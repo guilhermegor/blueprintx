@@ -60,11 +60,6 @@ def _migration_file(path_dir: Path, str_name: str, str_body: str = "") -> Path:
     return path_file
 
 
-# --------------------------
-# 🔴 The negative control — the gate must be able to FAIL, naming the file and slug
-# --------------------------
-
-
 def test_non_verb_slug_is_reported(tmp_path: Path) -> None:
     """A slug that does not lead with a known verb must fail the gate."""
     path_file = _migration_file(tmp_path, "20260913_a1b2c3d4e5f6_users_table.py")
@@ -101,11 +96,6 @@ def test_unparsable_filename_shape_is_reported(tmp_path: Path) -> None:
     assert gate.check_file(path_file) == 1
 
 
-# --------------------------
-# Should-PASS witnesses — every verb in the adopted enum
-# --------------------------
-
-
 @pytest.mark.parametrize(
     "str_slug",
     [
@@ -124,11 +114,6 @@ def test_known_verb_slug_passes(tmp_path: Path, str_slug: str) -> None:
     path_file = _migration_file(tmp_path, f"20260913_a1b2c3d4e5f6_{str_slug}.py")
 
     assert gate.check_file(path_file) == 0
-
-
-# --------------------------
-# Escape hatch — required reason, matching this repo's other gate markers
-# --------------------------
 
 
 def test_escape_hatch_with_a_reason_silences_the_finding(tmp_path: Path) -> None:
@@ -164,11 +149,6 @@ def test_a_bare_escape_hatch_cannot_borrow_a_reason_from_the_next_line(
     )
 
     assert gate.check_file(path_file) == 1
-
-
-# --------------------------
-# Directory-level behaviour — the self-skip and the whole-run verdict
-# --------------------------
 
 
 def test_main_skips_when_migrations_dir_is_absent(

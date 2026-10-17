@@ -254,14 +254,6 @@ def test_omit_patterns_expands_environment_variables(
     assert cls_gate.omit_patterns(path_cfg) == ["/srv/app/src/capabilities/*/domain/*"]
 
 
-# ⚠️ Both tests below pass a RELATIVE path_module and chdir into the project root, because
-# that is how main() calls swallowed_by_omit. Passing an absolute path instead makes each
-# test vacuous: the absolute pattern then matches the "relative" branch and the relative
-# pattern is compared against a path that can never match it. Measured — with the absolute
-# branch reverted out of the gate, the earlier absolute-path versions of these two tests
-# still reported `2 passed`.
-
-
 def test_absolute_omit_pattern_still_swallows_a_relative_module(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -288,7 +280,6 @@ def test_relative_omit_pattern_keeps_working(
     monkeypatch.chdir(path_root)
     path_module = Path("src/capabilities/orders/domain/service.py")
 
-    # A pattern that DOES cover this module, so a broken relative branch fails the test.
     list_problems = cls_gate.swallowed_by_omit([path_module], ["src/capabilities/*/domain/*"])
 
     assert len(list_problems) == 1

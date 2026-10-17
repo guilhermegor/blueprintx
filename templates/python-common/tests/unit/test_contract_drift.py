@@ -46,11 +46,6 @@ def _load(str_name: str) -> ModuleType:
 driver = _load("check_contract_drift")
 
 
-# --------------------------
-# Module Utilities
-# --------------------------
-
-
 class _Contract:
     """Minimal stand-in for ``FileContract`` carrying only what the driver reads."""
 
@@ -73,11 +68,6 @@ class _Contract:
         self.str_source_key = str_source_key
 
 
-# --------------------------
-# Fixtures
-# --------------------------
-
-
 @pytest.fixture
 def dict_entry() -> dict:
     """Return a registry entry for a single source.
@@ -88,11 +78,6 @@ def dict_entry() -> dict:
         A minimal ``{url, sep, encoding}`` entry.
     """
     return {"url": "https://example.invalid/data.csv", "sep": ";", "encoding": "utf-8"}
-
-
-# --------------------------
-# Tests
-# --------------------------
 
 
 def test_drift_for_source_unreachable_returns_none_not_empty(

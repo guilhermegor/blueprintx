@@ -11,19 +11,12 @@ same real-world evidence rather than an invented one.
 
 import pytest
 
-# Bare `utils.` imports (not `src.utils.`) — RegimeRegistry/RegimeBoundAdapter import
-# RegimeWindow the same way internally; a `src.`-prefixed import here would create a SECOND,
-# distinct RegimeWindow class under pytest's dual `pythonpath = . src`, and beartype's nominal
-# isinstance check on `list[RegimeWindow]` would reject fixture instances built from it.
 from utils.regime_adapter import RegimeBoundAdapter
 from utils.regime_registry import RegimeRegistry
 from utils.regime_window import RegimeWindow
 from utils.spec_gap_registry import SpecGapRegistry
 
 
-# --------------------------
-# Fixtures
-# --------------------------
 @pytest.fixture
 def cls_registry() -> RegimeRegistry:
     """Build the two-regime registry from the issue's measured cutover (202311 / 202312).
@@ -44,9 +37,6 @@ def cls_registry() -> RegimeRegistry:
     )
 
 
-# --------------------------
-# RegimeWindow / RegimeRegistry — selection mechanics
-# --------------------------
 def test_window_covers_period_at_its_closed_end(cls_registry: RegimeRegistry) -> None:
     """The legacy window covers its own last published period, 202311.
 
@@ -121,9 +111,6 @@ def test_regime_window_rejects_a_backwards_range() -> None:
         RegimeWindow(str_name="bad", int_period_start=202412, int_period_end=202401)
 
 
-# --------------------------
-# RegimeBoundAdapter — should-fail witness (adapter selection)
-# --------------------------
 def test_adapter_bound_to_the_right_regime_accepts_its_own_period(
     cls_registry: RegimeRegistry,
 ) -> None:
@@ -182,9 +169,6 @@ def test_adapter_with_no_period_defaults_to_its_regimes_last_covered_period(
     assert cls_adapter.int_period == 202311
 
 
-# --------------------------
-# SpecGapRegistry — narrow named registry for spec gaps
-# --------------------------
 def test_unlisted_regime_has_no_known_gaps() -> None:
     """A regime absent from the registry reports every column as unexplained.
 
@@ -221,14 +205,6 @@ def test_unexplained_suppresses_only_the_registered_gap() -> None:
     cls_registry = SpecGapRegistry({"cnpj_keyed": frozenset({"TP_FUNDO_CLASSE"})})
     set_reported = frozenset({"TP_FUNDO_CLASSE", "UNEXPECTED_COLUMN"})
     assert cls_registry.unexplained("cnpj_keyed", set_reported) == frozenset({"UNEXPECTED_COLUMN"})
-
-
-# ⚠️ WITNESSES FOR THE #344 REVIEW — AMBIGUITY AND INVALID PERIODS.
-#
-# `resolve` returns the FIRST covering window, and the registry's docstring promises the
-# windows may arrive "in any order". Two overlapping windows therefore bound a period to
-# whichever happened to be listed first — a reader parsing a real file against the wrong
-# published header, with nothing reporting it.
 
 
 def test_overlapping_windows_are_rejected_at_construction() -> None:
@@ -307,9 +283,6 @@ def test_covers_still_accepts_a_valid_period_on_an_open_window() -> None:
         int_period_end=None,
     )
     assert cls_open.covers(202312) is True
-
-
-# ⚠️ REGRESSION FOR THE #344 REVIEW — validation the caller can undo is not validation.
 
 
 def test_a_later_append_to_the_callers_list_cannot_reach_the_registry() -> None:

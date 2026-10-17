@@ -10,9 +10,6 @@ from src.utils.br_identifiers import (
 )
 
 
-# --- CNPJ: unmask ---------------------------------------------------------------
-
-
 def test_unmask_cnpj_masked_value_returns_bare_digits() -> None:
     """A punctuated CNPJ unmasks to its 14 bare digits."""
     assert unmask_cnpj("11.222.333/0001-81") == "11222333000181"
@@ -38,9 +35,6 @@ def test_unmask_cnpj_empty_returns_empty() -> None:
     assert unmask_cnpj("") == ""
 
 
-# --- CNPJ: mask -----------------------------------------------------------------
-
-
 def test_mask_cnpj_bare_value_returns_punctuated() -> None:
     """A bare CNPJ is formatted as ``XX.XXX.XXX/XXXX-XX``."""
     assert mask_cnpj("11222333000181") == "11.222.333/0001-81"
@@ -53,9 +47,6 @@ def test_mask_cnpj_invalid_length_passes_through_unmasked() -> None:
     masked, so the pass-through branch only triggers for non-14 alphanumeric input.
     """
     assert mask_cnpj("12ABC") == "12ABC"
-
-
-# --- CNPJ: validate -------------------------------------------------------------
 
 
 def test_is_valid_cnpj_legacy_numeric_true() -> None:
@@ -81,9 +72,6 @@ def test_is_valid_cnpj_all_zeros_false() -> None:
 def test_is_valid_cnpj_wrong_length_false() -> None:
     """A CNPJ of the wrong length is rejected."""
     assert is_valid_cnpj("112223330001") is False
-
-
-# --- CPF ------------------------------------------------------------------------
 
 
 def test_unmask_cpf_masked_value_returns_bare_digits() -> None:

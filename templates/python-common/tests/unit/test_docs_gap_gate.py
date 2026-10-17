@@ -37,11 +37,6 @@ def _load_gate() -> types.ModuleType:
 cls_gate = _load_gate()
 
 
-# --------------------------
-# Module Utilities
-# --------------------------
-
-
 def _build_project(
     tmp_path: pathlib.Path,
     dict_pages: dict[str, str],
@@ -97,11 +92,6 @@ _STR_INDEX_TABLE = (
     "| Path | Type | Purpose |\n|------|------|---------|\n"
     "| `index.md` | Utility page | Home |\n"
 )
-
-
-# --------------------------
-# Tests — Layer 1 (orphan pages)
-# --------------------------
 
 
 def test_orphan_page_is_reported(tmp_path: pathlib.Path) -> None:
@@ -257,11 +247,6 @@ def test_absolute_docs_dir_is_scanned(tmp_path: pathlib.Path) -> None:
     assert cls_gate.main(["--root", str(path_root)]) == 0
 
 
-# --------------------------
-# Tests — Layer 2 (CLAUDE.md file-index sync)
-# --------------------------
-
-
 def test_claude_index_missing_row_is_reported(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
 ) -> None:
@@ -404,11 +389,6 @@ def test_file_index_table_with_no_rows_fails_the_run(tmp_path: pathlib.Path) -> 
     assert cls_gate.main(["--root", str(path_root)]) == 1
 
 
-# --------------------------
-# Tests — fail-closed discovery guards
-# --------------------------
-
-
 def test_missing_docs_dir_fails_closed(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
 ) -> None:
@@ -437,11 +417,6 @@ def test_missing_mkdocs_yml_exits_nonzero(tmp_path: pathlib.Path) -> None:
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "index.md").write_text("# Home", encoding="utf-8")
     assert cls_gate.main(["--root", str(tmp_path)]) == 1
-
-
-# --------------------------
-# Tests — MkDocs parity (#641)
-# --------------------------
 
 
 def test_exclude_docs_negation_reincludes_implicitly_dropped_page(

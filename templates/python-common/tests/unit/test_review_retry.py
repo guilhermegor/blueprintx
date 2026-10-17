@@ -25,11 +25,6 @@ from unittest.mock import Mock
 import pytest
 
 
-# --------------------------
-# Module Utilities
-# --------------------------
-
-
 def _load_retry() -> ModuleType:
     """Import ``bin/retry_rate_limited_review.py`` as a module.
 
@@ -40,8 +35,6 @@ def _load_retry() -> ModuleType:
     """
     path_mod = Path(__file__).resolve().parents[2] / "bin" / "retry_rate_limited_review.py"
     cls_spec = importlib.util.spec_from_file_location("_retry_rate_limited_review", path_mod)
-    # Split rather than combined, matching the gate's own test module. An absent spec and an
-    # absent loader are different faults, and a conjunction cannot say which one fired.
     assert cls_spec is not None
     assert cls_spec.loader is not None
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -69,8 +62,8 @@ def _find_gate_path() -> Path:
     """
     path_here = Path(__file__).resolve()
     tuple_candidates = (
-        path_here.parents[2] / "bin" / "check_review_threads.py",  # generated project
-        path_here.parents[3] / "common" / "bin" / "check_review_threads.py",  # template tree
+        path_here.parents[2] / "bin" / "check_review_threads.py",
+        path_here.parents[3] / "common" / "bin" / "check_review_threads.py",
     )
     return next(
         (path_candidate for path_candidate in tuple_candidates if path_candidate.is_file()),
@@ -126,8 +119,6 @@ def _pr(list_comments: list, list_reviews: list, str_head: str = "cafe123") -> d
     return {"headRefOid": str_head, "reviews": {"nodes": list_reviews}}
 
 
-# The real reviewer wording, kept verbatim rather than paraphrased: the phrase IS the interface,
-# and a paraphrase would let the detector drift away from what the reviewer actually posts.
 _STR_RATE_LIMITED = (
     "⚠️ Action not completed\n\nReview rate limited. Please wait before your next review "
     "request. Note: CodeRabbit is an incremental review system and does not re-review "
@@ -137,11 +128,6 @@ _STR_PERFORMED = (
     "✅ Action performed\n\nReview triggered. Note: CodeRabbit is an incremental review system "
     "and does not re-review already reviewed commits."
 )
-
-
-# --------------------------
-# Fixtures
-# --------------------------
 
 
 @pytest.fixture
@@ -172,11 +158,6 @@ def cls_gate() -> ModuleType:
     cls_module = importlib.util.module_from_spec(cls_spec)
     cls_spec.loader.exec_module(cls_module)
     return cls_module
-
-
-# --------------------------
-# Tests
-# --------------------------
 
 
 def test_a_rate_limited_pr_with_no_review_is_re_asked(
@@ -609,10 +590,6 @@ def test_an_author_less_marker_cannot_match_an_unknown_identity(
     )
 
 
-# ⚠️ A `Mock(side_effect=...)` rather than an inner function that raises. An inner function is a
-# decision point, and `bin/check_complexity.sh` caps tests/ at cyclomatic complexity 1 — measured
-# the hard way here, since BlueprintX's own tree has no tests/ so only the GENERATED project
-# exercises that ceiling.
 def test_one_unreadable_pr_does_not_end_the_sweep(
     cls_retry: ModuleType, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -646,14 +623,6 @@ def test_one_unreadable_pr_does_not_end_the_sweep(
     )
 
 
-# --------------------------
-# The reviewer's DECLARED wait (blueprintx#272)
-# --------------------------
-
-
-# Verbatim from the live refusal on blueprintx#275 (2026-08-26). Transcribing the shape by hand
-# would test our idea of the message; this is the sentence the reviewer actually sent, which is
-# the only thing the parser will ever meet.
 _STR_RATE_LIMITED_35 = (
     "⚠️ Action not completed\n\nReview rate limited.\n\nYour included review limit is currently "
     "reached under our Fair Usage Limits Policy. This review may still proceed through "
@@ -795,9 +764,6 @@ def test_an_oversized_declared_wait_is_rejected_instead_of_crashing(
     cls_retry : types.ModuleType
         The retry module.
     """
-    # ⚠️ 5000 digits, not 100. The first version used 100 — below the 4300-digit conversion
-    # limit — so it exercised only the OverflowError path and passed while the ValueError path
-    # was wide open. A fixture has to reach the boundary it claims to test.
     str_absurd = f"Your next included review will be available in {'9' * 5000} minutes."
 
     assert cls_retry.parse_declared_wait(str_absurd) is None
@@ -818,11 +784,6 @@ def test_a_representable_but_oversized_wait_is_also_rejected(cls_retry: ModuleTy
     str_absurd = f"Your next included review will be available in {'9' * 100} minutes."
 
     assert cls_retry.parse_declared_wait(str_absurd) is None
-
-
-# --------------------------
-# FIFO, one ask per run, account-level blocking (blueprintx#280)
-# --------------------------
 
 
 def _candidate(int_number: int, str_created_at: str, list_comments: list, dict_pr: dict) -> dict:
@@ -864,8 +825,8 @@ def test_account_blocked_until_reads_the_newest_refusal_across_all_waiting_prs(
         The retry module.
     """
     list_notices = [
-        _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20),  # older refusal
-        _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=5),  # newest refusal
+        _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20),
+        _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=5),
     ]
 
     assert cls_retry.account_blocked_until(list_notices, _DT_NOW) is not None
@@ -887,9 +848,7 @@ def test_account_blocked_until_takes_the_LATEST_deadline_not_the_latest_notice(
         The retry module.
     """
     list_notices = [
-        # Older, but names 35 minutes and was posted 20 ago -- still blocking for 15 more.
         _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20),
-        # Newer, but names no number at all.
         _comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=5),
     ]
 
@@ -980,7 +939,6 @@ def test_select_pr_for_retry_skips_a_pr_past_the_attempt_cap(
     cls_gate : types.ModuleType
         The gate module.
     """
-    # Five past attempts, all outside the 40-minute cooldown, plus the reviewer's latest refusal.
     list_comments_stuck = [
         _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=250),
         _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=200),
