@@ -3419,22 +3419,43 @@ def test_find_missing_review_problem_retargeted_pr_says_why_on_stderr(
     assert "base branch was changed" in capsys.readouterr().err
 
 
-def _retargeted_pr(list_change_times: list[str], str_review_time: str) -> dict:
-    """Build a PR node whose base changed at each time, reviewed once at ``a * 40``.
+def _timed_review(
+    str_time: str, str_login: str = "coderabbitai[bot]", str_state: str = "COMMENTED"
+) -> dict:
+    """Build a review at ``a * 40`` submitted at ``str_time``.
+
+    Parameters
+    ----------
+    str_time : str
+        ``submittedAt`` of the review.
+    str_login : str
+        Review author's login.
+    str_state : str
+        Review state.
+
+    Returns
+    -------
+    dict
+        A review shaped like the GraphQL response.
+    """
+    return {**_review(str_login, "a" * 40), "submittedAt": str_time, "state": str_state}
+
+
+def _retargeted_pr(list_change_times: list[str], list_reviews: list[dict]) -> dict:
+    """Build a PR node whose base changed at each time.
 
     Parameters
     ----------
     list_change_times : list of str
         ``createdAt`` of each base-change event.
-    str_review_time : str
-        ``submittedAt`` of the review.
+    list_reviews : list of dict
+        The PR's reviews.
 
     Returns
     -------
     dict
         A ``pullRequest`` node shaped like the GraphQL response.
     """
-    dict_review = {**_review("coderabbitai[bot]", "a" * 40), "submittedAt": str_review_time}
     return {
         "baseRefOid": "base",
         "timelineItems": {
@@ -3443,38 +3464,57 @@ def _retargeted_pr(list_change_times: list[str], str_review_time: str) -> dict:
                 for str_time in list_change_times
             ]
         },
-        "reviews": {"nodes": [dict_review]},
+        "reviews": {"nodes": list_reviews},
     }
 
 
+_T_BEFORE = "2026-10-15T08:00:00Z"
+_T_CHANGE = "2026-10-15T09:16:00Z"
+_T_MID = "2026-10-15T10:00:00Z"
+_T_LATER_CHANGE = "2026-10-15T12:00:00Z"
+_T_AFTER = "2026-10-15T15:29:00Z"
+
+
 @pytest.mark.parametrize(
-    ("list_change_times", "str_review_time", "bool_carries"),
+    ("list_change_times", "list_reviews", "bool_carries"),
     [
-        (["2026-10-15T09:16:00Z"], "2026-10-15T15:29:00Z", True),
-        (["2026-10-15T09:16:00Z"], "2026-10-15T08:00:00Z", False),
-        (["2026-10-15T09:16:00Z"], "2026-10-15T09:16:00Z", False),
-        (["2026-10-15T09:16:00Z", "2026-10-15T12:00:00Z"], "2026-10-15T10:00:00Z", False),
-        (["2026-10-15T12:00:00Z", "2026-10-15T09:16:00Z"], "2026-10-15T10:00:00Z", False),
-        (["2026-10-15T09:16:00Z", "2026-10-15T12:00:00Z"], "2026-10-15T13:00:00Z", True),
-        (["not a time"], "2026-10-15T15:29:00Z", False),
-        (["2026-10-15T09:16:00Z"], "", False),
+        ([_T_CHANGE], [_timed_review(_T_AFTER)], True),
+        ([_T_CHANGE], [_timed_review(_T_BEFORE)], False),
+        ([_T_CHANGE], [_timed_review(_T_CHANGE)], False),
+        ([_T_CHANGE, _T_LATER_CHANGE], [_timed_review(_T_MID)], False),
+        ([_T_LATER_CHANGE, _T_CHANGE], [_timed_review(_T_MID)], False),
+        ([_T_CHANGE, _T_LATER_CHANGE], [_timed_review(_T_AFTER)], True),
+        (["not a time"], [_timed_review(_T_AFTER)], False),
+        ([_T_CHANGE], [_timed_review("")], False),
+        ([_T_CHANGE], [_timed_review(_T_BEFORE), _timed_review(_T_AFTER)], True),
+        ([_T_CHANGE], [_timed_review(_T_AFTER), _timed_review(_T_BEFORE)], True),
+        (
+            [_T_CHANGE],
+            [_timed_review(_T_BEFORE), _timed_review(_T_AFTER, "someone-else")],
+            False,
+        ),
+        (
+            [_T_CHANGE],
+            [_timed_review(_T_BEFORE), _timed_review(_T_AFTER, str_state="DISMISSED")],
+            False,
+        ),
     ],
 )
 def test_find_missing_review_problem_carries_only_a_review_newer_than_the_base_change(
     monkeypatch: pytest.MonkeyPatch,
     list_change_times: list[str],
-    str_review_time: str,
+    list_reviews: list[dict],
     bool_carries: bool,
 ) -> None:
     """A review carries across a merge-only update only if the latest base change predates it."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    dict_pr = _retargeted_pr(list_change_times, str_review_time)
+    dict_pr = _retargeted_pr(list_change_times, list_reviews)
     str_problem = cls_gate.find_missing_review_problem(
-        dict_pr["reviews"]["nodes"],
+        list_reviews,
         {"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint(dict_pr, "o/r"),
+        fn_fingerprint=cls_gate._compare_fingerprint(dict_pr, "o/r", {"coderabbitai"}),
     )
     assert (str_problem is None) is bool_carries
 

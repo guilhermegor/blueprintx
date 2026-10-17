@@ -250,8 +250,9 @@ any other PR (blueprintx#809). The gate looks for a `BASE_REF_CHANGED_EVENT` or
 `AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT` timeline item (the second is what GitHub records when
 it retargets a PR itself after its base branch is merged and deleted) in the same GraphQL
 query as the reviews, reads each event's `createdAt`, and refuses a review whose `submittedAt`
-is not strictly later than the newest one. An event is never removed, so a review older than
-it stays refused permanently. The gate prints the reason on stderr, and every unreadable answer
+is not strictly later than the newest one. When one commit has several live reviews from the
+roster, the newest decides, so a post-change review supersedes an earlier one on the same
+commit. An event is never removed, so a review older than it stays refused permanently. The gate prints the reason on stderr, and every unreadable answer
 fails closed: a missing event list ("retarget state is unknown"), an event or review without a
 parseable time, and a review that is not later than the event are all refused, never read as
 "never retargeted". The gate reads the filtered `nodes`, never `totalCount`, which ignores the

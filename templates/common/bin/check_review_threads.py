@@ -1807,11 +1807,34 @@ def _parse_time(str_time: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(str_time.replace("Z", "+00:00"))
 
 
-def _reviewed_before_base_change(dict_pr: dict, list_changes: list[dict], str_oid: str) -> bool:
-    """Return whether a review at ``str_oid`` was submitted before the PR's latest base change.
+def _review_times(
+    dict_pr: dict, str_oid: str, set_roster: set[str] | None
+) -> list[datetime.datetime]:
+    """Return the submission times of the live roster reviews written against ``str_oid``.
+
+    Dismissed reviews are skipped, as :func:`reviewed_commits` skips them; ``None`` for the
+    roster keeps every author.
+    """
+    return [
+        _parse_time(dict_review.get("submittedAt") or "")
+        for dict_review in dict_pr.get("reviews", {}).get("nodes", [])
+        if (dict_review.get("commit") or {}).get("oid") == str_oid
+        and dict_review.get("state") != "DISMISSED"
+        and (
+            set_roster is None
+            or normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+        )
+    ]
+
+
+def _reviewed_before_base_change(
+    dict_pr: dict, list_changes: list[dict], str_oid: str, set_roster: set[str] | None = None
+) -> bool:
+    """Return whether the newest review at ``str_oid`` predates the PR's latest base change.
 
     Fails closed: an unreadable event time or review time counts as "before". A commit with no
-    review at all (the head, fingerprinted as the comparison target) is not refused.
+    live roster review (the head, fingerprinted as the comparison target) is not refused. A
+    later review on the same commit supersedes an earlier one, so only the newest decides.
 
     Parameters
     ----------
@@ -1821,6 +1844,8 @@ def _reviewed_before_base_change(dict_pr: dict, list_changes: list[dict], str_oi
         The base-change timeline events, each carrying ``createdAt``.
     str_oid : str
         The commit being fingerprinted.
+    set_roster : set of str, optional
+        Already-normalised logins that can submit a review; ``None`` keeps every author.
 
     Returns
     -------
@@ -1829,17 +1854,15 @@ def _reviewed_before_base_change(dict_pr: dict, list_changes: list[dict], str_oi
     """
     try:
         dt_change = max(_parse_time(dict_ev.get("createdAt") or "") for dict_ev in list_changes)
-        list_times = [
-            _parse_time(dict_review.get("submittedAt") or "")
-            for dict_review in dict_pr.get("reviews", {}).get("nodes", [])
-            if (dict_review.get("commit") or {}).get("oid") == str_oid
-        ]
+        list_times = _review_times(dict_pr, str_oid, set_roster)
     except (ValueError, AttributeError, TypeError):
         return True
-    return any(dt_time <= dt_change for dt_time in list_times)
+    return bool(list_times) and max(list_times) <= dt_change
 
 
-def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], str]:
+def _compare_fingerprint(
+    dict_pr: dict, str_repo_full: str, set_roster: set[str] | None = None
+) -> Callable[[str], str]:
     """Bind the compare-API fingerprint to this PR's repository and base branch.
 
     A review written before the latest base change gets no fingerprint: the compare is measured
@@ -1853,6 +1876,8 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
             ``headRefOid``) and ``timelineItems.nodes``, the base-change events.
     str_repo_full : str
         ``owner/name``.
+    set_roster : set of str, optional
+        Already-normalised logins whose reviews count for the base-change comparison.
 
     Returns
     -------
@@ -1868,7 +1893,9 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     def fn_fingerprint(str_oid: str) -> str:
         if not isinstance(list_changes, list):
             raise ValueError("the PR's retarget state is unknown: a review is not carried across")
-        if list_changes and _reviewed_before_base_change(dict_pr, list_changes, str_oid):
+        if list_changes and _reviewed_before_base_change(
+            dict_pr, list_changes, str_oid, set_roster
+        ):
             raise ValueError("the PR's base branch was changed: a review is not carried across")
         return fetch_patch_fingerprint(str_owner, str_repo, str_base, str_oid)
 
@@ -1985,7 +2012,9 @@ def _missing_review(
         str_head_date=_head_committed_date(dict_pr),
         tuple_markers=load_comment_markers(pathlib.Path.cwd()),
         set_posters=load_marker_posters(pathlib.Path.cwd()),
-        fn_fingerprint=_compare_fingerprint(dict_pr, str_repo_full),
+        fn_fingerprint=_compare_fingerprint(
+            dict_pr, str_repo_full, {normalise_login(str_login) for str_login in set_reviewers}
+        ),
     )
 
 
