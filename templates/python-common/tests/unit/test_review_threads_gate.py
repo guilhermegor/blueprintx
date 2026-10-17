@@ -3026,8 +3026,9 @@ def test_patch_fingerprint_ignores_unchanged_context_lines() -> None:
 def test_patch_fingerprint_changed_added_line_differs() -> None:
     """A different ``+`` line is different code, whatever the context says."""
     cls_gate = _load_gate()
-    dict_reviewed = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ fn\n ctx\n-x\n+y"}
-    dict_edited = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ fn\n ctx\n-x\n+z"}
+    str_head = "@@ -2 +2 @@ fn\n ctx\n-x\n+"
+    dict_reviewed = {"filename": "a", "status": "modified", "patch": str_head + "y"}
+    dict_edited = {"filename": "a", "status": "modified", "patch": str_head + "z"}
     assert cls_gate.patch_fingerprint([dict_reviewed]) != cls_gate.patch_fingerprint([dict_edited])
 
 
