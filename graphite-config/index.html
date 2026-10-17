@@ -1027,6 +1027,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#measured-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-blueprintx-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In BlueprintX itself
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2060,6 +2082,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#measured-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-blueprintx-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In BlueprintX itself
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2080,6 +2124,7 @@
   
 
 
+<!-- Single-sourced from templates/common/.greptile/graphite.md, which every scaffold ships. -->
 <h1 id="graphite-configuration">Graphite Configuration<a class="headerlink" href="#graphite-configuration" title="Permanent link">&para;</a></h1>
 <p>Graphite has no repo-level config file (no <code>.graphite.yaml</code>). Everything below is either one
 versioned file or a dashboard step the repository owner performs by hand.</p>
@@ -2106,13 +2151,26 @@ versioned file or a dashboard step the repository owner performs by hand.</p>
 <p>Graphite reviews every new PR by default. The label filter in step 4 is the opt-in: the
 <code>/dev-loop</code> ladder adds <code>review:graphite</code> when it is Graphite's turn and removes it once the
 review lands. A label left on lets every push trigger another review.</p>
-<p>What the docs say: PR-level filtering by label applies to new and updated PRs. They describe
-no "label added" event and no comment trigger.</p>
-<p>Documented, not measured: whether adding the label alone fires a review. That stays unknown until Graphite
-is installed on a repo and the behavior is tested on a real PR. Until then the ladder may
-need to push a commit or post a comment after adding the label, and must not assume a
-Graphite turn has started just because the label was added. If adding the label fires
-nothing, a <code>/dev-loop</code> Graphite turn completes without a review.</p>
+<h2 id="measured-behavior">Measured behavior<a class="headerlink" href="#measured-behavior" title="Permanent link">&para;</a></h2>
+<p>Measured on blueprintx#807, 2026-10-16.</p>
+<ul>
+<li>Adding the label is enough. At 10:25:13 UTC the label was added to head <code>8912317c</code> with no
+  push and no comment; about 76 s later Graphite reported the check run
+  <code>Graphite / AI Reviews</code> (app <code>graphite-app</code>): success, "AI review ran and left 0 comments".</li>
+<li>A clean review leaves no PR review and no comment. The check run is its only trace, so a
+  review-thread gate that counts reviews sees nothing.</li>
+<li>Without the label, nothing runs. Heads <code>ac0f9231</code> and <code>5d3e1fde</code>, pushed while the label
+  was absent, each got the check run <code>Graphite / AI Reviews</code> with conclusion <code>skipped</code> ("does
+  not match your org's AI review filters") and zero reviews.</li>
+</ul>
+<p>Not yet measured: the login Graphite uses on a review that does leave comments (expected
+<code>graphite-app[bot]</code>). Until it is, <code>.review-bots.yaml</code> has no Graphite row.</p>
+<h2 id="in-blueprintx-itself">In BlueprintX itself<a class="headerlink" href="#in-blueprintx-itself" title="Permanent link">&para;</a></h2>
+<p>The BlueprintX root has no <code>.greptile/rules.md</code> (each skeleton ships its own, under
+<code>templates/&lt;skeleton&gt;/.greptile/</code>). The file-based rule for this repository points at
+<code>CLAUDE.md</code> instead. The ship check for the shared page is
+<code>bin/ci/check_review_config_shipped.sh</code>, which lists it in
+<code>templates/common/review-config.manifest</code>.</p>
 
 
 
