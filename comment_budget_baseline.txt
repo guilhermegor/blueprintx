@@ -5,16 +5,6 @@ scope 2
 3 bin/scaffold/python_lib_minimal.sh
 2 bin/scaffold/python_mvc_service.sh
 2 bin/scaffold/python_mvc_service_orm.sh
-28 templates/python-common/.github/dependabot.yml
-83 templates/python-common/.github/workflows/coderabbit_trigger.yaml
-15 templates/python-common/.github/workflows/contract_drift.yaml
-20 templates/python-common/.github/workflows/pr-gate.yaml
-33 templates/python-common/.github/workflows/pr-reconcile.yaml
-20 templates/python-common/.github/workflows/release.yaml
-42 templates/python-common/.github/workflows/review_retry.yaml
-104 templates/python-common/.github/workflows/review_threads.yaml
-70 templates/python-common/.github/workflows/secret_scan.yaml
-154 templates/python-common/.github/workflows/tests.yaml
 26 templates/python-common/bin/build_wheelhouse.sh
 8 templates/python-common/bin/check_all_exports.py
 20 templates/python-common/bin/check_assertion_weakening.py

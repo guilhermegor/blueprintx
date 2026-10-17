@@ -793,3 +793,138 @@ repository. They were moved out of the workflow files, which now carry no prose.
   `^22`, the `engines.node` floor line. Lift the `ignore` and raise the pin in the same PR when
   an `engines` floor moves to a newer major.
 - Pinning actions by SHA (#369) does not self-update; the Actions ecosystem entry does.
+
+## Generated-project workflows (`templates/python-common/.github`)
+
+The workflows and `dependabot.yml` a Python scaffold ships carry no prose. Where a file is the
+twin of a root workflow, the reasoning above applies unchanged (`review_threads.yaml`,
+`coderabbit_trigger.yaml`, `review_retry.yaml`, `pr-reconcile.yaml`, `secret_scan.yaml`).
+This section records what is specific to the generated copies.
+
+### `tests.yaml`
+
+- **No `outputs:` on `workflow_call`.** It once declared `ready_for_release` as
+  `${{ jobs.test.result == 'success' }}`. Only `jobs.<id>.outputs.<name>` is in scope there,
+  so the output was an empty string on every run while looking like a release gate. It had no
+  consumers; a caller reads the verdict from `needs.<job>.result`.
+- **The job name carries every matrix axis.** With only `os` in it, the 3x5 matrix produced 15
+  check runs sharing 3 names. A required check is resolved by name, so a green and a red leg
+  of one name are indistinguishable to the merge gate.
+- **`fetch-depth: 0`.** The work-ledger gate resolves `merge-base(HEAD, default)`, which a
+  shallow clone cannot find; the gate-integrity gate diffs against `main` for the same reason.
+- **The lockfile check is an unconditional step before the pyproject rewrite.** Nested under
+  the install's `if: cache-hit != 'true'` it never ran on a warm cache, which is exactly the
+  condition that makes it cheap. A stale `poetry.lock` fails loud: regenerating would
+  re-resolve every dependency to the newest in-range version, a non-reproducible build. A
+  version bump does not invalidate the lock, so `poe bump_version` never trips it.
+- **The cache holds `.venv` only, keyed on `poetry.lock` and `pyproject.toml`.** Caching the
+  tracked lockfile lets a restored cache overwrite the committed one. Hashing `pyproject.toml`
+  alone makes the lock-only diff Dependabot's `lockfile-only` produces a cache hit, so every
+  bump PR would skip the install and test the pre-bump set.
+- **Every gate is an explicit step as well as a pre-commit hook.** CI does not run
+  pre-commit, so a gate listed only there is bypassed by a contributor who skips hooks;
+  `check-sql-guards` shipped one-legged that way and a `WHERE`-less `DELETE` reached `main`
+  (#355). Per-gate points:
+    - `lint-deps` runs inside the Poetry venv and cannot become `pipx run deptry`: deptry maps a
+      module to its distribution through the environment it runs in, and outside it the verdict
+      inverts rather than degrades.
+    - `check-comment-language` runs in audit mode (no filenames), sweeping every commented file
+      type, because a partial sweep leaves a precedent the next author copies.
+    - `function-length`, `fixture-scope`, `check-complexity` and `identifier-masking` fail when
+      discovery matches zero files. `check-complexity` hard-fails when ruff cannot be resolved.
+    - `gate-integrity` is diff-scoped (#309): a PR may not weaken a hook, rule, exclude or check
+      without a `gate-change-ok: <reason>` marker.
+    - `coverage-floor` exits 0 with a message on a tier with no `src/capabilities/` (MVC) and
+      `migration-graph` self-skips on a tier with no `migrations/versions/`.
+    - `fixture-scope` is a proxy, not a detector (#442); see the gate's module docstring.
+    - The others pin one invariant each: `check-typing` (every `src/` class or function carries
+      the runtime checker, Pydantic models excepted), `check-provenance` (a module that calls
+      `read_table` also calls `stamp_provenance`), `check-all-exports` (a declared `__all__`
+      names every public member, which an introspective test that discovers the family through
+      `__all__` cannot catch), `check-dtypes` (no ingested column typed as a binary float, which
+      stores 1984223115.42 as 1984223115.4200000762939453125), `check-layer-imports` (a
+      third-party dependency is reached through a `utils/` seam, in any scope),
+      `check-orm-model-guards` (#361: bitwise operators in `.where()`, two `create_all`, and a
+      duplicate constraint `name=` across a mixin MRO, each a silent wrong answer at
+      declaration time), `specs-structure` (a tree with no `.specs/` passes, a malformed one
+      fails by name), `check-docs-sections`, `check-docs-code-refs` (#159) and
+      `check-backlog-ledger`.
+- **Pinning pins what is asked for, never what arrives.** `gitleaks` and `actionlint` are
+  unpacked and executed on the runner, so each download is SHA-256 verified before
+  extraction. `LINT_ACTIONS_REQUIRED=1` turns actionlint's graceful skip into a failure: the
+  skip is right on a contributor's machine and a placebo in CI.
+- **`ruff format` is a CI step** so unformatted code fails, not only lint findings. mypy runs
+  from `src/`, the single package base, to avoid the "found twice" error on the deeper DDD
+  tree. shellcheck and shfmt are installed so the shell gate runs instead of skipping.
+- **`|| [ $? -eq 5 ]` on the integration run.** Pytest exit 5 means no tests collected, which
+  a fresh project's empty suite must not turn into a red CI; exit 1 still fails.
+- **The coverage floor runs on every PR.** The badge step runs only on main and tags, so
+  without the floor step a PR could drop coverage uncaught. The badge uses `--local` because
+  the default form fetches from img.shields.io, and no CI or release path may depend on a
+  non-essential external host.
+
+### Other generated workflows
+
+- **`pr-gate.yaml`.** It triggers on `pull_request` only, never `workflow_run`, which fires
+  only from the default branch's copy and so cannot run on the PR that introduces the gate.
+  The gate polls the checks in-run instead. `labeled` and `unlabeled` are included so
+  `do-not-merge` takes effect at once. A pull_request-driven gate never re-evaluates an
+  already-open PR after a policy change; run the `workflow_dispatch` with `backfill: true`
+  (or `@dependabot rebase`) to re-decide every open PR. A new push cancels the previous
+  polling run so two gates do not race on one sticky comment. Event data reaches the script
+  through `env:` only.
+- **`release.yaml`.** A service is deployed, not published, so there is no PyPI step. The
+  version input is free text and is validated before `git tag`, the irreversible half. The
+  versioned-docs job runs only after the tag is cut, so the site never advertises a version
+  that failed to ship. `mike` deploys `X.Y` under the `latest` alias; a prerelease suffix
+  is skipped in-step so it never moves `latest`. The dropdown granularity is `X.Y`, so 1.4.2
+  and 1.4.7 share an entry. `CHANGELOG.md` is regenerated by `cz` for that build and not
+  committed back to protected `main`. GitHub Pages must serve from `gh-pages`
+  (`poe enable_pages`).
+- **`contract_drift.yaml`.** A weekly, non-gating reporter on `schedule` and manual dispatch,
+  never `pull_request` or `push`, so it cannot gate a PR or a release. It opens or updates
+  one deduplicated issue and never fails the run; it is inert until a source is added to
+  `src/config/contract_oracles.yaml`. Dedupe is on the `contract-drift` label and a hidden
+  body marker, since the label alone can be removed by hand and a job that files an issue per
+  run gets switched off. The report goes in as `--body-file` so source-derived text cannot
+  inject into a shell command.
+- **`review_threads.yaml`.** `actions: write` is for the stale-run cleanup only. Set
+  `REVIEW_THREADS_REQUIRE_RESOLVED` to `0` for a reply-only contract; the shipped value is `1`.
+  `bin/enable_repo_rules.sh` seeds `REQUIRED_CHECKS` with this job's `name:`.
+- **`coderabbit_trigger.yaml`.** The scaffolder sets `GH_PAT_REVIEW_TRIGGER` when it is exported
+  at scaffold time and prints the command otherwise. Scope the PAT to all repositories if you
+  scaffold often, since a per-repository PAT is edited for every new project. It ships with
+  the review-thread gate: without the gate this workflow is a nicety, without the workflow
+  the gate blocks every PR.
+- **`secret_scan.yaml`.** It is opt-in (#287): copied only when `GITGUARDIAN_API_KEY` is set at
+  scaffold time, the same presence check that propagates the key to the new repo's secrets.
+  It is not in `REQUIRED_CHECKS`, since a required check that never reports blocks every PR.
+  An absent key fails loud, never skips: ggshield exits 3, distinct from a clean exit 0.
+- **`review_retry.yaml`.** GitHub disables a scheduled workflow after 60 days of repository
+  inactivity without announcing it. If rate-limited PRs stop being re-asked, check that the
+  workflow is still enabled before looking for a bug in the script.
+- **`pr-reconcile.yaml`.** Cards in a Projects "closed to Done" automation key on the issue
+  closing, so a missed close leaves them in "In review" while the code has shipped, and the
+  problem grows with auto-merge adoption. The workflow calls `bin/pr_reconcile.sh`, the one
+  implementation shared with the root workflow. On the event path it reconciles that PR; on
+  `schedule` and dispatch it sweeps a window.
+
+### `dependabot.yml`
+
+- **Ordinary version updates only.** Security updates are a repository toggle
+  (`poe enable_security`), not config.
+- **`versioning-strategy: lockfile-only`.** CI installs from the committed lock and refuses to
+  re-lock, so it tests the frozen versions while consumers get whatever the loose `>=` ranges
+  allow. This refreshes the lock but never rewrites pyproject ranges: narrowing a library's
+  range on a consumer's behalf is not the project's call, and pyproject and lock stay in sync.
+- **Solo-maintainer tuning.** Minor and patch are grouped into one PR; majors arrive alone and
+  get scrutiny. Each PR (one grouped minor-and-patch update, or one major) is isolated, so a bad bump reddens that PR and never `main`. A
+  linter bump (ruff, mypy) can ask for a reformat, which is the system working.
+- **No `labels:` key**, because `bin/pr_gate.py` already labels by changed path and Dependabot
+  comments an error on every PR it opens when a declared label does not exist. When a scaffold
+  ships both a bot config and a labelling gate, only one may own labels.
+- **Major-line pins** go for dependencies whose major is a support decision. pandas is tested on
+  both 2.x and 3.x, so its major bump is a project decision. Add one per such dependency and
+  remove it when the project stops straddling.
+- **The Actions ecosystem entry** keeps CI off deprecated runtimes, for example a Node version
+  GitHub is sunsetting.
