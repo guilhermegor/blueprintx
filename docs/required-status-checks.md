@@ -163,3 +163,7 @@ In `--live`, a workflow the gate cannot expand (an `include` matrix, `fromJSON`)
 under its own file name and the other checks still run. `--live` also reads `actions/workflows` and fails when a workflow file that emits a required
 context is not `active` (disabled in the UI): the context would never report and every PR
 would deadlock.
+
+## Dependabot PRs and `Review threads answered`
+
+A pure Dependabot patch/minor PR passes this check without a review; a major still needs one. The rules are in [Dependabot auto-merge](dependabot-auto-merge.md) (blueprintx#800).

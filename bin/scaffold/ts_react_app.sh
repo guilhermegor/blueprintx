@@ -427,6 +427,7 @@ copy_common_templates() {
 
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
     copy_repo_rules_provisioner "$project_path" "$COMMON_TEMPLATE_ROOT/bin/required-checks.txt"
+    copy_dependabot_auto_merge "$project_path"
 
     copy_shared_ts_source "$project_path"
 

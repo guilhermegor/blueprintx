@@ -376,6 +376,9 @@ jobs:
       - name: Should-fail regression tests for close_linked_issues.sh
         run: bash tests/test_close_linked_issues.sh
 
+      - name: Should-fail regression tests for dependabot_auto_merge.sh
+        run: bash tests/test_dependabot_auto_merge.sh
+
       - name: Should-fail regression tests for check_pr_policy.sh
         run: bash tests/test_check_pr_policy.sh
 

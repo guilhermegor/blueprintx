@@ -27,6 +27,8 @@ updates:
         versions: [">=10.0.0"]
       - dependency-name: "@eslint/js"
         versions: [">=10.0.0"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/templates/ts-lib"
@@ -47,6 +49,9 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
     directory: "/"
