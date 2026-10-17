@@ -1,6 +1,7 @@
-"""Worked example for ``config/schemas/`` — the Pydantic v2 sibling of
-``config/contracts/``'s worked example (``test_contract_oracle_example.py``). Copy per real
-schema, then delete.
+"""Worked example for ``config/schemas/``, the Pydantic v2 sibling of ``config/contracts/``.
+
+The sibling worked example is ``test_contract_oracle_example.py``. Copy per real schema, then
+delete.
 
 Two witness directions, per ``src/config/CLAUDE.md``'s contracts-vs-schemas split: a payload
 violating the schema is rejected with a message naming the field / rule; a valid one passes.
