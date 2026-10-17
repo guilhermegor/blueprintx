@@ -2147,8 +2147,7 @@ offline mode removes <code>.github/</code>, so it ships none there). The root re
 <h2 id="lint-stack">Lint stack<a class="headerlink" href="#lint-stack" title="Permanent link">&para;</a></h2>
 <p><code>eslint</code>, <code>@eslint/js</code>, <code>typescript-eslint</code> and <code>eslint-plugin-jest</code> share one <code>eslint</code> group in
 every npm block, so the lint stack moves as a unit. A lone <code>@eslint/js</code> major once broke
-<code>npm ci</code> with ERESOLVE. <code>eslint</code> and <code>@eslint/js</code> <code>&gt;=10</code> stay ignored until the eslint 10
-migration lands.</p>
+<code>npm ci</code> with ERESOLVE. The templates are on eslint 10 (#839), so no major is ignored.</p>
 <h2 id="gate">Gate<a class="headerlink" href="#gate" title="Permanent link">&para;</a></h2>
 <p><code>bin/ci/check_dependabot_shipped.sh --static</code> (pre-commit hook <code>dependabot-shipped</code>, CI job
 <code>dependabot-shipped</code>) fails when a skeleton script stops copying <code>dependabot.yml</code>, copies a
