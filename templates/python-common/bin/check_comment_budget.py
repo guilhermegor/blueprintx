@@ -43,31 +43,14 @@ import sys
 import tokenize
 
 
-# The ratchet. See the module docstring for the criterion: just above the worst
-# block measured on this tree (80 lines), so today's tree has zero run-length
-# violations and #304 is what tightens it, not this gate.
 INT_MAX_RUN = 85
 
 STR_ESCAPE = "comment-budget-ok:"
 
-# A structural line (shebang, PEP 263 encoding declaration) only ever appears
-# on line 1 or 2 — never deeper, so this is not a magic number to tune.
 INT_STRUCTURAL_LINE_LIMIT = 2
 
-# A decorative banner "sandwich" is exactly rule / title / rule — three lines.
 INT_BANNER_TRIPLE = 3
 
-# `#`-comment file types, by suffix. `.py` is deliberately NOT in this tuple —
-# its BLOCKS are extracted separately via `tokenize` (a `#` inside a string
-# literal is not a comment and only the tokenizer knows the difference) — but
-# `marker_for` below still must recognize `.py` explicitly, or `file_problems`
-# short-circuits on its `not str_marker` guard before ever reaching the
-# `.py`-specific branch, and every Python file goes unchecked while `audit_paths`
-# reports it "checked" (blueprintx#466 — measured: 228/499 files "checked", 0
-# findings, discovery non-zero and looking like coverage while checking nothing).
-# `Makefile` (no suffix) and `.mk` are matched by name in `audit_paths`/
-# `marker_for`, not here — the issue's own table missed Makefile for exactly
-# this reason.
 TUPLE_SCOPE1_HASH_SUFFIXES = (".sh", ".yaml", ".yml", ".toml", ".ini", ".mk")
 TUPLE_SCOPE1_SLASH_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 TUPLE_YAML_SUFFIXES = (".yaml", ".yml")
@@ -109,16 +92,8 @@ TUPLE_HASH_NAMES = (
 
 DICT_DASH_SUFFIXES = (".sql",)
 
-# `//`-comment file types. Block comments (`/* */`) are a known ceiling, not a
-# gap: every measured violation in the issue's table is a line-comment block,
-# and adding a second comment grammar for zero measured evidence is exactly the
-# unrequested generality this repo's own philosophy argues against.
 DICT_SLASH_SUFFIXES = (*TUPLE_SCOPE1_SLASH_SUFFIXES, ".css")
 
-# Directories that hold code we did not write or that is generated, mirroring
-# check_function_length.py's list (`.claude` matters for the same reason: this
-# gate's `--root` is overridable to the real repo root, which commonly sits
-# under a `.claude/worktrees/<agent>/` copy of itself).
 TUPLE_SKIP_DIRS = (
     ".git",
     ".claude",
@@ -144,25 +119,10 @@ INT_BANNER_HEAD = 10
 STR_REQUIRE_BASELINE = "--require-baseline"
 STR_COMPARE_BASELINE = "--compare-baseline"
 
-# PEP 263 — a `# -*- coding: utf-8 -*-` line is metadata, not prose, and only
-# ever appears on line 1 or 2.
 RE_ENCODING_DECL = re.compile(r"coding[:=]\s*[-\w.]+")
 
-# A comment whose stripped content is nothing but rule punctuation — the
-# decorative banner the issue names by example (`# -------`).
 RE_BANNER_LINE = re.compile(r"^[-=*#~_\s]{3,}$")
 
-# The exact rule line of tests/CLAUDE.md's mandated test-section-banner
-# convention ("# --------------------------" / "# <section>" /
-# "# --------------------------") — measured (blueprintx#466) to occur
-# NOWHERE else in the tree, always this shape, only in `.py` files. Matched
-# structurally in banner_findings, NOT via the pragma allowlist: a pragma
-# BREAKS a run (line_breaks_run), so listing this string there would let one
-# dash line split an oversized block into two under-ceiling halves
-# (blueprintx#479). The two rule lines still count toward the block's
-# length — only the banner FINDING is suppressed, never the run. Scoped to
-# Python test modules by is_test_module: the same triple in a production
-# .py, a Makefile, a shell or a .ts file is a plain decorative banner.
 STR_TEST_SECTION_RULE = "--------------------------"
 
 
@@ -531,10 +491,6 @@ def has_valid_escape(list_lines: list) -> bool:
     str_joined = "\n".join(list_lines)
     if STR_ESCAPE not in str_joined:
         return False
-    # `.splitlines()` on the tail after the marker is EMPTY, not `[""]`, when the
-    # marker is the very last text in the block — a bare `# comment-budget-ok:`
-    # with no trailing newline and no reason. `[0]` on that crashed the first
-    # draft instead of doing what a bare marker must do: fail the exemption.
     list_after_marker = str_joined.split(STR_ESCAPE, 1)[1].splitlines()
     str_reason = list_after_marker[0].strip() if list_after_marker else ""
     return bool(str_reason)
@@ -1283,7 +1239,6 @@ def baseline_problems(list_paths: list, bool_audit: bool, bool_require: bool) ->
     return ratchet_problems(current_counts(list_paths), dict_baseline, set_scope)
 
 
-# `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
 _INT_FLAG_WITH_VALUE = 2
 
 
@@ -1408,8 +1363,6 @@ def run(list_argv: list) -> int:
         else audit_paths()
     )
 
-    # Zero discovered files in audit mode is a failure, not a pass, matching every
-    # sibling gate in this family.
     if bool_audit and not list_paths:
         print(
             f"❌ no supported file found under {PATH_ROOT} — this gate would pass vacuously. "
