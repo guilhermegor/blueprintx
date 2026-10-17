@@ -34,5 +34,5 @@ export function NoteProvider({ children, repository }: NoteProviderProps) {
     [notes, createNote, createLoading, createError, listNotes, listLoading, listError, notifier],
   );
 
-  return <NoteContext.Provider value={value}>{children}</NoteContext.Provider>;
+  return <NoteContext value={value}>{children}</NoteContext>;
 }
