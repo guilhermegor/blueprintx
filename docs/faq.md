@@ -288,10 +288,10 @@ paths are listed once, one bare path per line (blank and `#` lines are ignored),
 - `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
   assertion over one already-generated project.
 
-Today the manifest lists only `.gitattributes` (the Graphite `linguist-generated` marker).
-`.coderabbit.yaml` and `.greptile/` are added by the PRs that ship them, so the guard does
-not yet protect those. Both are repo-root files, not GitHub-only assets, so the offline
-scaffold keeps them: `apply_offline_mode` drops only `.github/`.
+`templates/common/review-config.manifest` is the list of guarded paths; the PR that ships a
+reviewer config file adds its path there, so read the file rather than this page. These are
+repo-root files, not GitHub-only assets, so the offline scaffold keeps them:
+`apply_offline_mode` drops only `.github/`.
 
 `--static` is a fast heuristic over direct `cp` commands. It reads the scaffold script plus the
 `bin/lib/*.sh` helpers it sources, resolves the `*_TEMPLATE_ROOT` variables, and accepts a
