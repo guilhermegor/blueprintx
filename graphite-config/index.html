@@ -2190,8 +2190,11 @@ review lands. A label left on lets every push trigger another review.</p>
   was absent, each got the check run <code>Graphite / AI Reviews</code> with conclusion <code>skipped</code> ("does
   not match your org's AI review filters") and zero reviews.</li>
 </ul>
-<p>Not yet measured: the login Graphite uses on a review that does leave comments (expected
-<code>graphite-app[bot]</code>). Until it is, <code>.review-bots.yaml</code> has no Graphite row.</p>
+<p>Login measured on 2026-10-17 (probe PR with deliberate defects, label <code>review:graphite</code> added at
+21:43:12 UTC): about 67 s later <code>Graphite / AI Reviews</code> reported "AI review ran and left 2
+comments", and <code>graphite-app[bot]</code> (type <code>Bot</code>) submitted a <code>COMMENTED</code> review carrying 2 inline
+review comments. So <code>.review-bots.yaml</code> lists it as <code>posts: threads</code>. A draft PR got nothing in
+10 minutes, so the label only works on a PR that is ready for review.</p>
 <h2 id="in-blueprintx-itself">In BlueprintX itself<a class="headerlink" href="#in-blueprintx-itself" title="Permanent link">&para;</a></h2>
 <p>The BlueprintX root has no <code>.greptile/rules.md</code> (each skeleton ships its own, under
 <code>templates/&lt;skeleton&gt;/.greptile/</code>). The file-based rule for this repository points at
