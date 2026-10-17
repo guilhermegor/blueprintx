@@ -86,6 +86,15 @@ env HOME="$WORK_DIR" GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EM
     source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_git_remote.sh"
     scaffold_commit_artifacts "$2" nested' _ "$REPO_ROOT" "$parent/child" >/dev/null 2>&1
 check "a project nested in another repo is never committed into it" 0 "$(git -C "$parent" rev-list --all --count 2>/dev/null)"
+proj="$WORK_DIR/env-identity"
+git init -q -b main "$proj"
+echo e >"$proj/e"
+git -C "$proj" add e
+str_env_out="$(env HOME="$WORK_DIR" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    GIT_AUTHOR_NAME=envuser GIT_AUTHOR_EMAIL=env@e.com GIT_COMMITTER_NAME=envuser GIT_COMMITTER_EMAIL=env@e.com \
+    bash -c 'source "$1/bin/lib/common.sh"; scaffold_git_commit "$2" env-identity' _ "$REPO_ROOT" "$proj" 2>&1)"
+check "an identity from the environment is used, not the fallback" env@e.com "$(git -C "$proj" log -1 --format=%ae)"
+check "no fallback notice when the environment supplies the identity" 0 "$(grep -c 'No git identity set' <<<"$str_env_out")"
 check "an artifact commit that fails stops the scaffold" 0 "$(grep -c '^boom=' <<<"$str_out")"
 check "the failure names the commit" 1 "$(grep -c "Could not commit 'boom'" <<<"$str_out")"
 

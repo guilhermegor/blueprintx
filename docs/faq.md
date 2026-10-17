@@ -26,10 +26,12 @@ Create `templates/<name>/` with a `skeleton.meta` descriptor, add a scaffold scr
 
 ## Do I need a global git identity to scaffold?
 
-No. The scaffold's commits use your `user.name` / `user.email` when set. When no email is
-configured it commits as `BlueprintX Scaffold <scaffold@blueprintx.invalid>` for those commits
-only, prints a one-line notice, and never writes the fallback to any git config. Set your own
-identity afterwards with `git config --global user.name` / `user.email`.
+No. The scaffold's commits use your `user.name` / `user.email` (or the `GIT_AUTHOR_EMAIL` /
+`GIT_COMMITTER_EMAIL` environment variables) when set. When none of these is configured it
+commits as `BlueprintX Scaffold <scaffold@blueprintx.invalid>` for those commits only, prints a
+one-line notice, and never writes the fallback to any git config. Set your own identity later
+with `git config --global user.name "Your Name"` and
+`git config --global user.email "you@example.com"`.
 
 ## Online vs offline scaffolds — what's the difference?
 
