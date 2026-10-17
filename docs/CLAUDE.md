@@ -25,7 +25,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
 | `coverage-floor.md` | Utility page | Design record for `bin/check_coverage_floor.py` (blueprintx#149) — why `.coveragerc`'s `omit` list needed a code-derived floor, how it derives one, and why it stays deliberately coarse |
-| `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239) |
+| `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239); includes the "Generated-project workflows" section for rationale stripped from `templates/python-common/.github/` |
 | `issue-scope.md` | Utility page | Declaring and enforcing an issue's file surface so a gate can verify dispatched work at PR time (blueprintx#314) |
 | `lockfile-sync.md` | Utility page | The package.json vs package-lock.json gate, its regression test, and the ts-lib Dependabot grouping (blueprintx#588) |
 | `docs-boundary-gate.md` | Utility page | What `check_docs_boundary.sh` denies, where each case belongs, and why it ships to generated projects (blueprintx#576) |
@@ -36,7 +36,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `quality-gate-blind-spots.md` | Utility page | Measured audit of what the quality gates cannot see (blueprintx#169) |
 | `required-status-checks.md` | Utility page | Which checks `REQUIRED_CHECKS` should seed per scaffolded tier (blueprintx#164) |
 | `coderabbit-config.md` | Utility page | Why every scaffold ships `.coderabbit.yaml` and what its one key does (blueprintx#739) |
-| `graphite-config.md` | Utility page | What Graphite config the repo versions (`.gitattributes` `linguist-generated`), the dashboard-only steps, and the label-gated never-auto-review rule (blueprintx#738) |
+| `graphite-config.md` | Utility page | What Graphite config the repo versions (`.gitattributes` `linguist-generated`), the dashboard-only steps, the label-gated never-auto-review rule, and the measured label trigger; single-sourced from `templates/common/.greptile/graphite.md` (blueprintx#738) |
 | `skeletons.md` | Skeleton overview | API Service (Native DB) — hexagonal HTTP service with a transport layer |
 | `skeletons/ventoy-usb.md` | Skeleton overview | Ventoy drive builder (`ventoy-usb`): manifest-driven latest ISOs, resolver and checksum research, persistence, device guard |
 | `skeletons/bash-cli.md` | Skeleton overview | Standalone Bash CLI starter (`bash-cli`), git-tag versioned, bats + shellcheck |
@@ -183,7 +183,7 @@ No fixed section template — these pages serve different purposes. Preserve the
 | `sonarqube-evaluation.md` | Tooling-adoption decision record | Coverage-map table against existing gates, sourced claims about the evaluated tool, recommendation with reopen conditions |
 | `quality-rules.md` | Quality-rule registry record | What the gate decides vs leaves to review, one section per rule id (the `docs:` anchors) |
 | `coderabbit-config.md` | Config explanation record | The one active key and what it does, why it may be a no-op (star threshold), and that the trigger workflow, not this file, drives review requests |
-| `graphite-config.md` | Config explanation record | What the repo versions (`.gitattributes` `linguist-generated`), the dashboard-only setup steps, and the label-gated never-auto-review rule with its unmeasured label trigger |
+| `graphite-config.md` | Config explanation record | What the repo versions (`.gitattributes` `linguist-generated`), the dashboard-only setup steps, and the label-gated never-auto-review rule with its measured trigger; the body is a snippet include of the file every scaffold ships |
 
 When adding a new utility page, document its intent and key sections in the table above.
 
