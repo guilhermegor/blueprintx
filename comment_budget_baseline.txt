@@ -34,7 +34,6 @@ scope 2
 20 templates/python-common/bin/check_assertion_weakening.py
 31 templates/python-common/bin/check_backlog_ledger.py
 23 templates/python-common/bin/check_clean_index.sh
-47 templates/python-common/bin/check_comment_budget.py
 62 templates/python-common/bin/check_comment_language.py
 142 templates/python-common/bin/check_complexity.sh
 25 templates/python-common/bin/check_contract_drift.py
@@ -61,7 +60,6 @@ scope 2
 37 templates/python-common/bin/check_sql_guards.py
 13 templates/python-common/bin/check_typing.py
 27 templates/python-common/bin/check_unix_filenames.sh
-48 templates/python-common/bin/comment_budget_allowlist.txt
 5 templates/python-common/bin/db.sh
 28 templates/python-common/bin/enable_pages.sh
 190 templates/python-common/bin/enable_repo_rules.sh
@@ -90,7 +88,6 @@ scope 2
 32 templates/python-common/bin/pr_gate.py
 35 templates/python-common/bin/pr_reconcile.sh
 42 templates/python-common/bin/precommit.sh
-13 templates/python-common/bin/required-checks.txt
 54 templates/python-common/bin/rerun_stale_gate_runs.sh
 171 templates/python-common/bin/retry_rate_limited_review.py
 14 templates/python-common/bin/run.sh
