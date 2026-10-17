@@ -444,7 +444,7 @@ This section records what is specific to the generated copies.
   allow. This refreshes the lock but never rewrites pyproject ranges: narrowing a library's
   range on a consumer's behalf is not the project's call, and pyproject and lock stay in sync.
 - **Solo-maintainer tuning.** Minor and patch are grouped into one PR; majors arrive alone and
-  get scrutiny. Each bump is an isolated PR, so a bad one reddens that PR and never `main`. A
+  get scrutiny. Each PR (one grouped minor-and-patch update, or one major) is isolated, so a bad bump reddens that PR and never `main`. A
   linter bump (ruff, mypy) can ask for a reformat, which is the system working.
 - **No `labels:` key**, because `bin/pr_gate.py` already labels by changed path and Dependabot
   comments an error on every PR it opens when a declared label does not exist. When a scaffold
