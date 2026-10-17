@@ -759,9 +759,6 @@ conditional_pyproject_otel() {
     if [[ "$INCLUDE_OTEL" != "true" ]]; then return; fi
     local pyproject="$project_path/pyproject.toml"
     sed_inplace '/^defusedxml = ">=0.7"/a\
-# OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
-# "Development" status upstream (see _internal/utils/otel_logging.py). The consumer'"'"'s own\
-# host process sets OTEL_EXPORTER_OTLP_ENDPOINT — this library ships no .env.\
 opentelemetry-api = "==1.44.0"\
 opentelemetry-sdk = "==1.44.0"\
 opentelemetry-exporter-otlp-proto-http = "==1.44.0"' "$pyproject"

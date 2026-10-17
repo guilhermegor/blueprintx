@@ -40,8 +40,7 @@ from beartype import BeartypeConf, BeartypeHintOverrides
 from beartype.vale import Is
 
 
-# ── Policy knobs — edit these, not the adapter ──────────────────────────────────────────
-VIOLATION_TYPE: type[Exception] = TypeError  # ⚠ load-bearing — see module docstring.
+VIOLATION_TYPE: type[Exception] = TypeError
 STRICT_BOOL: bool = True
 WIDEN_INT_TO_NUMPY: bool = True
 PEP484_NUMERIC_TOWER: bool = False
@@ -80,8 +79,6 @@ def build_conf() -> BeartypeConf:
     """
     int_hint = _int_hint()
     if int_hint is int:
-        # No numeric override applies, so skip the hint override entirely and let beartype
-        # use its own int handling rather than a redundant self-mapping.
         return BeartypeConf(
             violation_type=VIOLATION_TYPE,
             is_pep484_tower=PEP484_NUMERIC_TOWER,

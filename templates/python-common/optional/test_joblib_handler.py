@@ -21,8 +21,6 @@ import pytest
 from chassis.db_wschema.infrastructure.joblib_handler import JoblibHandler
 
 
-# zlib, not the handler's default lz4: lz4 is not a declared dependency of any tier, and these
-# tests are about the id, not the codec.
 TUPLE_COMPRESS = ("zlib", 3)
 
 LIST_BAD_ID_SUFFIXES = [
