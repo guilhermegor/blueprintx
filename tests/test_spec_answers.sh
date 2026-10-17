@@ -598,6 +598,22 @@ test_a_missing_tool_is_not_reported_as_an_undefined_test() {
     fi
 }
 
+test_first_commit_works_without_a_git_identity() {
+    local file out int_rc str_home="$WORK_DIR/empty-home"
+    mkdir -p "$str_home"
+    file="$(write_spec no-identity lib-minimal "project_root=$WORK_DIR/proot-noid")"
+    out="$(cd "$WORK_DIR" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME \
+        -u GIT_COMMITTER_EMAIL -u XDG_CONFIG_HOME -u EMAIL HOME="$str_home" GIT_CONFIG_GLOBAL="$str_home/.gitconfig" GIT_CONFIG_NOSYSTEM=1 TMPDIR="$WORK_DIR" \
+        bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" --dev 2>&1 </dev/null)"
+    int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [[ "$out" == *"No git identity set"* ]] \
+        && [ ! -e "$str_home/.gitconfig" ]; then
+        pass "first commit succeeds with no git identity and writes no config"
+    else
+        fail "no git identity" "$(tail -3 <<<"$out") rc=$int_rc gitconfig-written=$([ -e "$str_home/.gitconfig" ] && echo yes || echo no)"
+    fi
+}
+
 main() {
     test_ventoy_usb_answer_stream_order
     test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes
@@ -623,6 +639,7 @@ main() {
     test_api_service_storage_answer_reaches_the_storage_prompt
     test_dev_clean_uses_a_temp_root_and_removes_it
     test_dev_without_clean_preserves_the_temp_root
+    test_first_commit_works_without_a_git_identity
     test_spec_values_are_trimmed_so_a_crlf_spec_works
     test_yn_keys_read_by_callers_match_the_key_map
     test_skeleton_match_is_exact
