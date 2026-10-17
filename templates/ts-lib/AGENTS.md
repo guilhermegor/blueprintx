@@ -18,8 +18,8 @@ built with `tsc` alone (no bundler).
 `src/**/*.ts` is REJECTED unless `VENDOR_POLICY` names it, per layer, with a written reason
 (an entry with a blank reason fails at config-load time, not silently). This is the TypeScript
 mirror of the Python skeletons' `.layer-policy.yaml` + `check_layer_imports.py` — see the
-block comment above `VENDOR_POLICY` for why the policy lives inline here rather than in
-`templates/ts-common/`, and why there is no `boundaries` (layer-direction) entry for this
+vendor-policy notes in `CONTRIBUTING.md` (ESLint configs) for why the policy lives inline here
+rather than in `templates/ts-common/`, and why there is no `boundaries` (layer-direction) entry for this
 tier. Adding a new runtime dependency means adding it to the **allow map of the layer that imports
 it**, with a reason, or `npm run lint` fails.
 

@@ -86,10 +86,10 @@ exact failure the gate family exists to prevent. Its verification is
 per-tier in each `pyproject.toml` and **cannot** be single-sourced into a shared `deptry.toml`:
 `--config <file>` re-points deptry at that file as the *manifest* as well, so it stops reading
 the tier's dependency table. That is the one-implementation rule losing to a measured
-constraint, which is why the reason is in `CONTRIBUTING.md` rather than remembered. The five
-manifests still carry a comment about it today (baselined, removed by the #304 sweep). An
-explanation belongs in `docs/`, `README.md` or `CONTRIBUTING.md`, and nothing is left at the
-code site: BlueprintX's own comment gate is zero-tolerance outside its allowlist (blueprintx#304).
+constraint, which is why the reason is in `CONTRIBUTING.md` and `docs/decision-records.md` rather
+than remembered. The manifests carry no comment about it: an explanation belongs in `docs/`,
+`README.md` or `CONTRIBUTING.md`, and nothing is left at the code site, because the comment gate
+(`check_comment_budget.py`) is zero-tolerance outside its allowlist (blueprintx#304).
 
 The **review-thread gate** follows the same rule, reached from the other direction: it *did* have
 two 543-line copies, and `.github/workflows/review_threads.yml` now runs the shared
