@@ -104,6 +104,142 @@ the trigger-label route, which counts as an `open` event and would need `"open"`
 `greptile-apps[bot]` posts inline review threads, so it is listed in every
 `.review-bots.yaml` roster.
 
+## Generated-project config files (`templates/python-common`)
+
+The config files every Python scaffold ships carry no comments. This section records why each
+is shaped as it is; a generated project gets the same text in its own `docs/` layer.
+
+### Small config files
+
+- **`.codespellrc`.**
+    - `skip` is the single source both gates read: `poe lint` scans the whole tree and
+      pre-commit only staged files, so they agree only because the skip lives here.
+      `*-lessons.md` is a git-ignored mirror that the lessons workflow writes, not a build
+      output; without the skip, writing a lesson would flag the mirror and abort an unrelated
+      commit. Use the basename glob, never `docs/*-lessons.md`: `codespell .` walks `./docs/...`
+      and an anchored pattern silently fails to match.
+    - `ignore-words-list` is the locale extension point. codespell only knows English, so a
+      technical doc in another language (the seed is pt-BR) is flagged at the pre-commit
+      boundary, and each rejected commit costs a full gate run. Extend the list with your
+      locale's vocabulary; never `skip` a whole file, which hides real typos in identifiers.
+      The second half of the list is commit and doc prose (`ser`, `vai`, `meu`, ...), not
+      domain nouns. Write every entry lowercase: codespell lowercases the found word before the
+      lookup, so a capitalised entry matches only itself. Keep it in sync with the repo-root
+      `.codespellrc`; the two drifted in both directions and the stale copy was this one.
+      Entries are pruned by measurement (#197): drop one, re-run, keep it only if a finding
+      appears.
+- **`.coveragerc`.** Branch coverage and the floor are measured as described in
+  [Coverage floor](coverage-floor.md) (#427). `bin/check_coverage_floor.py` guards the patterns:
+  one must never widen past `infrastructure/` (or a whole capability named outright) into a
+  `domain/` or `application/` layer, which would drop real logic from the `fail_under`
+  denominator (#149). `fail_under` is the single literal read by pytest-cov in both the
+  pre-commit hook and the CI gate.
+- **`.cz.toml`.** Commitizen config lives here, not in `pyproject.toml`, so the manifest stays
+  near package identity and dependencies (#233); the keys were identical across the five Python
+  tiers, so it is one file copied to each. Commitizen tries `pyproject.toml` first and skips it
+  when it has no `[tool.commitizen]`, so this file is found; but if it ever stops being copied,
+  commitizen does not fail: `cz version --project` prints "No project information" and exits 0,
+  giving a differently formatted changelog and an unprefixed tag, never a red check. That is why
+  `scaffold_lint_test.sh` asserts the file lands. Consumers: `poe bump_version`, `poe changelog`,
+  the `commitizen` and commit-msg hooks, and the docs build. `version_provider = "poetry"` reads
+  `[tool.poetry]` by project root, not by where the config lives. Services keep the version in
+  `pyproject.toml`, tagged by `cz bump` (offline) or `release.yaml` (online); the library tier
+  takes it from the git tag via poetry-dynamic-versioning. Either way `cz changelog` groups by tag.
+- **`docker-compose.otel-collector.yml`.** Ports are bound to `127.0.0.1`, not published on every
+  interface. The OTLP receivers are unauthenticated and the file is copied into every project that
+  opts in, so a bare `4318:4318` would make an open log sink the default on whatever network the
+  box sits on. A deployed collector belongs behind a real ingress with credentials. 4318 is
+  OTLP/HTTP, which `OTEL_EXPORTER_OTLP_ENDPOINT` points at; 4317 (gRPC) is unused by the HTTP
+  exporter and kept for a gRPC one.
+- **`otel-collector-config.yaml`** (#438). The collector is the decoupling point: repoint the
+  `logging` exporter at Axiom, Loki, Datadog, SigNoz, Honeycomb, Elastic or any OTLP backend,
+  a config change and never an application change. `0.0.0.0` is correct and must not be
+  hardened to `127.0.0.1`: it is the bind address inside the container, whose loopback is not
+  the host's, and narrowing it makes the collector unreachable through the port mapping while
+  the fire-and-forget exporter reports nothing. Host exposure is controlled in the compose file.
+  The `logging` exporter prints to the collector's stdout, enough to prove the seam end to end.
+- **`docs/.docs-skeleton.yaml`.** Overrides the required-page set `check_docs_sections.py`
+  enforces. It adds `architecture.md`, which describes a service's layer structure and was
+  scaffolded but never enforced (#130). It is copied into the four service tiers;
+  `lib-minimal` has no `architecture.md`, never receives the file and keeps the default set.
+- **`.gitignore`.** `dist/` is ignored but `dist/.keep` is tracked, so the directory ships.
+  Only the curated VS Code settings and tasks are tracked. `coverage.svg` is tracked (the
+  README badge references it); `coverage.xml` is regenerated on every run. The Claude Code
+  `.tmp.<pid>.<hash>` mid-save sibling is ignored so a racing `git add -A` cannot sweep it into
+  a commit. The scaffoldable-lessons working copies are local; the canonical stores are global.
+  The SQLite file is the `DB_BACKEND=sqlite` default `DB_PATH=./data/app.db` and is never
+  committed. The corporate CA and the union bundle derived from it are generated locally.
+- **`.gitleaks.toml`.** It extends the default ruleset rather than replacing it, and keeps the
+  allowlist to what a fresh project measurably needs, not a speculative list copied from
+  another app's surface (#305). Extend it as real false positives are measured, as
+  `.codespellrc` grows. The stopwords are the placeholder markers in `.env.example` and the
+  README, never real secrets; a value containing one is ignored. The lockfile is allowlisted
+  for pinned package-hash entropy.
+- **`.gitlint`.** The limits were implicit (gitlint's defaults) and were found only when a
+  commit was rejected after the slow hook chain had run. Commitizen enforces the
+  Conventional-Commits format; gitlint owns the length limits.
+- **`.hadolint.yaml`.** A project may ship no Dockerfile, in which case the `hadolint-docker`
+  hook skips. The baseline lets one that adds a Dockerfile inherit a starting point. hadolint
+  lints Dockerfiles only; compose files are covered by `check-yaml` and yamllint. It fails on
+  warnings and above (info and style are advisory). Seed `trustedRegistries` (DL3026) and
+  `ignored` per project, for example `DL3008` (pin apt-get versions) or `DL3059`.
+- **`.layer-policy.yaml`** (this directory's own copy, checking `python-common/src`). The
+  directory is a staging area, not a project, which is why it went unchecked: the gate
+  self-skipped without a policy, so the code shipped to every tier was the one tree the boundary
+  was never applied to. A third-party dependency is reached through a seam in `utils/`, never
+  imported by `model/`, `view/` or `controller/`, so a vendor change stays in one adapter.
+  Deferring an import into a function buys no exemption. Every `allow` entry carries a reason,
+  since an unexplained allowlist entry is one the first inconvenienced person widens.
+  `chassis` is first-party but absent from this layout (the DDD name for the typing shim's
+  home). pandas is allowed as a type annotation only: `-> pd.DataFrame` is shared vocabulary,
+  `pd.read_sql(...)` is a vendor API call every copy inherits. `utils/` is the seam layer and is
+  listed explicitly so a new vendor needs a conscious decision. A stray module directly under
+  `src/` is named so it cannot bypass the policy. The composition root knows concrete
+  implementations but not the domain.
+- **`.pydocstyle`.** Ruff already enforces the NumPy docstring set; pydocstyle adds the two
+  checks ruff lacks, D412 and D417. The list matches the hook's `--select`, so `poe lint` (a
+  bare `pydocstyle .`) and the hook enforce the same thing.
+- **`pytest.ini`.** `PytestUnraisableExceptionWarning` is escalated as well as
+  `ResourceWarning`: a warning raised inside `__del__` is unraisable, so pytest re-emits it as
+  the other class and `error::ResourceWarning` alone never sees it, letting a leaked file handle
+  pass (#294, the shape #223 shipped). The second line is the whole mechanism for `__del__`; do
+  not delete it as noise. A warning is ignored by source, never by class alone: a bare
+  `ignore::DeprecationWarning` hides every deprecation, including ones aimed at this code.
+  With the four blanket lines removed the suite emitted four warnings, all from one vendor.
+- **`requirements.txt`** is the bootstrap install. `poetry-plugin-export` is pinned here and not
+  only as a dev dependency: a dev dependency reaches the project venv and nothing else, so the
+  recipe would work from an activated shell and fail from cron, CI and the offline host it
+  serves. `poetry-plugin-shell` (Poetry 2.x dropped `poetry shell`) lives here for the same
+  reason: a Poetry plugin must live in the interpreter Poetry runs from, and as a project
+  dependency it would sit in `.venv`, where no Poetry exists to load it.
+- **`.review-bots.yaml`.** The roster is the provider-agnosticism: the gate names no tool, it
+  subtracts these logins from a thread's authors. Reviewer shapes differ: some post inline
+  threads, some post only a status check. `posts:` is required on every row and decides more
+  than authorship (#218): a `posts: status` member is excluded from the missing-review gate too,
+  so a workflow submitting a review with the ambient `GITHUB_TOKEN` cannot satisfy a gate that
+  exists to say a real reviewer looked. A row that omits it or spells it otherwise fails loudly;
+  at least one `posts: threads` member is required. Zero threads is judged against a submitted
+  review, never against silence (#208). Delete the file to opt out: the gate self-skips with a
+  message. See also the records at the top of this page.
+- **`.shellcheckrc`.** `severity=warning` is the level at which the scripts are clean while still
+  catching real bugs (unquoted expansions, undefined variables, bad test syntax). SC1091 is
+  disabled because `lib/common.sh` is resolved at run time, not lint time.
+- **`.sqlfluff`.** The top-level dialect is a fallback for a `.sql` file outside the per-engine
+  layout. Mixing engines needs no change here or in `bin/lint_sql.sh`: queries live in
+  `src/config/queries/<engine>/<table>__<purpose>.sql` and sqlfluff resolves config per
+  directory, so each engine's folder carries a one-line `.sqlfluff` with its dialect. The engine
+  is a directory, never a filename prefix, which would declare it twice and could disagree.
+  Positional `?` bind parameters are swapped for a stub by the placeholder templater, since a
+  bare `?` is not SQL. Indentation is a tab, matching the project convention (ruff, shfmt and
+  Make use tabs; only YAML is forced to spaces). Hand-written SQL keeps a readable style with
+  identifier casing dictated by the source schema, so those opinion groups are excluded while
+  parse-correctness and keyword capitalisation stay on.
+- **`.yamllint`** complements `check-yaml`, which only validates that YAML parses, with style
+  checks. It is relaxed where the config YAMLs are intentional: no line-length cap (long
+  documentation comments and email bodies), no `---` start marker, aligned values with extra
+  spaces after the colon (`outputs_*.yaml`), and truthy values that appear inside quoted
+  strings, not as bare booleans.
+
 ## Root workflows: why each is shaped as it is
 
 These records explain the GitHub Actions workflows under `.github/workflows/` in this
