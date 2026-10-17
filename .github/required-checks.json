@@ -22,6 +22,7 @@
     "Dry-run smoke — mvc-service-native-db",
     "Dry-run smoke — mvc-service-orm-db",
     "Dry-run smoke — react-spa-webpack",
+    "Every skeleton ships dependabot.yml with a cooldown",
     "Every skeleton ships the hosted-reviewer config",
     "Function length — 60 lines, docstring excluded",
     "Gate integrity — a PR must not weaken a check without saying why",
