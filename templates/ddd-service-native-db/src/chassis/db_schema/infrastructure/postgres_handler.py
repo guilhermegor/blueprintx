@@ -55,12 +55,6 @@ class PostgresDatabaseHandler(DatabaseHandler):
         dict_parsed = self._parse_dsn(dsn)
         self.host = dict_parsed.get("host") or "localhost"
         self.port = dict_parsed.get("port") or 5432
-        # ⚠️ Chain the literal default as its own "or" term rather than passing it to
-        # os.getenv. Inside an "or", mypy resolves getenv's generic default against the
-        # LEFT operand's type, so a getenv call with a string default comes back as str or None
-        # and every argv built from it becomes a list of str-or-None. Chaining also fixes
-        # a real behavioural gap — an env var set to the EMPTY string now falls back too,
-        # instead of silently connecting as "".
         self.user = dict_parsed.get("user") or os.getenv("DB_USER") or "user"
         self.password = dict_parsed.get("password") or os.getenv("DB_PASSWORD") or "password"
         self.dbname = dict_parsed.get("database") or os.getenv("DB_NAME") or "app"
@@ -197,8 +191,8 @@ class PostgresDatabaseHandler(DatabaseHandler):
             "-U",
             self.user,
             "-F",
-            "c",  # custom format for pg_restore
-            "-b",  # include large objects
+            "c",
+            "-b",
             "-f",
             str(path_target),
             self.dbname,

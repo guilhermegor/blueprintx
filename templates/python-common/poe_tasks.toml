@@ -188,7 +188,7 @@ cmd = "bash bin/check_complexity.sh"
 help = "Cyclomatic-complexity ceiling per tree (tests 1, src 2, bin 8)"
 
 [tool.poe.tasks.check_comment_budget]
-cmd = "python bin/check_comment_budget.py"
+cmd = "python bin/check_comment_budget.py --require-baseline"
 help = "Bound comment volume (long runs + decorative banners), QA pragmas exempt"
 
 [tool.poe.tasks.check_env_docs_sync]

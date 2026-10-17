@@ -1,20 +1,3 @@
-# Library-only tasks — present only when scaffolded as a distributable library (lib-minimal).
-# Not shipped to the service tiers, which are applications rather than published packages.
-#
-# Wired into poe_tasks.toml by the scaffold's `add_poe_include`, never declared there: poe
-# warns on every invocation for a missing include, unlike the Makefile's silent `-include`.
-
-# Build the wheel/sdist, install it, and smoke-import the package — catches packaging mistakes
-# (a missing __init__, an unshipped _internal subpackage) that source-tree tests cannot see.
-#
-# ⚠️ Uses `python -m build`, a PEP 517 frontend, so poetry-dynamic-versioning stamps the real
-# version into the wheel; `poetry build` would ignore the backend. The editable install resolves
-# __version__ to the 0.0.0 placeholder (expected), so the built wheel's tag-derived version is
-# reported instead. The package name is read from pyproject at runtime, so this file needs no
-# per-project substitution.
-#
-# `poetry install` and `poetry version` are MANAGEMENT commands and route through the Poetry
-# resolver; `python -m build` and the import checks run inside the venv, so poe supplies it.
 [tool.poe.tasks.install_dist_locally]
 shell = """
 rm -rf dist/* build/ ./*.egg-info/

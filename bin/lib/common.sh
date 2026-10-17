@@ -336,3 +336,6 @@ remove_repo_policy_scripts() {
     rm -f "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh" \
         "$project_path/bin/dependabot_auto_merge.sh"
 }
+
+# shellcheck source=bin/lib/scaffold_comment_budget.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scaffold_comment_budget.sh"
