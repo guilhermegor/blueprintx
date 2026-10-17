@@ -1,12 +1,11 @@
 #!/bin/bash
-# Clean and reinstall Playwright Chromium browsers.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=bin/lib/bootstrap.sh
-source "$SCRIPT_DIR/lib/bootstrap.sh" # detect_os (sourced does no work)
+source "$SCRIPT_DIR/lib/bootstrap.sh"
 
 fix_playwright_installation() {
 	print_status "section" "Playwright Reinstallation"
@@ -23,9 +22,6 @@ fix_playwright_installation() {
 		return 1
 	}
 
-	# `--with-deps` installs Linux OS packages via apt and is only valid on Debian/Ubuntu;
-	# on Windows/macOS it has nothing to spawn (the `spawn UNKNOWN` failure), so add it on
-	# Linux only.
 	local -a args_install=(chromium)
 	[[ "${OS_TYPE:-$(detect_os)}" == "linux" ]] && args_install+=(--with-deps)
 
@@ -56,8 +52,6 @@ except Exception as e:
 }
 
 main() {
-	# Resolve Poetry the robust way (bare `poetry` may be absent; see
-	# bin/poetry_exec.sh) before any `run_poetry` call.
 	bootstrap_init
 	ensure_poetry
 	fix_playwright_installation || exit 1

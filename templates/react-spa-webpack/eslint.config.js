@@ -1,10 +1,11 @@
 import js from '@eslint/js';
+import eslintReact from '@eslint-react/eslint-plugin';
 import prettierConfig from 'eslint-config-prettier';
 import boundaries from 'eslint-plugin-boundaries';
-import importPlugin from 'eslint-plugin-import';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
+import importPlugin from 'eslint-plugin-import-x';
 import jest from 'eslint-plugin-jest';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
-import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
@@ -28,11 +29,11 @@ export default [
 
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  { files: ['**/*.{jsx,tsx}'], ...eslintReact.configs['recommended-typescript'] },
 
   {
     files: ['**/*.{jsx,tsx}'],
     plugins: {
-      react,
       'react-hooks': reactHooks,
       'jsx-a11y': jsxA11y,
       'react-refresh': reactRefresh,
@@ -48,16 +49,8 @@ export default [
         ecmaFeatures: { jsx: true },
       },
     },
-    settings: {
-      react: {
-        version: 'detect',
-      },
-    },
     rules: {
-      ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
-      'react/react-in-jsx-scope': 'off',
-      'react/prop-types': 'off',
       'jsx-a11y/alt-text': 'warn',
       'jsx-a11y/anchor-is-valid': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
@@ -188,23 +181,17 @@ export default [
 
   {
     files: ['src/**/*.{ts,tsx,js,jsx}'],
-    plugins: { import: importPlugin },
+    plugins: { 'import-x': importPlugin },
     settings: {
-      'import/resolver': {
-        typescript: {
-          alwaysTryTypes: true,
-          project: './tsconfig.json',
-        },
-        node: {
-          extensions: ['.js', '.jsx', '.ts', '.tsx', '.json', '.css'],
-        },
-      },
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({ alwaysTryTypes: true, project: './tsconfig.json' }),
+      ],
     },
     rules: {
-      'import/no-unresolved': 'error',
-      'import/no-duplicates': 'error',
-      'import/no-cycle': ['error', { maxDepth: 10 }],
-      'import/order': [
+      'import-x/no-unresolved': 'error',
+      'import-x/no-duplicates': 'error',
+      'import-x/no-cycle': ['error', { maxDepth: 10 }],
+      'import-x/order': [
         'error',
         {
           groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],

@@ -578,6 +578,445 @@ is shaped as it is; a generated project gets the behavior, not the history.
   and breaks on setuptools 81 or newer. It generates `coverage.xml`, then the SVG; the SVG is
   tracked (README badge) and the XML is ignored.
 
+## Generated-project shell scripts (`templates/python-common/bin`)
+
+The shell scripts every Python scaffold ships carry no comments. This section records why each
+is shaped as it is.
+
+### Rules that recur across the scripts
+
+- **Resolve, don't install.** An optional linter or tool must never trigger an install. A
+  missing tool is a graceful skip on a contributor's machine (exit 0 with a message) and a hard
+  failure in CI, through a `*_REQUIRED=1` variable (`LINT_ACTIONS_REQUIRED`,
+  `LINT_DOCKER_REQUIRED`, `GITLEAKS_REQUIRED`). A skip in CI is a gate reporting its own
+  blindness as OK. Applies to `lint_shell.sh`, `lint_yaml.sh`, `lint_sql.sh`, `lint_actions.sh`,
+  `lint_docker.sh` and `check_secrets.sh`; `lint_deps.sh` and `check_complexity.sh` are the
+  exceptions that hard-fail, below.
+- **Probe with `--version`, never `command -v` alone.** `command -v` answers "is there a file by
+  that name on `PATH`", not "does it run". A shadowing stub, a half-installed package or a binary
+  built for another libc satisfies it, and the wrapper then reports the tool's startup failure as
+  a lint finding: a stub exiting 127 produced `actionlint [system]: 7 workflow(s)` and exit 127,
+  blaming the workflows (#111). The poetry branch always probed; the system branch now does too.
+- **Assert the discovery count.** Tools such as actionlint and deptry exit 0 when handed nothing,
+  so a wrapper whose glob matched nothing reports success forever. Zero discovered files fails
+  (`lint_actions.sh`, `lint_deps.sh`, `check_unix_filenames.sh`, `check_complexity.sh`);
+  `lint_docker.sh` is the one deliberate exception, below.
+- **Group a `find` expression.** `-name '*.yaml' -o -name '*.yml' -type f` parses as `(-name
+  '*.yaml') OR (-name '*.yml' AND -type f)`, so a directory named `*.yaml` enters the list and
+  fails the gate for an unrelated reason. The `\( ... \)` is load-bearing. A prune group must
+  also come first with no test before it: a leading `-type f` is false for a directory, so
+  `-prune` is never evaluated and `.venv` and `node_modules` get linted
+  (`check_unix_filenames.sh`, measured).
+- **`mapfile < <(producer)` discards the producer's exit status.** A `find`, `git` or `gh api`
+  that dies midway hands over a partial or empty list that reads as complete, and the script
+  announces "clean" over a query that never ran. Materialise to a temp file first (also because a
+  bash variable cannot carry NUL bytes), check the status, then read
+  (`lint_docker.sh`, `check_unix_filenames.sh`, `rerun_stale_gate_runs.sh`).
+- **Never set a global inside `$(...)`.** `resolve_poetry` populates the `POETRY_CMD` array;
+  command substitution runs in a subshell, so the caller's array stays unset, every later
+  `run_poetry` fails and, with output suppressed, the gate reports a clean tree having run
+  nothing: 79 known violations reported as success (`check_complexity.sh`, `lint_deps.sh`).
+- **Capture an exit status where it is produced** (`|| int_status=$?`). A bare call is exempt
+  from `set -e` only because a caller three levels up happens to suspend errexit, which is true
+  today and not something anyone should have to know.
+- **Keep a command's output when you explain its failure.** Never `>/dev/null 2>&1` a command
+  and then blame a cause: the explanation becomes a guess about text you refused to read.
+  Remedies name the resolved binary (`${POETRY_CMD[*]}`), never a bare `poetry`
+  (`export_deps.sh`, `enable_repo_rules.sh`).
+- **Verbatim wrapper discipline.** Each wrapper keeps the heavy logic out of heredocs: a heredoc
+  is for inert text a script emits, not a program (`bin/CLAUDE.md`). The CA union and the pip
+  requirement translation were `python - <<'PYEOF'` blocks of 66 and 151 lines that ruff never
+  linted, mypy never checked and pytest could not import; they are `lib/ca_bundle.py` and
+  `lib/pip_requirements.py` now, with the interface unchanged.
+- **Sourcing `lib/bootstrap.sh` does no work.** It defines functions only; the caller invokes
+  `bootstrap_init` and then the helpers it needs. It guards against being sourced twice.
+
+### GitHub setup scripts (`enable_*.sh`)
+
+- **Why they exist.** A workflow's `GITHUB_TOKEN` is an App installation token that cannot
+  create a Pages site, change its source, set a ruleset or flip a security toggle ("Resource not
+  accessible by integration"). Those need repo-admin rights, which a maintainer running
+  `poe init` has through `gh auth` and CI does not. Merge protection kept in a maintainer's
+  memory is protection a fresh clone or fork silently lacks. All are idempotent and
+  non-blocking: `gh` absent, unauthenticated or not admin warns and returns 0 so `init`
+  completes.
+- **`enable_pages.sh`.** Two models, auto-detected from `mkdocs.yml`. With `provider: mike` the
+  release workflow deploys to `gh-pages`, so Pages serves from that branch, flipped only once the
+  branch exists (the first `mike deploy` creates it) so the live site never points at an empty
+  branch. Without mike, `docs.yaml` deploys through `actions/deploy-pages`, so the source is
+  "GitHub Actions" (`build_type=workflow`). The two models are mutually exclusive.
+- **`enable_security.sh`.** The Settings checkboxes are not reproducible and are forgotten on a
+  fork. Three plain `PUT`s (204): vulnerability alerts, then automated security fixes (which
+  depend on alerts being on), then private vulnerability reporting, the intake channel
+  `SECURITY.md` points at. Secret scanning and push protection are one `PATCH` of
+  `security_and_analysis` with scanning first (push protection depends on it, and fields apply
+  in order); free on public repos only, so on a private repo it warns and continues. Automated
+  security fixes are for vulnerabilities, `.github/dependabot.yml` for ordinary version updates.
+  GitHub detects a root `SECURITY.md` by itself. GitGuardian (#155) was evaluated for this role
+  and deferred: the native toggles are free and need no third-party app on public repos;
+  reconsider for private repos or an offline pre-commit scanner. `secret_scan.yaml` is a
+  separate, opt-in decision made at scaffold time (#287), not here: `poe init` runs against an
+  already-created repo, the wrong phase to gate a file's shipping. A self-audit of BlueprintX
+  (#164, 2026-09-04) found no divergence; the script has no `verify` mode.
+- **`enable_repo_rules.sh`.** Applies the `pr-quality-gate` ruleset by name (PUT when it exists,
+  POST when it does not; never a blind POST, which would duplicate it):
+    - `pull_request` with `required_approving_review_count: 0` and
+      `required_review_thread_resolution: true`. Zero, because GitHub forbids authors approving
+      their own PR, so any higher value locks a solo maintainer out; zero still forces every
+      change through a PR, which is the guardrail.
+    - `code_scanning` (CodeQL, alerts at `high_or_higher`), `non_fast_forward`, `deletion`.
+    - `copilot_code_review` is its own rule type: the intuitive
+      `pull_request.parameters.automatic_copilot_code_review_enabled` returns HTTP 422, which makes
+      the feature look UI-only. The automatic/manual boundary is repo config versus account plan:
+      without a qualifying Copilot plan the rule sits correctly configured and inert, with no
+      error. `gh api user/copilot_billing` 404s for a personal account even when Free is active;
+      read the plan page.
+    - Deliberately not enabled, each a second source of truth: "Require code quality results"
+      (subjective AI severity on the merge path) and "Restrict code coverage" (the floor is
+      single-sourced in `.coveragerc`).
+    - Settings the gate cannot set itself: code-scanning default setup, `allow_auto_merge`
+      (without it the `enablePullRequestAutoMerge` mutation silently no-ops),
+      `delete_branch_on_merge` and the `do-not-merge` opt-out label. Each is read back, since a
+      green API call is not proof the mutation took.
+    - `required_status_checks` only when the list is non-empty, because a required check that
+      never reports blocks every PR forever. Do not guess names: they must match check-run
+      names exactly (matrix values included); take them from a real PR with
+      `gh api repos/:owner/:repo/commits/<sha>/check-runs --jq '.check_runs[].name' | sort -u`.
+      The seeded entry is the `review_threads.yaml` job name, correct by construction and
+      reporting on every PR from the moment it opens. A name qualifies only if it is a literal
+      `jobs.<id>.name:` of a workflow the project ships, its `on: pull_request` has no
+      `types:`/`branches:`/`paths:` filter, no job-level `if:` can skip it, and the workflow is
+      shipped; `tests.yaml` fails the second rule and `coderabbit_trigger.yaml` the third. The
+      list is data (`bin/required-checks.txt`, per template family, #164/#564), compared verbatim
+      (stray space never matches). An empty list means CI runs on every PR and blocks nothing:
+      measured on BlueprintX 2026-08-16, a PR merged with 32 of 47 checks passed.
+    - A missing `required-checks.txt` is unknown, not an empty list (#585): it must not drive a
+      PUT against an existing ruleset, which would silently strip its `required_status_checks`.
+    - `REVIEW_THREADS_REQUIRE_RESOLVED=1` (#196) supersedes the earlier delegation of the
+      resolve half to the ruleset, which drops a thread marked `isOutdated`; see the records
+      above. The accepted cost is a red check after a resolve until a re-run.
+    - `strict_required_status_checks_policy` must be true (#307, "Require branches to be up to
+      date"). With it false a PR merges on a green run against a base that no longer exists
+      (#302: six tier checks red only because #293 had not merged; a rebase fixed it). The cost
+      is an update-branch for a PR whose base moved, the accepted trade.
+    - The summary reads the server back, not the input: a provisioning step that reports its own
+      input verified nothing. The strict check has three states with one exit contract (#311):
+      0 confirmed strict, 1 confirmed not strict, 2 absent or unreadable. "Could not check" and
+      "checked and it is fine" must never share an exit code, a failed read is never an empty
+      answer, and an absent policy reads back as jq `null`, which is unknown, not a violation.
+      `init` swallows non-zero with `|| true`; `verify` is the read-only CI guard (needs no
+      admin) and fails loud on 1 and 2, requires at least one mechanism to confirm strict, and
+      checks classic branch protection too, since BlueprintX's own `main` uses it. The default
+      branch read has no `|| echo main` fallback (CWE-693): a substituted answer nobody
+      confirmed lets verification inspect the wrong branch.
+    - Apply errors keep the API's own words; the old form swallowed stderr and blamed admin
+      rights for a malformed payload. `~DEFAULT_BRANCH` survives a rename.
+
+### Linting wrappers
+
+- **`lint.sh`** is the one list of every gate, called by `poe lint`, CI and
+  `bin/ci/scaffold_lint_test.sh`. It replaced 14 inline recipe lines duplicated across two
+  files that had already diverged (#189). Order is load-bearing: the two ruff steps come first
+  and mutate the tree (`--fix`, then `format`), so every later gate judges the tree CI checks;
+  `poe lint` must leave a clean checkout unchanged, and a diff means a gate and the formatter
+  disagree. `set -e` with no masking: do not add `|| true`. mypy runs from `src/` (config path
+  `../mypy.ini`) so `src` is the single package base. `check_provenance` was the one gate CI
+  ran and this script did not, so "green locally, red in CI" was reachable on the gate that
+  stops an ingested row shipping without its url and `updated_at` columns.
+- **`lint_shell.sh`** resolves shellcheck and shfmt preferably through the Poetry venv, which
+  finds the vendored wheel wherever the venv lives, including a Windows UNC or mapped drive;
+  a bare-`PATH` lookup would silently skip both there. It falls back to a system binary
+  (`install_shell_linters.sh`) and skips only when neither exists. Default mode formats in
+  place; `--check` is `shfmt -d` for the hook. The canonical gate is warning-and-above with
+  SC1091 excluded (siblings are sourced by runtime path). File discovery is find-only: a literal
+  `tasks.sh` was left beside it after the poe migration and made shellcheck report "does not
+  exist" for the whole run.
+- **`install_shell_linters.sh`** is an optional convenience for machines that need a system
+  binary (a venv on a share that blocks executing the vendored one). Each branch is guarded with
+  `command -v` and skips with guidance; it never hard-fails. Order by OS: Windows chocolatey then
+  scoop (both package shellcheck and shfmt), macOS brew, Linux apt-get, dnf, pacman, zypper
+  (shfmt is rarely packaged, so it stays on the pip `shfmt-py` or `go install`). `--dry-run` or
+  `DRY_RUN=1` previews through one guarded runner.
+- **`lint_yaml.sh`, `lint_sql.sh`** resolve Poetry through the bootstrap lib (poetry, then
+  `python -m poetry`) rather than a bare `command -v poetry`, which saw only a bare `poetry` and
+  silently skipped a `python -m poetry`-only box. yamllint's real status propagates. One sqlfluff
+  pass covers every engine: queries live in `src/config/queries/<engine>/`, sqlfluff resolves
+  config per directory, and adding an engine is adding a folder, never a second pass with
+  another `--dialect` or a dialect in the filename.
+- **`lint_actions.sh`** exists because yamllint asks whether YAML is well-formed and actionlint
+  asks whether GitHub will run it. A workflow that added `pull_request_review_thread` (a real
+  webhook event, not a workflow trigger) was impeccable YAML, passed every hook, and GitHub
+  rejected the entire file with no red check: the PR just looked like it was waiting, so a dead
+  gate and a slow gate are indistinguishable. In CI the binary is installed at a pinned version
+  with a verified SHA-256 and `LINT_ACTIONS_REQUIRED=1` makes absence a failure. It sets
+  shellcheck options for the `run:` blocks actionlint shells out to, so one script does not pass
+  one gate and fail the other. A comment line may not start with a tool's name, because it parses
+  as a lint directive.
+- **`lint_docker.sh`** is a wrapper, not a line in `lint.sh`, because hadolint is the only gate
+  with no Python package: pre-commit runs `hadolint-docker`, which needs a Docker daemon, and
+  calling that from `poe lint` would turn a lint run into an infrastructure requirement. It
+  differs from `lint_actions.sh` deliberately: zero Dockerfiles is legitimate (no Python tier
+  ships one, measured 2026-08-23; the only one is in `react-spa-webpack`). The rule is: no
+  Dockerfile skips; Dockerfiles with no tool skips unless `LINT_DOCKER_REQUIRED=1`; both present
+  lints. The count is asserted before the tool runs, so hadolint is never handed an empty list.
+  The image is pinned by digest, not tag: the tag pins what is asked for, the digest what
+  arrives, and the image is pulled and executed on the gate's machine (re-resolve with `docker
+  buildx imagetools inspect hadolint/hadolint:<tag>`). It probes `docker info`, since the client
+  binary is present on machines whose daemon is stopped. The tree is mounted read-only and the
+  run happens inside it, so hadolint finds `.hadolint.yaml` and reports file names (stdin
+  reports `-`); `--no-fail` is not passed, the container's status is the verdict.
+- **`lint_deps.sh`** (deptry over `src/`). The rule "every imported package is a direct
+  dependency" was written down and nothing checked it. The first run found both DDD tiers using
+  pandas in five `src/utils` modules while declaring it nowhere (it arrived through `wwdates`);
+  a calendar library dropping pandas would have broken every DDD project with an `ImportError`
+  nobody could predict. It must run inside the project venv with no system fallback: deptry maps
+  a module to its distribution through the metadata of the environment it runs in, and outside
+  the venv the verdict inverts (9 findings on ddd-native, all false and two contradictory, while
+  both real defects vanished). The config lives in `pyproject.toml` per tier, never a shared
+  `deptry.toml`: `--config <file>` re-points deptry at that file as the manifest too, and it fell
+  back to `requirements.txt` and relabelled beartype, python-dotenv, wwdates and every DB driver
+  as transitive. `bin/` is out of scope, since one run cannot hold both profiles and each dev
+  dependency would become a DEP004. Zero `.py` files under the tree fails.
+- **`check_unix_filenames.sh`** rejects names outside `[a-zA-Z0-9._-]`. It has two callers:
+  pre-commit passes staged files, and `poe lint`/CI pass nothing, in which case it discovers the
+  tree itself with `git ls-files -z` (respecting `.gitignore`) and a `find` fallback for a
+  scaffold not yet `git init`'d. The no-argument mode exists because the old script iterated an
+  empty `$@` and printed "All filenames are valid" having examined nothing. Zero discovered files
+  is never legitimate there, so it fails.
+- **`check_secrets.sh`** (gitleaks, #305). GitGuardian (#155, #286) is the hosted product and
+  BlueprintX's own `GITGUARDIAN_API_KEY` measurably fails auth (exit 3); live detection there was
+  never proven. This repo is public, so shipping that key would either hand strangers the
+  maintainer's quota or ship every project red. gitleaks needs no key or account, so it is the
+  default scanner, additive to GitGuardian. One implementation: bulk-copied into every project
+  and run by BlueprintX's own hook and workflow through `--root .`. Config is gitleaks' own:
+  `.gitleaks.toml` at the root of the target. Resolve, don't install; `GITLEAKS_REQUIRED=1` in
+  CI. Exit 0 or 1 are data and drive the script's exit.
+- **`check_complexity.sh`.** The per-tree ceilings and their arguments are in
+  [Complexity ceilings](complexity-ceilings-measured.md); the points that live in the script are:
+    - Cyclomatic ceilings are tests 1, `src/` 2, `bin/` 8: a branching test tests two paths and
+      its green never says which ran; branching that is the work of a validator or parser takes
+      the escape hatch with a reason; the gates in `bin/` are parsing tools by nature and at 2
+      they were 74% violating, a number nobody pays and so a gate nobody keeps. Nesting depth
+      (PLR1702) is a separate table: tests 2, `src/` 3, `bin/` 5 (findings at one ceiling lower:
+      2, 54 and 16 for tests, `src/` and `bin/`). An earlier revision asserted 1, 1 and 3 by
+      analogy to the mccabe row; all three were wrong, and because the hook scans the whole tree
+      each blocked every commit. An argument by analogy is not a measurement: mccabe counts
+      branches and PLR1702 counts nesting. These are the zero-cost ceilings; the tighter ones
+      (`src/`=2 costs 8 fixes, `bin/`=4 costs 2) are each their own measured slice.
+    - Do not reimplement mccabe. ruff ships it as C901 and PLR1702; a draft counter that
+      treated `assert` and `with` as decision points reported 85% of `tests/` violating where
+      the real figure was 8%. A threshold agreed against one implementation and enforced by
+      another is not the threshold anybody agreed to.
+    - Two ruff invocations per rule: `per-file-ignores` can switch a rule off for a path but
+      cannot give it a different threshold, so `run_ruff_check` takes the rule code and its
+      config key (`lint.mccabe.max-complexity`, `lint.pylint.max-nested-blocks`) as arguments.
+    - Escape hatch: `# complexity-ok: <reason>` on the `def` line (ruff anchors both rules
+      there, not on a decorator), reason required, one marker for both rules. The whole signature
+      is scanned, because `ruff format` re-wraps a long signature and moves a trailing comment to
+      the closing-paren line; a hatch correct on the `def` stopped counting when the formatter
+      touched the file (`CreateLog._validate_path`). The formatter wins, so the gate adapts. The
+      signature scan is bounded so a malformed file is not turned into a file read.
+    - Only `--root` is accepted, so BlueprintX runs this file over its own tree (#189).
+    - ruff is probed with `--version` so a real lint exit code is never mistaken for "absent".
+      The mode is set as a global, never printed for `$(...)`, for the subshell reason above.
+      ruff exits 0 or 1 (data); anything else means it could not run and its output is
+      re-printed. Output goes to a file, not `while read < <(...)`: a process substitution runs
+      in a subshell, so a hard failure could only exit that subshell, the loop would read
+      nothing and the gate would be blind a second time.
+    - Colour: ruff wraps every `path:line:col:` separator in ANSI escapes when colour is on,
+      and those travel into `cut -d:` and an arithmetic expansion, which dies with `[0m101[36m:
+      syntax error: operand expected`, naming neither ruff, colour nor this gate (6 of 6 tiers
+      red on 2026-08-23 because a shell exported `FORCE_COLOR`). `NO_COLOR=1` alone does not fix
+      it: with `FORCE_COLOR=3` also set ruff still colours, and `TERM=dumb` does not change that.
+      So the forcing variables are unset, in a subshell rather than `env -u` (the poetry branch
+      calls a shell function `env` cannot exec) and rather than `local` (does not hide an
+      exported global from a child). `NO_COLOR` stays as belt-and-braces.
+    - ruff absent is not a graceful skip: it is a declared dev dependency, so its absence is a
+      broken environment. A broken glob would otherwise report success forever.
+- **`test_urls_docstrings.sh`** (hook) scans docstrings for URLs, cached for a week to avoid
+  repeated network calls. Domains that answer a scripted probe with 403 or anti-bot pages
+  regardless of method are treated as reachable, a deliberate false negative: the alternative
+  is a permanently red hook that people learn to bypass. Match the hostname, never a substring:
+  `*domain*` would allowlist `https://attacker.example/path/openai.com` and
+  `https://openai.com.attacker.example/`; strip scheme, userinfo and everything from the first
+  `/`, `?`, `#` or `:`, then require an exact match or a real subdomain. Probes go HEAD, then
+  GET for servers that refuse HEAD, then wget for servers that refuse curl; each fallback exists
+  for an observed failure, so the order is load-bearing. State is script-scoped because bash
+  cannot return an associative array. A host-only URL is skipped (nothing to 404, and fetching
+  it only rate-limits). A one-line docstring opens and closes on the same line and must not flip
+  the state. A delimiter line is docstring content and is scanned before the state flips
+  (#206, #224): the old `continue` blinded the gate on `"""One line https://..."""` and on the
+  opening line of a multi-line docstring, and was self-concealing, since an unscanned URL is
+  never fetched or cached. A closing delimiter sharing a line with text was never blind (the URL
+  was scanned as body text) but the state never flipped back, so every later line was read as
+  inside the docstring and over-scanned; both delimiters are now matched wherever they sit.
+- **`check_clean_index.sh`** (pre-push). A non-empty index at push time is the fingerprint of a
+  commit rejected after `git add`: the push ships the previous commit and prints success while
+  the work stays behind, found only by comparing HEAD to `origin/<branch>`. No other layer sees
+  it: CI sees only what was pushed, and pre-commit already did its job by rejecting. It also
+  closes a hole a written rule did not: "never pipe `git commit` through `tail`/`grep`; confirm
+  HEAD moved" existed and was violated hours after being quoted, because a rejection scrolling
+  off screen is what a tired reader misses. It guards the index, not the dirty tree: unstaged
+  edits while pushing are routine, a noisy guard gets disabled, and a populated index is nearly
+  false-positive-free. Escape hatch: `git push --no-verify` or stash the index. With no work
+  tree (a shipped zip) there is nothing to guard and it never blocks.
+
+### Bootstrap, runtime and CI helpers
+
+- **`lib/bootstrap.sh`.** `ensure_python_version` prefers pyenv (pinning the project version) and
+  falls back to the system interpreter with a version-mismatch warning for corporate hosts that
+  forbid pyenv. `to_native_path` turns `/a/foo/bar` into `A:/foo/bar` through `cygpath` on Git
+  Bash/MINGW, shell-only and stripping stray CR and LF; `POETRY_CMD` is an array so a `python -m
+  poetry` fallback stays quotable. `build_union_ca_bundle` writes `bin/ca_bundle.pem` as the
+  union of certifi's roots, whatever bundle the host provisions and the corporate CA. Union is
+  the point: pointing `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` and `PIP_CERT` at the corporate CA
+  alone narrows trust to one certificate and breaks every connection not through the proxy's CA
+  (Poetry went from "0 candidates" to "All attempts to connect to pypi.org failed" because the
+  helper ran), and it clobbers a bundle a corporate image provisions. A generated file also
+  replaces the old append to certifi's `cacert.pem`, which mutated site-packages invisibly and
+  was undone by any reinstall. `wire_corporate_ca` is a no-op without `bin/corporate_ca.pem`,
+  so non-corporate setups keep full verification; it resolves the absolute Windows-safe path in
+  shell, exports the union to every consumer, points Poetry's resolver at it best-effort, and
+  deliberately does not export `PIP_TRUSTED_HOST`, which disables verification for PyPI outright.
+- **`get_corporate_ca.sh`** generates `bin/corporate_ca.pem` from the OS trust store without
+  touching the network or disabling TLS verification. It is the store the browser uses, which is
+  why the browser works behind a TLS-inspecting proxy while pip, with certifi's own bundle,
+  does not. On Windows it reads the store from Python directly, with no admin rights. On
+  Linux/macOS the store is already a file and a corporate image normally installs the CA there,
+  so it refuses with instructions rather than guess a path or capture whatever certificate the
+  network presents. The pem is git-ignored and picked up by `poe venv` and `poe run`.
+- **`lib/pip_fallback.sh`.** Every status is checked: the function used to return the pruning
+  status, which succeeds on an empty file, so a failed TOML reader or emitter produced an empty
+  requirements file and reported success, and install and verify both accept zero requirements
+  (the venv was declared good having installed nothing). `_read_env_var` is anchored to the
+  project, since its default `.env` is CWD-relative and reading the wrong one prunes the driver
+  the project needs. Pruning: the service tiers declare all four DB drivers unconditionally
+  (about 20 MB of pyodbc, oracledb, psycopg and mysql-connector a SQLite project never
+  imports), and on a corporate index that answers 403 per package an unrequested dependency is a
+  self-inflicted failure surface (2026-08-16, `mysql-connector-python` was refused and took the
+  whole install down). `DB_BACKEND` is lowercased to match `config/connection_db.py`
+  (`os.getenv("DB_BACKEND", "sqlite").lower()`), or `PostgreSQL` would drop psycopg. A driver not
+  in the table is not a DB driver and is never pruned. `pip install -r` is atomic, so one
+  refused wheel discards a batch whose other packages downloaded; the batch is only the fast
+  path, and on failure it retries per requirement so everything installable is installed and the
+  report names every refused package. A blocked index can report success with nothing usable
+  (`already satisfied` without contacting the index), so the last word is a real import
+  against the target venv's own interpreter (`verify_venv_imports.py`).
+- **`lib/common.sh`** is kept byte-identical in `templates/common/bin/lib/` and here (CI enforces
+  parity; offline scaffolds copy the common version over this one, so both carry
+  `resolve_default_branch` and `_read_env_var`). `print_status <level> <message>` (success, error,
+  warning, info, config, debug, section) sends errors to stderr and tees timestamped lines to
+  `$LOG_FILE` when set. An unknown level names the bad status on stderr instead of printing an
+  unmarked line: 35 calls spelled `warn` for `warning` across five scaffolds each rendered a
+  warning like ordinary chatter. `resolve_default_branch`: explicit argument, `$DEFAULT_BRANCH`,
+  `origin/HEAD`, local `main`, else `master`. `_read_env_var NAME` reads `.env` (override with
+  `ENV_FILE`), returns the raw right-hand side without stripping an inline `#`, so passwords with
+  `#` or `$` survive (the point of bypassing Make's expansion), removes one pair of surrounding
+  quotes, last assignment wins, missing file or key is empty. `ensure_dir` checks existence
+  before `mkdir -p`: over an existing path on Windows mapped or UNC drives a bare `mkdir -p` can
+  fail with "Permission denied".
+- **`poe_exec.sh` and `poetry_exec.sh`** are the single Poe and Poetry entrypoints for every
+  hook, workflow and script, so nothing depends on a bare binary on `PATH`. Poetry may be
+  reachable only as `python -m poetry` (the user-scripts directory is not on `PATH` on Git
+  Bash/MINGW), so a bare `poetry run` dies "command not found" with Poetry installed;
+  `resolve_poetry()` tries bare then `$PYTHON -m poetry`, and `ensure_poetry()` installs from
+  `requirements.txt` when none resolves. Poe reaches a machine by three routes: the in-project
+  `.venv` first (load-bearing: `poetry.toml` forces in-project, `poetry install` does not put poe
+  on `PATH`, and `$PYTHON` is the system interpreter, so in CI after `poetry install --with dev`
+  neither later route can see it), then `poe` on `PATH` or `$PYTHON -m poethepoet` (the module is
+  `poethepoet`, not `poe`: `python -m poe` fails), probed by running the module because a `pip
+  install --user` layout puts the package where the interpreter finds it but the console script
+  nowhere useful, then `poetry poe` last. The plugin is no longer declared: a project-scoped
+  `[tool.poetry.requires-plugins]` breaks `poetry install` (a plugin env keyed by project name,
+  not path, measured), it is the slowest route, and poe's docs advise against it because
+  Poetry's CLI mangles arbitrary task arguments and the plugin silently disappears if
+  `--no-plugins` appears anywhere. Stdout discipline: resolution status goes to stderr so the
+  task's own stdout and command substitution (`version -s`) stay clean. Zero arguments is valid
+  and is the help path.
+- **`precommit.sh`** installs `commit-msg` and `pre-push` hooks. `pre-commit install` needs git
+  and a work tree; a deploy box (a shipped zip) has none and pre-commit aborts "FatalError: git
+  failed", taking `init` down. Hooks are dev-only, so with no work tree it warns and skips,
+  like the best-effort `ensure_env` and the Playwright install. Opt-in alternative: replace the
+  skip with a loud `git init`, announced so a dev box surfaces a lost `.git`; never auto-init
+  silently. On a shared network checkout (Windows UNC mapped to a drive) the first person to
+  check it out owns it and any other domain user trips git's "dubious ownership" guard, which
+  blocks every repo operation and makes `pre-commit install` die too. `ensure_safe_directory`
+  registers a per-user `safe.directory` before the work-tree probe, which would otherwise fail
+  under the guard and wrongly conclude "no repo" (a bogus `git init` over an existing tree).
+  It lifts git's own suggested path rather than reconstructing it, and strips the UNC quote.
+- **`venv.sh`, `run.sh`.** `run.sh` resolves the entrypoint, ensures a venv, prefers Poetry and
+  falls back to stdlib venv plus pip requirements; the pinned interpreter is selected first so
+  both branches use it. Tokens after the entrypoint are the user's argv: `poe run backfill`
+  forwards `backfill`, and dropping it makes `main.py` fall back to `PIPELINE_INTENT` (#317).
+  The Playwright install in `venv.sh` is best-effort and never aborts `init`: it warns and points
+  at `poe fix_playwright`, since the environment is usable without browsers and `playwright
+  install` fails on hosts without a compatible toolchain (`Error: spawn UNKNOWN` under Git Bash
+  on Windows). `--with-deps` installs apt packages and is valid on Debian and Ubuntu only, so it
+  is added on Linux only. `fix_playwright.sh` cleans and reinstalls the browsers.
+- **`ensure_env.sh`** seeds `.env` from `.env.example` when `.env` is absent; if the template is
+  missing it reports and aborts that script with non-zero, and the task runner ignores that
+  failure so the venv and pre-commit steps still run. **`db.sh`** has `up` (idempotently start
+  services, ensure schema, migrate), `backup` (dump to `BACKUP_STORE_PATH`) and `restore`
+  (`DUMP=<path>`); Poetry is resolved robustly because a bare `poetry` may be absent.
+- **`export_deps.sh`** writes `requirements-lock.txt` for hosts that can `pip install -r` but not
+  Poetry (locked-down boxes, slim containers, air-gapped transfers). `export` is a plugin
+  subcommand, so the question is "does the Poetry that resolves here carry the plugin?", and a
+  `pip install --user` Poetry and the venv's Poetry report the same `--version` with different
+  plugin sets. That is why the plugin is pinned in `requirements.txt` (what `ensure_poetry`
+  installs from) and not only as a dev dependency, which reaches the venv and nothing else: the
+  recipe would work from an activated shell and fail from a VS Code task, cron, CI and the
+  offline host it serves. The artifact path is overridable so a test can redirect it.
+- **`test_cov.sh`** is four steps that only make sense in order: pytest writes `.coverage`,
+  `coverage report` prints it, `coverage xml` serialises it, genbadge renders `coverage.svg`.
+  Splitting them across two recipe files put the order in two places. genbadge runs with
+  `--local`: a build step that reaches the network fails behind a corporate proxy and on an
+  air-gapped runner, and a badge is not worth either.
+- **`build_wheelhouse.sh`** (#299, pieces 1 to 3 of #127). A corporate machine behind a
+  TLS-inspecting proxy that blocks PyPI cannot install anything; `verify_venv_imports.py` makes
+  that failure loud and this is the remedy: `poe wheelhouse` builds the payload on a machine
+  with internet and `poe wheelhouse_assemble` rebuilds it on the offline target. See
+  [Offline wheelhouse](offline-wheelhouse.md). Heavy logic (marker evaluation against a target
+  environment, zip/split/manifest, verify-and-refuse) is in `lib/wheelhouse_select.py`; the shell
+  owns only network I/O and orchestration. The default destination is a sibling of the repo:
+  outside it, never a `git add` candidate, surviving a re-clone, per repo because sibling
+  projects pin different versions. DB-driver pruning by `DB_BACKEND` took 65 MB to 45 MB (#299).
+  Bash 3.2-safe (macOS system bash): no associative arrays, no `${var,,}`; `mariadb` shares
+  mysql's driver. Cross-platform builds pass pip's own platform tags verbatim
+  (`win_amd64`, `manylinux2014_x86_64`); unset, pip downloads for the build machine. The trap
+  expands `dir_tmp` immediately: single-quoted it would hit an unbound variable under `set -u`
+  after the function returned, leaking the directory and exiting non-zero.
+- **`pr_reconcile.sh`** (#255) is the mechanism extracted from the `pr-reconcile.yaml` inline
+  `run:` block so every workflow that ships it invokes one implementation, like
+  `check_review_threads.py` and `rerun_stale_gate_runs.sh`. Inputs: `GH_TOKEN` and `GH_REPO`
+  (required), `EVENT_PR` (one PR, the fast path) and `SWEEP_LIMIT` (default 30, the scheduled
+  backstop). It acts only on a merged PR, so a closed-unmerged PR closes nothing. A linked
+  issue's repository travels with its number: a cross-repo link would otherwise resolve
+  `gh issue view 42` against `GH_REPO` and close an unrelated #42 there, silently. It closes only
+  issues still open, and deletes only a same-repo head branch, and only while the ref still
+  points at the commit the PR merged: this runs on a schedule, possibly days later, and a branch
+  name is reusable (`fix/thing` cut again for new work would be deleted with unpushed commits,
+  reporting success). An already-deleted branch is a no-op.
+- **`rerun_stale_gate_runs.sh`** re-runs the stale failed runs of the review-thread workflow
+  that still poison the merge rollup. The gate re-triggers on `pull_request`, `pull_request_review`
+  and `pull_request_review_comment`, each creating a new check run, and branch protection reads
+  the aggregate, so the push-time failure keeps the PR `BLOCKED` however many later runs pass
+  (#262 one stale failure, #264 five, #265 seven; `gh run rerun <id> --failed` on only the stale
+  failures flipped each to `CLEAN`). `concurrency:` was tried and is strictly worse: a queued run
+  cancelled before it starts publishes no check run, leaving the required context at `Expected
+  — Waiting for status to be reported`, which no re-run clears; a stale red is at least
+  clickable. It exits 0 even when it cannot do its job, and that is not failing open: it is a
+  janitor, if it fails the run stays red and the PR stays blocked (the status quo, visible),
+  whereas failing the step would deposit one more failed run into the rollup it came to clean.
+  It reports through one seam that emits both the `::warning::` annotation (a machine-read
+  workflow command that puts the message in the run summary) and the status line, because three
+  copies of that pair are where one loses its annotation. It refuses to act outside a
+  pull-request run (an empty `HEAD_SHA` is ordinary on other events). It asks the API which
+  workflow the current run belongs to, since the two shipped copies disagree on name and
+  filename (`.yml` here, `.yaml` in a generated project). It scopes by `head_sha` so older
+  commits' genuine failures are untouched, and skips `$GITHUB_RUN_ID`, the loop guard: it only
+  runs on a successful run, so re-running itself would re-run a green run forever. Needs
+  `actions: write`.
+
 ## Root workflows: why each is shaped as it is
 
 These records explain the GitHub Actions workflows under `.github/workflows/` in this

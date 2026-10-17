@@ -1,21 +1,4 @@
 #!/usr/bin/env bash
-# Export the locked dependency set to requirements-lock.txt, for hosts that can run
-# `pip install -r` but not Poetry — locked-down corporate boxes, slim containers, air-gapped
-# transfers. This is the reason the plugin exists here at all.
-#
-# `export` is a PLUGIN subcommand, not core Poetry. So the question is never "is Poetry
-# installed?" but "does the Poetry that RESOLVES HERE carry the plugin?" — and those two come
-# apart silently, because a `pip install --user` Poetry and the project venv's Poetry report
-# the SAME `--version` while carrying different plugin sets. Every version probe agrees and the
-# subcommand still does not exist. That is why the plugin is pinned in `requirements.txt` (what
-# ensure_poetry installs from) and not only as a dev-dependency: a dev-dep reaches the project
-# venv and nothing else, so the recipe works from an activated shell and fails from a VS Code
-# task, from cron, from CI, and from the fresh offline host it exists to serve.
-#
-# Diagnostics: the export output is CAPTURED and re-printed on failure, never discarded. Do not
-# `>/dev/null 2>&1` a command whose failure you then explain — the explanation becomes a guess
-# about text you refused to read, and any remedy must name the RESOLVED binary
-# (`${POETRY_CMD[*]}`), never a bare `poetry` that may not be the one that just failed.
 
 set -euo pipefail
 
@@ -25,7 +8,6 @@ source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=bin/lib/bootstrap.sh
 source "$SCRIPT_DIR/lib/bootstrap.sh"
 
-# Overridable so a test can redirect the artifact out of the project tree.
 OUTPUT_FILE="${OUTPUT_FILE:-$PROJECT_ROOT/requirements-lock.txt}"
 
 export_deps() {

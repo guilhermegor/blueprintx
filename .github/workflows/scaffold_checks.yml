@@ -469,6 +469,21 @@ jobs:
       - name: Should-fail regression tests for the review-config guard
         run: bash tests/test_check_review_config_shipped.sh
 
+  dependabot-shipped:
+    name: Every skeleton ships dependabot.yml with a cooldown
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Assert every skeleton copies a dependabot.yml with a cooldown (blueprintx#838)
+        run: bash bin/ci/check_dependabot_shipped.sh --static
+
+      - name: Should-fail regression tests for the dependabot guard
+        run: bash tests/test_check_dependabot_shipped.sh
+
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json
     runs-on: ubuntu-latest

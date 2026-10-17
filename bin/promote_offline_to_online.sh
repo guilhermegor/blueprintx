@@ -244,6 +244,7 @@ copy_online_assets_react() {
     local deploy_root="$BLUEPRINTX_ROOT/templates/react-spa-webpack/optional/deploy"
     mkdir -p "$dest/.github/workflows"
     cp -r "$BLUEPRINTX_ROOT/templates/ts-common/.github/." "$dest/.github"
+    cp "$BLUEPRINTX_ROOT/templates/ts-common/dependabot.yml" "$dest/.github/dependabot.yml"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
@@ -265,6 +266,7 @@ copy_online_assets_ts_lib() {
     local dest="$PROJECT_PATH" wf
     mkdir -p "$dest/.github/workflows"
     cp -r "$BLUEPRINTX_ROOT/templates/ts-common/.github/." "$dest/.github"
+    cp "$BLUEPRINTX_ROOT/templates/ts-common/dependabot.yml" "$dest/.github/dependabot.yml"
     for wf in docs docs-deploy pack-smoke; do
         cp "$skeleton/.github/workflows/$wf.yml" "$dest/.github/workflows/$wf.yml"
     done
@@ -278,6 +280,7 @@ copy_online_assets_bash_cli() {
     mkdir -p "$dest/.github/workflows"
     cp "$skeleton/.github/workflows/ci.yml" "$dest/.github/workflows/ci.yml"
     envsubst '${PROJECT_NAME}' <"$skeleton/.github/workflows/release.yml" >"$dest/.github/workflows/release.yml"
+    cp "$BLUEPRINTX_ROOT/templates/common/.github/dependabot.yml" "$dest/.github/dependabot.yml"
     copy_shared_github_overlay
     print_status "success" "GitHub assets copied (.github)"
 }
