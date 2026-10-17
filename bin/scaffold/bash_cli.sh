@@ -107,7 +107,7 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
-    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$BLUEPRINTX_ROOT/templates/bash-cli/.greptile/"* "$project_path/.greptile/"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$SHARED_TEMPLATE_ROOT/.greptile/graphite.md" "$BLUEPRINTX_ROOT/templates/bash-cli/.greptile/"* "$project_path/.greptile/"
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"

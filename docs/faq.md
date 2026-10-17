@@ -213,10 +213,12 @@ That is the case of `update-branch` under the strict-serial ruleset: main is mer
 is written, and a second review of the same diff would only spend a reviewer rung.
 
 The patch is the diff from the merge base with the base branch to the commit. It is
-fingerprinted as the compare API reports it, with only the hunk coordinates
-(`@@ -a,b +c,d @@`) removed. Everything else is kept: the function context after the closing
-`@@`, the context lines, and all whitespace. This is stricter than `git patch-id --stable`,
-which also drops the function context and normalises whitespace. The CI checkout is shallow
+fingerprinted from what the PR authored: the file name, status and previous name, and the
+ordered `+`/`-` lines with all whitespace. Hunk headers (coordinates and function context) and
+unchanged context lines are dropped, because they describe the base: a merge of main that adds
+a function next to the PR's lines splits one hunk into two with different headers, and the PR's
+own lines did not change. This is stricter than `git patch-id --stable`, which also
+normalises whitespace. The CI checkout is shallow
 (`actions/checkout` defaults to `fetch-depth: 1`), so there is no local history for
 `git merge-base`; the gate reads the same diff from the GitHub compare API
 (`compare/<base>...<commit>`), which computes the merge base server side.
@@ -240,28 +242,33 @@ covered", with one line on stderr per failing commit giving the reason (stdout s
 `DISMISSED` review is never carried forward. Every review's findings, threads or body, are
 audited afterwards whatever the carry-forward decided.
 
-What carries forward is therefore narrower than "any update-branch". A base edit that only
-shifts the PR's hunks (lines added above or below them) leaves the fingerprint alone. A
-conflict-free base edit inside a hunk's three context lines changes the context, so the review
-goes stale; that fails safe. The tests pin both cases against real `git diff` output. Known
-ceilings: an identical edit moved within one function, between identical context lines, still
-matches, as it does for `git patch-id`; and a conflict-free base change can still break the
+What carries forward is therefore narrower than "any update-branch". A conflict-free base
+edit anywhere, including next to or inside a hunk's three context lines, leaves the fingerprint
+alone, since only the PR's own `+`/`-` lines count. The tests pin this against real
+`git diff` output. Known ceilings: an identical edit moved to another function matches, because
+hunk headers are not hashed (the trade-off of blueprintx#848; `git patch-id` ignores headers
+too); and a conflict-free base change can still break the
 unchanged patch semantically (main renames a function the PR calls), which a patch comparison
 cannot see. That is accepted: a review is repeated only when a conflict or new code changes
 the PR's own patch, and CI covers the integration. A PR from a fork whose commits cannot be
 compared fails closed like any other error.
 
-A PR whose base branch was ever changed gets no carry-forward at all. The compare measures the
-patch against today's base, which need not be the base the review was written against, so
-after a retarget the same fingerprint proves nothing. The gate looks for a `BASE_REF_CHANGED_EVENT` or
-`AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT`
-timeline item (the second is what GitHub records when it retargets a PR itself after its base
-branch is merged and deleted) in the same GraphQL query as the reviews. An event is never
-removed, so the refusal is permanent for that PR. The gate prints the reason on stderr, and a
-missing answer is a failure ("retarget state is unknown"), not "never retargeted". The gate reads
-the filtered `nodes`, never `totalCount`, which ignores the type filter and counts the whole
-timeline. This also applies to a stacked PR whose lower PR merged: its base was retargeted
-automatically, so it needs a fresh review.
+A review submitted before the PR's latest base change gets no carry-forward. The compare
+measures the patch against today's base, which need not be the base such a review was written
+against, so the same fingerprint proves nothing. A review submitted after that change was
+written against the current base lineage, so it carries through a merge-only update like on
+any other PR (blueprintx#809). The gate looks for a `BASE_REF_CHANGED_EVENT` or
+`AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT` timeline item (the second is what GitHub records when
+it retargets a PR itself after its base branch is merged and deleted) in the same GraphQL
+query as the reviews, reads each event's `createdAt`, and refuses a review whose `submittedAt`
+is not strictly later than the newest one. When one commit has several live reviews from the
+roster, the newest decides, so a post-change review supersedes an earlier one on the same
+commit. An event is never removed, so a review older than it stays refused permanently. The gate prints the reason on stderr, and every unreadable answer
+fails closed: a missing event list ("retarget state is unknown"), an event or review without a
+parseable time, and a review that is not later than the event are all refused, never read as
+"never retargeted". The gate reads the filtered `nodes`, never `totalCount`, which ignores the
+type filter and counts the whole timeline. A stacked PR whose lower PR merged was retargeted
+automatically, so a review from before that retarget needs a fresh one.
 
 Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
@@ -293,10 +300,10 @@ paths are listed once, one bare path per line (blank and `#` lines are ignored),
 - `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
   assertion over one already-generated project.
 
-Today the manifest lists only `.gitattributes` (the Graphite `linguist-generated` marker).
-`.coderabbit.yaml` and `.greptile/` are added by the PRs that ship them, so the guard does
-not yet protect those. Both are repo-root files, not GitHub-only assets, so the offline
-scaffold keeps them: `apply_offline_mode` drops only `.github/`.
+`templates/common/review-config.manifest` is the list of guarded paths; the PR that ships a
+reviewer config file adds its path there, so read the file rather than this page. These are
+repo-root files, not GitHub-only assets, so the offline scaffold keeps them:
+`apply_offline_mode` drops only `.github/`.
 
 `--static` is a fast heuristic over direct `cp` commands. It reads the scaffold script plus the
 `bin/lib/*.sh` helpers it sources, resolves the `*_TEMPLATE_ROOT` variables, and accepts a

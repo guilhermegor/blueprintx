@@ -25,8 +25,9 @@ gate did not read until P0.
 - [x] 5 (PR #820) `templates/python-common/src` and `templates/common` (55 files, 1027 lines)
 - [~] chore/comment-strip-slice6-304 6 Python skeletons: `ddd-*`, `api-*`, `lib-minimal` (51 files, about 880 lines)
 - [x] 6b (PR #823) Python skeletons: `mvc-service-native-db`, `mvc-service-orm-db` (split from 6 at the 90-file ceiling, 40 files)
-- Dependency: slices 7, 8, 9 and Z wait for #826 (ship the zero-comment ratchet to every generated project) to merge; whatever they strip must be stated as dehydrated into the right layer (SECURITY, README, CONTRIBUTING or docs).
-- [ ] 7 `templates/python-common` config and workflows (35 files, 1401 lines)
+- Dependency met: #826 (ship the zero-comment ratchet to every generated project) merged as #828; slices 7 to 9 and Z may proceed. Whatever they strip must be stated as dehydrated into the right layer (SECURITY, README, CONTRIBUTING or docs).
+- [~] chore/comment-strip-slice7-304 7a `templates/python-common/.github` workflows and `dependabot.yml` (10 files, 569 lines); rationale in `docs/decision-records.md`
+- [ ] 7b `templates/python-common` config files (`ruff.toml`, `mypy.ini`, `poe_tasks.toml`, `.pre-commit-config.yaml`, dotfiles; 34 files, 958 lines)
 - [ ] 8 `templates/python-common/tests` (55 files, 931 lines)
 - [ ] 9 `templates/python-common/bin`, the gates themselves (66 files, 2113 lines)
 - [~] chore/comment-strip-slice9a-304 9a `templates/python-common/bin` shell scripts and `lib/*.sh` (33 files, 1287 lines); oracle: `shfmt -mn` output identical before and after. Slice 9 is split 9a shell, 9b Python gates, 9c the comment-budget gate itself plus its banner exemption
