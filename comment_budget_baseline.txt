@@ -118,7 +118,6 @@ scope 2
 23 templates/python-common/tests/unit/test_regime_adapters.py
 21 templates/python-common/tests/unit/test_retry.py
 36 templates/python-common/tests/unit/test_review_retry.py
-123 templates/python-common/tests/unit/test_review_threads_gate.py
 18 templates/python-common/tests/unit/test_rmw_race_gate.py
 9 templates/python-common/tests/unit/test_ruff_ret_rule.py
 8 templates/python-common/tests/unit/test_sidecar_metadata.py
