@@ -24,7 +24,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
 | `coverage-floor.md` | Utility page | Design record for `bin/check_coverage_floor.py` (blueprintx#149) — why `.coveragerc`'s `omit` list needed a code-derived floor, how it derives one, and why it stays deliberately coarse |
-| `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239) |
+| `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239); includes the "Generated-project workflows" section for rationale stripped from `templates/python-common/.github/` |
 | `issue-scope.md` | Utility page | Declaring and enforcing an issue's file surface so a gate can verify dispatched work at PR time (blueprintx#314) |
 | `lockfile-sync.md` | Utility page | The package.json vs package-lock.json gate, its regression test, and the ts-lib Dependabot grouping (blueprintx#588) |
 | `docs-boundary-gate.md` | Utility page | What `check_docs_boundary.sh` denies, where each case belongs, and why it ships to generated projects (blueprintx#576) |

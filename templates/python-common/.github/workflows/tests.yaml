@@ -1,11 +1,6 @@
 name: Run Tests
 
 on:
-  # No `outputs:` here on purpose. This used to declare `ready_for_release` as
-  # `${{ jobs.test.result == 'success' }}`, which is not a valid workflow_call output value —
-  # only `jobs.<id>.outputs.<name>` is in scope there, so the output resolved to the empty
-  # string on every run while looking like a working release gate. It had no consumers, and a
-  # caller that needs the verdict already has it as `needs.<job>.result`.
   workflow_call:
   workflow_dispatch:
   pull_request:
@@ -20,13 +15,7 @@ on:
 
 jobs:
 
-
   test:
-    # ⚠️ The name must carry EVERY matrix axis. With only `os` in it, the 3×5 matrix produced
-    # 15 check runs sharing 3 names — and a required status check is resolved BY NAME, so a
-    # green leg and a red leg of the same name are indistinguishable to the merge gate. A
-    # required check must map to exactly one run, or it is decorative in the worst way: it
-    # reports a colour drawn from a run nobody chose.
     name: Run Automated Tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -41,8 +30,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          # Full history: the work-ledger gate resolves merge-base(HEAD, default) and a
-          # shallow clone has no common ancestor to find.
           fetch-depth: 0
 
       - name: Set Up Python ${{ matrix.python-version }}
@@ -57,18 +44,6 @@ jobs:
           virtualenvs-create: true
           version: 2.2.1
 
-      # A gate must not live inside a cache-conditional step: nested under the install's
-      # `if: cache-hit != 'true'` this never ran on a warm cache, i.e. it was switched off by
-      # exactly the condition that makes it cheap. It also has to run BEFORE the step below
-      # rewrites pyproject.toml, so it checks what a developer checks locally rather than a
-      # CI-only rewrite of the manifest.
-      #
-      # Fail loud on a stale lock instead of silently regenerating it. A poetry.lock that no
-      # longer matches pyproject.toml means dependencies changed without re-locking;
-      # regenerating here would re-resolve and upgrade every dependency to the latest
-      # in-range version — a non-reproducible build that can silently pull a breaking
-      # release. (A version bump does NOT invalidate the lock, so `poe bump_version` never
-      # trips this.)
       - name: Check lockfile is in sync
         run: |
           if ! poetry check --lock; then
@@ -80,15 +55,7 @@ jobs:
         id: cached-venv
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          # Cache build outputs only. poetry.lock is a TRACKED file: caching it means a
-          # restored cache overwrites the repo's committed lockfile, so anything downstream
-          # validates a cache artifact instead of what is in the tree.
           path: .venv
-          # The lockfile must be in the key. Hashing pyproject.toml alone makes every
-          # lock-only change a cache hit — which is precisely the diff Dependabot's
-          # `versioning-strategy: lockfile-only` produces, so every dependency-bump PR would
-          # restore a stale .venv, skip the install, and report green while testing the
-          # PRE-bump dependency set.
           key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('poetry.lock', 'pyproject.toml') }}
 
       - name: Install Dependencies
@@ -104,12 +71,9 @@ jobs:
           print(content)
           ' > pyproject.toml
 
-          # The lockfile check is NOT here — it is an unconditional step above, so a warm
-          # cache cannot switch it off.
           echo "No groups to exclude, installing all dependencies"
           poetry install --no-interaction --no-root
 
-          # Restore original pyproject.toml
           mv pyproject.original.toml pyproject.toml
           poetry env activate
 
@@ -130,76 +94,34 @@ jobs:
 
       - name: Run Runtime Type-Checking Enforcement
         if: runner.os == 'Linux'
-        # Mirrors the `check-typing` pre-commit hook: every src/ class/function carries the
-        # runtime checker (TypeChecker metaclass / @type_checker), Pydantic models excepted.
-        # CI runs its gates as explicit steps, not via pre-commit, so this must be listed
-        # here or a hook-skipping contributor bypasses the check entirely.
         run: poetry run python bin/check_typing.py
 
       - name: Run Ingestion Provenance Enforcement
         if: runner.os == 'Linux'
-        # Mirrors the `check-provenance` pre-commit hook: a module referencing read_table (a
-        # contract-checked read) must also reference stamp_provenance, so a bronze row never
-        # ships without its traceability columns. CI runs its gates as explicit steps, not via
-        # pre-commit, so this must be listed here or a hook-skipping contributor bypasses it.
         run: poetry run python bin/check_provenance.py
 
       - name: Run __all__ Export Completeness Check
         if: runner.os == 'Linux'
-        # Mirrors the `check-all-exports` pre-commit hook: a package declaring __all__ must name
-        # every public member its submodules define. An introspective test that discovers the
-        # family THROUGH __all__ structurally cannot catch a member missing from it. CI runs its
-        # gates as explicit steps, not via pre-commit, so this must be listed here or a
-        # hook-skipping contributor bypasses it.
         run: poetry run python bin/check_all_exports.py
 
       - name: Run Numeric Dtype Policy Enforcement
         if: runner.os == 'Linux'
-        # Mirrors the `check-dtypes` pre-commit hook: no ingested source column may be typed
-        # as a binary float, which stores 1984223115.42 as 1984223115.4200000762939453125 —
-        # irreversible and silent. CI runs its gates as explicit steps, not via pre-commit, so
-        # this must be listed here or a hook-skipping contributor bypasses it.
         run: poetry run python bin/check_dtypes.py
 
       - name: Run Direct-Dependency Gate
         if: runner.os == 'Linux'
-        # Mirrors the `lint-deps` pre-commit hook: every package src/ imports must be declared
-        # in pyproject.toml, never inherited from another package's tree. CI runs its gates as
-        # explicit steps, not via pre-commit, so this must be listed here or a hook-skipping
-        # contributor bypasses it.
-        #
-        # ⚠️ This step is the one that CANNOT be replaced by a `pipx run deptry`: the gate has
-        # to execute inside the Poetry venv, because deptry maps a module back to its
-        # distribution through the metadata of the environment it runs in. Outside it, the
-        # verdict inverts rather than degrades (bin/lint_deps.sh carries the measurement).
         run: bash bin/lint_deps.sh
 
       - name: Run Layer Import Policy Enforcement
         if: runner.os == 'Linux'
-        # Mirrors the `check-layer-imports` pre-commit hook: a third-party dependency is
-        # reached through a seam in utils/, never imported by model/view/controller — in ANY
-        # scope, since deferring an import into a function does not undo the coupling. CI runs
-        # its gates as explicit steps, not via pre-commit, so this must be listed here or a
-        # hook-skipping contributor bypasses it.
         run: poetry run python bin/check_layer_imports.py
 
       - name: Run ORM Model-Definition Guards
         if: runner.os == 'Linux'
-        # Mirrors the `check-orm-model-guards` pre-commit hook (blueprintx#361): bitwise
-        # &/|/~ inside .where()/.filter(), two Base/module-scope create_all, and a duplicate
-        # constraint name= across a same-file mixin MRO — each a SILENT wrong answer at ORM
-        # model-declaration time, no exception raised. CI runs its gates as explicit steps,
-        # not via pre-commit, so this must be listed here or a hook-skipping contributor
-        # bypasses it.
         run: poetry run python bin/check_orm_model_guards.py
 
       - name: Run Documentation-Language Boundary Enforcement
         if: runner.os == 'Linux'
-        # Mirrors the `check-comment-language` pre-commit hook: prose for a READER may be in the
-        # project's locale, while code — comments, docstrings, symbol names — stays English.
-        # Runs in AUDIT mode here (no filenames), which sweeps every commented file type rather
-        # than only what a given commit staged: the failure this guards against is a PARTIAL
-        # sweep leaving a precedent that the next author copies, so the CI pass must be total.
         run: poetry run python bin/check_comment_language.py
 
       - name: Run Comment Budget Ratchet
@@ -208,26 +130,14 @@ jobs:
 
       - name: Run Gate Integrity Enforcement
         if: runner.os == 'Linux'
-        # Mirrors the `gate-integrity` pre-commit hook: a PR must not weaken a hook, rule,
-        # exclude, or check without a `gate-change-ok: <reason>` justification (blueprintx#309).
-        # CI runs its gates as explicit steps, not via pre-commit, so this must be listed here
-        # or a hook-skipping contributor bypasses it. Diff-scoped against merge-base(HEAD,
-        # main), so it needs the `fetch-depth: 0` checkout already set above.
         run: poetry run python bin/check_gate_integrity.py
 
       - name: Run Function Length Gate
         if: runner.os == 'Linux'
-        # Mirrors the `function-length` pre-commit hook. CI runs its gates as explicit steps,
-        # not via pre-commit, so this must be listed here or a hook-skipping contributor
-        # bypasses it. Audit mode (no filenames) sweeps the whole tree rather than only what
-        # was staged, and FAILS when discovery matches zero files.
         run: poetry run python bin/check_function_length.py
 
       - name: Run Specs Structure Gate
         if: runner.os == 'Linux'
-        # Mirrors the `specs-structure` pre-commit hook. CI runs its gates as explicit steps,
-        # not via pre-commit, so this must be listed here or a hook-skipping contributor
-        # bypasses it. A tree with no .specs/ passes; a malformed one fails by name.
         run: bash bin/check_specs_structure.sh --root .
 
       - name: Run Required Checks Sync Gate
@@ -240,61 +150,30 @@ jobs:
 
       - name: Run Fixture Scope Gate
         if: runner.os == 'Linux'
-        # Mirrors the `fixture-scope` pre-commit hook. A PROXY (blueprintx#442), not a
-        # detector — see the gate's module docstring. CI runs its gates as explicit steps,
-        # not via pre-commit, so this must be listed here or a hook-skipping contributor
-        # bypasses it. Audit mode FAILS when discovery matches zero files.
         run: poetry run python bin/check_fixture_scope.py
 
       - name: Run Complexity Gate
         if: runner.os == 'Linux'
-        # Mirrors the `check-complexity` pre-commit hook. CI runs its gates as explicit steps,
-        # not via pre-commit, so this must be listed here or a hook-skipping contributor
-        # bypasses it. The gate FAILS when discovery matches zero files, and hard-fails (never
-        # skips) when ruff cannot be resolved — a gate reporting its own blindness as OK is the
-        # failure mode this repo writes gates to prevent.
         run: bash bin/check_complexity.sh
 
       - name: Run Identifier Masking Gate
         if: runner.os == 'Linux'
-        # Mirrors the `identifier-masking` pre-commit hook. CI runs its gates as explicit
-        # steps, not via pre-commit, so this must be listed here or a hook-skipping
-        # contributor bypasses it. The gate FAILS when discovery matches zero files.
         run: poetry run python bin/check_identifier_masking.py
 
       - name: Run SQL Guards Gate
         if: runner.os == 'Linux'
-        # Mirrors the `check-sql-guards` pre-commit hook. CI runs its gates as explicit
-        # steps, not via pre-commit, so this must be listed here or a hook-skipping
-        # contributor bypasses it — which is exactly how this gate shipped one-legged
-        # (blueprintx#355): present in pre-commit, absent from CI, so a WHERE-less DELETE
-        # reached main unflagged whenever hooks were skipped.
         run: poetry run python bin/check_sql_guards.py
 
       - name: Run Coverage Floor Gate
         if: runner.os == 'Linux'
-        # Mirrors the `coverage-floor` pre-commit hook. CI runs its gates as explicit steps,
-        # not via pre-commit, so this must be listed here or a hook-skipping contributor
-        # bypasses it. The gate FAILS when `.coveragerc`/`src/` cannot be read at all; it
-        # exits 0 with an explicit message on a tier with no `src/capabilities/` (e.g. MVC)
-        # or on a fresh scaffold with nothing yet to check.
         run: poetry run python bin/check_coverage_floor.py
 
       - name: Run Migration Graph Gate
         if: runner.os == 'Linux'
-        # Mirrors the `migration-graph` pre-commit hook (blueprintx#308): every Alembic
-        # revision/down_revision graph must resolve to exactly one head, with no dangling
-        # or duplicate revisions. CI runs its gates as explicit steps, not via pre-commit,
-        # so this must be listed here or a hook-skipping contributor bypasses it. Self-skips
-        # with a message on a tier with no migrations/versions/ (e.g. MVC, native-DB).
         run: poetry run python bin/check_migration_graph.py
 
       - name: Run Secret Scan (gitleaks)
         if: runner.os == 'Linux'
-        # Mirrors the `check-secrets` pre-commit hook (blueprintx#305, gitleaks slice).
-        # ⚠️ Pinning the version pins what is ASKED FOR, never what ARRIVES — and what arrives
-        # is unpacked and EXECUTED on this runner. Hence the SHA-256 check before extracting,
-        # the same pattern the actionlint install below uses.
         env:
           GITLEAKS_VERSION: "8.30.1"
           GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
@@ -308,24 +187,14 @@ jobs:
 
       - name: Run Docs Skeleton Enforcement
         if: runner.os == 'Linux'
-        # Mirrors the `check-docs-sections` pre-commit hook: every canonical page (English slug)
-        # exists and is registered in mkdocs.yml nav. CI runs its gates as explicit steps, not via
-        # pre-commit, so this must be listed here or a hook-skipping contributor bypasses it.
         run: poetry run python bin/check_docs_sections.py
 
       - name: Run Docs Code-Reference Enforcement
         if: runner.os == 'Linux'
-        # Mirrors the `check-docs-code-refs` pre-commit hook: a docs page's fenced `from x import
-        # Y` example must resolve against real src/ (blueprintx#159). CI runs its gates as
-        # explicit steps, not via pre-commit, so this must be listed here or a hook-skipping
-        # contributor bypasses it.
         run: poetry run python bin/check_docs_code_refs.py
 
       - name: Run Work-Ledger Enforcement
         if: runner.os == 'Linux'
-        # Mirrors the `check-backlog-ledger` pre-commit hook: a branch touching src/ or ci paths
-        # must carry a .specs/backlog ledger. CI runs its gates as explicit steps, not via
-        # pre-commit, so this must be listed here or a hook-skipping contributor bypasses it.
         run: poetry run python bin/check_backlog_ledger.py
 
       - name: Run Ruff Linting
@@ -340,28 +209,14 @@ jobs:
 
       - name: Run Ruff Format Check
         if: runner.os == 'Linux'
-        # Mirrors the `ruff-format` pre-commit hook — CI must fail on unformatted code,
-        # not just flag lint issues. Fix locally with `poetry run ruff format src/ tests/`.
         run: poetry run ruff format --check src/ tests/ --config=ruff.toml
 
       - name: Run Static Type Check (mypy)
         if: runner.os == 'Linux'
-        # Run from src/ so it is the single package base (avoids the dual-root
-        # "found twice" error on the deeper DDD tree).
         run: cd src && poetry run mypy --config-file ../mypy.ini .
 
       - name: Run Non-Python Lint Gates (shell, sql, yaml, actions, filenames, docker)
         if: runner.os == 'Linux'
-        # Mirrors `poe lint` and the pre-commit lint-* hooks (one home, zero drift).
-        # shellcheck/shfmt are system tools; install them so the shell gate actually runs
-        # in CI (the wrappers skip gracefully on a box without them).
-        #
-        # actionlint: the graceful skip is correct on a contributor's machine and is PLACEBO
-        # in CI — a gate reporting its own blindness as OK. LINT_ACTIONS_REQUIRED=1 turns the
-        # skip into a failure, so a broken install can never read as a passing gate.
-        #
-        # ⚠️ Pinning the version pins what is ASKED FOR, never what ARRIVES — and what arrives
-        # is unpacked and EXECUTED on the runner. Hence the SHA-256 check before extracting.
         env:
           ACTIONLINT_VERSION: "1.7.7"
           ACTIONLINT_SHA256: "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
@@ -380,9 +235,6 @@ jobs:
           LINT_DOCKER_REQUIRED=1 bash bin/lint_docker.sh
 
       - name: Run Integration Tests
-        # `|| [ $? -eq 5 ]` tolerates pytest exit 5 ("no tests collected") so a
-        # fresh project with an empty integration suite does not fail CI; real
-        # failures (exit 1) still fail the step.
         run: poetry run pytest tests/integration/ -v || [ $? -eq 5 ]
 
       - name: Run Unit Tests
@@ -390,19 +242,12 @@ jobs:
 
       - name: Run Coverage Gate
         if: runner.os == 'Linux'
-        # Enforce the coverage floor (`.coveragerc` [report] fail_under) on every PR,
-        # mirroring the pre-commit `coverage-check` hook. The badge step below runs only on
-        # main/tags, so without this a PR could drop coverage below the floor uncaught.
         run: poetry run pytest tests/unit/ --cov=src --cov-report=term-missing || [ $? -eq 5 ]
 
       - name: Run Coverage Report
         if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
         run: |
           poetry run pytest --cov=src --cov-report=xml --no-header -q tests/unit/
-          # --local renders the SVG from coverage.xml offline. The default form fetches
-          # the badge from img.shields.io, so a DNS flake on this cosmetic step could fail
-          # (or, on a fail-fast release matrix, silently SKIP) the run. Nothing on a CI/
-          # release path may depend on a non-essential external host.
           poetry run genbadge coverage --local -i coverage.xml -o coverage.svg
 
       - name: Upload Badge
