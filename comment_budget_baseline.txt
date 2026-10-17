@@ -15,7 +15,6 @@ scope 2
 104 templates/python-common/.github/workflows/review_threads.yaml
 70 templates/python-common/.github/workflows/secret_scan.yaml
 154 templates/python-common/.github/workflows/tests.yaml
-146 templates/python-common/.pre-commit-config.yaml
 26 templates/python-common/bin/build_wheelhouse.sh
 8 templates/python-common/bin/check_all_exports.py
 20 templates/python-common/bin/check_assertion_weakening.py
@@ -84,7 +83,6 @@ scope 2
 11 templates/python-common/bin/test_cov.sh
 42 templates/python-common/bin/test_urls_docstrings.sh
 13 templates/python-common/bin/venv.sh
-100 templates/python-common/mypy.ini
 4 templates/python-common/optional/browser_steps/step_handlers.py
 7 templates/python-common/optional/chassis/db_wschema/infrastructure/joblib_handler.py
 3 templates/python-common/optional/email/domain/ports.py
@@ -97,8 +95,6 @@ scope 2
 2 templates/python-common/optional/webhook/factory.py
 2 templates/python-common/optional/webhook/infrastructure/slack_notifier.py
 3 templates/python-common/optional/webhooks.yaml
-109 templates/python-common/poe_tasks.toml
-258 templates/python-common/ruff.toml
 4 templates/python-common/tests/conftest.py
 173 templates/python-common/tests/integration/test_bin_scripts.py
 2 templates/python-common/tests/integration/test_resourcewarning_unraisable_gate.py

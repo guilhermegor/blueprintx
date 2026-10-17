@@ -29,6 +29,7 @@ gate did not read until P0.
 - [ ] 7 `templates/python-common` config and workflows (35 files, 1401 lines)
 - [ ] 8 `templates/python-common/tests` (55 files, 931 lines)
 - [ ] 9 `templates/python-common/bin`, the gates themselves (66 files, 2113 lines)
+- [~] chore/comment-strip-slice7b-304 7b `templates/python-common` config files: `ruff.toml`, `mypy.ini`, `poe_tasks.toml`, `.pre-commit-config.yaml` and 18 dotfiles (22 files, 889 lines); rationale in `docs/decision-records.md`. Slice 7a (workflows) is in a separate PR
 - [ ] Z delete the superseded rules in `CLAUDE.md` and `templates/python-common/CLAUDE.md`, drop the
   baseline and flip the gate to strict zero tolerance
 
