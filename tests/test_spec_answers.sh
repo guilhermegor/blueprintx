@@ -18,8 +18,16 @@ fail() {
 }
 
 command_not_found_handle() {
-    echo "FAIL (undefined test): $1" >&2
-    kill -TERM "$$"
+    case "$1" in
+        test_*)
+            echo "FAIL (undefined test): $1" >&2
+            kill -TERM "$$"
+            ;;
+        *)
+            echo "$1: command not found" >&2
+            return 127
+            ;;
+    esac
 }
 
 write_spec() {
@@ -565,7 +573,7 @@ test_ventoy_usb_spec_reaches_the_generated_conf() {
 
 test_an_undefined_test_name_fails_the_runner() {
     local file="$WORK_DIR/undefined-probe.sh" out int_rc
-    { sed '$d' "${BASH_SOURCE[0]}"
+    { sed '/^main$/d' "${BASH_SOURCE[0]}"
         printf 'main() { test_no_such_test_probe; [ "$int_failures" -eq 0 ]; }\nmain\n'
     } >"$file"
     out="$(bash "$file" 2>&1)"
@@ -577,6 +585,19 @@ test_an_undefined_test_name_fails_the_runner() {
     fi
 }
 
+test_a_missing_tool_is_not_reported_as_an_undefined_test() {
+    local file="$WORK_DIR/missing-tool-probe.sh" out
+    { sed '/^main$/d' "${BASH_SOURCE[0]}"
+        printf 'main() { tool_no_such_probe; echo rc=$?; }\nmain\n'
+    } >"$file"
+    out="$(bash "$file" 2>&1)"
+    if [[ "$out" == *"tool_no_such_probe: command not found"* && "$out" == *"rc=127"* && "$out" != *"undefined test"* ]]; then
+        pass "a missing non-test command returns 127 and is not reported as an undefined test"
+    else
+        fail "missing tool report" "out: ${out: -300}"
+    fi
+}
+
 main() {
     test_ventoy_usb_answer_stream_order
     test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes
@@ -584,6 +605,7 @@ main() {
     test_ventoy_usb_spec_reaches_the_generated_conf
     test_etcher_chromeos_answer_stream_and_prompt_order
     test_an_undefined_test_name_fails_the_runner
+    test_a_missing_tool_is_not_reported_as_an_undefined_test
     test_ts_lib_answer_stream_order
     test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes
     test_ts_lib_remote_keys_defaults
