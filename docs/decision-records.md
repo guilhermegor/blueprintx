@@ -948,8 +948,8 @@ scaffold scripts no longer append comment lines to a generated `pyproject.toml`.
   incoming-webhook URL to its platform by substring signature; Teams webhooks are hosted under
   `*.webhook.office.com` and `teams.microsoft.com`. `slack_notifier.py` validates an `https`
   scheme in the constructor, so the S310 audit warning about arbitrary schemes does not apply.
-  `webhooks.yaml`: the target URL comes from `WEBHOOK_URL` in `.env` and the platform
-  (teams or slack) from `WEBHOOK_PLATFORM`; the named fields (`app_name`, `environment`,
+  `webhooks.yaml`: the target URL comes from `WEBHOOK_URL` in `.env`; the platform
+  (teams or slack) is inferred from that URL by `build_webhook`; the named fields (`app_name`, `environment`,
   `hostname`, `user`, `log_path`) are substituted in `src/config/startup.py`.
 - **`browser_steps/step_handlers.py`.** The fields each kind needs, and their type, live in a
   second dict keyed by the same kind, which is the drift this module's dispatch design exists to
