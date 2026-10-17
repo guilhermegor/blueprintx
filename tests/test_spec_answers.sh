@@ -502,7 +502,7 @@ test_first_commit_works_without_a_git_identity() {
     mkdir -p "$str_home"
     file="$(write_spec no-identity lib-minimal "project_root=$WORK_DIR/proot-noid")"
     out="$(cd "$WORK_DIR" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME \
-        -u GIT_COMMITTER_EMAIL HOME="$str_home" GIT_CONFIG_NOSYSTEM=1 TMPDIR="$WORK_DIR" \
+        -u GIT_COMMITTER_EMAIL -u XDG_CONFIG_HOME -u EMAIL HOME="$str_home" GIT_CONFIG_GLOBAL="$str_home/.gitconfig" GIT_CONFIG_NOSYSTEM=1 TMPDIR="$WORK_DIR" \
         bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" --dev 2>&1 </dev/null)"
     int_rc=$?
     if [ "$int_rc" -eq 0 ] && [[ "$out" == *"No git identity set"* ]] \

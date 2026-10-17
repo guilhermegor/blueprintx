@@ -343,8 +343,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/scaffold_comment_budget.sh"
 scaffold_git_commit() {
     local str_dir="$1" str_message="$2"
     shift 2
-    if [ -n "$(git -C "$str_dir" config user.email 2>/dev/null)" ] ||
-        { [ -n "${GIT_AUTHOR_EMAIL:-}" ] && [ -n "${GIT_COMMITTER_EMAIL:-}" ]; }; then
+    if git -C "$str_dir" var GIT_AUTHOR_IDENT >/dev/null 2>&1 &&
+        git -C "$str_dir" var GIT_COMMITTER_IDENT >/dev/null 2>&1; then
         git -C "$str_dir" commit -q "$@" -m "$str_message"
         return
     fi
