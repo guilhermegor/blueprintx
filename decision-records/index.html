@@ -2379,6 +2379,11 @@ repository. They were moved out of the workflow files, which now carry no prose.
   (typescript-eslint peers on <code>typescript</code> below 6.1.0; the react, import and jsx-a11y plugins
   cap <code>eslint</code> at 9) exclude them; lift per #720. First match wins, so <code>@eslint/js</code> moves in
   lockstep with <code>eslint</code>.</li>
+<li><code>@types/node</code> majors are held in both TypeScript tiers (#824, closing #798). The types must
+  match the lowest Node a template supports, because newer types let code compile against APIs
+  a Node 22 user lacks: the build passes and the program fails at run time. Both tiers pin
+  <code>^22</code>, the <code>engines.node</code> floor line. Lift the <code>ignore</code> and raise the pin in the same PR when
+  an <code>engines</code> floor moves to a newer major.</li>
 <li>Pinning actions by SHA (#369) does not self-update; the Actions ecosystem entry does.</li>
 </ul>
 
