@@ -3005,6 +3005,33 @@ def test_patch_fingerprint_ignores_hunk_line_numbers() -> None:
     )
 
 
+def test_patch_fingerprint_ignores_unchanged_context_lines() -> None:
+    """Main editing lines next to the PR's hunk changes context only, never the PR's patch."""
+    cls_gate = _load_gate()
+    dict_at_review = {
+        "filename": "a",
+        "status": "modified",
+        "patch": "@@ -2,3 +2,3 @@ fn\n old_above\n-x\n+y\n old_below",
+    }
+    dict_at_head = {
+        "filename": "a",
+        "status": "modified",
+        "patch": "@@ -2,3 +2,3 @@ fn\n new_above\n-x\n+y\n new_below",
+    }
+    assert cls_gate.patch_fingerprint([dict_at_review]) == cls_gate.patch_fingerprint(
+        [dict_at_head]
+    )
+
+
+def test_patch_fingerprint_changed_added_line_differs() -> None:
+    """A different ``+`` line is different code, whatever the context says."""
+    cls_gate = _load_gate()
+    str_head = "@@ -2 +2 @@ fn\n ctx\n-x\n+"
+    dict_reviewed = {"filename": "a", "status": "modified", "patch": str_head + "y"}
+    dict_edited = {"filename": "a", "status": "modified", "patch": str_head + "z"}
+    assert cls_gate.patch_fingerprint([dict_reviewed]) != cls_gate.patch_fingerprint([dict_edited])
+
+
 def test_patch_fingerprint_file_without_patch_text_raises() -> None:
     """The API omits ``patch`` for binary or oversized files, which cannot be compared."""
     cls_gate = _load_gate()
@@ -3012,12 +3039,26 @@ def test_patch_fingerprint_file_without_patch_text_raises() -> None:
         cls_gate.patch_fingerprint([{"filename": "big.bin", "status": "added"}])
 
 
-def test_patch_fingerprint_same_edit_in_another_function_differs() -> None:
-    """The reviewed hunk text moved to a different function must not carry forward."""
+def test_patch_fingerprint_same_edit_in_another_function_matches() -> None:
+    """Hunk headers are not hashed, so the same edit in another function matches.
+
+    Deliberate (blueprintx#848): main's edits split and re-head hunks, so any hash of
+    ``@@`` lines breaks the carry-forward on a PR whose own lines did not change.
+    """
     cls_gate = _load_gate()
     dict_reviewed = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ def one\n-x\n+y"}
     dict_moved = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ def two\n-x\n+y"}
-    assert cls_gate.patch_fingerprint([dict_reviewed]) != cls_gate.patch_fingerprint([dict_moved])
+    assert cls_gate.patch_fingerprint([dict_reviewed]) == cls_gate.patch_fingerprint([dict_moved])
+
+
+def test_patch_fingerprint_hunk_split_by_a_base_edit_matches() -> None:
+    """One hunk and the same ``+`` lines split into two re-headed hunks digest equally."""
+    cls_gate = _load_gate()
+    str_one = "@@ -5,0 +6,2 @@ test_a() {\n+one\n+two"
+    str_two = "@@ -5,0 +6,1 @@ test_a() {\n+one\n@@ -20,0 +30,1 @@ main() {\n ctx\n+two"
+    dict_one = {"filename": "a", "status": "modified", "patch": str_one}
+    dict_two = {"filename": "a", "status": "modified", "patch": str_two}
+    assert cls_gate.patch_fingerprint([dict_one]) == cls_gate.patch_fingerprint([dict_two])
 
 
 def test_patch_fingerprint_field_boundaries_are_unambiguous() -> None:
@@ -3073,17 +3114,16 @@ def test_review_covers_head_production_fingerprint_on_real_diffs(
     [
         ("\n20\n", "\nmain\n", True),  # below the hunk
         ("1\n2\n", "0\n1\n2\n", True),  # a line inserted above shifts the coordinates
-        ("\n12\n", "\nmain\n", False),  # inside the hunk's 3-line context window
+        ("\n12\n", "\nmain\n", True),  # inside the hunk's 3-line context window
     ],
 )
 def test_review_covers_head_main_edit_relative_to_the_hunk(
     tmp_path: Path, str_old: str, str_new: str, bool_expected: bool
 ) -> None:
-    """A clean merge carries a review forward unless main touched the hunk's context lines.
+    """A clean merge carries a review forward even when main edits the hunk's context lines.
 
-    Pinned behaviour, not a promise: the digest keeps context lines, so a conflict-free
-    base edit inside the 3-line window makes the review stale (it fails safe), while an
-    edit that only shifts the hunk's coordinates does not.
+    The digest hashes the PR's ``+``/``-`` lines only, so no conflict-free base edit,
+    inside the 3-line window or outside it, changes it (blueprintx#848).
     """
     str_review, str_head = _overlap_repo(tmp_path, str_old, str_new)
     fn_fingerprint = functools.partial(_real_fingerprint, tmp_path)

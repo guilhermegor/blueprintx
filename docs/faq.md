@@ -213,10 +213,12 @@ That is the case of `update-branch` under the strict-serial ruleset: main is mer
 is written, and a second review of the same diff would only spend a reviewer rung.
 
 The patch is the diff from the merge base with the base branch to the commit. It is
-fingerprinted as the compare API reports it, with only the hunk coordinates
-(`@@ -a,b +c,d @@`) removed. Everything else is kept: the function context after the closing
-`@@`, the context lines, and all whitespace. This is stricter than `git patch-id --stable`,
-which also drops the function context and normalises whitespace. The CI checkout is shallow
+fingerprinted from what the PR authored: the file name, status and previous name, and the
+ordered `+`/`-` lines with all whitespace. Hunk headers (coordinates and function context) and
+unchanged context lines are dropped, because they describe the base: a merge of main that adds
+a function next to the PR's lines splits one hunk into two with different headers, and the PR's
+own lines did not change. This is stricter than `git patch-id --stable`, which also
+normalises whitespace. The CI checkout is shallow
 (`actions/checkout` defaults to `fetch-depth: 1`), so there is no local history for
 `git merge-base`; the gate reads the same diff from the GitHub compare API
 (`compare/<base>...<commit>`), which computes the merge base server side.
@@ -240,12 +242,12 @@ covered", with one line on stderr per failing commit giving the reason (stdout s
 `DISMISSED` review is never carried forward. Every review's findings, threads or body, are
 audited afterwards whatever the carry-forward decided.
 
-What carries forward is therefore narrower than "any update-branch". A base edit that only
-shifts the PR's hunks (lines added above or below them) leaves the fingerprint alone. A
-conflict-free base edit inside a hunk's three context lines changes the context, so the review
-goes stale; that fails safe. The tests pin both cases against real `git diff` output. Known
-ceilings: an identical edit moved within one function, between identical context lines, still
-matches, as it does for `git patch-id`; and a conflict-free base change can still break the
+What carries forward is therefore narrower than "any update-branch". A conflict-free base
+edit anywhere, including next to or inside a hunk's three context lines, leaves the fingerprint
+alone, since only the PR's own `+`/`-` lines count. The tests pin this against real
+`git diff` output. Known ceilings: an identical edit moved to another function matches, because
+hunk headers are not hashed (the trade-off of blueprintx#848; `git patch-id` ignores headers
+too); and a conflict-free base change can still break the
 unchanged patch semantically (main renames a function the PR calls), which a patch comparison
 cannot see. That is accepted: a review is repeated only when a conflict or new code changes
 the PR's own patch, and CI covers the integration. A PR from a fork whose commits cannot be
