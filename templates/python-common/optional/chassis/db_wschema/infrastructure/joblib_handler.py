@@ -18,13 +18,8 @@ from chassis.db.domain.ports import DatabaseHandler, Record
 
 _TS_FMT = "%Y%m%d_%H%M%S"
 
-# A record_id is `<name>_<date>_<time>_<sha8>`. Both the split count and the expected
-# length derive from this one number, so they cannot drift apart.
 _INT_RECORD_ID_PARTS = 4
 
-# Every path this store opens is built from a record_id, and a record_id arrives from the
-# caller. A full match on the documented shape is what makes it a single filename component:
-# no separator, no `..`, no drive. The name charset is the one `create()` can produce.
 _RE_NAME = re.compile(r"[a-z0-9-]+")
 _RE_RECORD_ID = re.compile(r"[a-z0-9-]+_\d{8}_\d{6}_[0-9a-f]{8}")
 
@@ -162,8 +157,6 @@ class JoblibHandler(DatabaseHandler):
             If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
             component.
         """
-        # Both paths are confined BEFORE anything is unlinked: resolving the sidecar after
-        # the artifact is gone would leave the store half-deleted when the sidecar is refused.
         path_artifact = self._artifact_path(record_id, ".joblib")
         path_sig = self._artifact_path(record_id, ".sig")
         if not path_artifact.exists():

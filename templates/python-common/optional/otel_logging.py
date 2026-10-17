@@ -32,22 +32,15 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 
-# Runtime type-checking engine — layout-agnostic (utils.typing in MVC, chassis.typing in
-# DDD; always injected, just at different paths). mypy reads the single TYPE_CHECKING
-# import (no redefinition); at runtime the try/except picks whichever layout shipped.
 if TYPE_CHECKING:
     from utils.typing import type_checker
 else:
     try:
         from utils.typing import type_checker
-    except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
+    except ModuleNotFoundError:
         from chassis.typing import type_checker
 
 
-# A cleartext endpoint is only a credential leak when there is a credential to leak, and only
-# when it leaves the machine. Both halves matter: refusing every http:// endpoint would break
-# this seam's own documented quickstart (docker-compose.otel-collector.yml serves
-# http://localhost:4318), and refusing none would ship an API key over the wire in the clear.
 _TUPLE_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 
@@ -137,7 +130,6 @@ def _is_offhost_cleartext(str_endpoint: str) -> bool:
     try:
         str_hostname = urlsplit(str_endpoint).hostname
     except ValueError:
-        # Unparseable endpoint + credentials: refuse. See docs/observability.md.
         return True
     return not str_endpoint.startswith("https://") and str_hostname not in _TUPLE_LOOPBACK_HOSTS
 
@@ -197,8 +189,6 @@ def _exportable_endpoint(logger: logging.Logger) -> str:
     """
     str_endpoint, bool_has_headers = _effective_otlp_logs_config()
     if _is_cleartext_with_credentials(str_endpoint, bool_has_headers):
-        # The endpoint is named because the fix is to change it; the header VALUES never are,
-        # since they are the credential this guard exists to protect.
         logger.warning(
             "OTel log export refused: OTLP headers are set but the endpoint %r is neither "
             "https:// nor loopback, so the credentials would cross the network in cleartext. "
@@ -209,15 +199,6 @@ def _exportable_endpoint(logger: logging.Logger) -> str:
     return str_endpoint
 
 
-# CWE-319, and the reason it is not covered by the cleartext guard above: that guard vets the
-# CONFIGURED endpoint, while `requests` follows a 3xx on its own and re-sends the OTLP headers —
-# the API key — to whatever host the hop names, over http:// if it says so. So the credential can
-# leave in the clear via an endpoint no check ever saw. `max_redirects = 0` makes requests raise
-# TooManyRedirects on the first hop instead of forwarding it.
-# ⚠️ `_session` is a vendor internal. It is read through getattr and its ABSENCE is fatal on
-# purpose: if a future opentelemetry release renames it, the right outcome is "no export", never
-# "export with credentials unprotected" — a silent downgrade is the failure this repo writes
-# guards to prevent. The raise is caught by the fire-and-forget handler in the caller.
 @type_checker
 def _reject_credential_forwarding_redirects(cls_exporter: object) -> None:
     """Refuse to follow redirects, so credential headers cannot reach another host.
@@ -262,10 +243,6 @@ def _install_otel_handler(logger: logging.Logger) -> None:  # complexity-ok: one
     -------
     None
     """
-    # Fire-and-forget, deliberately. A failure here must never become an application outage —
-    # raising would turn an unreachable OTel collector into a crashed scaffolded project, and
-    # the FileHandler above already gives the message somewhere to land either way. This is
-    # the ONE place a silently swallowed error is the correct choice.
     try:
         from opentelemetry._logs import set_logger_provider
         from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
@@ -273,10 +250,6 @@ def _install_otel_handler(logger: logging.Logger) -> None:  # complexity-ok: one
         from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
         from opentelemetry.sdk.resources import Resource
 
-        # The SDK classes below already read the standard OTEL environment variables for the
-        # endpoint, headers, service name and resource attributes on their own, so none of
-        # that is passed explicitly — reimplementing the lookup would be a second, driftable
-        # copy of it.
         cls_exporter = OTLPLogExporter()
         _reject_credential_forwarding_redirects(cls_exporter)
         cls_provider = LoggerProvider(resource=Resource.create())

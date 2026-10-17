@@ -31,6 +31,7 @@ gate did not read until P0.
 - [ ] 8 `templates/python-common/tests` (55 files, 931 lines)
 - [ ] 9 `templates/python-common/bin`, the gates themselves (66 files, 2113 lines)
 - [~] chore/comment-strip-slice9a-304 9a `templates/python-common/bin` shell scripts and `lib/*.sh` (33 files, 1287 lines); oracle: `shfmt -mn` output identical before and after. Slice 9 is split 9a shell, 9b Python gates, 9c the comment-budget gate itself plus its banner exemption
+- [~] chore/comment-strip-slice10-304 10 residuals: `templates/python-common/optional` (65 lines) and the OTel pin comment lines that six `bin/scaffold/python_*.sh` appended to the generated `pyproject.toml` (13 lines); verified with the otel and storage opt-in scaffolds
 - [ ] Z delete the superseded rules in `CLAUDE.md` and `templates/python-common/CLAUDE.md`, drop the
   baseline and flip the gate to strict zero tolerance
 
