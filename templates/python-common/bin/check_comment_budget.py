@@ -135,6 +135,7 @@ TUPLE_SKIP_DIRS = (
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PATH_ALLOWLIST = pathlib.Path(__file__).resolve().parent / "comment_budget_allowlist.txt"
 STR_BASELINE_NAME = "comment_budget_baseline.txt"
+STR_ROUTING_NAME = "comment_budget_routing.txt"
 STR_SCOPE_ROW = "scope "
 INT_SCOPE = 2
 STR_WRITE_BASELINE = "--write-baseline"
@@ -1336,6 +1337,46 @@ def split_flags(list_rest: list) -> tuple:
     return bool_write, bool_require, str_reference, [n for n in list_names if n not in tuple_flags]
 
 
+def routing_lines() -> list:
+    """Read the knowledge-routing table the failure message prints.
+
+    The file sits beside the gate in a generated project and under ``templates/common/bin``
+    in the template tree, so a project retunes the table by editing its own copy.
+
+    Returns
+    -------
+    list of str
+        Non-blank lines in file order; empty when no routing file is found.
+    """
+    path_here = pathlib.Path(__file__).resolve().parent
+    for path_dir in (path_here, path_here.parents[1] / "common" / "bin"):
+        path_file = path_dir / STR_ROUTING_NAME
+        if path_file.is_file():
+            str_text = path_file.read_text(encoding="utf-8")
+            return [str_line.strip() for str_line in str_text.splitlines() if str_line.strip()]
+    return []
+
+
+def print_failure_help(int_findings: int) -> None:
+    """Print the closing guidance of a failed run, routing table included.
+
+    Parameters
+    ----------
+    int_findings : int
+        How many findings were printed above.
+    """
+    print(
+        f"\n{int_findings} finding(s). Delete the comment and put any explanation in "
+        f"docs/, README.md or CONTRIBUTING.md; leave nothing behind. A stale baseline is "
+        f"lowered with --write-baseline. QA suppressions (noqa, type: ignore, *-ok: markers) "
+        f"are exempt by design (see comment_budget_allowlist.txt)."
+    )
+    list_routing = routing_lines()
+    if list_routing:
+        print("\nWhere the sentence goes instead:")
+        print("\n".join(f"  - {str_line}" for str_line in list_routing))
+
+
 def run(list_argv: list) -> int:
     """Check comments: ratchet against the baseline, long runs, decorative banners.
 
@@ -1391,12 +1432,7 @@ def run(list_argv: list) -> int:
         print(f"✅ comment budget OK ({len(list_paths)} file(s) checked)")
         return 0
 
-    print(
-        f"\n{len(list_problems)} finding(s). Delete the comment and put any explanation in "
-        f"docs/, README.md or CONTRIBUTING.md; leave nothing behind. A stale baseline is "
-        f"lowered with --write-baseline. QA suppressions (noqa, type: ignore, *-ok: markers) "
-        f"are exempt by design (see comment_budget_allowlist.txt)."
-    )
+    print_failure_help(len(list_problems))
     return 1
 
 

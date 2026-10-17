@@ -337,6 +337,9 @@ remove_repo_policy_scripts() {
         "$project_path/bin/dependabot_auto_merge.sh"
 }
 
+# shellcheck source=bin/lib/scaffold_comment_budget.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scaffold_comment_budget.sh"
+
 scaffold_git_commit() {
     local str_dir="$1" str_message="$2"
     shift 2
