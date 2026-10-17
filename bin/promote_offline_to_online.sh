@@ -477,7 +477,7 @@ PY
 commit_promotion_changes() {
     [ -n "$(git -C "$PROJECT_PATH" status --porcelain)" ] || return 0
     git -C "$PROJECT_PATH" add -A
-    SKIP=no-commit-to-branch git -C "$PROJECT_PATH" commit -q -m "chore: promote project to online GitHub workflow"
+    SKIP=no-commit-to-branch scaffold_git_commit "$PROJECT_PATH" "chore: promote project to online GitHub workflow"
     print_status "success" "Committed promotion changes"
 }
 

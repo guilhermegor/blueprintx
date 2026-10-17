@@ -124,7 +124,7 @@ copy_common_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.editorconfig" "$project_path/.editorconfig"
     cp "$SHARED_TEMPLATE_ROOT/.gitattributes" "$project_path/.gitattributes"
     cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
-    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$SKELETON_TEMPLATE_ROOT/.greptile/"* "$project_path/.greptile/"
+    mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$SHARED_TEMPLATE_ROOT/.greptile/graphite.md" "$SKELETON_TEMPLATE_ROOT/.greptile/"* "$project_path/.greptile/"
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
@@ -178,9 +178,9 @@ initialize_git_repo() {
         cd "$project_path" || exit 1
         git init -q -b main &&
             git add . &&
-            git commit -q -m "feat: first commit"
+            scaffold_git_commit . "feat: first commit"
     ); then
-        exit_error "Could not create the initial commit in '$project_path'. Set git user.name and user.email, then re-run."
+        exit_error "Could not create the initial commit in '$project_path'. A commit hook rejected it, or git is older than 2.28 (no 'git init -b'). Fix that, then re-run."
     fi
     print_status "success" "Initialized git repo (branch main) with first commit"
 }
@@ -215,7 +215,7 @@ commit_offline_artifacts() {
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
     scaffold_comment_budget_refresh "$project_path"
     git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+    scaffold_git_commit "$project_path" "chore: enable offline git workflow" --no-verify || true
 }
 
 main() {

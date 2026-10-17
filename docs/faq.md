@@ -24,6 +24,15 @@ copied into scaffolded projects.
 Create `templates/<name>/` with a `skeleton.meta` descriptor, add a scaffold script under
 `bin/scaffold/`, and the menu discovers it automatically. See [Contributing](contributing.md).
 
+## Do I need a global git identity to scaffold?
+
+No. The scaffold's commits use your `user.name` / `user.email` (or the `GIT_AUTHOR_EMAIL` /
+`GIT_COMMITTER_EMAIL` environment variables) when set. When none of these is configured it
+commits as `BlueprintX Scaffold <scaffold@blueprintx.invalid>` for those commits only, prints a
+one-line notice, and never writes the fallback to any git config. Set your own identity later
+with `git config --global user.name "Your Name"` and
+`git config --global user.email "you@example.com"`.
+
 ## Online vs offline scaffolds — what's the difference?
 
 If you connect a GitHub remote, the scaffold ships GitHub-only assets (Actions workflows,
@@ -242,17 +251,22 @@ cannot see. That is accepted: a review is repeated only when a conflict or new c
 the PR's own patch, and CI covers the integration. A PR from a fork whose commits cannot be
 compared fails closed like any other error.
 
-A PR whose base branch was ever changed gets no carry-forward at all. The compare measures the
-patch against today's base, which need not be the base the review was written against, so
-after a retarget the same fingerprint proves nothing. The gate looks for a `BASE_REF_CHANGED_EVENT` or
-`AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT`
-timeline item (the second is what GitHub records when it retargets a PR itself after its base
-branch is merged and deleted) in the same GraphQL query as the reviews. An event is never
-removed, so the refusal is permanent for that PR. The gate prints the reason on stderr, and a
-missing answer is a failure ("retarget state is unknown"), not "never retargeted". The gate reads
-the filtered `nodes`, never `totalCount`, which ignores the type filter and counts the whole
-timeline. This also applies to a stacked PR whose lower PR merged: its base was retargeted
-automatically, so it needs a fresh review.
+A review submitted before the PR's latest base change gets no carry-forward. The compare
+measures the patch against today's base, which need not be the base such a review was written
+against, so the same fingerprint proves nothing. A review submitted after that change was
+written against the current base lineage, so it carries through a merge-only update like on
+any other PR (blueprintx#809). The gate looks for a `BASE_REF_CHANGED_EVENT` or
+`AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT` timeline item (the second is what GitHub records when
+it retargets a PR itself after its base branch is merged and deleted) in the same GraphQL
+query as the reviews, reads each event's `createdAt`, and refuses a review whose `submittedAt`
+is not strictly later than the newest one. When one commit has several live reviews from the
+roster, the newest decides, so a post-change review supersedes an earlier one on the same
+commit. An event is never removed, so a review older than it stays refused permanently. The gate prints the reason on stderr, and every unreadable answer
+fails closed: a missing event list ("retarget state is unknown"), an event or review without a
+parseable time, and a review that is not later than the event are all refused, never read as
+"never retargeted". The gate reads the filtered `nodes`, never `totalCount`, which ignores the
+type filter and counts the whole timeline. A stacked PR whose lower PR merged was retargeted
+automatically, so a review from before that retarget needs a fresh one.
 
 Still superseded, so a new review is needed: a merge that resolves a conflict, any new commit,
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
@@ -284,10 +298,10 @@ paths are listed once, one bare path per line (blank and `#` lines are ignored),
 - `--project <dir>` (called by `scaffold_lint_test.sh` for each Python tier): the same
   assertion over one already-generated project.
 
-Today the manifest lists only `.gitattributes` (the Graphite `linguist-generated` marker).
-`.coderabbit.yaml` and `.greptile/` are added by the PRs that ship them, so the guard does
-not yet protect those. Both are repo-root files, not GitHub-only assets, so the offline
-scaffold keeps them: `apply_offline_mode` drops only `.github/`.
+`templates/common/review-config.manifest` is the list of guarded paths; the PR that ships a
+reviewer config file adds its path there, so read the file rather than this page. These are
+repo-root files, not GitHub-only assets, so the offline scaffold keeps them:
+`apply_offline_mode` drops only `.github/`.
 
 `--static` is a fast heuristic over direct `cp` commands. It reads the scaffold script plus the
 `bin/lib/*.sh` helpers it sources, resolves the `*_TEMPLATE_ROOT` variables, and accepts a
