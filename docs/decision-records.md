@@ -313,4 +313,9 @@ repository. They were moved out of the workflow files, which now carry no prose.
   (typescript-eslint peers on `typescript` below 6.1.0; the react, import and jsx-a11y plugins
   cap `eslint` at 9) exclude them; lift per #720. First match wins, so `@eslint/js` moves in
   lockstep with `eslint`.
+- `@types/node` majors are held in both TypeScript tiers (#824, closing #798). The types must
+  match the lowest Node a template supports, because newer types let code compile against APIs
+  a Node 22 user lacks: the build passes and the program fails at run time. Both tiers pin
+  `^22`, the `engines.node` floor line. Lift the `ignore` and raise the pin in the same PR when
+  an `engines` floor moves to a newer major.
 - Pinning actions by SHA (#369) does not self-update; the Actions ecosystem entry does.
