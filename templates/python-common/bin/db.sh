@@ -1,8 +1,4 @@
 #!/bin/bash
-# Database lifecycle helper. Sub-commands:
-#   up       Idempotently bring the DB up: start services, ensure schema, migrate.
-#   backup   Dump the database to BACKUP_STORE_PATH.
-#   restore  Restore the database from DUMP=<path>.
 
 set -e
 
@@ -87,7 +83,6 @@ apply_migrations() {
 
 	print_status "info" "Applying Alembic migrations..."
 	export PYTHONPATH=".:src"
-	# Resolve Poetry robustly (bare `poetry` may be absent; see bin/poetry_exec.sh).
 	bootstrap_init
 	ensure_poetry
 	run_poetry run alembic upgrade head

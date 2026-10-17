@@ -1,15 +1,4 @@
 #!/usr/bin/env bash
-# Build (or assemble) the project's offline wheelhouse — blueprintx#299, pieces 1-3 of #127.
-# A corporate machine behind a TLS-inspecting proxy that blocks PyPI outright cannot install
-# anything; PR #297 already makes that failure LOUD (verify_venv_imports.py). This script is
-# the remedy: `poe wheelhouse` builds the payload on a machine WITH internet access, and
-# `poe wheelhouse_assemble` reconstructs it on the OFFLINE target after it is copied over.
-# See docs/offline-wheelhouse.md for the full workflow.
-#
-# The heavy logic (marker evaluation against a TARGET environment, zip/split/manifest,
-# verify-and-refuse) lives in lib/wheelhouse_select.py — a heredoc is for inert text a
-# script emits, not a program (see bin/CLAUDE.md). This file owns only the network I/O
-# (poetry export, pip download) and orchestration.
 
 set -euo pipefail
 
@@ -19,8 +8,6 @@ source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=bin/lib/bootstrap.sh
 source "$SCRIPT_DIR/lib/bootstrap.sh"
 
-# Piece 1: default destination is a SIBLING of the repo — outside it, never a `git add`
-# candidate, survives a re-clone. Per-repo because sibling projects pin different versions.
 WHEELHOUSE_DIR="${WHEELHOUSE_DIR:-$PROJECT_ROOT/../_wheels/$(basename "$PROJECT_ROOT")}"
 WHEELHOUSE_PART_MB="${WHEELHOUSE_PART_MB:-45}"
 SELECT_PY="$SCRIPT_DIR/lib/wheelhouse_select.py"
@@ -36,13 +23,7 @@ resolve_target_env() {
 	print_status "config" "Target: python $TARGET_PYVER, $TARGET_SYSPLAT/$TARGET_MACHINE ($TARGET_IMPL)"
 }
 
-# Piece 2 continued: the native-db tiers ship pyodbc/oracledb/psycopg/mysql-connector-python
-# UNCONDITIONALLY (the backend is chosen at RUNTIME from config, not at scaffold time) — this
-# is the wheelhouse-only pruning DB_BACKEND enables (measured 65 MB -> 45 MB, blueprintx#299).
-# A no-op for tiers that never carry more than one driver.
 driver_prune_list() {
-	# Bash 3.2-safe (macOS system bash): no associative array, no ${var,,}. mariadb shares
-	# mysql's driver; the app lowercases DB_BACKEND, so match the same way.
 	local str_keep
 	DROP_PACKAGES=()
 	[[ -z "${DB_BACKEND:-}" ]] && return 0
@@ -84,11 +65,6 @@ export_and_select() {
 		${args_drop[@]+"${args_drop[@]}"}
 }
 
-# Cross-platform builds (target differs from the build machine) need pip's OWN platform-tag
-# vocabulary ("win_amd64", "manylinux2014_x86_64", ...) — passed through verbatim rather than
-# re-derived here, since guessing it is exactly the maze `pip download --platform`'s own docs
-# already own. Left unset, pip downloads for the BUILD machine's own platform/ABI (the common
-# case: build and target are the same OS, only the network differs).
 download_wheels() {
 	local path_selected="$1" dir_wheels="$2"
 	local -a args_pip=(-m pip download --no-deps --dest "$dir_wheels" -r "$path_selected")
@@ -113,8 +89,6 @@ build_wheelhouse() {
 	print_status "section" "Building offline wheelhouse -> $WHEELHOUSE_DIR"
 	ensure_dir "$WHEELHOUSE_DIR"
 	dir_tmp="$(mktemp -d)"
-	# Expand now: dir_tmp is local, so a single-quoted trap would hit an unbound variable under
-	# set -u when it fires after this function returned, leaking the dir and exiting non-zero.
 	# shellcheck disable=SC2064
 	trap "rm -rf '$dir_tmp'" EXIT
 	dir_wheels="$dir_tmp/wheels"

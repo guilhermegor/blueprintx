@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Set up the Python virtual environment: pyenv-preferred with a system-Python
-# fallback (for hosts where pyenv cannot be installed), optional corporate-CA
-# wiring, then a Poetry install with a stdlib-venv + pip fallback for restricted
-# environments. Cross-platform logic lives in lib/bootstrap.sh and lib/pip_fallback.sh.
 
 set -euo pipefail
 
@@ -102,15 +98,6 @@ install_playwright() {
 }
 
 try_install_playwright_browsers() {
-	# Best-effort Playwright browser install. The Poetry/.venv environment is already
-	# usable without browsers, so a failure here must NEVER abort `init` — it warns and
-	# points at `poe fix_playwright`. This guards against `playwright install` failing on
-	# hosts without a compatible browser toolchain (notably `Error: spawn UNKNOWN` under
-	# Git Bash/MINGW on Windows). `--with-deps` installs Linux OS packages via apt and is
-	# only valid on Debian/Ubuntu, so it is added on Linux only.
-	#
-	# $@ is the Python launcher to run the install with, e.g. `run_poetry run python`
-	# (a shell function is fine as the first word) or an absolute `.venv` python path.
 	local -a cmd_python=("$@")
 	local -a args_install=(chromium)
 	[[ "${OS_TYPE:-$(detect_os)}" == "linux" ]] && args_install+=(--with-deps)
