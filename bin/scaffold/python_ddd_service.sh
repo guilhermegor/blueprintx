@@ -359,9 +359,9 @@ copy_required_chassis_db() {
 conditional_prune_optin_deps() {
     local project_path="$1"
     scaffold_prune_optin_dependency "$project_path" "$INCLUDE_STORAGE" \
-        '/^# Used only by the schema-less-storage opt-in/,/^joblib = /d'
+        '/^joblib = /d'
     scaffold_prune_optin_dependency "$project_path" "$INCLUDE_WEBHOOK" \
-        '/^# Microsoft Teams incoming-webhook transport/,/^pymsteams = /d'
+        '/^pymsteams = /d'
 }
 
 conditional_copy_storage() {

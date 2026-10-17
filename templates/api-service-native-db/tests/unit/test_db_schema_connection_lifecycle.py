@@ -29,7 +29,6 @@ from chassis.db_schema.infrastructure.sqlite_handler import SQLiteDatabaseHandle
 STR_RECORD_ID = "r1"
 STR_STORED = json.dumps({"id": STR_RECORD_ID, "alpha": "initial"})
 
-# Operation name -> callable(handler, tmp_path). Every public method that opens a connection.
 DICT_OPERATIONS = {
     "create": lambda cls_handler, path_dir: cls_handler.create({"id": STR_RECORD_ID}),
     "read": lambda cls_handler, path_dir: cls_handler.read(STR_RECORD_ID),
@@ -37,7 +36,6 @@ DICT_OPERATIONS = {
     "delete": lambda cls_handler, path_dir: cls_handler.delete(STR_RECORD_ID),
 }
 
-# (module stem, class name, driver attribute or None, constructor args before the identifiers).
 LIST_HANDLERS = [
     ("sqlite_handler", "SQLiteDatabaseHandler", None, ("unused.db",)),
     ("mssql_handler", "MSSQLDatabaseHandler", "pyodbc", ("DSN=x",)),

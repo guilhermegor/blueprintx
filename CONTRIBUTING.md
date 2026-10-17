@@ -1302,6 +1302,179 @@ either layout (blueprintx#360). A few modules stub the metaclass shape instead o
   fetches full history so `cz changelog` sees the tags, and the changelog is never committed by
   CI.
 
+## Python skeleton notes
+
+The six Python skeletons (`ddd-service-native-db`, `ddd-service-orm-db`, `api-service-native-db`,
+`mvc-service-native-db`, `mvc-service-orm-db`, `lib-minimal`) carry no comments, so the reasoning
+behind their policy files, manifests, workflows and sources lives here. A generated project gets
+the behavior, not the history. Reasoning shared with `python-common` is in "Shared template
+notes" above.
+
+### `.layer-policy.yaml` (every tier)
+
+- **The rule.** A third-party dependency is reached through a seam in `utils/` (or `chassis/` in
+  the DDD layouts), never imported directly by a layer, so a vendor change is confined to one
+  adapter. Deferring an import into a function earns no exemption; the gate judges every scope
+  alike. Every `allow` entry carries a written reason, since an entry without one is a rule the
+  first person who finds it inconvenient will widen.
+- **Type-only vendors.** Some vendors (pandas) may appear as a type annotation in any layer and
+  nowhere else. `-> pd.DataFrame` is vocabulary the layers share and couples nothing, while
+  `pd.read_sql(...)` is a vendor call every copied file inherits.
+- **First-party roots absent from this layout.** The shared `utils/` helpers reach their typing
+  engine through a layout shim (`utils.typing`, falling back to `chassis.typing`), so `chassis`
+  is first-party code even in layouts that have no `chassis/`.
+- **Entrypoint modules directly under `src/`** have no directory to name their layer and are
+  where a bypass would be easiest, so they get an entry of their own.
+- **DDD capability sublayers** are declared as globs because the tier's `CLAUDE.md` gives them
+  different rules: `domain` depends on nothing, `application` on the domain only, and
+  `infrastructure` on domain ports plus external libraries. The longest matching glob wins, which
+  is how they override the broad `capabilities` entry. The `chassis` rule names only the provider
+  subpackages instead of denying `chassis:` wholesale, because `chassis.typing` is the runtime
+  type-checking engine every class uses, and a rule that fires on correct code gets deleted.
+- **Direction.** `utils/` and `config/` are imported by the layers and must not import one back,
+  and the composition root may know concrete implementations but not the domain. These existed as
+  prose only until the policy entries were added.
+- **api tier.** The `transport` sublayer is the inbound adapter (HTTP request and response
+  translation) and may use the web framework, but it must not know `app`: the composition root
+  injects plain callables into the router builder, never the container.
+- **lib-minimal.** The layers sit inside the distributable package as
+  `src/<package>/_internal/<layer>/…`, so the first two path components are the package name and
+  the `_internal` marker. Without that, the layer resolves to the package name, matches no entry
+  and deny-by-default rejects the whole tree for the wrong reason. A module directly under the
+  private package root gets a named layer so a stray module cannot bypass the policy.
+
+### `pyproject.toml` (every tier)
+
+- **Why a dependency is declared.** The direct-dependency gate (deptry, `bin/lint_deps.sh`)
+  requires everything `src/` imports to be a declared direct dependency. pandas was once reached
+  only through `wwdates`, and numpy only behind a guarded `try/except ModuleNotFoundError` import;
+  a guarded import is still an import (blueprintx#238). For a library this matters more, since an
+  undeclared import becomes a consumer's `ImportError`.
+- **Opt-in dependencies are pruned, not ignored** (blueprintx#274). When an opt-in is declined,
+  `scaffold_prune_optin_dependency` removes its line (joblib for schema-less storage, pymsteams
+  for the webhook), so when the line survives it is imported and needs no DEP002 ignore. The MVC
+  tier declared joblib with no code path importing it, so it was deleted outright. The DB driver
+  is added by the scaffold from the chosen backend (psycopg, pymysql, mariadb).
+- **Permanent deptry ignores.** `alembic` is a migration command and never imported, `openpyxl`
+  is reached as a pandas engine string, and `pywin32` installs modules whose names share no prefix
+  with the distribution and is absent off Windows, so deptry guesses wrong. `src.…` imports in
+  `main.py` and `bootstrap.py` need a known-first-party entry or deptry looks for a distribution
+  named `src`.
+- **The deptry block cannot move to a shared `deptry.toml`.** `--config <file>` re-points deptry
+  at that file as the manifest too, so it stops reading the dependency table. Measured: it fell
+  back to `requirements.txt` (which pins only Poetry) and relabelled the real dependencies as
+  transitive. Settings and the dependency list must come from the same file.
+- **Task runner and tooling.** Poe the Poet runs every project command. It is a dev dependency
+  living in `.venv`, so it cannot run the tasks that create `.venv`: bootstrap (`init`, `venv`,
+  `ensure_env`, `precommit`) runs `bash bin/venv.sh` directly, and `[tool.poetry.requires-plugins]`
+  must not be used because it breaks `poetry install` (blueprintx#232). Ruff is pinned to the
+  ruff-pre-commit minor so `poe lint` and the hook agree. `pytest-randomly` shuffles test order and
+  prints the seed (blueprintx#442). `genbadge` replaced the abandoned `coverage-badge`, which
+  imports the removed `pkg_resources`. `pytest-mock` is declared explicitly because a test imports
+  it. shellcheck and shfmt are pip dev dependencies resolved through `poetry run`, then a system
+  binary, then a skip.
+- **Runtime type-checking engine** (`beartype`) is a main dependency, not dev, because production
+  code uses `@type_checker` and `metaclass=TypeChecker`; in `lib-minimal` it must ship to consumers.
+- **api tier.** The HTTP transport (`src/app/api.py`, `capabilities/*/transport/`) is what makes
+  the tier a service rather than a batch DDD one, and the ASGI server runs `src/main.py`. A
+  service ships a container or process, never a wheel.
+- **lib-minimal.** The version is static in an offline scaffold (hand-bumped with
+  `poe bump_version`), and in an online one the scaffold rewrites it to a `0.0.0` stub plus
+  `poetry-dynamic-versioning`, so the version comes from the `vX.Y.Z` tag. Internal dev docs are
+  excluded from the wheel and sdist. Build and publish tooling is for the release workflows
+  (`twine` is the fallback when `poetry publish` is unavailable), and `mike` drives versioned
+  docs.
+
+### `mkdocs.yml` (api)
+
+`exclude_docs` uses `.gitignore` syntax, which has no inline comments: a trailing `# …` becomes
+part of the pattern and silently disables the exclusion, so every comment must sit on its own
+line. It excludes design specs and working notes, `docs/` authoring guidance, the scaffolding
+lessons mirrors, and the offline merge-checkpoint log, because MkDocs builds every `.md` under
+`docs/`. `mike` drives Material's version dropdown, which the release workflow feeds with each
+`X.Y` plus the `latest` alias on `gh-pages`. The locale is chosen at scaffold time, the brand icon
+is a placeholder (swap `docs/assets/logo.png`), and the `--8<--` include on the Changelog page
+single-sources the root file.
+
+### Database access (ddd native/api, mvc native and orm)
+
+- **Connection strings.** The native-driver tiers must not get a SQLAlchemy-style URL for
+  `mssql` or `oracle`: their handlers pass the string straight to the driver. oracledb wants an
+  Easy Connect DSN (`host:port/service`) with credentials passed separately, and pyodbc wants a
+  `KEY=VALUE;` ODBC string, never a URL. Credentials in a URL-form DSN are percent-encoded because
+  a password containing `@ : / ?` silently re-partitions it, but the ODBC and Easy Connect forms
+  are not URLs and are not encoded. In the MVC tiers' `connection_db.py`, ODBC Driver 18 encrypts
+  by default, so the normalised `Encrypt` and `TrustServerCertificate` settings are appended when
+  those variables are set, to keep a self-signed server reachable; the api and DDD factories
+  default to Driver 17 and append neither.
+- **Engine map.** The engine-name to builder map lives at module level so the engine names have
+  one source, read by the factory, by `active_backend()` and by the `config/queries/<engine>/`
+  layout. In `connection_db.py` it must follow the `_connect_*` functions, because the dict is
+  evaluated at import; the placement is a language constraint, not disorder. The builders carry
+  the complexity hatch because each branch is one documented backend or auth option.
+- **Queries.** `query_loader` anchors to its own module and never to the working directory, so a
+  service launched from cron, an editor task or another drive resolves the same queries. Queries
+  live under `queries/<engine>/`; sqlfluff resolves configuration per file directory, so each
+  engine's `.sqlfluff` sets only its dialect and the root keeps the house style. The directory is
+  an engine name (matching `DB_BACKEND`) and the dialect is sqlfluff's name, so SQL Server is
+  `mssql` and `tsql`. A query's row cap must match every other engine's copy, because one filename
+  is one contract.
+- **`postgres_handler`.** The literal default is chained as its own `or` term instead of passed to
+  `os.getenv`: inside an `or`, mypy resolves `getenv`'s generic default against the left operand,
+  so the argv becomes a list of `str | None`, and an empty-string variable now falls back too.
+- **Repositories.** In the api tier one repository instance is shared by every request and
+  FastAPI runs a synchronous handler in a worker thread, so the methods do run concurrently (see
+  `docs/architecture.md` for why the lock is in the repository). The ORM repository is
+  last-write-wins by design (#385).
+- **Alembic (orm tiers).** The migration filename template has a date prefix and no time
+  component, since the revision id is already unique. `env.py` imports every model module so each
+  entity registers on one shared `Base.metadata` (a second `Base` would give autogenerate nothing),
+  escapes `%` for ConfigParser, and cannot run a `batch_alter_table` migration offline without
+  `copy_from` (see `migrations/CLAUDE.md`, rule 5). `sqlalchemy.url` is overridden at runtime.
+
+### Sources and tests
+
+- **Runtime imports of pandas** (`example_entity.py`, `scope_filter_example.py`) are real rather
+  than `TYPE_CHECKING` only, because the runtime type-checker resolves `-> pd.DataFrame` against
+  the module globals at call time, and an unbound name raised
+  `BeartypeCallHintForwardRefException` on every call (blueprintx#667). Declarative ORM classes
+  carry their own metaclass, so only the plain service class takes `TypeChecker`
+  (`docs/coverage-floor.md`, blueprintx#617). Column types are declared on load, never inferred.
+  A table name cannot be bound by a driver, so it is validated before it goes into the SQL text.
+- **`lib-minimal/main.py`** uses a relative import on purpose. The `_internal/` helpers have their
+  bare `utils.`/`chassis.typing` imports rewritten to `<pkg>._internal.…` at scaffold time, but that
+  rewrite is scoped to `_internal/` and `main.py` is copied outside it. A bare import would ship
+  unrewritten, and an absolute package-qualified one cannot be written because the package name is
+  known only at scaffold time.
+- **`multi_pipeline`.** An explicit `poe run <intent>` argument wins over `PIPELINE_INTENT`, which
+  keeps `.env`-driven callers (CI, cron, containers) working. `resolve_intent` folds case, accents,
+  spaces and hyphens, accepts English and pt-BR, and exits 2 on an unknown value. The e-mail
+  handler assignment is replaced at scaffold time when the opt-in is chosen. `PLR0913` is
+  suppressed on the pipeline builder because it is a composition root and injecting collaborators
+  is its job.
+- **`main.py` entrypoints** run in bootstrap, wire, run and teardown stages; the api tier blocks
+  until SIGINT or SIGTERM.
+- **Tests.** Bare `model.` imports (not `src.model.`) in the regime tests, because pytest's dual
+  `pythonpath = . src` would otherwise create a second `RegimeWindow` class that beartype's
+  nominal `isinstance` check rejects. The DB-schema tests key their expectations by dialect
+  because the atomic construct really differs per backend (the table in `python-common/CLAUDE.md`
+  is the source).
+- **Workflows (`lib-minimal`).** `docs.yaml` builds with `--strict` on every push and PR and does
+  not deploy; `release-pypi.yaml` deploys versioned docs with `mike` only after a successful
+  publish, and a prerelease must not move `latest`. The release workflow runs the full test suite
+  as a hard gate. The version input is validated before any tag exists, and it accepts exactly the
+  forms the suffix extractor can read back: `1.2.3-rc.1` once passed the old pattern, extracted an
+  empty suffix and would have published a prerelease as final (blueprintx#548). The version is
+  stamped with `POETRY_DYNAMIC_VERSIONING_BYPASS` instead of a local tag, so re-runs are idempotent.
+  Publishing uses OIDC trusted publishing with no token. The GitHub Release step exists only in
+  the real release (not in `release-test-pypi.yaml`), so a change there debuts in production; diff
+  the two when editing. Release assets are named explicitly because a 0-byte `dist/.keep` makes
+  the API reject the asset and leaves a draft release with no tag.
+- **Misc.** `lib-minimal`'s `.coveragerc` keeps the vendored `_internal/` helpers out of the
+  library's coverage number, since they are tested in `python-common`. `emails.yaml` send flags
+  come from `.env` (`EMAIL_SEND__<BLOCK>`, blueprintx#121), because a flag in the tracked file
+  would need a branch and merge to flip.
+
 ## Repository scripts under `bin/`
 
 The scripts under `bin/` carry no comments, so the reasoning lives here. Per-script rules,

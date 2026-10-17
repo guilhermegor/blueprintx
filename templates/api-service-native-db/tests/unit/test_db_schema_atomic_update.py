@@ -38,8 +38,6 @@ from chassis.db_schema.infrastructure.sqlite_handler import SQLiteDatabaseHandle
 FLOAT_STALL_SECONDS = 0.25
 STR_RECORD_ID = "r1"
 
-# Dialect -> the fragment its locked SELECT must carry. The values differ because the atomic
-# construct genuinely differs per backend; the table in python-common/CLAUDE.md is the source.
 DICT_LOCKED_SELECT = {
     "mariadb_handler.MariaDBDatabaseHandler": "FOR UPDATE",
     "mssql_handler.MSSQLDatabaseHandler": "UPDLOCK, ROWLOCK",
