@@ -17,6 +17,11 @@ fail() {
     int_failures=$((int_failures + 1))
 }
 
+command_not_found_handle() {
+    echo "FAIL (undefined test): $1" >&2
+    kill -TERM "$$"
+}
+
 write_spec() {
     local name="$1" skeleton="$2"
     local file="$WORK_DIR/$name.spec"
@@ -497,12 +502,88 @@ test_etcher_chromeos_answer_stream_and_prompt_order() {
     fi
 }
 
+ventoy_stream() {
+    local file
+    file="$(SPEC_LANGUAGE=bash write_spec "ventoy-$RANDOM" ventoy-usb "$@")"
+    bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        spec_stdin_for_skeleton ventoy-usb "$2"' _ "$REPO_ROOT" "$file" 2>&1 | paste -sd, -
+}
+
+test_ventoy_usb_answer_stream_order() {
+    local str_def str_full str_remote str_bad
+    str_def="$(ventoy_stream)"
+    str_remote="$(ventoy_stream git_remote=y)"
+    str_full="$(ventoy_stream include_windows=n include_android=no persistence_size_mb=2048 \
+        review_bot_roster=y git_remote=y create_repo=y)"
+    str_bad="$(ventoy_stream persistence_size_mb=1500)"
+    if [ "$str_def" = "y,y,4096,n,n" ] && [ "$str_remote" = "y,y,4096,n,y,n" ] \
+        && [ "$str_full" = "n,n,2048,y,y,y,2,n,n" ] \
+        && [[ "$str_bad" == *"'persistence_size_mb' must be a multiple of 1024"* ]]; then
+        pass "ventoy-usb stream: windows, android, size, roster, git_remote, create_repo; bad size refused"
+    else
+        fail "ventoy-usb stream" "default=$str_def remote=$str_remote full=$str_full bad=$str_bad"
+    fi
+}
+
+test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes() {
+    local str_got
+    str_got="$(sed -n '/^main() {/,/^}/p' "$REPO_ROOT/bin/scaffold/ventoy_usb.sh" \
+        | grep -E '^    (prompt_[a-z_]+|scaffold_prompt_review_bot_roster)( |$)' \
+        | awk '{print $1}' | paste -sd' ' -)"
+    if [ "$str_got" = "prompt_ventoy_options scaffold_prompt_review_bot_roster prompt_git_remote_setup" ]; then
+        pass "ventoy_usb.sh main() asks options, roster, git remote in the order the stream is built for"
+    else
+        fail "ventoy-usb prompt order" "main() asks: $str_got"
+    fi
+}
+
+test_ventoy_usb_bad_persistence_size_stops_before_anything_is_created() {
+    local file root out int_rc
+    root="$WORK_DIR/bad-size-root"
+    file="$(SPEC_LANGUAGE=bash write_spec bad-size ventoy-usb "project_root=$root" "persistence_size_mb=1500")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'persistence_size_mb' must be a multiple of 1024"* && ! -e "$root" ]]; then
+        pass "a persistence_size_mb that is not a multiple of 1024 refuses the run and creates nothing"
+    else
+        fail "ventoy-usb bad size" "rc=$int_rc, root exists or message missing: ${out: -300}"
+    fi
+}
+
+test_ventoy_usb_spec_reaches_the_generated_conf() {
+    local file out str_temp str_got
+    file="$(SPEC_LANGUAGE=bash write_spec ventoy-conf ventoy-usb include_windows=n include_android=n persistence_size_mb=2048)"
+    out="$(run_blueprintx new --spec "$file" --dev)"
+    str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
+    str_got="$(paste -sd' ' "$str_temp/spec-probe/ventoy-usb.conf" 2>/dev/null)"
+    if [ "$str_got" = "INCLUDE_WINDOWS=n INCLUDE_ANDROID=n PERSISTENCE_SIZE_MB=2048" ]; then
+        pass "ventoy-usb spec answers render into the generated ventoy-usb.conf"
+    else
+        fail "ventoy-usb conf pass-through" "generated ventoy-usb.conf: '$str_got' ${out: -300}"
+    fi
+}
+
+test_an_undefined_test_name_fails_the_runner() {
+    local file="$WORK_DIR/undefined-probe.sh" out int_rc
+    { sed '$d' "${BASH_SOURCE[0]}"
+        printf 'main() { test_no_such_test_probe; [ "$int_failures" -eq 0 ]; }\nmain\n'
+    } >"$file"
+    out="$(bash "$file" 2>&1)"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"FAIL (undefined test): test_no_such_test_probe"* ]]; then
+        pass "a main() entry naming an undefined test fails the runner instead of exiting 0"
+    else
+        fail "undefined test guard" "rc=$int_rc out: ${out: -300}"
+    fi
+}
+
 main() {
     test_ventoy_usb_answer_stream_order
     test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes
     test_ventoy_usb_bad_persistence_size_stops_before_anything_is_created
     test_ventoy_usb_spec_reaches_the_generated_conf
     test_etcher_chromeos_answer_stream_and_prompt_order
+    test_an_undefined_test_name_fails_the_runner
     test_ts_lib_answer_stream_order
     test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes
     test_ts_lib_remote_keys_defaults
