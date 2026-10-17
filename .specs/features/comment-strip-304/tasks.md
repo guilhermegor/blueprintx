@@ -25,8 +25,9 @@ gate did not read until P0.
 - [x] 5 (PR #820) `templates/python-common/src` and `templates/common` (55 files, 1027 lines)
 - [~] chore/comment-strip-slice6-304 6 Python skeletons: `ddd-*`, `api-*`, `lib-minimal` (51 files, about 880 lines)
 - [x] 6b (PR #823) Python skeletons: `mvc-service-native-db`, `mvc-service-orm-db` (split from 6 at the 90-file ceiling, 40 files)
-- Dependency: slices 7, 8, 9 and Z wait for #826 (ship the zero-comment ratchet to every generated project) to merge; whatever they strip must be stated as dehydrated into the right layer (SECURITY, README, CONTRIBUTING or docs).
-- [ ] 7 `templates/python-common` config and workflows (35 files, 1401 lines)
+- Dependency met: #826 (ship the zero-comment ratchet to every generated project) merged as #828; slices 7 to 9 and Z may proceed. Whatever they strip must be stated as dehydrated into the right layer (SECURITY, README, CONTRIBUTING or docs).
+- [x] 7a (PR #841) `templates/python-common/.github` workflows and `dependabot.yml` (10 files, 569 lines); rationale in `docs/decision-records.md`
+- [~] chore/comment-strip-slice7b-304 7b (PR #843) `templates/python-common` config files (`ruff.toml`, `mypy.ini`, `poe_tasks.toml`, `.pre-commit-config.yaml`, dotfiles; 22 files, 889 lines)
 - [~] chore/comment-strip-slice8-304 8 `templates/python-common/tests` (54 files, 808 lines; `test_review_threads_gate.py` is left to #837); rationale in `docs/decision-records.md`
 - [ ] 9 `templates/python-common/bin`, the gates themselves (66 files, 2113 lines)
 - [ ] Z delete the superseded rules in `CLAUDE.md` and `templates/python-common/CLAUDE.md`, drop the

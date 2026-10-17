@@ -1,3 +1,4 @@
 .gitattributes
 .coderabbit.yaml
 .greptile/config.json
+.greptile/graphite.md
