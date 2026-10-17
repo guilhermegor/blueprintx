@@ -1,38 +1,15 @@
 name: PR Reconcile
 
-# Close the linked issues (and delete the head branches) of MERGED PRs.
-#
-# WHY THIS EXISTS — the finding, measured, not suspected: a PR whose body says `Closes #N` and is
-# merged by GitHub's NATIVE AUTO-MERGE (armed by a workflow using github.token) merges and leaves
-# #N **open**. The link is parsed (`closingIssuesReferences` contains it) — the only variable is
-# WHO merged. Manually merging the identical PR closes the issue. Same root cause takes a second
-# casualty: `delete_branch_on_merge: true` does NOT fire either, so the branch survives.
-# (Dependabot branches still vanish because *Dependabot* cleans up its own — a coincidence that
-# neatly hides this bug.)
-#
-# Why it matters more than it looks: a Projects "closed → Done" automation keys on the ISSUE
-# closing, so cards rot in "In review" while the code is shipped and merged. And it SCALES WITH
-# SUCCESS — once auto-merge is opt-out, every docs/ci/deps PR takes this path, so **the better
-# auto-merge works, the more the backlog lies**.
-#
-# ⚠️ THE TWO PATHS ARE NOT EQUAL — know which one is load-bearing:
-#   * `pull_request: [closed]` — the FAST path. Immediate WHEN it fires, but it is itself
-#     suppressed for a bot merge (measured: a provoked bot merge at 11:16:08Z produced no run;
-#     the latest reconcile run was 11:06:36Z, ten minutes EARLIER). Treat it as an optimization.
-#   * `schedule` — the GUARANTEED BACKSTOP AND THE ACTUAL FIX. Scheduled events are exempt from
-#     the GITHUB_TOKEN "no new workflow runs" suppression, so this path runs whether or not the
-#     event path did. Cost: up to one sweep interval of latency. Accept that rather than reaching
-#     for a PAT.
 on:
   pull_request:
     types: [closed]
   schedule:
-    - cron: "17 3 * * *" # daily backstop
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 permissions:
-  contents: write # delete the merged head branch
-  issues: write # close the linked issues
+  contents: write
+  issues: write
   pull-requests: read
 
 jobs:
@@ -41,12 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      # The mechanism lives in bin/pr_reconcile.sh (blueprintx#255) — ONE implementation, so a
-      # repo that ships this workflow to every generated project and also wants it for itself
-      # (blueprintx's own .github/workflows/pr-reconcile.yaml) invokes the same script instead
-      # of forking a second copy of the logic. `bin/pr_reconcile.sh` is this file's OWN
-      # post-scaffold path (templates/python-common/bin/ is flattened to bin/ on copy) — a
-      # generated project's checkout, not blueprintx's own source tree.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
@@ -55,7 +26,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          # On the event path, reconcile just this PR; on schedule/dispatch, sweep a window.
           EVENT_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged && github.event.pull_request.number || '' }}
           SWEEP_LIMIT: "30"
         run: bash bin/pr_reconcile.sh

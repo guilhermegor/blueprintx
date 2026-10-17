@@ -181,9 +181,11 @@ The **hosted-reviewer config guard** (`bin/ci/check_review_config_shipped.sh`, p
 `review-config-shipped`, the `review-config-shipped` CI job) fails when any skeleton found by
 `templates/*/skeleton.meta` does not ship a path listed in `templates/common/review-config.manifest`.
 `--static` checks the copy lists, `--generated` scaffolds every skeleton and is the real oracle.
-Today the manifest lists `.gitattributes`, `.coderabbit.yaml` and `.greptile/config.json` (per-skeleton `.greptile/rules.md` and `files.json` are not listable). `--static` is a text parser: a loop copy, or `cp -r dir` after `mkdir -p` of the same path, is a documented limit, as are `cp -t`, a prose line containing `cp`, a whole-root copy to anything but `project_path` (or one written without `/.`), and a single-source copy into a bare directory. Each change that ships a reviewer config file (#737, #739) adds its path to the manifest in the same PR; see
+The manifest file itself is the list (per-skeleton `.greptile/rules.md` and `files.json` are not listable). `--static` is a text parser: a loop copy, or `cp -r dir` after `mkdir -p` of the same path, is a documented limit, as are `cp -t`, a prose line containing `cp`, a whole-root copy to anything but `project_path` (or one written without `/.`), and a single-source copy into a bare directory. Each change that ships a reviewer config file (#737, #739) adds its path to the manifest in the same PR; see
 `docs/faq.md`. Root-repo-only, like `check_makefile_pairing.sh`. ⚠️ The manifest needs the
 `!templates/common/review-config.manifest` line in `.gitignore`, because `*.manifest` is ignored.
+
+The **dependabot guard** (`bin/ci/check_dependabot_shipped.sh --static`, hook and CI job `dependabot-shipped`) fails when a skeleton stops copying a `dependabot.yml` with a `cooldown`; there is no `--generated` mode because default answers scaffold offline. See `docs/dependabot-config.md`.
 
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`

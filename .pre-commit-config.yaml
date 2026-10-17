@@ -385,6 +385,20 @@ repos:
         pass_filenames: false
         files: ^(bin/scaffold/.*\.sh|bin/lib/.*\.sh|templates/common/.*|templates/[^/]+/skeleton\.meta|bin/ci/check_review_config_shipped\.sh)$
 
+      - id: dependabot-shipped
+        name: every skeleton ships dependabot.yml with a cooldown (blueprintx#838)
+        entry: bash bin/ci/check_dependabot_shipped.sh --static
+        language: system
+        pass_filenames: false
+        files: ^(bin/scaffold/.*\.sh|templates/common/\.github/dependabot\.yml|templates/ts-common/dependabot\.yml|templates/python-common/\.github/dependabot\.yml|templates/[^/]+/skeleton\.meta|bin/ci/check_dependabot_shipped\.sh)$
+
+      - id: dependabot-shipped-tests
+        name: dependabot guard should-fail regression tests (blueprintx#838)
+        entry: bash tests/test_check_dependabot_shipped.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/scaffold/.*\.sh|templates/.*dependabot\.yml|bin/ci/check_dependabot_shipped\.sh|tests/test_check_dependabot_shipped\.sh)$
+
       - id: precommit-ci-parity
         name: pre-commit and CI run the same checks, both directions (blueprintx#384)
         entry: bash bin/check_precommit_ci_parity.sh
