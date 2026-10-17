@@ -2172,6 +2172,447 @@ An empty array means never automatic; the review ladder asks for one explicitly.
 the trigger-label route, which counts as an <code>open</code> event and would need <code>"open"</code> back.
 <code>greptile-apps[bot]</code> posts inline review threads, so it is listed in every
 <code>.review-bots.yaml</code> roster.</p>
+<h2 id="generated-project-shell-scripts-templatespython-commonbin">Generated-project shell scripts (<code>templates/python-common/bin</code>)<a class="headerlink" href="#generated-project-shell-scripts-templatespython-commonbin" title="Permanent link">&para;</a></h2>
+<p>The shell scripts every Python scaffold ships carry no comments. This section records why each
+is shaped as it is.</p>
+<h3 id="rules-that-recur-across-the-scripts">Rules that recur across the scripts<a class="headerlink" href="#rules-that-recur-across-the-scripts" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Resolve, don't install.</strong> An optional linter or tool must never trigger an install. A
+  missing tool is a graceful skip on a contributor's machine (exit 0 with a message) and a hard
+  failure in CI, through a <code>*_REQUIRED=1</code> variable (<code>LINT_ACTIONS_REQUIRED</code>,
+  <code>LINT_DOCKER_REQUIRED</code>, <code>GITLEAKS_REQUIRED</code>). A skip in CI is a gate reporting its own
+  blindness as OK. Applies to <code>lint_shell.sh</code>, <code>lint_yaml.sh</code>, <code>lint_sql.sh</code>, <code>lint_actions.sh</code>,
+  <code>lint_docker.sh</code> and <code>check_secrets.sh</code>; <code>lint_deps.sh</code> and <code>check_complexity.sh</code> are the
+  exceptions that hard-fail, below.</li>
+<li><strong>Probe with <code>--version</code>, never <code>command -v</code> alone.</strong> <code>command -v</code> answers "is there a file by
+  that name on <code>PATH</code>", not "does it run". A shadowing stub, a half-installed package or a binary
+  built for another libc satisfies it, and the wrapper then reports the tool's startup failure as
+  a lint finding: a stub exiting 127 produced <code>actionlint [system]: 7 workflow(s)</code> and exit 127,
+  blaming the workflows (#111). The poetry branch always probed; the system branch now does too.</li>
+<li><strong>Assert the discovery count.</strong> Tools such as actionlint and deptry exit 0 when handed nothing,
+  so a wrapper whose glob matched nothing reports success forever. Zero discovered files fails
+  (<code>lint_actions.sh</code>, <code>lint_deps.sh</code>, <code>check_unix_filenames.sh</code>, <code>check_complexity.sh</code>);
+  <code>lint_docker.sh</code> is the one deliberate exception, below.</li>
+<li><strong>Group a <code>find</code> expression.</strong> <code>-name '*.yaml' -o -name '*.yml' -type f</code> parses as <code>(-name
+  '*.yaml') OR (-name '*.yml' AND -type f)</code>, so a directory named <code>*.yaml</code> enters the list and
+  fails the gate for an unrelated reason. The <code>\( ... \)</code> is load-bearing. A prune group must
+  also come first with no test before it: a leading <code>-type f</code> is false for a directory, so
+  <code>-prune</code> is never evaluated and <code>.venv</code> and <code>node_modules</code> get linted
+  (<code>check_unix_filenames.sh</code>, measured).</li>
+<li><strong><code>mapfile &lt; &lt;(producer)</code> discards the producer's exit status.</strong> A <code>find</code>, <code>git</code> or <code>gh api</code>
+  that dies midway hands over a partial or empty list that reads as complete, and the script
+  announces "clean" over a query that never ran. Materialise to a temp file first (also because a
+  bash variable cannot carry NUL bytes), check the status, then read
+  (<code>lint_docker.sh</code>, <code>check_unix_filenames.sh</code>, <code>rerun_stale_gate_runs.sh</code>).</li>
+<li><strong>Never set a global inside <code>$(...)</code>.</strong> <code>resolve_poetry</code> populates the <code>POETRY_CMD</code> array;
+  command substitution runs in a subshell, so the caller's array stays unset, every later
+  <code>run_poetry</code> fails and, with output suppressed, the gate reports a clean tree having run
+  nothing: 79 known violations reported as success (<code>check_complexity.sh</code>, <code>lint_deps.sh</code>).</li>
+<li><strong>Capture an exit status where it is produced</strong> (<code>|| int_status=$?</code>). A bare call is exempt
+  from <code>set -e</code> only because a caller three levels up happens to suspend errexit, which is true
+  today and not something anyone should have to know.</li>
+<li><strong>Keep a command's output when you explain its failure.</strong> Never <code>&gt;/dev/null 2&gt;&amp;1</code> a command
+  and then blame a cause: the explanation becomes a guess about text you refused to read.
+  Remedies name the resolved binary (<code>${POETRY_CMD[*]}</code>), never a bare <code>poetry</code>
+  (<code>export_deps.sh</code>, <code>enable_repo_rules.sh</code>).</li>
+<li><strong>Verbatim wrapper discipline.</strong> Each wrapper keeps the heavy logic out of heredocs: a heredoc
+  is for inert text a script emits, not a program (<code>bin/CLAUDE.md</code>). The CA union and the pip
+  requirement translation were <code>python - &lt;&lt;'PYEOF'</code> blocks of 66 and 151 lines that ruff never
+  linted, mypy never checked and pytest could not import; they are <code>lib/ca_bundle.py</code> and
+  <code>lib/pip_requirements.py</code> now, with the interface unchanged.</li>
+<li><strong>Sourcing <code>lib/bootstrap.sh</code> does no work.</strong> It defines functions only; the caller invokes
+  <code>bootstrap_init</code> and then the helpers it needs. It guards against being sourced twice.</li>
+</ul>
+<h3 id="github-setup-scripts-enable_sh">GitHub setup scripts (<code>enable_*.sh</code>)<a class="headerlink" href="#github-setup-scripts-enable_sh" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Why they exist.</strong> A workflow's <code>GITHUB_TOKEN</code> is an App installation token that cannot
+  create a Pages site, change its source, set a ruleset or flip a security toggle ("Resource not
+  accessible by integration"). Those need repo-admin rights, which a maintainer running
+  <code>poe init</code> has through <code>gh auth</code> and CI does not. Merge protection kept in a maintainer's
+  memory is protection a fresh clone or fork silently lacks. All are idempotent and
+  non-blocking: <code>gh</code> absent, unauthenticated or not admin warns and returns 0 so <code>init</code>
+  completes.</li>
+<li><strong><code>enable_pages.sh</code>.</strong> Two models, auto-detected from <code>mkdocs.yml</code>. With <code>provider: mike</code> the
+  release workflow deploys to <code>gh-pages</code>, so Pages serves from that branch, flipped only once the
+  branch exists (the first <code>mike deploy</code> creates it) so the live site never points at an empty
+  branch. Without mike, <code>docs.yaml</code> deploys through <code>actions/deploy-pages</code>, so the source is
+  "GitHub Actions" (<code>build_type=workflow</code>). The two models are mutually exclusive.</li>
+<li><strong><code>enable_security.sh</code>.</strong> The Settings checkboxes are not reproducible and are forgotten on a
+  fork. Three plain <code>PUT</code>s (204): vulnerability alerts, then automated security fixes (which
+  depend on alerts being on), then private vulnerability reporting, the intake channel
+  <code>SECURITY.md</code> points at. Secret scanning and push protection are one <code>PATCH</code> of
+  <code>security_and_analysis</code> with scanning first (push protection depends on it, and fields apply
+  in order); free on public repos only, so on a private repo it warns and continues. Automated
+  security fixes are for vulnerabilities, <code>.github/dependabot.yml</code> for ordinary version updates.
+  GitHub detects a root <code>SECURITY.md</code> by itself. GitGuardian (#155) was evaluated for this role
+  and deferred: the native toggles are free and need no third-party app on public repos;
+  reconsider for private repos or an offline pre-commit scanner. <code>secret_scan.yaml</code> is a
+  separate, opt-in decision made at scaffold time (#287), not here: <code>poe init</code> runs against an
+  already-created repo, the wrong phase to gate a file's shipping. A self-audit of BlueprintX
+  (#164, 2026-09-04) found no divergence; the script has no <code>verify</code> mode.</li>
+<li><strong><code>enable_repo_rules.sh</code>.</strong> Applies the <code>pr-quality-gate</code> ruleset by name (PUT when it exists,
+  POST when it does not; never a blind POST, which would duplicate it):<ul>
+<li><code>pull_request</code> with <code>required_approving_review_count: 0</code> and
+  <code>required_review_thread_resolution: true</code>. Zero, because GitHub forbids authors approving
+  their own PR, so any higher value locks a solo maintainer out; zero still forces every
+  change through a PR, which is the guardrail.</li>
+<li><code>code_scanning</code> (CodeQL, alerts at <code>high_or_higher</code>), <code>non_fast_forward</code>, <code>deletion</code>.</li>
+<li><code>copilot_code_review</code> is its own rule type: the intuitive
+  <code>pull_request.parameters.automatic_copilot_code_review_enabled</code> returns HTTP 422, which makes
+  the feature look UI-only. The automatic/manual boundary is repo config versus account plan:
+  without a qualifying Copilot plan the rule sits correctly configured and inert, with no
+  error. <code>gh api user/copilot_billing</code> 404s for a personal account even when Free is active;
+  read the plan page.</li>
+<li>Deliberately not enabled, each a second source of truth: "Require code quality results"
+  (subjective AI severity on the merge path) and "Restrict code coverage" (the floor is
+  single-sourced in <code>.coveragerc</code>).</li>
+<li>Settings the gate cannot set itself: code-scanning default setup, <code>allow_auto_merge</code>
+  (without it the <code>enablePullRequestAutoMerge</code> mutation silently no-ops),
+  <code>delete_branch_on_merge</code> and the <code>do-not-merge</code> opt-out label. Each is read back, since a
+  green API call is not proof the mutation took.</li>
+<li><code>required_status_checks</code> only when the list is non-empty, because a required check that
+  never reports blocks every PR forever. Do not guess names: they must match check-run
+  names exactly (matrix values included); take them from a real PR with
+  <code>gh api repos/:owner/:repo/commits/&lt;sha&gt;/check-runs --jq '.check_runs[].name' | sort -u</code>.
+  The seeded entry is the <code>review_threads.yaml</code> job name, correct by construction and
+  reporting on every PR from the moment it opens. A name qualifies only if it is a literal
+  <code>jobs.&lt;id&gt;.name:</code> of a workflow the project ships, its <code>on: pull_request</code> has no
+  <code>types:</code>/<code>branches:</code>/<code>paths:</code> filter, no job-level <code>if:</code> can skip it, and the workflow is
+  shipped; <code>tests.yaml</code> fails the second rule and <code>coderabbit_trigger.yaml</code> the third. The
+  list is data (<code>bin/required-checks.txt</code>, per template family, #164/#564), compared verbatim
+  (stray space never matches). An empty list means CI runs on every PR and blocks nothing:
+  measured on BlueprintX 2026-08-16, a PR merged with 32 of 47 checks passed.</li>
+<li>A missing <code>required-checks.txt</code> is unknown, not an empty list (#585): it must not drive a
+  PUT against an existing ruleset, which would silently strip its <code>required_status_checks</code>.</li>
+<li><code>REVIEW_THREADS_REQUIRE_RESOLVED=1</code> (#196) supersedes the earlier delegation of the
+  resolve half to the ruleset, which drops a thread marked <code>isOutdated</code>; see the records
+  above. The accepted cost is a red check after a resolve until a re-run.</li>
+<li><code>strict_required_status_checks_policy</code> must be true (#307, "Require branches to be up to
+  date"). With it false a PR merges on a green run against a base that no longer exists
+  (#302: six tier checks red only because #293 had not merged; a rebase fixed it). The cost
+  is an update-branch for a PR whose base moved, the accepted trade.</li>
+<li>The summary reads the server back, not the input: a provisioning step that reports its own
+  input verified nothing. The strict check has three states with one exit contract (#311):
+  0 confirmed strict, 1 confirmed not strict, 2 absent or unreadable. "Could not check" and
+  "checked and it is fine" must never share an exit code, a failed read is never an empty
+  answer, and an absent policy reads back as jq <code>null</code>, which is unknown, not a violation.
+  <code>init</code> swallows non-zero with <code>|| true</code>; <code>verify</code> is the read-only CI guard (needs no
+  admin) and fails loud on 1 and 2, requires at least one mechanism to confirm strict, and
+  checks classic branch protection too, since BlueprintX's own <code>main</code> uses it. The default
+  branch read has no <code>|| echo main</code> fallback (CWE-693): a substituted answer nobody
+  confirmed lets verification inspect the wrong branch.</li>
+<li>Apply errors keep the API's own words; the old form swallowed stderr and blamed admin
+  rights for a malformed payload. <code>~DEFAULT_BRANCH</code> survives a rename.</li>
+</ul>
+</li>
+</ul>
+<h3 id="linting-wrappers">Linting wrappers<a class="headerlink" href="#linting-wrappers" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>lint.sh</code></strong> is the one list of every gate, called by <code>poe lint</code>, CI and
+  <code>bin/ci/scaffold_lint_test.sh</code>. It replaced 14 inline recipe lines duplicated across two
+  files that had already diverged (#189). Order is load-bearing: the two ruff steps come first
+  and mutate the tree (<code>--fix</code>, then <code>format</code>), so every later gate judges the tree CI checks;
+  <code>poe lint</code> must leave a clean checkout unchanged, and a diff means a gate and the formatter
+  disagree. <code>set -e</code> with no masking: do not add <code>|| true</code>. mypy runs from <code>src/</code> (config path
+  <code>../mypy.ini</code>) so <code>src</code> is the single package base. <code>check_provenance</code> was the one gate CI
+  ran and this script did not, so "green locally, red in CI" was reachable on the gate that
+  stops an ingested row shipping without its url and <code>updated_at</code> columns.</li>
+<li><strong><code>lint_shell.sh</code></strong> resolves shellcheck and shfmt preferably through the Poetry venv, which
+  finds the vendored wheel wherever the venv lives, including a Windows UNC or mapped drive;
+  a bare-<code>PATH</code> lookup would silently skip both there. It falls back to a system binary
+  (<code>install_shell_linters.sh</code>) and skips only when neither exists. Default mode formats in
+  place; <code>--check</code> is <code>shfmt -d</code> for the hook. The canonical gate is warning-and-above with
+  SC1091 excluded (siblings are sourced by runtime path). File discovery is find-only: a literal
+  <code>tasks.sh</code> was left beside it after the poe migration and made shellcheck report "does not
+  exist" for the whole run.</li>
+<li><strong><code>install_shell_linters.sh</code></strong> is an optional convenience for machines that need a system
+  binary (a venv on a share that blocks executing the vendored one). Each branch is guarded with
+  <code>command -v</code> and skips with guidance; it never hard-fails. Order by OS: Windows chocolatey then
+  scoop (both package shellcheck and shfmt), macOS brew, Linux apt-get, dnf, pacman, zypper
+  (shfmt is rarely packaged, so it stays on the pip <code>shfmt-py</code> or <code>go install</code>). <code>--dry-run</code> or
+  <code>DRY_RUN=1</code> previews through one guarded runner.</li>
+<li><strong><code>lint_yaml.sh</code>, <code>lint_sql.sh</code></strong> resolve Poetry through the bootstrap lib (poetry, then
+  <code>python -m poetry</code>) rather than a bare <code>command -v poetry</code>, which saw only a bare <code>poetry</code> and
+  silently skipped a <code>python -m poetry</code>-only box. yamllint's real status propagates. One sqlfluff
+  pass covers every engine: queries live in <code>src/config/queries/&lt;engine&gt;/</code>, sqlfluff resolves
+  config per directory, and adding an engine is adding a folder, never a second pass with
+  another <code>--dialect</code> or a dialect in the filename.</li>
+<li><strong><code>lint_actions.sh</code></strong> exists because yamllint asks whether YAML is well-formed and actionlint
+  asks whether GitHub will run it. A workflow that added <code>pull_request_review_thread</code> (a real
+  webhook event, not a workflow trigger) was impeccable YAML, passed every hook, and GitHub
+  rejected the entire file with no red check: the PR just looked like it was waiting, so a dead
+  gate and a slow gate are indistinguishable. In CI the binary is installed at a pinned version
+  with a verified SHA-256 and <code>LINT_ACTIONS_REQUIRED=1</code> makes absence a failure. It sets
+  shellcheck options for the <code>run:</code> blocks actionlint shells out to, so one script does not pass
+  one gate and fail the other. A comment line may not start with a tool's name, because it parses
+  as a lint directive.</li>
+<li><strong><code>lint_docker.sh</code></strong> is a wrapper, not a line in <code>lint.sh</code>, because hadolint is the only gate
+  with no Python package: pre-commit runs <code>hadolint-docker</code>, which needs a Docker daemon, and
+  calling that from <code>poe lint</code> would turn a lint run into an infrastructure requirement. It
+  differs from <code>lint_actions.sh</code> deliberately: zero Dockerfiles is legitimate (no Python tier
+  ships one, measured 2026-08-23; the only one is in <code>react-spa-webpack</code>). The rule is: no
+  Dockerfile skips; Dockerfiles with no tool skips unless <code>LINT_DOCKER_REQUIRED=1</code>; both present
+  lints. The count is asserted before the tool runs, so hadolint is never handed an empty list.
+  The image is pinned by digest, not tag: the tag pins what is asked for, the digest what
+  arrives, and the image is pulled and executed on the gate's machine (re-resolve with <code>docker
+  buildx imagetools inspect hadolint/hadolint:&lt;tag&gt;</code>). It probes <code>docker info</code>, since the client
+  binary is present on machines whose daemon is stopped. The tree is mounted read-only and the
+  run happens inside it, so hadolint finds <code>.hadolint.yaml</code> and reports file names (stdin
+  reports <code>-</code>); <code>--no-fail</code> is not passed, the container's status is the verdict.</li>
+<li><strong><code>lint_deps.sh</code></strong> (deptry over <code>src/</code>). The rule "every imported package is a direct
+  dependency" was written down and nothing checked it. The first run found both DDD tiers using
+  pandas in five <code>src/utils</code> modules while declaring it nowhere (it arrived through <code>wwdates</code>);
+  a calendar library dropping pandas would have broken every DDD project with an <code>ImportError</code>
+  nobody could predict. It must run inside the project venv with no system fallback: deptry maps
+  a module to its distribution through the metadata of the environment it runs in, and outside
+  the venv the verdict inverts (9 findings on ddd-native, all false and two contradictory, while
+  both real defects vanished). The config lives in <code>pyproject.toml</code> per tier, never a shared
+  <code>deptry.toml</code>: <code>--config &lt;file&gt;</code> re-points deptry at that file as the manifest too, and it fell
+  back to <code>requirements.txt</code> and relabelled beartype, python-dotenv, wwdates and every DB driver
+  as transitive. <code>bin/</code> is out of scope, since one run cannot hold both profiles and each dev
+  dependency would become a DEP004. Zero <code>.py</code> files under the tree fails.</li>
+<li><strong><code>check_unix_filenames.sh</code></strong> rejects names outside <code>[a-zA-Z0-9._-]</code>. It has two callers:
+  pre-commit passes staged files, and <code>poe lint</code>/CI pass nothing, in which case it discovers the
+  tree itself with <code>git ls-files -z</code> (respecting <code>.gitignore</code>) and a <code>find</code> fallback for a
+  scaffold not yet <code>git init</code>'d. The no-argument mode exists because the old script iterated an
+  empty <code>$@</code> and printed "All filenames are valid" having examined nothing. Zero discovered files
+  is never legitimate there, so it fails.</li>
+<li><strong><code>check_secrets.sh</code></strong> (gitleaks, #305). GitGuardian (#155, #286) is the hosted product and
+  BlueprintX's own <code>GITGUARDIAN_API_KEY</code> measurably fails auth (exit 3); live detection there was
+  never proven. This repo is public, so shipping that key would either hand strangers the
+  maintainer's quota or ship every project red. gitleaks needs no key or account, so it is the
+  default scanner, additive to GitGuardian. One implementation: bulk-copied into every project
+  and run by BlueprintX's own hook and workflow through <code>--root .</code>. Config is gitleaks' own:
+  <code>.gitleaks.toml</code> at the root of the target. Resolve, don't install; <code>GITLEAKS_REQUIRED=1</code> in
+  CI. Exit 0 or 1 are data and drive the script's exit.</li>
+<li><strong><code>check_complexity.sh</code>.</strong> The per-tree ceilings and their arguments are in
+  <a href="../complexity-ceilings-measured/">Complexity ceilings</a>; the points that live in the script are:<ul>
+<li>Cyclomatic ceilings are tests 1, <code>src/</code> 2, <code>bin/</code> 8: a branching test tests two paths and
+  its green never says which ran; branching that is the work of a validator or parser takes
+  the escape hatch with a reason; the gates in <code>bin/</code> are parsing tools by nature and at 2
+  they were 74% violating, a number nobody pays and so a gate nobody keeps. Nesting depth
+  (PLR1702) is a separate table: tests 2, <code>src/</code> 3, <code>bin/</code> 5 (findings at one ceiling lower:
+  2, 54 and 16 for tests, <code>src/</code> and <code>bin/</code>). An earlier revision asserted 1, 1 and 3 by
+  analogy to the mccabe row; all three were wrong, and because the hook scans the whole tree
+  each blocked every commit. An argument by analogy is not a measurement: mccabe counts
+  branches and PLR1702 counts nesting. These are the zero-cost ceilings; the tighter ones
+  (<code>src/</code>=2 costs 8 fixes, <code>bin/</code>=4 costs 2) are each their own measured slice.</li>
+<li>Do not reimplement mccabe. ruff ships it as C901 and PLR1702; a draft counter that
+  treated <code>assert</code> and <code>with</code> as decision points reported 85% of <code>tests/</code> violating where
+  the real figure was 8%. A threshold agreed against one implementation and enforced by
+  another is not the threshold anybody agreed to.</li>
+<li>Two ruff invocations per rule: <code>per-file-ignores</code> can switch a rule off for a path but
+  cannot give it a different threshold, so <code>run_ruff_check</code> takes the rule code and its
+  config key (<code>lint.mccabe.max-complexity</code>, <code>lint.pylint.max-nested-blocks</code>) as arguments.</li>
+<li>Escape hatch: <code># complexity-ok: &lt;reason&gt;</code> on the <code>def</code> line (ruff anchors both rules
+  there, not on a decorator), reason required, one marker for both rules. The whole signature
+  is scanned, because <code>ruff format</code> re-wraps a long signature and moves a trailing comment to
+  the closing-paren line; a hatch correct on the <code>def</code> stopped counting when the formatter
+  touched the file (<code>CreateLog._validate_path</code>). The formatter wins, so the gate adapts. The
+  signature scan is bounded so a malformed file is not turned into a file read.</li>
+<li>Only <code>--root</code> is accepted, so BlueprintX runs this file over its own tree (#189).</li>
+<li>ruff is probed with <code>--version</code> so a real lint exit code is never mistaken for "absent".
+  The mode is set as a global, never printed for <code>$(...)</code>, for the subshell reason above.
+  ruff exits 0 or 1 (data); anything else means it could not run and its output is
+  re-printed. Output goes to a file, not <code>while read &lt; &lt;(...)</code>: a process substitution runs
+  in a subshell, so a hard failure could only exit that subshell, the loop would read
+  nothing and the gate would be blind a second time.</li>
+<li>Colour: ruff wraps every <code>path:line:col:</code> separator in ANSI escapes when colour is on,
+  and those travel into <code>cut -d:</code> and an arithmetic expansion, which dies with <code>[0m101[36m:
+  syntax error: operand expected</code>, naming neither ruff, colour nor this gate (6 of 6 tiers
+  red on 2026-08-23 because a shell exported <code>FORCE_COLOR</code>). <code>NO_COLOR=1</code> alone does not fix
+  it: with <code>FORCE_COLOR=3</code> also set ruff still colours, and <code>TERM=dumb</code> does not change that.
+  So the forcing variables are unset, in a subshell rather than <code>env -u</code> (the poetry branch
+  calls a shell function <code>env</code> cannot exec) and rather than <code>local</code> (does not hide an
+  exported global from a child). <code>NO_COLOR</code> stays as belt-and-braces.</li>
+<li>ruff absent is not a graceful skip: it is a declared dev dependency, so its absence is a
+  broken environment. A broken glob would otherwise report success forever.</li>
+</ul>
+</li>
+<li><strong><code>test_urls_docstrings.sh</code></strong> (hook) scans docstrings for URLs, cached for a week to avoid
+  repeated network calls. Domains that answer a scripted probe with 403 or anti-bot pages
+  regardless of method are treated as reachable, a deliberate false negative: the alternative
+  is a permanently red hook that people learn to bypass. Match the hostname, never a substring:
+  <code>*domain*</code> would allowlist <code>https://attacker.example/path/openai.com</code> and
+  <code>https://openai.com.attacker.example/</code>; strip scheme, userinfo and everything from the first
+  <code>/</code>, <code>?</code>, <code>#</code> or <code>:</code>, then require an exact match or a real subdomain. Probes go HEAD, then
+  GET for servers that refuse HEAD, then wget for servers that refuse curl; each fallback exists
+  for an observed failure, so the order is load-bearing. State is script-scoped because bash
+  cannot return an associative array. A host-only URL is skipped (nothing to 404, and fetching
+  it only rate-limits). A one-line docstring opens and closes on the same line and must not flip
+  the state. A delimiter line is docstring content and is scanned before the state flips
+  (#206, #224): the old <code>continue</code> blinded the gate on <code>"""One line https://..."""</code> and on the
+  opening line of a multi-line docstring, and was self-concealing, since an unscanned URL is
+  never fetched or cached. A closing delimiter sharing a line with text was never blind (the URL
+  was scanned as body text) but the state never flipped back, so every later line was read as
+  inside the docstring and over-scanned; both delimiters are now matched wherever they sit.</li>
+<li><strong><code>check_clean_index.sh</code></strong> (pre-push). A non-empty index at push time is the fingerprint of a
+  commit rejected after <code>git add</code>: the push ships the previous commit and prints success while
+  the work stays behind, found only by comparing HEAD to <code>origin/&lt;branch&gt;</code>. No other layer sees
+  it: CI sees only what was pushed, and pre-commit already did its job by rejecting. It also
+  closes a hole a written rule did not: "never pipe <code>git commit</code> through <code>tail</code>/<code>grep</code>; confirm
+  HEAD moved" existed and was violated hours after being quoted, because a rejection scrolling
+  off screen is what a tired reader misses. It guards the index, not the dirty tree: unstaged
+  edits while pushing are routine, a noisy guard gets disabled, and a populated index is nearly
+  false-positive-free. Escape hatch: <code>git push --no-verify</code> or stash the index. With no work
+  tree (a shipped zip) there is nothing to guard and it never blocks.</li>
+</ul>
+<h3 id="bootstrap-runtime-and-ci-helpers">Bootstrap, runtime and CI helpers<a class="headerlink" href="#bootstrap-runtime-and-ci-helpers" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>lib/bootstrap.sh</code>.</strong> <code>ensure_python_version</code> prefers pyenv (pinning the project version) and
+  falls back to the system interpreter with a version-mismatch warning for corporate hosts that
+  forbid pyenv. <code>to_native_path</code> turns <code>/a/foo/bar</code> into <code>A:/foo/bar</code> through <code>cygpath</code> on Git
+  Bash/MINGW, shell-only and stripping stray CR and LF; <code>POETRY_CMD</code> is an array so a <code>python -m
+  poetry</code> fallback stays quotable. <code>build_union_ca_bundle</code> writes <code>bin/ca_bundle.pem</code> as the
+  union of certifi's roots, whatever bundle the host provisions and the corporate CA. Union is
+  the point: pointing <code>SSL_CERT_FILE</code>, <code>REQUESTS_CA_BUNDLE</code> and <code>PIP_CERT</code> at the corporate CA
+  alone narrows trust to one certificate and breaks every connection not through the proxy's CA
+  (Poetry went from "0 candidates" to "All attempts to connect to pypi.org failed" because the
+  helper ran), and it clobbers a bundle a corporate image provisions. A generated file also
+  replaces the old append to certifi's <code>cacert.pem</code>, which mutated site-packages invisibly and
+  was undone by any reinstall. <code>wire_corporate_ca</code> is a no-op without <code>bin/corporate_ca.pem</code>,
+  so non-corporate setups keep full verification; it resolves the absolute Windows-safe path in
+  shell, exports the union to every consumer, points Poetry's resolver at it best-effort, and
+  deliberately does not export <code>PIP_TRUSTED_HOST</code>, which disables verification for PyPI outright.</li>
+<li><strong><code>get_corporate_ca.sh</code></strong> generates <code>bin/corporate_ca.pem</code> from the OS trust store without
+  touching the network or disabling TLS verification. It is the store the browser uses, which is
+  why the browser works behind a TLS-inspecting proxy while pip, with certifi's own bundle,
+  does not. On Windows it reads the store from Python directly, with no admin rights. On
+  Linux/macOS the store is already a file and a corporate image normally installs the CA there,
+  so it refuses with instructions rather than guess a path or capture whatever certificate the
+  network presents. The pem is git-ignored and picked up by <code>poe venv</code> and <code>poe run</code>.</li>
+<li><strong><code>lib/pip_fallback.sh</code>.</strong> Every status is checked: the function used to return the pruning
+  status, which succeeds on an empty file, so a failed TOML reader or emitter produced an empty
+  requirements file and reported success, and install and verify both accept zero requirements
+  (the venv was declared good having installed nothing). <code>_read_env_var</code> is anchored to the
+  project, since its default <code>.env</code> is CWD-relative and reading the wrong one prunes the driver
+  the project needs. Pruning: the service tiers declare all four DB drivers unconditionally
+  (about 20 MB of pyodbc, oracledb, psycopg and mysql-connector a SQLite project never
+  imports), and on a corporate index that answers 403 per package an unrequested dependency is a
+  self-inflicted failure surface (2026-08-16, <code>mysql-connector-python</code> was refused and took the
+  whole install down). <code>DB_BACKEND</code> is lowercased to match <code>config/connection_db.py</code>
+  (<code>os.getenv("DB_BACKEND", "sqlite").lower()</code>), or <code>PostgreSQL</code> would drop psycopg. A driver not
+  in the table is not a DB driver and is never pruned. <code>pip install -r</code> is atomic, so one
+  refused wheel discards a batch whose other packages downloaded; the batch is only the fast
+  path, and on failure it retries per requirement so everything installable is installed and the
+  report names every refused package. A blocked index can report success with nothing usable
+  (<code>already satisfied</code> without contacting the index), so the last word is a real import
+  against the target venv's own interpreter (<code>verify_venv_imports.py</code>).</li>
+<li><strong><code>lib/common.sh</code></strong> is kept byte-identical in <code>templates/common/bin/lib/</code> and here (CI enforces
+  parity; offline scaffolds copy the common version over this one, so both carry
+  <code>resolve_default_branch</code> and <code>_read_env_var</code>). <code>print_status &lt;level&gt; &lt;message&gt;</code> (success, error,
+  warning, info, config, debug, section) sends errors to stderr and tees timestamped lines to
+  <code>$LOG_FILE</code> when set. An unknown level names the bad status on stderr instead of printing an
+  unmarked line: 35 calls spelled <code>warn</code> for <code>warning</code> across five scaffolds each rendered a
+  warning like ordinary chatter. <code>resolve_default_branch</code>: explicit argument, <code>$DEFAULT_BRANCH</code>,
+  <code>origin/HEAD</code>, local <code>main</code>, else <code>master</code>. <code>_read_env_var NAME</code> reads <code>.env</code> (override with
+  <code>ENV_FILE</code>), returns the raw right-hand side without stripping an inline <code>#</code>, so passwords with
+  <code>#</code> or <code>$</code> survive (the point of bypassing Make's expansion), removes one pair of surrounding
+  quotes, last assignment wins, missing file or key is empty. <code>ensure_dir</code> checks existence
+  before <code>mkdir -p</code>: over an existing path on Windows mapped or UNC drives a bare <code>mkdir -p</code> can
+  fail with "Permission denied".</li>
+<li><strong><code>poe_exec.sh</code> and <code>poetry_exec.sh</code></strong> are the single Poe and Poetry entrypoints for every
+  hook, workflow and script, so nothing depends on a bare binary on <code>PATH</code>. Poetry may be
+  reachable only as <code>python -m poetry</code> (the user-scripts directory is not on <code>PATH</code> on Git
+  Bash/MINGW), so a bare <code>poetry run</code> dies "command not found" with Poetry installed;
+  <code>resolve_poetry()</code> tries bare then <code>$PYTHON -m poetry</code>, and <code>ensure_poetry()</code> installs from
+  <code>requirements.txt</code> when none resolves. Poe reaches a machine by three routes: the in-project
+  <code>.venv</code> first (load-bearing: <code>poetry.toml</code> forces in-project, <code>poetry install</code> does not put poe
+  on <code>PATH</code>, and <code>$PYTHON</code> is the system interpreter, so in CI after <code>poetry install --with dev</code>
+  neither later route can see it), then <code>poe</code> on <code>PATH</code> or <code>$PYTHON -m poethepoet</code> (the module is
+  <code>poethepoet</code>, not <code>poe</code>: <code>python -m poe</code> fails), probed by running the module because a <code>pip
+  install --user</code> layout puts the package where the interpreter finds it but the console script
+  nowhere useful, then <code>poetry poe</code> last. The plugin is no longer declared: a project-scoped
+  <code>[tool.poetry.requires-plugins]</code> breaks <code>poetry install</code> (a plugin env keyed by project name,
+  not path, measured), it is the slowest route, and poe's docs advise against it because
+  Poetry's CLI mangles arbitrary task arguments and the plugin silently disappears if
+  <code>--no-plugins</code> appears anywhere. Stdout discipline: resolution status goes to stderr so the
+  task's own stdout and command substitution (<code>version -s</code>) stay clean. Zero arguments is valid
+  and is the help path.</li>
+<li><strong><code>precommit.sh</code></strong> installs <code>commit-msg</code> and <code>pre-push</code> hooks. <code>pre-commit install</code> needs git
+  and a work tree; a deploy box (a shipped zip) has none and pre-commit aborts "FatalError: git
+  failed", taking <code>init</code> down. Hooks are dev-only, so with no work tree it warns and skips,
+  like the best-effort <code>ensure_env</code> and the Playwright install. Opt-in alternative: replace the
+  skip with a loud <code>git init</code>, announced so a dev box surfaces a lost <code>.git</code>; never auto-init
+  silently. On a shared network checkout (Windows UNC mapped to a drive) the first person to
+  check it out owns it and any other domain user trips git's "dubious ownership" guard, which
+  blocks every repo operation and makes <code>pre-commit install</code> die too. <code>ensure_safe_directory</code>
+  registers a per-user <code>safe.directory</code> before the work-tree probe, which would otherwise fail
+  under the guard and wrongly conclude "no repo" (a bogus <code>git init</code> over an existing tree).
+  It lifts git's own suggested path rather than reconstructing it, and strips the UNC quote.</li>
+<li><strong><code>venv.sh</code>, <code>run.sh</code>.</strong> <code>run.sh</code> resolves the entrypoint, ensures a venv, prefers Poetry and
+  falls back to stdlib venv plus pip requirements; the pinned interpreter is selected first so
+  both branches use it. Tokens after the entrypoint are the user's argv: <code>poe run backfill</code>
+  forwards <code>backfill</code>, and dropping it makes <code>main.py</code> fall back to <code>PIPELINE_INTENT</code> (#317).
+  The Playwright install in <code>venv.sh</code> is best-effort and never aborts <code>init</code>: it warns and points
+  at <code>poe fix_playwright</code>, since the environment is usable without browsers and <code>playwright
+  install</code> fails on hosts without a compatible toolchain (<code>Error: spawn UNKNOWN</code> under Git Bash
+  on Windows). <code>--with-deps</code> installs apt packages and is valid on Debian and Ubuntu only, so it
+  is added on Linux only. <code>fix_playwright.sh</code> cleans and reinstalls the browsers.</li>
+<li><strong><code>ensure_env.sh</code></strong> seeds <code>.env</code> from <code>.env.example</code> when <code>.env</code> is absent; if the template is
+  missing it reports and aborts that script with non-zero, and the task runner ignores that
+  failure so the venv and pre-commit steps still run. <strong><code>db.sh</code></strong> has <code>up</code> (idempotently start
+  services, ensure schema, migrate), <code>backup</code> (dump to <code>BACKUP_STORE_PATH</code>) and <code>restore</code>
+  (<code>DUMP=&lt;path&gt;</code>); Poetry is resolved robustly because a bare <code>poetry</code> may be absent.</li>
+<li><strong><code>export_deps.sh</code></strong> writes <code>requirements-lock.txt</code> for hosts that can <code>pip install -r</code> but not
+  Poetry (locked-down boxes, slim containers, air-gapped transfers). <code>export</code> is a plugin
+  subcommand, so the question is "does the Poetry that resolves here carry the plugin?", and a
+  <code>pip install --user</code> Poetry and the venv's Poetry report the same <code>--version</code> with different
+  plugin sets. That is why the plugin is pinned in <code>requirements.txt</code> (what <code>ensure_poetry</code>
+  installs from) and not only as a dev dependency, which reaches the venv and nothing else: the
+  recipe would work from an activated shell and fail from a VS Code task, cron, CI and the
+  offline host it serves. The artifact path is overridable so a test can redirect it.</li>
+<li><strong><code>test_cov.sh</code></strong> is four steps that only make sense in order: pytest writes <code>.coverage</code>,
+  <code>coverage report</code> prints it, <code>coverage xml</code> serialises it, genbadge renders <code>coverage.svg</code>.
+  Splitting them across two recipe files put the order in two places. genbadge runs with
+  <code>--local</code>: a build step that reaches the network fails behind a corporate proxy and on an
+  air-gapped runner, and a badge is not worth either.</li>
+<li><strong><code>build_wheelhouse.sh</code></strong> (#299, pieces 1 to 3 of #127). A corporate machine behind a
+  TLS-inspecting proxy that blocks PyPI cannot install anything; <code>verify_venv_imports.py</code> makes
+  that failure loud and this is the remedy: <code>poe wheelhouse</code> builds the payload on a machine
+  with internet and <code>poe wheelhouse_assemble</code> rebuilds it on the offline target. See
+  <a href="../offline-wheelhouse/">Offline wheelhouse</a>. Heavy logic (marker evaluation against a target
+  environment, zip/split/manifest, verify-and-refuse) is in <code>lib/wheelhouse_select.py</code>; the shell
+  owns only network I/O and orchestration. The default destination is a sibling of the repo:
+  outside it, never a <code>git add</code> candidate, surviving a re-clone, per repo because sibling
+  projects pin different versions. DB-driver pruning by <code>DB_BACKEND</code> took 65 MB to 45 MB (#299).
+  Bash 3.2-safe (macOS system bash): no associative arrays, no <code>${var,,}</code>; <code>mariadb</code> shares
+  mysql's driver. Cross-platform builds pass pip's own platform tags verbatim
+  (<code>win_amd64</code>, <code>manylinux2014_x86_64</code>); unset, pip downloads for the build machine. The trap
+  expands <code>dir_tmp</code> immediately: single-quoted it would hit an unbound variable under <code>set -u</code>
+  after the function returned, leaking the directory and exiting non-zero.</li>
+<li><strong><code>pr_reconcile.sh</code></strong> (#255) is the mechanism extracted from the <code>pr-reconcile.yaml</code> inline
+  <code>run:</code> block so every workflow that ships it invokes one implementation, like
+  <code>check_review_threads.py</code> and <code>rerun_stale_gate_runs.sh</code>. Inputs: <code>GH_TOKEN</code> and <code>GH_REPO</code>
+  (required), <code>EVENT_PR</code> (one PR, the fast path) and <code>SWEEP_LIMIT</code> (default 30, the scheduled
+  backstop). It acts only on a merged PR, so a closed-unmerged PR closes nothing. A linked
+  issue's repository travels with its number: a cross-repo link would otherwise resolve
+  <code>gh issue view 42</code> against <code>GH_REPO</code> and close an unrelated #42 there, silently. It closes only
+  issues still open, and deletes only a same-repo head branch, and only while the ref still
+  points at the commit the PR merged: this runs on a schedule, possibly days later, and a branch
+  name is reusable (<code>fix/thing</code> cut again for new work would be deleted with unpushed commits,
+  reporting success). An already-deleted branch is a no-op.</li>
+<li><strong><code>rerun_stale_gate_runs.sh</code></strong> re-runs the stale failed runs of the review-thread workflow
+  that still poison the merge rollup. The gate re-triggers on <code>pull_request</code>, <code>pull_request_review</code>
+  and <code>pull_request_review_comment</code>, each creating a new check run, and branch protection reads
+  the aggregate, so the push-time failure keeps the PR <code>BLOCKED</code> however many later runs pass
+  (#262 one stale failure, #264 five, #265 seven; <code>gh run rerun &lt;id&gt; --failed</code> on only the stale
+  failures flipped each to <code>CLEAN</code>). <code>concurrency:</code> was tried and is strictly worse: a queued run
+  cancelled before it starts publishes no check run, leaving the required context at <code>Expected
+  — Waiting for status to be reported</code>, which no re-run clears; a stale red is at least
+  clickable. It exits 0 even when it cannot do its job, and that is not failing open: it is a
+  janitor, if it fails the run stays red and the PR stays blocked (the status quo, visible),
+  whereas failing the step would deposit one more failed run into the rollup it came to clean.
+  It reports through one seam that emits both the <code>::warning::</code> annotation (a machine-read
+  workflow command that puts the message in the run summary) and the status line, because three
+  copies of that pair are where one loses its annotation. It refuses to act outside a
+  pull-request run (an empty <code>HEAD_SHA</code> is ordinary on other events). It asks the API which
+  workflow the current run belongs to, since the two shipped copies disagree on name and
+  filename (<code>.yml</code> here, <code>.yaml</code> in a generated project). It scopes by <code>head_sha</code> so older
+  commits' genuine failures are untouched, and skips <code>$GITHUB_RUN_ID</code>, the loop guard: it only
+  runs on a successful run, so re-running itself would re-run a green run forever. Needs
+  <code>actions: write</code>.</li>
+</ul>
 <h2 id="root-workflows-why-each-is-shaped-as-it-is">Root workflows: why each is shaped as it is<a class="headerlink" href="#root-workflows-why-each-is-shaped-as-it-is" title="Permanent link">&para;</a></h2>
 <p>These records explain the GitHub Actions workflows under <code>.github/workflows/</code> in this
 repository. They were moved out of the workflow files, which now carry no prose.</p>
