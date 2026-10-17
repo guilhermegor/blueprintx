@@ -9,6 +9,12 @@ reviewers:
     posts: threads
     note: Posts inline review threads with a severity badge; reviews only when asked, autoReview is empty.
 
+  - login: graphite-app[bot]
+    posts: threads
+    note: >-
+      Posts a COMMENTED review with inline comments; a clean review leaves only the
+      "Graphite / AI Reviews" check run. Reviews only when the review:graphite label is added.
+
   - login: github-actions[bot]
     posts: status
     note: Workflow output, never a review finding.
