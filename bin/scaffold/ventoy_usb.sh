@@ -179,9 +179,9 @@ initialize_git_repo() {
         cd "$project_path" || exit 1
         git init -q -b main &&
             git add . &&
-            git commit -q -m "feat: first commit"
+            scaffold_git_commit . "feat: first commit"
     ); then
-        exit_error "Could not create the initial commit in '$project_path'. Set git user.name and user.email, then re-run."
+        exit_error "Could not create the initial commit in '$project_path'. A commit hook rejected it, or git is older than 2.28 (no 'git init -b'). Fix that, then re-run."
     fi
     print_status "success" "Initialized git repo (branch main) with first commit"
 }
@@ -216,7 +216,7 @@ commit_offline_artifacts() {
     git -C "$project_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
     scaffold_comment_budget_refresh "$project_path"
     git -C "$project_path" add -A
-    git -C "$project_path" commit -q --no-verify -m "chore: enable offline git workflow" || true
+    scaffold_git_commit "$project_path" "chore: enable offline git workflow" --no-verify || true
 }
 
 main() {
