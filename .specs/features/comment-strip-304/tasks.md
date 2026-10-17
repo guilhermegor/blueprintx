@@ -29,6 +29,7 @@ gate did not read until P0.
 - [ ] 7 `templates/python-common` config and workflows (35 files, 1401 lines)
 - [ ] 8 `templates/python-common/tests` (55 files, 931 lines)
 - [ ] 9 `templates/python-common/bin`, the gates themselves (66 files, 2113 lines)
+- [~] chore/comment-strip-slice9b-304 9b `templates/python-common/bin` Python gates and `lib/*.py` (32 files, 779 lines); the AST of every module is identical before and after. Slice 9 is split 9a shell, 9b Python gates, 9c the comment-budget gate itself plus its banner exemption
 - [ ] Z delete the superseded rules in `CLAUDE.md` and `templates/python-common/CLAUDE.md`, drop the
   baseline and flip the gate to strict zero tolerance
 

@@ -40,11 +40,6 @@ import sys
 _PATH_MIGRATIONS = pathlib.Path("migrations/versions")
 _HEADER_NAMES = frozenset({"revision", "down_revision"})
 
-# Three states a `down_revision` can be in, and the gate must not collapse them: a genuine
-# root (`None`), the key absent from the file, and a value this reader cannot evaluate (a
-# name, a call, an f-string). `.get()` returns None for all three, which reads as "root" —
-# so an unverifiable file would silently become a head and the head count would be wrong
-# in either direction. Distinct sentinels keep them distinguishable (blueprintx#308).
 _MISSING = object()
 _UNSUPPORTED = object()
 
@@ -349,8 +344,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the glyphs this script prints —
-    # see check_dtypes.py's identical fix for the always_run hook it would otherwise crash.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

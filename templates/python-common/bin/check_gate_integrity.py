@@ -128,8 +128,6 @@ import sys
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# The reason is REQUIRED — a bare marker does not satisfy the gate, matching
-# `# complexity-ok: <reason>` elsewhere in this file family.
 RE_JUSTIFICATION = re.compile(r"^\s*gate-change-ok:\s*(\S.*)$", re.I | re.M)
 RE_HOOK_ID = re.compile(r"^\s*-\s*id:\s*(\S+)\s*$", re.M)
 RE_REQUIRED_CHECKS = re.compile(r"REQUIRED_CHECKS=\((.*?)\)", re.S)
@@ -140,21 +138,11 @@ RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
 RE_PYTEST_RAISES = re.compile(r"pytest\.raises\(\s*([A-Za-z_][\w.]*)")
-# ⚠️ `!=` BELONGS HERE, and it is the weakest of the set: `assert actual != expected` accepts
-# every value except one, so a concurrent code+test change could flip `==` to `!=` and keep a
-# green test that asserts almost nothing.
 _SET_WEAKER_THAN_EQ = frozenset({"in", "not in", ">=", "<=", "!="})
 _SET_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
 
-# `git show :<path>` (empty ref) reads the INDEX blob — equal to HEAD on a clean CI checkout,
-# and the staged content in a local pre-commit run. Using it for BOTH sides is what lets one
-# code path serve pre-commit and CI without branching on which one is running.
 STR_INDEX_REF = ""
 
-# A `git diff --name-status` row is always "<status>\t<path>" (or, for a rename,
-# "<status>\t<old>\t<new>") — never fewer than 2 tab-separated fields. Module-scoped
-# (ruff N806, blueprintx#422): a local ALL-CAPS name inside a function reads as a
-# constant while behaving like a plain variable — moved here to be what it says it is.
 _INT_MIN_FIELDS = 2
 
 
@@ -172,8 +160,6 @@ def _git(list_args: list) -> str:
         Captured stdout, stripped.
     """
     try:
-        # Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
-        # resolution BY DESIGN — see check_backlog_ledger.py's identical helper.
         cls_proc = subprocess.run(  # noqa: S603
             ["git", *list_args],  # noqa: S607
             capture_output=True,
@@ -226,18 +212,6 @@ def show(str_ref: str, str_path: str) -> str | None:
         when the blob is not valid UTF-8 — a binary cannot define a gate, so there is nothing
         here to assert about it.
     """
-    # ⚠️ BYTES, NOT text=True. `text=True` decodes whatever git emits, so ONE binary path in the
-    # diff raised UnicodeDecodeError and took the whole gate down — not a finding, a crash, and
-    # a crash reports as the check's NAME ("a PR must not weaken a check without saying why"),
-    # accusing a PR that had merely added a logo. Measured on #337: `docs/assets/logo.png`,
-    # 0xff at position 0, a JPEG SOI marker.
-    #
-    # Worse than a wrong message: the traceback stopped collection at the FIRST binary path, so
-    # every later file went unexamined. The gate blocked the PR while having checked almost
-    # nothing — its own blindness reported as a rejection.
-    #
-    # ⚠️ Skipping by EXTENSION is not the fix, and this repo holds the counter-example: that
-    # `.png` contains JPEG bytes. A decode attempt asks the blob itself.
     cls_proc = subprocess.run(  # noqa: S603
         ["git", "show", f"{str_ref}:{str_path}"],  # noqa: S607
         capture_output=True,
@@ -450,9 +424,6 @@ def mypy_ini_problems(str_old: str, str_new: str, str_shown: str) -> list:
     for str_alt in sorted(set_new_alts - set_old_alts):
         list_problems.append(f"{str_shown}: path {str_alt!r} added to [mypy] exclude")
 
-    # Effective value, not section presence — a pre-existing `[mypy-<module>]` section that
-    # flips `ignore_errors` from False/absent to True is exactly as much a weakening as a
-    # brand new section carrying `ignore_errors = True` (blueprintx#313).
     for str_section in sorted(cls_new.sections()):
         bool_old = cls_old.getboolean(str_section, "ignore_errors", fallback=False)
         bool_new = cls_new.getboolean(str_section, "ignore_errors", fallback=False)
@@ -713,10 +684,6 @@ def skip_marks(cls_node: ast.FunctionDef) -> frozenset:
     frozenset of str
         e.g. ``{"skip"}``. Empty when undecorated or decorated with something else.
     """
-    # ⚠️ The OUTER chain only, never a walk. `@pytest.mark.skipif(platform.skip, …)` contains
-    # an Attribute named `skip` in its ARGUMENTS, so walking the decorator reported a `skip`
-    # mark on a conditional test — contradicting the deliberate `skipif` exclusion and
-    # blocking valid work. Measured: the walk returns {'skip'} on that decorator.
     return frozenset(
         str_mark
         for cls_dec in cls_node.decorator_list
@@ -1068,8 +1035,6 @@ def test_assertion_problems(str_old: str, str_new: str, str_shown: str) -> list:
     ]
 
 
-# Dispatch by basename/path shape — the whole reason each analyzer above takes plain
-# (old_text, new_text, shown_path) rather than reaching for git itself.
 _DICT_DISPATCH = {
     ".pre-commit-config.yaml": precommit_problems,
     "ruff.toml": ruff_toml_problems,
@@ -1171,8 +1136,6 @@ def pr_body_text() -> str:
     return str(dict_pr.get("body") or "")
 
 
-# Set by GitHub Actions (both) and by essentially every other CI provider (``CI``). Their only
-# job here is to make the GATE_CHANGE_OK hatch local-only — see env_reason.
 TUPLE_CI_MARKERS = ("CI", "GITHUB_ACTIONS")
 
 
@@ -1380,8 +1343,6 @@ def main(list_argv: list) -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this script
-    # prints — see check_backlog_ledger.py's identical guard.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

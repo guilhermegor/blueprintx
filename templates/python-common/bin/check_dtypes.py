@@ -27,19 +27,10 @@ import re
 import sys
 
 
-# Matches a dtype declaration whose value names a binary float, in either the dict form
-# ("COL": "float64") or a bare pandas/numpy spelling. Deliberately text-based rather than AST:
-# the target is a string literal in a class-level dict, which an AST walk complicates without
-# buying accuracy here.
 _RE_FLOAT_DTYPE = re.compile(r"""["'](?:float(?:16|32|64|128)?|Float(?:32|64))["']""")
 
-# The line-scoped opt-out; must carry a reason after the colon. Named a MARKER, not a token:
-# it is a source-text sentinel, and "TOKEN" reads as a credential to a reader and to bandit
-# (S105) alike.
 _ALLOW_MARKER = "dtype-ok:"
 
-# Trees exempt from the ban: the runtime type-checking engine (which names float as a *type*,
-# not a dtype) and this gate's own documentation of the banned spellings.
 _EXCLUDED_PARTS = {"typing", "chassis"}
 
 
@@ -88,11 +79,6 @@ def _source_files() -> list[pathlib.Path]:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")
