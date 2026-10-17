@@ -336,3 +336,17 @@ remove_repo_policy_scripts() {
     rm -f "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh" \
         "$project_path/bin/dependabot_auto_merge.sh"
 }
+
+# Commit with a throwaway identity only when none is configured; never persisted.
+# Usage: scaffold_git_commit <repo-dir> <message> [extra commit flags]
+scaffold_git_commit() {
+    local str_dir="$1" str_message="$2"
+    shift 2
+    if [ -n "$(git -C "$str_dir" config user.email 2>/dev/null)" ]; then
+        git -C "$str_dir" commit -q "$@" -m "$str_message"
+        return
+    fi
+    print_status "info" "No git identity set; committing as 'BlueprintX Scaffold'. Set yours: git config --global user.name/user.email" >&2
+    git -C "$str_dir" -c user.name="BlueprintX Scaffold" -c user.email="scaffold@blueprintx.invalid" \
+        commit -q "$@" -m "$str_message"
+}

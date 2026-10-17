@@ -24,6 +24,13 @@ copied into scaffolded projects.
 Create `templates/<name>/` with a `skeleton.meta` descriptor, add a scaffold script under
 `bin/scaffold/`, and the menu discovers it automatically. See [Contributing](contributing.md).
 
+## Do I need a global git identity to scaffold?
+
+No. The scaffold's commits use your `user.name` / `user.email` when set. When no email is
+configured it commits as `BlueprintX Scaffold <scaffold@blueprintx.invalid>` for those commits
+only, prints a one-line notice, and never writes the fallback to any git config. Set your own
+identity afterwards with `git config --global user.name` / `user.email`.
+
 ## Online vs offline scaffolds — what's the difference?
 
 If you connect a GitHub remote, the scaffold ships GitHub-only assets (Actions workflows,
