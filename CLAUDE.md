@@ -185,6 +185,8 @@ Today the manifest lists `.gitattributes`, `.coderabbit.yaml` and `.greptile/con
 `docs/faq.md`. Root-repo-only, like `check_makefile_pairing.sh`. ⚠️ The manifest needs the
 `!templates/common/review-config.manifest` line in `.gitignore`, because `*.manifest` is ignored.
 
+The **dependabot guard** (`bin/ci/check_dependabot_shipped.sh --static`, hook and CI job `dependabot-shipped`) fails when a skeleton stops copying a `dependabot.yml` with a `cooldown`; there is no `--generated` mode because default answers scaffold offline. See `docs/dependabot-config.md`.
+
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
 GitHub Action** (`release.yml`, `workflow_dispatch` → `version` field): the `tag` job pushes

@@ -130,6 +130,7 @@ copy_common_templates() {
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$project_path/.github/ISSUE_TEMPLATE" && cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$project_path/.github/ISSUE_TEMPLATE/feature_or_fix.md"
+    cp "$SHARED_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$BLUEPRINTX_ROOT/templates/ts-common/.github/.review-bots.yaml" "$project_path/.github/.review-bots.yaml"
     copy_repo_policy_workflows "$project_path"
     copy_repo_rules_provisioner "$project_path" "$SKELETON_TEMPLATE_ROOT/bin/required-checks.txt"
