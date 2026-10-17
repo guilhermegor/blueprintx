@@ -2,6 +2,8 @@
 
 # shellcheck source=bin/lib/scaffold_kanban.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_kanban.sh"
+# shellcheck source=bin/lib/scaffold_comment_budget.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scaffold_comment_budget.sh"
 
 : "${SCAFFOLD_REPO_HOMEPAGE:=}"
 
@@ -236,6 +238,7 @@ scaffold_initial_commit() {
 scaffold_commit_artifacts() {
 	local str_project_path="$1" str_message="$2"
 	[ "$(git -C "$str_project_path" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$str_project_path" && pwd -P)" ] || return 0
+	scaffold_comment_budget_refresh "$str_project_path"
 	git -C "$str_project_path" add -A ||
 		exit_error "Could not stage files in '$str_project_path'; see the git error above."
 	git -C "$str_project_path" diff --cached --quiet && return 0

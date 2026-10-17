@@ -59,7 +59,7 @@ print_status info "comment language boundary"
 $POETRY run python bin/check_comment_language.py
 
 print_status info "comment budget"
-$POETRY run python bin/check_comment_budget.py
+$POETRY run python bin/check_comment_budget.py --require-baseline
 
 print_status info "env docs sync"
 $POETRY run python bin/check_env_docs_sync.py
