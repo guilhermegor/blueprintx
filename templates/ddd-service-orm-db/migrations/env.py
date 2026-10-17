@@ -13,14 +13,11 @@ from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import URL, engine_from_config, pool
 
-# Register ORM models so Base.metadata reflects the full schema
 from chassis.db_schema.infrastructure import Base
 from chassis.db_schema.infrastructure import models as _models  # noqa: F401
 
 
 load_dotenv()
-
-# ─── READ RUNTIME CONFIG ──────────────────────────────────────────────────────
 
 _DB_SCHEMA: str = os.getenv("DB_SCHEMA", "public")
 
@@ -43,7 +40,6 @@ _DRIVER_MAP: dict[str, str] = {
 _DSN: str = os.getenv("DB_DSN", "")
 
 if _DSN:
-    # Escape % for ConfigParser (alembic.ini interpolation)
     _DSN = _DSN.replace("%", "%%")
 elif _DB_BACKEND == "sqlite":
     _DSN = f"sqlite:///{os.getenv('DB_PATH', './data/app.db')}"
@@ -59,15 +55,11 @@ else:
     )
     _DSN = str(_url_obj).replace("%", "%%")
 
-# ─── ALEMBIC CONFIG ───────────────────────────────────────────────────────────
-
 config = context.config
 config.set_main_option("sqlalchemy.url", _DSN)
 
 target_metadata = Base.metadata
 
-
-# ─── OFFLINE MIGRATIONS ───────────────────────────────────────────────────────
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode (no live DB connection required).
@@ -75,8 +67,6 @@ def run_migrations_offline() -> None:
     Generates SQL scripts that can be reviewed and applied manually.
     """
     url = config.get_main_option("sqlalchemy.url")
-    # A batch_alter_table migration still cannot run here without copy_from — the
-    # constraint is the migration's, not this config's. See migrations/CLAUDE.md rule 5.
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -88,8 +78,6 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
-
-# ─── ONLINE MIGRATIONS ────────────────────────────────────────────────────────
 
 def run_migrations_online() -> None:
     """Run migrations against a live database connection.

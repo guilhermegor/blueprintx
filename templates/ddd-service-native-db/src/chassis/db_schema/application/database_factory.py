@@ -58,11 +58,6 @@ def _sqlite() -> SQLiteDatabaseHandler:
     return SQLiteDatabaseHandler(path_db)
 
 
-# Engine name -> handler builder. Each builder takes the backend name so the map can live at
-# MODULE level: as closures over an enclosing `str_backend` these had to be rebuilt inside the
-# factory on every call, which also kept the engine NAMES private to that call — and the names
-# are exactly what `active_backend()` must validate against and what the
-# `config/queries/<engine>/` layout mirrors. One source, three readers.
 _DICT_BUILDERS: dict[str, Callable[[str], DatabaseHandler]] = {
     "sqlite": lambda _: _sqlite(),
     "postgresql": lambda b: PostgresDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
@@ -72,7 +67,6 @@ _DICT_BUILDERS: dict[str, Callable[[str], DatabaseHandler]] = {
     "oracle": lambda b: OracleDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
 }
 
-# The supported engine names, derived from the dispatch map so the two cannot drift.
 SET_BACKENDS: frozenset[str] = frozenset(_DICT_BUILDERS)
 
 _STR_DEFAULT_BACKEND = "sqlite"

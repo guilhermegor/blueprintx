@@ -19,6 +19,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Comment budget ratchet
+        run: python3 bin/check_comment_budget.py --require-baseline
+
       - name: Install shfmt
         run: command -v shfmt >/dev/null || (sudo snap install shfmt)
 

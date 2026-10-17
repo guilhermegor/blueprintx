@@ -116,6 +116,8 @@ fails with an opaque `invalid-publisher`:
 | Environment | `release-pypi` / `release-test-pypi` |
 | PyPI **Project Name** | must equal the distribution name (`name` in `pyproject.toml`) |
 
+The GitHub Release step exists only in `release-pypi.yaml`, not in the Test PyPI workflow, so a change there is never rehearsed; diff the two workflows when editing either.
+
 For the very first upload the project does not exist yet — register a **pending publisher** at the
 account level (not under an existing project's settings). Publishing from a laptop instead of CI is
 the one case that still needs an API token; OIDC works only from GitHub Actions.
