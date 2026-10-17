@@ -41,5 +41,8 @@ Measured on blueprintx#807, 2026-10-16.
   was absent, each got the check run `Graphite / AI Reviews` with conclusion `skipped` ("does
   not match your org's AI review filters") and zero reviews.
 
-Not yet measured: the login Graphite uses on a review that does leave comments (expected
-`graphite-app[bot]`). Until it is, `.review-bots.yaml` has no Graphite row.
+Login measured on 2026-10-17 (probe PR with deliberate defects, label `review:graphite` added at
+21:43:12 UTC): about 67 s later `Graphite / AI Reviews` reported "AI review ran and left 2
+comments", and `graphite-app[bot]` (type `Bot`) submitted a `COMMENTED` review carrying 2 inline
+review comments. So `.review-bots.yaml` lists it as `posts: threads`. A draft PR got nothing in
+10 minutes, so the label only works on a PR that is ready for review.
