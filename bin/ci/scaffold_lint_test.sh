@@ -130,6 +130,13 @@ fi
 rm -rf "$str_probe"
 echo "The project's docs/ gate passes its skeleton and rejects docs/backlog/."
 
+str_gap_venv="$(mktemp -d)"
+python3 -m venv "$str_gap_venv"
+"$str_gap_venv/bin/pip" install -q pathspec pyyaml
+"$str_gap_venv/bin/python" "$PROJECT_PATH/bin/check_docs_gap.py" --root "$PROJECT_PATH"
+rm -rf "$str_gap_venv"
+echo "The project's docs-gap gate (nav ceiling included) passes its skeleton."
+
 cd "$PROJECT_PATH"
 
 echo "::group::poetry install (runtime + dev)"
