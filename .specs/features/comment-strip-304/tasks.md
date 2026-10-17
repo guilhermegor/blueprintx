@@ -30,6 +30,7 @@ gate did not read until P0.
 - [~] chore/comment-strip-slice7b-304 7b (PR #843) `templates/python-common` config files (`ruff.toml`, `mypy.ini`, `poe_tasks.toml`, `.pre-commit-config.yaml`, dotfiles; 22 files, 889 lines)
 - [~] chore/comment-strip-slice8-304 8 `templates/python-common/tests` (54 files, 808 lines; `test_review_threads_gate.py` is left to #837); rationale in `docs/decision-records.md`
 - [ ] 9 `templates/python-common/bin`, the gates themselves (66 files, 2113 lines)
+- [x] 9a (PR #845) `templates/python-common/bin` shell scripts and `lib/*.sh` (33 files, 1287 lines); oracle: `shfmt -mn` output identical before and after. Slice 9 is split 9a shell, 9b Python gates, 9c the comment-budget gate itself plus its banner exemption
 - [ ] Z delete the superseded rules in `CLAUDE.md` and `templates/python-common/CLAUDE.md`, drop the
   baseline and flip the gate to strict zero tolerance
 

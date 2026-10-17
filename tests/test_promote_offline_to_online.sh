@@ -185,6 +185,14 @@ test_copy_manifests_match_templates() {
             int_failures=$((int_failures + 1))
         fi
     done
+    for tier in react-spa-webpack ts-lib bash-cli; do
+        if grep -q 'cooldown:' "$WORK_DIR/manifest-$tier/.github/dependabot.yml"; then
+            echo "ok: $tier promotion restores dependabot.yml with a cooldown"
+        else
+            echo "FAIL ($tier): promotion did not restore .github/dependabot.yml"
+            int_failures=$((int_failures + 1))
+        fi
+    done
     for tier in ts-lib bash-cli; do
         local wf=release.yml
         [ "$tier" = ts-lib ] && wf=release-npm.yml

@@ -16,6 +16,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `faq.md` | Utility page | Common questions about using and extending BlueprintX |
 | `policy-workflows.md` | Reference page | Server-side PR/issue policy workflows scaffolded repos carry (blueprintx#604) |
 | `dependabot-auto-merge.md` | Reference page | Dependabot auto-merge policy by update type, BlueprintX and generated projects (blueprintx#800) |
+| `dependabot-config.md` | Reference page | Dependabot config shipped to every skeleton: cooldown, lint group, shipped-file gate (blueprintx#838) |
 | `troubleshooting.md` | Utility page | What broke while wiring this site's brand assets/routing, the cause, the fix, and which of those fixes were decided against scaffolding into `templates/` |
 | `offline-wheelhouse.md` | Utility page | How a scaffolded Python project installs offline — `poe wheelhouse` / `wheelhouse_assemble`, target-env selection, manifest/split-part payload (blueprintx#299) |
 | `secret-scanning.md` | Utility page | Secret scanning per tier — the measured gitleaks-vs-GitGuardian comparison behind gitleaks being the default, plus the GitGuardian (`ggshield`) opt-in: how to enable it at scaffold time, how it propagates the key, and how to opt in after the fact |
