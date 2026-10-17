@@ -1,13 +1,5 @@
 name: Docs - Strict Build Check
 
-# Build the MkDocs site with --strict on every push and PR to catch broken links, missing
-# nav entries, and bad references BEFORE they reach a release. This workflow does NOT deploy.
-#
-# Deployment is owned by the release workflow (release-pypi.yaml): after a successful PyPI
-# publish it runs `mike deploy <X.Y> latest` to the gh-pages branch, so the published site
-# is versioned and only ever reflects versions that actually shipped. GitHub Pages must be
-# set to "Deploy from a branch → gh-pages" — do that once via `poe enable_pages` (wired into
-# `init`) or Settings → Pages. mike creates the gh-pages branch on its first deploy.
 on:
   push:
     branches:
@@ -29,7 +21,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          # Full history so `cz changelog` sees the tags when regenerating CHANGELOG.md.
           fetch-depth: 0
 
       - name: Set Up Python
@@ -46,8 +37,6 @@ jobs:
       - name: Install Docs Dependencies
         run: poetry install --with docs
 
-      # Regenerate CHANGELOG.md from the commit/tag history so the built Changelog page is
-      # current (cz derives sections from git tags). Never committed by CI — built fresh here.
       - name: Regenerate CHANGELOG.md
         run: poetry run cz changelog
 

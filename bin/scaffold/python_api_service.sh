@@ -390,9 +390,9 @@ copy_required_chassis_db() {
 conditional_prune_optin_deps() {
     local project_path="$1"
     scaffold_prune_optin_dependency "$project_path" "$INCLUDE_STORAGE" \
-        '/^# Used only by the schema-less-storage opt-in/,/^joblib = /d'
+        '/^joblib = /d'
     scaffold_prune_optin_dependency "$project_path" "$INCLUDE_WEBHOOK" \
-        '/^# Microsoft Teams incoming-webhook transport/,/^pymsteams = /d'
+        '/^pymsteams = /d'
 }
 
 conditional_copy_storage() {
@@ -727,6 +727,7 @@ main() {
     conditional_patch_main_py "$PROJECT_PATH"
     copy_mkdocs_templates "$PROJECT_PATH"
     scaffold_purge_caches "$PROJECT_PATH"
+    scaffold_comment_budget "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
     finalize_github_or_offline "$PROJECT_PATH"
