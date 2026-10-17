@@ -3,20 +3,25 @@ site_description: Documentation for ${PROJECT_DISPLAY_NAME}
 repo_url: ${REPOSITORY}
 nav:
   - Home: index.md
-  - Usage: usage.md
-  - Configuration: configuration.md
-  - Examples: examples.md
-  - Architecture: architecture.md
+  - Guide:
+      - Usage: usage.md
+      - Configuration: configuration.md
+      - Examples: examples.md
+      - Architecture: architecture.md
   - API Reference:
       - Overview: api/index.md
       - Reference: api/reference.md
-  - FAQ: faq.md
-  - Contributing: contributing.md
-  - Changelog: changelog.md
-  - Incidents: incidents.md
+  - Project:
+      - FAQ: faq.md
+      - Contributing: contributing.md
+      - Changelog: changelog.md
+      - Incidents: incidents.md
 
 theme:
   name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
   language: ${DOCS_LOCALE}
   logo: assets/logo.png
   favicon: assets/logo.png
