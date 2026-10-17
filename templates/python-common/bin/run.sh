@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# Run the scaffolded project entrypoint.
-# Strategy:
-#  1) Resolve the entrypoint module automatically.
-#  2) Ensure a local project virtualenv exists and is up to date enough to run.
-#  3) Prefer Poetry for dependency installation.
-#  4) Fall back to stdlib venv + pip requirements from pyproject.toml when Poetry
-#     is unavailable or when Poetry bootstrap fails in restricted environments.
-# pyenv-preferred: when a bootstrap is needed, the pinned .python-version is
-# selected first so both the Poetry and pip-fallback branches use it.
 
 set -euo pipefail
 
@@ -139,8 +130,6 @@ ensure_runtime_env() {
 		return 0
 	fi
 
-	# A bootstrap is required — pin the interpreter first so a pyenv-pinned
-	# Python is used on both the Poetry and pip-fallback branches below.
 	ensure_python_version
 
 	if pip_fallback_ensure_project_poetry; then
@@ -152,9 +141,6 @@ ensure_runtime_env() {
 	bootstrap_runtime_with_pip
 }
 
-# Extra tokens after the entrypoint are the USER's argv and must reach the module:
-# `poe run backfill` forwards "backfill" here, and dropping it makes main.py fall
-# back to PIPELINE_INTENT (or "send") no matter what was asked for (blueprintx#317).
 run_entrypoint() {
 	local str_entrypoint="$1"
 	shift

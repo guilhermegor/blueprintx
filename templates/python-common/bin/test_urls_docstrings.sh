@@ -1,6 +1,4 @@
 #!/bin/bash
-# Pre-commit hook: scan Python docstrings for URLs and validate reachability.
-# Results are cached for 1 week to avoid repeated network calls.
 
 set -euo pipefail
 
@@ -8,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 CACHE_DIR=".url_check_cache"
-CACHE_TTL=$((60 * 60 * 24 * 7)) # 1 week in seconds
+CACHE_TTL=$((60 * 60 * 24 * 7))
 
 get_cache() {
 	local url="$1"
@@ -41,9 +39,6 @@ clean_cache() {
 	find "$CACHE_DIR" -type f -mtime +$((CACHE_TTL / 60 / 60 / 24)) -delete 2>/dev/null
 }
 
-# Domains that answer a scripted probe with 403/anti-bot pages no matter which method is
-# used. Treating them as reachable is a deliberate false-negative: the alternative is a
-# permanently red hook that people learn to bypass.
 STR_URL_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 LIST_URL_ALLOWLIST=(
 	"platform.openai.com"
@@ -58,11 +53,6 @@ LIST_URL_ALLOWLIST=(
 )
 
 url_is_allowlisted() {
-	# ⚠️ Match the HOSTNAME, never a substring of the whole URL. A plain `*domain*` test
-	# allowlists `https://attacker.example/path/openai.com` and
-	# `https://openai.com.attacker.example/` — both skip probing and get cached as reachable.
-	# Strip scheme, then userinfo, then everything from the first `/`, `?`, `#` or `:`, and
-	# require an exact match or a real subdomain.
 	local str_url="$1"
 	local str_domain str_host
 
@@ -83,9 +73,6 @@ url_is_allowlisted() {
 }
 
 probe_url_status() {
-	# HEAD first (cheapest), GET when the server refuses HEAD, wget last for the servers
-	# that refuse curl specifically. Each fallback exists for an observed failure, so the
-	# order is load-bearing rather than defensive.
 	local str_url="$1"
 	local str_status_code
 	local -a list_headers=(
@@ -134,9 +121,6 @@ check_url() {
 	echo "$str_status_code"
 }
 
-# Shared across the scan so a URL repeated in twenty docstrings is fetched once, and so a
-# failure anywhere survives to the exit code. They are script-scoped rather than passed
-# around because bash cannot return an associative array.
 declare -A DICT_PROCESSED_URLS=()
 INT_URL_ERRORS=0
 
@@ -166,7 +150,6 @@ check_urls_in_line() {
 		[[ -n "${DICT_PROCESSED_URLS[$str_url]:-}" ]] && continue
 		DICT_PROCESSED_URLS["$str_url"]=1
 
-		# A host-only URL has nothing to 404 on, and fetching it only rate-limits us.
 		[[ "$str_url" =~ (https?://[^/]+)$ ]] && continue
 
 		str_status_code=$(check_url "$str_url")
@@ -175,8 +158,6 @@ check_urls_in_line() {
 }
 
 toggle_docstring_state() {
-	# Echoes the state AFTER this delimiter line. A one-line docstring opens and closes on
-	# the same line, so it must not flip the state at all.
 	local str_line="$1" str_quote="$2" bool_in_docstring="$3"
 	local str_after_open="${str_line#*"$str_quote"}"
 
@@ -198,28 +179,6 @@ scan_file_for_urls() {
 	while IFS= read -r str_line; do
 		((int_line_num++))
 
-		# ⚠️ A delimiter line IS docstring content — scan it BEFORE flipping the state.
-		# This `continue` used to skip the scan, blinding the gate on TWO shapes (measured
-		# with a seeded-cache negative control; blueprintx#206 reported the first):
-		#
-		#   1. `"""One line holding https://…"""` — the whole docstring, never scanned. This
-		#      is the most common docstring shape in the tree, so the blind spot was the
-		#      common case and the gate still printed "All docstring URLs are reachable".
-		#   2. the OPENING line of a multi-line docstring (`"""Summary … https://…`) — the
-		#      summary line is exactly where a reference URL tends to sit.
-		#
-		# Self-concealing by construction: an unscanned URL is never fetched, so it is never
-		# cached and nothing in the output hints a line was skipped — the count printed is of
-		# files scanned, not URLs checked.
-		#
-		# ⚠️ A THIRD shape, deferred when the two above were fixed and closed on review: a
-		# closing delimiter sharing a line with text (`… https://…"""`). The guard used to
-		# anchor on `^[[:space:]]*"""`, so such a line was not recognised as a delimiter at
-		# all — its URL was scanned as ordinary body text (right answer, wrong mechanism) and,
-		# worse, the state never flipped back, so every LATER line was read as still inside the
-		# docstring and its URLs were fetched too. That over-scans rather than blinds, which is
-		# why it was not urgent; it is also two characters to fix. Both delimiters are now
-		# matched WHEREVER they sit on the line.
 		if [[ "$str_line" == *'"""'* ]]; then
 			check_urls_in_line "$str_file" "$int_line_num" "$str_line"
 			bool_in_docstring="$(toggle_docstring_state "$str_line" '"""' "$bool_in_docstring")"
