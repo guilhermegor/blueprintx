@@ -53,16 +53,11 @@ import sys
 _ALLOW_MARKER = "identifier-mask-ok:"
 _SRC_ROOT = "src"
 
-# 11-digit CPF mask: 123.456.789-01. The 2026 CNPJ format is alphanumeric in the base
-# (mod-11 check digits stay numeric — see br_identifiers.py), so the CNPJ pattern accepts
-# letters in every group but the trailing check-digit pair.
 _RE_MASKED_CPF = re.compile(r"^\d{3}\.\d{3}\.\d{3}-\d{2}$")
 _RE_MASKED_CNPJ = re.compile(
     r"^[0-9A-Za-z]{2}\.[0-9A-Za-z]{3}\.[0-9A-Za-z]{3}/[0-9A-Za-z]{4}-\d{2}$"
 )
 
-# Column-ish token followed by an equality against a quoted value — matched against SQL
-# TEXT (a Python string/f-string segment, or a raw .sql file), not Python syntax.
 _RE_TEXT_COMPARE = re.compile(
     r"\b(\w*(?:cpf|cnpj)\w*)\s*(?:==|=)\s*['\"]([0-9A-Za-z./-]+)['\"]", re.IGNORECASE
 )
@@ -169,7 +164,7 @@ def _text_problems(
     list of (int, str)
         ``(source_line, masked_value)`` pairs for every match.
     """
-    del path_file  # message is built by the caller, which owns the file path
+    del path_file
     list_found: list[tuple[int, str]] = []
     for cls_match in _RE_TEXT_COMPARE.finditer(str_text):
         str_value = cls_match.group(2)
@@ -417,8 +412,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this script
-    # prints — see check_sql_guards.py's identical block for the measured failure.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

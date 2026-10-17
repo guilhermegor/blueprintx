@@ -790,9 +790,6 @@ def _effective_table_args(
         for str_cls in [str_owner, *(c for c in list_declarers[1:] if c in set_consumed)]
         for str_n, int_ln in dict_own_names.get(str_cls, [])
     ]
-    # A later declarer that maps its OWN table (``__tablename__``) is a parent in a joined/
-    # concrete inheritance chain: its ``__table_args__`` applies to its own table and is not
-    # discarded. Only table-less mixins are truly shadowed.
     list_shadowed = [
         str_cls
         for str_cls in list_declarers[1:]
@@ -1036,9 +1033,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this script
-    # prints — see check_sql_guards.py for the measured rationale (a Windows checkout would
-    # otherwise crash before reporting anything, blocking every commit from that OS).
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")
