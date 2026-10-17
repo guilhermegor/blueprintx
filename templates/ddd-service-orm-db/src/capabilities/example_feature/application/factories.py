@@ -12,9 +12,6 @@ from capabilities.example_feature.domain.entities import Note
 from capabilities.example_feature.domain.ports import NoteRepository
 
 
-# --- assemblers (DTO ↔ entity) ---
-
-
 def note_from_create_dto(cls_dto: NoteCreateDTO) -> Note:
     """Build a Note entity from an inbound create payload.
 
@@ -50,9 +47,6 @@ def note_to_response_dto(cls_note: Note) -> NoteResponseDTO:
         created_at=cls_note.created_at,
         status=cls_note.status,
     )
-
-
-# --- application service entry points ---
 
 
 def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:

@@ -21,8 +21,6 @@ from unittest.mock import patch
 import pytest
 
 
-# Target -> a DSN whose database segment is a real mysqldump/pg_dump long option. Each handler's
-# ``_parse_dsn`` reads it via ``urlparse(...).path.lstrip("/")``, landing in ``self.dbname``.
 DICT_MALICIOUS_DSN = {
     "mysql_handler.MySQLDatabaseHandler": "mysql://user:pass@localhost:3306/--file=/tmp/pwned",
     "mariadb_handler.MariaDBDatabaseHandler": (
