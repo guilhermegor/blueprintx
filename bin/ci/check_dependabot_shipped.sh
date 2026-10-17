@@ -30,13 +30,14 @@ copy_source() {
 }
 
 check_static() {
-    local str_meta str_script str_src
+    local str_meta str_script str_src int_eco
     while IFS= read -r str_meta; do
         str_script="$REPO_ROOT/$(meta_field "$str_meta" scaffold)"
         str_src="$(copy_source "$str_script")" \
             || { fail "$(basename "$str_script") never copies dependabot.yml"; continue; }
         [ -f "$str_src" ] || { fail "$(basename "$str_script") copies missing file ${str_src#"$REPO_ROOT"/}"; continue; }
-        [ "$(grep -c '^  - package-ecosystem:' "$str_src")" -eq "$(grep -c '^    cooldown:' "$str_src")" ] \
+        int_eco="$(grep -c '^  - package-ecosystem:' "$str_src" || true)"
+        [ "$int_eco" -gt 0 ] && [ "$int_eco" -eq "$(grep -c '^    cooldown:' "$str_src" || true)" ] \
             || fail "${str_src#"$REPO_ROOT"/} sets no cooldown on every ecosystem"
     done < <(skeleton_meta_files)
 }

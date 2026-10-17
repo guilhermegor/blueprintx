@@ -54,6 +54,14 @@ test_partial_cooldown_fails() {
     expect_gate "npm block without cooldown" "$str_root" fail "every ecosystem"
 }
 
+test_unparseable_file_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i 's/^  - package-ecosystem:/    - package-ecosystem:/; /cooldown:/d' \
+        "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "file with no recognizable blocks" "$str_root" fail "every ecosystem"
+}
+
 test_missing_source_fails() {
     local str_root
     str_root="$(make_copy)"
@@ -65,6 +73,7 @@ test_real_tree_passes
 test_dropped_copy_line_fails
 test_missing_cooldown_fails
 test_partial_cooldown_fails
+test_unparseable_file_fails
 test_missing_source_fails
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed" >&2; exit 1; }
