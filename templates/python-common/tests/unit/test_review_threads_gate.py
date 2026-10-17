@@ -3039,12 +3039,26 @@ def test_patch_fingerprint_file_without_patch_text_raises() -> None:
         cls_gate.patch_fingerprint([{"filename": "big.bin", "status": "added"}])
 
 
-def test_patch_fingerprint_same_edit_in_another_function_differs() -> None:
-    """The reviewed hunk text moved to a different function must not carry forward."""
+def test_patch_fingerprint_same_edit_in_another_function_matches() -> None:
+    """Hunk headers are not hashed, so the same edit in another function matches.
+
+    Deliberate (blueprintx#848): main's edits split and re-head hunks, so any hash of
+    ``@@`` lines breaks the carry-forward on a PR whose own lines did not change.
+    """
     cls_gate = _load_gate()
     dict_reviewed = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ def one\n-x\n+y"}
     dict_moved = {"filename": "a", "status": "modified", "patch": "@@ -2 +2 @@ def two\n-x\n+y"}
-    assert cls_gate.patch_fingerprint([dict_reviewed]) != cls_gate.patch_fingerprint([dict_moved])
+    assert cls_gate.patch_fingerprint([dict_reviewed]) == cls_gate.patch_fingerprint([dict_moved])
+
+
+def test_patch_fingerprint_hunk_split_by_a_base_edit_matches() -> None:
+    """One hunk and the same ``+`` lines split into two re-headed hunks digest equally."""
+    cls_gate = _load_gate()
+    str_one = "@@ -5,0 +6,2 @@ test_a() {\n+one\n+two"
+    str_two = "@@ -5,0 +6,1 @@ test_a() {\n+one\n@@ -20,0 +30,1 @@ main() {\n ctx\n+two"
+    dict_one = {"filename": "a", "status": "modified", "patch": str_one}
+    dict_two = {"filename": "a", "status": "modified", "patch": str_two}
+    assert cls_gate.patch_fingerprint([dict_one]) == cls_gate.patch_fingerprint([dict_two])
 
 
 def test_patch_fingerprint_field_boundaries_are_unambiguous() -> None:

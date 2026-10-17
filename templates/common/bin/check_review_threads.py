@@ -479,7 +479,7 @@ def _is_pure_rename(dict_file: dict) -> bool:
     )
 
 
-_TUPLE_PATCH_PREFIXES = ("@", "+", "-")
+_TUPLE_PATCH_PREFIXES = ("+", "-")
 
 
 def patch_fingerprint(list_files: list[dict]) -> str:
@@ -493,9 +493,10 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     Returns
     -------
     str
-        A digest of the file names, each hunk header's function context and the ``+``/``-``
-            lines. Hunk line numbers and unchanged context lines are ignored: they belong to
-            the base, so a merge of main next to a hunk must not change the digest.
+        A digest of the file names and the ordered ``+``/``-`` lines. Hunk headers (line
+            numbers and function context) and unchanged context lines are ignored: they
+            describe the base, and main's edits split and re-head hunks. An identical edit
+            moved to another function therefore matches.
 
     Raises
     ------
@@ -516,11 +517,7 @@ def patch_fingerprint(list_files: list[dict]) -> str:
                 d.get("status", ""),
                 d.get("previous_filename", ""),
                 d.get("sha", "") if d.get("patch") is None else "",
-                [
-                    re.sub(r"^@@ -\S+ \+\S+ @@", "@@", s)
-                    for s in (d.get("patch") or "").splitlines()
-                    if s[:1] in _TUPLE_PATCH_PREFIXES
-                ],
+                [s for s in (d.get("patch") or "").splitlines() if s[:1] in _TUPLE_PATCH_PREFIXES],
             ]
             for d in sorted(list_files, key=lambda d: d["filename"])
         ]
