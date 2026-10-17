@@ -42,7 +42,7 @@ test_missing_cooldown_fails() {
     local str_root
     str_root="$(make_copy)"
     sed -i '/cooldown:/d' "$str_root/templates/ts-common/dependabot.yml"
-    expect_gate "template without cooldown" "$str_root" fail "sets no cooldown"
+    expect_gate "template without cooldown" "$str_root" fail "exactly one cooldown"
 }
 
 test_partial_cooldown_fails() {
@@ -51,7 +51,7 @@ test_partial_cooldown_fails() {
     awk '/^    cooldown:/ && !int_done { int_skip = 4; int_done = 1 } int_skip > 0 { int_skip--; next } 1' \
         "$str_root/templates/ts-common/dependabot.yml" >"$str_root/out.yml"
     mv "$str_root/out.yml" "$str_root/templates/ts-common/dependabot.yml"
-    expect_gate "npm block without cooldown" "$str_root" fail "every ecosystem"
+    expect_gate "npm block without cooldown" "$str_root" fail "exactly one cooldown"
 }
 
 test_unparseable_file_fails() {
@@ -59,7 +59,15 @@ test_unparseable_file_fails() {
     str_root="$(make_copy)"
     sed -i 's/^  - package-ecosystem:/    - package-ecosystem:/; /cooldown:/d' \
         "$str_root/templates/ts-common/dependabot.yml"
-    expect_gate "file with no recognizable blocks" "$str_root" fail "every ecosystem"
+    expect_gate "file with no recognizable blocks" "$str_root" fail "exactly one cooldown"
+}
+
+test_duplicate_cooldown_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i '0,/^    cooldown:/s//    cooldown:\n      default-days: 1\n    cooldown:/' \
+        "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "duplicate cooldown in one block" "$str_root" fail "exactly one cooldown"
 }
 
 test_missing_source_fails() {
@@ -74,6 +82,7 @@ test_dropped_copy_line_fails
 test_missing_cooldown_fails
 test_partial_cooldown_fails
 test_unparseable_file_fails
+test_duplicate_cooldown_fails
 test_missing_source_fails
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed" >&2; exit 1; }

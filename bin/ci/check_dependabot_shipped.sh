@@ -29,16 +29,23 @@ copy_source() {
     printf '%s/%s\n' "$REPO_ROOT/$str_dir" "${str_src#*/}"
 }
 
+cooldown_per_block() {
+    awk '
+        /^  - package-ecosystem:/ { if (int_in && int_n != 1) int_bad = 1; int_in = 1; int_n = 0; int_blocks++ }
+        /^    cooldown:/ { int_n++ }
+        END { if (int_in && int_n != 1) int_bad = 1; exit (int_blocks > 0 && !int_bad) ? 0 : 1 }
+    ' "$1"
+}
+
 check_static() {
-    local str_meta str_script str_src int_eco
+    local str_meta str_script str_src
     while IFS= read -r str_meta; do
         str_script="$REPO_ROOT/$(meta_field "$str_meta" scaffold)"
         str_src="$(copy_source "$str_script")" \
             || { fail "$(basename "$str_script") never copies dependabot.yml"; continue; }
         [ -f "$str_src" ] || { fail "$(basename "$str_script") copies missing file ${str_src#"$REPO_ROOT"/}"; continue; }
-        int_eco="$(grep -c '^  - package-ecosystem:' "$str_src" || true)"
-        [ "$int_eco" -gt 0 ] && [ "$int_eco" -eq "$(grep -c '^    cooldown:' "$str_src" || true)" ] \
-            || fail "${str_src#"$REPO_ROOT"/} sets no cooldown on every ecosystem"
+        cooldown_per_block "$str_src" \
+            || fail "${str_src#"$REPO_ROOT"/} needs exactly one cooldown on every ecosystem"
     done < <(skeleton_meta_files)
 }
 
