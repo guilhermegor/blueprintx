@@ -104,6 +104,243 @@ the trigger-label route, which counts as an `open` event and would need `"open"`
 `greptile-apps[bot]` posts inline review threads, so it is listed in every
 `.review-bots.yaml` roster.
 
+## Generated-project test suite (`templates/python-common/tests`)
+
+The tests every Python scaffold ships carry no comments. The shapes below recur across the
+suite; each exists because a simpler form was measured to be wrong or to hide a failure. The
+module layout the old banners spelled out is plain order now: helpers, fixtures, then tests.
+
+### Shapes forced by the complexity ceiling
+
+`tests/` is held to cyclomatic complexity 1 by `bin/check_complexity.sh`, so a test body has no
+branch. That is the mechanical form of "a test exercises one path"; a branch in a test means the
+green never says which side ran.
+
+- **Comprehensions, generators and `contextlib.suppress`** replace loops with skip guards,
+  `try` handlers and flag variables: mccabe charges a comprehension nothing and charges every
+  loop, guard and handler a point (`test_startup_fragility_order`, `test_contract_family_conventions`,
+  `test_integration/test_bin_scripts`, `test_wheelhouse_select`). A short run of three calls or
+  entries is written out rather than looped for the same reason.
+- **`skipif` decorators over a body guard.** An environment probe is resolved once at import time
+  and feeds a `skipif`, because `if ...: pytest.skip(...)` in the body reads as a path through
+  the test to a reader and to mccabe alike. The same applies to "does this tier ship the package
+  or driver" (`test_all_exports_gate`, `test_daily_cache`, `test_ruff_ret_rule`, `lint_deps`).
+- **Module-level helpers and stubs, never nested `def`s.** A nested function costs the enclosing
+  test one point, so a branch-free stub would spend the budget reserved for branching
+  (`test_pr_gate`, `test_sidecar_metadata`, `test_retry`).
+- **`Mock(side_effect=[...])` for a flaky callable** (`test_retry`, `test_review_retry`): the call
+  sequence "raise, raise, return" is data where a reader looks for it, not an `if` on a counter,
+  and `functools.wraps` tolerates a Mock. A conditional expression keeps the opt-out fixture in
+  `conftest.py` at complexity 1: a test that opted out is patched back to the real primitives,
+  a no-op that monkeypatch undoes at teardown anyway.
+- **`parametrize`, not a `for` in the body.** A loop asserts N cases behind one green: the report
+  cannot say which case ran and the first failure hides the rest. A reference date, one token
+  map and three documented tokens is one assertion over different keys (`test_paths`).
+  Where a case list must be flattened, flatten first and assert once on the collected names so
+  every offender is reported (`test_startup_fragility_order`).
+- **An immutable default for env-override parameters.** A mutable `{}` default is a bugbear B006
+  finding and a `dict_extra or {}` guard costs a decision point; short-circuit evaluation makes
+  a helper an expression instead of a branch (`test_bin_scripts`).
+- **One build, several facets.** The "expensive shared setup" pattern in `tests/CLAUDE.md`,
+  module-scoped, stops the one-assert rule from turning three claims about one read-only frame
+  into three rebuilds of it (`test_frames`, #544). `pytest.raises` plus its `match=` is one
+  assertion site with one failure mode, not two (`test_pip_requirements`).
+- **Split rather than combine.** A conjunction in one assertion reports only that the whole was
+  false: an absent loader and an absent spec are different faults (`test_all_exports_gate`,
+  `test_layer_imports_gate`, `test_review_retry`). An introspective test over `__all__` beats
+  five hand-listed imports, so a name added to a package without being exported is what fails
+  (`test_retry`, the surface added in #116).
+
+### Witnesses and negative controls
+
+- **Every gate needs a test that has seen it fail** (#111). A gate with no should-fail witness
+  is indistinguishable from one that is not wired up, since both print green. Writing the first
+  eight found three live defects: `check_provenance.py` and `check_docstrings.py` both exited 0
+  printing nothing when their cwd-relative globs matched nothing, and `lint_actions.sh` accepted
+  any file named `actionlint` on `PATH` as a working one. The `lint_*.sh` wrappers need a
+  witness for both the missing-tool branch and the zero-discovery branch, since "tool not found"
+  and "tool ran and passed" look identical from outside.
+- **A healthy tool is required for the zero-discovery witness.** With actionlint absent the run
+  stops in the required-tool branch and never reaches discovery, so an assertion that also
+  accepts "required" stays green with the guard deleted. Poetry is shadowed there so resolution
+  cannot take the vendored path.
+- **A fixture must reach the boundary it claims to test.** A 100-digit input sat under Python's
+  4300-digit conversion limit, exercised only the `OverflowError` path and passed while the
+  `ValueError` path was open; it is 5000 digits (`test_review_retry`). A multi-line docstring
+  that closes on a line starting with text is required for #206's third shape: a one-line
+  docstring matched the old start-anchored guard and proved nothing. Fixture halves that a gate
+  keys on disagreement over must genuinely differ (annotated `-> int`, documented as `str`).
+- **A scanned-nothing control keeps a gate from becoming decorative.** A gate that scanned
+  nothing also found nothing wrong and would report OK forever after a rename; the zero-discovery
+  and could-not-parse cases pin that for each gate (`test_all_exports_gate` and siblings).
+- **Real wording, verbatim.** The reviewer's refusal text and declared wait come from the live
+  message (#275, 2026-08-26): the phrase is the interface, and a paraphrase would test our idea
+  of the message while the parser only ever meets the real one (`test_review_retry`).
+- **Relative paths where the gate takes relative paths.** `swallowed_by_omit` is called with a
+  relative `path_module` after a `chdir` to the project root. Passing an absolute path makes each
+  test vacuous: it matches the absolute branch and the relative pattern is compared with a path
+  that can never match. With the absolute branch reverted out of the gate, the earlier versions
+  still reported `2 passed` (`test_coverage_floor_gate`). Gates that derive `PATH_ROOT` from
+  `__file__` (`check_docs_code_refs.py`, `check_function_length.py`) are pointed at a throwaway
+  tree with `--root`, because `cwd=` alone would scan the real repo.
+
+### The dual import root
+
+`pytest.ini` puts both `.` and `src` on the path, so one file is importable as `utils.x` and as
+`src.utils.x`, and Python loads it twice with distinct class objects. A module that annotates a
+parameter with a class it imports bare (`ProblemReport`, `FileContract`, `RegimeWindow`,
+`LogEmitter`) is guarded by beartype or the runtime TypeChecker, whose nominal check rejects an
+instance built from the other copy. So these tests import bare (`utils.`, `config.`), never
+`src.utils.`; `tests/CLAUDE.md` ("The dual-import-root trap") has the rule. The names are
+interchangeable until a class crosses between them. Affected modules: `test_daily_cache`,
+`test_provenance`, `test_regime_adapters`, `test_ms_office_excel_sheet_names`, `test_xml_reader`,
+`test_sidecar_metadata`, `test_config_schemas_example`, `test_contract_oracle_example`.
+
+### Per-suite notes
+
+- **`test_bin_scripts` (integration).**
+    - Subprocess argv is a constant, trusted list built from repo-internal paths with no shell,
+      so bandit's subprocess warning is a false positive; each call carries its own `noqa`.
+    - The environment is inherited, not scrubbed: an emptied `PATH` takes `dirname` with it, so
+      `SCRIPT_DIR` never resolves and the run fails for a reason unrelated to the claim
+      (measured). `poe_exec.sh` is run under either branch of the resolver, since a resolved Poe
+      and the "none found" diagnostic are both built from `print_status`, so either proves the
+      lib is reachable.
+    - `poetry_exec.sh`: stdout is exactly the project version, and the resolution status lands
+      on stderr. `precommit.sh`: the skip-gracefully default exits 0 and announces the skip
+      without fabricating a repository or running `git init`; with a real work tree a throwaway
+      `HOME` isolates the global `safe.directory` write, and the self-heal never emits the
+      "no git repo" skip.
+    - `pip_fallback.sh` driver pruning: `config/connection_db.py` lowercases `DB_BACKEND` before
+      dispatching, so those spellings are valid configuration and the pruner must agree, or it
+      drops the one driver the project uses.
+    - `bin/check_*.py` on Windows: cp1252 stdout must not crash the glyph that `check_dtypes`
+      prints for a banned binary float dtype.
+    - `bootstrap.sh`: a corporate CA must be unioned with the existing roots, never replace them.
+      A replacement writes exactly one block, while only a union carries the roots too. certifi's
+      absence is simulated by hiding it from the child with a finder written against the modern
+      protocol: the older two-method form was dropped in Python 3.12 and a finder shaped that
+      way is skipped without a warning. The supported path reads the store the browser trusts.
+    - `get_corporate_ca.sh`: the refusal carries the remedy, not only the verdict, and nothing is
+      written on the refusal path. `check-clean-index`: editing a tracked file without staging it
+      leaves the tree dirty and the index empty, the routine state the guard must never block;
+      `git add` with no commit consuming it is the fingerprint of a rejected commit, and the
+      verdict names the likely cause, the file and the remedy including the escape hatch.
+    - `export_deps.sh`: Poetry's own words survive to the operator, and the remedy names the
+      resolved binary, not a bare `poetry`. `print_status`: an unknown status must not look like
+      ordinary output.
+    - `check-urls` (#206, #224): every docstring shape must actually be scanned. The three shapes
+      each hold the same unreachable URL, so a shape that reports clean is a check nobody ran.
+      The third (a closing delimiter sharing a line with text) was never blind, since the URL was
+      scanned as body text, but the state never flipped back, so every later line was read as
+      still in the docstring. The cache key mirrors the hook's own `md5sum`, not a security use.
+    - `check_complexity.sh` (#167, #254): a function with complexity 3 (two `if`s plus the
+      implicit path) is over `src/`'s ceiling of 2 and under `bin/`'s 8. The colour-control
+      variables are stripped from every run so a developer's shell cannot decide what the suite
+      measures; the ANSI CSI pattern is matched so escapes never reach the gate's parsing;
+      the reported finding is a regex over the whole line, and `print_status` adds colour, so
+      only the ruff-derived remainder after `C901` is asserted clean.
+    - `rerun_stale_gate_runs.sh`: a scriptable `gh` shadows the real one and records every call.
+      Shadowing, not mocking, because it is deterministic on any machine including CI, where
+      the real `gh` is installed and a `skipif` would drop the coverage where it matters. It
+      does not evaluate `--jq`: filtering is GitHub's job, so the tests assert on the query sent.
+    - `lint_deps.sh` (#238): the manifest declares nothing, so any third-party import under
+      `src/` is undeclared by construction. PEP 621 is used rather than `[tool.poetry]`, which
+      does not drift when the tier's Poetry moves. The test imports a package every tier
+      declares, installed in the venv yet absent from the throwaway manifest: present at run
+      time today and gone the day whatever pulled it in stops doing so. The wrapper's `shift 2`
+      drops `run` and `deptry`, leaving its own arguments.
+    - `run.sh` (#252): an argument passed to `poe run <x>` must reach the entrypoint; the test
+      file is made newer than `pyproject.toml` with a margin so the `-nt` check in
+      `runtime_env_needs_bootstrap` is unambiguous at any filesystem mtime resolution.
+    - `test_resourcewarning_unraisable_gate`: constant trusted argv from `sys.executable` and
+      repo-internal paths, so the bandit warning is a false positive.
+- **`test_backlog_ledger` and the integrity gates.** `classify_risk` returns the single most
+  dangerous class and ranks `tests` above `ci`, so a branch touching `bin/` and `tests/`
+  collapses to `tests`, not a ledger class. One test pins that collapse, the other that asking
+  per path still catches it; they are two tests because they assert different functions. The bot
+  exemption (#123) is tested in both directions by name, because an exemption is one
+  `return 0` from disabling the gate for everyone with the suite green. `robotics-team` and
+  `dependabot` are the load-bearing cases: "bot" inside a name is not the suffix, and only
+  GitHub's own marker counts. A gate demanding a human-authored artifact otherwise blocks every
+  bot PR. Gate integrity (#309) is pure logic, offline; assertion integrity (#324) covers a
+  test's expected value edited to match a bug, with the line number as a case, since a finding
+  that cannot point at its assertion sends the author hunting. A renamed test file is read at
+  its source path (#590), with padding to keep git's rename similarity above 50% after the
+  one-line weakening; an expected-value change counts only when production code also changed
+  (#289 is the live example). The `#334` review added three ways the guard could be defeated or
+  misfire.
+- **`test_pr_gate`.** Terminality differs from display state: `{"a": "failure", "b": "pending"}`
+  displays as failure while not terminal, and breaking the poll loop on `gate_state() !=
+  "pending"` would stop on the first transient red while other checks run, with nothing
+  re-rendering the comment afterwards.
+- **`test_regime_adapters`.** `resolve` returns the first covering window while the registry
+  promises windows may arrive in any order, so two overlapping windows bind a period to whichever
+  was listed first, a reader parsing a real file against the wrong published header with nothing
+  reporting it (#344 review). Validation the caller can undo is not validation, hence the
+  regression for it.
+- **`test_paths`.** The premise (`PureWindowsPath("/home/x/out")` is rooted but driveless, so
+  `is_absolute()` is False) and the behaviour (the function routes through `resolve()`) are
+  separate claims and must not collapse (#544): asserting only the premise pins the platform and
+  leaves our function untested, since a regression handing the driveless input back would pass.
+  On POSIX CI the verdict is simulated and the real function is then called under it.
+- **`test_daily_cache`.** `write_bytes` is not atomic, so an interrupted run can leave an empty
+  file; serving it hands the caller a valid-looking path to nothing that fails later and far
+  away. The miss, the hit on the same reference day, and the half-written file each get a case.
+- **`test_frames`.** An empty frame with no columns makes the shape data-dependent: a caller that
+  concatenates or renders it behaves differently depending on whether rows existed. Returning the
+  declared columns keeps it constant; both seams owe the property, empty and still shaped.
+  `apply_dtypes` needs disjoint column sets, so a date column is declared by `list_date_cols`
+  alone, never also in `dict_dtypes`.
+- **`test_startup_fragility_order`.** The reference block is an optional override and must never
+  force a project to declare a source's `{dir, pattern}` twice; the tests pin the fallback chain
+  (override wins, the real input's own spec otherwise, `None` only when neither exists), with the
+  absent-override path asserted explicitly since every existing project has no `reference_files`
+  and that path is where a regression lands first. The try-block check is scoped to the one that
+  wraps the config read, since the module has a legitimate `except ModuleNotFoundError` for the
+  typing shim. These tests live in this module because a new `tests/unit/*.py` needs its own
+  scaffold copy-list wiring (`bin/ci/check_test_copy_lists.py`).
+- **`test_contract_family_conventions`.** The list of column names two contracts legitimately
+  share stays empty by default and a conscious list: two sources requiring `cnpj` is ordinary, so
+  the check's value is that sharing is declared, not forbidden.
+- **`test_comment_language_gate`.** Two consecutive comment lines form a quotation that opens on
+  the first and closes on the second; read line by line, the opening quote never meets its
+  closing one, the quoted span survives redaction and its language is charged to the English
+  comment. Each false positive was measured and is pinned by name, accented capitals included
+  (`NÃO`). The environment is inherited because a bare dict drops `PATH`; discovery reads
+  `git ls-files` (#331), so an untracked fixture tree is invisible and the fixture must be a
+  committed repo, with an orphan worktree stand-in present on disk but never staged. One
+  representative long-lived file per location the allow-list once missed is checked.
+  Registering the module root makes teardown undo the rebind the gate performs.
+- **`test_comment_budget_gate`.** The ratchet ceiling, the escape hatch, pragma lines breaking
+  a run, the decorative banner (regex-decidable, no ratchet), positional exemptions, the
+  extensionless `Makefile` as the issue's own worked example, and that Python files are checked
+  (#466).
+- **`test_logs`.** A `StreamHandler` flushes on every record, so the old flush loop was dead
+  code; the caller prefix is rebuilt by walking the stack, so the pattern asserts the shape and
+  ends at the message, which also proves it was written; closing a `FileHandler` sets its stream
+  to `None`, a deterministic signal independent of garbage collection.
+- **`test_raw_workspace`.** The criterion is what is not on disk afterwards, so the assertion
+  runs outside the block. A caller naming a leaf inside an unbuilt tree must not assume the
+  parent exists, or a bronze write dies on the first run of a new dated folder. The runtime
+  checker guards against the string form, which would otherwise fail at `str.mkdir` later.
+- **`test_tabular_reader`.** A stray quote opens a free-text middle column; under default quoting
+  the open quote swallows the separator and the trailing rows, while `QUOTE_NONE` keeps the three
+  real fields.
+- **`test_typing`.** Under the default policy a bool is rejected where an int is annotated;
+  flipping the strict-bool knob off on the seam and rebuilding the config makes the bool satisfy
+  it, proving the knob and not the adapter drove the change.
+- **Smaller notes.** `test_decimals`: equality alone proves finiteness since NaN never compares
+  equal, and a plain float-repr cell keeps its value and is not inflated tenfold.
+  `test_docs_code_refs_gate` and `test_verify_venv_imports`: `in None` raises, so a missing
+  finding fails there too. `test_dead_code_gate`: the duck-typed stand-ins for vulture's `Item`
+  are a flat literal down to the one field read, not a comprehension.
+  `test_family_convention_example`: the illustrative family stands in for `import myproj.section
+  as family`; in a real project it is `family.__all__`, the declared public surface, and the
+  members are discovered from it, never hand-listed. `test_env_config`: only `_dev` exists.
+  `test_ruff_ret_rule`: the shipped config the test is the witness for is found by walking
+  `tests/unit/ -> tests/ -> python-common/`. `test_wheelhouse_select`: built through `map`.
+
 ## Root workflows: why each is shaped as it is
 
 These records explain the GitHub Actions workflows under `.github/workflows/` in this

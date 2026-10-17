@@ -67,11 +67,6 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
     return path_file
 
 
-# --------------------------
-# 🔴 The negative control — the gate must be able to FAIL, naming file and line
-# --------------------------
-
-
 def test_arithmetic_write_after_session_get_is_reported(tmp_path: Path) -> None:
     """The canonical race: `.get()` read, arithmetic write, no lock, no version column."""
     path_file = _python_file(
@@ -88,8 +83,6 @@ def test_arithmetic_write_after_session_get_is_reported(tmp_path: Path) -> None:
     assert gate.check_file(str(path_file)) == 1
 
 
-# The file:line and the offending SOURCE LINE are the same kind of claim — "the message
-# identifies the defect" — over two fragments, so they are cases rather than two asserts.
 @pytest.mark.parametrize("str_which", ["location", "source"])
 def test_arithmetic_write_after_session_get_names_file_and_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], str_which: str
@@ -155,11 +148,6 @@ def test_query_first_chain_with_a_model_is_reported(tmp_path: Path) -> None:
     )
 
     assert gate.check_file(str(path_file)) == 1
-
-
-# --------------------------
-# Should-PASS witnesses — the two forms #385 requires to stay clean
-# --------------------------
 
 
 def test_with_for_update_kwarg_on_session_get_silences_it(tmp_path: Path) -> None:
@@ -231,11 +219,6 @@ def test_sql_side_update_where_form_is_never_flagged(tmp_path: Path) -> None:
     assert gate.check_file(str(path_file)) == 0
 
 
-# --------------------------
-# Escape hatch — required reason, matching this repo's other gate markers
-# --------------------------
-
-
 def test_escape_hatch_with_a_reason_silences_the_finding(tmp_path: Path) -> None:
     """A single-writer migration script legitimately reads-then-writes arithmetically."""
     path_file = _python_file(
@@ -266,11 +249,6 @@ def test_a_bare_escape_hatch_with_no_reason_is_rejected(tmp_path: Path) -> None:
     )
 
     assert gate.check_file(str(path_file)) == 1
-
-
-# --------------------------
-# Row 2 must stay silent — the false-positive risk #385 calls out explicitly
-# --------------------------
 
 
 def test_a_plain_full_record_overwrite_is_not_flagged(tmp_path: Path) -> None:
@@ -335,11 +313,6 @@ def test_a_race_in_one_function_does_not_leak_into_a_sibling(tmp_path: Path) -> 
     assert gate.check_file(str(path_file)) == 1
 
 
-# --------------------------
-# Discovery — the seam the `__main__` zero-discovery guard reads from
-# --------------------------
-
-
 def test_discovery_finds_nothing_when_there_is_no_src_dir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -351,9 +324,6 @@ def test_discovery_finds_nothing_when_there_is_no_src_dir(
     monkeypatch.chdir(tmp_path)
 
     assert gate._source_files() == []  # noqa: SLF001 — testing the discovery seam directly
-
-
-# ⚠️ REGRESSIONS FOR THE #392 REVIEW — two ways a lock could be claimed without existing.
 
 
 def test_with_for_update_false_is_not_a_lock(tmp_path: Path) -> None:

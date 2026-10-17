@@ -91,11 +91,6 @@ def _sole_finding(str_old: str, str_new: str, *, bool_prod_changed: bool = False
     return list_problems[0]
 
 
-# --------------------------
-# Deletion — a test or a whole file disappearing
-# --------------------------
-
-
 @pytest.mark.parametrize("str_fragment", ["test_x", "deleted"])
 def test_a_deleted_test_function_is_reported(str_fragment: str) -> None:
     """A test present at the merge-base but absent now is a finding."""
@@ -113,11 +108,6 @@ def test_an_unrelated_new_test_alongside_the_old_one_is_clean() -> None:
     )
 
     assert _findings(str_old, str_new) == []
-
-
-# --------------------------
-# 🔴 The negative control — assertion count reduced
-# --------------------------
 
 
 @pytest.mark.parametrize("str_fragment", ["test_x", "lost 1 assertion"])
@@ -139,13 +129,6 @@ def test_trivialised_to_assert_true_is_reported() -> None:
     assert any("trivialised" in str_p for str_p in list_problems)
 
 
-# --------------------------
-# Operator weakened — blueprintx#289's live example
-# --------------------------
-
-
-# The line number is the second case, not decoration: a finding that cannot point at the
-# assertion it means is one the author has to go hunting for.
 @pytest.mark.parametrize("str_fragment", ["operator weakened from == to in", "line 2"])
 def test_equality_weakened_to_membership_is_reported(str_fragment: str) -> None:
     """``==`` narrowed to ``in`` is exactly the defect blueprintx#289's review caught."""
@@ -163,11 +146,6 @@ def test_a_stricter_operator_swap_is_not_flagged() -> None:
     assert _findings(str_old, str_new) == []
 
 
-# --------------------------
-# unittest-style call weakened
-# --------------------------
-
-
 def test_assert_equal_weakened_to_assert_true_is_reported() -> None:
     """``assertEqual`` downgraded to ``assertTrue`` loses the value it pinned."""
     str_old = "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n"
@@ -176,11 +154,6 @@ def test_assert_equal_weakened_to_assert_true_is_reported() -> None:
     list_problems = _findings(str_old, str_new)
 
     assert any("assertEqual() weakened to assertTrue()" in str_p for str_p in list_problems)
-
-
-# --------------------------
-# pytest.raises broadened
-# --------------------------
 
 
 def test_raises_broadened_to_bare_exception_is_reported() -> None:
@@ -219,11 +192,6 @@ def test_raises_kept_at_the_same_specificity_is_clean() -> None:
     assert _findings(str_old, str_new) == []
 
 
-# --------------------------
-# skip/xfail newly added
-# --------------------------
-
-
 def test_a_newly_added_skip_marker_is_reported() -> None:
     """A test that gained ``@pytest.mark.skip`` without carrying it before is a finding."""
     str_old = "def test_x() -> None:\n\tassert 1 == 1\n"
@@ -232,11 +200,6 @@ def test_a_newly_added_skip_marker_is_reported() -> None:
     list_problems = _findings(str_old, str_new)
 
     assert any("newly marked skip" in str_p for str_p in list_problems)
-
-
-# --------------------------
-# Expected value changed — gated on production code also changing
-# --------------------------
 
 
 def test_expected_value_changed_alongside_production_code_is_reported() -> None:
@@ -272,11 +235,6 @@ def test_a_rewritten_left_hand_expression_is_not_read_as_a_changed_value() -> No
     assert _findings(str_old, str_new, bool_prod_changed=True) == []
 
 
-# --------------------------
-# Three states: flagged / clean / could not parse
-# --------------------------
-
-
 def test_an_unparsable_new_version_is_a_finding_not_a_silent_pass() -> None:
     """A file the gate cannot parse must FAIL, never read as clean.
 
@@ -293,11 +251,6 @@ def test_a_clean_file_with_no_test_changes_reports_nothing() -> None:
     str_new = "def test_x() -> None:\n\t# a harmless comment\n\tassert 1 == 1\n"
 
     assert _findings(str_old, str_new) == []
-
-
-# --------------------------
-# The escape hatch
-# --------------------------
 
 
 def test_the_report_passes_a_flagged_diff_with_a_justification_trailer(
@@ -426,11 +379,6 @@ def test_a_call_replaced_by_a_falsy_constant_is_not_a_weakening(str_new_assert: 
     assert _findings(str_old, str_new) == []
 
 
-# --------------------------
-# Tests — the merge-base mid-merge (a merge of main into the branch in progress)
-# --------------------------
-
-
 def _git_in(path_repo: Path, *args: str) -> str:
     """Run ``git`` inside a throwaway repo and return its stripped stdout.
 
@@ -499,11 +447,6 @@ def test_resolve_base_mid_merge_is_the_incoming_tip(path_mid_merge: Path) -> Non
     assert gate.resolve_base() == _git_in(path_mid_merge, "rev-parse", "main")
 
 
-# --------------------------
-# Tests — a renamed test file is read at its source path (blueprintx#590)
-# --------------------------
-
-# Padding keeps git's rename similarity above 50% after the one-line weakening.
 _STR_PAD = "".join(
     f"def test_p{int_i}() -> None:\n    assert g({int_i}) == {int_i}\n" for int_i in range(8)
 )

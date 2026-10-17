@@ -272,9 +272,6 @@ def test_discover_python_files_skips_vendored_dir_inside_src(tmp_path: Path) -> 
 def test_classify_findings_splits_on_gate_threshold() -> None:
     """Items are bucketed strictly by the >=80% boundary, never by any other cutoff."""
     cls_gate = _load_gate()
-    # Duck-typed stand-ins for vulture's Item, down to the one field this function reads.
-    # Written as a flat literal, never a comprehension, to stay under the tests/ complexity
-    # ceiling of one.
     list_items = [
         SimpleNamespace(confidence=60),
         SimpleNamespace(confidence=79),

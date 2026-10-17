@@ -27,7 +27,7 @@ gate did not read until P0.
 - [x] 6b (PR #823) Python skeletons: `mvc-service-native-db`, `mvc-service-orm-db` (split from 6 at the 90-file ceiling, 40 files)
 - Dependency: slices 7, 8, 9 and Z wait for #826 (ship the zero-comment ratchet to every generated project) to merge; whatever they strip must be stated as dehydrated into the right layer (SECURITY, README, CONTRIBUTING or docs).
 - [ ] 7 `templates/python-common` config and workflows (35 files, 1401 lines)
-- [ ] 8 `templates/python-common/tests` (55 files, 931 lines)
+- [~] chore/comment-strip-slice8-304 8 `templates/python-common/tests` (54 files, 808 lines; `test_review_threads_gate.py` is left to #837); rationale in `docs/decision-records.md`
 - [ ] 9 `templates/python-common/bin`, the gates themselves (66 files, 2113 lines)
 - [ ] Z delete the superseded rules in `CLAUDE.md` and `templates/python-common/CLAUDE.md`, drop the
   baseline and flip the gate to strict zero tolerance

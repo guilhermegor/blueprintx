@@ -74,8 +74,6 @@ def test_ensure_dir_returns_the_directory_it_created(tmp_path: Path) -> None:
     assert ensure_dir(path_target) == path_target
 
 
-# One reference date, one token map, three documented tokens — the same assertion over
-# different keys, which is a parametrize rather than three asserts.
 @pytest.mark.parametrize(
     ("str_token", "str_value"),
     [("date", "2026-04-30"), ("ym", "202604"), ("month_pt", "abril")],
@@ -228,16 +226,6 @@ def test_to_absolute_absolute_path_is_returned_unchanged(tmp_path: Path) -> None
     assert to_absolute(path_in) == path_in
 
 
-# ⚠️ THE PREMISE AND THE BEHAVIOUR ARE FOUR SEPARATE CLAIMS, and the file's own reasoning
-# says why they must not collapse into one test (blueprintx#544): asserting only the
-# PureWindowsPath premise would pin the platform while leaving our own function untested — a
-# regression handing the driveless input straight back would still pass. Keeping them as
-# separate tests makes that argument mechanical instead of a comment.
-#
-# `/home/x/out` is rooted but carries no drive, so Windows anchors it to whichever drive the
-# READING process sits on, and is_absolute() reports False. That verdict is the branch which
-# must route through resolve(); on POSIX CI the verdict is simulated and the real function is
-# then called under it.
 @pytest.mark.parametrize(
     ("str_path", "bool_absolute"),
     [("/home/x/out", False), ("C:/home/x/out", True)],

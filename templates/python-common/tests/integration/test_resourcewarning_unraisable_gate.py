@@ -19,9 +19,9 @@ against the template source in this repo; wiring the copy line is a tracked foll
 one of those PRs lands.
 """
 
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 
 
 _PATH_PYTEST_INI = Path(__file__).resolve().parents[2] / "pytest.ini"
@@ -67,8 +67,6 @@ def _run_probe(path_tmp: Path, str_module_source: str) -> subprocess.CompletedPr
     """
     path_module = path_tmp / "test_probe.py"
     path_module.write_text(str_module_source)
-    # Constant, trusted argv: sys.executable plus repo-internal paths, no shell, no
-    # untrusted input reaches it — the bandit subprocess warning is a false positive here.
     return subprocess.run(  # noqa: S603
         [sys.executable, "-m", "pytest", "-c", str(_PATH_PYTEST_INI), str(path_module), "-q"],
         capture_output=True,

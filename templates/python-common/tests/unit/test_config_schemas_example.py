@@ -8,15 +8,13 @@ violating the schema is rejected with a message naming the field / rule; a valid
 
 from decimal import Decimal
 
-import pytest
 from pydantic import ValidationError
+import pytest
 
-# Bare ``config.`` prefix (not ``src.config.``) — matches the cross-module test convention
-# (see test_contract_oracle_example.py / test_provenance).
 from config.schemas import ExampleSchema
 
 
-_VALID_CNPJ = "11222333000181"  # legacy-numeric, correct check digits
+_VALID_CNPJ = "11222333000181"
 
 
 def test_valid_payload_passes_and_quantises_decimal() -> None:

@@ -65,11 +65,6 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_gate_integrity")
 
 
-# --------------------------
-# Tests — the GATE_CHANGE_OK local escape hatch (blueprintx#354)
-# --------------------------
-
-
 def _local_shell(monkeypatch: pytest.MonkeyPatch) -> None:  # complexity-ok: clears N markers
     """Clear the CI markers so the GATE_CHANGE_OK hatch is live (it is local-only).
 
@@ -193,9 +188,6 @@ def test_report_rejects_a_ci_set_gate_change_ok(monkeypatch: pytest.MonkeyPatch)
     assert gate.report(["ruff.toml: rule 'S608' added to [lint] ignore"], "base", 1) == 1
 
 
-# Fixtures — minimal wiring-file shapes, real anchors from this repo's own files
-# (blueprintx#359 — gate-count-never-decreases regression)
-
 _STR_PRECOMMIT_BASE = (
     "repos:\n"
     "  - repo: local\n"
@@ -216,11 +208,6 @@ _STR_WORKFLOW_BASE = (
     "    name: Some other job\n"
     "    runs-on: ubuntu-latest\n"
 )
-
-
-# --------------------------
-# Tests — precommit_problems (blueprintx#310's own shape)
-# --------------------------
 
 
 @pytest.fixture
@@ -297,11 +284,6 @@ def test_precommit_unrelated_addition_alone_is_clean() -> None:
     str_new = _STR_PRECOMMIT_BASE + "      - id: brand-new-hook\n        name: brand new\n"
 
     assert gate.precommit_problems(_STR_PRECOMMIT_BASE, str_new, ".pre-commit-config.yaml") == []
-
-
-# --------------------------
-# Tests — workflow_problems (blueprintx#312's own shape)
-# --------------------------
 
 
 @pytest.fixture
@@ -382,11 +364,6 @@ def test_workflow_unrelated_addition_alone_is_clean() -> None:
     assert gate.workflow_problems(_STR_WORKFLOW_BASE, str_new, "scaffold_checks.yml") == []
 
 
-# --------------------------
-# Tests — report() + the gate-change-ok escape hatch (a legitimate rename must stay payable)
-# --------------------------
-
-
 def test_report_unjustified_gate_drop_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     """A dropped id with no ``gate-change-ok:`` trailer/PR-body reason fails the run."""
     monkeypatch.setattr(gate, "justification_reason", lambda str_base: "")
@@ -414,11 +391,6 @@ def test_report_justified_gate_drop_passes(monkeypatch: pytest.MonkeyPatch) -> N
 def test_report_no_findings_passes() -> None:
     """An empty findings list passes without consulting the justification hatch at all."""
     assert gate.report([], "base", 3) == 0
-
-
-# --------------------------
-# Tests — the merge-base mid-merge (a merge of main into the branch in progress)
-# --------------------------
 
 
 def _git_in(path_repo: Path, *args: str) -> str:

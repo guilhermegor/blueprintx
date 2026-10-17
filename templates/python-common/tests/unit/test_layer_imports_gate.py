@@ -18,11 +18,6 @@ from types import ModuleType
 import pytest
 
 
-# --------------------------
-# Module Utilities
-# --------------------------
-
-
 def _load_gate() -> ModuleType:
     """Import ``bin/check_layer_imports.py`` as a module.
 
@@ -33,9 +28,6 @@ def _load_gate() -> ModuleType:
     """
     path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_layer_imports.py"
     cls_spec = importlib.util.spec_from_file_location("_check_layer_imports", path_gate)
-    # Split rather than combined. A conjunction in one assertion reports only that the
-    # whole thing was false, so a failure cannot say WHICH half broke — an absent loader
-    # and an absent spec are different faults with different causes.
     assert cls_spec is not None
     assert cls_spec.loader is not None
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -120,11 +112,6 @@ def _sole_problem(tmp_path: Path, str_source: str, str_layer: str = "model") -> 
     return _sole(_problems(tmp_path, str_source, str_layer))
 
 
-# --------------------------
-# should-FAIL
-# --------------------------
-
-
 def test_vendor_at_the_top_of_a_layer_is_rejected(tmp_path: Path) -> None:
     """The plain case: a domain vendor imported straight into ``model/``.
 
@@ -146,8 +133,6 @@ _STR_DEFERRED_VENDOR = (
 )
 
 
-# "inside a function" is the second case, not decoration: the message must name the evasion,
-# since deferring is the form that passed unnoticed in the real project this was measured in.
 @pytest.mark.parametrize("str_fragment", ["filings_cvm", "inside a function"])
 def test_vendor_deferred_into_a_function_is_still_rejected(
     tmp_path: Path, str_fragment: str
@@ -170,18 +155,12 @@ _STR_PANDAS_AS_API = (
 )
 
 
-# The remedy travels with the finding, so it is a case here rather than a second assert.
 @pytest.mark.parametrize("str_fragment", ["TYPE only", "utils.frames.from_cursor"])
 def test_annotation_only_vendor_called_as_an_api_is_rejected(
     tmp_path: Path, str_fragment: str
 ) -> None:
     """``pandas`` is the layers' vocabulary, not an API they may call."""
     assert str_fragment in _sole_problem(tmp_path, _STR_PANDAS_AS_API)
-
-
-# --------------------------
-# should-PASS
-# --------------------------
 
 
 def test_annotation_only_vendor_used_as_a_type_passes(tmp_path: Path) -> None:
@@ -265,11 +244,6 @@ def test_a_module_directly_under_src_is_not_skipped(tmp_path: Path) -> None:
     assert "filings_cvm" in _sole(list_problems)
 
 
-# --------------------------
-# main() — the gate must never pass by not looking (blueprintx#139)
-# --------------------------
-
-
 def _run_main(path_root: Path) -> tuple[int, str]:
     """Run the gate's ``main()`` with ``path_root`` as the working directory.
 
@@ -283,8 +257,6 @@ def _run_main(path_root: Path) -> tuple[int, str]:
     tuple of (int, str)
         The exit code and everything printed.
     """
-    # Constant, trusted argv. Invoked as a subprocess so the working directory and the
-    # printed output are the real ones main sees.
     cls_run = subprocess.run(  # noqa: S603
         [
             sys.executable,
@@ -409,10 +381,6 @@ def test_the_same_nested_tree_without_the_prefix_is_rejected(tmp_path: Path) -> 
 
     assert int_code == 1
 
-
-# --------------------------
-# direction — the OTHER question this gate answers (blueprintx#140)
-# --------------------------
 
 _STR_DIRECTION_POLICY = (
     "layers:\n"
@@ -560,10 +528,6 @@ def test_a_duplicate_policy_key_is_rejected(
 
     assert (str_fragment in _output_at(_run_main(tmp_path), 1)) is bool_present
 
-
-# --------------------------
-# sublayers and dotted deny targets (blueprintx#224 review)
-# --------------------------
 
 _STR_SUBLAYER_POLICY = (
     "layers:\n"
