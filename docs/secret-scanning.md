@@ -104,8 +104,9 @@ is checked in. This repo does not document GitHub Actions secrets in any
 tier's `.env.example` (that file is seeded into the generated project's own
 `.env` and covers **application runtime** configuration — database
 credentials, feature flags — never CI-time secrets); the precedent for a
-repo secret like this one is a comment in the workflow file that needs it,
-which is what `secret_scan.yaml`'s own header — and this page — follow.
+repo secret like this one is a documented note beside the workflow that needs it,
+which is what this page and the `secret_scan.yaml` record in
+[Decision records](decision-records.md) follow.
 
 ## Opting in after the fact
 
