@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+import datetime
 import functools
 import hashlib
 import json
@@ -119,9 +120,15 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
       headRefOid
       baseRefOid
       timelineItems(
-        first:1,
+        last:10,
         itemTypes:[BASE_REF_CHANGED_EVENT, AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT]
-      ) { nodes { __typename } }
+      ) {
+        nodes {
+          __typename
+          ... on BaseRefChangedEvent { createdAt }
+          ... on AutomaticBaseChangeSucceededEvent { createdAt }
+        }
+      }
       comments(first:100, after:$cc) {
         pageInfo { hasNextPage endCursor }
         nodes { author { login __typename } authorAssociation body createdAt }
@@ -1795,11 +1802,49 @@ def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[
     )
 
 
+def _parse_time(str_time: str) -> datetime.datetime:
+    """Parse a GitHub ISO-8601 timestamp; raise ``ValueError`` when it is missing or malformed."""
+    return datetime.datetime.fromisoformat(str_time.replace("Z", "+00:00"))
+
+
+def _reviewed_before_base_change(dict_pr: dict, list_changes: list[dict], str_oid: str) -> bool:
+    """Return whether a review at ``str_oid`` was submitted before the PR's latest base change.
+
+    Fails closed: an unreadable event time or review time counts as "before". A commit with no
+    review at all (the head, fingerprinted as the comparison target) is not refused.
+
+    Parameters
+    ----------
+    dict_pr : dict
+        The ``pullRequest`` node, read for ``reviews.nodes``.
+    list_changes : list of dict
+        The base-change timeline events, each carrying ``createdAt``.
+    str_oid : str
+        The commit being fingerprinted.
+
+    Returns
+    -------
+    bool
+        ``True`` when the carry-forward must be refused.
+    """
+    try:
+        dt_change = max(_parse_time(dict_ev.get("createdAt") or "") for dict_ev in list_changes)
+        list_times = [
+            _parse_time(dict_review.get("submittedAt") or "")
+            for dict_review in dict_pr.get("reviews", {}).get("nodes", [])
+            if (dict_review.get("commit") or {}).get("oid") == str_oid
+        ]
+    except (ValueError, AttributeError, TypeError):
+        return True
+    return any(dt_time <= dt_change for dt_time in list_times)
+
+
 def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], str]:
     """Bind the compare-API fingerprint to this PR's repository and base branch.
 
-    A retargeted PR gets no fingerprint at all: the compare is measured against today's base,
-    which is not the base the review was written against.
+    A review written before the latest base change gets no fingerprint: the compare is measured
+    against today's base, which is not the base that review was written against. A review
+    submitted after that change was, so it carries.
 
     Parameters
     ----------
@@ -1812,8 +1857,9 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     Returns
     -------
     Callable[[str], str]
-        Maps a commit oid to its patch fingerprint; raises ``ValueError`` when the base was
-            changed or the events are missing (unknown is not "never retargeted").
+        Maps a commit oid to its patch fingerprint; raises ``ValueError`` when a review at that
+            commit predates the latest base change, the event time is unreadable, or the events
+            are missing (unknown is not "never retargeted").
     """
     str_owner, _, str_repo = str_repo_full.partition("/")
     str_base = dict_pr.get("baseRefOid") or ""
@@ -1822,7 +1868,7 @@ def _compare_fingerprint(dict_pr: dict, str_repo_full: str) -> Callable[[str], s
     def fn_fingerprint(str_oid: str) -> str:
         if not isinstance(list_changes, list):
             raise ValueError("the PR's retarget state is unknown: a review is not carried across")
-        if list_changes:
+        if list_changes and _reviewed_before_base_change(dict_pr, list_changes, str_oid):
             raise ValueError("the PR's base branch was changed: a review is not carried across")
         return fetch_patch_fingerprint(str_owner, str_repo, str_base, str_oid)
 

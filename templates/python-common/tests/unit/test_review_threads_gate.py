@@ -3419,6 +3419,73 @@ def test_find_missing_review_problem_retargeted_pr_says_why_on_stderr(
     assert "base branch was changed" in capsys.readouterr().err
 
 
+def _retargeted_pr(list_change_times: list[str], str_review_time: str) -> dict:
+    """Build a PR node whose base changed at each time, reviewed once at ``a * 40``.
+
+    Parameters
+    ----------
+    list_change_times : list of str
+        ``createdAt`` of each base-change event.
+    str_review_time : str
+        ``submittedAt`` of the review.
+
+    Returns
+    -------
+    dict
+        A ``pullRequest`` node shaped like the GraphQL response.
+    """
+    dict_review = {**_review("coderabbitai[bot]", "a" * 40), "submittedAt": str_review_time}
+    return {
+        "baseRefOid": "base",
+        "timelineItems": {
+            "nodes": [
+                {"__typename": "BaseRefChangedEvent", "createdAt": str_time}
+                for str_time in list_change_times
+            ]
+        },
+        "reviews": {"nodes": [dict_review]},
+    }
+
+
+@pytest.mark.parametrize(
+    ("list_change_times", "str_review_time", "bool_carries"),
+    [
+        (["2026-10-15T09:16:00Z"], "2026-10-15T15:29:00Z", True),
+        (["2026-10-15T09:16:00Z"], "2026-10-15T08:00:00Z", False),
+        (["2026-10-15T09:16:00Z"], "2026-10-15T09:16:00Z", False),
+        (["2026-10-15T09:16:00Z", "2026-10-15T12:00:00Z"], "2026-10-15T10:00:00Z", False),
+        (["2026-10-15T12:00:00Z", "2026-10-15T09:16:00Z"], "2026-10-15T10:00:00Z", False),
+        (["2026-10-15T09:16:00Z", "2026-10-15T12:00:00Z"], "2026-10-15T13:00:00Z", True),
+        (["not a time"], "2026-10-15T15:29:00Z", False),
+        (["2026-10-15T09:16:00Z"], "", False),
+    ],
+)
+def test_find_missing_review_problem_carries_only_a_review_newer_than_the_base_change(
+    monkeypatch: pytest.MonkeyPatch,
+    list_change_times: list[str],
+    str_review_time: str,
+    bool_carries: bool,
+) -> None:
+    """A review carries across a merge-only update only if the latest base change predates it."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    dict_pr = _retargeted_pr(list_change_times, str_review_time)
+    str_problem = cls_gate.find_missing_review_problem(
+        dict_pr["reviews"]["nodes"],
+        {"coderabbitai"},
+        str_head_oid=_HEAD,
+        fn_fingerprint=cls_gate._compare_fingerprint(dict_pr, "o/r"),
+    )
+    assert (str_problem is None) is bool_carries
+
+
+def test_query_asks_for_the_creation_time_of_both_retarget_events() -> None:
+    """The carry-forward needs ``createdAt`` on the manual and the automatic event alike."""
+    str_query = _load_gate()._QUERY
+    assert "... on BaseRefChangedEvent { createdAt }" in str_query
+    assert "... on AutomaticBaseChangeSucceededEvent { createdAt }" in str_query
+
+
 def test_review_carried_forward_long_review_list_makes_at_most_cap_plus_one_calls() -> None:
     """The head once, then at most the cap of reviewed commits, however many reviews exist."""
     cls_gate = _load_gate()
