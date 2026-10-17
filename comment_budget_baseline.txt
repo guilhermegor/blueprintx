@@ -8,16 +8,6 @@ scope 2
 40 templates/python-common/.codespellrc
 7 templates/python-common/.coveragerc
 24 templates/python-common/.cz.toml
-28 templates/python-common/.github/dependabot.yml
-83 templates/python-common/.github/workflows/coderabbit_trigger.yaml
-15 templates/python-common/.github/workflows/contract_drift.yaml
-20 templates/python-common/.github/workflows/pr-gate.yaml
-33 templates/python-common/.github/workflows/pr-reconcile.yaml
-20 templates/python-common/.github/workflows/release.yaml
-42 templates/python-common/.github/workflows/review_retry.yaml
-104 templates/python-common/.github/workflows/review_threads.yaml
-70 templates/python-common/.github/workflows/secret_scan.yaml
-154 templates/python-common/.github/workflows/tests.yaml
 27 templates/python-common/.gitignore
 14 templates/python-common/.gitleaks.toml
 8 templates/python-common/.gitlint
