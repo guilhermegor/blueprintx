@@ -180,7 +180,7 @@ initialize_git_repo() {
             git add . &&
             scaffold_git_commit . "feat: first commit"
     ); then
-        exit_error "Could not create the initial commit in '$project_path'. Set git user.name and user.email, then re-run."
+        exit_error "Could not create the initial commit in '$project_path'. A commit hook rejected it, or git is older than 2.28 (no 'git init -b'). Fix that, then re-run."
     fi
     print_status "success" "Initialized git repo (branch main) with first commit"
 }

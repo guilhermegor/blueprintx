@@ -229,7 +229,7 @@ scaffold_initial_commit() {
 			scaffold_git_commit . "feat: first commit"
 	); then
 		rm -rf "$str_project_path/.git"
-		exit_error "Could not create the initial commit in '$str_project_path'. Either git user.name/user.email is unset (git config --global user.email you@example.com; git config --global user.name 'Your Name') or a commit hook rejected the commit (or git is older than 2.28 and lacks 'git init -b'). Fix that, then re-run."
+		exit_error "Could not create the initial commit in '$str_project_path'. A commit hook rejected the commit (or git is older than 2.28 and lacks 'git init -b'). Fix that, then re-run."
 	fi
 }
 

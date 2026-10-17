@@ -337,8 +337,6 @@ remove_repo_policy_scripts() {
         "$project_path/bin/dependabot_auto_merge.sh"
 }
 
-# Commit with a throwaway identity only when none is configured; never persisted.
-# Usage: scaffold_git_commit <repo-dir> <message> [extra commit flags]
 scaffold_git_commit() {
     local str_dir="$1" str_message="$2"
     shift 2
