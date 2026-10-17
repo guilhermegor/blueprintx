@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# Generate bin/corporate_ca.pem from the CA certificates your OS already trusts.
-#
-# This does NOT touch the network and does NOT disable TLS verification. It reads the
-# operating system's own trust store — the same store the browser uses, which is precisely
-# why the browser works behind a corporate TLS-inspecting proxy while pip does not: the
-# corporate CA was installed there by IT, and Python ships its own bundle (certifi) that
-# never sees it.
-#
-# The generated pem is git-ignored and picked up automatically by `poe venv` / `poe run`
-# (see lib/bootstrap.sh), which merges it into a UNION bundle at bin/ca_bundle.pem.
 
 set -euo pipefail
 
@@ -17,9 +7,6 @@ source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=bin/lib/bootstrap.sh
 source "$SCRIPT_DIR/lib/bootstrap.sh"
 
-# ── export_windows_trust_store ────────────────────────────────────────────────
-# Windows exposes its trust store to Python directly. No network call, no disabled
-# verification, no administrator rights.
 export_windows_trust_store() {
 	print_status "config" "Reading the Windows trust store (ROOT + CA) ..."
 	BOOTSTRAP_CERT_OUT="$CORPORATE_CA_PEM" "$PYTHON" - <<'PYEOF'
@@ -54,10 +41,6 @@ print(len(list_pem))
 PYEOF
 }
 
-# ── explain_manual_route ──────────────────────────────────────────────────────
-# On Linux/macOS the OS trust store is already a file, and a corporate image normally
-# installs the CA into it. Refuse with instructions rather than guessing a path or, worse,
-# capturing whatever certificate the network happens to present.
 explain_manual_route() {
 	print_status "error" "Automatic extraction is implemented for Windows only."
 	print_status "info" "On this OS the system trust store is already a PEM file. Copy it (or just your corporate CA) to:"

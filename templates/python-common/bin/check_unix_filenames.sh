@@ -1,16 +1,4 @@
 #!/bin/bash
-# Reject filenames containing characters outside [a-zA-Z0-9._-].
-#
-# TWO CALLERS, TWO ARGUMENT SHAPES:
-#   pre-commit  → passes the staged files as arguments (hook `check-unix-filenames`)
-#   poe lint/CI → passes nothing, and this script discovers the whole tree itself
-#
-# ⚠️ WHY THE NO-ARG MODE EXISTS AT ALL. Before it, `bash bin/check_unix_filenames.sh` with no
-# arguments iterated an empty `$@`, left has_errors at 0, and printed "All filenames are valid"
-# — a gate reporting success for having examined nothing, in the most literal way available.
-# That is the exact failure this gate's own family (lint_actions.sh, lint_docker.sh) is built to
-# refuse, so the fix belongs HERE, in the one place both callers route through, rather than as a
-# file list assembled at each call site.
 
 set -euo pipefail
 
@@ -18,17 +6,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 discover_files() {
-	# `git ls-files -z` when the tree is a repo (respects .gitignore, so a stray venv or
-	# node_modules path never fails the gate), and a find fallback for a scaffold that has not
-	# been git-init'd yet — which is precisely how bin/ci/scaffold_lint_test.sh exercises it.
 	if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 		git ls-files -z
 		return 0
 	fi
-	# ⚠️ THE PRUNE GROUP MUST COME FIRST, with no test before it. A leading `-type f` is false
-	# for a DIRECTORY, so the branch short-circuits and `-prune` is never evaluated — find then
-	# descends into .venv and node_modules and lints dependency filenames. Measured: the leading
-	# form returned .venv/lib/junk.py and node_modules/pkg/index.js; this form returns neither.
 	find . \
 		\( -path ./.git -o -path ./.venv -o -path ./node_modules \) -prune \
 		-o -type f -print0
@@ -68,10 +49,6 @@ main() {
 	cd "$SCRIPT_DIR/.."
 	local -a list_files=()
 
-	# ⚠️ `mapfile < <(producer)` DISCARDS the producer's exit status — mapfile reports its own,
-	# so a git/find that dies midway hands over a PARTIAL list that looks complete. A temp file
-	# is used rather than a command substitution because discovery is NUL-delimited and a bash
-	# variable cannot carry NUL bytes.
 	local str_tmp
 	str_tmp="$(mktemp)"
 	# shellcheck disable=SC2064  # expand str_tmp NOW: the trap must name this run's file.
@@ -82,10 +59,6 @@ main() {
 	fi
 	mapfile -d '' -t list_files <"$str_tmp"
 
-	# ⚠️ ASSERT THE COUNT, DO NOT TRUST THE EXIT CODE. Zero discovered files is never legitimate
-	# here — every project has tracked files — so an empty list means discovery broke, not that
-	# the tree is clean. Without this the no-arg mode would reintroduce the vacuous success it
-	# was added to remove.
 	if [ "${#list_files[@]}" -eq 0 ]; then
 		print_status "error" "no files discovered — this gate would pass vacuously"
 		exit 1

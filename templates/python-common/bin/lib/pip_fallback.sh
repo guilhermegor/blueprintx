@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Sourced lib — shared Poetry/bootstrap/pip-fallback helpers for venv.sh and run.sh.
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 	echo "bin/lib/pip_fallback.sh is meant to be sourced, not executed." >&2
@@ -94,7 +93,6 @@ pip_fallback_ensure_project_poetry() {
 	"$PYTHON" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade --user "$str_poetry_spec"
 
 	if "$PYTHON" -m poetry --version >/dev/null 2>&1; then
-		# POETRY_CMD is consumed by run_poetry (defined in the sourced bootstrap.sh).
 		# shellcheck disable=SC2034
 		POETRY_CMD=("$PYTHON" -m poetry)
 		print_status "info" "Poetry found: $(run_poetry --version 2>&1 | head -n1)"
@@ -131,10 +129,6 @@ pip_fallback_poetry_env_is_local() {
 pip_fallback_emit_pip_requirements_from_pyproject() {
 	local str_groups_csv="$1"
 
-	# The translation itself lives in pip_requirements.py next to this file. It used to be
-	# a 151-line `"$PYTHON" - <<'PYEOF'` heredoc right here: four lines of shell wrapping a
-	# Python program that ruff never linted, mypy never checked and pytest could not import.
-	# The interface is unchanged — PROJECT_ROOT and BX_GROUPS in, requirement lines out.
 	PROJECT_ROOT="$PROJECT_ROOT" BX_GROUPS="$str_groups_csv" \
 		"$PYTHON" "$(dirname "${BASH_SOURCE[0]}")/pip_requirements.py"
 }
@@ -143,18 +137,12 @@ pip_fallback_write_requirements_file() {
 	local str_groups_csv="$1"
 	local str_req_file="$2"
 
-	# ⚠️ EVERY STATUS IS CHECKED, and that is the whole point. This used to return the
-	# PRUNING status, which succeeds on an empty file — so a failed TOML reader or a failed
-	# emitter produced an empty requirements file and reported success. Install and verify
-	# both accept zero requirements, so the venv was declared good having installed nothing.
 	pip_fallback_ensure_toml_reader || return 1
 	pip_fallback_emit_pip_requirements_from_pyproject "$str_groups_csv" >"$str_req_file" ||
 		return 1
 	pip_fallback_prune_unused_db_drivers "$str_req_file" || return 1
 }
 
-# The package name at the head of a requirement line, stripped of extras, version
-# specifiers and environment markers ("mysql-connector-python>=8.3,<9.0" -> the name).
 pip_fallback_requirement_name() {
 	local str_req="$1"
 
@@ -167,8 +155,6 @@ pip_fallback_requirement_name() {
 	printf '%s\n' "$str_req"
 }
 
-# Which DB_BACKEND values actually need a given driver. A driver absent from this
-# table is not a DB driver at all and is never pruned.
 pip_fallback_backends_needing_driver() {
 	case "$1" in
 	psycopg) echo "postgresql" ;;
@@ -182,29 +168,13 @@ pip_fallback_backends_needing_driver() {
 pip_fallback_resolve_db_backend() {
 	local str_backend
 
-	# `_read_env_var` defaults to a CWD-relative ".env"; anchor it to the project so the
-	# answer does not depend on where the recipe happened to be invoked from. Reading the
-	# wrong .env here silently prunes the driver the project actually needs.
 	str_backend="$(ENV_FILE="$PROJECT_ROOT/.env" _read_env_var DB_BACKEND 2>/dev/null || true)"
 	str_backend="${str_backend//$'\r'/}"
 	str_backend="${str_backend//[[:space:]]/}"
 
-	# Lowercase to match config/connection_db.py, which reads the same variable through
-	# `os.getenv("DB_BACKEND", "sqlite").lower()`. Without this, `DB_BACKEND=PostgreSQL` is a
-	# valid configuration for the app and an unrecognised one here — so the pruner would drop
-	# psycopg and hand the project a venv missing the driver it is configured to use, which is
-	# the exact class of failure this pruning exists to prevent.
 	printf '%s\n' "${str_backend:-sqlite}" | tr '[:upper:]' '[:lower:]'
 }
 
-# Drop every DB driver that the configured DB_BACKEND does not use.
-#
-# The service tiers declare ALL four drivers unconditionally, so a SQLite project was
-# downloading ~20 MB of pyodbc/oracledb/psycopg/mysql-connector it can never import. On a
-# corporate index that answers 403 per package (an allowlist, not an outage) that is a
-# self-inflicted failure surface: measured 2026-08-16, `mysql-connector-python` was refused
-# and took the whole install with it on a project that persists to SQLite. A dependency you
-# never requested cannot be refused.
 pip_fallback_prune_unused_db_drivers() {
 	local str_req_file="$1"
 	local str_backend
@@ -243,13 +213,6 @@ pip_fallback_prune_unused_db_drivers() {
 	print_status "config" "DB_BACKEND=$str_backend — skipping unused DB drivers: $str_pruned"
 }
 
-# Install the requirements, degrading from one batch to one-at-a-time.
-#
-# `pip install -r` is ATOMIC: a single refused wheel discards a batch in which every other
-# package already downloaded successfully. Behind a corporate index that 403s per package,
-# that turns one unavailable dependency into an empty venv. So the batch is only the fast
-# path — on failure we retry per requirement, so everything installable IS installed and the
-# report names every package the index refused, not just the first one.
 pip_fallback_install_requirements_file_into_venv() {
 	local str_venv_python="$1"
 	local str_req_file="$2"
@@ -291,12 +254,6 @@ pip_fallback_install_requirements_file_into_venv() {
 	return 1
 }
 
-# A blocked index can report success with nothing usable: `pip install` may call a
-# requirement "already satisfied" without ever contacting the index (no `--upgrade`), and
-# a batch that fully failed can still leave a .venv that LOOKS bootstrapped. Neither is
-# caught by checking `.venv` existence or a pip exit code alone, so the last word is a real
-# import against the TARGET venv's own interpreter — verify_venv_imports.py, run via
-# "$str_venv_python" so it sees that venv's site-packages, not the bootstrap Python's.
 pip_fallback_verify_importable() {
 	local str_venv_python="$1"
 	local str_req_file="$2"
@@ -326,8 +283,6 @@ pip_fallback_install_groups_in_venv() {
 		return 1
 	fi
 
-	# Fatal, not a warning: an empty dependency group makes the install and the verify below
-	# both succeed, so a failed bootstrap upgrade would otherwise report a good venv.
 	if ! "$str_venv_python" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade pip setuptools wheel; then
 		print_status "error" "Could not upgrade pip/setuptools/wheel in the target venv."
 		rm -f "$str_req_file"
