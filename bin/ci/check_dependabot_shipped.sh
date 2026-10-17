@@ -36,7 +36,8 @@ check_static() {
         str_src="$(copy_source "$str_script")" \
             || { fail "$(basename "$str_script") never copies dependabot.yml"; continue; }
         [ -f "$str_src" ] || { fail "$(basename "$str_script") copies missing file ${str_src#"$REPO_ROOT"/}"; continue; }
-        grep -q '^    cooldown:' "$str_src" || fail "${str_src#"$REPO_ROOT"/} sets no cooldown"
+        [ "$(grep -c '^  - package-ecosystem:' "$str_src")" -eq "$(grep -c '^    cooldown:' "$str_src")" ] \
+            || fail "${str_src#"$REPO_ROOT"/} sets no cooldown on every ecosystem"
     done < <(skeleton_meta_files)
 }
 

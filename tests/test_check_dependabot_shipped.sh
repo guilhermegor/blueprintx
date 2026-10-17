@@ -45,6 +45,15 @@ test_missing_cooldown_fails() {
     expect_gate "template without cooldown" "$str_root" fail "sets no cooldown"
 }
 
+test_partial_cooldown_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    awk '/^    cooldown:/ && !int_done { int_skip = 4; int_done = 1 } int_skip > 0 { int_skip--; next } 1' \
+        "$str_root/templates/ts-common/dependabot.yml" >"$str_root/out.yml"
+    mv "$str_root/out.yml" "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "npm block without cooldown" "$str_root" fail "every ecosystem"
+}
+
 test_missing_source_fails() {
     local str_root
     str_root="$(make_copy)"
@@ -55,6 +64,7 @@ test_missing_source_fails() {
 test_real_tree_passes
 test_dropped_copy_line_fails
 test_missing_cooldown_fails
+test_partial_cooldown_fails
 test_missing_source_fails
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed" >&2; exit 1; }
