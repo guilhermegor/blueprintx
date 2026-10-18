@@ -387,8 +387,6 @@ conditional_copy_otel() {
     cp "$COMMON_TEMPLATE_ROOT/docker-compose.otel-collector.yml" "$project_path/docker-compose.otel-collector.yml"
     cp "$COMMON_TEMPLATE_ROOT/otel-collector-config.yaml" "$project_path/otel-collector-config.yaml"
     sed_inplace '/^python-dotenv = ">=1.0.0"/a\
-# OpenTelemetry OTLP log export (opt-in, blueprintx#438) — pinned; the Logs signal is\
-# "Development" status upstream (see chassis/otel_logging.py for the measured source).\
 opentelemetry-api = "==1.44.0"\
 opentelemetry-sdk = "==1.44.0"\
 opentelemetry-exporter-otlp-proto-http = "==1.44.0"' "$project_path/pyproject.toml"

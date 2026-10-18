@@ -2110,6 +2110,76 @@ This section records what is specific to the generated copies.
 - **The Actions ecosystem entry** keeps CI off deprecated runtimes, for example a Node version
   GitHub is sunsetting.
 
+## Opt-in modules (`templates/python-common/optional`) and the OTel pin comments
+
+The opt-in modules that a scaffold copies on request carry no comments, and the six Python
+scaffold scripts no longer append comment lines to a generated `pyproject.toml`.
+
+- **The OTel dependency block.** Each scaffold appends the pinned `opentelemetry-*` requirements
+  to the generated `pyproject.toml`. The two lines that once preceded the pins said the OTLP
+  export is opt-in (#438), that the pins are exact because the Logs signal is "Development"
+  status upstream, and (for `lib-minimal`) that the consumer's own host process sets
+  `OTEL_EXPORTER_OTLP_ENDPOINT` since a library ships no `.env`. Those lines were text written
+  into the generated file, not comments of the script, so removing them changes the generated
+  `pyproject.toml` by those comment lines only; the reason lives here and in the generated
+  project's observability page.
+- **`otel_logging.py`.**
+    - The typing-engine import is layout-agnostic: `utils.typing` in MVC, `chassis.typing` in
+      DDD, always injected at different paths. mypy reads the single `TYPE_CHECKING` import (no
+      redefinition) and at run time the `try`/`except` picks whichever layout shipped.
+    - Cleartext guard: an `http://` endpoint is a credential leak only when there is a credential
+      and only when it leaves the machine. Both halves matter: refusing every `http://` endpoint
+      would break the seam's own quickstart (`docker-compose.otel-collector.yml` serves
+      `http://localhost:4318`), and refusing none would ship an API key in the clear. An
+      unparseable endpoint with credentials is refused. The error names the endpoint, because the
+      fix is to change it, and never the header values, which are the credential.
+    - Redirects (CWE-319): the guard above vets the configured endpoint, but `requests` follows a
+      3xx by itself and re-sends the OTLP headers, the API key, to whatever host the hop names, over
+      `http://` if it says so. `max_redirects = 0` makes requests raise `TooManyRedirects` on the
+      first hop. `_session` is a vendor internal read through `getattr` and its absence is fatal on
+      purpose: if a future release renames it, the right outcome is "no export", never "export with
+      credentials unprotected". The raise is caught by the fire-and-forget handler in the caller.
+    - Fire-and-forget, deliberately: a failure must never become an application outage, raising
+      would turn an unreachable collector into a crashed scaffolded project, and the `FileHandler`
+      already gives the message somewhere to land. This is the one place a silently swallowed
+      error is the correct choice.
+    - The SDK classes already read the standard `OTEL_*` variables (endpoint, headers, service
+      name, resource attributes), so none is passed explicitly: reimplementing the lookup would be
+      a second, driftable copy.
+- **`test_otel_logging.py`.** Clear both the signal-specific and the generic endpoint variable: the
+  signal-specific one overrides the generic one, so an inherited value would silently decide the
+  test's endpoint and make it pass or fail on the developer's environment. The endpoint is
+  actionable and belongs in the message; the credential never does.
+- **`joblib_handler.py`.** A `record_id` is `<name>_<date>_<time>_<sha8>`; the split count and the
+  expected length derive from that one number so they cannot drift. Every path the store opens is
+  built from a `record_id` that arrives from the caller, so a full match on the documented shape
+  is what makes it a single filename component (no separator, no `..`, no drive); the name
+  charset is the one `create()` can produce. Both paths are confined before anything is unlinked:
+  resolving the sidecar after the artifact is gone would leave the store half-deleted when the
+  sidecar is refused. `test_joblib_handler.py` uses zlib, not the default lz4, which is not a
+  declared dependency of any tier; the tests are about the id, not the codec.
+- **`webhook/` and `email/` ports.** `@runtime_checkable` is required, not cosmetic: the runtime
+  type-checking engine performs an `isinstance` against the port, and a plain `Protocol` raises
+  `TypeError` on that check at import time, not call time. `webhook/factory.py` maps an
+  incoming-webhook URL to its platform by substring signature; Teams webhooks are hosted under
+  `*.webhook.office.com` and `teams.microsoft.com`. `slack_notifier.py` validates an `https`
+  scheme in the constructor, so the S310 audit warning about arbitrary schemes does not apply.
+  `webhooks.yaml`: the target URL comes from `WEBHOOK_URL` in `.env`; the platform
+  (teams or slack) is inferred from that URL by `build_webhook`; the named fields (`app_name`, `environment`,
+  `hostname`, `user`, `log_path`) are substituted in `src/config/startup.py`.
+- **`browser_steps/step_handlers.py`.** The fields each kind needs, and their type, live in a
+  second dict keyed by the same kind, which is the drift this module's dispatch design exists to
+  avoid, so `test_step_handlers.py` asserts the two keysets are equal: a new handler with no
+  entry fails the suite instead of silently skipping validation.
+- **`typing/policy.py`, `typing/type_checker.py`.** The policy knobs (`VIOLATION_TYPE`,
+  `STRICT_BOOL`, ...) are edited there, not in the adapter; `VIOLATION_TYPE = TypeError` is
+  load-bearing, see the module docstring. With no numeric override, the hint override is skipped
+  entirely so beartype uses its own int handling rather than a redundant self-mapping. The
+  `complexity-ok` hatch in `type_checker.py` is intrinsic type-system metaprogramming, which ruff
+  already excludes outright for the DDD and `lib-minimal` layouts and mypy carries
+  `ignore_errors` sections for in all three, so exempting it from the complexity ceiling applies
+  the existing policy to one more tool and is not a new concession.
+
 ## Review-thread gate tests (`templates/python-common/tests/unit/test_review_threads_gate.py`)
 
 The test module carries no comments. The points below recur through it; each exists because a
