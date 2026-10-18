@@ -112,9 +112,8 @@ Every row is decidable — yes/no, not a feeling.
       [#245](https://github.com/guilhermegor/blueprintx/issues/245),
       [#247](https://github.com/guilhermegor/blueprintx/issues/247)) is resolved,
       or explicitly deferred past 1.0.** Docs-only — does not touch the frozen
-      contract, so **not a blocker** by this page's recommendation. **Needs owner
-      sign-off**: some may consider a clean prose baseline part of what "1.0"
-      signals, independent of the API freeze.
+      contract, so **not a blocker**. Some may consider a clean prose baseline part
+      of what "1.0" signals, independent of the API freeze.
       Re-measured 2026-10-17: all six issues are **closed**. The owner signed the
       row off as resolved on 2026-10-17.
 - [x] **Wave D (ts-lib skeleton) ships, or its absence is accepted.**
