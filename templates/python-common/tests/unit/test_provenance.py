@@ -10,12 +10,6 @@ from pathlib import Path
 
 import pytest
 
-# Bare ``utils.`` prefix (not ``src.utils.``) — like test_logs_emitter/test_retry: a
-# beartype-checked function that annotates a param with a class it imports bare must be given an
-# instance from that *same* module object. Under pytest's ``pythonpath = . src`` a ``src.utils.``
-# import loads a *second* copy of the module with distinct class identities, which beartype
-# (correctly) rejects. Importing both names bare keeps stamp_provenance and FileContract on one
-# module object.
 from utils.provenance import hash_artifact, resolve_package_version, stamp_provenance
 from utils.tabular_reader import FileContract
 

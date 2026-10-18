@@ -62,11 +62,6 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
     return path_file
 
 
-# --------------------------
-# 🔴 WHERE-less DELETE/UPDATE — the negative control
-# --------------------------
-
-
 @pytest.fixture
 def list_whereless_delete_problems(tmp_path: Path) -> list[str]:
     """Return the findings for a bare Core ``delete(...)`` with no ``.where()``.
@@ -284,11 +279,6 @@ def test_query_style_update_with_filter_passes(tmp_path: Path) -> None:
     assert gate.check_python_file(path_file) == []
 
 
-# --------------------------
-# 🔴 False-positive guards — a matcher that fires on every ORM mutation is 100% noise
-# --------------------------
-
-
 def test_single_instance_session_delete_is_not_flagged(tmp_path: Path) -> None:
     """``session.delete(record)`` (primary-key-scoped) must never be flagged.
 
@@ -319,11 +309,6 @@ def test_no_sqlalchemy_import_skips_the_whereless_check(tmp_path: Path) -> None:
     path_file = _python_file(tmp_path, "stmt = delete(comments)\n")
 
     assert gate.check_python_file(path_file) == []
-
-
-# --------------------------
-# 🔴 WITH (NOLOCK) — flags the hint, never requires it
-# --------------------------
 
 
 @pytest.fixture
@@ -554,11 +539,6 @@ def test_query_without_nolock_passes(tmp_path: Path) -> None:
     assert gate._nolock_problems_in_sql(path_file) == []
 
 
-# --------------------------
-# 🔴 Escape hatch — present with a reason suppresses; empty/blank still fails
-# --------------------------
-
-
 def test_escape_hatch_with_reason_suppresses_the_finding(tmp_path: Path) -> None:
     """A written reason after the marker is accepted."""
     path_file = _python_file(
@@ -580,11 +560,6 @@ def test_escape_hatch_with_empty_reason_still_fails(tmp_path: Path) -> None:
     list_problems = gate.check_python_file(path_file)
 
     assert len(list_problems) == 1
-
-
-# --------------------------
-# 🔴 Zero-discovery guard — a wrong cwd must FAIL, not report success silently
-# --------------------------
 
 
 def test_main_skips_when_src_is_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

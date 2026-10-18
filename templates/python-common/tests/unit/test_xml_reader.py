@@ -10,13 +10,6 @@ from src.utils.xml_reader import (
     read_xml,
     text_path_columns,
 )
-
-# ⚠️ Bare import, NOT `src.utils.tabular_reader`: xml_reader.py itself imports FileContract /
-# ContractError bare ("from utils.tabular_reader import ..."), because that is how the app
-# imports it at runtime (there is no "src." prefix outside pytest's dual pythonpath). Pulling
-# them from `src.utils.tabular_reader` here would load a SECOND, distinct module instance —
-# a different FileContract class object — and the runtime type-checker would then reject a
-# contract built from one instance when read_xml expects the other.
 from utils.tabular_reader import ContractError, FileContract, ProblemReport
 
 
