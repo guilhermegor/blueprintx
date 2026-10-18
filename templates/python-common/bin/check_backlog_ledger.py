@@ -45,12 +45,6 @@ import sys
 import types
 
 
-# A gate demanding a HUMAN-AUTHORED artifact permanently blocks every bot PR that trips it:
-# nobody can satisfy it, so the real effect is training people to reach for `--admin`.
-# Measured: two Dependabot PRs differed only in which file the bump touched; one merged, one
-# sat red for days.
-#
-# Keyed on GitHub's own `[bot]` login suffix — an allow-list of bot names would rot.
 BOT_LOGIN_SUFFIX = "[bot]"
 
 
@@ -90,12 +84,6 @@ def pr_author_login() -> str:
     """
     str_event_path = os.environ.get("GITHUB_EVENT_PATH", "")
 
-    # Once GITHUB_EVENT_PATH is set we are inside a workflow run, so the payload is the ONLY
-    # authority on who authored the change. Every failure to use it — missing file, unreadable
-    # bytes, malformed JSON, a PR object with no login — returns "" and is treated as human.
-    # Falling back to GITHUB_ACTOR here would reintroduce the exact defect this function exists
-    # to avoid: the actor is whoever triggered the run, so a bot re-running or auto-merging a
-    # human's PR would exempt it. Fail closed: the worst case is a gate that still applies.
     if str_event_path:
         try:
             dict_event = json.loads(pathlib.Path(str_event_path).read_text(encoding="utf-8"))
@@ -104,17 +92,12 @@ def pr_author_login() -> str:
         dict_pr = dict_event.get("pull_request") or {}
         return str((dict_pr.get("user") or {}).get("login") or "")
 
-    # Not inside a workflow run at all (a local pre-commit, a manual invocation). There is no
-    # PR author to confuse the actor with, so the actor is the best available signal.
     return os.environ.get("GITHUB_ACTOR", "")
 
 
-# Risk classes that REQUIRE a ledger. Kept narrow on purpose: docs/deps/tests-only branches are
-# routine and a ledger for them would be noise nobody reads.
 LEDGER_CLASSES = frozenset({"src", "ci"})
 
 LEDGER_DIR = ".specs/backlog"
-# <kebab-topic>_YYYYMMDD_HHMMSS.md
 LEDGER_RE = re.compile(r"^\.specs/backlog/[a-z0-9]+(?:-[a-z0-9]+)*_\d{8}_\d{6}\.md$")
 CHECKBOX_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ x]\]|\[~\][ \t]+[a-z]+/\S)", re.M)
 FENCE_RE = re.compile(
@@ -157,9 +140,6 @@ def _git(list_args: list) -> str:
         Captured stdout, stripped.
     """
     try:
-        # Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
-        # resolution BY DESIGN: the hook must use the `git` the developer's PATH selects — the
-        # one their shell, their hooks and CI all use — not a path this file hardcodes.
         cls_proc = subprocess.run(  # noqa: S603
             ["git", *list_args],  # noqa: S607
             capture_output=True,
@@ -249,8 +229,6 @@ def needs_ledger(list_paths: list, cls_gate: types.ModuleType) -> bool:
     bool
         ``True`` when at least one path is in ``LEDGER_CLASSES``.
     """
-    # PER PATH — see the module docstring: classify_risk() over the whole list answers a
-    # different question and lets a mixed branch escape the requirement.
     return any(cls_gate.classify_risk([p]) in LEDGER_CLASSES for p in list_paths)
 
 
@@ -289,7 +267,6 @@ def find_ledger_problems(list_paths: list) -> list:
                 f"❌ {str_ledger}: contains no '- [ ]' / '- [x]' (lowercase) / "
                 f"'- [~] <type>/<branch>' checkbox outside a code fence"
             )
-    # A single valid ledger satisfies the branch.
     return [] if len(list_problems) < len(list_ledgers) else list_problems
 
 
@@ -303,8 +280,6 @@ def main() -> int:
     """
     str_author = pr_author_login()
     if is_bot_author(str_author):
-        # Keyed on the AUTHOR, never the path: a human branch touching the same files still
-        # owes the ledger. Announced so an unexpected exemption is visible in the log.
         print(f"✅ work-ledger check skipped — PR authored by a bot ({str_author}).")
         return 0
 
@@ -316,7 +291,6 @@ def main() -> int:
     str_base = resolve_base()
     str_head = _git(["rev-parse", "HEAD"])
     if not str_base or str_base == str_head:
-        # On the default branch (or no merge-base): nothing branch-scoped to enforce.
         return 0
 
     list_paths = changed_paths(str_base)
@@ -330,11 +304,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

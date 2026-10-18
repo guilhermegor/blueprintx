@@ -34,7 +34,7 @@ gate did not read until P0.
 - [x] 9b (PR #846) `templates/python-common/bin` Python gates and `lib/*.py` (32 files, 779 lines); oracle: AST identical
 - [x] 9c (PR #847) `check_comment_budget.py`, `comment_budget_allowlist.txt`, `required-checks.txt` (108 lines)
 - [x] 9d (PR #862) delete the test-section banner exemption with a should-fail test
-- [x] 10 (PR #858) residuals: `templates/python-common/optional` and the OTel pin comment lines that six scaffolds appended to a generated `pyproject.toml`
+- [x] 10 (PR #858, merged as dc00863f) residuals: `templates/python-common/optional` and the OTel pin comment lines that six scaffolds appended to a generated `pyproject.toml`
 - [x] Z (this PR) superseded rules deleted: stale pointers to comments that no longer exist
   (`CLAUDE.md`, `templates/python-common/CLAUDE.md`, `templates/python-common/src/config/CLAUDE.md`,
   the three native-DB `AGENTS.md` that said a `.sql` opens with a header comment,

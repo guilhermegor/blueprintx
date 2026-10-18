@@ -1,46 +1,16 @@
-# Per-layer import policy for python-common's OWN src/ — the shared utils/ and config/
-# that every Python tier receives verbatim.
-#
-# ⚠️ This directory is a staging area, not a project, which is exactly why it went
-# unchecked: the gate self-skipped without a policy, so the code that ships to EVERY
-# tier was the one tree nobody applied the boundary to. Checking it here catches a
-# vendor creeping into a shared helper before it is copied five ways.
-#
-# The rule: a third-party dependency is reached through a seam in utils/, never imported by
-# model/, view/ or controller/. The layer then depends on OUR function, not on a vendor API,
-# so a vendor change is confined to one adapter.
-#
-# Deferring an import into a function does NOT buy an exemption — the layer still knows the
-# vendor. The gate judges every scope identically.
-#
-# Every `allow` entry carries a written reason. An allowlist entry without one is a rule that
-# the first person who finds it inconvenient will widen.
-
-# Package roots that are first-party but do NOT exist in THIS layout. The shared utils/
-# helpers ship to both tiers and reach their typing engine through a layout shim
-# (`try: from utils.typing … except ModuleNotFoundError: from chassis.typing …`), so
-# `chassis` is our own code — just the DDD layout's name for it.
 first_party_extra:
   - chassis
 
-# Vendors usable as a TYPE ANNOTATION in any layer, and as nothing else.
-# This is the pandas compromise, and the distinction is load-bearing: `-> pd.DataFrame` in a
-# signature is the vocabulary the layers agree on and couples nothing, while `pd.read_sql(...)`
-# is a vendor API call that every copied file inherits.
 annotation_only:
   pandas: >-
     Annotation only. Build a frame with utils.frames.from_cursor; read one with
     utils.tabular_reader.read_table / read_query (they enforce a FileContract + dtypes).
 
 layers:
-  # There is no entrypoint here (this is not a runnable project), but the layer is named
-  # so a stray module dropped directly under src/ cannot bypass the policy.
   __root__:
     allow: {}
 
   utils:
-    # utils/ IS the seam layer — this is where vendors are supposed to live. Listed
-    # explicitly rather than left unchecked, so a new vendor still gets a conscious decision.
     allow:
       pandas: "the seam layer owns the pandas surface (frames, dtypes, tabular_reader)"
       wwdates: "BR business-day calendar, wrapped by utils.dates"
@@ -65,8 +35,6 @@ layers:
         real cycle rather than a hypothetical one.
 
   config:
-    # The composition root: the one layer whose job IS to know concrete implementations.
-    # What it must NOT know is the DOMAIN — a vendor SDK for the business belongs in a seam.
     allow:
       dotenv: "loads .env at startup; this is the layer that owns environment resolution"
       yaml: "parses inputs.yaml / outputs.yaml"

@@ -41,11 +41,6 @@ def _load() -> ModuleType:
 MODULE = _load()
 
 
-# --------------------------
-# Tests — requirement_name
-# --------------------------
-
-
 @pytest.mark.parametrize(
     ("str_line", "str_name"),
     [
@@ -79,11 +74,6 @@ def test_requirement_name_blank_and_comment_lines_are_none(str_line: str) -> Non
     assert MODULE.requirement_name(str_line) is None
 
 
-# --------------------------
-# Tests — check_requirement (the should-fail witness)
-# --------------------------
-
-
 def test_check_requirement_real_installed_package_passes() -> None:
     """A distribution that is genuinely installed and importable reports no problem.
 
@@ -102,7 +92,6 @@ def test_check_requirement_missing_package_is_reported() -> None:
     catch.
     """
     str_problem = MODULE.check_requirement("definitely-not-a-real-package-xyz-127")
-    # `in None` raises, so a missing finding fails here too.
     assert "definitely-not-a-real-package-xyz-127" in str_problem
 
 
@@ -110,11 +99,6 @@ def test_check_requirement_missing_package_says_not_installed() -> None:
     """The finding for an absent package says it is not installed."""
     str_problem = MODULE.check_requirement("definitely-not-a-real-package-xyz-127")
     assert "not installed" in str_problem
-
-
-# --------------------------
-# Tests — main (the file-driven entrypoint pip_fallback.sh actually invokes)
-# --------------------------
 
 
 def test_main_empty_requirements_file_passes(tmp_path: Path) -> None:

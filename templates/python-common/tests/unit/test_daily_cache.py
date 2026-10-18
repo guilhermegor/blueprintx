@@ -6,13 +6,6 @@ from pathlib import Path
 import pytest
 
 from src.utils.daily_cache import daily_cache_path, download_daily
-
-# ⚠️ `utils.retry`, NOT `src.utils.retry`. `pytest.ini` puts both `.` and `src` on the path, so
-# the same file is importable under two names and Python loads it TWICE — two distinct class
-# objects. `daily_cache` resolves its annotation against `utils.retry` (the shipped convention
-# for every module in this kit), so a subclass of `src.utils.retry.LogEmitter` is a different
-# class and the nominal runtime check rejects it. The two names are interchangeable until a
-# CLASS crosses between them; then they are not.
 from utils.retry import LogEmitter
 
 
@@ -96,7 +89,7 @@ def _download_that_dies_midway(str_url: str, path_dest: Path) -> Path:
     OSError
         Always, simulating a transfer dropped mid-write.
     """
-    path_dest.write_bytes(b"half a fi")  # non-empty, and wrong
+    path_dest.write_bytes(b"half a fi")
     raise OSError("connection dropped mid-transfer")
 
 
@@ -208,8 +201,8 @@ def test_download_daily_writes_the_payload_on_a_miss(tmp_path: Path) -> None:
 def test_download_daily_reuses_the_file_on_a_second_call(tmp_path: Path) -> None:
     """The second call for the same reference day does not hit the network."""
     fn_download, list_calls = _fake_download()
-    _call_download(tmp_path, fn_download)  # miss — downloads
-    _call_download(tmp_path, fn_download)  # same reference day — must NOT download again
+    _call_download(tmp_path, fn_download)
+    _call_download(tmp_path, fn_download)
     assert len(list_calls) == 1
 
 
@@ -250,8 +243,6 @@ def test_download_daily_bypasses_the_read_when_caching_is_off(tmp_path: Path) ->
 
 def test_download_daily_treats_a_zero_byte_file_as_a_miss(tmp_path: Path) -> None:
     """An empty cached file is refetched, not served."""
-    # `write_bytes` is not atomic, so an interrupted run can leave an empty file. Serving it
-    # hands the caller a valid-looking path to nothing, which fails much later and far away.
     path_cached = daily_cache_path(tmp_path, "src", date(2026, 8, 17), ".csv")
     path_cached.parent.mkdir(parents=True, exist_ok=True)
     path_cached.write_bytes(b"")
@@ -397,8 +388,8 @@ def run_miss_then_hit(tmp_path: Path) -> tuple:
     """
     cls_emitter = _RecordingEmitter()
     fn_download, list_calls = _fake_download()
-    _call_download(tmp_path, fn_download, cls_logger=cls_emitter)  # miss
-    _call_download(tmp_path, fn_download, cls_logger=cls_emitter)  # hit
+    _call_download(tmp_path, fn_download, cls_logger=cls_emitter)
+    _call_download(tmp_path, fn_download, cls_logger=cls_emitter)
     return list_calls, cls_emitter
 
 
@@ -425,9 +416,6 @@ def test_download_daily_logs_the_hit(run_miss_then_hit: tuple) -> None:
 _PATH_DRIFT_DRIVER = Path(__file__).resolve().parents[2] / "bin" / "check_contract_drift.py"
 
 
-# ⚠️ A decorator, not `if not …: pytest.skip(...)` inside the body. The condition is fixed at
-# import time (does this tier ship the driver?), so it is not a path THROUGH the test — but an
-# `if` in the body makes it one, both to a reader and to mccabe, and tests/ is capped at 1.
 @pytest.mark.skipif(
     not _PATH_DRIFT_DRIVER.is_file(), reason="drift driver ships to service tiers only"
 )

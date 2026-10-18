@@ -70,7 +70,6 @@ def test_to_decimal_non_finite_returns_default(value: float | Decimal | str) -> 
         A non-finite value the coercion contract must map to ``default`` rather than
         leak (a leaked ``Decimal('NaN')`` raises ``InvalidOperation`` downstream).
     """
-    # Equality alone proves finiteness: a NaN never compares equal to anything.
     assert to_decimal(value, 2, default=Decimal("-1")) == Decimal("-1.00")
 
 
@@ -85,7 +84,6 @@ def test_to_decimal_negative_places_raises() -> None:
     [
         (0, 2084960.76),
         (1, 1234.56),
-        # A plain float-repr cell keeps its value and is never inflated tenfold.
         (2, 5.0),
         (3, -3.5),
     ],

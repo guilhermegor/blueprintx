@@ -123,21 +123,9 @@ passes forever while the shipped gate rots.
 
 ## Structure of a test module
 
-Use comment-banner sections in this order (omit a section if empty):
-
-```python
-# --------------------------
-# Module Utilities   # plain helper functions (no fixtures)
-# --------------------------
-
-# --------------------------
-# Fixtures           # @pytest.fixture definitions (or put shared ones in conftest.py)
-# --------------------------
-
-# --------------------------
-# Tests
-# --------------------------
-```
+Order a test module as plain helpers (no fixtures), then fixtures (or put shared ones in
+`conftest.py`), then the tests. Do not mark the sections with comment banners: a module carries
+no comments apart from QA suppressions.
 
 ## Test rules
 

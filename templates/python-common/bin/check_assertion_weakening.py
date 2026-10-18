@@ -66,31 +66,18 @@ import sys
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# The reason is REQUIRED, matching `gate-change-ok: <reason>` / `# complexity-ok: <reason>`.
 RE_JUSTIFICATION = re.compile(r"^\s*test-change-ok:\s*(\S.*)$", re.I | re.M)
 RE_TEST_PATH = re.compile(r"(^|/)tests/.*test_[^/]+\.py$")
 RE_DOC_PATH = re.compile(r"\.md$|(^|/)docs/")
 
-# `git show :<path>` (empty ref) reads the INDEX blob — see check_gate_integrity.py's
-# identical constant for why this serves both a local pre-commit run and CI.
 STR_INDEX_REF = ""
 
-# A `git diff --name-status` row has 2 tab-separated fields ("<status>\t<path>"), or 3 for a
-# rename ("R100\t<old>\t<new>"); `changed_paths` keeps both paths of the 3-field form.
-# Module-scoped (ruff N806, blueprintx#422): a local ALL-CAPS name inside a function reads as
-# a constant while behaving like a plain variable — moved here to be what it says it is.
 _INT_MIN_FIELDS = 2
-# Minimum positional-arg count for `assertEqual(a, b)` — same N806 shape as above.
 _MIN_EQ_ARGS = 2
 
-# Comparison operators weaker than `==` — blueprintx#289's `in` example, plus the issue's
-# `>=` example. `Gt`/`Lt` are excluded: swapping equality for a strict inequality is not
-# obviously weaker (it still excludes the old value), so it stays out of the decidable core.
 _WEAK_FROM_EQ = frozenset({"In", "NotIn", "GtE", "LtE", "NotEq"})
 _OP_SYMBOLS = {"In": "in", "NotIn": "not in", "GtE": ">=", "LtE": "<=", "NotEq": "!="}
 
-# unittest-style call names weaker than the key. Not exhaustive — the measured, decidable
-# subset the issue names explicitly.
 _WEAKER_ASSERT_CALLS = {
     "assertEqual": frozenset(
         {
@@ -707,8 +694,6 @@ def _compare_pair(tuple_old: tuple, tuple_new: tuple, bool_prod_changed: bool) -
     return ""
 
 
-# A unittest call and the bare `assert` it is equivalent to. Only the pairs where the
-# equivalence is exact are listed -- see the backlog note for why the rest stay out.
 _CALL_AS_OPERATOR = {
     "assertEqual": "Eq",
     "assertListEqual": "Eq",
@@ -909,7 +894,6 @@ def _touches_production_code(list_changed: list) -> bool:
         documentation — the signal that gates the expected-value-changed rule.
     """
     for str_status, str_src, str_path in list_changed:
-        # A rename removes its source, so a production file moved into tests/ still counts.
         tuple_paths = (str_src, str_path) if str_status == "R" else (str_path,)
         if any(
             not (RE_TEST_PATH.search(str_p) or RE_DOC_PATH.search(str_p)) for str_p in tuple_paths
@@ -990,10 +974,9 @@ def collect_problems(list_changed: list, str_base: str) -> list:
         if not RE_TEST_PATH.search(str_path):
             continue
         str_new = show(STR_INDEX_REF, str_path)
-        # A non-test source (src/ moved into tests/) defines no baseline: treat as newly added.
         str_old = show(str_base, str_src) if RE_TEST_PATH.search(str_src) else None
         if str_new is None or str_old is None:
-            continue  # newly added file — nothing to compare against
+            continue
         list_problems.extend(_file_findings(str_path, str_old, str_new, bool_prod_changed))
     return list_problems
 
@@ -1063,8 +1046,6 @@ def main(list_argv: list) -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this script
-    # prints — see check_backlog_ledger.py's identical guard.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

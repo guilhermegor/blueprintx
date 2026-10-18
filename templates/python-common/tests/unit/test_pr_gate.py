@@ -136,9 +136,6 @@ def test_is_lockfile_only_is_narrow(list_paths: list[str], bool_only: bool) -> N
     assert gate.is_lockfile_only(list_paths) is bool_only
 
 
-# ⚠️ parametrize, not a `for` in the body. A loop asserts N cases behind ONE green: the report
-# cannot say which risk class was checked, and the first failure hides the rest. tests/ is capped
-# at complexity 1 (bin/check_complexity.sh), which is this rule made mechanical.
 @pytest.mark.parametrize("str_risk", sorted(gate.AUTO_MERGEABLE))
 def test_auto_merge_allows_safe_classes_without_a_label(str_risk: str) -> None:
     """Consent is opt-OUT: the safe classes merge with no label at all."""
@@ -205,10 +202,6 @@ def test_gate_state_lets_red_outrank_pending(dict_axes: dict, str_state: str) ->
     assert gate.gate_state(dict_axes) == str_state
 
 
-# ⚠️ TERMINALITY IS A DIFFERENT QUESTION FROM DISPLAY STATE, and the pair below is the whole
-# point: `{"a": "failure", "b": "pending"}` displays as "failure" (pinned above) while being
-# NOT terminal. Breaking the poll loop on `gate_state() != "pending"` would stop on the first
-# transient red while other checks still run, and nothing re-renders the comment afterwards.
 @pytest.mark.parametrize(
     ("dict_axes", "bool_terminal"),
     [
@@ -312,12 +305,6 @@ def test_graphql_stays_quiet_on_a_clean_response(
     assert capsys.readouterr().err == ""
 
 
-# --------------------------
-# Module Utilities
-# --------------------------
-# Plain module-level helpers, never nested inside a test — a nested `def` counts as a decision
-# point for ruff's C901, and tests/ is capped at complexity 1 (see bin/check_complexity.sh).
-
 _DICT_MAIN_API_RESPONSES = {
     "https://api.github.com/repos/o/r/pulls/7": {
         "head": {"sha": "sha1"},
@@ -391,11 +378,6 @@ class _CallRecorder:
         """
         self._list_target.append(self._str_label)
         return {}, {}
-
-
-# --------------------------
-# Tests
-# --------------------------
 
 
 def test_main_hands_the_merge_over_after_the_poll_not_before(

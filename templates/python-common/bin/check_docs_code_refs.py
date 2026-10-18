@@ -65,26 +65,10 @@ import re
 import sys
 
 
-# Where audit mode walks, and what findings are shown relative to. Defaults to the project
-# root (this file lives in `bin/`) and is overridable with `--root`, the same seam
-# `check_function_length.py` and `check_complexity.sh` use to run over BlueprintX's own tree
-# instead of keeping a second copy.
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Directories that are never a first-party source package, even if they sit under `src/`.
 TUPLE_SKIP_DIRS = ("__pycache__", ".git", ".mypy_cache", ".pytest_cache", ".ruff_cache")
 
-# The layer-name vocabulary every BlueprintX skeleton uses — root CLAUDE.md's own
-# architecture tables: DDD hexagonal (chassis/capabilities), the layers both share
-# (utils/config), the composition root (app), and MVC (controller/model/view). Unioned
-# with whatever really exists under `src/` (never in place of it) so a whole TOP-LEVEL
-# package rename still gets caught: `core` was a real historical name for what generated
-# DDD-ORM projects now ship as `chassis` — found live in a shipped template's own docstring
-# example, `templates/ddd-service-orm-db/src/chassis/db_schema/infrastructure/repository.py`
-# (`>>> from core.infrastructure.database import ...`) — so a dynamic-only scan would never
-# flag `docs/py-examples-orm/*.md` citing the same stale name, the exact failure #159 reports.
-# Kept small and hand-maintained on purpose: widening this to "any prefix mentioned twice in
-# docs/" reopens the prose false-positive problem this gate exists to avoid.
 _TUPLE_KNOWN_LAYER_NAMES = (
     "app",
     "capabilities",
@@ -100,10 +84,6 @@ _TUPLE_KNOWN_LAYER_NAMES = (
 _RE_FENCE_OPEN = re.compile(r"^```python\s*$")
 _RE_FENCE_CLOSE = re.compile(r"^```\s*$")
 _RE_ESCAPE_HATCH = re.compile(r"^\s*<!--\s*docs-refs-ok:\s*(\S.*?)\s*-->\s*$")
-# Anchored at column 0 on purpose: an indented import is inside a function/branch in the
-# sample, which means the reader already has less context than a whole-file example, so it is
-# treated the same as a relative import — out of scope, never a candidate. No leading dot is
-# accepted, which is what keeps a relative import (`from .foo import Bar`) unmatched.
 _RE_ABS_IMPORT = re.compile(r"^from ([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*) import (.+)$")
 
 
@@ -360,11 +340,6 @@ def import_statements(list_body: list[str], int_first_lineno: int) -> list[tuple
             continue
         str_module, str_names = cls_match.group(1), cls_match.group(2)
         int_lineno = int_first_lineno + int_i
-        # Strip each fragment's comment BEFORE testing for the closing ")" and before
-        # joining. A ")" inside a comment used to end the scan early (names after it were
-        # never checked), and a "#" anywhere used to swallow every later name once the
-        # fragments were joined. Both are silent misses — the gate passed, having looked
-        # at less than it reported.
         str_names = strip_inline_comment(str_names)
         if str_names.strip().startswith("(") and ")" not in str_names:
             int_i += 1
@@ -479,7 +454,6 @@ def scan_file(
     return int_raw, int_scoped, list_problems
 
 
-# `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
 _INT_FLAG_WITH_VALUE = 2
 
 
@@ -539,9 +513,6 @@ def main(list_argv: list) -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints — see check_docs_sections.py for the measured reason this runs on
-    # every gate that back an always_run pre-commit hook.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

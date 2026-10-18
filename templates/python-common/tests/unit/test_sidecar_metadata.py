@@ -10,9 +10,6 @@ from pathlib import Path
 
 import pytest
 
-# Bare ``utils.`` prefix (not ``src.utils.``), matching the repo's cross-module test convention
-# (see test_provenance / test_logs_emitter): a second module copy under the ``src.`` prefix
-# breaks type identity for a beartype-checked seam.
 from utils.sidecar_metadata import cvm_meta_url, fetch_sidecar_text, parse_sidecar_metadata
 
 
@@ -49,10 +46,6 @@ def test_parse_sidecar_metadata_empty_when_no_data_rows(str_text: str) -> None:
     assert parse_sidecar_metadata(str_text) == {}
 
 
-# ⚠️ Download stubs live at MODULE level, not nested inside each test. mccabe charges the
-# enclosing function 1 per nested `def`, and tests/ is capped at complexity 1
-# (bin/check_complexity.sh) — a stub with no branching would spend the budget the cap reserves
-# for branching.
 def _download_absent(_str_url: str, _path_dest: Path) -> Path:
     """Fail as a source publishing no sidecar does.
 
@@ -110,7 +103,7 @@ def test_fetch_sidecar_text_persists_and_returns_text(tmp_path: Path) -> None:
     str_text = fetch_sidecar_text(
         "https://x/META/meta_cad_fi.txt", path_dest, _download_writes_meta
     )
-    assert str_text == _META_TEXT  # returned for contract definition (the dev-time half)
+    assert str_text == _META_TEXT
 
 
 def test_fetch_sidecar_text_persists_to_bronze(tmp_path: Path) -> None:

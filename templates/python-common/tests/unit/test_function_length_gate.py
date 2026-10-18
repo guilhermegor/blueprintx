@@ -63,11 +63,6 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
     return path_file
 
 
-# --------------------------
-# 🔴 The negative control — the gate must be able to FAIL
-# --------------------------
-
-
 @pytest.fixture
 def list_over_ceiling_problems(tmp_path: Path) -> list[str]:
     """Return the findings for a Python function whose CODE exceeds the ceiling.
@@ -130,11 +125,6 @@ def test_a_function_at_the_ceiling_is_accepted(tmp_path: Path) -> None:
     path_file = _python_file(tmp_path, f"def f() -> None:\n{str_body}\n")
 
     assert gate.file_problems(path_file) == []
-
-
-# --------------------------
-# The docstring exclusion — most of the answer, not a detail
-# --------------------------
 
 
 def test_a_long_docstring_does_not_count_towards_the_limit(tmp_path: Path) -> None:
@@ -222,11 +212,6 @@ def test_audit_mode_fails_on_an_unparsable_file(
     assert gate.main([]) == 1
 
 
-# --------------------------
-# Shell — measured at the same single ceiling
-# --------------------------
-
-
 def test_a_long_shell_function_is_reported(tmp_path: Path) -> None:
     """Shell is held to the same number; two numbers for one rule is the shape that rots."""
     str_body = "\n".join(f'\techo "{i}"' for i in range(gate.INT_MAX_LINES + 5))
@@ -253,11 +238,6 @@ def test_a_short_shell_function_is_accepted(tmp_path: Path) -> None:
     path_file.write_text('f() {\n\techo "hello"\n}\n', encoding="utf-8")
 
     assert gate.file_problems(path_file) == []
-
-
-# --------------------------
-# Discovery — a gate that matches nothing must not report success
-# --------------------------
 
 
 def test_audit_mode_fails_when_discovery_matches_nothing(
@@ -295,11 +275,6 @@ def test_audit_mode_exits_zero_on_a_short_function(
     monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 
     assert gate.main([]) == 0
-
-
-# --------------------------
-# .claude/worktrees — a parallel-agent worktree is not project source (blueprintx#331)
-# --------------------------
 
 
 def test_a_dot_claude_worktree_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

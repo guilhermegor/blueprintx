@@ -39,18 +39,12 @@ import re
 import sys
 
 
-# Widening any of these away from the implicit pytest default ("function") shares the
-# fixture's instance across more than one test — the shape this gate exists to catch.
 SET_WIDE_SCOPES = frozenset({"module", "class", "session", "package"})
 
-# Mirrors `# complexity-ok: <reason>` / `test-change-ok: <reason>` elsewhere in this repo —
-# the reason is REQUIRED, never a bare marker.
 RE_JUSTIFICATION = re.compile(r"fixture-scope-ok:\s*(\S.*)")
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Same skip list as check_function_length.py — a parallel-agent worktree under
-# `.claude/worktrees/agent-NAME` is a full, older checkout, not project source.
 TUPLE_SKIP_DIRS = (
     ".git",
     ".claude",
@@ -290,7 +284,6 @@ def audit_paths() -> list:
     return sorted(list_paths)
 
 
-# `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
 _INT_FLAG_WITH_VALUE = 2
 
 
@@ -324,8 +317,6 @@ def main(list_argv: list) -> int:
         else audit_paths()
     )
 
-    # ⚠️ Zero discovered files in audit mode is a FAILURE, not a pass — a renamed `tests/`
-    # layout or a wrong `--root` would otherwise report clean forever by checking nothing.
     if bool_audit and not list_paths:
         print(
             f"❌ no test file found under {PATH_ROOT}/tests/ — this gate would pass "

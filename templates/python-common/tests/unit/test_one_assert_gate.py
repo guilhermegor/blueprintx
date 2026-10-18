@@ -102,11 +102,6 @@ def _count_sites(str_src: str) -> int:
     return len(gate._assertion_sites(gate._index_test_functions(ast.parse(str_src))["test_x"]))
 
 
-# --------------------------
-# The unconditional rule — a test with zero assertion sites, in any suite
-# --------------------------
-
-
 def test_a_zero_assertion_unit_test_is_flagged(tmp_path: Path) -> None:
     """A ``test_*`` function with no assert, call, or raises/warns block is a finding."""
     _write_test_file(tmp_path, _SRC_ZERO_ASSERT)
@@ -137,11 +132,6 @@ def test_a_single_bare_assert_is_clean(tmp_path: Path) -> None:
     _write_test_file(tmp_path, _SRC_ONE_ASSERT)
 
     assert _run(tmp_path, []) == 0
-
-
-# --------------------------
-# raises/warns and assert_*() calls count as one site, never zero
-# --------------------------
 
 
 @pytest.mark.parametrize(
@@ -191,11 +181,6 @@ def test_a_plain_assert_plus_an_async_raises_block_is_two_sites_and_flagged(
     )
 
     assert _run(tmp_path, []) == 1
-
-
-# --------------------------
-# The cap: on under tests/unit/, off under tests/integration/ (blueprintx#544)
-# --------------------------
 
 
 def test_two_assertion_sites_in_a_unit_test_are_flagged_by_default(tmp_path: Path) -> None:
@@ -278,11 +263,6 @@ def test_a_flag_with_no_value_is_rejected(tmp_path: Path) -> None:
     assert _run(tmp_path, ["--unit-dir"]) == 1
 
 
-# --------------------------
-# The escape hatch — reason required
-# --------------------------
-
-
 def test_a_justified_multi_assert_test_is_exempted_by_the_hatch(tmp_path: Path) -> None:
     """``# one-assert-ok: <reason>`` clears a cap violation."""
     _write_test_file(
@@ -347,11 +327,6 @@ def test_the_hatch_also_exempts_a_zero_assertion_test(tmp_path: Path) -> None:
     assert _run(tmp_path, []) == 0
 
 
-# --------------------------
-# Three states: flagged / clean / could not parse
-# --------------------------
-
-
 @pytest.mark.parametrize("str_fragment", ["not valid Python", "not checked"])
 def test_an_unparsable_file_is_a_finding_not_a_silent_skip(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], str_fragment: str
@@ -368,11 +343,6 @@ def test_an_unparsable_file_exits_non_zero(tmp_path: Path) -> None:
     _write_test_file(tmp_path, "def test_x(:\n")
 
     assert _run(tmp_path, []) == 1
-
-
-# --------------------------
-# Discovery: legitimate skip vs. broken discovery
-# --------------------------
 
 
 def test_no_tests_directory_is_a_legitimate_skip(tmp_path: Path) -> None:
@@ -416,11 +386,6 @@ def test_a_tests_dir_holding_only_non_python_tests_is_a_legitimate_skip(tmp_path
     (path_tests / "test_something.sh").write_text("#!/bin/bash\necho ok\n", encoding="utf-8")
 
     assert _run(tmp_path, []) == 0
-
-
-# --------------------------
-# The distribution table (the measurement half of the deliverable)
-# --------------------------
 
 
 @pytest.mark.parametrize(

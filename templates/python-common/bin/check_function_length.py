@@ -49,29 +49,12 @@ import pathlib
 import sys
 
 
-# The ceiling. One number for both languages on purpose: two numbers for one rule is the
-# shape that rots, and the moment shell gets a bigger allowance nobody remembers which
-# applies where.
 INT_MAX_LINES = 60
 
-# Where audit mode walks, and what findings are shown relative to. Defaults to the project
-# root (this file lives in `bin/`) and is overridable with `--root`, which is what lets
-# BlueprintX itself run THIS FILE over its own tree instead of keeping a second copy — the
-# repo has been bitten before by two copies of a shared asset drifting apart
-# (see bin/ci/check_codespell_sync.sh, which exists only because that happened).
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Directories that hold code we did not write or that is generated. `typing` is NOT here:
-# the runtime type-checking engine is exempt from *type* analysis (mypy cannot follow its
-# metaprogramming), but a long function is just as hard to read there as anywhere else.
 TUPLE_SKIP_DIRS = (
     ".git",
-    # A parallel-agent worktree under `.claude/worktrees/agent-NAME` is a FULL, older
-    # checkout of this repo, not project source — walking it inflates the file count and
-    # polices a stale revision (blueprintx#331). Only relevant here because this gate's
-    # `PATH_ROOT` is overridable via `--root` to the actual repo root — the comment-language
-    # gate carries the same `TUPLE_SKIP_DIRS` pattern but never needs this entry, since its
-    # root is fixed to `templates/python-common` and never reaches `.claude` at all.
     ".claude",
     ".mypy_cache",
     ".pytest_cache",
@@ -170,10 +153,6 @@ def python_functions(path_file: pathlib.Path) -> list:
     try:
         cls_tree = ast.parse(path_file.read_text(encoding="utf-8"), filename=str(path_file))
     except SyntaxError as cls_err:
-        # ⚠️ A file this gate cannot parse is a FINDING, not silence. The first version
-        # printed the error and handed back nothing, which the caller could only read as
-        # an absence of over-long functions — so a malformed file passed the audit by
-        # being unreadable. That is the same vacuous pass this gate fails discovery over.
         raise UnparsableFileError(f"{path_file}: could not parse ({cls_err})") from cls_err
 
     list_found = []
@@ -269,13 +248,6 @@ def audit_paths() -> list:
     list of pathlib.Path
         Sorted ``.py`` and ``.sh`` paths, skipping vendored and generated trees.
     """
-    # Compare parts RELATIVE TO PATH_ROOT, never `path_file.parts` directly. The latter
-    # carries every ancestor above the repo too, and a directory literally named `.claude`
-    # is not a rare ancestor here — this very gate runs from inside a parallel-agent
-    # worktree under `.claude/worktrees`, so `PATH_ROOT` itself commonly sits under one.
-    # An ancestor-based match would then skip every file on every such run, blueprintx#331 —
-    # the vacuous-audit failure this gate exists to catch, self-inflicted. The
-    # comment-language gate already avoids this the same way.
     list_paths = []
     for str_suffix in ("*.py", "*.sh"):
         for path_file in PATH_ROOT.rglob(str_suffix):
@@ -287,7 +259,6 @@ def audit_paths() -> list:
     return sorted(list_paths)
 
 
-# `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
 _INT_FLAG_WITH_VALUE = 2
 
 
@@ -304,12 +275,6 @@ def main(list_argv: list) -> int:
     int
         0 when every function fits, 1 on a violation.
     """
-    # ⚠️ PLW0603 is real and accepted here with its upgrade path written down. `--root` exists
-    # so BlueprintX can run THIS file over its own tree instead of keeping a second copy, and
-    # the root it sets is read by helpers throughout the module for relative-path display.
-    # Threading it through every signature is the proper fix; it is a wider change than this
-    # one, and a module-level default set once by the entrypoint is the honest shape until
-    # then.
     global PATH_ROOT  # noqa: PLW0603
     if list_argv[:1] == ["--root"]:
         if len(list_argv) < _INT_FLAG_WITH_VALUE:
@@ -325,11 +290,6 @@ def main(list_argv: list) -> int:
         else audit_paths()
     )
 
-    # ⚠️ In audit mode, ZERO discovered files is a failure, not a pass. Scanning nothing
-    # produces no findings, so a gate whose globs stopped matching — a renamed layout, a
-    # scaffold that puts sources elsewhere — reports success forever, and is green precisely
-    # because it checks nothing. When filenames are passed in, the hook is driving, and
-    # receiving none simply means nothing matching was staged.
     if bool_audit and not list_paths:
         print(
             f"❌ no .py or .sh file found under {PATH_ROOT} — this gate would pass "
@@ -344,8 +304,6 @@ def main(list_argv: list) -> int:
         print(str_problem)
 
     if not list_problems:
-        # Report the FILE COUNT on success, not just silence. A gate that prints nothing
-        # when clean is indistinguishable from a gate that did not run.
         print(f"✅ function length OK ({len(list_paths)} file(s) checked)")
         return 0
 

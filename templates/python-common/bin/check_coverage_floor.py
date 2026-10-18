@@ -43,9 +43,6 @@ _CAPABILITIES = pathlib.Path("src/capabilities")
 _SRC = pathlib.Path("src")
 _LAYERS = ("domain", "application")
 
-# A literal (non-wildcard) whole-capability omission, e.g. `src/capabilities/example_feature/*`.
-# Matched against the omit list itself, never hardcoded, so a future named exception is picked
-# up the same way `example_feature` is today.
 _RE_WHOLE_CAPABILITY = re.compile(r"^src/capabilities/([A-Za-z0-9_]+)/\*$")
 
 
@@ -65,11 +62,6 @@ def omit_patterns(path_coveragerc: pathlib.Path) -> list[str]:
     cls_parser = configparser.ConfigParser()
     cls_parser.read(path_coveragerc, encoding="utf-8")
     str_raw = cls_parser.get("run", "omit", fallback="")
-    # ⚠️ Expanded exactly as Coverage.py expands it before applying `omit`. A pattern written
-    # as `${PWD}/src/...` is what Coverage.py ACTS on after expansion, so comparing against
-    # the raw `${PWD}` text would never match a real module path — the omission would be
-    # real and this gate would report clean. That is a false negative in the one direction
-    # this gate exists to prevent: logic dropped from the denominator, silently.
     return [
         os.path.expandvars(str_line.strip())
         for str_line in str_raw.splitlines()
@@ -197,10 +189,6 @@ def swallowed_by_omit(
     list_problems = []
     for path_module in list_must_stay_covered:
         str_posix = path_module.as_posix()
-        # Both spellings, because an expanded pattern is ABSOLUTE while the module path is
-        # relative to the project root. Matching only the relative form would let an
-        # absolute pattern slip through; matching only the absolute form would break every
-        # plain relative pattern the shipped .coveragerc actually uses.
         str_absolute = path_module.resolve().as_posix()
         list_matched = [
             str_pattern

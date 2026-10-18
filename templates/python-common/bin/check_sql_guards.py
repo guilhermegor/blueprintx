@@ -57,8 +57,6 @@ import sys
 _ALLOW_MARKER = "sql-guard-ok:"
 _SRC_ROOT = "src"
 
-# MSSQL-only syntax; a very specific token, so the false-positive risk of a plain keyword
-# search is close to zero (unlike guessing intent from a variable or file name).
 _RE_NOLOCK = re.compile(r"with\s*\(\s*nolock\s*\)", re.IGNORECASE)
 
 _MUTATION_NAMES = frozenset({"delete", "update"})
@@ -129,12 +127,6 @@ def _sqlalchemy_usage(cls_tree: ast.Module) -> tuple[bool, set[str], set[str]]:
             for cls_alias in cls_node.names:
                 if cls_alias.name == "sqlalchemy" or cls_alias.name.startswith("sqlalchemy."):
                     bool_uses_sqlalchemy = True
-                    # ⚠️ The MODULE alias, not just the fact of the import. `import sqlalchemy
-                    # as sa` makes `sa.delete(t)` a Core builder call, but it reaches the
-                    # classifier as an ATTRIBUTE call — the same shape as `dict.update()`. The
-                    # attribute branch demands a `.query(` anchor to stay out of that false
-                    # positive, so without the alias recorded here the module-qualified form
-                    # is silently skipped: a WHERE-less delete reported as OK.
                     set_module_aliases.add(cls_alias.asname or cls_alias.name.split(".")[0])
         elif (
             isinstance(cls_node, ast.ImportFrom)
@@ -281,9 +273,6 @@ def _mutation_verb(
     if isinstance(cls_call.func, ast.Name) and cls_call.func.id in set_core_aliases:
         return cls_call.func.id, False
     if isinstance(cls_call.func, ast.Attribute) and cls_call.func.attr in _MUTATION_NAMES:
-        # `sa.delete(t)` is a Core builder, NOT the ambiguous attribute form: the receiver is
-        # the sqlalchemy module, so no `.query(` anchor is needed and demanding one would
-        # skip it entirely.
         if (
             isinstance(cls_call.func.value, ast.Name)
             and cls_call.func.value.id in set_module_aliases
@@ -330,10 +319,6 @@ def _whereless_mutation_problems(
 
         list_chain = _downward_chain_names(cls_node) + _upward_chain_names(cls_node, dict_parents)
 
-        # The anchor that turns "any .update()/.delete() attribute" into "a SQLAlchemy Query
-        # mutation" — without it this branch is the 100% ORM noise this gate must not become.
-        # session.delete(record) (single instance, already primary-key-scoped) has no .query()
-        # in its chain and is correctly left alone.
         if bool_is_query_style and "query" not in list_chain:
             continue
         if any(str_name in list_chain for str_name in _WHERE_NAMES):
@@ -388,16 +373,6 @@ def _nolock_problems_in_python(
     list of str
         Human-readable findings; empty when the file complies.
     """
-    # ⚠️ Per MATCH, never per constant. `search()` returns ONE boolean for the whole literal
-    # and `cls_node.lineno` is where the literal OPENS — so a hatch on the first line
-    # suppressed every hint inside it. Implicit concatenation makes that a two-line source
-    # edit: an approved hint on line 1, an unannotated one on line 2, and the gate reported
-    # clean. Measured before the fix: a probe with exactly that shape gave exit 0.
-    #
-    # ⚠️ Matched against the literal's SOURCE segment, not its parsed value. Implicit
-    # concatenation collapses `"a" "b"` into ONE Constant whose value holds no newline at
-    # all — the break lives in the source only. Counting newlines in the value therefore
-    # maps every match back to the opening line, which is the same bug wearing a loop.
     str_source = "\n".join(list_lines)
     list_problems: list[str] = []
     for cls_node in ast.walk(cls_tree):
@@ -424,17 +399,10 @@ def _nolock_problems_in_sql(path_file: pathlib.Path) -> list[str]:
     list of str
         Human-readable findings; empty when the file complies.
     """
-    # ⚠️ Searched as ONE text stream, never line by line. `_RE_NOLOCK` already tolerates
-    # whitespace between its tokens, and in SQL that whitespace is routinely a NEWLINE
-    # (`WITH\n(NOLOCK)`) — a per-line search can never match its own pattern across the
-    # break, so the hint reads as absent and the file reports clean. That is this gate's own
-    # failure mode: a dirty read reported as OK.
     str_text = path_file.read_text(encoding="utf-8")
     list_lines = str_text.splitlines()
     list_problems: list[str] = []
     for cls_match in _RE_NOLOCK.finditer(str_text):
-        # The line the match STARTS on: that is where a reader looks, and where the escape
-        # hatch has to be written for a deliberate hint.
         int_no = str_text.count("\n", 0, cls_match.start()) + 1
         if _hatch_reason(list_lines[int_no - 1]) is None:
             list_problems.append(_nolock_message(path_file, int_no))
@@ -521,11 +489,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

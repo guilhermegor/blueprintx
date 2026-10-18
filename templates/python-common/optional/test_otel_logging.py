@@ -16,7 +16,7 @@ try:
         _signal_override,
         configure_otel_logging,
     )
-except ModuleNotFoundError:  # DDD ships the module as chassis.otel_logging
+except ModuleNotFoundError:
     from chassis.otel_logging import (
         _is_cleartext_with_credentials,
         _reject_credential_forwarding_redirects,
@@ -72,8 +72,6 @@ def test_configure_otel_logging_no_endpoint_sends_nothing(monkeypatch: pytest.Mo
     that never opted into a collector must run — and stay silent over the network — exactly
     as it did before this seam existed.
     """
-    # Clear BOTH. The signal-specific variable OVERRIDES the generic one, so clearing only the
-    # generic one leaves this test passing or failing on the developer's own environment.
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", raising=False)
     cls_logger = logging.getLogger("test_otel_logging_no_endpoint")
@@ -93,8 +91,6 @@ def test_configure_otel_logging_with_endpoint_adds_handler_without_removing_exis
     installed), and the project's existing local logger handler is untouched — OTel adds,
     it never replaces.
     """
-    # Clear the signal-specific variable: it OVERRIDES the generic one, so an inherited value
-    # would silently decide this test's endpoint. Same reason as the sibling tests above.
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", raising=False)
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
     cls_logger = logging.getLogger("test_otel_logging_with_endpoint")
@@ -106,7 +102,7 @@ def test_configure_otel_logging_with_endpoint_adds_handler_without_removing_exis
 
     assert cls_existing_handler in cls_logger.handlers
     assert len(cls_logger.handlers) == 2
-    cls_logger.handlers.clear()  # tidy the module-global logger registry for other tests
+    cls_logger.handlers.clear()
 
 
 def test_cleartext_endpoint_with_headers_is_refused_and_warns(
@@ -131,7 +127,6 @@ def test_cleartext_endpoint_with_headers_is_refused_and_warns(
 
     assert cls_logger.handlers == []
     assert "cleartext" in caplog.text
-    # The endpoint is actionable and belongs in the message; the credential never does.
     assert "secret-token" not in caplog.text
 
 

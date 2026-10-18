@@ -11,8 +11,6 @@ from chassis.webhook.infrastructure.slack_notifier import SlackNotifier
 from chassis.webhook.infrastructure.teams_notifier import TeamsNotifier
 
 
-# Substring signatures that map an incoming-webhook URL to its platform. Teams
-# incoming webhooks are hosted under *.webhook.office.com / teams.microsoft.com.
 _DICT_PLATFORM_SIGNATURES = {
     "teams.microsoft": "teams",
     "office.com": "teams",
