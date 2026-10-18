@@ -12,8 +12,8 @@ Policy data: bin/ci/required_checks_policy.txt, `kind|name|reason` per line, kin
 `optional` (deliberately not required) or `external` (required, emitted by an app or a
 dynamic workflow that has no file here). A line without a reason is rejected.
 
-`--live` compares the JSON with the live protection and ruleset API instead (needs admin
-access; runs only on main). Unreadable API: fail with REQUIRED_CHECKS_SYNC_REQUIRED=1,
+`--live` compares the JSON with the live protection and ruleset API instead (read-only token;
+runs only on main). Unreadable API: fail with REQUIRED_CHECKS_SYNC_REQUIRED=1,
 skip loudly otherwise. Explanation: docs/required-status-checks.md.
 """
 
@@ -249,13 +249,10 @@ def gh_json(str_path: str) -> object:
 
 
 def classic_required() -> set:
-    """Read classic contexts; an unprotected branch (HTTP 404) is an empty set, not an error."""
-    try:
-        dict_prot = gh_json(f"repos/{REPO}/branches/main/protection")
-    except subprocess.CalledProcessError as exc:
-        if "Branch not protected" in (exc.stderr or ""):
-            return set()
-        raise
+    """Read classic contexts from the public branch view; an unreadable one raises."""
+    dict_prot = gh_json(f"repos/{REPO}/branches/main")["protection"]
+    if not dict_prot["enabled"]:
+        return set()
     return set(dict_prot["required_status_checks"]["contexts"])
 
 

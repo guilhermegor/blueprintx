@@ -151,10 +151,11 @@ conditional job is still treated as not running on every PR, because a gate that
 not one to require, and the allowlist keeps that choice visible.
 
 The JSON itself is checked against the live settings by `--live`, which needs
-Administration access (the maintainer PAT). That runs only in
+only read access: it reads classic protection from the public `branches/main` view
+(`protection.enabled`, `required_status_checks.contexts`), not the admin-only
+`branches/main/protection` endpoint, so the default `GITHUB_TOKEN` suffices. That runs only in
 `.github/workflows/verify_required_checks.yml`, on `push` to `main`, a daily schedule and
-`workflow_dispatch`, never on `pull_request`, so no PR-controlled code ever sees the
-secret. It fails closed (`REQUIRED_CHECKS_SYNC_REQUIRED=1`) when the API cannot be read,
+`workflow_dispatch`, never on `pull_request`, so no PR-controlled code ever runs with it. It fails closed (`REQUIRED_CHECKS_SYNC_REQUIRED=1`) when the API cannot be read,
 and fails on `main` when protection drifted from the JSON. Changing protection therefore
 means editing the JSON in the same change. `tests/test_check_required_checks_sync.sh`
 holds the should-fail cases.

@@ -113,8 +113,8 @@ str_out="$(PATH="$str_tmp/bin:$PATH" run_gate --live)" || int_rc=$?
 check "live read error skips loudly locally" "$int_rc" 0 "SKIPPED" "$str_out"
 
 printf '%s\n' '#!/bin/sh' 'case "$2" in' \
-	'*branches/main/protection) echo "{\"required_status_checks\":{\"contexts\":[\"Lint gate\",\"Extra live\"]}}" ;;' \
 	'*rules/branches/main) echo "[{\"type\":\"required_status_checks\",\"parameters\":{\"required_status_checks\":[{\"context\":\"Rule live\"}]}}]" ;;' \
+	'*branches/main) echo "{\"protection\":{\"enabled\":true,\"required_status_checks\":{\"contexts\":[\"Lint gate\",\"Extra live\"]}}}" ;;' \
 	'*actions/workflows*page=1) echo "{\"workflows\":[{\"path\":\".github/workflows/other.yml\",\"state\":\"active\"}]}" ;;' \
 	'*actions/workflows*page=2) echo "{\"workflows\":[{\"path\":\".github/workflows/a.yml\",\"state\":\"${FAKE_STATE:-active}\"}]}" ;;' \
 	'*actions/workflows*) echo "{\"workflows\":[]}" ;;' \
@@ -194,15 +194,26 @@ str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --
 check "live reports an unrelated include matrix per workflow" "$int_rc" 1 "i.yml: job 'Other'" "$str_out"
 check "live keeps checking everything else" "$int_rc" 1 "not live: App check" "$str_out"
 
-printf '%s\n' '#!/bin/sh' 'case "$2" in' \
-	'*branches/main/protection) echo "gh: Branch not protected (HTTP 404)" >&2; exit 1 ;;' \
-	'*rules/branches/main) echo "[{\"type\":\"required_status_checks\",\"parameters\":{\"required_status_checks\":[{\"context\":\"Rule live\"}]}}]" ;;' \
-	'*actions/workflows*) echo "{\"workflows\":[]}" ;;' \
-	'*) exit 1 ;;' 'esac' >"$str_tmp/bin/gh"
-fixture
-int_rc=0
-str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
-check "live treats an unprotected branch as an empty classic set" "$int_rc" 1 "classic: in required-checks.json, not live: Lint gate" "$str_out"
+gh_stub() {
+	printf '%s\n' '#!/bin/sh' 'case "$2" in' \
+		'*rules/branches/main) echo "[]" ;;' \
+		"*branches/main) $1 ;;" \
+		'*actions/workflows*page=1) echo "{\"workflows\":[{\"path\":\".github/workflows/a.yml\",\"state\":\"active\"}]}" ;;' \
+		'*actions/workflows*) echo "{\"workflows\":[]}" ;;' \
+		'*) exit 1 ;;' 'esac' >"$str_tmp/bin/gh"
+	fixture
+	int_rc=0
+	str_out="$(PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
+}
+
+gh_stub 'echo "{\"protection\":{\"enabled\":false}}"'
+check "live treats disabled classic protection as an empty classic set" "$int_rc" 1 "classic: in required-checks.json, not live: Lint gate" "$str_out"
+gh_stub 'echo "{\"protection\":{\"enabled\":true,\"required_status_checks\":{\"contexts\":[\"Lint gate\",\"App check\"]}}}"'
+check "live enabled classic protection with matching contexts passes" "$int_rc" 0 "findings=0" "$str_out"
+gh_stub 'echo "gh: HTTP 403" >&2; exit 1'
+check "live unreadable classic endpoint fails closed" "$int_rc" 1 "failing closed" "$str_out"
+gh_stub 'echo "{}"'
+check "live branch view without a protection key fails closed" "$int_rc" 1 "failing closed" "$str_out"
 
 list_mode() {
 	printf '%s\n' "$1" >"$str_tmp/req.txt"
