@@ -22,14 +22,8 @@ import sys
 import tempfile
 
 
-# The driver imports the project's source (config.contracts, utils.*); make ``src`` importable when
-# invoked as ``python bin/check_contract_drift.py`` from the project root (as the workflow does).
 sys.path.insert(0, "src")
 
-# ⚠️ This order is stable only because `ruff.toml` DECLARES known-first-party. Left to
-# inference, ruff has to guess whether `config`/`utils` are first-party once `src` is on
-# sys.path, and different ruff versions guess differently — which shows up not as a lint
-# error but as `poe lint` MODIFYING a freshly scaffolded tree.
 import yaml  # noqa: E402 — after the sys.path bootstrap above
 
 from config import contracts as contracts_module  # noqa: E402
@@ -39,7 +33,6 @@ from utils.tabular_reader import FileContract  # noqa: E402, TID251
 
 _REGISTRY_PATH = pathlib.Path("src/config/contract_oracles.yaml")
 _REPORT_PATH = pathlib.Path("contract_drift_report.md")
-# Per-source override: `timeout_s:` in the registry entry.
 _DEFAULT_TIMEOUT_SECONDS = 60
 
 
@@ -89,10 +82,6 @@ def live_header(dict_entry: dict) -> tuple[str, ...]:
     """
     str_sep = dict_entry.get("sep", ";")
     str_encoding = dict_entry.get("encoding", "utf-8-sig")
-    # The bound is passed EXPLICITLY even though the seam defaults it. This job runs
-    # unattended on a schedule with nobody watching, so a source that accepts the connection
-    # and then never sends bytes is the failure that hangs it until the runner's own ceiling
-    # — which reports as `cancelled`, indistinguishable from a human pressing cancel.
     int_timeout_s = int(dict_entry.get("timeout_s", _DEFAULT_TIMEOUT_SECONDS))
     with tempfile.TemporaryDirectory() as str_tmp:
         path_art = download_file(
@@ -147,10 +136,6 @@ def drift_for_source(
     try:
         tuple_live = live_header(dict_entry)
     except Exception as cls_err:  # noqa: BLE001 — see below
-        # Deliberately broad. This function's contract is that ONE source can never end the
-        # run, and the reasons it may fail are open-ended: a network error, a malformed URL in
-        # the registry, a non-2xx, an undecodable body. Every one of them means the same thing
-        # to the caller — "not checked" — and each is surfaced as SKIPPED, never swallowed.
         return None, [
             f"could not fetch {dict_entry.get('url')}: "
             f"{type(cls_err).__name__}: {cls_err} (NOT checked — not drift either)"
@@ -158,10 +143,8 @@ def drift_for_source(
     set_live = set(tuple_live)
     set_contract = set(cls_contract.tuple_required)
     list_lines: list[str] = []
-    # Load-bearing direction — always checked: the source dropped something we require.
     for str_removed in sorted(set_contract - set_live):
         list_lines.append(f"➖ contract requires column the source dropped: `{str_removed}`")
-    # Completeness-gated direction — only meaningful for a full-header (pinned-oracle) contract.
     if cls_contract.bool_full_column:
         for str_added in sorted(set_live - set_contract):
             list_lines.append(
@@ -231,9 +214,6 @@ def main() -> int:
         print("Contract drift detected:\n")
         print(str_report)
     if list_skipped:
-        # NEVER the all-clear line when anything went unchecked. The skipped sources stay OUT
-        # of the report body on purpose: the report opens an issue, and "the source is down"
-        # must not arrive looking like "our contract is wrong".
         print(
             f"SKIPPED: {len(list_skipped)} of {len(dict_registry)} source(s) could not be "
             f"checked — {', '.join(sorted(list_skipped))}. This run proves nothing about them."
@@ -244,11 +224,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

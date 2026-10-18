@@ -32,8 +32,9 @@ gate did not read until P0.
 - [x] 8b (PR #854) `templates/python-common/tests/unit/test_review_threads_gate.py` (123 lines), left out of slice 8 while #837 owned it
 - [ ] 9 `templates/python-common/bin`, the gates themselves (66 files, 2113 lines)
 - [x] 9a (PR #845) `templates/python-common/bin` shell scripts and `lib/*.sh` (33 files, 1287 lines); oracle: `shfmt -mn` output identical before and after. Slice 9 is split 9a shell, 9b Python gates, 9c the comment-budget gate itself plus its banner exemption
-- [~] chore/comment-strip-slice9c-304 9c `check_comment_budget.py`, `comment_budget_allowlist.txt`, `required-checks.txt` (3 files, 108 lines); behaviour unchanged (AST, parsed allowlist and check names identical)
-- [~] chore/comment-strip-slice9d-304 9d delete the test-section banner exemption (`STR_TEST_SECTION_RULE`, `is_exempt_section_banner`, `is_test_module`) with a should-fail test; follows slices 8 and 9c
+- [~] chore/comment-strip-slice9b-304 9b `templates/python-common/bin` Python gates and `lib/*.py` (32 files, 779 lines); the AST of every module is identical before and after. Slice 9 is split 9a shell, 9b Python gates, 9c the comment-budget gate itself plus its banner exemption
+- [x] 9c (PR #847) `check_comment_budget.py`, `comment_budget_allowlist.txt`, `required-checks.txt` (3 files, 108 lines); behaviour unchanged (AST, parsed allowlist and check names identical)
+- [x] 9d (PR #862) delete the test-section banner exemption (`STR_TEST_SECTION_RULE`, `is_exempt_section_banner`, `is_test_module`) with a should-fail test; follows slices 8 and 9c
 - [ ] Z delete the superseded rules in `CLAUDE.md` and `templates/python-common/CLAUDE.md`, drop the
   baseline and flip the gate to strict zero tolerance
 

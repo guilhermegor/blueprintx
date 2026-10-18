@@ -152,8 +152,6 @@ def unpublished_specs(dict_mkdocs: dict) -> tuple[pathspec.GitIgnoreSpec, ...]:
         ``exclude_docs`` can cancel an implicit drop. The second is ``draft_docs:``, kept
         apart: MkDocs evaluates it on its own.
     """
-    # ⚠️ Same engine MkDocs 1.6 builds these with (`mkdocs/structure/files.py`): a
-    # hand-rolled matcher diverged on basename-at-any-depth, anchored `/x`, `**` and `!`.
     list_lines = [".*", "/templates/", *(dict_mkdocs.get("exclude_docs") or "").splitlines()]
     str_draft = dict_mkdocs.get("draft_docs") or ""
     return (
@@ -323,8 +321,6 @@ def claude_index_table(path_claude_index: pathlib.Path) -> set[str] | None:
         if bool_in_table and str_stripped.startswith("#"):
             break
         if bool_in_table:
-            # A heading followed only by prose is NOT a table: enabling Layer 2 on it would
-            # report every published page as missing from an index that was never a table.
             bool_found_table = bool_found_table or str_stripped.startswith("|")
             cls_match = _INDEX_ROW_RE.match(str_stripped)
             if cls_match:
@@ -369,7 +365,6 @@ def check_claude_index(
     return list_errors
 
 
-# `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
 _INT_FLAG_WITH_VALUE = 2
 
 
@@ -395,8 +390,6 @@ def main(list_argv: list) -> int:
         PATH_ROOT = pathlib.Path(list_argv[1]).resolve()
 
     dict_mkdocs = load_mkdocs(PATH_ROOT / "mkdocs.yml")
-    # MkDocs resolves a relative `docs_dir` against mkdocs.yml's folder; `/` on an absolute
-    # right-hand side keeps the absolute path, so both documented forms land correctly.
     str_docs = str(dict_mkdocs.get("docs_dir") or "docs")
     path_docs = PATH_ROOT / str_docs
     if not path_docs.is_dir():
@@ -411,9 +404,6 @@ def main(list_argv: list) -> int:
 
     list_pages = published_pages(path_docs, unpublished_specs(dict_mkdocs))
     if not list_pages:
-        # Same reason as the empty-mkdocs.yml branch above: a scan that found nothing to
-        # check has not passed, it has failed to run. Reporting 0 errors over 0 pages is
-        # a gate declaring its own blindness as OK.
         print(
             "no published documentation pages found — discovery is broken, not clean",
             file=sys.stderr,

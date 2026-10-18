@@ -41,8 +41,6 @@ _RE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
 _RE_NORMALIZE = re.compile(r"[-_.]+")
 _INT_CHUNK_BYTES = 1024 * 1024
 _MANIFEST_SCHEMA_VERSION = 1
-# "3.11.4" has 3 dot-separated parts; "3.11" (2 parts) needs a ".0" appended before it can
-# stand in for python_full_version in a marker environment.
 _INT_FULL_VERSION_PARTS = 3
 _OS_BY_SYS_PLATFORM = {
     "win32": {"os_name": "nt", "platform_system": "Windows"},
@@ -241,8 +239,6 @@ def build_zip(dir_wheels: Path, path_zip: Path) -> None:
     list_wheels = sorted(dir_wheels.glob("*.whl"))
     if not list_wheels:
         raise SystemExit(f"wheelhouse pack: no *.whl files found in {dir_wheels}")
-    # `pip download` without --only-binary falls back to an sdist for a package with no matching
-    # wheel; zipping only *.whl would drop it silently and the offline install would then fail.
     list_other = sorted(p.name for p in dir_wheels.iterdir() if p.is_file() and p.suffix != ".whl")
     if list_other:
         raise SystemExit(
@@ -271,7 +267,6 @@ def split_into_parts(path_file: Path, int_part_mb: int) -> list[Path]:
         The created part files, in the order they must be concatenated back.
     """
     if int_part_mb < 1:
-        # read(0) returns b"" at once: no parts, a deleted archive and a "successful" manifest.
         raise SystemExit(f"part size must be a positive number of MB, got {int_part_mb}")
     int_part_bytes = int_part_mb * 1024 * 1024
     list_parts: list[Path] = []
@@ -302,7 +297,6 @@ def pack_wheelhouse(args: argparse.Namespace) -> int:
     path_zip = Path(args.zip_path)
     path_zip.parent.mkdir(parents=True, exist_ok=True)
     build_zip(dir_wheels, path_zip)
-    # A rebuild with fewer parts must not leave older <zip>.NNN files to be copied to the target.
     for path_stale in path_zip.parent.glob(f"{path_zip.name}.[0-9][0-9][0-9]"):
         path_stale.unlink()
 
@@ -468,8 +462,6 @@ def unzip_wheels(path_zip: Path, dir_out: Path) -> int:
     with zipfile.ZipFile(path_zip) as zip_in:
         list_names = [str_name for str_name in zip_in.namelist() if str_name.endswith(".whl")]
         for str_name in list_names:
-            # By basename: a hand-made zip of the wheels/ folder nests its members, and pip's
-            # --find-links does not recurse. The basename also rules out a path-traversal member.
             (dir_out / Path(str_name).name).write_bytes(zip_in.read(str_name))
     return len(list_names)
 
@@ -554,18 +546,15 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
         list_parts = verify_parts(dir_source, dict_manifest)
         str_zip_name = dict_manifest.get("zip_name") or "wheelhouse.zip"
         path_zip_tmp = _contained_path(dir_source, str_zip_name)
-        # The reassembled archive is written, then unlinked: it must not be an input it reads.
         if path_zip_tmp.resolve() in {path_manifest.resolve(), *list_parts}:
             raise SystemExit(
                 f"wheelhouse assemble: zip_name {str_zip_name!r} collides with an input file"
             )
         try:
             reassemble_zip(list_parts, dict_manifest, path_zip_tmp)
-            # Only now: a failed verification above must leave the existing wheels untouched.
             _remove_loose_wheels(dir_out)
             int_count = unzip_wheels(path_zip_tmp, dir_out)
         finally:
-            # A failed archive left behind could later be extracted as "unverified".
             path_zip_tmp.unlink(missing_ok=True)
         print(f"assembled {int_count} wheel(s) into {dir_out} (manifest-verified)")
         return 0

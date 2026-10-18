@@ -37,17 +37,11 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
     import tomli as tomllib  # type: ignore[no-redef]
 
 
-# Poetry's caret/tilde grammar has no pip equivalent, so it is expanded into an explicit
-# range. Everything pip already understands is passed through.
 TUPLE_PIP_NATIVE_PREFIXES = (">=", "<=", "==", "!=", ">", "<", "~=")
 
-# A dependency declared by path/git/url cannot be expressed as a plain requirement line
-# without also reproducing Poetry's resolution rules, so this refuses loudly instead of
-# emitting something that would install the wrong thing.
 TUPLE_UNSUPPORTED_KEYS = ("path", "git", "url")
 
 
-# major.minor.patch — a version is padded to three components before comparison.
 _INT_SEMVER_PARTS = 3
 
 
@@ -156,8 +150,6 @@ def normalize_version_spec(str_spec: str) -> str:
         return ""
     if str_spec.startswith("^"):
         return caret_to_range(str_spec)
-    # Poetry owns the bare tilde only. The two-character compatible-release operator
-    # is pip's own and passes straight through.
     if str_spec.startswith("~") and not str_spec.startswith("~="):
         return tilde_to_range(str_spec)
     if str_spec.startswith(TUPLE_PIP_NATIVE_PREFIXES) or "," in str_spec:
@@ -187,7 +179,6 @@ def build_requirement(str_name: str, union_spec: str | dict) -> str | None:
     SystemExit
         If the declaration is a path/git/url dependency, or a shape not handled here.
     """
-    # Poetry declares the interpreter itself as a dependency; pip has no such concept.
     if str_name.lower() == "python":
         return None
 
@@ -315,10 +306,6 @@ def main() -> int:
 
     list_requirements = select_requirements(dict_pyproject, list_groups)
 
-    # Zero requirements for a non-empty group request is not an answer, it is a symptom: the
-    # caller writes them to requirements-lock.txt, and an empty file reads as "this project
-    # has no dependencies" rather than as a failure. The hosts that reach this code are the
-    # constrained boxes where nobody is watching closely, so it has to say so out loud.
     if list_groups and not list_requirements:
         raise SystemExit(
             f"No requirements resolved for group(s) {','.join(list_groups)} in "

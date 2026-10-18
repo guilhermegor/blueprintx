@@ -55,56 +55,20 @@ import sys
 import types
 
 
-# The marker makes our own request recognisable, so a scheduled run asks ONCE per window
-# instead of every tick. It is an HTML comment, so it renders as nothing.
 _STR_MARKER = "<!-- retry-rate-limited-review -->"
 
-# The command, not a plain `review`: an incremental reviewer answers "already reviewed" for
-# commits it has seen, and only the full form disregards that. Same reasoning as the gate's
-# own remedy text — keep the two spellings identical.
 _STR_REQUEST = f"@coderabbitai full review\n\n{_STR_MARKER}"
 
-# Deliberately broad: any spelling of the reviewer saying it is throttled. Being generous here
-# is the safe direction, because the only consequence is one extra review request.
 _RE_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
 
-# 🔴 THE REVIEWER DECLARES ITS OWN WAIT — READ IT INSTEAD OF GUESSING.
-#
-# The refusal carries the number verbatim: "Your next included review will be available in 35
-# minutes." A hardcoded cooldown is a guess about someone else's quota, and this repo's guess was
-# measured wrong three times — 31, 34 and 35 minutes observed against a constant of 30. Every one
-# of those is a request that gets refused and, because a refused request still counts as traffic,
-# pushes the window further out. Guessing is not merely imprecise here, it is self-defeating.
 _RE_DECLARED_WAIT = re.compile(
     r"next\s+included\s+review\s+will\s+be\s+available\s+in\s+(\d+)\s+minute", re.IGNORECASE
 )
 
-# ⚠️ TWO DIFFERENT STATES WEAR THE SAME WORDS, AND THEY WANT OPPOSITE BEHAVIOUR.
-#
-# "Review rate limited" covers both a transient throttle (retry soon) and the INCLUDED-QUOTA
-# state under Fair Usage, which is an ACCOUNT-level budget: the same notice adds "This review may
-# still proceed through usage-based billing if eligible". `_RE_RATE_LIMIT` cannot tell them apart,
-# so the declared wait is the only reliable signal about which one we are in. When it is present,
-# it wins over any local constant.
 _RE_INCLUDED_QUOTA = re.compile(r"included\s+review\s+limit|fair\s+usage", re.IGNORECASE)
 
-# Fallback ONLY for a refusal that declares no wait. Above every window measured on this repo
-# (31, 34, 35 minutes), because the costs are asymmetric: asking early buys a declined request,
-# one more ack comment, and a pushed-out window, while asking late only delays a PR that is
-# already waiting. Prefer the quiet error.
 _INT_COOLDOWN_MIN = 40
 
-# 🔴 blueprintx#280 — SKIP-AFTER-N OVER STRICT FIFO, AND HERE IS WHY.
-#
-# Serving strictly the oldest waiting PR every window is right until the oldest one is somehow
-# permanently unreviewable (a refusal wording this file does not recognise, a PR the reviewer
-# has quietly given up on): strict FIFO would then re-pick it forever and every younger PR
-# starves behind it. Measured upstream (`review_retry.yml`'s own header): 18 of 19 rate-limited
-# PRs were eventually reviewed, so a PR still stuck after several genuine retries is the
-# exceptional 1-in-19 case, not the common one — worth surfacing to a human, not silently
-# blocking the queue. Five attempts at the */10 schedule is most of an hour, well past every
-# declared window measured on this repo (20-35 minutes), so it does not fire on a PR that is
-# merely waiting out a normal window.
 _INT_MAX_ATTEMPTS_PER_PR = 5
 
 
@@ -121,8 +85,6 @@ def _gh_json(list_args: list[str]) -> object:
     object
         The parsed JSON, or ``None`` when the call or the parse failed.
     """
-    # A constant, trusted argv assembled from this file's own literals plus repo/PR
-    # identifiers supplied by the workflow — no shell, so nothing to quote.
     str_gh = shutil.which("gh") or "gh"
     cls_done = subprocess.run(  # noqa: S603
         [str_gh, *list_args], capture_output=True, text=True, check=False
@@ -171,9 +133,6 @@ def load_gate(path_bin: pathlib.Path) -> types.ModuleType | None:
     return cls_module
 
 
-# ⚠️ NOT `summarise_reviewer_notice` — that helper's own docstring says DISPLAY ONLY, and it
-# truncates to 200 characters after stripping markup, which can cut the very sentence being
-# matched. Deciding anything from a display string is how a truncation becomes a logic bug.
 def newest_roster_comment(
     list_comments: list[dict], set_roster: set[str], fn_norm: Callable[[str], str]
 ) -> dict | None:
@@ -243,29 +202,10 @@ def parse_declared_wait(str_notice: str) -> int | None:
     cls_match = _RE_DECLARED_WAIT.search(str_notice)
     if cls_match is None:
         return None
-    # ⚠️ `\d+` is unbounded and this text comes from an EXTERNAL service, so the digits are
-    # untrusted input, not a number we chose. The only caller sits OUTSIDE examine_pr's try/except,
-    # which wraps just the fetch — so ANY exception raised here aborts the whole unattended sweep
-    # and leaves every later PR unexamined. That is the per-PR degradation rule this file already
-    # states for a deleted or transferred PR, reached through the parser instead of the network.
-    #
-    # TWO limits sit on this path at DIFFERENT depths, and guarding only the deeper one leaves the
-    # shallower one live:
-    #   - `int()` raises **ValueError** above `sys.get_int_max_str_digits()` (4300 by default — the
-    #     CVE-2020-10735 mitigation). This fires FIRST, during the conversion.
-    #   - `timedelta(minutes=…)` then raises **OverflowError** for a value that converts fine but
-    #     cannot be represented ("Python int too large to convert to C int").
-    #
-    # 🔴 The first version of this guard covered only OverflowError, and its regression test used a
-    # 100-digit value — comfortably under the 4300 threshold, so the suite passed with the
-    # ValueError path wide open. A should-fail test proves the code survives the case you thought
-    # of, never the boundary you did not. Raised by review on blueprintx#278, twice.
     try:
         int_wait = int(cls_match.group(1))
         timedelta(minutes=int_wait)
     except (ValueError, OverflowError):
-        # Not representable is not a wait: fall through to the marker cooldown, exactly as a
-        # refusal that declares no number at all already does.
         return None
     return int_wait
 
@@ -303,34 +243,10 @@ def declared_wait_still_open(dict_notice: dict | None, dt_now: datetime) -> bool
         return False
     dt_said = parse_timestamp(dict_notice.get("created_at") or "")
     if dt_said is None:
-        # A declared wait we cannot anchor in time: fall through to the marker cooldown rather
-        # than inventing a deadline. Returning True here would stall the retry for ever on one
-        # unreadable timestamp.
         return False
     return (dt_now - dt_said) < timedelta(minutes=int_wait)
 
 
-# 🔴 A COOLDOWN, NOT AN ORDERING TEST — AND THE ORDERING VERSION SHIPPED A LOOP.
-#
-# The first implementation asked "is our marker newer than the reviewer's newest notice?", which
-# reads as obviously right and is wrong against the real system. Measured live on blueprintx#270:
-#
-#     23:50:41  <us>          @coderabbitai full review <!-- marker -->
-#     23:50:54  coderabbitai  <auto-generated acknowledgement>      <- 13 SECONDS LATER
-#     23:53:00  <us>          @coderabbitai full review <!-- marker -->   <- asked AGAIN
-#
-# The reviewer ACKNOWLEDGES every request within seconds, and that acknowledgement is a roster
-# comment newer than our marker. So the newest-first scan always met the ack first, concluded
-# "not asked yet", and asked again — every ten minutes, for ever, while the ack itself carried
-# the rate-limit wording that made the outer predicate true. An unattended comment loop.
-#
-# ⚠️ The unit test for the ordering version PASSED, because it was written from the same mental
-# model as the code: it asserted that a roster notice after our marker means a NEW window. That
-# is precisely the case the reviewer's own ack occupies, so the test asserted the defect. A test
-# built on the same assumption as the code is the assumption agreeing with itself, never
-# evidence — only running it against the live PR distinguished them.
-#
-# Time cannot be confused this way. We asked recently or we did not.
 def asked_recently(
     list_comments: list[dict],
     str_self_login: str,
@@ -371,8 +287,6 @@ def asked_recently(
             continue
         dt_posted = parse_timestamp(dict_comment.get("created_at") or "")
         if dt_posted is None:
-            # An unreadable timestamp on OUR OWN marker: treat it as recent. Asking again on a
-            # comment we cannot date is how the loop above started.
             return True
         return (dt_now - dt_posted) < timedelta(minutes=int_cooldown_min)
     return False
@@ -397,11 +311,6 @@ def parse_timestamp(str_stamp: str) -> datetime | None:
         return None
 
 
-# ⚠️ THE COMMENTS COME FROM REST, NOT FROM THE GATE'S GRAPHQL QUERY, AND THAT IS THE POINT.
-# The gate's query returns `{author, body}` with no timestamps — it never needed them. This
-# script does, because ordering cannot tell our request's own acknowledgement from a new window
-# (see the block above `asked_recently`). Rather than widen a shared query for one consumer,
-# the retry reads what it needs itself.
 def fetch_comments(str_repo: str, int_number: int) -> list[dict]:
     """Return one PR's issue comments, oldest first, normalised with timestamps.
 
@@ -484,9 +393,6 @@ def pr_needs_retry(
 
     dt_when = dt_now or datetime.now(timezone.utc)
 
-    # The reviewer's own deadline comes first: it is the only statement about the quota made by
-    # the thing that owns the quota. Our marker cooldown stays as the second guard — it answers a
-    # different question (did WE ask recently?) and is what stops the comment loop.
     if declared_wait_still_open(dict_notice, dt_when):
         return False
 
@@ -527,8 +433,6 @@ def request_review(str_repo: str, int_number: int) -> bool:
         print(f"::warning::could not request a review on #{int_number}")
         return False
 
-    # The author TYPE is the whole point: a `Bot` comment is silently ignored by the reviewer,
-    # so posting one and reporting success would be a no-op wearing a success message.
     if dict_posted.get("type") == "Bot":
         print(
             f"::warning::the request on #{int_number} was authored by "
@@ -541,14 +445,6 @@ def request_review(str_repo: str, int_number: int) -> bool:
     return True
 
 
-# `--slurp` yields a list of PAGES, each a list of PR objects — so the flattening is one level
-# deeper than the obvious `[d["number"] for d in result]`, which would silently iterate PAGES
-# and yield nothing. Kept a pure function so the multi-page shape can be tested without a network.
-#
-# ⚠️ SORTED HERE, NOT LEFT TO THE CALLER — `createdAt` is the FIFO ordering key (blueprintx#280),
-# and leaving the sort to whoever consumes this makes "oldest first" an assumption instead of a
-# guarantee. `created_at` is REST's field name (the endpoint this reads is REST, not the gate's
-# GraphQL query), ISO-8601, so lexical sort already sorts chronologically.
 def flatten_open_prs(list_pages: list) -> list[dict]:
     """Flatten ``gh api --paginate --slurp`` output into open PRs, oldest first.
 
@@ -573,10 +469,6 @@ def flatten_open_prs(list_pages: list) -> list[dict]:
     return sorted(list_flat, key=lambda dict_item: dict_item["created_at"])
 
 
-# Whoever the PAT authenticates as is who our request will be authored by, so it is also the
-# only author whose marker may be trusted. Resolving it from the token rather than configuring
-# it means the two can never disagree — a configured login would silently stop matching the day
-# the PAT is reissued on another account.
 def resolve_self_login() -> str:
     """Return the login the configured token authenticates as, or ``""`` when unknown.
 
@@ -595,21 +487,6 @@ def resolve_self_login() -> str:
     return str(dict_user["login"])
 
 
-# ⚠️ ONE PR'S FAILURE MUST NOT END THE SWEEP. `fetch_pull_request` RAISES on an API failure
-# (four `raise RuntimeError` sites) and indexes a `pullRequest` node that can come back null, so
-# a single deleted, transferred or transiently-500ing PR would abort the loop and leave every PR
-# BEHIND IT unexamined — silently, because the run would just end. That is the same
-# silent-partial-pass shape as reading only the first page of results, one level up. This runs
-# unattended every ten minutes, so it must degrade per PR, never per sweep.
-#
-# The catch is deliberately broad: to this caller a network error, a null node and a malformed
-# payload all mean the same thing — this PR cannot be judged now, try the next one.
-#
-# ⚠️ THIS ONLY DECIDES "IS THE PR STRUCTURALLY WAITING", NOT "SHOULD WE ASK IT NOW"
-# (blueprintx#280). It deliberately does NOT apply `pr_needs_retry`'s cooldown/declared-wait
-# gating — that needs the whole open-PR set in hand first, because the account-level quota
-# means one PR's declared wait binds every other PR too (see ``account_blocked_until``). The
-# per-PR gating still runs, unchanged, inside ``select_pr_for_retry``.
 def build_candidate(
     str_repo: str,
     int_number: int,
@@ -727,14 +604,6 @@ def notice_deadline(dict_notice: dict, dt_now: datetime) -> datetime | None:
     return dt_deadline if dt_deadline > dt_now else None
 
 
-# 🔴 ACCOUNT-LEVEL, NOT PER-PR — THE CORE FIX FOR BLUEPRINTX#280.
-#
-# Measured on this repo: six PRs asked inside four minutes right after a quota reset, all six
-# rate limited, because the quota is shared across every PR in the account. A per-PR cooldown
-# cannot see that — it only knows what THAT PR's own history says. This reads the NEWEST refusal
-# across every PR still waiting on a review (same "only the newest notice decides" rule
-# `pr_needs_retry` already applies per PR, lifted to the whole waiting set) and, when it declares
-# a wait that has not elapsed, treats that deadline as binding on every other PR too.
 def account_blocked_until(list_notices: list[dict], dt_now: datetime) -> datetime | None:
     """Return when the account-level quota frees up, or ``None`` when nothing is blocking.
 
@@ -750,13 +619,6 @@ def account_blocked_until(list_notices: list[dict], dt_now: datetime) -> datetim
     datetime.datetime or None
         The moment the account frees up, or ``None`` when no notice is currently blocking.
     """
-    # ⚠️ The LATEST DEADLINE, never the deadline of the latest notice. Across PRs these are
-    # independent statements about ONE shared quota, so the binding moment is the furthest
-    # one out. Taking `max(created_at)` and reading only that notice loses the window
-    # whenever the newest refusal names no number -- `_RE_RATE_LIMIT` matches those too, and
-    # `notice_deadline` returns None for them, which reads as "account free" while another
-    # PR's declared window is still open. (Per PR the newest notice DOES supersede: that
-    # stays `pr_needs_retry`'s job, and is unchanged.)
     list_deadlines = [
         dt_deadline
         for dict_notice in list_notices
@@ -767,11 +629,6 @@ def account_blocked_until(list_notices: list[dict], dt_now: datetime) -> datetim
     return max(list_deadlines, default=None)
 
 
-# ⚠️ EXACTLY ONE PR PER RUN, OLDEST FIRST — AND A STUCK HEAD DOES NOT WEDGE THE QUEUE.
-# `pr_needs_retry` still does the per-PR gating unchanged (its own declared wait, and the
-# marker-cooldown fallback for a refusal that names no number); this only adds the FIFO order
-# and the attempt cap on top, so a PR stuck past `_INT_MAX_ATTEMPTS_PER_PR` is skipped — loudly —
-# rather than starving every younger PR forever.
 def select_pr_for_retry(
     list_candidates: list[dict],
     set_reviewers: set[str],
@@ -827,15 +684,6 @@ def select_pr_for_retry(
     return None
 
 
-# ⚠️ THE SETUP STEP RAISES TOO, AND IT IS EASY TO MISS BECAUSE IT LOOKS LIKE CONFIGURATION.
-# `exec_module` propagates any import-time error from the gate, and `load_roster` raises on a
-# roster that exists but is malformed (an unknown `posts:`, a missing one, a roster of only
-# status members). An ABSENT roster is fine — the gate self-skips by design — but a BROKEN one
-# would end this scheduled job with a traceback instead of a warning, on every tick, for ever.
-#
-# Same property as `examine_pr` one level up: degrade and report, never die. The catch is broad
-# for the same reason — to this caller an import error, a malformed roster and an ineligible
-# roster all mean "there is nothing I can safely do this tick".
 def _resolve_gate_dir(path_own_bin: pathlib.Path) -> pathlib.Path:
     """Return the directory holding ``check_review_threads.py``.
 
@@ -892,11 +740,6 @@ def resolve_setup(path_bin: pathlib.Path) -> tuple[types.ModuleType, set[str]] |
     return cls_gate, set_reviewers
 
 
-# ⚠️ ONE ASK PER RUN, EVER — blueprintx#280. The old loop asked every eligible PR it found,
-# which at `*/10` against N open PRs is `6*N` requests/hour against ~1/hour of quota (measured
-# 96:1 at N=16): the retry that exists to unblock the queue was what kept it blocked. This
-# function enumerates, decides once, and stops — the schedule itself is the only rate limiter
-# left, and only ONE PR ever gets asked per tick.
 def collect_waiting_prs(
     str_repo: str, set_reviewers: set, cls_gate: object
 ) -> tuple[list, list[dict]] | None:
@@ -916,15 +759,6 @@ def collect_waiting_prs(
     tuple of (list, list of dict), or None
         All open PRs and the waiting subset; ``None`` when the listing could not be parsed.
     """
-    # ⚠️ `--paginate`, not a bare `per_page=100`: without it only the first page is read, and a
-    # rate-limited PR on page two is never retried — a silent partial pass, which is the exact
-    # failure shape this family of scripts exists to prevent.
-    #
-    # ⚠️ AND NO `--jq` HERE, measured against gh 2.96.0: `--slurp` is REJECTED when combined
-    # with `--jq` ("the `--slurp` option is not supported with `--jq` or `--template`"). Without
-    # `--slurp`, `--paginate` emits one JSON array PER PAGE, which is not parseable as a single
-    # document — so the parse would fail, this function would take its early return, and the
-    # janitor would quietly do nothing on every tick. Slurp into pages and flatten in Python.
     list_pages = _gh_json(
         ["api", "--paginate", "--slurp", f"repos/{str_repo}/pulls?state=open&per_page=100"]
     )
@@ -942,9 +776,6 @@ def collect_waiting_prs(
     return list_open, list_candidates
 
 
-# Split out of `main` to keep it under the PLR0911 return-count ceiling: this owns every
-# reason to ask NOBODY this run (no candidate, an open account-level block, or every
-# candidate cooling down/exhausted), so `main` only has to check "did this hand back a PR".
 def choose_pr_to_retry(
     list_open: list,
     list_candidates: list[dict],
@@ -1043,8 +874,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252 and cannot encode the glyphs this family of scripts
-    # prints; same seam fix as the gate itself.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

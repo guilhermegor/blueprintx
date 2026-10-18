@@ -26,20 +26,11 @@ import pathlib
 import sys
 
 
-# The read whose provenance stamp this hook enforces (the CALL form — see the module docstring
-# for why the trailing paren matters) and the stamp marker that must accompany it. MARKER, not
-# token: these are source-text sentinels, and "TOKEN" reads as a credential to a reader and to
-# bandit (S105) alike.
 _READ_MARKER = "read_table("
 _STAMP_MARKER = "stamp_provenance"
 
-# Directory names excluded from the doctrine, mirroring bin/check_typing.py's excludes:
-#   - ``typing``           — the runtime type-checking engine itself;
-#   - ``chassis``          — cross-cutting reference scaffolding;
-#   - ``example_feature``  — the DDD example capability, reference scaffolding, not production.
 _EXCLUDED_PARTS = {"typing", "chassis", "example_feature"}
 
-# The seam files that *define* the tokens (rather than *use* them) — exempt from pairing.
 _SEAM_FILENAMES = {"tabular_reader.py", "provenance.py"}
 
 
@@ -86,21 +77,10 @@ def _source_files() -> list[pathlib.Path]:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
-    # ⚠️ Zero discovery is a FAILURE, not a clean tree. `_source_files()` globs `src/`, so a
-    # renamed layout, a wrong cwd, or an exclusion list that grew too broad all make this
-    # gate iterate nothing, sum to 0 and exit 0 — reporting success for having checked
-    # nothing, silently. That is the failure mode this gate exists to prevent in someone
-    # else's data, and it had it (blueprintx#111). Every tier inherits python-common's
-    # `src/utils/` + `src/config/`, so a real project can never legitimately reach zero.
     list_targets = _source_files()
     if not list_targets:
         print("❌ no Python files found under src/ — refusing to report success.")
@@ -108,6 +88,5 @@ if __name__ == "__main__":
 
     total_errors = sum(check_file(str(p)) for p in list_targets)
     if total_errors == 0:
-        # Print WHAT was checked: a silent gate is indistinguishable from an absent one.
         print(f"✅ provenance stamp OK ({len(list_targets)} file(s) checked)")
     sys.exit(1 if total_errors > 0 else 0)

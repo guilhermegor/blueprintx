@@ -40,7 +40,6 @@ except ModuleNotFoundError:  # pragma: no cover - the gate self-skips without it
 
 _POLICY_FILE = ".layer-policy.yaml"
 _SRC_ROOT = "src"
-# Layer name for modules sitting directly under src/ (an entrypoint such as src/main.py).
 _ROOT_LAYER = "__root__"
 
 
@@ -210,7 +209,7 @@ def imported_names(cls_node: ast.Import | ast.ImportFrom) -> list[tuple[str, str
             str_local = cls_alias.asname or cls_alias.name.split(".")[0]
             list_out.append((cls_alias.name.split(".")[0], str_local))
         return list_out
-    if cls_node.level:  # a relative import is first-party by construction
+    if cls_node.level:
         return list_out
     str_root = (cls_node.module or "").split(".")[0]
     for cls_alias in cls_node.names:
@@ -247,17 +246,10 @@ def resolve_layer(tuple_rel: tuple, dict_policy: dict) -> str:
     tuple_dirs = tuple_rel[:-1]
     list_keys = [str_key for str_key in (dict_policy.get("layers") or {}) if "*" in str_key]
 
-    # ⚠️ Matched against every ANCESTOR of the file's directory, deepest first — not the
-    # directory alone. fnmatch's `*` does not stop at `/`, but the pattern must still match
-    # the WHOLE string, so `capabilities/*/domain` matches `capabilities/notes/domain` and
-    # NOT `capabilities/notes/domain/entities`. A module one package deeper would fall back
-    # to the broad `capabilities` key and lose the sublayer rules — the same quiet loss of
-    # enforcement this gate exists to prevent.
     for int_depth in range(len(tuple_dirs), 0, -1):
         str_prefix = "/".join(tuple_dirs[:int_depth])
         list_hits = [str_key for str_key in list_keys if fnmatch.fnmatch(str_prefix, str_key)]
         if list_hits:
-            # Longest first: `capabilities/*/domain` beats a broader `capabilities/*`.
             return max(list_hits, key=len)
     return str_broad
 
@@ -376,23 +368,15 @@ def disallowed_import_problems(
         if not isinstance(cls_node, ast.Import | ast.ImportFrom):
             continue
         for str_root, str_alias in imported_names(cls_node):
-            # One guard, three ways a module is simply not this gate's business: the stdlib
-            # carries no coupling, first-party code is ours, and an allowed vendor already
-            # has its written reason in the policy.
             if (
                 str_root in sys.stdlib_module_names
                 or str_root in set_first_party
                 or str_root in dict_allow
             ):
                 continue
-            # ⚠️ A star import cannot be annotation-only. The alias recorded would be the
-            # literal `*`, so nothing in the body ever matches it and every use of the
-            # vendor — `DataFrame(...)` included — passes unexamined. The names it binds are
-            # not knowable without importing the vendor, so the honest verdict is to refuse.
             if str_root in dict_annotation_only and str_alias != "*":
                 dict_annotation_aliases[str_alias] = str_root
                 continue
-            # One statement binding several names is ONE violation, not one per name.
             if (cls_node.lineno, str_root) in set_reported:
                 continue
             set_reported.add((cls_node.lineno, str_root))
@@ -592,20 +576,11 @@ def direction_problems(
     if not dict_deny:
         return []
 
-    # Scope does not change the verdict here either: an import deferred into a function still
-    # couples the layers, exactly as it does for a vendor.
-    # FULL dotted paths, not just the root. A deny entry may name a subpackage
-    # (`chassis.db_schema`), which is the difference between forbidding the DB providers and
-    # forbidding the runtime type-checking engine that lives beside them and is mandated on
-    # every class in the project — a root-level deny cannot tell those apart, and a rule that
-    # fires on correct code is a rule someone deletes.
     list_targets = [
         (cls_node, str_module)
         for cls_node in ast.walk(cls_tree)
         for str_module in imported_modules(cls_node)
     ]
-    # Relative imports produce no bindings above, so they are resolved separately from the
-    # file's own position — see relative_import_layer for why the dot count alone is not it.
     list_targets += [
         (cls_node, str_target)
         for cls_node in ast.walk(cls_tree)
@@ -669,7 +644,6 @@ def _matching_deny_key(str_target: str, dict_deny: dict) -> str | None:
         if (str_target == str_key or str_target.startswith(f"{str_key}."))
         if "." in str_key or str_target.split(".")[0] == str_key
     ]
-    # Longest first: a specific `chassis.db_schema` beats a broad `chassis`.
     return max(list_hits, key=len) if list_hits else None
 
 
@@ -735,29 +709,18 @@ def main() -> int:
     try:
         dict_policy = load_policy(path_root)
     except ValueError as cls_err:
-        # A malformed policy is a FAILURE with a readable message, not a traceback: the
-        # person who has to fix it is reading CI output, not a Python stack.
         print(f"❌ {cls_err}")
         return 1
     if dict_policy is None:
         return _report_absent_policy(len(list_modules))
 
-    # How many leading path components to strip before the layer is named. 0 for a flat
-    # layout (src/<layer>/…); lib-minimal nests its layers inside the distributable package
-    # (src/<pkg>/_internal/<layer>/…) and sets 2, so one engine serves both shapes instead
-    # of the layer silently resolving to the package name and matching no policy entry.
     int_prefix = int(dict_policy.get("src_prefix_depth", 0))
 
     set_first_party = first_party_roots(path_src, dict_policy)
     list_all: list[str] = []
     for path_file in list_modules:
         tuple_rel = path_file.relative_to(path_src).parts[int_prefix:]
-        # A module sitting directly under the layer root has no directory to name its layer,
-        # but it is exactly where an entrypoint lives — skipping it would let src/main.py
-        # import any vendor and bypass the policy entirely. It gets its own layer name so the
-        # policy can speak about it; deny-by-default then applies as everywhere else.
         str_layer = resolve_layer(tuple_rel, dict_policy)
-        # Everything above the filename: the package a relative import climbs out of.
         list_all.extend(
             find_file_problems(path_file, str_layer, dict_policy, set_first_party, tuple_rel[:-1])
         )
@@ -767,17 +730,11 @@ def main() -> int:
     if list_all:
         print(f"\n{len(list_all)} layer-import violation(s).")
         return 1
-    # Print WHAT was checked: a silent gate cannot be told from an absent one.
     print(f"✅ layer-import policy OK ({len(list_modules)} module(s) checked).")
     return 0
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")
