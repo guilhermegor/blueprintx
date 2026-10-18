@@ -2932,8 +2932,9 @@ is checked in. This repo does not document GitHub Actions secrets in any
 tier's <code>.env.example</code> (that file is seeded into the generated project's own
 <code>.env</code> and covers <strong>application runtime</strong> configuration — database
 credentials, feature flags — never CI-time secrets); the precedent for a
-repo secret like this one is a comment in the workflow file that needs it,
-which is what <code>secret_scan.yaml</code>'s own header — and this page — follow.</p>
+repo secret like this one is a documented note beside the workflow that needs it,
+which is what this page and the <code>secret_scan.yaml</code> record in
+<a href="../decision-records/">Decision records</a> follow.</p>
 <h2 id="opting-in-after-the-fact">Opting in after the fact<a class="headerlink" href="#opting-in-after-the-fact" title="Permanent link">&para;</a></h2>
 <p>Scaffolded without the key and want GitGuardian anyway?</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>secret<span class="w"> </span><span class="nb">set</span><span class="w"> </span>GITGUARDIAN_API_KEY<span class="w"> </span>--repo<span class="w"> </span>&lt;owner&gt;/&lt;repo&gt;
