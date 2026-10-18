@@ -23,9 +23,6 @@ def _load_gate() -> ModuleType:
     """
     path_gate = Path(__file__).resolve().parents[2] / "bin" / "check_all_exports.py"
     cls_spec = importlib.util.spec_from_file_location("_check_all_exports", path_gate)
-    # Split rather than combined. A conjunction in one assertion reports only that the
-    # whole thing was false, so a failure cannot say WHICH half broke — an absent loader
-    # and an absent spec are different faults with different causes.
     assert cls_spec is not None
     assert cls_spec.loader is not None
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -140,8 +137,6 @@ def test_zero_discovery_fails_instead_of_reporting_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Scanning nothing must exit non-zero, never green."""
-    # A gate that scanned nothing also found nothing wrong, and would report OK forever the day
-    # a path is renamed. This is the control that keeps the gate from becoming decorative.
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "_SRC", tmp_path / "empty")
     (tmp_path / "empty").mkdir()
@@ -153,8 +148,6 @@ _PATH_CONTRACTS_INIT = (
 )
 
 
-# The condition is fixed at import time (does this tier ship the package?), so it is not a path
-# THROUGH the test — but an `if` in the body makes it one, to a reader and to mccabe alike.
 @pytest.mark.skipif(
     not _PATH_CONTRACTS_INIT.is_file(), reason="contracts package ships to service tiers only"
 )

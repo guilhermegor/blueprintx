@@ -66,9 +66,6 @@ import sys
 import tokenize
 
 
-# Portuguese function words. Every entry was checked against English: none is also an English
-# word, so one hit is enough signal. Deliberately absent: "ver" and "dar", which collide with the
-# abbreviations "ver"(sion) and a Danish/Dutch reading, and every 1-2 letter word.
 SET_PT_WORDS = frozenset(
     {
         "ainda",
@@ -133,21 +130,8 @@ SET_PT_WORDS = frozenset(
 
 STR_ESCAPE = "lang:pt-ok"
 
-# Portuguese terms of art that carry no English equivalent and are used *inside* English prose,
-# exactly as `CNPJ` and `informe diário` are. Redacted whole, before word matching.
-#
-# ⚠️ **Deliberately EMPTY, and that is the stricter setting.** `de-para` lived here first — it is
-# the mapping/lookup table this project named that way, and splitting it on the hyphen made seven
-# English docstrings read as Portuguese. The user chose to translate it to "mapping" instead
-# (2026-08-06, 10 sites), so the exemption came out with it. Whitelisting is the fallback for a
-# term with no English equivalent; where a translation exists, translating is what keeps the gate
-# honest, because every entry here is a word the gate stops seeing anywhere.
-#
-# Nothing else needs an entry today. `CNPJ`, `Ativos Líquidos` and `informe diário` already pass —
-# the first through the ALL-CAPS acronym rule, the other two because they are not function words.
 TUPLE_TERMS_OF_ART: tuple = ()
 
-# File types whose full-line comments are read, by comment marker.
 DICT_MARKERS = {
     ".cfg": "#",
     ".env": "#",
@@ -160,26 +144,6 @@ DICT_MARKERS = {
     ".yml": "#",
 }
 
-# Audit mode is DENY-BY-DEFAULT: every file whose extension appears in DICT_MARKERS (plus
-# `.py`) is scanned, and only the directories below are skipped.
-#
-# ⚠️ It used to be an allow-list of globs (`src/**/*.py`, `bin/**/*.sh`, …) and that was wrong in
-# the one way this gate least affords: it left **57** supported files unaudited in this very
-# template — `.pre-commit-config.yaml`, `.github/workflows/*.yaml`, `mypy.ini`, the
-# `docker-compose.*.yml` files, and all of `optional/` (app code that ships into projects).
-# Worse, the pre-commit hook DOES check those when staged, so hook and CI disagreed: a comment
-# could pass CI and fail someone's commit later. A gate written against "a partial sweep leaves
-# a precedent" must not itself be a partial sweep.
-#
-# An allow-list also fails silently on every future addition — a new top-level directory is
-# simply never scanned, and nothing says so.
-#
-# Discovery walks `git ls-files`, not the filesystem (blueprintx#331) — a stray directory the
-# repo does not track (a `.claude/worktrees/<agent>/` copy of the whole tree, a stray venv) is
-# structurally invisible to it, with no entry to remember. What remains in TUPLE_SKIP_DIRS below
-# is now pure POLICY, not filesystem hygiene: `docs`/`fixtures` ARE tracked and are excluded on
-# purpose (locale, verbatim bytes) — everything else here is defense against a build artifact
-# someone force-added by mistake, since `git ls-files` would otherwise surface it too.
 TUPLE_SKIP_DIRS = (
     ".git",
     ".venv",
@@ -192,18 +156,12 @@ TUPLE_SKIP_DIRS = (
     "dist",
     "build",
     "site",
-    # The published documentation is written in the generated project's locale ON PURPOSE —
-    # that is the other half of the boundary this gate enforces, so it must never be scanned.
     "docs",
-    # Verbatim external bytes; normalising or judging a captured oracle corrupts its purpose.
     "fixtures",
 )
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Redacted before matching, in this order: backticked spans, quoted spans, URLs, dotted tokens,
-# ALL-CAPS acronyms. The acronym rule is what stops Microsoft `COM` from reading as the
-# Portuguese preposition "com" — five hits across the Outlook gateway alone.
 TUPLE_REDACTIONS = (
     re.compile(r"``[^`]+``"),
     re.compile(r"`[^`]*`"),
@@ -251,9 +209,6 @@ def redact(str_text: str) -> str:
         The same text with escaped lines, terms of art, quoted/backticked spans, URLs, dotted
         tokens and ALL-CAPS acronyms replaced by spaces.
     """
-    # The escape works one line at a time and never per block, because a block is joined from
-    # consecutive comment lines — letting one escaped line silence its neighbours would quietly
-    # exempt whole headers.
     list_lines = [
         " " * len(str_line) if STR_ESCAPE in str_line else str_line
         for str_line in str_text.splitlines()
@@ -349,9 +304,6 @@ def python_comments(str_source: str) -> list:
         does not parse yields nothing — a syntax error is ruff's finding to report, not this
         gate's.
     """
-    # Two independent extractions, each with its own parser and its own failure mode: `#`
-    # comments come from tokenize, docstrings from the AST. They were one body, so a tokenize
-    # failure returned early and silently skipped the docstrings as well.
     return _comment_blocks(str_source) + _docstring_blocks(str_source)
 
 
@@ -543,9 +495,6 @@ def tracked_files() -> list:
         into a failure rather than a silent pass.
     """
     try:
-        # Constant, trusted argv built in-process; no shell involved. S607 (partial path) is
-        # resolution BY DESIGN: this must use the `git` the developer's PATH selects — the one
-        # their shell, pre-commit and CI all use — not a path this file hardcodes.
         cls_result = subprocess.run(  # noqa: S603
             ["git", "ls-files"],  # noqa: S607
             cwd=PATH_ROOT,
@@ -572,14 +521,11 @@ def audit_paths() -> list:
         PATH_ROOT / path_rel
         for path_rel in tracked_files()
         if path_rel.suffix in set_supported
-        # `.env.example` carries `#` comments but its suffix is `.example`, already in
-        # DICT_MARKERS, so it is picked up above with no special case.
         and not any(str_part in TUPLE_SKIP_DIRS for str_part in path_rel.parts)
     ]
     return sorted(set(list_paths))
 
 
-# `--root <dir>` is two argv entries; anything shorter is a flag with its value missing.
 _INT_FLAG_WITH_VALUE = 2
 
 
@@ -654,11 +600,6 @@ def main(list_argv: list) -> int:
         else audit_paths()
     )
 
-    # ⚠️ In audit mode, ZERO discovered files is a failure, not a pass. Scanning nothing
-    # produces no findings, so a gate whose globs stopped matching — a renamed layout, a
-    # scaffold that puts sources elsewhere — reports success forever, and is green precisely
-    # because it checks nothing. When filenames are passed in, the hook is driving, and receiving
-    # none of them simply means nothing matching was staged — so there is nothing to check.
     if bool_audit and not list_paths:
         print(
             f"❌ no supported file found under {PATH_ROOT} — this gate would pass vacuously. "
@@ -673,9 +614,6 @@ def main(list_argv: list) -> int:
         print(str_problem)
 
     if not list_problems:
-        # Report the FILE COUNT on success, not just silence. A gate that prints nothing when
-        # clean is indistinguishable from a gate that did not run — and this whole file exists
-        # because an unenforced convention looked identical to an enforced one.
         print(f"✅ documentation-language boundary OK ({len(list_paths)} file(s) checked)")
     if list_problems:
         print(

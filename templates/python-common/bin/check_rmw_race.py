@@ -66,16 +66,11 @@ import re
 import sys
 
 
-# `.first()`/`.one()` alone are not enough signal — they exist on plenty of non-ORM objects.
-# The read is only pinned to a model (and therefore gate-able) when the SAME chain also calls
-# `.query(Model)`.
 _READ_TERMINALS = {"first", "one"}
 
 _LOCK_METHOD = "with_for_update"
 _LOCK_KWARG = "with_for_update"
 
-# The reason is REQUIRED — a bare marker does not satisfy the gate, matching
-# `# complexity-ok: <reason>` elsewhere in this file family.
 _RE_ALLOW_MARKER = re.compile(r"rmw-ok:\s*(\S.*)")
 
 _ARITH_OPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)
@@ -218,10 +213,6 @@ def _collect_read_entities(func: ast.AST) -> dict:
             continue
         str_name = cls_node.targets[0].id
         cls_prev = dict_entities.get(str_name)
-        # ⚠️ EVERY binding that can reach the write counts, and the UNLOCKED one decides.
-        # `if cond: row = get(..., with_for_update=True)` / `else: row = get(...)` gives two
-        # definitions of one name; keeping the last one seen suppressed the finding whenever
-        # the locked branch happened to come second — a race hidden by source order.
         if cls_prev is None or (cls_prev[1] and not cls_read[1]):
             dict_entities[str_name] = cls_read
     return dict_entities
@@ -268,7 +259,6 @@ def _assign_target_and_check(node: ast.AST) -> tuple:
         ``(None, None)`` when ``node`` is not an arithmetic reassignment.
     """
     if isinstance(node, ast.AugAssign) and isinstance(node.op, _ARITH_OPS):
-        # `x.qty -= n` IS `x.qty = x.qty - n` — the target is the self-reference.
         return node.target, node.target
     bool_is_arith_assign = (
         isinstance(node, ast.Assign)
@@ -361,8 +351,6 @@ def _message(str_var: str, str_attr: str, str_model: str) -> str:
     str
         The finding message.
     """
-    # S608 false positive: this builds a human-readable REMEDY MESSAGE containing SQL
-    # vocabulary, never an executed query — nothing here reaches a cursor or a session.
     return (
         f"read-modify-write race: `{str_var}.{str_attr}` is reassigned from its own value, "  # noqa: S608
         f"read earlier in this function, with no with_for_update() and no version_id_col on "
@@ -455,8 +443,6 @@ def _source_files() -> list:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the glyphs this script prints —
-    # see check_dtypes.py's identical fix for the always_run hook it would otherwise crash.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

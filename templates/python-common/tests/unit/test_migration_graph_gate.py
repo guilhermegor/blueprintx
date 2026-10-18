@@ -71,11 +71,6 @@ def _migration_file(
     return path_file
 
 
-# --------------------------
-# Directory-level self-skip
-# --------------------------
-
-
 def test_main_skips_when_migrations_dir_is_absent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -93,11 +88,6 @@ def test_main_skips_when_versions_dir_is_empty(
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 0
-
-
-# --------------------------
-# Should-PASS witnesses
-# --------------------------
 
 
 def test_main_passes_on_a_single_linear_chain(
@@ -126,11 +116,6 @@ def test_main_passes_after_a_merge_revision_joins_two_heads(
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 0
-
-
-# --------------------------
-# 🔴 The negative control — the gate must be able to FAIL, naming the heads
-# --------------------------
 
 
 def test_main_fails_on_two_heads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -189,11 +174,6 @@ def test_two_heads_message_names_both_head_revisions(
         Text the message must contain.
     """
     assert str_needle in str_two_heads_err
-
-
-# --------------------------
-# Other findings the graph read must catch
-# --------------------------
 
 
 def test_main_fails_on_a_dangling_down_revision(

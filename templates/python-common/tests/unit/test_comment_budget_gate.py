@@ -47,11 +47,6 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_comment_budget")
 
 
-# --------------------------
-# The ratchet ceiling — should-fail witness
-# --------------------------
-
-
 def test_a_short_comment_block_is_not_flagged(tmp_path: Path) -> None:
     """A handful of comment lines, well under the ratchet, is clean.
 
@@ -111,11 +106,6 @@ def test_a_qa_pragma_line_is_never_itself_a_finding(tmp_path: Path) -> None:
     assert gate.file_problems(path_file) == []
 
 
-# --------------------------
-# The escape hatch — mirrors this repo's other gate escape-hatch markers
-# --------------------------
-
-
 def test_the_escape_hatch_exempts_a_flagged_block() -> None:
     """``# comment-budget-ok: <reason>`` anywhere in the block exempts it."""
     list_lines = ["filler"] * (gate.INT_MAX_RUN + 1)
@@ -168,11 +158,6 @@ def test_a_bare_marker_inside_a_real_oversized_block_still_fails(tmp_path: Path)
     assert len(gate.file_problems(path_file)) == 1
 
 
-# --------------------------
-# Pragma lines break a run, they never extend it
-# --------------------------
-
-
 def test_a_pragma_line_splits_one_block_into_two() -> None:
     """Two five-line blocks separated by one pragma are two findings, not one."""
     list_lines = ["# a"] * 5 + ["# noqa"] + ["# b"] * 5
@@ -200,11 +185,6 @@ def test_python_docstrings_are_excluded_from_the_budget(tmp_path: Path) -> None:
     assert gate.file_problems(path_file) == []
 
 
-# --------------------------
-# The decorative banner — regex-decidable, no ratchet
-# --------------------------
-
-
 def test_a_decorative_banner_triple_is_flagged() -> None:
     """A rule / title / rule sandwich is the Makefile's own measured shape."""
     list_findings = gate.banner_findings(1, [" -------", " LINTING", " -------"])
@@ -228,34 +208,6 @@ def test_a_section_title_alone_is_not_a_banner() -> None:
     assert gate.banner_findings(1, ["a", "b", "c"]) == []
 
 
-@pytest.mark.parametrize(
-    ("list_lines", "bool_expected"),
-    [
-        ([" --------------------------", " Tests", " --------------------------"], True),
-        ([" -------", " LINTING", " -------"], False),
-    ],
-    ids=["full-triple", "shorter-rule"],
-)
-def test_is_exempt_section_banner_matches_the_full_triple_only(
-    list_lines: list[str], bool_expected: bool
-) -> None:
-    """Only the exact mandated triple is exempt — a shorter rule is not.
-
-    Parameters
-    ----------
-    list_lines : list[str]
-        The candidate banner lines.
-    bool_expected : bool
-        Whether the triple is exempt.
-    """
-    assert gate.is_exempt_section_banner(list_lines, 0) is bool_expected
-
-
-# --------------------------
-# Structural exemptions — positional, not textual
-# --------------------------
-
-
 def test_a_shebang_line_is_structurally_exempt() -> None:
     """Line 1's ``#!`` never counts toward a run."""
     assert gate.line_breaks_run(1, "#!/usr/bin/env bash", "!/usr/bin/env bash", ()) is True
@@ -269,11 +221,6 @@ def test_an_encoding_declaration_is_structurally_exempt() -> None:
 def test_a_shebang_shaped_line_deeper_in_the_file_is_not_exempt() -> None:
     """The same text past line 2 is ordinary prose — position, not content, decides."""
     assert gate.line_breaks_run(3, "#!/usr/bin/env bash", "!/usr/bin/env bash", ()) is False
-
-
-# --------------------------
-# File-type discovery — extensionless Makefile is the issue's own worked example
-# --------------------------
 
 
 def test_marker_for_recognizes_makefile_by_name() -> None:
@@ -326,11 +273,6 @@ def test_audit_discovers_an_extensionless_makefile(
     assert tmp_path / "Makefile" in gate.audit_paths()
 
 
-# --------------------------
-# Python files are actually checked (blueprintx#466)
-# --------------------------
-
-
 def test_a_python_file_with_a_decorative_banner_is_flagged(tmp_path: Path) -> None:
     """Should-fail witness: a ``.py`` file's own banner defect must surface.
 
@@ -363,14 +305,13 @@ def test_a_python_file_with_an_oversized_comment_run_is_flagged(tmp_path: Path) 
     assert len(gate.file_problems(path_file)) == 1
 
 
-def test_the_mandated_test_section_banner_is_exempt(tmp_path: Path) -> None:
-    """``tests/CLAUDE.md``'s rule/title/rule test-section banner is not a finding.
+def test_a_section_banner_in_a_test_module_is_a_finding(tmp_path: Path) -> None:
+    """Should-fail witness: the old test-section banner is no longer exempt.
 
-    This is the shape ``tests/CLAUDE.md`` mandates for structuring every test
-    module in this repo (272 occurrences across 31 files, measured). It is not
-    the essay/decorative-banner defect this gate polices — see
-    ``is_exempt_section_banner`` for the reasoning — so once ``.py`` files
-    are actually checked (the fix above), this exact convention must stay clean.
+    ``tests/CLAUDE.md`` once mandated this rule/title/rule triple in every test
+    module and the gate exempted it by file type. The convention is gone (the
+    suite carries no comments), so the exemption was deleted with it: the same
+    three lines in a test module are now the plain decorative banner.
 
     Parameters
     ----------
@@ -379,72 +320,10 @@ def test_the_mandated_test_section_banner_is_exempt(tmp_path: Path) -> None:
     """
     path_dir = tmp_path / "tests"
     path_dir.mkdir()
-    path_file = path_dir / "probe.py"
-    str_source = (
-        "# --------------------------\n"
-        "# Tests\n"
-        "# --------------------------\n"
-        "def test_something() -> None:\n"
-        "\tassert True\n"
-    )
-    path_file.write_text(str_source, encoding="utf-8")
-    assert gate.file_problems(path_file) == []
-
-
-def test_a_test_module_outside_a_tests_dir_is_still_exempt(tmp_path: Path) -> None:
-    """Scoping the exemption by directory alone was measured wrong.
-
-    ``templates/*/optional/multi_pipeline/test_pipeline.py`` are real test
-    modules shipped outside any ``tests/`` tree. A directory-only rule flagged
-    6 mandated banners across those four files, so ``is_test_module`` follows
-    pytest's own discovery convention and accepts the ``test_`` filename
-    prefix too (blueprintx#479).
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        A throwaway directory pytest provides per test.
-    """
-    path_dir = tmp_path / "optional" / "multi_pipeline"
-    path_dir.mkdir(parents=True)
-    path_file = path_dir / "test_pipeline.py"
-    str_source = (
-        "# --------------------------\n"
-        "# Tests\n"
-        "# --------------------------\n"
-        "def test_something() -> None:\n"
-        "\tassert True\n"
-    )
-    path_file.write_text(str_source, encoding="utf-8")
-    assert gate.file_problems(path_file) == []
-
-
-def test_a_production_python_file_gets_no_section_banner_exemption(
-    tmp_path: Path,
-) -> None:
-    """The exemption is scoped to test modules, not to every ``.py`` file.
-
-    ``tests/CLAUDE.md`` mandates the rule/title/rule triple for structuring
-    TEST modules. The same three lines in a production ``.py`` are the plain
-    decorative banner this gate exists to police, so the exemption must not
-    reach them — see ``is_test_module`` (blueprintx#479).
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        A throwaway directory pytest provides per test.
-    """
-    path_dir = tmp_path / "src"
-    path_dir.mkdir()
-    path_file = path_dir / "service.py"
-    str_source = (
-        "# --------------------------\n"
-        "# Helpers\n"
-        "# --------------------------\n"
-        "def run() -> None:\n"
-        "\treturn None\n"
-    )
-    path_file.write_text(str_source, encoding="utf-8")
+    path_file = path_dir / "test_probe.py"
+    str_rule = "# " + "-" * 26 + "\n"
+    str_code = "def test_something() -> None:\n\tassert True\n"
+    path_file.write_text(str_rule + "# Tests\n" + str_rule + str_code, encoding="utf-8")
     assert len(gate.file_problems(path_file)) == 1
 
 
@@ -467,13 +346,8 @@ def test_a_production_python_file_banner_is_named_a_decorative_banner(
     assert "decorative banner (rule/title/rule)" in gate.file_problems(path_file)[0]
 
 
-def test_a_non_python_file_gets_no_section_banner_exemption(tmp_path: Path) -> None:
-    """A shell file under ``tests/`` carrying the triple is still a banner.
-
-    Guards the other half of the scope: ``is_test_module`` requires BOTH a
-    ``.py`` suffix and a ``tests`` path segment, so living under ``tests/`` is
-    not on its own enough to earn the exemption. The convention was measured
-    (blueprintx#466) to occur only in ``.py`` files.
+def test_a_shell_banner_triple_under_tests_is_a_finding(tmp_path: Path) -> None:
+    """A shell file under ``tests/`` carrying the triple is a banner like any other.
 
     Parameters
     ----------
@@ -494,7 +368,7 @@ def test_a_non_python_file_gets_no_section_banner_exemption(tmp_path: Path) -> N
     assert len(gate.file_problems(path_file)) == 1
 
 
-def test_a_non_python_file_banner_is_named_a_decorative_banner(tmp_path: Path) -> None:
+def test_a_shell_banner_finding_is_named_a_decorative_banner(tmp_path: Path) -> None:
     """The one finding on a ``tests/`` shell triple names the banner rule.
 
     Parameters
@@ -519,9 +393,8 @@ def list_split_run_problems(tmp_path: Path) -> list[str]:
     QA suppression, wrong for a banner: listing the test-section rule line
     there let one dash line split an 89-line block into two 44-line halves,
     each under ``INT_MAX_RUN``, so the whole file passed clean. A lone rule
-    line (no title, no closing rule after it) is not the exempt triple, so it
-    must both stay IN the run's line count and be flagged as its own
-    decorative banner.
+    line (no title, no closing rule after it) must both stay IN the run's line
+    count and be flagged as its own decorative banner.
 
     Parameters
     ----------
@@ -539,7 +412,7 @@ def list_split_run_problems(tmp_path: Path) -> list[str]:
     return gate.file_problems(path_file)
 
 
-def test_the_exempt_banner_does_not_split_an_oversized_run(
+def test_a_lone_rule_line_does_not_split_an_oversized_run(
     list_split_run_problems: list[str],
 ) -> None:
     """Should-fail witness for blueprintx#479: the lone rule line stays in the run's count.
@@ -580,7 +453,7 @@ def test_an_oversized_run_split_by_a_rule_line_yields_exactly_two_findings(
 
 @pytest.fixture
 def list_triple_run_problems(tmp_path: Path) -> list[str]:
-    """Problems for an oversized block wrapped around a valid section-banner triple.
+    """Problems for an oversized block wrapped around a rule/title/rule triple.
 
     Parameters
     ----------
@@ -604,38 +477,30 @@ def list_triple_run_problems(tmp_path: Path) -> list[str]:
     return gate.file_problems(path_file)
 
 
-def test_the_exempt_triple_still_counts_toward_an_oversized_run(
+def test_a_triple_still_counts_toward_an_oversized_run(
     list_triple_run_problems: list[str],
 ) -> None:
-    """The exemption suppresses the BANNER finding, never the run-length one.
-
-    A full, valid section-banner triple wrapped inside an otherwise-oversized
-    block must not disappear from the run's line count.
+    """The triple stays in the run's line count.
 
     Parameters
     ----------
     list_triple_run_problems : list[str]
         The gate's findings for the probe file.
     """
-    assert "91 lines" in list_triple_run_problems[0]
+    assert any("91 lines" in str_problem for str_problem in list_triple_run_problems)
 
 
-def test_the_exempt_triple_is_not_reported_as_a_banner_inside_a_run(
+def test_a_triple_inside_a_run_is_also_reported_as_a_banner(
     list_triple_run_problems: list[str],
 ) -> None:
-    """Only the run-length finding is reported — the triple itself goes unflagged.
+    """The run-length finding is joined by one banner finding for the triple.
 
     Parameters
     ----------
     list_triple_run_problems : list[str]
         The gate's findings for the probe file.
     """
-    assert len(list_triple_run_problems) == 1
-
-
-# --------------------------
-# Zero-discovery guard and the success message
-# --------------------------
+    assert any("decorative banner" in str_problem for str_problem in list_triple_run_problems)
 
 
 def test_audit_mode_fails_when_no_file_matches(

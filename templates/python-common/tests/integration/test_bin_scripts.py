@@ -28,21 +28,9 @@ from types import MappingProxyType
 import pytest
 
 
-# --------------------------
-# Module Utilities
-# --------------------------
-
-
-# Environment probes resolved ONCE at import time, so the tests that depend on them use
-# `skipif` decorators instead of a guard clause in the body. A runtime `if … pytest.skip(…)`
-# reads as a path THROUGH the test — to a reader and to mccabe alike — when it is really a
-# statement about the machine. tests/ is capped at complexity 1 by bin/check_complexity.sh.
 _STR_GIT = shutil.which("git")
 _STR_BASH = shutil.which("bash") or "bash"
 
-# An immutable empty default for the env-override parameters below. A mutable `{}` default
-# is a bugbear B006 finding, and a `dict_extra or {}` guard would cost a decision point in a
-# tree capped at cyclomatic complexity 1.
 _MAPPING_NO_EXTRA_ENV: Mapping[str, str] = MappingProxyType({})
 
 
@@ -63,8 +51,6 @@ def _skip_unless(bool_available: bool, str_reason: str) -> None:
     -------
     None
     """
-    # Short-circuit evaluation makes this an expression rather than a branch. Behaviour is
-    # the same, and the helper stays inside the very ceiling it exists to serve.
     bool_available or pytest.skip(str_reason)
 
 
@@ -104,11 +90,6 @@ def _bin_script(str_name: str) -> Path:
         Absolute path to ``bin/<str_name>`` at the repository root.
     """
     return Path(__file__).resolve().parents[2] / "bin" / str_name
-
-
-# --------------------------
-# print_status — an unknown status must not look like ordinary output
-# --------------------------
 
 
 def _print_status(str_status: str) -> subprocess.CompletedProcess:
@@ -184,9 +165,6 @@ def _run(
     """
     str_bash = shutil.which("bash") or "bash"
     dict_full_env = {**os.environ, **dict_env} if dict_env else None
-    # The argument vector is constant and trusted -- a resolved bash plus the repo's own
-    # script -- with no untrusted input interpolated, so the bandit subprocess warning is
-    # a false positive here.
     return subprocess.run(  # noqa: S603
         [str_bash, str(_bin_script(str_script)), *args],
         capture_output=True,
@@ -195,11 +173,6 @@ def _run(
         cwd=str(cwd) if cwd is not None else None,
         env=dict_full_env,
     )
-
-
-# --------------------------
-# bin/poetry_exec.sh
-# --------------------------
 
 
 def test_poetry_exec_no_args_exits_with_usage_error() -> None:
@@ -219,19 +192,12 @@ def test_poetry_exec_version_keeps_stdout_clean() -> None:
         "Poetry could not be resolved -- offline/CI integration guard only",
     )
 
-    # stdout is exactly the project version -- no resolution chatter leaked in.
     str_version = cls_result.stdout.strip()
     assert str_version != ""
     assert "\n" not in str_version
     assert "Detected OS" not in cls_result.stdout
 
-    # The resolution status the wrapper emits lands on stderr, not stdout.
     assert "Detected OS" in cls_result.stderr
-
-
-# --------------------------
-# bin/precommit.sh
-# --------------------------
 
 
 def test_precommit_skips_gracefully_off_git_tree(tmp_path: Path) -> None:
@@ -244,11 +210,8 @@ def test_precommit_skips_gracefully_off_git_tree(tmp_path: Path) -> None:
     """
     cls_result = _run("precommit.sh", cwd=tmp_path)
 
-    # Skip-gracefully default -- init must still complete, so exit 0.
     assert cls_result.returncode == 0
-    # No repository is fabricated; the template default never runs git init.
     assert not (tmp_path / ".git").exists()
-    # The skip is announced, so a missing repo is visible, not silent.
     str_output = cls_result.stdout + cls_result.stderr
     assert "skipping pre-commit hooks" in str_output
 
@@ -273,7 +236,6 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
     path_home = tmp_path / "home"
     path_home.mkdir()
     path_global_cfg = path_home / ".gitconfig"
-    # A real work tree; the throwaway HOME/config isolates the global safe.directory write.
     subprocess.run(  # noqa: S603
         [str(_STR_GIT), "init", "-q", str(path_repo)], check=True
     )
@@ -290,18 +252,10 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
         "git build does not honour GIT_TEST_ASSUME_DIFFERENT_OWNER -- guard only",
     )
 
-    # The throwaway global config now holds git's own suggested path, which proves the tree
-    # resolved and init could keep going instead of the probe misreading it as absent.
     str_cfg = path_global_cfg.read_text(encoding="utf-8") if path_global_cfg.exists() else ""
     assert "safe" in str_cfg
     assert str(path_repo) in str_cfg or "%(prefix)" in str_cfg
-    # The self-heal never fabricates a repo and never emits the "no git repo" skip.
     assert "No git repository here" not in str_output
-
-
-# --------------------------
-# pip_fallback.sh — DB driver pruning
-# --------------------------
 
 
 def _run_prune(tmp_path: Path, str_backend: str) -> list[str]:
@@ -334,7 +288,6 @@ def _run_prune(tmp_path: Path, str_backend: str) -> list[str]:
         f'source "{path_lib}/pip_fallback.sh"; '
         f'pip_fallback_prune_unused_db_drivers "{path_req}"'
     )
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     subprocess.run([str_bash, "-c", str_script], check=True, capture_output=True)  # noqa: S603
     return [line for line in path_req.read_text(encoding="utf-8").splitlines() if line]
 
@@ -359,9 +312,6 @@ def test_prune_drops_every_db_driver_for_sqlite(tmp_path: Path) -> None:
         ("mariadb", "mysql-connector-python"),
         ("mssql", "pyodbc"),
         ("oracle", "oracledb"),
-        # config/connection_db.py lowercases DB_BACKEND before dispatching, so these spellings
-        # are valid app configuration. The pruner must agree, or it drops the one driver the
-        # project is configured to use — the exact failure the pruning exists to prevent.
         ("PostgreSQL", "psycopg"),
         ("ORACLE", "oracledb"),
     ],
@@ -382,10 +332,6 @@ def test_prune_keeps_only_the_configured_backends_driver(
     assert len(list_drivers) == 1
     assert list_drivers[0].startswith(str_driver)
 
-
-# --------------------------
-# bin/check_*.py — Windows cp1252 stdout
-# --------------------------
 
 _GLYPH_GATES = (
     "check_backlog_ledger.py",
@@ -414,12 +360,10 @@ def test_gate_reports_a_finding_under_cp1252_stdout(tmp_path: Path) -> None:
     """
     path_src = tmp_path / "src"
     path_src.mkdir()
-    # A banned binary float dtype — the finding that makes check_dtypes print its glyph.
     (path_src / "loader.py").write_text('dict_dtypes = {"amount": "float64"}\n', encoding="utf-8")
     dict_env = dict(os.environ)
     dict_env["PYTHONIOENCODING"] = "cp1252"
     str_python = shutil.which("python3") or shutil.which("python") or "python3"
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     cls_run = subprocess.run(  # noqa: S603
         [str_python, str(_bin_script("check_dtypes.py"))],
         cwd=tmp_path,
@@ -447,11 +391,6 @@ def test_every_glyph_printing_gate_reconfigures_its_streams(str_script: str) -> 
     assert 'reconfigure(encoding="utf-8"' in str_main, (
         f"{str_script} prints status glyphs but never reconfigures stdout/stderr"
     )
-
-
-# --------------------------
-# bootstrap.sh — corporate CA must UNION, never replace
-# --------------------------
 
 
 _CA_ENV_VARS = ("PIP_CERT", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "CURL_CA_BUNDLE")
@@ -501,7 +440,6 @@ def test_corporate_ca_bundle_is_a_union_not_a_replacement(tmp_path: Path) -> Non
         f'BIN_DIR="{path_bin}"; PYTHON="$(command -v python3 || command -v python)"; '
         f'build_union_ca_bundle "{path_corporate}"'
     )
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     cls_run = subprocess.run(  # noqa: S603
         [str_bash, "-c", str_script],
         env=dict_env,
@@ -515,7 +453,6 @@ def test_corporate_ca_bundle_is_a_union_not_a_replacement(tmp_path: Path) -> Non
     str_bundle = (path_bin / "ca_bundle.pem").read_text(encoding="utf-8")
     assert "Q09SUE9SQVRFQ0E=" in str_bundle, "the corporate CA must be in the bundle"
     assert "SE9TVEJVTkRMRQ==" in str_bundle, "the host's existing bundle must survive"
-    # A replacement writes exactly one block; only a union carries the roots as well.
     assert str_bundle.count("BEGIN CERTIFICATE") > 2
 
 
@@ -535,11 +472,8 @@ def test_bundle_construction_refuses_when_only_the_corporate_ca_is_available(
     path_corporate.write_text(_fake_pem("Q09SUE9SQVRFQ0E="), encoding="utf-8")
 
     dict_env = {k: v for k, v in os.environ.items() if k not in _CA_ENV_VARS}
-    # Stand in for a host where certifi was never installed by hiding it from the child.
     path_sitecustomize = tmp_path / "sitecustomize.py"
     path_sitecustomize.write_text(
-        # Written against the modern finder protocol. The older two-method form was dropped
-        # in Python 3.12, where a finder shaped that way is skipped without any warning.
         "import sys\n"
         "from importlib.abc import MetaPathFinder\n"
         "class _Block(MetaPathFinder):\n"
@@ -558,7 +492,6 @@ def test_bundle_construction_refuses_when_only_the_corporate_ca_is_available(
         f'BIN_DIR="{path_bin}"; PYTHON="$(command -v python3 || command -v python)"; '
         f'build_union_ca_bundle "{path_corporate}"'
     )
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     cls_run = subprocess.run(  # noqa: S603
         [str_bash, "-c", str_script],
         env=dict_env,
@@ -585,11 +518,6 @@ def test_corporate_ca_wiring_never_disables_verification_for_pypi() -> None:
     assert "export PIP_TRUSTED_HOST" not in str_source
 
 
-# --------------------------
-# bin/get_corporate_ca.sh
-# --------------------------
-
-
 @pytest.mark.skipif(os.name == "nt", reason="this asserts the non-Windows refusal path")
 def test_get_corporate_ca_refuses_with_guidance_off_windows(tmp_path: Path) -> None:
     """On a non-Windows host the script refuses and names the system trust store.
@@ -606,9 +534,7 @@ def test_get_corporate_ca_refuses_with_guidance_off_windows(tmp_path: Path) -> N
     assert cls_result.returncode != 0, "the script must not report success without a pem"
     str_output = cls_result.stdout + cls_result.stderr
     assert "Windows only" in str_output
-    # The refusal carries the remedy, not just the verdict.
     assert "ca-certificates.crt" in str_output or "ca-bundle.crt" in str_output
-    # Nothing is written on the refusal path.
     assert not (tmp_path / "bin" / "corporate_ca.pem").exists()
 
 
@@ -630,7 +556,6 @@ def _init_repo_with_one_commit(path_repo: Path) -> str:
 
     path_repo.mkdir(parents=True, exist_ok=True)
     list_identity = ["-c", "user.email=t@t.invalid", "-c", "user.name=t"]
-    # Constant, trusted argv -- a resolved git plus repo-internal paths.
     subprocess.run([str_git, "init", "-q", str(path_repo)], check=True)  # noqa: S603
     (path_repo / "seed.txt").write_text("seed\n", encoding="utf-8")
     subprocess.run(  # noqa: S603
@@ -656,8 +581,6 @@ def test_clean_index_guard_allows_a_push_with_an_empty_index(tmp_path: Path) -> 
     """
     path_repo = tmp_path / "repo"
     _init_repo_with_one_commit(path_repo)
-    # Edit a tracked file without staging it. The tree is now dirty while the index stays
-    # empty, which is the routine state the guard must never block.
     (path_repo / "seed.txt").write_text("edited\n", encoding="utf-8")
 
     cls_result = _run("check_clean_index.sh", cwd=path_repo)
@@ -681,7 +604,6 @@ def test_clean_index_guard_blocks_a_populated_index(tmp_path: Path) -> None:
     path_repo = tmp_path / "repo"
     str_git = _init_repo_with_one_commit(path_repo)
     (path_repo / "left_behind.py").write_text("x = 1\n", encoding="utf-8")
-    # `git add` ran and no commit consumed it -- the fingerprint of a rejected commit.
     subprocess.run(  # noqa: S603
         [str_git, "-C", str(path_repo), "add", "left_behind.py"], check=True
     )
@@ -690,10 +612,8 @@ def test_clean_index_guard_blocks_a_populated_index(tmp_path: Path) -> None:
 
     assert cls_result.returncode != 0, "a populated index must block the push"
     str_output = cls_result.stdout + cls_result.stderr
-    # The verdict names the likely cause and the file, not just "blocked".
     assert "REJECTED" in str_output
     assert "left_behind.py" in str_output
-    # The remedy travels with the refusal, including the escape hatch.
     assert "--no-verify" in str_output
 
 
@@ -708,11 +628,6 @@ def test_clean_index_guard_is_inert_off_a_git_tree(tmp_path: Path) -> None:
     cls_result = _run("check_clean_index.sh", cwd=tmp_path)
 
     assert cls_result.returncode == 0
-
-
-# --------------------------
-# poe_exec.sh — the task-runner resolver
-# --------------------------
 
 
 def test_poe_exec_resolves_the_print_status_it_calls() -> None:
@@ -732,12 +647,6 @@ def test_poe_exec_resolves_the_print_status_it_calls() -> None:
     """
     str_bash = shutil.which("bash") or "bash"
     path_exec = Path(__file__).resolve().parents[2] / "bin" / "poe_exec.sh"
-    # Constant, trusted argv built from repo-internal paths -- no user input reaches it.
-    # The environment is inherited rather than scrubbed. An emptied PATH takes `dirname` with
-    # it, so SCRIPT_DIR never resolves and the run then fails for a reason unrelated to the
-    # claim. Measured while writing this test. Either branch of the resolver serves here, since
-    # a resolved Poe and the diagnostic that reports none are both built from print_status
-    # calls, so whichever one runs proves the lib is reachable.
     cls_result = subprocess.run(  # noqa: S603
         [str_bash, str(path_exec), "--version"],
         capture_output=True,
@@ -760,13 +669,7 @@ def test_get_corporate_ca_never_disables_tls_verification() -> None:
     str_source = _bin_script("get_corporate_ca.sh").read_text(encoding="utf-8")
     assert "CERT_NONE" not in str_source
     assert "check_hostname" not in str_source
-    # The supported path reads the store the browser already trusts.
     assert "enum_certificates" in str_source
-
-
-# --------------------------
-# bin/export_deps.sh
-# --------------------------
 
 
 def _stub_poetry(path_dir: Path, str_export_body: str) -> dict[str, str]:
@@ -830,30 +733,18 @@ def test_export_deps_reprints_what_poetry_said_on_failure(tmp_path: Path) -> Non
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode != 0
-    # Poetry's verbatim words survived to the operator.
     assert 'The command "export" does not exist.' in str_all
-    # ... and the remedy names the RESOLVED binary, not a bare `poetry`.
     assert "Resolved Poetry:" in str_all
     assert "self add poetry-plugin-export" in str_all
 
 
-# --------------------------
-# check-urls — every docstring SHAPE must actually be scanned (blueprintx#206)
-# --------------------------
-
 _URL_404 = "https://example.invalid/blueprintx/does-not-exist"
 
-# The three shapes the delimiter-line `continue` used to swallow. Each holds the SAME
-# unreachable URL, so a shape that reports clean is reporting a check nobody ran.
 DICT_DOCSTRING_SHAPES = {
     "one_line": f'"""A one-line docstring holding {_URL_404} inline."""\n',
     "opening_line": f'"""Summary carrying {_URL_404}.\n\n\tMore prose.\n\t"""\n',
     "closing_line": f'"""Summary.\n\n\tMore prose, then the link {_URL_404}"""\n',
     "body_line": f'"""Summary.\n\n\tThe link sits on its own line: {_URL_404}\n\t"""\n',
-    # ⚠️ The third shape, deferred when the two blind ones were fixed and closed on review
-    # (blueprintx#224): a closing delimiter sharing a line with text. It was never blind —
-    # the URL was scanned as body text — but the state never flipped back, so every LATER
-    # line was read as still inside the docstring and its URLs were fetched too.
     "closing_shares_the_line": f'"""Summary.\n\n\tProse, then the link {_URL_404}"""\n',
 }
 
@@ -883,7 +774,6 @@ def _seed_url_cache(path_root: Path, str_url: str, str_status: str) -> None:
 
     path_cache = path_root / ".url_check_cache"
     path_cache.mkdir(exist_ok=True)
-    # Not a security use — mirrors the hook's own `md5sum` cache key.
     str_key = hashlib.md5(str_url.encode()).hexdigest()  # noqa: S324
     (path_cache / str_key).write_text(f"{str_status}\n", encoding="utf-8")
 
@@ -901,7 +791,6 @@ def _run_url_hook(path_root: Path) -> subprocess.CompletedProcess:
     subprocess.CompletedProcess
         The completed run.
     """
-    # Constant, trusted argv; no shell involved.
     return subprocess.run(  # noqa: S603
         [shutil.which("bash") or "bash", str(_bin_script("test_urls_docstrings.sh")), "."],
         cwd=path_root,
@@ -967,11 +856,6 @@ def test_check_urls_ignores_a_url_outside_any_docstring(tmp_path: Path) -> None:
     assert cls_result.returncode == 0
 
 
-# --------------------------
-# check_complexity.sh — the per-tree cyclomatic ceiling (blueprintx#167)
-# --------------------------
-
-# Complexity 3 (two `if`s + the implicit path). Over src/'s ceiling of 2, under bin/'s 8.
 _STR_BRANCHY = (
     'def branchy(a, b):{marker}\n\t"""Doc."""\n'
     "\tif a:\n\t\treturn 1\n\tif b:\n\t\treturn 2\n\treturn 3\n"
@@ -1012,8 +896,6 @@ def _complexity_tree(path_root: Path, str_marker: str = "", str_tree: str = "src
     None
     """
     shutil.copy(Path(__file__).resolve().parents[2] / "ruff.toml", path_root / "ruff.toml")
-    # Written out rather than looped. At three entries the unrolled form is both shorter and
-    # plainer than any machinery that would dodge the loop.
     _seed_tree(path_root / "src")
     _seed_tree(path_root / "tests")
     _seed_tree(path_root / "bin")
@@ -1022,15 +904,9 @@ def _complexity_tree(path_root: Path, str_marker: str = "", str_tree: str = "src
     )
 
 
-# The colour-control variables, stripped from every run so a developer's shell cannot decide
-# what this suite measures. Unrolled at three entries for the same reason `_complexity_tree`
-# unrolls its three trees, and a loop here would cost complexity in a tree capped at 1.
 _MAPPING_NO_EXTRA_ENV: Mapping[str, str] = MappingProxyType({})
 
-# Matches an ANSI CSI sequence — the escapes that must never reach the gate's parsing.
 _RE_ANSI = re.compile(r"\x1b\[[0-9;]*m")
-# The reported finding, whole line. A regex rather than a filtered generator because a
-# comprehension `if` is a decision point, and tests/ is capped at complexity 1.
 _RE_C901_LINE = re.compile(r"^.*C901.*$", re.MULTILINE)
 
 
@@ -1062,7 +938,6 @@ def _run_complexity(
     dict_env.pop("NO_COLOR", None)
     dict_env.update(dict_extra)
 
-    # Constant, trusted argv; no shell involved.
     return subprocess.run(  # noqa: S603
         [
             shutil.which("bash") or "bash",
@@ -1140,11 +1015,6 @@ def test_complexity_gate_applies_a_different_ceiling_per_tree(tmp_path: Path) ->
     assert _run_complexity(tmp_path).returncode != 0
 
 
-# --------------------------
-# check_complexity.sh — a colour-forcing shell must not change the verdict (blueprintx#254)
-# --------------------------
-
-
 @pytest.mark.parametrize("str_var", ["FORCE_COLOR", "CLICOLOR_FORCE"])
 def test_complexity_gate_reaches_a_verdict_under_forced_colour(
     tmp_path: Path, str_var: str
@@ -1195,8 +1065,6 @@ def test_complexity_finding_carries_no_ansi_escapes(tmp_path: Path) -> None:
     cls_match = _RE_C901_LINE.search(str_all)
 
     assert cls_match, f"no C901 line to inspect: {str_all}"
-    # `print_status` adds its own colour around the marker, so only the ruff-derived
-    # remainder after "C901" is asserted clean.
     str_payload = cls_match.group().split("C901")[-1]
     assert not _RE_ANSI.search(str_payload), f"escapes leaked into: {cls_match.group()!r}"
 
@@ -1268,9 +1136,6 @@ def test_check_urls_stops_scanning_after_a_closing_delimiter(tmp_path: Path) -> 
     module was scanned as if it were still docstring. That is the over-scan direction: it
     fails a gate on a URL that was never in a docstring at all.
     """
-    # ⚠️ The docstring must be MULTI-line and close on a line that STARTS WITH TEXT. A
-    # one-line docstring matched the old start-anchored guard perfectly well, so a fixture
-    # using one passes against the bug and proves nothing.
     (tmp_path / "module_under_test.py").write_text(
         '"""Summary.\n\n\tProse, and the docstring closes right here."""\n\n'
         f'STR_ENDPOINT = "{_URL_404}"  # ordinary code, never a docstring\n',
@@ -1281,16 +1146,6 @@ def test_check_urls_stops_scanning_after_a_closing_delimiter(tmp_path: Path) -> 
     cls_result = _run_url_hook(tmp_path)
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
-
-
-# Every gate needs a should-fail witness (blueprintx#111)
-#
-# ⚠️ A gate with no test that has SEEN IT FAIL is indistinguishable from a gate that is not
-# wired up: both print green. These are the eight that had no such witness. Writing them
-# found three live defects, which is the argument for the rule rather than a coincidence:
-# `check_provenance.py` and `check_docstrings.py` both exited 0 printing NOTHING when their
-# cwd-relative globs matched nothing, and `lint_actions.sh` accepted any file named
-# `actionlint` on PATH as a working one.
 
 
 def _run_py_gate(str_gate: str, path_root: Path) -> subprocess.CompletedProcess:
@@ -1312,7 +1167,6 @@ def _run_py_gate(str_gate: str, path_root: Path) -> subprocess.CompletedProcess:
         The completed run, stdout and stderr captured as text.
     """
     str_python = shutil.which("python3") or shutil.which("python") or "python3"
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     return subprocess.run(  # noqa: S603
         [str_python, str(_bin_script(str_gate))],
         cwd=path_root,
@@ -1343,8 +1197,6 @@ def _write(path_file: Path, str_text: str) -> Path:
     return path_file
 
 
-# A module that reads a table without stamping provenance — the violation check_provenance
-# exists for. The marker it keys on is the CALL form, so the parentheses matter.
 _STR_UNSTAMPED_READ = (
     '"""Loader."""\n\n\ndef load():\n\t"""Load."""\n\treturn read_table("x.csv")\n'
 )
@@ -1389,8 +1241,6 @@ def test_provenance_gate_refuses_to_report_success_on_zero_discovery(tmp_path: P
     assert "refusing to report success" in cls_result.stdout + cls_result.stderr
 
 
-# Annotated `-> int`, documented as `str`. The gate keys on that disagreement, so the two
-# halves must genuinely differ — a fixture where they agree proves nothing.
 _STR_RETURN_TYPE_MISMATCH = (
     '"""M."""\n\n\ndef f() -> int:\n'
     '\t"""Do.\n\n\tReturns\n\t-------\n\tstr\n\t\tA thing.\n\t"""\n\treturn 1\n'
@@ -1446,14 +1296,6 @@ def test_docs_sections_gate_announces_its_skip_rather_than_passing_silently(
     assert "skipping" in cls_result.stdout
 
 
-# check_docs_code_refs.py — docs-cited symbols/import paths vs real src/ (blueprintx#159)
-#
-# ⚠️ Unlike check_docs_sections.py (cwd-relative), this gate's default PATH_ROOT is derived
-# from `__file__` (same seam as check_function_length.py, so BlueprintX can run it via
-# `--root .`), which means `_run_py_gate`'s `cwd=` alone does not point it at a throwaway
-# tree — the real repo would be scanned instead. Every test below passes `--root` explicitly.
-
-
 def _run_docs_code_refs_gate(path_root: Path) -> subprocess.CompletedProcess:
     """Run ``check_docs_code_refs.py --root <path_root>``.
 
@@ -1468,7 +1310,6 @@ def _run_docs_code_refs_gate(path_root: Path) -> subprocess.CompletedProcess:
         The completed run, stdout and stderr captured as text.
     """
     str_python = shutil.which("python3") or shutil.which("python") or "python3"
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     return subprocess.run(  # noqa: S603
         [str_python, str(_bin_script("check_docs_code_refs.py")), "--root", str(path_root)],
         capture_output=True,
@@ -1565,12 +1406,6 @@ def test_docs_code_refs_gate_treats_zero_in_scope_candidates_as_legitimate(
 
     assert cls_result.returncode == 0
     assert "0 first-party candidate" in cls_result.stdout
-
-
-# The lint_*.sh wrappers — their failure mode is distinct (blueprintx#111)
-#
-# "the tool was not found" and "the tool ran and passed" are indistinguishable from outside,
-# so these need a witness for BOTH the missing-tool branch and the zero-discovery branch.
 
 
 def _materialise_gate_tree(path_root: Path, str_script: str) -> Path:
@@ -1741,7 +1576,6 @@ def _run_sh_gate(
     """
     dict_env = dict(os.environ)
     dict_env.update(dict_extra)
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     return subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script)],
         capture_output=True,
@@ -1821,12 +1655,6 @@ def test_lint_actions_fails_when_discovery_matches_zero_files(tmp_path: Path) ->
     path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
     (tmp_path / ".github" / "workflows").mkdir(parents=True)
 
-    # ⚠️ A HEALTHY actionlint is required for this test to mean anything. With the tool absent
-    # the run stops in the required-tool branch and never reaches discovery — so an assertion
-    # that also accepts "required" passes even with the vacuous-discovery guard deleted, which
-    # is a witness green-lighting without ever reaching the branch it names — the very defect
-    # this file exists to prevent. Poetry is shadowed so resolution cannot take the vendored
-    # path.
     path_stub_dir = tmp_path / "_stubbin"
     _stub_ok(path_stub_dir, "actionlint")
     _shadow(path_stub_dir, "poetry")
@@ -1888,7 +1716,6 @@ def test_unix_filenames_gate_fires_on_a_filename_with_a_space(tmp_path: Path) ->
     """The should-fail control for the argv path — the one pre-commit actually uses."""
     path_bad = _write(tmp_path / "bad name.py", "x = 1\n")
 
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     cls_result = subprocess.run(  # noqa: S603
         [_STR_BASH, str(_bin_script("check_unix_filenames.sh")), path_bad.name],
         cwd=tmp_path,
@@ -1906,7 +1733,6 @@ def test_unix_filenames_gate_accepts_a_conventional_filename(tmp_path: Path) -> 
     """The positive control, so the test above is proving the rule and not a crash."""
     path_ok = _write(tmp_path / "good_name.py", "x = 1\n")
 
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     cls_result = subprocess.run(  # noqa: S603
         [_STR_BASH, str(_bin_script("check_unix_filenames.sh")), path_ok.name],
         cwd=tmp_path,
@@ -1918,18 +1744,6 @@ def test_unix_filenames_gate_accepts_a_conventional_filename(tmp_path: Path) -> 
     assert cls_result.returncode == 0
 
 
-# --------------------------
-# bin/rerun_stale_gate_runs.sh
-# --------------------------
-
-
-# A scriptable `gh` that records every invocation and answers the three calls the script makes.
-# Shadowing rather than mocking is the same technique the tool-absence tests above use: it makes
-# the behaviour deterministic on any machine, INCLUDING CI, where the real `gh` is installed and
-# a `skipif` would drop the coverage exactly where the contract matters.
-#
-# It deliberately does NOT evaluate the `--jq` filter. Filtering is GitHub's job, not this
-# script's — so the tests assert on the QUERY the script sends, which is the part it owns.
 _STR_FAKE_GH = """#!/bin/bash
 printf '%s\\n' "$*" >>"$GH_CALL_LOG"
 if [[ "$*" == *rerun-failed-jobs* ]]; then
@@ -2108,25 +1922,10 @@ def test_stale_cleanup_never_reports_clean_over_a_listing_that_failed(tmp_path: 
     assert "Could not list runs" in str_all
 
 
-# --------------------------
-# lint_deps.sh — every imported package is a DIRECT dependency (blueprintx#238)
-# --------------------------
-
-
-# Resolved ONCE at import time, like _STR_GIT at the top of this module: a `skipif` states a
-# fact about the machine, where the same test with a guard clause in its body reads as a path
-# THROUGH the test — to a reader and to mccabe alike.
 _BOOL_DEPTRY = importlib.util.find_spec("deptry") is not None
 
-# A manifest that declares NOTHING, so any third-party import under src/ is undeclared by
-# construction. PEP 621 rather than [tool.poetry] on purpose: deptry reads either, and this
-# shape does not drift when the tier's Poetry version moves.
 _STR_EMPTY_MANIFEST = '[project]\nname = "probe"\nversion = "0.0.0"\ndependencies = []\n'
 
-# Imports a package every tier declares — so it is INSTALLED in the venv running this test
-# while being absent from the throwaway manifest above. That combination is the defect under
-# test: present at runtime today, undeclared, and therefore gone the day whatever pulled it in
-# stops doing so.
 _STR_UNDECLARED_IMPORT = "import pandas\n\n\ndef go() -> None:\n\tprint(pandas)\n"
 
 
@@ -2151,7 +1950,6 @@ def _poetry_forwarding_deptry(path_dir: Path) -> str:
     """
     path_dir.mkdir(parents=True, exist_ok=True)
     path_stub = path_dir / "poetry"
-    # `shift 2` drops "run" and "deptry", leaving the wrapper's own arguments.
     path_stub.write_text(
         f'#!/bin/sh\n[ "$1" = run ] || exit 1\nshift 2\nexec "{sys.executable}" -m deptry "$@"\n',
         encoding="utf-8",
@@ -2392,9 +2190,6 @@ def test_template_drift_clean_when_every_required_path_is_present(tmp_path: Path
     assert "no template drift detected" in cls_result.stdout.lower()
 
 
-# run.sh — blueprintx#252: an argument passed to `poe run <x>` must reach the entrypoint
-
-
 def _materialise_run_sh(path_root: Path) -> Path:
     """Build a throwaway project tree with ``run.sh`` + its libs, ready to invoke.
 
@@ -2420,8 +2215,6 @@ def _materialise_run_sh(path_root: Path) -> Path:
     path_python = path_root / ".venv" / "bin" / "python"
     _write(path_python, "#!/bin/sh\nprintf 'ARG:%s\\n' \"$@\"\n")
     path_python.chmod(0o755)
-    # Newer than pyproject.toml with a margin, so the `-nt` mtime check in
-    # runtime_env_needs_bootstrap is unambiguous regardless of filesystem mtime resolution.
     float_future = time.time() + 60
     os.utime(path_python, (float_future, float_future))
     return path_script
@@ -2442,7 +2235,6 @@ def _run_run_sh(path_script: Path, list_args: list[str]) -> subprocess.Completed
     subprocess.CompletedProcess
         The completed run.
     """
-    # Constant, trusted argv built from repo-internal paths — no user input reaches it.
     return subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script), *list_args],
         capture_output=True,

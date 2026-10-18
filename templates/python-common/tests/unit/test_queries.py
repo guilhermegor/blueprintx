@@ -18,11 +18,6 @@ import pytest
 from utils.queries import load_query
 
 
-# --------------------------
-# Module Utilities
-# --------------------------
-
-
 def _seed_query(path_root: Path, str_engine: str, str_filename: str, str_sql: str) -> Path:
     """Write one query file under an engine directory, creating the tree.
 
@@ -47,11 +42,6 @@ def _seed_query(path_root: Path, str_engine: str, str_filename: str, str_sql: st
     path_query = path_engine / str_filename
     path_query.write_text(str_sql, encoding="utf-8")
     return path_query
-
-
-# --------------------------
-# Routing
-# --------------------------
 
 
 def test_load_query_reads_the_file_filed_for_the_active_engine(tmp_path: Path) -> None:
@@ -136,11 +126,6 @@ def test_load_query_does_not_read_outside_the_queries_root(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="single path segment"):
         load_query("example__select.sql", "..", path_root)
-
-
-# --------------------------
-# Diagnosis
-# --------------------------
 
 
 def test_load_query_names_the_engines_that_do_carry_the_query(tmp_path: Path) -> None:

@@ -37,22 +37,14 @@ import urllib.request
 
 API = "https://api.github.com"
 
-# Hidden marker: how the sticky comment finds itself to update in place instead of stacking.
 COMMENT_MARKER = "<!-- pr-quality-gate -->"
 
-# The opt-OUT label. Present -> never auto-merge, whatever the classification says.
 BLOCK_LABEL = "do-not-merge"
 
-# Named ONCE: this is both a `deps` trigger path AND the size-veto exemption below. Two literals
-# would drift. Change it for a non-Poetry project (package-lock.json, uv.lock, Cargo.lock, ...).
 LOCKFILE = "poetry.lock"
 
-# Risk classes, MOST DANGEROUS FIRST — the first class present wins, so a PR touching both docs/
-# and src/ is `src`. `other` outranks ci/deps/docs on purpose: an unmatched path is UNKNOWN, and
-# unknown is unsafe (default-deny, never default-allow).
 RISK_ORDER = ("src", "tests", "other", "ci", "deps", "docs")
 
-# prefix/exact-name rules per class. Edit these for the project's real layout.
 RISK_PATHS = {
     "src": ("src/",),
     "tests": ("tests/",),
@@ -69,12 +61,8 @@ RISK_PATHS = {
     ),
 }
 
-# Classes that may auto-merge. `src`/`tests` never do (they define what "passing" means), and
-# neither does `other`.
 AUTO_MERGEABLE = frozenset({"docs", "ci", "deps"})
 
-# Size buckets by changed lines. Used for LABELLING and for one narrow veto
-# (see is_auto_mergeable).
 SIZE_BUCKETS = (("XS", 10), ("S", 50), ("M", 200), ("L", 500))
 SIZE_XL = "XL"
 
@@ -276,8 +264,6 @@ def render_comment(
     dict_icon = {"success": "✅", "failure": "❌", "pending": "⏳"}
     list_rows = []
     for str_axis, str_state in sorted(dict_axes.items()):
-        # A failing axis must NAME its checks — "1 check(s) failing" tells the reader nothing, and
-        # the whole point of the sticky comment is learning WHY without opening another tab.
         str_detail = ", ".join(f"`{n}`" for n in dict_failing.get(str_axis, [])) or "—"
         list_rows.append(
             f"| {str_axis} | {dict_icon.get(str_state, '?')} {str_state} | {str_detail} |"
@@ -355,13 +341,6 @@ def _graphql(str_query: str, dict_vars: dict) -> object:
     return dict_response
 
 
-# ⚠️ Called AFTER the poll in main(), never up front. Arming `enablePullRequestAutoMerge` on a
-# PR fresh from `opened` finds nothing pending yet — sibling workflows have not registered their
-# check-runs — so GitHub either merges too early or refuses the mutation outright (measured). By
-# the time the poll has run, those check-runs exist, so native auto-merge has a real blocker to
-# wait on: checks AND unresolved review threads alike. A thread resolved LATER needs no extra
-# trigger (`pull_request_review_thread` is a webhook event, not a workflow trigger, and adding it
-# to `on:` makes GitHub reject the whole file) — the already-armed mutation just keeps waiting.
 def _enable_auto_merge(str_node_id: str) -> None:
     """Arm GitHub's native auto-merge for one PR (see module docstring, decision 1).
 
@@ -411,7 +390,7 @@ def collect_axes(list_check_runs: list, dict_axis_rules: dict) -> tuple:
             if any(m.lower() in (r.get("name") or "").lower() for m in tuple_matches)
         ]
         if not list_mine:
-            dict_axes[str_axis] = "pending"  # no result YET != failure
+            dict_axes[str_axis] = "pending"
             continue
         list_failed = [
             r.get("name")
@@ -486,13 +465,9 @@ def poll_axes_until_terminal(
     dict_axis_rules = {
         "tests": ("Run Automated Tests",),
         "lint": ("Ruff", "mypy", "lint"),
-        # Match the ANALYSES, not the `CodeQL` umbrella check (see collect_axes).
         "code scanning": ("Analyze",),
     }
 
-    # ⚠️ A poll count below one observes NOTHING, and `gate_state({})` is "success" — so the
-    # gate would label a PR green having never read a single check run. Clamp rather than
-    # trust the environment: that is the vacuous pass this file warns about elsewhere.
     int_max_polls = max(1, int_max_polls)
 
     dict_axes, dict_failing = {}, {}
@@ -572,7 +547,6 @@ def main() -> int:
         str_repo, str_head_sha, int_max_polls, int_poll_seconds
     )
 
-    # Hand the merge over at the END of the run — see the comment above _enable_auto_merge.
     if bool_eligible:
         _enable_auto_merge(dict_pr.get("node_id"))
 
@@ -594,11 +568,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

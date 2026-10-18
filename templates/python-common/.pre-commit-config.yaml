@@ -1,9 +1,3 @@
-# `bin/precommit.sh` installs BOTH `commit-msg` and `pre-push`. pre-commit applies a hook to
-# EVERY installed git hook type unless a stage is declared, so without this line every static
-# gate below (tests, mypy, lint-*, check_*) would run twice: once on commit and again on push.
-# The duplication is invisible in the config — the fast hooks correctly carry no `stages:`
-# because they belong on commit, and nothing says that silence also enlists them in the push.
-# Hooks that belong elsewhere still say so explicitly (`commit-msg`, `pre-push`, `manual`).
 default_stages:
   - pre-commit
 
@@ -17,20 +11,14 @@ repos:
         args:
           - --allow-missing-credentials
       - id: check-merge-conflict
-      # Online default. Offline scaffolds (no GitHub remote) swap this for the
-      # local `protect-branch` hook via apply_offline_mode, which points the user
-      # at `poe new_branch`. Online projects also get gh server-side protection.
       - id: no-commit-to-branch
         args:
           - --branch=main
       - id: trailing-whitespace
         args:
           - --markdown-linebreak-ext=md
-        # fixtures are verbatim external bytes — never normalise a captured oracle
-        # (stripping trailing spaces / CRLF corrupts the very thing it pins).
         exclude: ^tests/fixtures/
       - id: end-of-file-fixer
-        # fixtures are verbatim external bytes — never normalise a captured oracle.
         exclude: ^tests/fixtures/
       - id: check-xml
       - id: check-yaml
@@ -38,9 +26,6 @@ repos:
           - --unsafe
       - id: check-toml
       - id: check-json
-        # Every file under .vscode/ is JSONC (VS Code allows // comments): settings.json,
-        # extensions.json, and the per-tier tasks.json all carry them. check-json parses
-        # strict JSON and would reject the comments, so exclude the whole directory.
         exclude: ^\.vscode/.*\.json$
       - id: check-symlinks
       - id: debug-statements
@@ -72,14 +57,13 @@ repos:
           - manual
         always_run: true
 
-  # module decoupled from ruff, due to DAR absence
   - repo: https://github.com/PyCQA/pydocstyle
     rev: 6.3.0
     hooks:
       - id: pydocstyle
         name: pydocstyle (docstring conventions)
         args:
-          - --select=D412,D417 # missing blank lines between summary/description, missing arg descriptions
+          - --select=D412,D417
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.11.13
@@ -125,8 +109,6 @@ repos:
           - python
         pass_filenames: false
 
-      # Structural gate for the "runtime type-checking everywhere" doctrine — ruff/mypy
-      # cannot assert the *presence* of a checker metaclass / @type_checker decorator.
       - id: check-typing
         name: runtime type-checker application check
         entry: bash bin/poetry_exec.sh run python bin/check_typing.py
@@ -135,9 +117,6 @@ repos:
           - python
         pass_filenames: false
 
-      # Structural gate for the "ingestion stamps provenance" doctrine — a module that
-      # references read_table (a contract-checked read) must also reference stamp_provenance,
-      # so a bronze row can never ship without its traceability columns.
       - id: check-provenance
         name: ingestion provenance stamp check
         entry: bash bin/poetry_exec.sh run python bin/check_provenance.py
@@ -146,10 +125,6 @@ repos:
           - python
         pass_filenames: false
 
-      # Cap a function at 60 lines of CODE. Ruff has no per-function line-count rule
-      # (PLR0915 counts statements, a different metric), and the docstring is subtracted
-      # because this project mandates NumPy docstrings — a raw span would measure how well
-      # a function is documented, not how long it is.
       - id: function-length
         name: function length (60 lines, docstring excluded)
         entry: bash bin/poetry_exec.sh run python bin/check_function_length.py
@@ -157,9 +132,6 @@ repos:
         files: \.(py|sh)$
         pass_filenames: false
 
-      # .specs/ is working material (specs, plans, trackers, PR bodies); docs/ is published
-      # documentation only. Layout rules: .specs/CLAUDE.md. The script is BlueprintX's own,
-      # copied at scaffold time, so the root repo and this project run one implementation.
       - id: specs-structure
         name: .specs/ structure guard
         entry: bash bin/check_specs_structure.sh --root .
@@ -181,9 +153,6 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # A masked CPF/CNPJ compared against a stored unmasked column matches ZERO rows and
-      # raises nothing: the query is valid, the answer is silently empty. Scans .py and .sql
-      # alike, since SQL reaches the database through both.
       - id: identifier-masking
         name: identifier masking (masked CPF/CNPJ in a comparison)
         entry: bash bin/poetry_exec.sh run python bin/check_identifier_masking.py
@@ -191,10 +160,6 @@ repos:
         files: \.(py|sql)$
         pass_filenames: false
 
-      # A PROXY, not a detector (blueprintx#442) — see the module docstring. The real
-      # detector is pytest-randomly (pytest.ini has no config for it; it self-activates
-      # once installed). This gate only pins today's zero-shared-state baseline so the
-      # first `scope="module"` fixture does not remove it silently.
       - id: fixture-scope
         name: fixture scope (non-function scope needs a written reason)
         entry: bash bin/poetry_exec.sh run python bin/check_fixture_scope.py
@@ -202,11 +167,6 @@ repos:
         files: ^tests/.*\.py$
         pass_filenames: false
 
-      # Diff-scoped against merge-base(HEAD, main) — unlike every OTHER hook here, this one
-      # checks a DELTA, not a whole-tree property: a hook/rule/exclude that was never added is
-      # not a violation, but one that WAS there and got REMOVED without a `gate-change-ok:
-      # <reason>` justification is (blueprintx#309). Same script BlueprintX runs over itself
-      # via `--root .` — one implementation, both sides.
       - id: gate-integrity
         name: gate integrity (a PR must not weaken a check without saying why)
         entry: bash bin/poetry_exec.sh run python bin/check_gate_integrity.py
@@ -214,15 +174,6 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # A package that declares __all__ must name every public member its submodules define.
-      # The usual introspective test DISCOVERS the family through __all__ and therefore cannot
-      # see a member missing from it: the sweep just returns one fewer item and passes by not
-      # looking. This walks the FILES instead, so the hole closes.
-      # Cyclomatic complexity, with a DIFFERENT ceiling per tree: 1 for tests/, 2 for src/,
-      # 8 for bin/. The tests/ number is the load-bearing one — a test with a branch tests two
-      # paths and the green never says which ran, so complexity 1 is the mechanical form of
-      # "a test exercises one path". Two ruff invocations, not one config: per-file-ignores
-      # can switch a rule off for a path but cannot give it a different max-complexity.
       - id: check-complexity
         name: cyclomatic complexity (tests 1, src 2, bin 8)
         entry: bash bin/check_complexity.sh
@@ -230,12 +181,6 @@ repos:
         files: \.py$
         pass_filenames: false
 
-      # Assertion sites per test_* function. Zero is a failure everywhere; tests/unit/ is
-      # additionally capped at ONE (blueprintx#544) — a two-assert unit test goes red without
-      # saying which behaviour broke, and its green never says which assert RAN. tests/
-      # integration/ stays zero-only: one call, several consequences, one arrange.
-      # Sibling of check-complexity above, one level down; see tests/CLAUDE.md.
-      # Blocking since the last split of blueprintx#544 cleared the unit suites to zero.
       - id: one-assert
         name: one assertion site per unit test (zero asserts fails anywhere)
         entry: bash bin/poetry_exec.sh run python bin/check_one_assert.py
@@ -243,10 +188,6 @@ repos:
         files: \.py$
         pass_filenames: false
 
-      # Secret scanning via gitleaks (blueprintx#305, gitleaks slice). No Poetry involved —
-      # gitleaks is a system binary, resolved the same way shellcheck/actionlint are below.
-      # Config is gitleaks' own (.gitleaks.toml at the project root); resolve-don't-install,
-      # graceful skip locally, hard-fail only when GITLEAKS_REQUIRED=1 (set by CI).
       - id: check-secrets
         name: secret scan (gitleaks)
         entry: bash bin/check_secrets.sh --staged
@@ -262,10 +203,6 @@ repos:
           - python
         pass_filenames: false
 
-      # Structural gate against binary floats in ingested source columns. float64 stores
-      # 1984223115.42 as 1984223115.4200000762939453125 — an irreversible, silent loss no
-      # contract check or eyeballed frame reveals. Use list_decimal_cols (exact Decimal) or
-      # text; a genuinely dimensionless value opts out with "# dtype-ok: <reason>".
       - id: check-dtypes
         name: numeric dtype policy check (no binary floats)
         entry: bash bin/poetry_exec.sh run python bin/check_dtypes.py
@@ -274,13 +211,6 @@ repos:
           - python
         pass_filenames: false
 
-      # Structural gate for the read-modify-write race (blueprintx#385) — an attribute
-      # reassigned from an ARITHMETIC expression over its own value, read via
-      # session.get()/.query(...).first()/.one() in the same function, with no
-      # with_for_update() and no version_id_col on the model. Two concurrent writers can
-      # read the same value and silently lose an update; nothing crashes, nothing logs.
-      # Does NOT gate a plain read-then-write with no arithmetic (every ORM update() does
-      # that) — see the module docstring. Escape hatch: "# rmw-ok: <reason>".
       - id: check-rmw-race
         name: read-modify-write race (arithmetic write on an ORM-read row, no lock)
         entry: bash bin/poetry_exec.sh run python bin/check_rmw_race.py
@@ -289,10 +219,6 @@ repos:
           - python
         pass_filenames: false
 
-      # Structural gate for the layer-import policy: a third-party dependency is reached
-      # through a seam in utils/, never imported by model/view/controller. ruff's banned-api
-      # is a BLOCKLIST and by construction cannot catch a vendor nobody thought to list;
-      # this is deny-by-default per layer. Self-skips when .layer-policy.yaml is absent.
       - id: check-layer-imports
         name: layer import policy (vendors live behind a seam)
         entry: bash bin/poetry_exec.sh run python bin/check_layer_imports.py
@@ -301,24 +227,13 @@ repos:
           - python
         pass_filenames: false
 
-      # Structural gate for the "silent wrong answer" (blueprintx#355): a WHERE-less
-      # DELETE/UPDATE mutates or erases every row with no error, and WITH (NOLOCK) permits
-      # dirty reads / missed rows with no error either — both read as correct code and
-      # behave wrongly, which is exactly the failure shape an AI-written diff is least
-      # likely to catch on review. Escape hatch: "# sql-guard-ok: <reason>".
       - id: check-sql-guards
         name: SQL guards (WHERE-less mutations, NOLOCK)
         entry: bash bin/poetry_exec.sh run python bin/check_sql_guards.py
         language: system
-        # Both surfaces SQL reaches this codebase through: a .py file (the AST checks) and
-        # a raw .sql file under src/config/queries/ (the NOLOCK text scan).
         files: \.(py|sql)$
         pass_filenames: false
 
-      # Migration filenames must lead with a known verb (blueprintx#375) — Rails'
-      # <verb>_<object>[_<qualifier>] shape, so `ls migrations/versions/` sorts by date
-      # and reads as a changelog. Self-skips when migrations/versions/ is absent (only the
-      # ORM tier ships migrations today, #373). Escape hatch: "# migration-slug-ok: <reason>".
       - id: check-migration-slugs
         name: migration slug convention (leading verb)
         entry: bash bin/poetry_exec.sh run python bin/check_migration_slugs.py
@@ -327,14 +242,6 @@ repos:
           - python
         pass_filenames: false
 
-      # Structural gate for the SILENT WRONG ANSWER at ORM model-DECLARATION time
-      # (blueprintx#361, the model-side sibling of #355 above): bitwise &/|/~ inside
-      # .where()/.filter() (Python binds them tighter than ==, so a valid-looking filter
-      # returns wrong rows), two Base/module-scope create_all (create_all then SUCCEEDS
-      # having created nothing), and a constraint name= duplicated across a mixin MRO
-      # (SQLAlchemy silently overwrites one, not an error). Escape hatch: "# orm-guard-ok:
-      # <reason>". Python/SQLAlchemy-only by construction — see the gate's module docstring
-      # for why each TS/Prisma equivalent does not apply.
       - id: check-orm-model-guards
         name: ORM model-definition guards (bitwise filter, two Base, duplicate constraint)
         entry: bash bin/poetry_exec.sh run python bin/check_orm_model_guards.py
@@ -343,9 +250,6 @@ repos:
           - python
         pass_filenames: false
 
-      # Structural gate for the canonical docs skeleton — every canonical page (English slug)
-      # exists AND is registered in mkdocs.yml nav; MkDocs builds an unregistered page anyway,
-      # so it silently vanishes from navigation. Keys on slugs, never localized nav titles.
       - id: check-docs-sections
         name: docs skeleton (slug + nav) check
         entry: bash bin/poetry_exec.sh run python bin/check_docs_sections.py
@@ -353,10 +257,14 @@ repos:
         files: ^(mkdocs\.yml|docs/)
         pass_filenames: false
 
-      # Structural gate for the SYMBOLS a docs page cites, not just its slug/links — neither
-      # check-docs-sections (slugs) nor `mkdocs build --strict` (links) sees a `from x import Y`
-      # example, so a renamed/deleted module keeps being cited after every other gate goes
-      # green (blueprintx#159). Triggers on either side changing: a docs edit or a src move.
+      - id: docs-gap
+        name: docs gap (pages registered in nav, nav ceiling, blueprintx#860)
+        entry: python bin/check_docs_gap.py --root .
+        language: python
+        additional_dependencies: [pathspec, pyyaml]
+        files: ^(mkdocs\.yml|docs/)
+        pass_filenames: false
+
       - id: check-docs-code-refs
         name: docs code references (symbols + import paths)
         entry: bash bin/poetry_exec.sh run python bin/check_docs_code_refs.py
@@ -364,9 +272,6 @@ repos:
         files: ^(docs/|README\.md|src/)
         pass_filenames: false
 
-      # Structural gate for the per-branch work-ledger convention: a branch whose cumulative diff
-      # touches src/ or ci paths must add .specs/backlog/<kebab>_YYYYMMDD_HHMMSS.md with a checklist.
-      # Diffs the INDEX against merge-base so a staged-but-uncommitted ledger counts.
       - id: check-backlog-ledger
         name: work-ledger (.specs/backlog) check
         entry: bash bin/poetry_exec.sh run python bin/check_backlog_ledger.py
@@ -374,13 +279,6 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # Structural gate for the documentation-language boundary: prose for a READER may be in
-      # the project's locale (README.md, docs/), while code — comments, docstrings, symbol
-      # names, commit messages, CI output — stays English. Prose alone was not enough: the rule
-      # was breached TWICE in one session, the second time because a sweep grepped only `.py`
-      # and left 55 Portuguese comment lines in `src/config/*.yaml`, which then became the
-      # convention the next author copied. A partial sweep leaves a PRECEDENT, not just debt.
-      # Hence every commented file type, not merely the one the last violation was in.
       - id: check-comment-language
         name: documentation-language boundary (code is English)
         entry: bash bin/poetry_exec.sh run python bin/check_comment_language.py
@@ -388,10 +286,6 @@ repos:
         files: \.(py|ya?ml|sql|sh|toml|cfg|ini)$|\.env\.example$
         exclude: ^docs/
 
-      # Bounds comment volume in every code format, QA suppression pragmas (noqa,
-      # complexity-ok, type: ignore, codespell:ignore, ...) explicitly exempt via
-      # an anticipatory allowlist (bin/comment_budget_allowlist.txt). Escape
-      # hatch: `# comment-budget-ok: <reason>`.
       - id: check-comment-budget
         name: comment budget (long runs + decorative banners)
         entry: bash bin/poetry_exec.sh run python bin/check_comment_budget.py --require-baseline
@@ -407,16 +301,12 @@ repos:
 
       - id: mypy
         name: mypy (static type check)
-        # Run from src/ so it is the single package base (bare config.x/utils.x imports
-        # resolve as at runtime); avoids the dual-root "found twice" error on DDD.
         entry: bash -c 'cd src && bash ../bin/poetry_exec.sh run mypy --config-file ../mypy.ini .'
         language: system
         types:
           - python
         pass_filenames: false
 
-      # Non-Python lint gates share a single wrapper with `poe lint` (one home,
-      # zero drift). Each wrapper skips gracefully when its tool is absent.
       - id: lint-shell
         name: shellcheck + shfmt (shell lint)
         entry: bash bin/lint_shell.sh --check
@@ -441,10 +331,6 @@ repos:
           - sql
         pass_filenames: false
 
-      # yamllint validates YAML; actionlint validates a WORKFLOW — different questions, and
-      # only the second is the one GitHub asks. A workflow can be impeccable YAML and still be
-      # rejected wholesale by GitHub, which produces NO red check: the PR just looks like it is
-      # waiting, so a dead gate and a slow gate are indistinguishable from the outside.
       - id: lint-actions
         name: actionlint (github actions workflows)
         entry: bash bin/lint_actions.sh
@@ -452,11 +338,6 @@ repos:
         files: ^\.github/workflows/.*\.(yml|yaml)$
         pass_filenames: false
 
-      # deptry: every package src/ imports must be a DIRECT dependency. Both triggers are
-      # needed and neither alone is enough — a new import in src/ and a deleted line in
-      # pyproject.toml break the same rule from opposite sides, and the second one leaves
-      # src/ untouched. pass_filenames is false because the gate reads the whole manifest,
-      # not the staged subset.
       - id: lint-deps
         name: deptry (every imported package is a direct dependency)
         entry: bash bin/lint_deps.sh
@@ -464,9 +345,6 @@ repos:
         files: ^(pyproject\.toml|src/.*\.py)$
         pass_filenames: false
 
-      # `|| [ $? -eq 5 ]` tolerates pytest exit 5 ("no tests collected") so a
-      # fresh project with an empty suite does not block every commit; real
-      # failures (exit 1) still block.
       - id: unit-tests
         name: checking unit tests
         entry: bash -c "bash bin/poetry_exec.sh run pytest tests/unit/ || [ $? -eq 5 ]"
@@ -483,11 +361,6 @@ repos:
           - file
         pass_filenames: false
 
-      # A non-empty index at push time is the fingerprint of a REJECTED commit: the push then
-      # ships the previous commit and prints success, so every signal is green while the work
-      # stays behind. Neither CI (a commit that does not exist is not a diff) nor pre-commit
-      # (it already rejected; the loss is downstream) can see it. Guards the INDEX, not the
-      # dirty tree — unstaged edits while pushing are routine, and a noisy guard gets disabled.
       - id: check-clean-index
         name: pre-push — index must be empty (a rejected commit leaves it populated)
         entry: bash bin/check_clean_index.sh
@@ -497,9 +370,6 @@ repos:
         stages:
           - pre-push
 
-      # `fail_under` in `.coveragerc` is only honest if the `omit` list beside it never widens
-      # past a capability's `infrastructure/` layer into `domain/`/`application/` — see the
-      # gate's own module docstring for the "green, silent, wrong" failure mode (blueprintx#149).
       - id: coverage-floor
         name: coverage floor (omit list must not swallow capability logic)
         entry: bash bin/poetry_exec.sh run python bin/check_coverage_floor.py
@@ -507,12 +377,8 @@ repos:
         files: ^(\.coveragerc|src/capabilities/.*\.py)$
         pass_filenames: false
 
-      # Coverage is the slow full-suite gate — run it on pre-push, not per-commit,
-      # so day-to-day commits stay fast (static gates above still run per-commit).
       - id: coverage-check
         name: test coverage check
-        # Coverage floor is single-sourced in .coveragerc ([report] fail_under) — read by
-        # pytest-cov here and by the CI gate, so there is no duplicated literal to drift.
         entry: bash -c "bash bin/poetry_exec.sh run pytest tests/unit/ --cov=src --cov-report=term-missing"
         language: system
         types:
@@ -522,9 +388,6 @@ repos:
         stages:
           - pre-push
 
-      # genbadge (not the abandoned coverage-badge, which imports the removed
-      # pkg_resources and breaks on setuptools >= 81). Generates coverage.xml then
-      # the SVG. coverage.svg is tracked (README badge); coverage.xml is ignored.
       - id: coverage-badge
         name: coverage badge
         entry: bash -c "bash bin/poetry_exec.sh run pytest tests/unit/ --cov=src && bash bin/poetry_exec.sh run coverage xml -o coverage.xml && bash bin/poetry_exec.sh run genbadge coverage --local -i coverage.xml -o coverage.svg"

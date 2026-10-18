@@ -49,9 +49,6 @@ from types import ModuleType
 _GATE_MIN_CONFIDENCE = 80
 _REPORT_MIN_CONFIDENCE = 60
 _INT_FLAG_WITH_VALUE = 2
-# Mirrors `check_function_length.py`'s skip list — `.claude` matters here too: a `--root .`
-# run from inside a parallel-agent worktree must not sweep an older checkout under
-# `.claude/worktrees/agent-*` into the scan (blueprintx#331).
 _TUPLE_SKIP_DIRS = (
     ".claude",
     ".git",
@@ -94,8 +91,6 @@ def resolve_vulture() -> ModuleType | None:
     try:
         import vulture
     except ModuleNotFoundError as exc:
-        # A half-removed install also reports name == "vulture"; the metadata probe tells
-        # "never installed" from "installed but its package is gone".
         if exc.name != "vulture" or _is_distribution_installed():
             raise
         return None
@@ -115,11 +110,6 @@ def discover_python_files(path_src: pathlib.Path) -> list:
     list
         Sorted ``pathlib.Path`` entries.
     """
-    # Compare parts RELATIVE TO path_src, never path_file.parts directly. This gate's own
-    # `--root` is routinely pointed at a checkout living under `.claude/worktrees/agent-*`
-    # (a parallel-agent worktree), so an absolute path's parts always contain `.claude` —
-    # an ancestor-based match would then skip every file on every such run, the exact
-    # self-inflicted vacuous-audit failure blueprintx#331 exists to catch.
     return sorted(
         path_file
         for path_file in path_src.rglob("*.py")
@@ -153,12 +143,6 @@ def run_vulture(cls_vulture: ModuleType, list_files: list) -> list:
         ``InvalidInput`` exit code and carries on, so returning its findings anyway would
         report a clean tree for a file that was never scanned.
     """
-    # Scavenge the EXPLICIT file list rather than the directory. vulture's own `exclude`
-    # matches against the full (often absolute) path string — and this gate's own `--root`
-    # is routinely a checkout living under `.claude/worktrees/agent-*`, so a `.claude`
-    # exclude pattern would match every real file too, not just a nested worktree copy.
-    # `discover_python_files` already filtered correctly (relative to path_src), so handing
-    # vulture that filtered list needs no second, differently-scoped exclude at all.
     cls_scanner = cls_vulture.Vulture()
     cls_scanner.scavenge([str(path_file) for path_file in list_files])
     if cls_scanner.exit_code == cls_vulture.core.ExitCode.InvalidInput:

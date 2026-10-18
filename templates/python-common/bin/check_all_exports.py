@@ -30,7 +30,6 @@ import sys
 
 
 _SRC = pathlib.Path("src")
-# Vendored/generated trees whose exports are not ours to police.
 _EXCLUDED_PARTS = frozenset({"typing", "__pycache__", "example_feature"})
 
 
@@ -53,9 +52,6 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
             continue
         for cls_target in cls_node.targets:
             if isinstance(cls_target, ast.Name) and cls_target.id == "__all__":
-                # `__all__` may be a list OR a tuple — both are valid Python. Accepting only
-                # the list form made a complete tuple declaration read as EMPTY, which reports
-                # every public member as missing: a gate that fails loudest on correct code.
                 if not isinstance(cls_node.value, ast.List | ast.Tuple):
                     return []
                 return [
@@ -157,15 +153,11 @@ def main() -> int:
         print(f"❌ {str_problem}", file=sys.stderr)
     if list_problems:
         return 1
-    # Print WHAT was checked: a silent gate cannot be told from an absent one.
     print(f"__all__ exports complete in {len(list_inits)} package(s).")
     return 0
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252 and cannot encode the status glyphs below; because
-    # this backs an always_run hook, that crash would block EVERY commit from a Windows
-    # checkout rather than failing the file under check.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

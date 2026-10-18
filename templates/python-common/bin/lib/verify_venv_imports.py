@@ -27,7 +27,6 @@ import sys
 
 _RE_LEADING_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
 
-# argv[0] (the script path) plus one requirement-file argument.
 _INT_EXPECTED_ARGC = 2
 
 
@@ -128,10 +127,6 @@ def top_level_imports(str_name: str) -> list[str]:
     str_text = cls_dist.read_text("top_level.txt")
     if str_text:
         return [str_line.strip() for str_line in str_text.splitlines() if str_line.strip()]
-    # Some wheel-built distributions omit top_level.txt. Derive the candidates from the
-    # files the distribution actually installed rather than guessing from its name: a
-    # guess that misses rejects a correctly installed package, and the normalised-name
-    # rule is wrong for every distribution whose module differs from its PyPI name.
     list_from_files = top_level_from_files(cls_dist)
     return list_from_files or [str_name.replace("-", "_")]
 

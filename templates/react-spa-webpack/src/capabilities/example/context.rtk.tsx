@@ -36,7 +36,7 @@ function NoteContextBridge({ children, repository }: NoteProviderProps) {
     [notes, loading, error, dispatch, repo],
   );
 
-  return <NoteContext.Provider value={value}>{children}</NoteContext.Provider>;
+  return <NoteContext value={value}>{children}</NoteContext>;
 }
 
 export function NoteProvider({ children, repository }: NoteProviderProps) {

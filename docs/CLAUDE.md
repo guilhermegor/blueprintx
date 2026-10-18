@@ -16,6 +16,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `faq.md` | Utility page | Common questions about using and extending BlueprintX |
 | `policy-workflows.md` | Reference page | Server-side PR/issue policy workflows scaffolded repos carry (blueprintx#604) |
 | `dependabot-auto-merge.md` | Reference page | Dependabot auto-merge policy by update type, BlueprintX and generated projects (blueprintx#800) |
+| `dependabot-config.md` | Reference page | Dependabot config shipped to every skeleton: cooldown, lint group, shipped-file gate (blueprintx#838) |
 | `troubleshooting.md` | Utility page | What broke while wiring this site's brand assets/routing, the cause, the fix, and which of those fixes were decided against scaffolding into `templates/` |
 | `offline-wheelhouse.md` | Utility page | How a scaffolded Python project installs offline — `poe wheelhouse` / `wheelhouse_assemble`, target-env selection, manifest/split-part payload (blueprintx#299) |
 | `secret-scanning.md` | Utility page | Secret scanning per tier — the measured gitleaks-vs-GitGuardian comparison behind gitleaks being the default, plus the GitGuardian (`ggshield`) opt-in: how to enable it at scaffold time, how it propagates the key, and how to opt in after the fact |
@@ -105,26 +106,29 @@ Current nav shape for reference:
 ```yaml
 nav:
   - Home: index.md
-  - Get Started: get-started.md
-  - Examples: examples.md
-  - CLI Reference: cli-reference.md
-  - FAQ: faq.md
-  - Troubleshooting: troubleshooting.md
-  - Contributing: contributing.md
-  - Changelog: changelog.md
-  - Python:
-      - DDD Service (Native DB):
-          - Overview: py-ddd-service-native-db.md
-          - Example - <title>: py-examples/<filename>.md
-      - DDD Service (ORM DB):
-          - Overview: py-ddd-service-orm-db.md
-          - Example - <title>: py-examples-orm/<filename>.md
-      - Lib Minimal: py-lib-minimal.md
-  - TypeScript:
-      - React SPA (Webpack): ts-react-spa-webpack.md
+  - Getting Started:
+      - Get Started: get-started.md
+      - ...
+  - Skeletons:
+      - Python:
+          - DDD Service (Native DB):
+              - Overview: py-ddd-service-native-db.md
+              - Example - <title>: py-examples/<filename>.md
+          - Lib Minimal: py-lib-minimal.md
+      - Bash: ...
+      - TypeScript:
+          - React SPA (Webpack): ts-react-spa-webpack.md
+  - Quality Gates: ...
+  - Review & Dependencies: ...
+  - Decisions & Audits: ...
+  - Project:
+      - Contributing: contributing.md
+      - Changelog: changelog.md
 ```
 
-When adding a new Python skeleton, add a new group under `Python:` and name the file `py-<skeleton>.md`. When adding a new TypeScript skeleton, add a new entry under `TypeScript:` and name the file `ts-<skeleton>.md`. When adding a new example, append it under the relevant skeleton group. TypeScript example walkthroughs follow the same `ts-examples-<skeleton-name>/` subdirectory pattern as Python examples.
+The top level is capped at **8 entries** (`INT_NAV_TOP_LEVEL_CEILING` in `check_docs_gap.py`, blueprintx#860): a new page goes under the section it belongs to, never at the top. The root site has 7 today and a scaffolded Python project has 4 (Home, Guide, API Reference, Project). The ceiling counts top-level entries only, so a section may hold as many pages as it needs. `theme.features` enables `navigation.tabs` and `navigation.sections`, which render those entries as tabs and sidebar sections.
+
+When adding a new Python skeleton, add a new group under `Skeletons` > `Python:` and name the file `py-<skeleton>.md`. When adding a new TypeScript skeleton, add a new entry under `Skeletons` > `TypeScript:` and name the file `ts-<skeleton>.md`. When adding a new example, append it under the relevant skeleton group. TypeScript example walkthroughs follow the same `ts-examples-<skeleton-name>/` subdirectory pattern as Python examples.
 
 ---
 

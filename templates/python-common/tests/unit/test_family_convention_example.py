@@ -29,9 +29,6 @@ import inspect
 import pytest
 
 
-# --------------------------
-# Illustrative family (stand-in for `import myproj.section as family`)
-# --------------------------
 class _Reader:
     """Base of the illustrative family; each member must declare ``_KNOB``."""
 
@@ -48,8 +45,6 @@ class _BetaReader(_Reader):
     _KNOB: int = 2
 
 
-# In your project this is `family.__all__` — the declared public surface. Discover
-# the members from it; never hand-list the CLASSES themselves.
 _FAMILY_NAMES = ("_AlphaReader", "_BetaReader")
 _FAMILY = tuple(
     obj
@@ -58,9 +53,6 @@ _FAMILY = tuple(
 )
 
 
-# --------------------------
-# Tests
-# --------------------------
 def test_the_discovered_family_is_not_empty() -> None:
     """Guard the discovery itself — an empty family makes every per-member test vacuous.
 
