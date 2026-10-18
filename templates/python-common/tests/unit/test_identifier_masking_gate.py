@@ -60,11 +60,6 @@ def _python_file(path_dir: Path, str_source: str) -> Path:
     return path_file
 
 
-# --------------------------
-# 🔴 Raw SQL text (Python string literal) — the negative control
-# --------------------------
-
-
 @pytest.fixture
 def tuple_masked_cpf_sql(tmp_path: Path) -> tuple:
     """Return the findings for a hardcoded masked CPF inside a SQL string literal.
@@ -190,11 +185,6 @@ def test_raw_sql_file_finding_quotes_the_value(tmp_path: Path) -> None:
     assert "123.456.789-01" in gate._sql_file_problems(path_file)[0]
 
 
-# --------------------------
-# 🔴 ORM comparison / keyword form
-# --------------------------
-
-
 def test_orm_attribute_comparison_masked_cpf_is_reported(tmp_path: Path) -> None:
     """``Model.cpf == "<masked>"`` is the ORM-builder shape of the same bug."""
     path_file = _python_file(
@@ -259,11 +249,6 @@ def test_filter_by_keyword_unmasked_value_passes(tmp_path: Path) -> None:
     assert gate.check_python_file(path_file) == []
 
 
-# --------------------------
-# 🔴 Escape hatch, both directions
-# --------------------------
-
-
 def test_escape_hatch_with_reason_suppresses_finding(tmp_path: Path) -> None:
     """A written reason on the offending line suppresses the finding."""
     path_file = _python_file(
@@ -283,11 +268,6 @@ def test_escape_hatch_with_empty_reason_is_rejected(tmp_path: Path) -> None:
     )
 
     assert len(gate.check_python_file(path_file)) == 1
-
-
-# --------------------------
-# 🔴 Discovery guard — a silent 0 is the failure this gate family exists to prevent
-# --------------------------
 
 
 def test_main_fails_when_src_present_but_empty(

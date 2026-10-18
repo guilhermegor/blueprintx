@@ -66,9 +66,6 @@ _DICT_DTYPES = {"id": "int64", "title": "str"}
 _LIST_RECORDS = [{"id": 1, "title": "a"}, {"id": 2, "title": "b"}]
 
 
-# ⚠️ ONE BUILD, SEVERAL FACETS — the "expensive shared setup" pattern from tests/CLAUDE.md,
-# applied so the one-assert rule does not turn three claims about one frame into three
-# rebuilds of it (blueprintx#544). Module-scoped because the frames are only ever read.
 @pytest.fixture(scope="module")  # fixture-scope-ok: frame is only read, never mutated
 def df_from_cursor() -> object:
     """Shape one populated cursor into a frame, once, for the three tests that inspect it.
@@ -143,10 +140,6 @@ def test_the_row_values_survive_the_coercion(
     assert request.getfixturevalue(str_fixture)["title"].tolist() == ["a", "b"]
 
 
-# A bare empty frame has no columns, so a caller that concatenates or renders the result
-# behaves differently depending on whether rows happened to exist — the shape becomes
-# data-dependent. Returning the declared columns keeps it constant. Both seams owe the
-# property, and each owes BOTH halves of it: empty, and still shaped.
 @pytest.fixture(scope="module")  # fixture-scope-ok: frame is only read, never mutated
 def df_empty_from_cursor() -> object:
     """Shape a non-returning cursor, once.
@@ -203,8 +196,6 @@ def test_an_empty_frame_still_carries_the_declared_columns(
     assert list(request.getfixturevalue(str_fixture).columns) == ["id", "title"]
 
 
-# ⚠️ apply_dtypes requires the column sets to be disjoint, so a date column is declared by
-# list_date_cols alone and never also in dict_dtypes.
 @pytest.fixture(scope="module")  # fixture-scope-ok: frame is only read, never mutated
 def tuple_date_col_frames() -> tuple:
     """Shape the empty and populated date-column frames once, for the pair of tests below.

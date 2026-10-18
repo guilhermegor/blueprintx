@@ -47,11 +47,6 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_comment_budget")
 
 
-# --------------------------
-# The ratchet ceiling — should-fail witness
-# --------------------------
-
-
 def test_a_short_comment_block_is_not_flagged(tmp_path: Path) -> None:
     """A handful of comment lines, well under the ratchet, is clean.
 
@@ -111,11 +106,6 @@ def test_a_qa_pragma_line_is_never_itself_a_finding(tmp_path: Path) -> None:
     assert gate.file_problems(path_file) == []
 
 
-# --------------------------
-# The escape hatch — mirrors this repo's other gate escape-hatch markers
-# --------------------------
-
-
 def test_the_escape_hatch_exempts_a_flagged_block() -> None:
     """``# comment-budget-ok: <reason>`` anywhere in the block exempts it."""
     list_lines = ["filler"] * (gate.INT_MAX_RUN + 1)
@@ -168,11 +158,6 @@ def test_a_bare_marker_inside_a_real_oversized_block_still_fails(tmp_path: Path)
     assert len(gate.file_problems(path_file)) == 1
 
 
-# --------------------------
-# Pragma lines break a run, they never extend it
-# --------------------------
-
-
 def test_a_pragma_line_splits_one_block_into_two() -> None:
     """Two five-line blocks separated by one pragma are two findings, not one."""
     list_lines = ["# a"] * 5 + ["# noqa"] + ["# b"] * 5
@@ -198,11 +183,6 @@ def test_python_docstrings_are_excluded_from_the_budget(tmp_path: Path) -> None:
     str_source = 'def f() -> None:\n    """\n' + "\n".join(list_docstring_lines) + '\n    """\n'
     path_file.write_text(str_source, encoding="utf-8")
     assert gate.file_problems(path_file) == []
-
-
-# --------------------------
-# The decorative banner — regex-decidable, no ratchet
-# --------------------------
 
 
 def test_a_decorative_banner_triple_is_flagged() -> None:
@@ -251,11 +231,6 @@ def test_is_exempt_section_banner_matches_the_full_triple_only(
     assert gate.is_exempt_section_banner(list_lines, 0) is bool_expected
 
 
-# --------------------------
-# Structural exemptions — positional, not textual
-# --------------------------
-
-
 def test_a_shebang_line_is_structurally_exempt() -> None:
     """Line 1's ``#!`` never counts toward a run."""
     assert gate.line_breaks_run(1, "#!/usr/bin/env bash", "!/usr/bin/env bash", ()) is True
@@ -269,11 +244,6 @@ def test_an_encoding_declaration_is_structurally_exempt() -> None:
 def test_a_shebang_shaped_line_deeper_in_the_file_is_not_exempt() -> None:
     """The same text past line 2 is ordinary prose — position, not content, decides."""
     assert gate.line_breaks_run(3, "#!/usr/bin/env bash", "!/usr/bin/env bash", ()) is False
-
-
-# --------------------------
-# File-type discovery — extensionless Makefile is the issue's own worked example
-# --------------------------
 
 
 def test_marker_for_recognizes_makefile_by_name() -> None:
@@ -324,11 +294,6 @@ def test_audit_discovers_an_extensionless_makefile(
     (tmp_path / "Makefile").write_text("build:\n\techo hi\n", encoding="utf-8")
     monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
     assert tmp_path / "Makefile" in gate.audit_paths()
-
-
-# --------------------------
-# Python files are actually checked (blueprintx#466)
-# --------------------------
 
 
 def test_a_python_file_with_a_decorative_banner_is_flagged(tmp_path: Path) -> None:
@@ -631,11 +596,6 @@ def test_the_exempt_triple_is_not_reported_as_a_banner_inside_a_run(
         The gate's findings for the probe file.
     """
     assert len(list_triple_run_problems) == 1
-
-
-# --------------------------
-# Zero-discovery guard and the success message
-# --------------------------
 
 
 def test_audit_mode_fails_when_no_file_matches(

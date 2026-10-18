@@ -20,11 +20,8 @@ import tomllib
 _BAD_SOURCE = "def choose(flag: bool) -> int:\n\tif flag:\n\t\treturn 1\n\telse:\n\t\treturn 2\n"
 _GOOD_SOURCE = "def choose(flag: bool) -> int:\n\tif flag:\n\t\treturn 1\n\treturn 2\n"
 
-# Resolved once at collection time; branch lives in the `skipif` marker below, never in the
-# helper, to keep `_run_ruff_ret505` at the `tests/` complexity ceiling of 1.
 _STR_RUFF = shutil.which("ruff")
 
-# The shipped config this test family is the witness for: tests/unit/ -> tests/ -> python-common/.
 _PATH_RUFF_TOML = Path(__file__).parents[2] / "ruff.toml"
 
 
@@ -54,11 +51,6 @@ def _run_ruff_ret505(path_file: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(list_argv, capture_output=True, text=True, check=False)  # noqa: S603
 
 
-# --------------------------
-# 🔴 The negative control — the gate must be able to FAIL
-# --------------------------
-
-
 @pytest.mark.skipif(_STR_RUFF is None, reason="ruff is not on PATH")
 def test_ret505_flags_else_after_return(tmp_path: Path) -> None:
     """An `if: return … else: return …` shape must be rejected by RET505."""
@@ -74,11 +66,6 @@ def test_ret505_names_the_rule_it_flags(tmp_path: Path) -> None:
     path_file = tmp_path / "bad.py"
     path_file.write_text(_BAD_SOURCE, encoding="utf-8")
     assert "RET505" in _run_ruff_ret505(path_file).stdout
-
-
-# --------------------------
-# Tests
-# --------------------------
 
 
 @pytest.mark.skipif(_STR_RUFF is None, reason="ruff is not on PATH")

@@ -43,10 +43,7 @@ def test_basic_conf_returns_logger_writing_to_file(tmp_path: Path) -> None:
     path_log = tmp_path / "run.log"
     cls_log = CreateLog()
     logger = cls_log.basic_conf(complete_path=str(path_log), basic_level="info")
-    # No explicit flush is needed. A StreamHandler flushes on every record it emits, so the
-    # flush loop that used to sit here was dead code that made the test look like it needed one.
     logger.info("hello")
-    # A missing file raises here, so reading it also proves it exists.
     assert "hello" in path_log.read_text()
 
 
@@ -57,9 +54,6 @@ def test_log_message_emits_through_logger(tmp_path: Path) -> None:
     logger = cls_log.basic_conf(complete_path=str(path_log), basic_level="info")
     cls_log.log_message(logger, "boom", "error")
     str_written = path_log.read_text()
-    # The caller-context prefix is reconstructed by walking the stack, so the exact caller
-    # under a test runner varies; assert the prefix shape rather than a specific caller name.
-    # The pattern ends in the message, so a match also proves the message was written.
     assert re.search(r"\[\w+\.\w+\] boom", str_written) is not None
 
 
@@ -77,8 +71,6 @@ def test_basic_conf_reconfigure_closes_previous_handler(tmp_path: Path) -> None:
     logger = cls_log.basic_conf(complete_path=str(path_first), basic_level="info")
     cls_handler_first = logger.handlers[0]
     cls_log.basic_conf(complete_path=str(path_second), basic_level="info")
-    # Closing a FileHandler sets its stream attribute back to None once the descriptor is
-    # released — a deterministic signal that does not depend on garbage-collection timing.
     assert cls_handler_first.stream is None
 
 

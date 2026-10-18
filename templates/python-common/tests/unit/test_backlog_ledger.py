@@ -79,12 +79,6 @@ def test_ledger_not_required_for_routine_classes(str_path: str) -> None:
     assert ledger.needs_ledger([str_path], gate) is False
 
 
-# ⚠️ The two tests below are the two HALVES of one regression and must be read together:
-# `classify_risk` returns the single most-dangerous class and ranks `tests` above `ci`, so a
-# branch touching both `bin/` and `tests/` collapses to `tests` — not a ledger class. The
-# first test pins the collapse that would let it escape; the second pins that asking per path
-# catches it anyway. Split rather than parametrized because the two assert different
-# functions, not one function over two inputs.
 _LIST_MIXED_BRANCH = ["bin/venv.sh", "tests/unit/test_x.py"]
 
 
@@ -174,23 +168,12 @@ def test_checkbox_grammar_rejects_what_the_specs_gate_rejects(str_line: str) -> 
     assert not ledger.CHECKBOX_RE.search(str_line)
 
 
-# --------------------------
-# Bot exemption (#123)
-# --------------------------
-#
-# A gate demanding a human-authored artifact permanently blocks every bot PR that trips it.
-# Both directions are tested by name: an exemption is one `return 0` away from disabling the
-# gate for everyone with the suite still green, so the negative control is the real assertion.
-
-
 @pytest.mark.parametrize("str_login", ["dependabot[bot]", "github-actions[bot]", "renovate[bot]"])
 def test_bot_login_is_exempt(str_login: str) -> None:
     """GitHub's own ``[bot]`` suffix identifies the author, with no allow-list to rot."""
     assert ledger.is_bot_author(str_login) is True
 
 
-# `robotics-team` and `dependabot` are the load-bearing cases, not padding: "bot" appearing
-# in the name is not the suffix, and only GitHub's own marker counts.
 @pytest.mark.parametrize("str_login", ["octocat", "robotics-team", "dependabot"])
 def test_human_login_is_not_exempt(str_login: str) -> None:
     """NEGATIVE CONTROL: the gate still fires for humans, including bot-ish names."""
@@ -345,9 +328,6 @@ def test_local_run_has_no_author_and_stays_enforced(monkeypatch: pytest.MonkeyPa
     assert ledger.is_bot_author(ledger.pr_author_login()) is False
 
 
-# Gate integrity (#309) — pure logic only, offline (no git; see the module docstring for why
-# check_backlog_ledger's own tests above stop at the same boundary).
-
 _RUFF_BASE = """
 select = [
     "E",
@@ -415,7 +395,7 @@ def test_ruff_per_file_ignore_added_is_rule_level_and_flagged() -> None:
 
 def test_ruff_toml_with_no_changes_reports_nothing() -> None:
     """NEGATIVE CONTROL: an untouched (or purely additive-to-select) file passes clean."""
-    str_new = _RUFF_BASE.replace('    "S",\n', '    "S",\n    "B",\n')  # rule ADDED to select
+    str_new = _RUFF_BASE.replace('    "S",\n', '    "S",\n    "B",\n')
     assert gate_integrity.ruff_toml_problems(_RUFF_BASE, str_new, "ruff.toml") == []
 
 
@@ -576,10 +556,6 @@ def test_justification_reason_reads_the_pr_body(
 def test_bare_marker_with_no_reason_does_not_satisfy(str_marker: str) -> None:
     """The reason is REQUIRED, matching `# complexity-ok: <reason>` elsewhere in this repo."""
     assert gate_integrity.RE_JUSTIFICATION.search(str_marker) is None
-
-
-# Assertion integrity (#324) — the sharper half of #309: a test's expected value edited to
-# match a bug, rather than the bug fixed. Pure logic only, offline (same boundary as above).
 
 
 def test_module_stem_strips_the_test_prefix() -> None:
@@ -834,9 +810,6 @@ def test_deletion_of_a_test_file_alone_is_not_flagged() -> None:
     assert gate_integrity.deletion_problems(list_changed, set_stems) == []
 
 
-# ⚠️ REGRESSIONS FOR THE #334 REVIEW — three ways the guard could be defeated or misfire.
-
-
 def test_a_string_literal_cannot_restore_the_raises_count() -> None:
     """A regex over source text counts occurrences; only calls are calls."""
     gate_integrity = _load("check_gate_integrity")
@@ -883,11 +856,6 @@ def test_a_bare_skip_mark_is_still_registered() -> None:
     gate_integrity = _load("check_gate_integrity")
     cls_node = ast.parse("@pytest.mark.skip\ndef test_b() -> None:\n\tpass\n").body[0]
     assert gate_integrity.skip_marks(cls_node) == frozenset({"skip"})
-
-
-# --------------------------
-# Tests — the merge-base mid-merge (a merge of main into the branch in progress)
-# --------------------------
 
 
 def _git_in(path_repo: Path, *args: str) -> str:
