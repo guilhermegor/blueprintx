@@ -132,17 +132,18 @@ that lived beside the constants and the data.
   copy of itself.
 - **A decorative banner** is a comment whose stripped content is only rule punctuation
   (`# -------`).
-- **The test-section banner exemption.** `tests/CLAUDE.md` used to mandate a banner triple
-  (dash rule, section name, dash rule) in every test module. The rule line was measured (#466) to
-  occur nowhere else in the tree. It was matched structurally in `banner_findings` and not through
-  the pragma allowlist, because a pragma breaks a run (`line_breaks_run`): listing the string there
-  would let one dash line split an oversized block into two under-ceiling halves (#479;
-  reproduced: 44 lines, one dash line, 44 lines passed clean). The two rule lines still counted
-  toward the block's length, and only the banner finding was suppressed, never the run. It was
-  scoped to Python test modules (`is_test_module`); the same triple in production code, a
-  `Makefile`, shell or `.ts` is a plain decorative banner. Once the convention is removed from
-  `tests/CLAUDE.md` and the suite (slice 8 of #304), the exemption has no remaining purpose and
-  is deleted in a follow-up, with a should-fail test that a banner in a test module is a finding.
+- **The test-section banner exemption was removed (slice 9d).** `tests/CLAUDE.md` used to
+  mandate a banner triple (dash rule, section name, dash rule) in every test module, and the gate
+  exempted it by file type (`is_test_module`, `is_exempt_section_banner`, `STR_TEST_SECTION_RULE`).
+  The rule line was measured (#466) to occur nowhere else in the tree. It was matched
+  structurally in `banner_findings` and not through the pragma allowlist, because a pragma breaks
+  a run (`line_breaks_run`): listing the string there would let one dash line split an
+  oversized block into two under-ceiling halves (#479; reproduced: 44 lines, one dash line,
+  44 lines passed clean), so the two rule lines counted toward the block's length and only the
+  banner finding was suppressed, never the run. The convention left `tests/CLAUDE.md` and the
+  suite in slice 8, so the exemption had no purpose and was deleted with a should-fail test
+  that the same triple in a test module is a finding. The split-run and run-length witnesses
+  stay: a lone rule line never splits an oversized run, and a triple inside one still counts.
 - **A bare `# comment-budget-ok:`** with no reason and no trailing newline leaves
   `.splitlines()` on the tail empty, not `[""]`; indexing `[0]` crashed the first draft instead of
   failing the exemption, which is what a bare marker must do.
@@ -170,8 +171,7 @@ that lived beside the constants and the data.
 - **The test-section banner is not listed here.** Every entry is a pragma, and a pragma breaks
   the current run. That is right for a QA suppression, but a "banner is a pragma" entry lets one
   dash line split an oversized block into two under-ceiling halves (reproduced as above).
-  The exemption was structural in `check_comment_budget.py` for that reason; do not re-add the
-  string here.
+  The exemption that once lived in `check_comment_budget.py` is gone; do not add the string here.
 
 ### `required-checks.txt`
 
