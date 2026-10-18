@@ -185,7 +185,6 @@ def _wheel_dir(tmp_path: Path, *list_names: str) -> Path:
     """
     dir_wheels = tmp_path / "dl"
     dir_wheels.mkdir()
-    # Created through map because the tests tree is capped at cyclomatic complexity 1.
     tuple(map(lambda str_name: (dir_wheels / str_name).write_bytes(b"x" * 10), list_names))
     return dir_wheels
 

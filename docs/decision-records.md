@@ -524,6 +524,802 @@ test suite keep the contract; this section records the reasoning that lived besi
       account-level block, every candidate cooling down or exhausted) was split out of `main` to
       stay under the PLR0911 return-count ceiling.
 
+## The comment-budget gate and its data files (`templates/python-common/bin`)
+
+`check_comment_budget.py`, `comment_budget_allowlist.txt` and `required-checks.txt` carry no
+comments. The module docstring of the gate is the contract; this section records the reasoning
+that lived beside the constants and the data.
+
+### `check_comment_budget.py`
+
+- **`INT_MAX_RUN = 85`** is just above the worst block measured on the tree (80 lines), so the
+  tree had zero run-length violations when the gate shipped and #304 is what tightens it, not
+  the gate. The ratchet, not this ceiling, is the live constraint.
+- **The structural-line limit (2)** is not a number to tune: a shebang or PEP 263 coding cookie
+  only ever sits on line 1 or 2. A decorative banner is exactly rule, title, rule: three lines.
+- **`.py` is deliberately absent from the `#`-suffix tuple**: its blocks come from `tokenize`,
+  since a `#` inside a string literal is not a comment and only the tokenizer knows. But
+  `marker_for` must still recognise `.py` explicitly, or `file_problems` short-circuits on its
+  `not str_marker` guard before the `.py` branch and every Python file goes unchecked while
+  `audit_paths` reports it "checked" (#466; measured 228 of 499 files "checked", 0 findings,
+  discovery non-zero and looking like coverage). `Makefile` (no suffix) and `.mk` are matched by
+  name in `audit_paths` and `marker_for`; the issue's own table missed `Makefile` for this reason.
+- **`//` file types.** `/* */` block comments are a known ceiling, not a gap: every measured
+  violation in the issue's table is a line-comment block, and a second comment grammar for zero
+  measured evidence is the unrequested generality this repo argues against.
+- **The skip list** mirrors `check_function_length.py`, `.claude` included: `--root` is
+  overridable to the real repo root, which commonly sits under a `.claude/worktrees/<agent>/`
+  copy of itself.
+- **A decorative banner** is a comment whose stripped content is only rule punctuation
+  (`# -------`).
+- **The test-section banner exemption.** `tests/CLAUDE.md` used to mandate a banner triple
+  (dash rule, section name, dash rule) in every test module. The rule line was measured (#466) to
+  occur nowhere else in the tree. It was matched structurally in `banner_findings` and not through
+  the pragma allowlist, because a pragma breaks a run (`line_breaks_run`): listing the string there
+  would let one dash line split an oversized block into two under-ceiling halves (#479;
+  reproduced: 44 lines, one dash line, 44 lines passed clean). The two rule lines still counted
+  toward the block's length, and only the banner finding was suppressed, never the run. It was
+  scoped to Python test modules (`is_test_module`); the same triple in production code, a
+  `Makefile`, shell or `.ts` is a plain decorative banner. Once the convention is removed from
+  `tests/CLAUDE.md` and the suite (slice 8 of #304), the exemption has no remaining purpose and
+  is deleted in a follow-up, with a should-fail test that a banner in a test module is a finding.
+- **A bare `# comment-budget-ok:`** with no reason and no trailing newline leaves
+  `.splitlines()` on the tail empty, not `[""]`; indexing `[0]` crashed the first draft instead of
+  failing the exemption, which is what a bare marker must do.
+- **`--root <dir>`** is a flag plus its value, so argv must hold at least two entries. Zero
+  discovered files in audit mode is a failure, not a pass, matching every sibling gate.
+
+### `comment_budget_allowlist.txt`
+
+- **Format.** One substring per line. A comment line that starts with an entry is
+  machine-read configuration in comment syntax, not prose being budgeted: it never counts toward
+  a run, is never flagged as a banner and is never stripped, and it breaks a run instead of
+  extending it (#303). A leading `~` means "contains", for generated-file banners, matched only
+  in a file's first lines. Lines starting with `#` are ignored, as are blank lines.
+- **Anticipatory, not a census.** Add every pragma form the toolchain in `templates/python-common/`
+  can emit, even with zero occurrences today: `codespell:ignore` has no inline use (codespell is
+  configured through `.codespellrc`) and belongs anyway, because the first person who legitimately
+  needs one must not be the one who finds out the gate has never seen it.
+- **The groups**, in file order: ruff, pyright, mypy, pytest/coverage, shellcheck, codespell, this
+  repo's own gates (`*-ok:` markers, `pairing:internal`, `pipeline-mode:`, `offline-mode:`,
+  `layer-policy`, `gate-change-ok:`), deptry (`per_rule_ignores` and `DEP00N` codes), hadolint and
+  Dockerfile parser directives, markdownlint, yamllint, sqlfluff, secrets scanners, formatters,
+  the TypeScript and JavaScript toolchain, pylint, generic "do not analyze" markers, dependency
+  bots, and ponytail. The last group is structural exemptions (#303): SPDX headers and
+  generated-file banners are not the essay or decorative-banner defect the gate polices.
+- **The test-section banner is not listed here.** Every entry is a pragma, and a pragma breaks
+  the current run. That is right for a QA suppression, but a "banner is a pragma" entry lets one
+  dash line split an oversized block into two under-ceiling halves (reproduced as above).
+  The exemption was structural in `check_comment_budget.py` for that reason; do not re-add the
+  string here.
+
+### `required-checks.txt`
+
+- It lists the status-check names `enable_repo_rules.sh` makes merge-blocking on the default
+  branch, one per line, verbatim as GitHub reports them; blank lines and `#` comments are ignored.
+- Add a name only after confirming a real PR emits it
+  (`gh api repos/:owner/:repo/commits/<pr-head-sha>/check-runs --jq '.check_runs[].name' | sort -u`).
+  A name nothing emits blocks every PR forever, since GitHub cannot tell "has not reported yet"
+  from "will never report". Deleting a line is always safe; adding an unverified one is not.
+- `Review threads answered` is the `review_threads.yaml` job: `on: pull_request` with no filter,
+  so it reports from the moment a PR opens, and it fails both when a thread is unanswered and when
+  no reviewer ran at all.
+- `Classify and gate this PR` is the `pr-gate.yaml` job: `on: pull_request` with
+  `types: [opened, synchronize, reopened, labeled, unlabeled]`, and its job-level
+  `if: github.event_name == 'pull_request'` is true for every one of those. Without this line the
+  gate classifies and fails while nothing stops the merge (#564).
+
+## Generated-project test suite (`templates/python-common/tests`)
+
+The tests every Python scaffold ships carry no comments. The shapes below recur across the
+suite; each exists because a simpler form was measured to be wrong or to hide a failure. The
+module layout the old banners spelled out is plain order now: helpers, fixtures, then tests.
+
+### Shapes forced by the complexity ceiling
+
+`tests/` is held to cyclomatic complexity 1 by `bin/check_complexity.sh`, so a test body has no
+branch. That is the mechanical form of "a test exercises one path"; a branch in a test means the
+green never says which side ran.
+
+- **Comprehensions, generators and `contextlib.suppress`** replace loops with skip guards,
+  `try` handlers and flag variables: mccabe charges a comprehension nothing and charges every
+  loop, guard and handler a point (`test_startup_fragility_order`, `test_contract_family_conventions`,
+  `test_integration/test_bin_scripts`, `test_wheelhouse_select`). A short run of three calls or
+  entries is written out rather than looped for the same reason.
+- **`skipif` decorators over a body guard.** An environment probe is resolved once at import time
+  and feeds a `skipif`, because `if ...: pytest.skip(...)` in the body reads as a path through
+  the test to a reader and to mccabe alike. The same applies to "does this tier ship the package
+  or driver" (`test_all_exports_gate`, `test_daily_cache`, `test_ruff_ret_rule`, `lint_deps`).
+- **Module-level helpers and stubs, never nested `def`s.** A nested function costs the enclosing
+  test one point, so a branch-free stub would spend the budget reserved for branching
+  (`test_pr_gate`, `test_sidecar_metadata`, `test_retry`).
+- **`Mock(side_effect=[...])` for a flaky callable** (`test_retry`, `test_review_retry`): the call
+  sequence "raise, raise, return" is data where a reader looks for it, not an `if` on a counter,
+  and `functools.wraps` tolerates a Mock. A conditional expression keeps the opt-out fixture in
+  `conftest.py` at complexity 1: a test that opted out is patched back to the real primitives,
+  a no-op that monkeypatch undoes at teardown anyway.
+- **`parametrize`, not a `for` in the body.** A loop asserts N cases behind one green: the report
+  cannot say which case ran and the first failure hides the rest. A reference date, one token
+  map and three documented tokens is one assertion over different keys (`test_paths`).
+  Where a case list must be flattened, flatten first and assert once on the collected names so
+  every offender is reported (`test_startup_fragility_order`).
+- **An immutable default for env-override parameters.** A mutable `{}` default is a bugbear B006
+  finding and a `dict_extra or {}` guard costs a decision point; short-circuit evaluation makes
+  a helper an expression instead of a branch (`test_bin_scripts`).
+- **One build, several facets.** The "expensive shared setup" pattern in `tests/CLAUDE.md`,
+  module-scoped, stops the one-assert rule from turning three claims about one read-only frame
+  into three rebuilds of it (`test_frames`, #544). `pytest.raises` plus its `match=` is one
+  assertion site with one failure mode, not two (`test_pip_requirements`).
+- **Split rather than combine.** A conjunction in one assertion reports only that the whole was
+  false: an absent loader and an absent spec are different faults (`test_all_exports_gate`,
+  `test_layer_imports_gate`, `test_review_retry`). An introspective test over `__all__` beats
+  five hand-listed imports, so a name added to a package without being exported is what fails
+  (`test_retry`, the surface added in #116).
+
+### Witnesses and negative controls
+
+- **Every gate needs a test that has seen it fail** (#111). A gate with no should-fail witness
+  is indistinguishable from one that is not wired up, since both print green. Writing the first
+  eight found three live defects: `check_provenance.py` and `check_docstrings.py` both exited 0
+  printing nothing when their cwd-relative globs matched nothing, and `lint_actions.sh` accepted
+  any file named `actionlint` on `PATH` as a working one. The `lint_*.sh` wrappers need a
+  witness for both the missing-tool branch and the zero-discovery branch, since "tool not found"
+  and "tool ran and passed" look identical from outside.
+- **A healthy tool is required for the zero-discovery witness.** With actionlint absent the run
+  stops in the required-tool branch and never reaches discovery, so an assertion that also
+  accepts "required" stays green with the guard deleted. Poetry is shadowed there so resolution
+  cannot take the vendored path.
+- **A fixture must reach the boundary it claims to test.** A 100-digit input sat under Python's
+  4300-digit conversion limit, exercised only the `OverflowError` path and passed while the
+  `ValueError` path was open; it is 5000 digits (`test_review_retry`). A multi-line docstring
+  that closes on a line starting with text is required for #206's third shape: a one-line
+  docstring matched the old start-anchored guard and proved nothing. Fixture halves that a gate
+  keys on disagreement over must genuinely differ (annotated `-> int`, documented as `str`).
+- **A scanned-nothing control keeps a gate from becoming decorative.** A gate that scanned
+  nothing also found nothing wrong and would report OK forever after a rename; the zero-discovery
+  and could-not-parse cases pin that for each gate (`test_all_exports_gate` and siblings).
+- **Real wording, verbatim.** The reviewer's refusal text and declared wait come from the live
+  message (#275, 2026-08-26): the phrase is the interface, and a paraphrase would test our idea
+  of the message while the parser only ever meets the real one (`test_review_retry`).
+- **Relative paths where the gate takes relative paths.** `swallowed_by_omit` is called with a
+  relative `path_module` after a `chdir` to the project root. Passing an absolute path makes each
+  test vacuous: it matches the absolute branch and the relative pattern is compared with a path
+  that can never match. With the absolute branch reverted out of the gate, the earlier versions
+  still reported `2 passed` (`test_coverage_floor_gate`). Gates that derive `PATH_ROOT` from
+  `__file__` (`check_docs_code_refs.py`, `check_function_length.py`) are pointed at a throwaway
+  tree with `--root`, because `cwd=` alone would scan the real repo.
+
+### The dual import root
+
+`pytest.ini` puts both `.` and `src` on the path, so one file is importable as `utils.x` and as
+`src.utils.x`, and Python loads it twice with distinct class objects. A module that annotates a
+parameter with a class it imports bare (`ProblemReport`, `FileContract`, `RegimeWindow`,
+`LogEmitter`) is guarded by beartype or the runtime TypeChecker, whose nominal check rejects an
+instance built from the other copy. So these tests import bare (`utils.`, `config.`), never
+`src.utils.`; `tests/CLAUDE.md` ("The dual-import-root trap") has the rule. The names are
+interchangeable until a class crosses between them. Affected modules: `test_daily_cache`,
+`test_provenance`, `test_regime_adapters`, `test_ms_office_excel_sheet_names`, `test_xml_reader`,
+`test_sidecar_metadata`, `test_config_schemas_example`, `test_contract_oracle_example`.
+
+### Per-suite notes
+
+- **`test_bin_scripts` (integration).**
+    - Subprocess argv is a constant, trusted list built from repo-internal paths with no shell,
+      so bandit's subprocess warning is a false positive; each call carries its own `noqa`.
+    - The environment is inherited, not scrubbed: an emptied `PATH` takes `dirname` with it, so
+      `SCRIPT_DIR` never resolves and the run fails for a reason unrelated to the claim
+      (measured). `poe_exec.sh` is run under either branch of the resolver, since a resolved Poe
+      and the "none found" diagnostic are both built from `print_status`, so either proves the
+      lib is reachable.
+    - `poetry_exec.sh`: stdout is exactly the project version, and the resolution status lands
+      on stderr. `precommit.sh`: the skip-gracefully default exits 0 and announces the skip
+      without fabricating a repository or running `git init`; with a real work tree a throwaway
+      `HOME` isolates the global `safe.directory` write, and the self-heal never emits the
+      "no git repo" skip.
+    - `pip_fallback.sh` driver pruning: `config/connection_db.py` lowercases `DB_BACKEND` before
+      dispatching, so those spellings are valid configuration and the pruner must agree, or it
+      drops the one driver the project uses.
+    - `bin/check_*.py` on Windows: cp1252 stdout must not crash the glyph that `check_dtypes`
+      prints for a banned binary float dtype.
+    - `bootstrap.sh`: a corporate CA must be unioned with the existing roots, never replace them.
+      A replacement writes exactly one block, while only a union carries the roots too. certifi's
+      absence is simulated by hiding it from the child with a finder written against the modern
+      protocol: the older two-method form was dropped in Python 3.12 and a finder shaped that
+      way is skipped without a warning. The supported path reads the store the browser trusts.
+    - `get_corporate_ca.sh`: the refusal carries the remedy, not only the verdict, and nothing is
+      written on the refusal path. `check-clean-index`: editing a tracked file without staging it
+      leaves the tree dirty and the index empty, the routine state the guard must never block;
+      `git add` with no commit consuming it is the fingerprint of a rejected commit, and the
+      verdict names the likely cause, the file and the remedy including the escape hatch.
+    - `export_deps.sh`: Poetry's own words survive to the operator, and the remedy names the
+      resolved binary, not a bare `poetry`. `print_status`: an unknown status must not look like
+      ordinary output.
+    - `check-urls` (#206, #224): every docstring shape must actually be scanned. The three shapes
+      each hold the same unreachable URL, so a shape that reports clean is a check nobody ran.
+      The third (a closing delimiter sharing a line with text) was never blind, since the URL was
+      scanned as body text, but the state never flipped back, so every later line was read as
+      still in the docstring. The cache key mirrors the hook's own `md5sum`, not a security use.
+    - `check_complexity.sh` (#167, #254): a function with complexity 3 (two `if`s plus the
+      implicit path) is over `src/`'s ceiling of 2 and under `bin/`'s 8. The colour-control
+      variables are stripped from every run so a developer's shell cannot decide what the suite
+      measures; the ANSI CSI pattern is matched so escapes never reach the gate's parsing;
+      the reported finding is a regex over the whole line, and `print_status` adds colour, so
+      only the ruff-derived remainder after `C901` is asserted clean.
+    - `rerun_stale_gate_runs.sh`: a scriptable `gh` shadows the real one and records every call.
+      Shadowing, not mocking, because it is deterministic on any machine including CI, where
+      the real `gh` is installed and a `skipif` would drop the coverage where it matters. It
+      does not evaluate `--jq`: filtering is GitHub's job, so the tests assert on the query sent.
+    - `lint_deps.sh` (#238): the manifest declares nothing, so any third-party import under
+      `src/` is undeclared by construction. PEP 621 is used rather than `[tool.poetry]`, which
+      does not drift when the tier's Poetry moves. The test imports a package every tier
+      declares, installed in the venv yet absent from the throwaway manifest: present at run
+      time today and gone the day whatever pulled it in stops doing so. The wrapper's `shift 2`
+      drops `run` and `deptry`, leaving its own arguments.
+    - `run.sh` (#252): an argument passed to `poe run <x>` must reach the entrypoint; the test
+      file is made newer than `pyproject.toml` with a margin so the `-nt` check in
+      `runtime_env_needs_bootstrap` is unambiguous at any filesystem mtime resolution.
+    - `test_resourcewarning_unraisable_gate`: constant trusted argv from `sys.executable` and
+      repo-internal paths, so the bandit warning is a false positive.
+- **`test_backlog_ledger` and the integrity gates.** `classify_risk` returns the single most
+  dangerous class and ranks `tests` above `ci`, so a branch touching `bin/` and `tests/`
+  collapses to `tests`, not a ledger class. One test pins that collapse, the other that asking
+  per path still catches it; they are two tests because they assert different functions. The bot
+  exemption (#123) is tested in both directions by name, because an exemption is one
+  `return 0` from disabling the gate for everyone with the suite green. `robotics-team` and
+  `dependabot` are the load-bearing cases: "bot" inside a name is not the suffix, and only
+  GitHub's own marker counts. A gate demanding a human-authored artifact otherwise blocks every
+  bot PR. Gate integrity (#309) is pure logic, offline; assertion integrity (#324) covers a
+  test's expected value edited to match a bug, with the line number as a case, since a finding
+  that cannot point at its assertion sends the author hunting. A renamed test file is read at
+  its source path (#590), with padding to keep git's rename similarity above 50% after the
+  one-line weakening; an expected-value change counts only when production code also changed
+  (#289 is the live example). The `#334` review added three ways the guard could be defeated or
+  misfire.
+- **`test_pr_gate`.** Terminality differs from display state: `{"a": "failure", "b": "pending"}`
+  displays as failure while not terminal, and breaking the poll loop on `gate_state() !=
+  "pending"` would stop on the first transient red while other checks run, with nothing
+  re-rendering the comment afterwards.
+- **`test_regime_adapters`.** `resolve` returns the first covering window while the registry
+  promises windows may arrive in any order, so two overlapping windows bind a period to whichever
+  was listed first, a reader parsing a real file against the wrong published header with nothing
+  reporting it (#344 review). Validation the caller can undo is not validation, hence the
+  regression for it.
+- **`test_paths`.** The premise (`PureWindowsPath("/home/x/out")` is rooted but driveless, so
+  `is_absolute()` is False) and the behaviour (the function routes through `resolve()`) are
+  separate claims and must not collapse (#544): asserting only the premise pins the platform and
+  leaves our function untested, since a regression handing the driveless input back would pass.
+  On POSIX CI the verdict is simulated and the real function is then called under it.
+- **`test_daily_cache`.** `write_bytes` is not atomic, so an interrupted run can leave an empty
+  file; serving it hands the caller a valid-looking path to nothing that fails later and far
+  away. The miss, the hit on the same reference day, and the half-written file each get a case.
+- **`test_frames`.** An empty frame with no columns makes the shape data-dependent: a caller that
+  concatenates or renders it behaves differently depending on whether rows existed. Returning the
+  declared columns keeps it constant; both seams owe the property, empty and still shaped.
+  `apply_dtypes` needs disjoint column sets, so a date column is declared by `list_date_cols`
+  alone, never also in `dict_dtypes`.
+- **`test_startup_fragility_order`.** The reference block is an optional override and must never
+  force a project to declare a source's `{dir, pattern}` twice; the tests pin the fallback chain
+  (override wins, the real input's own spec otherwise, `None` only when neither exists), with the
+  absent-override path asserted explicitly since every existing project has no `reference_files`
+  and that path is where a regression lands first. The try-block check is scoped to the one that
+  wraps the config read, since the module has a legitimate `except ModuleNotFoundError` for the
+  typing shim. These tests live in this module because a new `tests/unit/*.py` needs its own
+  scaffold copy-list wiring (`bin/ci/check_test_copy_lists.py`).
+- **`test_contract_family_conventions`.** The list of column names two contracts legitimately
+  share stays empty by default and a conscious list: two sources requiring `cnpj` is ordinary, so
+  the check's value is that sharing is declared, not forbidden.
+- **`test_comment_language_gate`.** Two consecutive comment lines form a quotation that opens on
+  the first and closes on the second; read line by line, the opening quote never meets its
+  closing one, the quoted span survives redaction and its language is charged to the English
+  comment. Each false positive was measured and is pinned by name, accented capitals included
+  (`NÃO`). The environment is inherited because a bare dict drops `PATH`; discovery reads
+  `git ls-files` (#331), so an untracked fixture tree is invisible and the fixture must be a
+  committed repo, with an orphan worktree stand-in present on disk but never staged. One
+  representative long-lived file per location the allow-list once missed is checked.
+  Registering the module root makes teardown undo the rebind the gate performs.
+- **`test_comment_budget_gate`.** The ratchet ceiling, the escape hatch, pragma lines breaking
+  a run, the decorative banner (regex-decidable, no ratchet), positional exemptions, the
+  extensionless `Makefile` as the issue's own worked example, and that Python files are checked
+  (#466).
+- **`test_logs`.** A `StreamHandler` flushes on every record, so the old flush loop was dead
+  code; the caller prefix is rebuilt by walking the stack, so the pattern asserts the shape and
+  ends at the message, which also proves it was written; closing a `FileHandler` sets its stream
+  to `None`, a deterministic signal independent of garbage collection.
+- **`test_raw_workspace`.** The criterion is what is not on disk afterwards, so the assertion
+  runs outside the block. A caller naming a leaf inside an unbuilt tree must not assume the
+  parent exists, or a bronze write dies on the first run of a new dated folder. The runtime
+  checker guards against the string form, which would otherwise fail at `str.mkdir` later.
+- **`test_tabular_reader`.** A stray quote opens a free-text middle column; under default quoting
+  the open quote swallows the separator and the trailing rows, while `QUOTE_NONE` keeps the three
+  real fields.
+- **`test_typing`.** Under the default policy a bool is rejected where an int is annotated;
+  flipping the strict-bool knob off on the seam and rebuilding the config makes the bool satisfy
+  it, proving the knob and not the adapter drove the change.
+- **Smaller notes.** `test_decimals`: equality alone proves finiteness since NaN never compares
+  equal, and a plain float-repr cell keeps its value and is not inflated tenfold.
+  `test_docs_code_refs_gate` and `test_verify_venv_imports`: `in None` raises, so a missing
+  finding fails there too. `test_dead_code_gate`: the duck-typed stand-ins for vulture's `Item`
+  are a flat literal down to the one field read, not a comprehension.
+  `test_family_convention_example`: the illustrative family stands in for `import myproj.section
+  as family`; in a real project it is `family.__all__`, the declared public surface, and the
+  members are discovered from it, never hand-listed. `test_env_config`: only `_dev` exists.
+  `test_ruff_ret_rule`: the shipped config the test is the witness for is found by walking
+  `tests/unit/ -> tests/ -> python-common/`. `test_wheelhouse_select`: built through `map`.
+
+## Generated-project config files (`templates/python-common`)
+
+The config files every Python scaffold ships carry no comments. This section records why each
+is shaped as it is; a generated project gets the behavior, not the history.
+
+### Small config files
+
+- **`.codespellrc`.**
+    - `skip` is the single source both gates read: `poe lint` scans the whole tree and
+      pre-commit only staged files, so they agree only because the skip lives here.
+      `*-lessons.md` is a git-ignored mirror that the lessons workflow writes, not a build
+      output; without the skip, writing a lesson would flag the mirror and abort an unrelated
+      commit. Use the basename glob, never `docs/*-lessons.md`: `codespell .` walks `./docs/...`
+      and an anchored pattern silently fails to match.
+    - `ignore-words-list` is the locale extension point. codespell only knows English, so a
+      technical doc in another language (the seed is pt-BR) is flagged at the pre-commit
+      boundary, and each rejected commit costs a full gate run. Extend the list with your
+      locale's vocabulary; never `skip` a whole file, which hides real typos in identifiers.
+      The second half of the list is commit and doc prose (`ser`, `vai`, `meu`, ...), not
+      domain nouns. Write every entry lowercase: codespell lowercases the found word before the
+      lookup, so a capitalised entry matches only itself. Keep it in sync with the repo-root
+      `.codespellrc`; the two drifted in both directions and the stale copy was this one.
+      Entries are pruned by measurement (#197): drop one, re-run, keep it only if a finding
+      appears.
+- **`.coveragerc`.** Branch coverage and the floor are measured as described in
+  [Coverage floor](coverage-floor.md) (#427). `bin/check_coverage_floor.py` guards the patterns:
+  one must never widen past `infrastructure/` (or a whole capability named outright) into a
+  `domain/` or `application/` layer, which would drop real logic from the `fail_under`
+  denominator (#149). `fail_under` is the single literal read by pytest-cov in both the
+  pre-commit hook and the CI gate.
+- **`.cz.toml`.** Commitizen config lives here, not in `pyproject.toml`, so the manifest stays
+  near package identity and dependencies (#233); the keys were identical across the five Python
+  tiers, so it is one file copied to each. Commitizen tries `pyproject.toml` first and skips it
+  when it has no `[tool.commitizen]`, so this file is found; but if it ever stops being copied,
+  commitizen does not fail: `cz version --project` prints "No project information" and exits 0,
+  giving a differently formatted changelog and an unprefixed tag, never a red check. That is why
+  `scaffold_lint_test.sh` asserts the file lands. Consumers: `poe bump_version`, `poe changelog`,
+  the `commitizen` and commit-msg hooks, and the docs build. `version_provider = "poetry"` reads
+  `[tool.poetry]` by project root, not by where the config lives. Services keep the version in
+  `pyproject.toml`, tagged by `cz bump` (offline) or `release.yaml` (online); the library tier
+  takes it from the git tag via poetry-dynamic-versioning. Either way `cz changelog` groups by tag.
+- **`docker-compose.otel-collector.yml`.** Ports are bound to `127.0.0.1`, not published on every
+  interface. The OTLP receivers are unauthenticated and the file is copied into every project that
+  opts in, so a bare `4318:4318` would make an open log sink the default on whatever network the
+  box sits on. A deployed collector belongs behind a real ingress with credentials. 4318 is
+  OTLP/HTTP, which `OTEL_EXPORTER_OTLP_ENDPOINT` points at; 4317 (gRPC) is unused by the HTTP
+  exporter and kept for a gRPC one.
+- **`otel-collector-config.yaml`** (#438). The collector is the decoupling point: repoint the
+  `logging` exporter at Axiom, Loki, Datadog, SigNoz, Honeycomb, Elastic or any OTLP backend,
+  a config change and never an application change. `0.0.0.0` is correct and must not be
+  hardened to `127.0.0.1`: it is the bind address inside the container, whose loopback is not
+  the host's, and narrowing it makes the collector unreachable through the port mapping while
+  the fire-and-forget exporter reports nothing. Host exposure is controlled in the compose file.
+  The `logging` exporter prints to the collector's stdout, enough to prove the seam end to end.
+- **`docs/.docs-skeleton.yaml`.** Overrides the required-page set `check_docs_sections.py`
+  enforces. It adds `architecture.md`, which describes a service's layer structure and was
+  scaffolded but never enforced (#130). It is copied into the four service tiers;
+  `lib-minimal` has no `architecture.md`, never receives the file and keeps the default set.
+- **`.gitignore`.** `dist/` is ignored but `dist/.keep` is tracked, so the directory ships.
+  Only the curated VS Code settings and tasks are tracked. `coverage.svg` is tracked (the
+  README badge references it); `coverage.xml` is regenerated on every run. The Claude Code
+  `.tmp.<pid>.<hash>` mid-save sibling is ignored so a racing `git add -A` cannot sweep it into
+  a commit. The scaffoldable-lessons working copies are local; the canonical stores are global.
+  The SQLite file is the `DB_BACKEND=sqlite` default `DB_PATH=./data/app.db` and is never
+  committed. The corporate CA and the union bundle derived from it are generated locally.
+- **`.gitleaks.toml`.** It extends the default ruleset rather than replacing it, and keeps the
+  allowlist to what a fresh project measurably needs, not a speculative list copied from
+  another app's surface (#305). Extend it as real false positives are measured, as
+  `.codespellrc` grows. The stopwords are the placeholder markers in `.env.example` and the
+  README, never real secrets; a value containing one is ignored. The lockfile is allowlisted
+  for pinned package-hash entropy.
+- **`.gitlint`.** The limits were implicit (gitlint's defaults) and were found only when a
+  commit was rejected after the slow hook chain had run. Commitizen enforces the
+  Conventional-Commits format; gitlint owns the length limits.
+- **`.hadolint.yaml`.** A project may ship no Dockerfile, in which case the `hadolint-docker`
+  hook skips. The baseline lets one that adds a Dockerfile inherit a starting point. hadolint
+  lints Dockerfiles only; compose files are covered by `check-yaml` and yamllint. It fails on
+  warnings and above (info and style are advisory). Seed `trustedRegistries` (DL3026) and
+  `ignored` per project, for example `DL3008` (pin apt-get versions) or `DL3059`.
+- **`.layer-policy.yaml`** (this directory's own copy, checking `python-common/src`). The
+  directory is a staging area, not a project, which is why it went unchecked: the gate
+  self-skipped without a policy, so the code shipped to every tier was the one tree the boundary
+  was never applied to. A third-party dependency is reached through a seam in `utils/`, never
+  imported by `model/`, `view/` or `controller/`, so a vendor change stays in one adapter.
+  Deferring an import into a function buys no exemption. Every `allow` entry carries a reason,
+  since an unexplained allowlist entry is one the first inconvenienced person widens.
+  `chassis` is first-party but absent from this layout (the DDD name for the typing shim's
+  home). pandas is allowed as a type annotation only: `-> pd.DataFrame` is shared vocabulary,
+  `pd.read_sql(...)` is a vendor API call every copy inherits. `utils/` is the seam layer and is
+  listed explicitly so a new vendor needs a conscious decision. A stray module directly under
+  `src/` is named so it cannot bypass the policy. The composition root knows concrete
+  implementations but not the domain.
+- **`.pydocstyle`.** Ruff already enforces the NumPy docstring set; pydocstyle adds the two
+  checks ruff lacks, D412 and D417. The list matches the hook's `--select`, so `poe lint` (a
+  bare `pydocstyle .`) and the hook enforce the same thing.
+- **`pytest.ini`.** `PytestUnraisableExceptionWarning` is escalated as well as
+  `ResourceWarning`: a warning raised inside `__del__` is unraisable, so pytest re-emits it as
+  the other class and `error::ResourceWarning` alone never sees it, letting a leaked file handle
+  pass (#294, the shape #223 shipped). The second line is the whole mechanism for `__del__`; do
+  not delete it as noise. A warning is ignored by source, never by class alone: a bare
+  `ignore::DeprecationWarning` hides every deprecation, including ones aimed at this code.
+  With the four blanket lines removed the suite emitted four warnings, all from one vendor.
+- **`requirements.txt`** is the bootstrap install. `poetry-plugin-export` is pinned here and not
+  only as a dev dependency: a dev dependency reaches the project venv and nothing else, so the
+  recipe would work from an activated shell and fail from cron, CI and the offline host it
+  serves. `poetry-plugin-shell` (Poetry 2.x dropped `poetry shell`) lives here for the same
+  reason: a Poetry plugin must live in the interpreter Poetry runs from, and as a project
+  dependency it would sit in `.venv`, where no Poetry exists to load it.
+- **`.review-bots.yaml`.** The roster is the provider-agnosticism: the gate names no tool, it
+  subtracts these logins from a thread's authors. Reviewer shapes differ: some post inline
+  threads, some post only a status check. `posts:` is required on every row and decides more
+  than authorship (#218): a `posts: status` member is excluded from the missing-review gate too,
+  so a workflow submitting a review with the ambient `GITHUB_TOKEN` cannot satisfy a gate that
+  exists to say a real reviewer looked. A row that omits it or spells it otherwise fails loudly;
+  at least one `posts: threads` member is required. Zero threads is judged against a submitted
+  review, never against silence (#208). Delete the file to opt out: the gate self-skips with a
+  message. See also the records at the top of this page.
+- **`.shellcheckrc`.** `severity=warning` is the level at which the scripts are clean while still
+  catching real bugs (unquoted expansions, undefined variables, bad test syntax). SC1091 is
+  disabled because `lib/common.sh` is resolved at run time, not lint time.
+- **`.sqlfluff`.** The top-level dialect is a fallback for a `.sql` file outside the per-engine
+  layout. Mixing engines needs no change here or in `bin/lint_sql.sh`: queries live in
+  `src/config/queries/<engine>/<table>__<purpose>.sql` and sqlfluff resolves config per
+  directory, so each engine's folder carries a one-line `.sqlfluff` with its dialect. The engine
+  is a directory, never a filename prefix, which would declare it twice and could disagree.
+  Positional `?` bind parameters are swapped for a stub by the placeholder templater, since a
+  bare `?` is not SQL. Indentation is a tab, matching the project convention (ruff, shfmt and
+  Make use tabs; only YAML is forced to spaces). Hand-written SQL keeps a readable style with
+  identifier casing dictated by the source schema, so those opinion groups are excluded while
+  parse-correctness and keyword capitalisation stay on.
+- **`.yamllint`** complements `check-yaml`, which only validates that YAML parses, with style
+  checks. It is relaxed where the config YAMLs are intentional: no line-length cap (long
+  documentation comments and email bodies), no `---` start marker, aligned values with extra
+  spaces after the colon (`outputs_*.yaml`), and truthy values that appear inside quoted
+  strings, not as bare booleans.
+
+### `mypy.ini`
+
+- **Run from `src/`** (`cd src && mypy --config-file ../mypy.ini .`, in the pre-commit hook, CI
+  and `poe`). That makes `src` the single package base, so the bare imports (`config.x`,
+  `utils.x`, `model.x`) resolve as at run time (`pythonpath = . src` in `pytest.ini`). From the
+  repo root, with `mypy_path = src` and `files = src`, the root and `src` compete as bases and
+  a file resolves twice ("found twice under different module names") on the deeper DDD tree.
+- **No `python_version` pin.** Pinning below the running interpreter makes mypy parse the
+  installed third-party stubs under older syntax rules. On Python 3.12 Poetry resolves
+  numpy 2.5 or newer, whose `.pyi` files use PEP 695 `type` statements, and `python_version =
+  3.10` fails on `numpy/__init__.pyi` in every tier that imports pandas. Capping numpy would
+  move the break to the next dependency that adopts PEP 695. The floor is enforced where it is
+  sound: the CI 3.10 matrix leg runs mypy on 3.10, and ruff's `target-version = py310` catches
+  too-new syntax in our own code.
+- **`ignore_missing_imports = False`** (#376). A global `True` cannot tell "pandas ships no
+  stubs" from "this first-party module does not exist in this layout", so a typo'd `utils.x`
+  reported `Success`. Stub-less vendors get one `[mypy-<vendor>.*]` block each, derived by
+  measurement (flip the line locally, scaffold, read the `import-not-found` errors), because a
+  hand-written list that misses one turns a green gate red in every generated project.
+  Current blocks and their import sites: pandas (the `utils` readers, `dtypes`, `frames`,
+  `provenance`; MVC controller, model and view), wwdates (`utils/dates.py`), defusedxml
+  (`utils/xml_reader.py`), win32com (`utils/ms_office/outlook_gateway.py`), yaml
+  (`config/startup.py`), pyodbc (the native-DB MSSQL handler, the only one of the five native
+  drivers with no stubs) and joblib (the schema-less opt-in's `joblib_handler.py`, #650, which a
+  scaffold with no opt-ins never imports). openpyxl is named in docstrings but never imported,
+  so it is absent: an unmeasured entry is the guess this scheme exists to stop.
+- **Baseline strictness.** Annotations and obvious type errors are enforced, not `--strict`,
+  so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.
+- **The one exclude** is the runtime type-checking engine (`utils/typing` or `chassis/typing`,
+  nested at `<pkg>._internal.utils.typing` in `lib-minimal`): intrinsic metaprogramming mypy
+  cannot analyse, the same reason it is ANN401-exempt. It matches `ruff.toml`'s `exclude`
+  (#203). `^chassis/` and `^capabilities/example_feature/` were both removed in #190:
+  `chassis` was unchecked and had accumulated 20 errors in the DB handlers while shipping into
+  every DDD project; `example_feature` was excluded yet checked anyway, because `main.py` and
+  `app/container.py` import it. Dropping it took the DDD native tier from 58 to 69 checked
+  files with zero new errors. An exclude that excludes nothing advertises a protection that is
+  not there.
+- **Keep both mechanisms**, `exclude` and the per-module `ignore_errors` sections. `exclude`
+  filters discovery only and does not apply to a module reached through an import, so it holds
+  only while nothing outside the tree imports it, a property of the wiring and not of the
+  config. Adding `config/query_loader.py` (#119) took the DDD native tier from "no issues in 31
+  files" to "20 errors in 5 files", none in a file the change touched. Those 20 were fixed (#190),
+  which is why no `[mypy-chassis.*]` section exists. Do not add one to quiet a new error.
+- **The typing-engine sections carry `ignore_missing_imports` as well as `ignore_errors`**
+  (#376). Every shared `src/utils/*.py` helper reaches the engine through one `try: from
+  utils.typing import type_checker / except ModuleNotFoundError: from chassis.typing import
+  type_checker`; a separate `TYPE_CHECKING` branch was measured not to change which import mypy
+  reports (#360). mypy always tries `utils.typing` first, and on a DDD layout it genuinely does
+  not exist: a deliberate shim, the one first-party import still tolerated. Narrowing `[mypy]`
+  alone turned every shared `utils/*.py` red on DDD; MVC reports 0 errors either way.
+
+### `ruff.toml`
+
+- **`target-version`** is the floor of `requires-python` (`>=3.10`); bump it in lockstep with
+  `pyproject.toml`.
+- **`exclude`.** `src/chassis` and `src/capabilities/example_feature` were excluded until #203,
+  mirroring #190's mypy fix. They ship verbatim into every DDD project, so a defect or a style
+  violation the rest of the tree is held to propagates. About 230 findings were fixed in place
+  (D202, S608 `noqa`'d per line, UP007/UP035, missing ANN204/ANN202, a docstring hanging indent
+  authored before the tree was tabified); a few per-file ANN401 ignores remain where `Any` is
+  honest. `lib-minimal` vendors the typing engine at a nested private path whose imports are
+  rewritten to `<pkg>._internal.*` and can exceed the line length, so it is excluded in full
+  (mypy excludes it too).
+- **Preview mode is for PLR1702 only** (too-many-nested-blocks, still preview-only in ruff
+  0.11.13). It also activates 10 tag-along preview rules in the `PL` and `S` families, never
+  chosen on their merits, so they are ignored explicitly (#434): `--preview` alone raised
+  findings from 21 to 81 on `templates/`, and ignoring exactly those 10 restores 21. Revisit
+  each on its own measurement the day PLR1702 leaves preview. Why nesting is gated at all is in
+  `check_complexity.sh`'s header and [Complexity ceilings](complexity-ceilings-measured.md).
+- **PLR1702 pairs with `max-complexity = 3` for `src/` only.** Ceiling 3 alone would admit the
+  nested `if`/`for` that ceiling 2 exists to forbid, and PLR1702 alone would not solve the
+  guard-plus-try/except case. Per-tree ceilings live in `check_complexity.sh`, since
+  `per-file-ignores` can switch a rule off but cannot set a different threshold.
+- **Rules adopted by measurement** (ruff 0.11.13), recorded in the Ruff Rule Adoption Log in
+  `CONTRIBUTING.md`:
+    - `RET` (#426): 0 RET505 and 11 RET501 (a trailing `return None` in a `-> None` function),
+      all removed; 5 were reachable from `templates/python-common`, the other 6 needed a scaffold.
+    - `A` (#418): `from re import compile` shadows a builtin with no signal today; zero findings
+      across `src/ bin/ tests/ optional/`. Do not also set `[lint.flake8-builtins]
+      strict-checking = true`: it enables A005 and fires on `utils/typing` and `chassis/typing`,
+      which shadow stdlib `typing` on purpose as the engine's layout shim (#360), putting a gate
+      violation on correct design and teaching everyone to disable it.
+    - `BLE` (#440): `E722` only catches bare `except:`. Two `BLE001` findings, both the
+      `_pipeline.py` five-mode degradation, now `# noqa: BLE001`; nine other broad handlers
+      already carried one that nothing enforced. `RUF` was measured in the same pass and not
+      adopted (150 findings, 138 of them RUF100 unused-noqa), a separate decision.
+    - `N` (#422): 9 findings across 3 rules, adopted with two narrow per-file ignores.
+- **Ignored rules.** `D206` and `W191` existed only so the linter did not fight an
+  `indent-style = "tab"` formatter; #419 moved the formatter to spaces, so neither fires, and
+  re-measuring with both enabled gave zero findings (the 6022 of #222 was measured under tabs).
+  `E701` is deliberately not ignored: `ruff format` expands a compound statement back onto its
+  own line whatever the lint rule says, so ignoring it would be dead config. Reach for the
+  expression form (`return not cond`, a comprehension, `any(...)`, a ternary). Before
+  suppressing a rule for a style, check whether the formatter already forbids it.
+- **`dummy-variable-rgx`** allows an underscore-prefixed name followed by alphanumerics.
+- **Banned APIs (`TID251`).** Bare pandas readers are banned so every file or SQL read funnels
+  through `utils/tabular_reader`, which enforces a `FileContract` and `apply_dtypes`; the seam
+  and the tests (round-trip read-backs) are exempt. `FileContract` is constructed only in
+  `config/contracts/`; elsewhere both import paths of the class are banned, and a file that
+  imports it for an annotation carries a line-scoped `# noqa: TID251`. The ORM reference entity
+  was once exempt, but it is the file each tier's `CLAUDE.md` says to copy per entity, so
+  exempting it exempted the pattern (#172); it now reads through the session and builds its
+  frame with `utils.frames.from_records`.
+- **`known-first-party` is declared, never inferred**, as a superset of every tier's layer
+  names (one that does not exist in a tier never matches). Otherwise ruff guesses, and versions
+  guess differently: a script that puts `src` on `sys.path` was sorted one way by the ruff that
+  wrote it and the other by the newer ruff in a generated project, so `poe lint` modified a
+  fresh tree and the scaffold check failed on the diff with no rule named.
+- **`max-args = 8`**, not pylint's 5, by measurement: the reader and mail seams take a genuine
+  spread of options and a config object would only move the arguments. At 5 the gate reported
+  12 functions; at 8 it reports one, `read_table` with 11, the widest public API and so the
+  finding worth keeping visible.
+- **No identifier-length ceiling** (#420), measured and rejected. Over `src/` and `bin/`: 493
+  definitions, 63 over 20 characters, 4 over 30, none over 40, the longest 34
+  (`assertion_value_or_operator_change`); the next-longest in any skeleton is 26. A ceiling at 40
+  finds nothing, indistinguishable from a gate that never ran. Ruff has no length rule, so it
+  would need a hand-rolled `bin/check_*.py`, and it would penalise the 3-to-5 character type
+  prefix convention (`str_`, `df_`, `cls_`), pushing authors to drop the prefix or abbreviate
+  the noun. Reopen only if the measured maximum crosses 40, or a concrete defect traces to a
+  name's length.
+- **`bin/` is linted like the rest** (#207). It was excluded for a hypothetical (ruff-format
+  would tabify space-indented helpers and trip E101); the 27 E101s all sat in one genuinely
+  mixed file, and the exclude hid the project's own quality machinery, with 73 findings behind
+  it. Two rules are relaxed there: `ERA001` (100% false positives, 0 of 24 true: the gates'
+  long wrapped prose comments contain `(`, `:` or `=` and read as code; per-line `noqa` would
+  teach authors that `noqa` is how you write a comment; `src/` keeps it, and the global
+  decision is open in #169) and `E101` (the 2-space hanging indent of a wrapped Markdown
+  bullet in a module docstring is prose alignment, a tab would break the continuation, and a
+  `noqa` cannot sit inside a docstring). A `src/` module with a numbered-list hanging indent
+  carries the same E101 exemption (#203), and `lib-minimal`'s private-package path mirrors every
+  exemption (`*` matches the single package segment; without the mirror only that tier goes
+  red, #486).
+- **Per-file ignores.**
+    - `S101` and the magic-value rule are off in `tests/`: a literal in a test is the case
+      under test (21 of 29 findings were in `tests/`). `TID251` is off there because tests read
+      back outputs with `pd.read_*` to assert on them.
+    - `N802` is off in `tests/`: a mixed-case name where the upper-case word is the point
+      (`..._FAIL_rather_than_pass_silently`) is the behaviour description `tests/CLAUDE.md`
+      asks for (5 findings, #422).
+    - `ANN401` is ignored for the raw-driver connection factory (`config/connection_db.py`,
+      MVC) and the DB handlers' `_connect` (psycopg, mysql-connector, pyodbc, oracledb), which
+      have no shared type; `sqlite_handler.py` needs none, `sqlite3.Connection` being real.
+      It is also ignored for the typing engine in both layouts (MVC `utils/typing`, DDD
+      `chassis/typing`, #203) and for `SanityCheck.validate()`, which takes any joblib payload.
+    - `N813` is ignored for `import defusedxml.ElementTree as defused_et`, a deliberate alias
+      for the trust-boundary-safe parser; renaming would only hurt readability (#422).
+    - `lib-minimal` mirrors the exemptions for `src/<pkg>/_internal/...`; its typing engine is
+      fully excluded and needs none.
+
+### `poe_tasks.toml`
+
+- **It replaced the twin Makefile and `tasks.sh`**, two hand-kept implementations of one command
+  list synchronised by a written rule that had already failed: `poe help` lacked
+  `test_cov_report` and `test_cov_serve` (#189). There is no separate help file: bare `poe`
+  lists the `help =` fields, so help and recipe are one declaration. A task without `help =`
+  is invisible in that listing.
+- **Three ways to run a task:** `poe lint` (the dev dependency in `.venv`, or a pipx install),
+  `.venv/bin/python -m poethepoet lint` (the module is `poethepoet`, not `poe`), and
+  `poetry poe lint` (only if you installed the plugin yourself). Scripts never hardcode one:
+  `bin/poe_exec.sh` resolves them in order, as `bin/poetry_exec.sh` does for Poetry.
+- **Tasks run inside the project venv automatically.** Poe detects `./.venv`, which
+  `poetry.toml` forces in-project, so a task is a bare command (`pytest tests/unit/`), never
+  `poetry run pytest`. `bin/poetry_exec.sh` survives only for Poetry management commands
+  (`update`, `install --with docs`, `version`), which act on the venv and so route through the
+  Poetry resolver.
+- **Bootstrap tasks cannot assume the venv**, because they create it: `init`, `ensure_env`,
+  `venv`, `precommit`, `update_venv`. Poe is a dev dependency, so it lives inside the venv it
+  would have to create; run `bash bin/venv.sh`, `bin/ensure_env.sh` or `bin/precommit.sh`
+  directly, which is exactly what these tasks call. The shell entrypoint is the second and
+  last interface; do not add a third. `init` ends a seed step with `|| true` so a missing
+  `.env.example` aborts only that step, not the venv and precommit steps after it.
+- **Do not use `[tool.poetry.requires-plugins]`** to make tasks runnable via poe: it breaks
+  `poetry install` (#232).
+- **`bump_version`** has `cz` compute the next semver from Conventional Commits, write it to
+  `pyproject.toml`, regenerate `CHANGELOG.md`, commit `bump: X.Y.Z` and create the tag. It
+  passes `--no-verify` because that single-line message cannot satisfy gitlint's body rule and
+  the format and test hooks are irrelevant to a version bump; run it on a feature branch. It is
+  offline-tier only: the online scaffold strips it, since releases come from `release.yaml`.
+  `changelog` previews locally; the published site regenerates it in the docs workflow and CI
+  never commits it.
+- **The HTML coverage task covers the whole tree.** Never narrow it to `--cov=<module>`, which
+  reports "no data" on the full suite.
+- **There is no `test_feat` task.** Poe passes extra tokens straight through to a task that
+  declares no `args`: `poe unit_tests -k some_keyword` and `poe unit_tests -x --lf` work with
+  no task per flag. Declaring `args` turns the passthrough off (poe then parses the tokens),
+  as `check_commit_msg` does, so declare `args` only for a named, required parameter.
+- **System `shellcheck` and `shfmt`** are optional, for boxes whose venv drive blocks executing
+  the vendored binary; the primary route is the pip dev dependencies. The two single-rule lint
+  tasks are reachable alone so one rule can be checked cheaply; `poe lint` covers both.
+- **`check_commit_msg <file>`** runs only the commit-msg hooks against a message file in
+  seconds, before `git commit -F <file>`. commitizen and gitlint reject after every pre-commit
+  gate has run, so each rejected message costs a full gate run and the fixes arrive one at a
+  time. It invokes the project's own hooks, so it cannot drift from what the commit enforces.
+  When re-wrapping an over-long body line, re-wrap the whole paragraph (`textwrap.fill`,
+  width 76); fixing one line by hand pushes the overflow into the next. Poe validates the
+  required argument and prints a real usage line, so the Makefile's hand-written guard was
+  deleted, not ported: a reimplemented check can disagree with the tool.
+- **Alembic tasks** (#381). Online (`upgrade`, `downgrade`) is what a developer runs locally
+  and a deploy runs; offline (`--sql`) is what goes to a DBA when production access is
+  restricted. `db_up` already calls `alembic upgrade head`; these give the individual verbs a
+  place in the command interface. On a tier with no `alembic.ini` Alembic errors loudly, as
+  `db_backup` and `db_restore` do for a non-postgresql backend.
+- **The offline wheelhouse tasks** (#299): build on a machine with internet access, copy the
+  `WHEELHOUSE_DIR` payload to the offline target and run `wheelhouse_assemble` there. See
+  [Offline wheelhouse](offline-wheelhouse.md).
+- **Two task sets ship conditionally:** `poe_tasks.library.toml` (`install_dist_locally`, only
+  `lib-minimal`) and `poe_tasks.offline.toml` (`new_branch`, `git_merge_to_main`,
+  `git_diff_*`, only when scaffolded without a GitHub remote). The Makefile declared both with
+  `-include make/*.mk`, whose leading `-` made a missing file silent. Poe's `include` is not
+  equivalent: a missing path does not fail but prints `Warning: Poe could not include file from
+  invalid path` on every invocation (measured), which teaches a team to read past warnings. So
+  the scaffold appends the include list, naming only the fragments it copied
+  (`add_poe_include` in `bin/lib/common.sh`); a `[tool.poe]` table declared after the task
+  subtables is valid TOML and is how the appended block lands.
+
+### `.pre-commit-config.yaml`
+
+- **A default stage is declared.** `bin/precommit.sh` installs both `commit-msg` and
+  `pre-push`, and pre-commit applies a hook to every installed hook type unless a stage is
+  declared, so without it every static gate would run twice, on commit and on push. The fast
+  hooks carry no `stages:` because they belong on commit, and nothing else says that silence
+  also enlists them for the push; hooks that belong elsewhere say so (`commit-msg`, `pre-push`,
+  `manual`).
+- **`no-commit-to-branch`** is the online default. Offline scaffolds (no GitHub remote) swap it
+  for the local `protect-branch` hook via `apply_offline_mode`, pointing at `poe new_branch`;
+  online projects also get server-side protection through `gh`.
+- **Whitespace and JSON hooks exclude** the verbatim external-byte fixtures (stripping trailing
+  spaces or CRLF would corrupt a captured oracle) and the whole of `.vscode/`, which is JSONC:
+  `settings.json`, `extensions.json` and `tasks.json` carry comments that `check-json` rejects.
+- **`pydocstyle` is decoupled from ruff** because ruff lacks the DAR-style checks. It selects
+  only D412 and D417 (no blank line after a section header, every parameter documented).
+- **One structural gate per doctrine**, each a hook and a CI step:
+    - `check-typing`: ruff and mypy cannot assert the presence of a checker metaclass or
+      `@type_checker`.
+    - `check-provenance`: a module that references `read_table` must also reference
+      `stamp_provenance`, so a bronze row never ships without traceability columns.
+    - `function-length`: 60 lines of code. Ruff has no per-function line rule (PLR0915 counts
+      statements) and the docstring is subtracted because NumPy docstrings are mandatory, so a
+      raw span would measure how well a function is documented.
+    - `docs-boundary`: `.specs/` is working material and `docs/` is published documentation;
+      layout rules are in `.specs/CLAUDE.md`. The script is BlueprintX's own, copied at scaffold
+      time, so the root repo and a project run one implementation.
+    - `identifier-masking`: a masked CPF or CNPJ compared with a stored unmasked column matches
+      zero rows and raises nothing. Scans `.py` and `.sql`, since SQL reaches the database
+      through both.
+    - `fixture-scope`: a proxy, not a detector (#442). The real detector is pytest-randomly
+      (no config; it self-activates once installed); this gate pins today's zero-shared-state
+      baseline so the first `scope="module"` fixture does not remove it silently.
+    - `gate-integrity`: diff-scoped against `merge-base(HEAD, main)`, unlike every other hook,
+      because it checks a delta: a hook, rule or exclude that was removed without a
+      `gate-change-ok: <reason>` is a violation (#309). The same script BlueprintX runs over
+      itself.
+    - `check-all-exports`: a package declaring `__all__` must name every public member of its
+      submodules. The usual introspective test discovers the family through `__all__`, so it
+      cannot see a missing member; this walks the files.
+    - `check-complexity`: ceilings per tree (1 for `tests/`, 2 for `src/`, 8 for `bin/`).
+      A test with a branch tests two paths and its green never says which ran. Two ruff
+      invocations, since `per-file-ignores` cannot set a different `max-complexity`.
+    - `one-assert`: assertion sites per `test_*` function; zero fails everywhere and
+      `tests/unit/` is capped at one (#544), since a two-assert unit test goes red without
+      saying which behaviour broke. `tests/integration/` stays zero-only: one call, several
+      consequences. Blocking since the last split of #544 cleared the unit suites. See
+      `tests/CLAUDE.md`.
+    - `check-secrets`: gitleaks (#305) is a system binary resolved like shellcheck and
+      actionlint; config is `.gitleaks.toml`; it skips gracefully locally and hard-fails only
+      when `GITLEAKS_REQUIRED=1` (set by CI).
+    - `check-dtypes`: no ingested column typed as a binary float: float64 stores
+      1984223115.42 as 1984223115.4200000762939453125, an irreversible silent loss. Use
+      `list_decimal_cols` or text; a dimensionless value opts out with `# dtype-ok: <reason>`.
+    - `check-rmw-race`: the read-modify-write race (#385), an attribute reassigned from arithmetic
+      over its own value, read by `session.get()` or `.query(...).first()/.one()` in the same
+      function, with no `with_for_update()` and no `version_id_col`. Two writers can read one
+      value and lose an update silently. A plain read-then-write is not gated. Escape hatch
+      `# rmw-ok: <reason>`.
+    - `check-layer-imports`: a third-party dependency is reached through a seam in `utils/`,
+      never imported by model, view or controller. ruff's banned-api is a blocklist and cannot
+      catch a vendor nobody listed; this is deny-by-default per layer. Self-skips when
+      `.layer-policy.yaml` is absent.
+    - `check-sql-guards` (#355): a `WHERE`-less `DELETE` or `UPDATE` mutates every row with no
+      error, and `WITH (NOLOCK)` permits dirty reads, both reading as correct code. Escape
+      hatch `# sql-guard-ok: <reason>`. It scans a `.py` file (AST) and a raw `.sql` file
+      under `src/config/queries/` (text).
+    - `check-migration-slugs` (#375): migration filenames lead with a known verb (Rails'
+      `<verb>_<object>[_<qualifier>]`), so `ls migrations/versions/` sorts by date and reads
+      as a changelog. Self-skips without `migrations/versions/` (only the ORM tier ships
+      them, #373). Escape hatch `# migration-slug-ok: <reason>`.
+    - `check-orm-model-guards` (#361, the model-side sibling of #355): bitwise `&`, `|`, `~`
+      inside `.where()` or `.filter()` (Python binds them tighter than `==`), two
+      `create_all` at Base or module scope (the second succeeds having created nothing), and
+      a constraint `name=` duplicated across a mixin MRO (SQLAlchemy silently overwrites one).
+      Escape hatch `# orm-guard-ok: <reason>`. Python and SQLAlchemy only; see the gate's
+      module docstring for why each TypeScript/Prisma equivalent does not apply.
+    - `check-docs-sections`: every canonical page (English slug) exists and is registered in
+      `mkdocs.yml` nav; MkDocs builds an unregistered page anyway, so it silently vanishes
+      from navigation. Keys on slugs, never localised titles.
+    - `check-docs-code-refs` (#159): neither the slug gate nor `mkdocs build --strict` sees a
+      `from x import Y` example, so a renamed module keeps being cited after every other gate
+      goes green. Triggers on a docs edit or a `src/` move.
+    - `check-backlog-ledger`: a branch whose cumulative diff touches `src/` or CI paths must
+      add `.specs/backlog/<kebab>_YYYYMMDD_HHMMSS.md` with a checklist. It diffs the index
+      against the merge base, so a staged-but-uncommitted ledger counts.
+    - `check-comment-language`: prose for a reader (README, `docs/`) may be in the project's
+      locale; code, comments, docstrings, symbol names, commit messages and CI output stay
+      English. Prose alone failed: the rule was breached twice in one session, the second time
+      because a sweep grepped only `.py` and left 55 Portuguese comment lines in
+      `src/config/*.yaml`, which became the convention the next author copied. Hence every
+      commented file type.
+    - `check-comment-budget`: bounds comment volume in every code format, with QA suppressions
+      exempt through the anticipatory allowlist (`bin/comment_budget_allowlist.txt`). Escape
+      hatch `# comment-budget-ok: <reason>`.
+- **mypy runs from `src/`** in the hook for the same reason as in CI; see `mypy.ini` above.
+- **The non-Python lint gates share one wrapper with `poe lint`** (one home, zero drift), and
+  each wrapper skips gracefully when its tool is absent.
+- **actionlint beside yamllint:** yamllint asks whether the YAML is valid, actionlint whether
+  GitHub will run it. A workflow can be impeccable YAML and be rejected wholesale, which
+  produces no red check: the PR just looks like it is waiting, so a dead gate and a slow gate
+  look the same from outside.
+- **deptry** requires every package `src/` imports to be a direct dependency. Both triggers
+  are needed: a new import in `src/` and a deleted line in `pyproject.toml` break the same rule
+  from opposite sides, and the second leaves `src/` untouched. `pass_filenames` is false
+  because the gate reads the whole manifest.
+- **The unit-test hook tolerates pytest exit 5** (`|| [ $? -eq 5 ]`, no tests collected), so a
+  fresh project with an empty suite does not block every commit; exit 1 still blocks.
+- **The staged-index guard on pre-push:** a non-empty index at push time is the fingerprint of
+  a rejected commit, where the push then ships the previous commit and prints success while the
+  work stays behind. Neither CI (a commit that does not exist is not a diff) nor pre-commit (it
+  already rejected) can see it. It guards the index, not the dirty tree: unstaged edits while
+  pushing are routine, and a noisy guard gets disabled.
+- **`coverage-floor`:** `fail_under` in `.coveragerc` is honest only if the `omit` list beside
+  it never widens past a capability's `infrastructure/` into `domain/` or `application/`; the
+  gate's module docstring explains the green, silent, wrong failure (#149).
+- **Coverage is the slow full-suite gate**, so it runs on pre-push and day-to-day commits stay
+  fast. The floor is single-sourced in `.coveragerc`, read by pytest-cov here and by the CI
+  gate, so there is no duplicated literal to drift.
+- **`genbadge`, not the abandoned `coverage-badge`,** which imports the removed `pkg_resources`
+  and breaks on setuptools 81 or newer. It generates `coverage.xml`, then the SVG; the SVG is
+  tracked (README badge) and the XML is ignored.
+
 ## Generated-project shell scripts (`templates/python-common/bin`)
 
 The shell scripts every Python scaffold ships carry no comments. This section records why each
@@ -1313,3 +2109,63 @@ This section records what is specific to the generated copies.
   remove it when the project stops straddling.
 - **The Actions ecosystem entry** keeps CI off deprecated runtimes, for example a Node version
   GitHub is sunsetting.
+
+## Review-thread gate tests (`templates/python-common/tests/unit/test_review_threads_gate.py`)
+
+The test module carries no comments. The points below recur through it; each exists because a
+simpler form was measured to be wrong. The shapes forced by the complexity-1 ceiling (module
+data in place of branches, split rather than combined assertions) are the ones recorded for the
+rest of the suite.
+
+- **Split the loader and the spec.** A conjunction in one assertion reports only that the whole
+  thing was false; an absent loader and an absent spec are different faults.
+- **Two roster shapes are not interchangeable.** `_ROSTER` is the raw member list; the normalised
+  mapping (login without `[bot]` to its `posts:` class, as `load_roster` returns it) is what the
+  notice helpers take. The thread half of the gate takes every member, the missing-review half
+  only those that can review. Passing the raw roster to a helper that expects the normalised one
+  matches nothing and returns `""`: a green-looking empty answer, not an error.
+- **A review is pinned to a commit** (#220). The fixtures use two distinct oids, the PR head and a
+  commit it superseded, because the gate's question is "which commit was this review written
+  against?"; measured on #219, where the only review was attributed to a commit pushed five
+  minutes before the head. A completion notice is evidence only when it postdates the head
+  commit's `committedDate`, otherwise it describes code the branch has since moved past (raised
+  by review on #339).
+- **The pagination case is the "expensive shared setup" one** from `tests/CLAUDE.md` (#544): one
+  two-page fetch backs five independent claims, so it runs once in a module-scoped fixture. The
+  two pages are data in a `side_effect` sequence, not a stub that branches on its cursor
+  arguments (a branch put a decision in the test and the green never said which side ran), and
+  `Mock` records the calls for free.
+- **The bot-login spelling** is why the gate was silently vacuous: REST spells the login with a
+  `[bot]` suffix, GraphQL without, and before the fix the GraphQL spelling counted as an answer.
+  The human login is the load-bearing third case: it passes through untouched, so nobody is
+  normalised into looking like a reviewer.
+- **The `REVIEW_THREADS_REQUIRE_RESOLVED` flag has three claims, one test each** (#544): three
+  different verdicts, not one assertion over three inputs; collapsing them hid the third. CI no
+  longer passes `False` (#196): delegating the resolve half to `required_conversation_resolution`
+  looked safe, but that setting drops an outdated thread (#193: merge enabled over an unresolved
+  outdated thread with 29 of 29 checks green). The flag survives for callers that cannot
+  re-evaluate a resolve, so the reply-only mode must keep working and must not quietly disable
+  the job altogether.
+- **A redundant re-review is not an unreviewed PR** (#259). The reviewer's boilerplate is copied
+  verbatim from #264's own comment stream; it is appended to every outcome (performed,
+  rate-limited and failed alike), which is what defeated the first draft of the check.
+- **Real notice bodies, never retyped** (#364, #433). The chat-quota notice (PR #363,
+  2026-08-30T18:44:28Z), the review-quota notice (PR #317, 2026-08-29T17:11:51Z) and the file-cap
+  notice (PR #424, 2026-09-11) are fetched with `gh api graphql`; the issue the first closed was
+  itself written against retyped text that classified differently from the real bytes. A second,
+  unrelated "Review skipped" reason (measured on PR #400, a one-file bot-authored PR, clearable
+  simply by asking, unlike the structural cap) shares the bare prefix with the file-cap notice,
+  which is what makes it a genuine negative control. The bot suffix is stripped first, or the
+  notice lookup silently finds nothing.
+- **Classification by declared structure** (#630, `docs/faq.md`). Each shape is a trimmed copy of
+  a real body from this repo's PRs (#347, #671 to #687), and the witness is the same text with
+  only its structural marker removed. The real CodeRabbit body from #347 has its only finding in
+  a body section, not an inline thread.
+- **The display budget must not reach a matcher** (#372). `summarise_reviewer_notice` cuts a
+  notice to 200 characters so a failure message stays readable. Two matchers used to read that
+  cut string, so a phrase past the budget read as absent. Over 112 real reviewer notices, 4
+  flipped UNKNOWN to OK (phrase at offsets 394, 583, 583 and 2700) and 4 lost a completion
+  phrase; both directions are silent.
+- **A review carries forward across a merge of the base** (#698). The patch-id output is
+  `<patch-id> <commit-id>`, and unpacking fails loudly on empty output instead of an
+  `IndexError`. The `merge` of `main` into the branch conflicts by design.

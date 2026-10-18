@@ -112,14 +112,12 @@ def test_a_genuinely_absent_name_is_still_reported(path_src: pathlib.Path) -> No
     a finding — otherwise the two fixes above would have silently disabled the check.
     """
     str_problem = cls_gate.candidate_problem(path_src, "chassis", ["nonexistent"])
-    # `in None` raises, so a missing finding fails here too.
     assert "nonexistent" in str_problem
 
 
 def test_an_absent_module_is_still_reported(path_src: pathlib.Path) -> None:
     """A module that does not resolve at all remains a finding."""
     str_problem = cls_gate.candidate_problem(path_src, "no_such_package", ["anything"])
-    # `in None` raises, so a missing finding fails here too.
     assert "module not found" in str_problem
 
 

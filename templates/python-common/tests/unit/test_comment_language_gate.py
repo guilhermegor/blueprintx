@@ -71,19 +71,11 @@ def _sole(list_items: list) -> object:
     return list_items[0]
 
 
-# Two consecutive comment lines: a verbatim quotation opens on the first and closes on the
-# second. Read line by line, the opening quote never finds its closing one, the quoted span
-# survives redaction, and the quotation's language is charged to the English comment.
 _STR_SPANNING_QUOTE = (
     '# The user decided: "nao vamos usar isso,\n'
     '# para nada" -- quoted verbatim, so the comment itself stays English.\n'
     "x = 1\n"
 )
-
-
-# --------------------------
-# True positives — the gate must actually fire
-# --------------------------
 
 
 def test_a_portuguese_sentence_is_flagged() -> None:
@@ -94,11 +86,6 @@ def test_a_portuguese_sentence_is_flagged() -> None:
 def test_one_function_word_is_enough_signal() -> None:
     """Every listed word was checked against English, so a single hit is a verdict."""
     assert gate.portuguese_words("returns the value quando the flag is set") == ["quando"]
-
-
-# --------------------------
-# False positives — each one was MEASURED, each is pinned by name
-# --------------------------
 
 
 @pytest.mark.parametrize(
@@ -119,8 +106,6 @@ def test_accented_data_labels_do_not_trigger(str_comment: str) -> None:
     assert gate.portuguese_words(str_comment) == []
 
 
-# ``NÃO`` is the second case because accented capitals are in the rule too — the same pass
-# has to leave both spellings alone.
 @pytest.mark.parametrize(
     "str_comment",
     ["Uses the Microsoft COM bridge", "The NAO and NÃO markers are unrelated"],
@@ -174,11 +159,6 @@ def test_double_backtick_spans_are_redacted_before_single() -> None:
     assert gate.portuguese_words("The ``para cada fundo`` directive is documented") == []
 
 
-# --------------------------
-# 🔴 Blocks, not lines — the subtlest class
-# --------------------------
-
-
 def test_consecutive_comment_lines_join_into_one_block() -> None:
     """The MECHANISM, split out rather than left as a second assert (blueprintx#544).
 
@@ -202,11 +182,6 @@ def test_a_blank_line_separates_two_blocks() -> None:
     """Joining must not run past a non-comment line, or unrelated comments merge."""
     str_source = "# first block\nx = 1\n# second block\n"
     assert len(gate.marker_comments(str_source, "#")) == 2
-
-
-# --------------------------
-# Geometry — a finding must name the right line
-# --------------------------
 
 
 def test_redaction_preserves_length_so_offsets_survive() -> None:
@@ -237,21 +212,11 @@ def test_the_reported_line_is_the_word_s_own_line(tmp_path: Path) -> None:
     )
 
 
-# --------------------------
-# Escape hatch — per line, never per block
-# --------------------------
-
-
 def test_the_escape_marker_exempts_only_its_own_line() -> None:
     """A block-scoped marker would exempt a whole 40-line header in one stroke."""
     str_text = f"esta linha foi isentada {gate.STR_ESCAPE}\noutra linha que nao foi isentada"
     list_hits = gate.portuguese_words(str_text)
     assert list_hits, "the unescaped neighbour must still be reported"
-
-
-# --------------------------
-# Python exactness
-# --------------------------
 
 
 def test_a_hash_inside_a_string_literal_is_not_a_comment() -> None:
@@ -270,11 +235,6 @@ def test_docstrings_are_read() -> None:
 def test_an_unparseable_file_yields_nothing_rather_than_crashing() -> None:
     """A syntax error is ruff's finding to report, not this gate's — and must not crash it."""
     assert gate.python_comments("def (((\n") == []
-
-
-# --------------------------
-# Discovery — a gate that scans nothing must not report success
-# --------------------------
 
 
 def test_audit_mode_fails_when_no_file_matches(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -320,9 +280,6 @@ def test_audit_covers_every_supported_extension_anywhere_in_the_tree() -> None:
     """
     set_audited = {path_file.resolve() for path_file in gate.audit_paths()}
 
-    # One representative, long-lived file per location the allow-list used to miss entirely —
-    # a repo-root config file, a root-level mypy config, a workflow, and app code that ships
-    # into generated projects.
     list_required = [
         gate.PATH_ROOT / ".pre-commit-config.yaml",
         gate.PATH_ROOT / "mypy.ini",
@@ -395,7 +352,6 @@ def _git_init_and_commit(path_repo: Path) -> None:
     path_repo : pathlib.Path
         The directory to initialise and commit.
     """
-    # Inherit the environment; a bare dict drops PATH. See the backlog note for the measurement.
     dict_env = {
         **os.environ,
         "GIT_AUTHOR_NAME": "test",
@@ -403,8 +359,6 @@ def _git_init_and_commit(path_repo: Path) -> None:
         "GIT_COMMITTER_NAME": "test",
         "GIT_COMMITTER_EMAIL": "test@example.com",
     }
-    # Three calls in a row rather than a loop over the argv list — a loop costs complexity
-    # points and tests/ is capped at 1. Constant, trusted argv; no shell involved.
     subprocess.run(["git", "init", "-q"], cwd=path_repo, env=dict_env, check=True)  # noqa: S603, S607
     subprocess.run(["git", "add", "-A"], cwd=path_repo, env=dict_env, check=True)  # noqa: S603, S607
     subprocess.run(  # noqa: S603
@@ -435,13 +389,10 @@ def test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem(
     path_repo = tmp_path / "docs" / "proj"
     (path_repo / "src").mkdir(parents=True)
     (path_repo / "src" / "ok.py").write_text("# English comment\n", encoding="utf-8")
-    # The repo's OWN docs/ must still be skipped — the exclusion is real, just repo-relative.
     (path_repo / "docs").mkdir()
     (path_repo / "docs" / "guia.py").write_text(
         "# esta linha nao esta escrita em ingles\n", encoding="utf-8"
     )
-    # Discovery reads `git ls-files` (blueprintx#331) — an untracked fixture tree is invisible
-    # to it by construction, so the fixture must actually be a committed repo.
     _git_init_and_commit(path_repo)
 
     monkeypatch.setattr(gate, "PATH_ROOT", path_repo)
@@ -475,7 +426,6 @@ def test_untracked_files_are_invisible_but_tracked_ones_are_not(
     (path_repo / "src" / "ok.py").write_text("# English comment\n", encoding="utf-8")
     _git_init_and_commit(path_repo)
 
-    # An orphan worktree stand-in — present on disk, never staged, never committed.
     path_worktree = path_repo / ".claude" / "worktrees" / "orphan" / "src"
     path_worktree.mkdir(parents=True)
     (path_worktree / "bloat.py").write_text("# English comment too\n", encoding="utf-8")
@@ -593,7 +543,6 @@ def test_named_file_resolves_against_root_not_cwd(
     path_cwd = tmp_path / "elsewhere"
     path_cwd.mkdir()
     monkeypatch.chdir(path_cwd)
-    # Registering the module root here makes teardown undo the rebind the gate performs.
     monkeypatch.setattr(gate, "PATH_ROOT", gate.PATH_ROOT)
 
     int_status = gate.main(["--root", str(path_root), "ok.py"])

@@ -61,11 +61,6 @@ def _test_file(path_dir: Path, str_source: str) -> Path:
     return path_file
 
 
-# --------------------------
-# 🔴 The negative control — the gate must be able to FAIL
-# --------------------------
-
-
 @pytest.fixture
 def list_unjustified_module_scope(tmp_path: Path) -> list[str]:
     """Return the findings for a module-scope fixture that carries no written reason.
@@ -131,11 +126,6 @@ def test_every_wide_scope_is_reported(tmp_path: Path, str_scope: str) -> None:
     )
 
     assert len(gate.file_problems(path_file)) == 1
-
-
-# --------------------------
-# What must NOT fire — each reason is measured, not assumed
-# --------------------------
 
 
 def test_a_bare_fixture_decorator_is_accepted() -> None:
@@ -208,11 +198,6 @@ def test_a_dynamic_scope_value_is_not_flagged(tmp_path: Path) -> None:
     )
 
     assert gate.file_problems(path_file) == []
-
-
-# --------------------------
-# Parse failures and discovery — same vacuous-pass guards as the sibling gates
-# --------------------------
 
 
 def test_an_unparsable_file_raises_rather_than_reporting_clean(tmp_path: Path) -> None:

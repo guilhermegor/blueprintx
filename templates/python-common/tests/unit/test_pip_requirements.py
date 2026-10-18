@@ -44,8 +44,6 @@ def _load() -> ModuleType:
 MODULE = _load()
 
 
-# A PEP 621 project with NO [project.dependencies] — only optional groups. This is the shape
-# no tier ships and the one that used to resolve to an empty requirement set.
 DICT_PEP621_OPTIONAL_ONLY = {
     "project": {
         "name": "optional-only",
@@ -64,8 +62,6 @@ DICT_PEP621_WITH_MAIN = {
     }
 }
 
-# An EMPTY standard table beside a populated Poetry one — the case the narrower selector was
-# protecting, and which must keep resolving through Poetry.
 DICT_POETRY_WITH_EMPTY_PROJECT_TABLE = {
     "project": {"name": "poetry-project"},
     "tool": {
@@ -133,8 +129,5 @@ def test_empty_result_for_a_requested_group_fails_loudly(
     monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
     monkeypatch.setenv("BX_GROUPS", "main,dev")
 
-    # One assertion site, not two — pytest.raises is the "it must exit" half, and its match
-    # argument is the "and it must say why" half. Exception type and message are checked
-    # together as one behaviour with one failure mode (blueprintx#544).
     with pytest.raises(SystemExit, match="No requirements resolved"):
         MODULE.main()

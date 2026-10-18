@@ -22,8 +22,7 @@ A release is aged before Dependabot proposes it. Security updates ignore the coo
 
 `eslint`, `@eslint/js`, `typescript-eslint` and `eslint-plugin-jest` share one `eslint` group in
 every npm block, so the lint stack moves as a unit. A lone `@eslint/js` major once broke
-`npm ci` with ERESOLVE. `eslint` and `@eslint/js` `>=10` stay ignored until the eslint 10
-migration lands.
+`npm ci` with ERESOLVE. The templates are on eslint 10 (#839), so no major is ignored.
 
 ## Gate
 
