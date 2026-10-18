@@ -120,10 +120,6 @@ _DICT_STEP_HANDLERS: dict[str, Callable[[BrowserPage, BrowserStep, Path], Awaita
 
 STEP_KINDS = frozenset(_DICT_STEP_HANDLERS)
 
-# The fields each kind needs, and their type. A second dict keyed by the same kind IS the
-# drift this module's dispatch design exists to avoid, so test_step_handlers.py asserts the
-# two keysets are equal — a new handler with no entry here fails the suite, it does not
-# silently skip validation.
 _DICT_REQUIRED_FIELDS: dict[str, tuple[tuple[str, type], ...]] = {
     "navigate": (("url", str),),
     "fill": (("selector", str), ("value", str)),
