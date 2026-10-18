@@ -3066,10 +3066,11 @@ forever. A job skipped by a job-level <code>if:</code> reports <code>skipped</co
 conditional job is still treated as not running on every PR, because a gate that may skip is
 not one to require, and the allowlist keeps that choice visible.</p>
 <p>The JSON itself is checked against the live settings by <code>--live</code>, which needs
-Administration access (the maintainer PAT). That runs only in
+only read access: it reads classic protection from the public <code>branches/main</code> view
+(<code>protection.enabled</code>, <code>required_status_checks.contexts</code>), not the admin-only
+<code>branches/main/protection</code> endpoint, so the default <code>GITHUB_TOKEN</code> suffices. That runs only in
 <code>.github/workflows/verify_required_checks.yml</code>, on <code>push</code> to <code>main</code>, a daily schedule and
-<code>workflow_dispatch</code>, never on <code>pull_request</code>, so no PR-controlled code ever sees the
-secret. It fails closed (<code>REQUIRED_CHECKS_SYNC_REQUIRED=1</code>) when the API cannot be read,
+<code>workflow_dispatch</code>, never on <code>pull_request</code>, so no PR-controlled code ever runs with it. It fails closed (<code>REQUIRED_CHECKS_SYNC_REQUIRED=1</code>) when the API cannot be read,
 and fails on <code>main</code> when protection drifted from the JSON. Changing protection therefore
 means editing the JSON in the same change. <code>tests/test_check_required_checks_sync.sh</code>
 holds the should-fail cases.</p>
