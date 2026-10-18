@@ -4793,6 +4793,77 @@ This section records what is specific to the generated copies.</p>
 <li><strong>The Actions ecosystem entry</strong> keeps CI off deprecated runtimes, for example a Node version
   GitHub is sunsetting.</li>
 </ul>
+<h2 id="opt-in-modules-templatespython-commonoptional-and-the-otel-pin-comments">Opt-in modules (<code>templates/python-common/optional</code>) and the OTel pin comments<a class="headerlink" href="#opt-in-modules-templatespython-commonoptional-and-the-otel-pin-comments" title="Permanent link">&para;</a></h2>
+<p>The opt-in modules that a scaffold copies on request carry no comments, and the six Python
+scaffold scripts no longer append comment lines to a generated <code>pyproject.toml</code>.</p>
+<ul>
+<li><strong>The OTel dependency block.</strong> Each scaffold appends the pinned <code>opentelemetry-*</code> requirements
+  to the generated <code>pyproject.toml</code>. The two lines that once preceded the pins said the OTLP
+  export is opt-in (#438), that the pins are exact because the Logs signal is "Development"
+  status upstream, and (for <code>lib-minimal</code>) that the consumer's own host process sets
+  <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> since a library ships no <code>.env</code>. Those lines were text written
+  into the generated file, not comments of the script, so removing them changes the generated
+  <code>pyproject.toml</code> by those comment lines only; the reason lives here and in the generated
+  project's observability page.</li>
+<li><strong><code>otel_logging.py</code>.</strong><ul>
+<li>The typing-engine import is layout-agnostic: <code>utils.typing</code> in MVC, <code>chassis.typing</code> in
+  DDD, always injected at different paths. mypy reads the single <code>TYPE_CHECKING</code> import (no
+  redefinition) and at run time the <code>try</code>/<code>except</code> picks whichever layout shipped.</li>
+<li>Cleartext guard: an <code>http://</code> endpoint is a credential leak only when there is a credential
+  and only when it leaves the machine. Both halves matter: refusing every <code>http://</code> endpoint
+  would break the seam's own quickstart (<code>docker-compose.otel-collector.yml</code> serves
+  <code>http://localhost:4318</code>), and refusing none would ship an API key in the clear. An
+  unparseable endpoint with credentials is refused. The error names the endpoint, because the
+  fix is to change it, and never the header values, which are the credential.</li>
+<li>Redirects (CWE-319): the guard above vets the configured endpoint, but <code>requests</code> follows a
+  3xx by itself and re-sends the OTLP headers, the API key, to whatever host the hop names, over
+  <code>http://</code> if it says so. <code>max_redirects = 0</code> makes requests raise <code>TooManyRedirects</code> on the
+  first hop. <code>_session</code> is a vendor internal read through <code>getattr</code> and its absence is fatal on
+  purpose: if a future release renames it, the right outcome is "no export", never "export with
+  credentials unprotected". The raise is caught by the fire-and-forget handler in the caller.</li>
+<li>Fire-and-forget, deliberately: a failure must never become an application outage, raising
+  would turn an unreachable collector into a crashed scaffolded project, and the <code>FileHandler</code>
+  already gives the message somewhere to land. This is the one place a silently swallowed
+  error is the correct choice.</li>
+<li>The SDK classes already read the standard <code>OTEL_*</code> variables (endpoint, headers, service
+  name, resource attributes), so none is passed explicitly: reimplementing the lookup would be
+  a second, driftable copy.</li>
+</ul>
+</li>
+<li><strong><code>test_otel_logging.py</code>.</strong> Clear both the signal-specific and the generic endpoint variable: the
+  signal-specific one overrides the generic one, so an inherited value would silently decide the
+  test's endpoint and make it pass or fail on the developer's environment. The endpoint is
+  actionable and belongs in the message; the credential never does.</li>
+<li><strong><code>joblib_handler.py</code>.</strong> A <code>record_id</code> is <code>&lt;name&gt;_&lt;date&gt;_&lt;time&gt;_&lt;sha8&gt;</code>; the split count and the
+  expected length derive from that one number so they cannot drift. Every path the store opens is
+  built from a <code>record_id</code> that arrives from the caller, so a full match on the documented shape
+  is what makes it a single filename component (no separator, no <code>..</code>, no drive); the name
+  charset is the one <code>create()</code> can produce. Both paths are confined before anything is unlinked:
+  resolving the sidecar after the artifact is gone would leave the store half-deleted when the
+  sidecar is refused. <code>test_joblib_handler.py</code> uses zlib, not the default lz4, which is not a
+  declared dependency of any tier; the tests are about the id, not the codec.</li>
+<li><strong><code>webhook/</code> and <code>email/</code> ports.</strong> <code>@runtime_checkable</code> is required, not cosmetic: the runtime
+  type-checking engine performs an <code>isinstance</code> against the port, and a plain <code>Protocol</code> raises
+  <code>TypeError</code> on that check at import time, not call time. <code>webhook/factory.py</code> maps an
+  incoming-webhook URL to its platform by substring signature; Teams webhooks are hosted under
+  <code>*.webhook.office.com</code> and <code>teams.microsoft.com</code>. <code>slack_notifier.py</code> validates an <code>https</code>
+  scheme in the constructor, so the S310 audit warning about arbitrary schemes does not apply.
+  <code>webhooks.yaml</code>: the target URL comes from <code>WEBHOOK_URL</code> in <code>.env</code>; the platform
+  (teams or slack) is inferred from that URL by <code>build_webhook</code>; the named fields (<code>app_name</code>, <code>environment</code>,
+  <code>hostname</code>, <code>user</code>, <code>log_path</code>) are substituted in <code>src/config/startup.py</code>.</li>
+<li><strong><code>browser_steps/step_handlers.py</code>.</strong> The fields each kind needs, and their type, live in a
+  second dict keyed by the same kind, which is the drift this module's dispatch design exists to
+  avoid, so <code>test_step_handlers.py</code> asserts the two keysets are equal: a new handler with no
+  entry fails the suite instead of silently skipping validation.</li>
+<li><strong><code>typing/policy.py</code>, <code>typing/type_checker.py</code>.</strong> The policy knobs (<code>VIOLATION_TYPE</code>,
+  <code>STRICT_BOOL</code>, ...) are edited there, not in the adapter; <code>VIOLATION_TYPE = TypeError</code> is
+  load-bearing, see the module docstring. With no numeric override, the hint override is skipped
+  entirely so beartype uses its own int handling rather than a redundant self-mapping. The
+  <code>complexity-ok</code> hatch in <code>type_checker.py</code> is intrinsic type-system metaprogramming, which ruff
+  already excludes outright for the DDD and <code>lib-minimal</code> layouts and mypy carries
+  <code>ignore_errors</code> sections for in all three, so exempting it from the complexity ceiling applies
+  the existing policy to one more tool and is not a new concession.</li>
+</ul>
 <h2 id="review-thread-gate-tests-templatespython-commontestsunittest_review_threads_gatepy">Review-thread gate tests (<code>templates/python-common/tests/unit/test_review_threads_gate.py</code>)<a class="headerlink" href="#review-thread-gate-tests-templatespython-commontestsunittest_review_threads_gatepy" title="Permanent link">&para;</a></h2>
 <p>The test module carries no comments. The points below recur through it; each exists because a
 simpler form was measured to be wrong. The shapes forced by the complexity-1 ceiling (module
