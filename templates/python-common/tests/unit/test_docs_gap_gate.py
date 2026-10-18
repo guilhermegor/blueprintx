@@ -526,3 +526,46 @@ def test_unreadable_directory_is_reported(
     path_root = _build_project(tmp_path, {"index.md": "# Home"}, "[{Home: index.md}]")
     monkeypatch.setattr(cls_gate.os, "walk", _walk_that_fails)
     assert "docs/secret" in cls_gate.walk_problems(path_root / "docs")[0]
+
+
+_LIST_NINE_PAGES = ["index.md", "a.md", "b.md", "c.md", "d.md", "e.md", "f.md", "g.md", "h.md"]
+_STR_NINE_FLAT = (
+    "[{Home: index.md}, {A: a.md}, {B: b.md}, {C: c.md}, {D: d.md},"
+    " {E: e.md}, {F: f.md}, {G: g.md}, {H: h.md}]"
+)
+_STR_GROUPED = (
+    "[{Home: index.md}, {Guide: [{A: a.md}, {B: b.md}, {C: c.md}, {D: d.md}]},"
+    " {Project: [{E: e.md}, {F: f.md}, {G: g.md}, {H: h.md}]}]"
+)
+
+
+def test_flat_nav_above_ceiling_fails(tmp_path: pathlib.Path) -> None:
+    """Nine flat top-level entries exceed the ceiling of eight, so the gate exits non-zero."""
+    path_root = _build_project(tmp_path, dict.fromkeys(_LIST_NINE_PAGES, "# x"), _STR_NINE_FLAT)
+    assert cls_gate.main(["--root", str(path_root)]) == 1
+
+
+def test_flat_nav_message_names_count_and_ceiling(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The finding reports the measured count against the ceiling."""
+    path_root = _build_project(tmp_path, dict.fromkeys(_LIST_NINE_PAGES, "# x"), _STR_NINE_FLAT)
+    cls_gate.main(["--root", str(path_root)])
+    assert "9 top-level nav entries (ceiling 8)" in capsys.readouterr().err
+
+
+def test_grouped_nav_under_ceiling_passes(tmp_path: pathlib.Path) -> None:
+    """The same nine pages grouped under three sections pass."""
+    path_root = _build_project(tmp_path, dict.fromkeys(_LIST_NINE_PAGES, "# x"), _STR_GROUPED)
+    assert cls_gate.main(["--root", str(path_root)]) == 0
+
+
+def test_nav_exactly_at_ceiling_passes(tmp_path: pathlib.Path) -> None:
+    """Eight top-level entries sit at the ceiling, which is allowed."""
+    path_root = _build_project(
+        tmp_path,
+        dict.fromkeys(_LIST_NINE_PAGES[:8], "# x"),
+        "[{Home: index.md}, {A: a.md}, {B: b.md}, {C: c.md}, {D: d.md},"
+        " {E: e.md}, {F: f.md}, {G: g.md}]",
+    )
+    assert cls_gate.main(["--root", str(path_root)]) == 0

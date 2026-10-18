@@ -191,6 +191,12 @@ happening silently:
    rows marked `yes` in the `In .env.example` column differ in either direction. A variable
    left out of the file on purpose (`DB_PORT`) gets a `no` row.
 
+**Docs navigation ceiling** (blueprintx#860). `check_docs_gap.py` fails a `mkdocs.yml` whose `nav:`
+has more than 8 top-level entries (`INT_NAV_TOP_LEVEL_CEILING`), so the sidebar cannot grow
+back into a flat list; pages go into sections. `bin/ci/scaffold_lint_test.sh` runs it against every generated Python tier. The TypeScript library
+tier uses Docusaurus, whose `sidebars.js` has 5 flat items today, under the ceiling by
+construction, so it carries no gate and no change. Revisit it if that sidebar grows past 8.
+
 **The rules themselves live in `quality-rules.yaml` at the repo root** (blueprintx#432) — one
 entry per rule, with its per-language `tool`/`rule` (or an explicit `status: not-implemented` /
 `overridden_by:`), validated by `templates/python-common/bin/check_quality_rules.py` so the

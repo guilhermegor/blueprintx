@@ -118,6 +118,10 @@ help = "Cyclomatic-complexity ceiling per tree (tests 1, src 2, bin 8)"
 cmd = "python bin/check_comment_budget.py --require-baseline"
 help = "Bound comment volume (long runs + decorative banners), QA pragmas exempt"
 
+[tool.poe.tasks.check_docs_gap]
+cmd = "pre-commit run docs-gap --all-files"
+help = "Docs pages registered in nav, top-level nav ceiling of 8 (#860)"
+
 [tool.poe.tasks.check_env_docs_sync]
 cmd = "python bin/check_env_docs_sync.py"
 help = ".env.example keys and docs/configuration.md rows must match"
