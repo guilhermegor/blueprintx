@@ -1367,3 +1367,63 @@ This section records what is specific to the generated copies.
   remove it when the project stops straddling.
 - **The Actions ecosystem entry** keeps CI off deprecated runtimes, for example a Node version
   GitHub is sunsetting.
+
+## Review-thread gate tests (`templates/python-common/tests/unit/test_review_threads_gate.py`)
+
+The test module carries no comments. The points below recur through it; each exists because a
+simpler form was measured to be wrong. The shapes forced by the complexity-1 ceiling (module
+data in place of branches, split rather than combined assertions) are the ones recorded for the
+rest of the suite.
+
+- **Split the loader and the spec.** A conjunction in one assertion reports only that the whole
+  thing was false; an absent loader and an absent spec are different faults.
+- **Two roster shapes are not interchangeable.** `_ROSTER` is the raw member list; the normalised
+  mapping (login without `[bot]` to its `posts:` class, as `load_roster` returns it) is what the
+  notice helpers take. The thread half of the gate takes every member, the missing-review half
+  only those that can review. Passing the raw roster to a helper that expects the normalised one
+  matches nothing and returns `""`: a green-looking empty answer, not an error.
+- **A review is pinned to a commit** (#220). The fixtures use two distinct oids, the PR head and a
+  commit it superseded, because the gate's question is "which commit was this review written
+  against?"; measured on #219, where the only review was attributed to a commit pushed five
+  minutes before the head. A completion notice is evidence only when it postdates the head
+  commit's `committedDate`, otherwise it describes code the branch has since moved past (raised
+  by review on #339).
+- **The pagination case is the "expensive shared setup" one** from `tests/CLAUDE.md` (#544): one
+  two-page fetch backs five independent claims, so it runs once in a module-scoped fixture. The
+  two pages are data in a `side_effect` sequence, not a stub that branches on its cursor
+  arguments (a branch put a decision in the test and the green never said which side ran), and
+  `Mock` records the calls for free.
+- **The bot-login spelling** is why the gate was silently vacuous: REST spells the login with a
+  `[bot]` suffix, GraphQL without, and before the fix the GraphQL spelling counted as an answer.
+  The human login is the load-bearing third case: it passes through untouched, so nobody is
+  normalised into looking like a reviewer.
+- **The `REVIEW_THREADS_REQUIRE_RESOLVED` flag has three claims, one test each** (#544): three
+  different verdicts, not one assertion over three inputs; collapsing them hid the third. CI no
+  longer passes `False` (#196): delegating the resolve half to `required_conversation_resolution`
+  looked safe, but that setting drops an outdated thread (#193: merge enabled over an unresolved
+  outdated thread with 29 of 29 checks green). The flag survives for callers that cannot
+  re-evaluate a resolve, so the reply-only mode must keep working and must not quietly disable
+  the job altogether.
+- **A redundant re-review is not an unreviewed PR** (#259). The reviewer's boilerplate is copied
+  verbatim from #264's own comment stream; it is appended to every outcome (performed,
+  rate-limited and failed alike), which is what defeated the first draft of the check.
+- **Real notice bodies, never retyped** (#364, #433). The chat-quota notice (PR #363,
+  2026-08-30T18:44:28Z), the review-quota notice (PR #317, 2026-08-29T17:11:51Z) and the file-cap
+  notice (PR #424, 2026-09-11) are fetched with `gh api graphql`; the issue the first closed was
+  itself written against retyped text that classified differently from the real bytes. A second,
+  unrelated "Review skipped" reason (measured on PR #400, a one-file bot-authored PR, clearable
+  simply by asking, unlike the structural cap) shares the bare prefix with the file-cap notice,
+  which is what makes it a genuine negative control. The bot suffix is stripped first, or the
+  notice lookup silently finds nothing.
+- **Classification by declared structure** (#630, `docs/faq.md`). Each shape is a trimmed copy of
+  a real body from this repo's PRs (#347, #671 to #687), and the witness is the same text with
+  only its structural marker removed. The real CodeRabbit body from #347 has its only finding in
+  a body section, not an inline thread.
+- **The display budget must not reach a matcher** (#372). `summarise_reviewer_notice` cuts a
+  notice to 200 characters so a failure message stays readable. Two matchers used to read that
+  cut string, so a phrase past the budget read as absent. Over 112 real reviewer notices, 4
+  flipped UNKNOWN to OK (phrase at offsets 394, 583, 583 and 2700) and 4 lost a completion
+  phrase; both directions are silent.
+- **A review carries forward across a merge of the base** (#698). The patch-id output is
+  `<patch-id> <commit-id>`, and unpacking fails loudly on empty output instead of an
+  `IndexError`. The `merge` of `main` into the branch conflicts by design.
