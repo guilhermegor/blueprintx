@@ -353,6 +353,14 @@ repos:
         files: ^(mkdocs\.yml|docs/)
         pass_filenames: false
 
+      - id: docs-gap
+        name: docs gap (pages registered in nav, nav ceiling, blueprintx#860)
+        entry: python bin/check_docs_gap.py --root .
+        language: python
+        additional_dependencies: [pathspec, pyyaml]
+        files: ^(mkdocs\.yml|docs/)
+        pass_filenames: false
+
       # Structural gate for the SYMBOLS a docs page cites, not just its slug/links — neither
       # check-docs-sections (slugs) nor `mkdocs build --strict` (links) sees a `from x import Y`
       # example, so a renamed/deleted module keeps being cited after every other gate goes

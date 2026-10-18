@@ -130,13 +130,6 @@ fi
 rm -rf "$str_probe"
 echo "The project's docs/ gate passes its skeleton and rejects docs/backlog/."
 
-str_gap_venv="$(mktemp -d)"
-python3 -m venv "$str_gap_venv"
-"$str_gap_venv/bin/pip" install -q pathspec pyyaml
-"$str_gap_venv/bin/python" "$PROJECT_PATH/bin/check_docs_gap.py" --root "$PROJECT_PATH"
-rm -rf "$str_gap_venv"
-echo "The project's docs-gap gate (nav ceiling included) passes its skeleton."
-
 cd "$PROJECT_PATH"
 
 echo "::group::poetry install (runtime + dev)"
@@ -145,6 +138,19 @@ echo "::endgroup::"
 
 git add -A
 git commit -q --no-verify -m "ci: scaffold baseline" || true
+
+poetry run pre-commit run docs-gap --all-files
+python3 - <<'PY'
+s = open("mkdocs.yml").read()
+rows = "".join(f"  - X{n}: index.md\n" for n in range(9))
+open("mkdocs.yml", "w").write(s.replace("nav:\n", "nav:\n" + rows, 1))
+PY
+if poetry run pre-commit run docs-gap --all-files >/dev/null 2>&1; then
+    echo "ERROR: [$SKELETON] the docs-gap hook accepted a nav with 9+ top-level entries." >&2
+    exit 1
+fi
+git checkout -q -- mkdocs.yml
+echo "The project's docs-gap hook passes its nav and rejects a flat one over the ceiling."
 
 if ! git ls-files --error-unmatch poetry.lock >/dev/null 2>&1; then
     echo "ERROR: [$SKELETON] the generated project does not TRACK poetry.lock." >&2
