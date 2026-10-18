@@ -51,7 +51,7 @@ explicitly open. Everything named below is the only thing a major version bump
    the shipped behaviour rather than an aspiration. Adding a new optional
    key is minor; removing or repurposing one of the four is major.
 
-**Explicitly NOT frozen at `1.0.0` — recommendation, needs owner sign-off:**
+**Explicitly NOT frozen at `1.0.0` — owner sign-off recorded 2026-10-18:**
 
 3. **Everything inside `templates/`** — the generated project's internal layout,
    task names (`poe lint`, `poe unit_tests`), gate implementations, and config file
@@ -75,10 +75,10 @@ explicitly open. Everything named below is the only thing a major version bump
    [#109](https://github.com/guilhermegor/blueprintx/issues/109) (the template-drift
    doctor) exists to give a scaffolded project *some* way to detect and follow a
    later change. Until #109 lands, freezing template internals would freeze bug
-   fixes with no way for existing projects to benefit either way. **Recommended:
-   template internals stay free to change every release, including post-1.0; this
-   is stated so users know a second scaffold of the same skeleton may look
-   different from the first.**
+   fixes with no way for existing projects to benefit either way. **Decided
+   (owner, 2026-10-18): template internals stay free to change every release,
+   including post-1.0. Users should know that a second scaffold of the same
+   skeleton may look different from the first.**
 
 ## Entry-bar checklist
 
@@ -104,7 +104,7 @@ Every row is decidable — yes/no, not a feeling.
       2026-09-18:** `tests/test_validate_meta.sh` now exists on `main` and is wired
       as the `validate_meta.sh should-fail regression tests (blueprintx#407)`
       pre-commit hook — the exact absence the 2026-09-04 note cited is gone.
-- [ ] **Wave C (en-US prose consistency —
+- [x] **Wave C (en-US prose consistency —
       [#194](https://github.com/guilhermegor/blueprintx/issues/194),
       [#195](https://github.com/guilhermegor/blueprintx/issues/195),
       [#197](https://github.com/guilhermegor/blueprintx/issues/197),
@@ -112,12 +112,10 @@ Every row is decidable — yes/no, not a feeling.
       [#245](https://github.com/guilhermegor/blueprintx/issues/245),
       [#247](https://github.com/guilhermegor/blueprintx/issues/247)) is resolved,
       or explicitly deferred past 1.0.** Docs-only — does not touch the frozen
-      contract, so **not a blocker** by this page's recommendation. **Needs owner
-      sign-off**: some may consider a clean prose baseline part of what "1.0"
-      signals, independent of the API freeze.
-      Re-measured 2026-09-18: #195, #197, #241 and #245 are **closed**; **#194 and
-      #247 remain open** — so this row stays unchecked on its own terms, and those
-      two are the whole of what it is waiting on.
+      contract, so **not a blocker**. Some may consider a clean prose baseline part
+      of what "1.0" signals, independent of the API freeze.
+      Re-measured 2026-10-17: all six issues are **closed**. The owner signed the
+      row off as resolved on 2026-10-17.
 - [x] **Wave D (ts-lib skeleton) ships, or its absence is accepted.**
       Re-measured 2026-09-18: the skeleton **shipped** — `templates/ts-lib/` exists
       on `main` with its own `skeleton.meta` — and
@@ -128,16 +126,13 @@ Every row is decidable — yes/no, not a feeling.
 - [x] **The template-drift question is answered in one direction, in writing.**
       This page answers it: templates are outside the frozen contract (item 3
       above), so [#109](https://github.com/guilhermegor/blueprintx/issues/109) is
-      not required to land first. **Not a blocker under this page's
-      recommendation** — reopens if the sign-off above goes the other way.
-- [ ] **The post-1.0 breaking-change policy is decided.** ⚠️ Unchecked on purpose:
-      the section below is headed *"recommendation, needs owner sign-off"*, so this
-      page **proposes** the policy rather than settling it. This row is a yes/no
-      entry-bar item and flips to `[x]` when the sign-off is recorded — marking it
-      done while the heading still asks for approval would make the checklist
-      report an entry bar that was never cleared.
+      not required to land first. The owner confirmed this direction on 2026-10-18.
+- [x] **The post-1.0 breaking-change policy is decided.** The owner signed off on
+      2026-10-18. Template internals stay outside major-version accounting, and only
+      the CLI interaction and the `skeleton.meta` format are frozen. The section
+      below records the decision.
 
-## Post-1.0 policy — recommendation, needs owner sign-off
+## Post-1.0 policy — decided 2026-10-18
 
 Because only the CLI surface and the `skeleton.meta` format are frozen (item 3
 above), the everyday source of breaking changes today — template internals —
@@ -152,8 +147,6 @@ of change the project ships today (Waves G–Q) is almost entirely inside
 — changing what `new`/`preview`/`dev` do, or changing what a `skeleton.meta` must
 declare — not a byproduct of routine template maintenance.
 
-**If the owner instead wants templates inside the frozen contract**, the policy
-above does not hold: template changes would need to bump the major, the pace
-above changes completely, and #109 becomes a prerequisite rather than a follow-up.
-That is the fork in this decision with the largest downstream cost, which is why
-it is called out explicitly rather than defaulted.
+The rejected alternative put templates inside the frozen contract. Every template change would
+then need a major bump, and #109 (the template-drift doctor) would have to ship before 1.0.
+Owners who want stable scaffolds should pin the BlueprintX version they scaffold from.
