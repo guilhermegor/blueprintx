@@ -126,8 +126,8 @@ scale.
 
 - `CONTRIBUTING.md` → "Cross-Language Quality Parity" — the general rule this page backs
   with numbers.
-- `templates/python-common/bin/check_complexity.sh` — the enforcement, with its own per-tree
-  rationale in its header comment.
+- `templates/python-common/bin/check_complexity.sh` — the enforcement; its colour, signature
+  and nesting-table reasoning is in [Decision records](decision-records.md).
 - `templates/react-spa-webpack/eslint.config.js` / its `CLAUDE.md` "Cyclomatic complexity"
   section — the TypeScript side (blueprintx#168), independently measured rather than copied
   by symmetry.

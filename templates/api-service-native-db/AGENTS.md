@@ -111,7 +111,7 @@ Why it is shaped this way: `DB_BACKEND` lives in a git-ignored `.env`, so a repo
 
 ⚠️ **What this does not do:** the layout removes mismatches encoded in a *filename*. It cannot make a wrong `DB_BACKEND` right — that value selects the driver and the SQL together, so an incorrect one simply routes consistently to the wrong engine. `active_backend()` rejects a value that names no supported engine; it cannot know which supported engine you meant.
 
-The directory names the **engine**, not the database instance — two SQL Server databases share one `mssql/`. Each `.sql` opens with a `database / table(s) / purpose` header comment.
+The directory names the **engine**, not the database instance — two SQL Server databases share one `mssql/`. A `.sql` file carries no header comment: its path (`<engine>/<table>__<purpose>.sql`) names the engine, the table and the purpose.
 
 ## Adding a new chassis provider
 

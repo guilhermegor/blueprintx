@@ -12,8 +12,9 @@ configuration, startup singletons, and the connection factory — nothing else.*
   `.env`, lazy-imports the one configured driver).
 - **YAML config** — `inputs.yaml` / `outputs.yaml` (and any `*_dev.yaml`/`*_prd.yaml`
   variants): declarative values only, no logic.
-- **`queries/<engine>/`** — SQL query files, one per `<table>__<purpose>.sql`, each opening
-  with a header comment (database/schema, table(s), purpose). Keep inline SQL out of code.
+- **`queries/<engine>/`** — SQL query files, one per `<table>__<purpose>.sql`, the file
+  name carries the table and purpose and the directory the engine, so a query file has no
+  header comment (the comment gate refuses one). Keep inline SQL out of code.
   The **engine is the directory** — `sqlite/`, `mssql/`, … matching `DB_BACKEND` — and
   `config/query_loader.load_query("<table>__<purpose>.sql")` resolves it. See below.
 - **`contracts/`** — `FileContract` declarations, one per input source (see the dedicated
