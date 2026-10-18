@@ -104,6 +104,91 @@ the trigger-label route, which counts as an `open` event and would need `"open"`
 `greptile-apps[bot]` posts inline review threads, so it is listed in every
 `.review-bots.yaml` roster.
 
+## The comment-budget gate and its data files (`templates/python-common/bin`)
+
+`check_comment_budget.py`, `comment_budget_allowlist.txt` and `required-checks.txt` carry no
+comments. The module docstring of the gate is the contract; this section records the reasoning
+that lived beside the constants and the data.
+
+### `check_comment_budget.py`
+
+- **`INT_MAX_RUN = 85`** is just above the worst block measured on the tree (80 lines), so the
+  tree had zero run-length violations when the gate shipped and #304 is what tightens it, not
+  the gate. The ratchet, not this ceiling, is the live constraint.
+- **The structural-line limit (2)** is not a number to tune: a shebang or PEP 263 coding cookie
+  only ever sits on line 1 or 2. A decorative banner is exactly rule, title, rule: three lines.
+- **`.py` is deliberately absent from the `#`-suffix tuple**: its blocks come from `tokenize`,
+  since a `#` inside a string literal is not a comment and only the tokenizer knows. But
+  `marker_for` must still recognise `.py` explicitly, or `file_problems` short-circuits on its
+  `not str_marker` guard before the `.py` branch and every Python file goes unchecked while
+  `audit_paths` reports it "checked" (#466; measured 228 of 499 files "checked", 0 findings,
+  discovery non-zero and looking like coverage). `Makefile` (no suffix) and `.mk` are matched by
+  name in `audit_paths` and `marker_for`; the issue's own table missed `Makefile` for this reason.
+- **`//` file types.** `/* */` block comments are a known ceiling, not a gap: every measured
+  violation in the issue's table is a line-comment block, and a second comment grammar for zero
+  measured evidence is the unrequested generality this repo argues against.
+- **The skip list** mirrors `check_function_length.py`, `.claude` included: `--root` is
+  overridable to the real repo root, which commonly sits under a `.claude/worktrees/<agent>/`
+  copy of itself.
+- **A decorative banner** is a comment whose stripped content is only rule punctuation
+  (`# -------`).
+- **The test-section banner exemption.** `tests/CLAUDE.md` used to mandate a banner triple
+  (dash rule, section name, dash rule) in every test module. The rule line was measured (#466) to
+  occur nowhere else in the tree. It was matched structurally in `banner_findings` and not through
+  the pragma allowlist, because a pragma breaks a run (`line_breaks_run`): listing the string there
+  would let one dash line split an oversized block into two under-ceiling halves (#479;
+  reproduced: 44 lines, one dash line, 44 lines passed clean). The two rule lines still counted
+  toward the block's length, and only the banner finding was suppressed, never the run. It was
+  scoped to Python test modules (`is_test_module`); the same triple in production code, a
+  `Makefile`, shell or `.ts` is a plain decorative banner. Once the convention is removed from
+  `tests/CLAUDE.md` and the suite (slice 8 of #304), the exemption has no remaining purpose and
+  is deleted in a follow-up, with a should-fail test that a banner in a test module is a finding.
+- **A bare `# comment-budget-ok:`** with no reason and no trailing newline leaves
+  `.splitlines()` on the tail empty, not `[""]`; indexing `[0]` crashed the first draft instead of
+  failing the exemption, which is what a bare marker must do.
+- **`--root <dir>`** is a flag plus its value, so argv must hold at least two entries. Zero
+  discovered files in audit mode is a failure, not a pass, matching every sibling gate.
+
+### `comment_budget_allowlist.txt`
+
+- **Format.** One substring per line. A comment line that starts with an entry is
+  machine-read configuration in comment syntax, not prose being budgeted: it never counts toward
+  a run, is never flagged as a banner and is never stripped, and it breaks a run instead of
+  extending it (#303). A leading `~` means "contains", for generated-file banners, matched only
+  in a file's first lines. Lines starting with `#` are ignored, as are blank lines.
+- **Anticipatory, not a census.** Add every pragma form the toolchain in `templates/python-common/`
+  can emit, even with zero occurrences today: `codespell:ignore` has no inline use (codespell is
+  configured through `.codespellrc`) and belongs anyway, because the first person who legitimately
+  needs one must not be the one who finds out the gate has never seen it.
+- **The groups**, in file order: ruff, pyright, mypy, pytest/coverage, shellcheck, codespell, this
+  repo's own gates (`*-ok:` markers, `pairing:internal`, `pipeline-mode:`, `offline-mode:`,
+  `layer-policy`, `gate-change-ok:`), deptry (`per_rule_ignores` and `DEP00N` codes), hadolint and
+  Dockerfile parser directives, markdownlint, yamllint, sqlfluff, secrets scanners, formatters,
+  the TypeScript and JavaScript toolchain, pylint, generic "do not analyze" markers, dependency
+  bots, and ponytail. The last group is structural exemptions (#303): SPDX headers and
+  generated-file banners are not the essay or decorative-banner defect the gate polices.
+- **The test-section banner is not listed here.** Every entry is a pragma, and a pragma breaks
+  the current run. That is right for a QA suppression, but a "banner is a pragma" entry lets one
+  dash line split an oversized block into two under-ceiling halves (reproduced as above).
+  The exemption was structural in `check_comment_budget.py` for that reason; do not re-add the
+  string here.
+
+### `required-checks.txt`
+
+- It lists the status-check names `enable_repo_rules.sh` makes merge-blocking on the default
+  branch, one per line, verbatim as GitHub reports them; blank lines and `#` comments are ignored.
+- Add a name only after confirming a real PR emits it
+  (`gh api repos/:owner/:repo/commits/<pr-head-sha>/check-runs --jq '.check_runs[].name' | sort -u`).
+  A name nothing emits blocks every PR forever, since GitHub cannot tell "has not reported yet"
+  from "will never report". Deleting a line is always safe; adding an unverified one is not.
+- `Review threads answered` is the `review_threads.yaml` job: `on: pull_request` with no filter,
+  so it reports from the moment a PR opens, and it fails both when a thread is unanswered and when
+  no reviewer ran at all.
+- `Classify and gate this PR` is the `pr-gate.yaml` job: `on: pull_request` with
+  `types: [opened, synchronize, reopened, labeled, unlabeled]`, and its job-level
+  `if: github.event_name == 'pull_request'` is true for every one of those. Without this line the
+  gate classifies and fails while nothing stops the merge (#564).
+
 ## Generated-project test suite (`templates/python-common/tests`)
 
 The tests every Python scaffold ships carry no comments. The shapes below recur across the

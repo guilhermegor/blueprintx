@@ -8,7 +8,6 @@ scope 2
 8 templates/python-common/bin/check_all_exports.py
 20 templates/python-common/bin/check_assertion_weakening.py
 31 templates/python-common/bin/check_backlog_ledger.py
-47 templates/python-common/bin/check_comment_budget.py
 62 templates/python-common/bin/check_comment_language.py
 25 templates/python-common/bin/check_contract_drift.py
 12 templates/python-common/bin/check_coverage_floor.py
@@ -32,13 +31,11 @@ scope 2
 14 templates/python-common/bin/check_rmw_race.py
 37 templates/python-common/bin/check_sql_guards.py
 13 templates/python-common/bin/check_typing.py
-48 templates/python-common/bin/comment_budget_allowlist.txt
 4 templates/python-common/bin/lib/ca_bundle.py
 13 templates/python-common/bin/lib/pip_requirements.py
 5 templates/python-common/bin/lib/verify_venv_imports.py
 11 templates/python-common/bin/lib/wheelhouse_select.py
 32 templates/python-common/bin/pr_gate.py
-13 templates/python-common/bin/required-checks.txt
 171 templates/python-common/bin/retry_rate_limited_review.py
 4 templates/python-common/optional/browser_steps/step_handlers.py
 7 templates/python-common/optional/chassis/db_wschema/infrastructure/joblib_handler.py
