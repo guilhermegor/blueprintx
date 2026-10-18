@@ -26,9 +26,6 @@ _NON_RAISES_SECTIONS_RE = re.compile(
     re.IGNORECASE,
 )
 
-# A NumPy parameter-definition line: one name, or several comma-separated names,
-# followed by " : <type>". The combined form ("a, b : dict") is valid NumPy and
-# documents every listed name at once.
 _PARAM_DEF_RE = re.compile(r"^\s*([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*:\s*\S")
 
 
@@ -54,13 +51,8 @@ def _param_names(line: str) -> list:
     return [name.strip() for name in match.group(1).split(",")]
 
 
-# Connector / filler words and tokens that carry no type identity. They let a
-# NumPy-style docstring ("pathlib.Path or None", "list of dict", "str, optional")
-# read naturally while still matching the bare annotation (Path | None, etc.).
 _FILLER_TOKENS = {"or", "of", "optional", "...", "ellipsis"}
 
-# Tokens that mean the same container, collapsed to one canonical spelling so an
-# annotation and its prose description compare equal regardless of which is used.
 _TOKEN_EQUIVALENCES = {
     "sequence": "list",
     "mapping": "dict",
@@ -96,8 +88,6 @@ def _canonical_type_tokens(text: str) -> list:
         Sorted token multiset suitable for equality comparison.
     """
     text = str(text).replace("typing.", "").lower()
-    # ``Optional[...]`` (bracketed) means the value may be None; emit that token
-    # before the brackets are flattened to separators and "optional" is dropped.
     bool_optional_wrapper = re.search(r"\boptional\s*\[", text) is not None
     for str_sep in ("|", ",", "[", "]", "(", ")", "{", "}", ":"):
         text = text.replace(str_sep, " ")
@@ -140,10 +130,6 @@ def compare_types(hint: object, doc: str) -> bool:
     set_doc = set(_canonical_type_tokens(doc))
     if not set_doc:
         return False
-    # NumPy prose is routinely less specific than the annotation — it omits inner
-    # generic args ("list of dict" for list[dict[str, Any]]) and the Optional/None
-    # arm ("str, optional"). Accept when the documented tokens are a subset of the
-    # annotation's; exact equality is the common case and also satisfies this.
     return set_doc <= set_hint
 
 
@@ -160,8 +146,6 @@ def parse_raises_section(docstring: str) -> dict[str, str]:
     dict[str, str]
         Mapping of exception name to description.
     """
-    # Two jobs, kept apart: WHICH lines belong to the Raises section, and WHAT one entry in
-    # it means. They were one loop, so a change to either had to be made inside the other.
     dict_raises: dict[str, str] = {}
     for str_line in _raises_section_lines(docstring):
         tuple_entry = _parse_raises_entry(str_line)
@@ -533,19 +517,10 @@ def check_file(filepath: str) -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
-    # ⚠️ Zero discovery is a FAILURE, not a clean tree — see the same guard in
-    # check_provenance.py. Both globs are cwd-relative, so running from the wrong directory
-    # yielded an empty list, a sum of 0 and exit 0: success for having checked nothing
-    # (blueprintx#111). Every tier ships both trees, so zero is always a broken invocation.
     targets = list(pathlib.Path("src").rglob("*.py")) + list(pathlib.Path("tests").rglob("*.py"))
     if not targets:
         print("❌ no Python files found under src/ or tests/ — refusing to report success.")
@@ -553,6 +528,5 @@ if __name__ == "__main__":
 
     total_errors = sum(check_file(str(p)) for p in targets)
     if total_errors == 0:
-        # Print WHAT was checked: a silent gate is indistinguishable from an absent one.
         print(f"✅ docstring consistency OK ({len(targets)} file(s) checked)")
     sys.exit(1 if total_errors > 0 else 0)

@@ -1,6 +1,7 @@
-"""Worked example for ``config/schemas/`` — the Pydantic v2 sibling of
-``config/contracts/``'s worked example (``test_contract_oracle_example.py``). Copy per real
-schema, then delete.
+"""Worked example for ``config/schemas/``, the Pydantic v2 sibling of ``config/contracts/``.
+
+The sibling worked example is ``test_contract_oracle_example.py``. Copy per real schema, then
+delete.
 
 Two witness directions, per ``src/config/CLAUDE.md``'s contracts-vs-schemas split: a payload
 violating the schema is rejected with a message naming the field / rule; a valid one passes.
@@ -8,15 +9,13 @@ violating the schema is rejected with a message naming the field / rule; a valid
 
 from decimal import Decimal
 
-import pytest
 from pydantic import ValidationError
+import pytest
 
-# Bare ``config.`` prefix (not ``src.config.``) — matches the cross-module test convention
-# (see test_contract_oracle_example.py / test_provenance).
 from config.schemas import ExampleSchema
 
 
-_VALID_CNPJ = "11222333000181"  # legacy-numeric, correct check digits
+_VALID_CNPJ = "11222333000181"
 
 
 def test_valid_payload_passes_and_quantises_decimal() -> None:

@@ -81,4 +81,4 @@ def test_missing_env_file_aborts(tmp_path: Path) -> None:
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
     with pytest.raises(SystemExit, match=r"^2$"):
-        resolve_config_path("production", "inputs", tmp_path)  # only _dev exists
+        resolve_config_path("production", "inputs", tmp_path)

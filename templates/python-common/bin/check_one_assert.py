@@ -55,19 +55,11 @@ import tokenize
 
 RE_HATCH = re.compile(r"#[ \t]*one-assert-ok:[ \t]*(\S.*)$", re.M)
 
-# The unit suite's ceiling, blocking by default (blueprintx#544). `--max-per-test 0` turns the
-# cap off and leaves the zero-assertion check alone — 0 cannot mean "cap at zero", since a test
-# with zero sites is already the other, unconditional finding.
 DEFAULT_UNIT_MAX = 1
 DEFAULT_UNIT_DIR = "tests/unit"
 
-# Every flag takes a value, so one table handles them all — adding a flag is adding a key, not
-# a branch, and keeps this file under bin/'s complexity ceiling of 8.
 _SET_VALUE_FLAGS = frozenset({"--root", "--max-per-test", "--unit-dir"})
 
-# Call names this gate treats as a `with`-block assertion — pytest.raises/warns is the
-# context-manager form of a check, not the absence of one (blueprintx#431's own measurement
-# note: bare ast.Assert alone misreads these as zero).
 _SET_CTX_ASSERTIONS = frozenset({"raises", "warns"})
 
 
@@ -331,9 +323,6 @@ def _hatch_reason(str_source: str, node_fn: ast.FunctionDef | ast.AsyncFunctionD
         The non-empty reason, or ``""`` when no valid hatch is present — a bare marker with
         no reason does not exempt, matching ``# complexity-ok:``'s convention.
     """
-    # Only COMMENT tokens count: a marker inside a string literal is data, not an exemption.
-    # Tokens carry whole physical lines' comments, so a trailing hatch past the last
-    # statement's column (which `ast.get_source_segment` would cut off) is still found.
     int_end = node_fn.end_lineno or node_fn.lineno
     cls_tokens = tokenize.generate_tokens(io.StringIO(str_source).readline)
     for cls_tok in cls_tokens:
@@ -523,8 +512,6 @@ def main(list_argv: list) -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the glyphs this script prints —
-    # see check_dtypes.py's identical fix for the always_run hook it would otherwise crash.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

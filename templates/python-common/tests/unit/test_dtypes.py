@@ -123,9 +123,6 @@ def test_apply_dtypes_does_not_mutate_input_frame() -> None:
     assert df_input["code"].tolist() == [1, 2]
 
 
-# --------------------------
-# Exact decimals (list_decimal_cols)
-# --------------------------
 def test_decimal_cols_convert_text_exactly() -> None:
     """A numeric string becomes a Decimal without passing through a binary float.
 

@@ -26,8 +26,6 @@ import re
 import sys
 
 
-# The bundle variables tools consult, in the order they consult them. A corporate image
-# often provisions one of these; replacing it is how a working box stops working.
 TUPLE_CA_ENV_VARS = ("PIP_CERT", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "CURL_CA_BUNDLE")
 
 RE_PEM_BLOCK = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.DOTALL)
@@ -55,7 +53,6 @@ def collect_sources(str_corporate: str, path_out: pathlib.Path) -> list:
 
     for str_var in TUPLE_CA_ENV_VARS:
         str_existing = os.environ.get(str_var, "")
-        # Skip a bundle we generated on a previous run, or the union grows forever.
         if str_existing and pathlib.Path(str_existing) != path_out:
             list_sources.append(str_existing)
 
@@ -93,7 +90,6 @@ def dedupe_certificates(list_sources: list) -> tuple:
             continue
         str_text = path_source.read_text(encoding="utf-8", errors="replace")
         for str_block in RE_PEM_BLOCK.findall(str_text):
-            # Dedupe on the base64 body, never on the BEGIN line every certificate shares.
             str_body = "".join(str_block.split())
             if str_body in set_bodies:
                 continue

@@ -133,9 +133,7 @@ def test_broken_vulture_prints_one_line_and_exits_nonzero(
     assert "vulture is installed but failed to import" in capsys.readouterr().err
 
 
-def test_broken_vulture_main_returns_one(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_broken_vulture_main_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A broken vulture fails the gate (exit 1) rather than propagating out of ``main()``."""
     _write_module(tmp_path, "src/thing.py", "def used():\n    return 1\n")
     _write_module(tmp_path, "vulture/__init__.py", "import broken_transitive_dep\n")
@@ -272,9 +270,6 @@ def test_discover_python_files_skips_vendored_dir_inside_src(tmp_path: Path) -> 
 def test_classify_findings_splits_on_gate_threshold() -> None:
     """Items are bucketed strictly by the >=80% boundary, never by any other cutoff."""
     cls_gate = _load_gate()
-    # Duck-typed stand-ins for vulture's Item, down to the one field this function reads.
-    # Written as a flat literal, never a comprehension, to stay under the tests/ complexity
-    # ceiling of one.
     list_items = [
         SimpleNamespace(confidence=60),
         SimpleNamespace(confidence=79),

@@ -26,11 +26,15 @@ gate did not read until P0.
 - [~] chore/comment-strip-slice6-304 6 Python skeletons: `ddd-*`, `api-*`, `lib-minimal` (51 files, about 880 lines)
 - [x] 6b (PR #823) Python skeletons: `mvc-service-native-db`, `mvc-service-orm-db` (split from 6 at the 90-file ceiling, 40 files)
 - Dependency met: #826 (ship the zero-comment ratchet to every generated project) merged as #828; slices 7 to 9 and Z may proceed. Whatever they strip must be stated as dehydrated into the right layer (SECURITY, README, CONTRIBUTING or docs).
-- [~] chore/comment-strip-slice7-304 7a `templates/python-common/.github` workflows and `dependabot.yml` (10 files, 569 lines); rationale in `docs/decision-records.md`
-- [ ] 7b `templates/python-common` config files (`ruff.toml`, `mypy.ini`, `poe_tasks.toml`, `.pre-commit-config.yaml`, dotfiles; 34 files, 958 lines)
-- [ ] 8 `templates/python-common/tests` (55 files, 931 lines)
+- [x] 7a (PR #841) `templates/python-common/.github` workflows and `dependabot.yml` (10 files, 569 lines); rationale in `docs/decision-records.md`
+- [x] 7b (PR #843) `templates/python-common` config files (`ruff.toml`, `mypy.ini`, `poe_tasks.toml`, `.pre-commit-config.yaml`, dotfiles; 22 files, 889 lines)
+- [x] 8 (PR #844) `templates/python-common/tests` (54 files, 808 lines; `test_review_threads_gate.py` is left to #837); rationale in `docs/decision-records.md`
+- [x] 8b (PR #854) `templates/python-common/tests/unit/test_review_threads_gate.py` (123 lines), left out of slice 8 while #837 owned it
 - [ ] 9 `templates/python-common/bin`, the gates themselves (66 files, 2113 lines)
-- [~] chore/comment-strip-slice9a-304 9a `templates/python-common/bin` shell scripts and `lib/*.sh` (33 files, 1287 lines); oracle: `shfmt -mn` output identical before and after. Slice 9 is split 9a shell, 9b Python gates, 9c the comment-budget gate itself plus its banner exemption
+- [x] 9a (PR #845) `templates/python-common/bin` shell scripts and `lib/*.sh` (33 files, 1287 lines); oracle: `shfmt -mn` output identical before and after. Slice 9 is split 9a shell, 9b Python gates, 9c the comment-budget gate itself plus its banner exemption
+- [x] 9b (PR #846) `templates/python-common/bin` Python gates and `lib/*.py` (32 files, 779 lines); the AST of every module is identical before and after. Slice 9 is split 9a shell, 9b Python gates, 9c the comment-budget gate itself plus its banner exemption
+- [x] 9c (PR #847) `check_comment_budget.py`, `comment_budget_allowlist.txt`, `required-checks.txt` (3 files, 108 lines); behaviour unchanged (AST, parsed allowlist and check names identical)
+- [x] 9d (PR #862) delete the test-section banner exemption (`STR_TEST_SECTION_RULE`, `is_exempt_section_banner`, `is_test_module`) with a should-fail test; follows slices 8 and 9c
 - [~] chore/comment-strip-slice10-304 10 residuals: `templates/python-common/optional` (65 lines) and the OTel pin comment lines that six `bin/scaffold/python_*.sh` appended to the generated `pyproject.toml` (13 lines); verified with the otel and storage opt-in scaffolds
 - [ ] Z delete the superseded rules in `CLAUDE.md` and `templates/python-common/CLAUDE.md`, drop the
   baseline and flip the gate to strict zero tolerance

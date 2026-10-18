@@ -12,7 +12,7 @@ absent from BOTH ``mkdocs.yml`` ``nav:`` AND this repo's own ``docs/CLAUDE.md`` 
 index — a real, reproducible gap, not a hypothetical one (see blueprintx#340 for the
 full measurement and the PR that shipped this gate).
 
-Two independent layers, both fail-closed:
+Three independent layers, all fail-closed:
 
 - **Layer 1 — orphan pages (always runs).** Every ``.md`` under ``docs_dir`` (default
   ``docs/``) that MkDocs would build — not dot-pathed, under ``templates/``, nor matched by
@@ -33,6 +33,9 @@ skeleton ships its own ``docs/`` + ``mkdocs.yml`` + ``docs/CLAUDE.md``, so this 
 BlueprintX-only concern (``bin/ci/`` is reserved for checks with no template counterpart,
 e.g. ``check_makefile_pairing.sh``, since generated projects carry no ``Makefile``).
 
+- **Layer 3 — nav ceiling (always runs).** ``nav:`` may hold at most
+  ``INT_NAV_TOP_LEVEL_CEILING`` top-level entries; rationale in ``CONTRIBUTING.md``.
+
 Every finding is a hard error (exit 1), printed to stderr. Fails when ``docs/`` or
 ``mkdocs.yml`` is missing or empty — discovery collapsing to zero must never read as
 "nothing to check".
@@ -50,6 +53,7 @@ import yaml
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _INDEX_HEADING_RE = re.compile(r"^#+\s*\d*\.?\s*File index", re.IGNORECASE)
 _INDEX_ROW_RE = re.compile(r"^\|\s*`([^`]+)`\s*\|")
+INT_NAV_TOP_LEVEL_CEILING = 8
 
 
 class _MkDocsSafeLoader(yaml.SafeLoader):
@@ -148,8 +152,6 @@ def unpublished_specs(dict_mkdocs: dict) -> tuple[pathspec.GitIgnoreSpec, ...]:
         ``exclude_docs`` can cancel an implicit drop. The second is ``draft_docs:``, kept
         apart: MkDocs evaluates it on its own.
     """
-    # ⚠️ Same engine MkDocs 1.6 builds these with (`mkdocs/structure/files.py`): a
-    # hand-rolled matcher diverged on basename-at-any-depth, anchored `/x`, `**` and `!`.
     list_lines = [".*", "/templates/", *(dict_mkdocs.get("exclude_docs") or "").splitlines()]
     str_draft = dict_mkdocs.get("draft_docs") or ""
     return (
@@ -268,6 +270,30 @@ def check_orphan_pages(
     ]
 
 
+def check_nav_ceiling(nav: object, int_ceiling: int = INT_NAV_TOP_LEVEL_CEILING) -> list[str]:
+    """Return an error when ``nav:`` has more top-level entries than the ceiling.
+
+    Parameters
+    ----------
+    nav : object
+        The parsed ``nav`` value.
+    int_ceiling : int
+        The most top-level entries allowed.
+
+    Returns
+    -------
+    list of str
+        One message when the ceiling is exceeded, else empty.
+    """
+    int_top = len(nav) if isinstance(nav, list) else 0
+    if int_top <= int_ceiling:
+        return []
+    return [
+        f"mkdocs.yml nav has {int_top} top-level nav entries (ceiling {int_ceiling}): "
+        f"group pages into sections instead of growing a flat sidebar"
+    ]
+
+
 def claude_index_table(path_claude_index: pathlib.Path) -> set[str] | None:
     """Return the path column of ``docs/CLAUDE.md``'s ``## 1. File index`` table.
 
@@ -295,8 +321,6 @@ def claude_index_table(path_claude_index: pathlib.Path) -> set[str] | None:
         if bool_in_table and str_stripped.startswith("#"):
             break
         if bool_in_table:
-            # A heading followed only by prose is NOT a table: enabling Layer 2 on it would
-            # report every published page as missing from an index that was never a table.
             bool_found_table = bool_found_table or str_stripped.startswith("|")
             cls_match = _INDEX_ROW_RE.match(str_stripped)
             if cls_match:
@@ -341,7 +365,6 @@ def check_claude_index(
     return list_errors
 
 
-# `--root <dir>` is a flag plus its value, so argv must hold at least two entries.
 _INT_FLAG_WITH_VALUE = 2
 
 
@@ -367,8 +390,6 @@ def main(list_argv: list) -> int:
         PATH_ROOT = pathlib.Path(list_argv[1]).resolve()
 
     dict_mkdocs = load_mkdocs(PATH_ROOT / "mkdocs.yml")
-    # MkDocs resolves a relative `docs_dir` against mkdocs.yml's folder; `/` on an absolute
-    # right-hand side keeps the absolute path, so both documented forms land correctly.
     str_docs = str(dict_mkdocs.get("docs_dir") or "docs")
     path_docs = PATH_ROOT / str_docs
     if not path_docs.is_dir():
@@ -383,9 +404,6 @@ def main(list_argv: list) -> int:
 
     list_pages = published_pages(path_docs, unpublished_specs(dict_mkdocs))
     if not list_pages:
-        # Same reason as the empty-mkdocs.yml branch above: a scan that found nothing to
-        # check has not passed, it has failed to run. Reporting 0 errors over 0 pages is
-        # a gate declaring its own blindness as OK.
         print(
             "no published documentation pages found — discovery is broken, not clean",
             file=sys.stderr,
@@ -394,6 +412,7 @@ def main(list_argv: list) -> int:
     set_nav_files = nav_files(dict_mkdocs.get("nav"))
     list_errors = check_orphan_pages(list_pages, set_nav_files, str_docs)
     list_errors += walk_problems(path_docs)
+    list_errors += check_nav_ceiling(dict_mkdocs.get("nav"))
 
     set_indexed = claude_index_table(path_docs / "CLAUDE.md")
     if set_indexed is not None:

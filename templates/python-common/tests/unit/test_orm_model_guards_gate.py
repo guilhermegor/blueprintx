@@ -61,11 +61,6 @@ def _python_file(path_dir: Path, str_source: str, str_name: str = "sample.py") -
     return path_file
 
 
-# --------------------------
-# 1. Bitwise &/|/~ inside .where()/.filter()
-# --------------------------
-
-
 @pytest.fixture
 def list_bitwise_and_problems(tmp_path: Path) -> list[str]:
     """Return the findings for ``&`` inside ``.where(...)``.
@@ -154,11 +149,6 @@ def test_no_sqlalchemy_import_skips_the_bitwise_check(tmp_path: Path) -> None:
     path_file = _python_file(tmp_path, "qs.filter(Q(a) & Q(b))\n")
 
     assert gate.check_python_file(path_file)[0] == []
-
-
-# --------------------------
-# 2. Two Base / early create_all
-# --------------------------
 
 
 @pytest.fixture
@@ -296,11 +286,6 @@ def test_unrelated_create_all_method_is_not_flagged(tmp_path: Path) -> None:
     path_file = _python_file(tmp_path, "cache.create_all()\n")
 
     assert gate.check_python_file(path_file)[0] == []
-
-
-# --------------------------
-# 3. Duplicate constraint name= across a same-file mixin MRO
-# --------------------------
 
 
 @pytest.fixture
@@ -582,11 +567,6 @@ def test_single_class_with_no_bases_never_flags_its_own_constraint(tmp_path: Pat
     assert gate.check_python_file(path_file)[0] == []
 
 
-# --------------------------
-# Escape hatch — present with a reason suppresses; empty/blank still fails
-# --------------------------
-
-
 def test_escape_hatch_with_reason_suppresses_the_finding(tmp_path: Path) -> None:
     """A written reason after the marker is accepted."""
     path_file = _python_file(
@@ -606,11 +586,6 @@ def test_escape_hatch_with_empty_reason_still_fails(tmp_path: Path) -> None:
     )
 
     assert len(gate.check_python_file(path_file)[0]) == 1
-
-
-# --------------------------
-# Zero-discovery guard — a wrong cwd must FAIL, not report success silently
-# --------------------------
 
 
 def test_main_skips_when_src_is_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -637,10 +612,6 @@ def test_main_passes_on_a_clean_tree(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     assert gate.main() == 0
 
-
-# --------------------------
-# 4. Review-driven edge cases
-# --------------------------
 
 _SA = "from sqlalchemy import UniqueConstraint, Index, select\n"
 

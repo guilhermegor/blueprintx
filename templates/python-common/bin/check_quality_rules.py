@@ -48,9 +48,6 @@ import sys
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# The only `status:` value that waives the tool+rule requirement. Matched exactly, never
-# by truthiness — see language_coverage_problems for why. Add a value here, deliberately,
-# rather than letting an arbitrary string through.
 SET_VALID_STATUSES = frozenset({"not-implemented"})
 
 _RE_TOP_ID = re.compile(r"^- id:\s*(\S+)\s*$")
@@ -115,9 +112,6 @@ def heading_slugs(path_md: pathlib.Path) -> set:
 
 _INT_MIN_QUOTED_LEN = 2
 
-# Strips an unquoted YAML comment: a '#' at the start of the value, or one preceded by
-# whitespace. Only applied to the bare-token branch of _parse_scalar, never to a quoted
-# value.
 _RE_TRAILING_COMMENT = re.compile(r"(?:^|\s)#.*$")
 
 
@@ -138,11 +132,6 @@ def _parse_scalar(str_raw: str) -> str:
     str_raw = str_raw.strip()
     if str_raw[:1] == '"' and str_raw[-1:] == '"' and len(str_raw) >= _INT_MIN_QUOTED_LEN:
         return str_raw[1:-1].replace('\\"', '"').replace("\\\\", "\\")
-    # An UNQUOTED '#' opens a comment in YAML, so `note: # reason` is note-with-no-value,
-    # not a note whose text is "# reason". Returning the raw text made a comment satisfy
-    # the non-empty check that `status:`/`overridden_by:` exceptions owe an explanation to
-    # — the hatch waiving tool+rule could then be taken with the explanation left unwritten.
-    # A quoted value is untouched: `note: "# literal hash"` is a real string.
     str_uncommented = _RE_TRAILING_COMMENT.sub("", str_raw)
     return str_uncommented.strip()
 
@@ -200,7 +189,6 @@ def _apply_line(dict_rule: dict, tuple_state: tuple, str_line: str) -> tuple:
         if str_val:
             dict_rule[str_lang_key][str_key] = _parse_scalar(str_val)
             return (str_lang_key, "")
-        # An empty value inside a language block opens a list (`patterns:`).
         dict_rule[str_lang_key][str_key] = []
         return (str_lang_key, str_key)
 
@@ -211,8 +199,6 @@ def _apply_line(dict_rule: dict, tuple_state: tuple, str_line: str) -> tuple:
     if str_val:
         dict_rule[str_key] = _parse_scalar(str_val)
         return ("", "")
-    # An empty value after `key:` only ever opens a nested language block in this file's
-    # restricted schema (`python:` / `typescript:`) — see the module docstring.
     dict_rule[str_key] = {}
     return (str_key, "")
 
@@ -294,14 +280,6 @@ def language_coverage_problems(list_rules: list, set_languages: set) -> list:
         str_id = dict_rule.get("id", "?")
         for str_lang in sorted(set_languages):
             dict_entry = dict_rule.get(str_lang)
-            # An entry is covered by a real implementation (tool + rule) OR by an explicit
-            # exception — `status: not-implemented` / `overridden_by:`, both permitted by
-            # CONTRIBUTING.md and neither of which requires tool/rule. The `note` those
-            # exceptions owe is reason_required_problems' job, not this one (blueprintx#503).
-            # `status` is matched against SET_VALID_STATUSES, never truthiness: any
-            # non-empty string would otherwise satisfy coverage, so a typo (`not_implemented`)
-            # or an invented value (`planned`) would buy an exemption the registry never
-            # granted — the gate failing open on the one field that waives tool+rule.
             bool_covered = isinstance(dict_entry, dict) and (
                 bool(dict_entry.get("tool") and dict_entry.get("rule"))
                 or dict_entry.get("status") in SET_VALID_STATUSES
@@ -534,9 +512,6 @@ def main(list_argv: list) -> int:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints — see check_docs_code_refs.py for the measured reason this runs on
-    # every gate that backs an always_run pre-commit hook.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")

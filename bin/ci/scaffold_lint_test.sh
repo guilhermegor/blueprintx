@@ -139,6 +139,21 @@ echo "::endgroup::"
 git add -A
 git commit -q --no-verify -m "ci: scaffold baseline" || true
 
+poetry run pre-commit run docs-gap --all-files
+python3 - <<'PY'
+s = open("mkdocs.yml").read()
+rows = "".join(f"  - X{n}: index.md\n" for n in range(9))
+open("mkdocs.yml", "w").write(s.replace("nav:\n", "nav:\n" + rows, 1))
+PY
+str_gap_out="$(poetry run pre-commit run docs-gap --all-files 2>&1)" && int_gap_rc=0 || int_gap_rc=$?
+git checkout -q -- mkdocs.yml
+if [ "$int_gap_rc" -eq 0 ] || ! grep -q "top-level nav entries" <<<"$str_gap_out"; then
+    echo "ERROR: [$SKELETON] the docs-gap hook did not reject a nav over the ceiling:" >&2
+    echo "$str_gap_out" >&2
+    exit 1
+fi
+echo "The project's docs-gap hook passes its nav and rejects a flat one over the ceiling."
+
 if ! git ls-files --error-unmatch poetry.lock >/dev/null 2>&1; then
     echo "ERROR: [$SKELETON] the generated project does not TRACK poetry.lock." >&2
     echo "       It exists on disk but git is ignoring it — check .gitignore for a" >&2

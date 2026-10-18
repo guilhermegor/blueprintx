@@ -6,14 +6,6 @@ from src.utils.ms_office.excel_sheet_names import (
     find_sheet_name_problems,
     find_workbook_sheet_name_problems,
 )
-
-# ⚠️ Bare import, NOT `src.utils.tabular_reader`: excel_sheet_names.py itself imports
-# ProblemReport bare ("from utils.tabular_reader import ProblemReport"), because that is how
-# the app imports it at runtime. Pulling it from `src.utils.tabular_reader` here would load a
-# SECOND, distinct module instance — a different ProblemReport class object — and the
-# TypeChecker-guarded dataclass's own equality check would then reject an instance built from
-# one against an instance built from the other, even with identical field values. See
-# tests/CLAUDE.md ("The dual-import-root trap").
 from utils.tabular_reader import ProblemReport
 
 

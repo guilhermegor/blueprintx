@@ -31,9 +31,6 @@ def _contracts() -> dict:
         (cls_info.name, importlib.import_module(f"config.contracts.{cls_info.name}"))
         for cls_info in pkgutil.iter_modules(cls_pkg.__path__)
     ]
-    # A comprehension rather than nested loops with skip guards. Discovery is identical, and
-    # mccabe charges a comprehension nothing while charging every loop and guard a point.
-    # The tests tree is capped at complexity 1 by the check_complexity gate in bin.
     return {
         f"{str_module_name}.{str_attr}": getattr(cls_module, str_attr)
         for str_module_name, cls_module in list_modules
@@ -78,9 +75,6 @@ def _discovered_contract_ids() -> list[str]:
     list of str
         ``"<module>.<name>"`` for each discovered contract.
     """
-    # Suppression via contextlib rather than a handler block. Handling is identical, since an
-    # absent package still yields the empty list, but mccabe charges a with-statement nothing
-    # while charging a handler a point, and this tree is capped at complexity 1.
     list_ids: list[str] = []
     with contextlib.suppress(ImportError):
         list_ids = sorted(_contracts())
@@ -98,10 +92,6 @@ def test_no_contract_declares_the_same_column_twice(str_id: str) -> None:
     assert len(tuple_required) == len(set(tuple_required)), f"{str_id} repeats a column"
 
 
-# Column names two contracts legitimately share. Empty by default and it must STAY a conscious
-# list: two sources requiring `cnpj` is ordinary, so the value of the check below is not that
-# sharing is forbidden — it is that sharing is DECLARED, and a name appearing in two contracts
-# by accident cannot pass as intentional.
 FROZENSET_SHARED_COLUMNS: frozenset[str] = frozenset()
 
 
@@ -120,8 +110,6 @@ def test_column_names_shared_across_contracts_are_declared() -> None:
     path. That form needs the source-field mapping the contracts do not carry yet.
     """
     pytest.importorskip("config.contracts", reason="contracts ship to service tiers only")
-    # Build column-and-owner pairs, then group them. Comprehensions rather than nested loops
-    # around a guard, which mccabe would charge 3 points against this tree's ceiling of 1.
     list_pairs = [
         (str_column, str_id)
         for str_id, cls_contract in sorted(_contracts().items())

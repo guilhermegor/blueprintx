@@ -7,62 +7,71 @@ exclude_docs: |
   blueprintx-lessons.md
 nav:
   - Home: index.md
-  - Get Started: get-started.md
-  - Examples: examples.md
-  - CLI Reference: cli-reference.md
-  - FAQ: faq.md
-  - Policy Workflows: policy-workflows.md
-  - Dependabot Auto-merge: dependabot-auto-merge.md
-  - Dependabot Config: dependabot-config.md
-  - Complexity Ceilings Measured: complexity-ceilings-measured.md
-  - Troubleshooting: troubleshooting.md
-  - Offline Wheelhouse: offline-wheelhouse.md
-  - Secret Scanning: secret-scanning.md
-  - Contributing: contributing.md
-  - Quality Rules: quality-rules.md
-  - Changelog: changelog.md
-  - Versioning: versioning.md
-  - Coverage Floor: coverage-floor.md
-  - Decision Records: decision-records.md
-  - Issue Scope: issue-scope.md
-  - Lockfile Sync: lockfile-sync.md
-  - Docs Boundary Gate: docs-boundary-gate.md
-  - Offline to Online: offline-to-online.md
-  - Prompt Defaults: prompt-defaults.md
-  - Quality Gate Blind Spots: quality-gate-blind-spots.md
-  - Required Status Checks: required-status-checks.md
-  - CodeRabbit Configuration: coderabbit-config.md
-  - Graphite Configuration: graphite-config.md
-  - SonarQube Evaluation: sonarqube-evaluation.md
-  - Template Drift: template-drift.md
-  - CI Scanner Gap Analysis: ci-scanner-gap-analysis.md
-  - Spec Answers: spec-answers.md
-  - Python:
-      - API Service (Native DB): skeletons.md
-      - DDD Service (Native DB):
-          - Overview: py-ddd-service-native-db.md
-          - Example - External API Calls: py-examples/ddd-external-api.md
-          - Example - Wiring with FastAPI: py-examples/ddd-usage-examples.md
-          - Example - Bank Balance Alert: py-examples/ddd-bank-balance-alert.md
-      - DDD Service (ORM DB):
-          - Overview: py-ddd-service-orm-db.md
-          - Example - Usage with SQLAlchemy: py-examples-orm/ddd-orm-usage-examples.md
-          - Example - External API Calls: py-examples-orm/ddd-orm-external-api.md
-          - Example - Bank Balance Alert: py-examples-orm/ddd-orm-bank-balance-alert.md
-      - MVC Service (Native DB):
-          - Overview: py-mvc-service-native-db.md
-      - MVC Service (ORM DB):
-          - Overview: py-mvc-service-orm-db.md
-      - Lib Minimal: py-lib-minimal.md
-  - Bash:
-      - Bash CLI: skeletons/bash-cli.md
-      - Ventoy USB: skeletons/ventoy-usb.md
-      - Etcher ChromeOS flasher: skeletons/etcher-chromeos.md
-  - TypeScript:
-      - React SPA (Webpack): ts-react-spa-webpack.md
-      - Library (TS, npm-ready): ts-lib.md
+  - Getting Started:
+      - Get Started: get-started.md
+      - Examples: examples.md
+      - CLI Reference: cli-reference.md
+      - Spec Answers: spec-answers.md
+      - Prompt Defaults: prompt-defaults.md
+      - Offline to Online: offline-to-online.md
+      - Offline Wheelhouse: offline-wheelhouse.md
+      - Troubleshooting: troubleshooting.md
+      - FAQ: faq.md
+  - Skeletons:
+    - Python:
+        - API Service (Native DB): skeletons.md
+        - DDD Service (Native DB):
+            - Overview: py-ddd-service-native-db.md
+            - Example - External API Calls: py-examples/ddd-external-api.md
+            - Example - Wiring with FastAPI: py-examples/ddd-usage-examples.md
+            - Example - Bank Balance Alert: py-examples/ddd-bank-balance-alert.md
+        - DDD Service (ORM DB):
+            - Overview: py-ddd-service-orm-db.md
+            - Example - Usage with SQLAlchemy: py-examples-orm/ddd-orm-usage-examples.md
+            - Example - External API Calls: py-examples-orm/ddd-orm-external-api.md
+            - Example - Bank Balance Alert: py-examples-orm/ddd-orm-bank-balance-alert.md
+        - MVC Service (Native DB):
+            - Overview: py-mvc-service-native-db.md
+        - MVC Service (ORM DB):
+            - Overview: py-mvc-service-orm-db.md
+        - Lib Minimal: py-lib-minimal.md
+    - Bash:
+        - Bash CLI: skeletons/bash-cli.md
+        - Ventoy USB: skeletons/ventoy-usb.md
+        - Etcher ChromeOS flasher: skeletons/etcher-chromeos.md
+    - TypeScript:
+        - React SPA (Webpack): ts-react-spa-webpack.md
+        - Library (TS, npm-ready): ts-lib.md
+  - Quality Gates:
+      - Quality Rules: quality-rules.md
+      - Coverage Floor: coverage-floor.md
+      - Complexity Ceilings Measured: complexity-ceilings-measured.md
+      - Lockfile Sync: lockfile-sync.md
+      - Docs Boundary Gate: docs-boundary-gate.md
+      - Issue Scope: issue-scope.md
+      - Secret Scanning: secret-scanning.md
+      - Required Status Checks: required-status-checks.md
+      - Template Drift: template-drift.md
+  - Review & Dependencies:
+      - Policy Workflows: policy-workflows.md
+      - CodeRabbit Configuration: coderabbit-config.md
+      - Graphite Configuration: graphite-config.md
+      - Dependabot Config: dependabot-config.md
+      - Dependabot Auto-merge: dependabot-auto-merge.md
+  - Decisions & Audits:
+      - Decision Records: decision-records.md
+      - Quality Gate Blind Spots: quality-gate-blind-spots.md
+      - CI Scanner Gap Analysis: ci-scanner-gap-analysis.md
+      - SonarQube Evaluation: sonarqube-evaluation.md
+  - Project:
+      - Contributing: contributing.md
+      - Changelog: changelog.md
+      - Versioning: versioning.md
 theme:
   name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:

@@ -32,7 +32,6 @@ import sys
 import tokenize
 
 
-# The metaclasses from ``_internal.utils.typing`` that apply runtime checking.
 _CHECKER_METACLASSES = {"TypeChecker", "ABCTypeCheckerMeta", "ProtocolTypeCheckerMeta"}
 
 
@@ -221,7 +220,6 @@ def _check_class(node: ast.ClassDef, filepath: str) -> int:
             )
             return 1
         return 0
-    # Metaclasses are inherited: only a hierarchy root (no base) must declare one.
     if node.bases:
         return 0
     if metaclass not in _CHECKER_METACLASSES:
@@ -269,12 +267,6 @@ def check_file(filepath: str) -> int:
     return errors
 
 
-# Directory names excluded from the doctrine, mirroring the ruff.toml / mypy.ini excludes:
-#   - ``typing``           — the runtime type-checking engine itself (intrinsic metaprogramming);
-#   - ``chassis``          — cross-cutting reference scaffolding with deliberate loose typing;
-#   - ``example_feature``  — the DDD example capability, reference scaffolding, not production.
-# Keeping the three gates' exclusion boundary identical avoids a file that ruff/mypy ignore
-# tripping this hook (and vice versa).
 _EXCLUDED_PARTS = {"typing", "chassis", "example_feature"}
 
 
@@ -293,11 +285,6 @@ def _source_files() -> list[pathlib.Path]:
 
 
 if __name__ == "__main__":
-    # Windows' stdout defaults to cp1252, which cannot encode the status glyphs this
-    # script prints: it would die with UnicodeEncodeError before reporting anything. And
-    # because this backs an always_run pre-commit hook, that crash blocks EVERY commit from
-    # a Windows checkout rather than failing the file under check. Fixed at the I/O seam so
-    # the glyphs stay; a test pins it with PYTHONIOENCODING=cp1252.
     for cls_stream in (sys.stdout, sys.stderr):
         if hasattr(cls_stream, "reconfigure"):
             cls_stream.reconfigure(encoding="utf-8", errors="replace")
