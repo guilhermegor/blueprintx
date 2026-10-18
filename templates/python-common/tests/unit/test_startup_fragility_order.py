@@ -18,11 +18,6 @@ from pathlib import Path
 import pytest
 
 
-# --------------------------
-# Module Utilities
-# --------------------------
-
-
 def _startup_tree() -> ast.Module:
     """Parse ``src/config/startup.py`` without importing it.
 
@@ -86,9 +81,6 @@ def _logger_lineno(cls_tree: ast.Module) -> int:
     int
         The 1-based line number of the ``LOGGER = …`` statement.
     """
-    # A generator plus next-with-default rather than a loop with a guard and a trailing raise.
-    # Same answer, same failure, and mccabe charges a comprehension nothing while charging the
-    # loop and its guard a point each. This tree is capped at complexity 1.
     list_lines = [
         cls_node.lineno
         for cls_node in cls_tree.body
@@ -102,11 +94,6 @@ def _logger_lineno(cls_tree: ast.Module) -> int:
     return list_lines[0]
 
 
-# --------------------------
-# Tests
-# --------------------------
-
-
 def test_every_config_read_before_the_logger_is_guarded() -> None:
     """No failable config resolution may run unguarded ahead of the logger.
 
@@ -117,8 +104,6 @@ def test_every_config_read_before_the_logger_is_guarded() -> None:
     cls_tree = _startup_tree()
     int_logger_line = _logger_lineno(cls_tree)
 
-    # Every node sitting inside any try-block, collected in one comprehension rather than a
-    # nested loop pair, which mccabe would charge 3 points against this tree's ceiling of 1.
     set_guarded = {
         id(cls_inner)
         for cls_node in ast.walk(cls_tree)
@@ -197,8 +182,6 @@ def test_the_failable_block_catches_exception_not_baseexception() -> None:
     """
     cls_tree = _startup_tree()
 
-    # Scope to the try that actually wraps the config read — the module also carries a
-    # legitimate `except ModuleNotFoundError` for the layout-agnostic typing shim.
     list_config_tries = [
         cls_node
         for cls_node in ast.walk(cls_tree)
@@ -210,33 +193,14 @@ def test_the_failable_block_catches_exception_not_baseexception() -> None:
             for cls_inner in ast.walk(cls_node)
         )
     ]
-    # Flatten first, then assert once on the collected names. The loop form asserted N times
-    # behind one green and stopped at the first bad handler; this reports every offender, and
-    # keeps the test at the complexity 1 this tree is capped at.
     list_caught = [
         cls_handler.type.id if isinstance(cls_handler.type, ast.Name) else ast.dump(cls_handler)
         for cls_try in list_config_tries
         for cls_handler in cls_try.handlers
     ]
-    # An unwrapped block or one that catches nothing leaves list_caught empty, which fails
-    # the equality below too.
     assert set(list_caught) == {"Exception"}, (
         f"the config read must catch Exception, never BaseException — found {list_caught}"
     )
-
-
-# --------------------------
-# Tests — resolve_reference_spec (blueprintx#225)
-# --------------------------
-#
-# The reference/golden-copy block in inputs.yaml is an OPTIONAL OVERRIDE: it must never force
-# a project to declare a source's {dir, pattern} twice. These tests pin the fallback chain —
-# override wins when present, the real input's own spec otherwise, None only when neither
-# exists — with the absent-override path asserted explicitly: every existing generated
-# project has no reference_files block, so that is the path a regression would hit first.
-# Placed in this module (rather than a new file) because it exercises the same startup.py and
-# a new tests/unit/*.py file needs its own scaffold copy-list wiring (bin/ci/check_test_copy_
-# lists.py), which is out of scope for this change.
 
 
 def test_reference_override_wins_over_real_spec() -> None:

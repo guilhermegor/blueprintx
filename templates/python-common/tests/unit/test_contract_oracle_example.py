@@ -13,8 +13,6 @@ source; delete all three examples once your own contracts exist.
 
 from pathlib import Path
 
-# Bare ``config.`` prefix (not ``src.config.``) — matches the cross-module test convention
-# (see test_provenance): a ``src.`` copy of the module has a distinct FileContract identity.
 from config.contracts import EXAMPLE_SOURCE
 
 

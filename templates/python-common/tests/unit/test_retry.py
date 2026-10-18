@@ -11,17 +11,6 @@ from src.utils.retry import LogEmitter, RetryPolicy, call_with_backoff, retry_wi
 from src.utils.retry._schedule import _compute_backoff_wait
 
 
-# ⚠️ The flaky callable is a `Mock(side_effect=[…])`, not a nested `def` with a counter and an
-# `if`. Two reasons, and the second is the load-bearing one:
-#
-#   1. mccabe charges the ENCLOSING function 1 for every nested `def`, and tests/ is capped at
-#      complexity 1 (bin/check_complexity.sh). An inline stub would spend the whole budget.
-#   2. The `if dict_calls["n"] < 3: raise` form put a BRANCH in the test body — and which side
-#      of it ran does not appear in the green. `side_effect` states the call sequence as data:
-#      "raise, raise, return" is the scenario, written where a reader looks for it.
-#
-# `functools.wraps` (which the decorator applies) tolerates a Mock: it skips the wrapper
-# attributes the target does not have.
 class _CapturingEmitter(LogEmitter):
     """Emitter that records messages instead of logging them.
 
@@ -144,17 +133,6 @@ def test_retry_messages_on_the_injected_logger_are_warnings() -> None:
     assert all(msg.startswith("warning:") for msg in cls_emitter.list_messages)
 
 
-# --------------------------
-# The package surface added in blueprintx#116
-# --------------------------
-#
-# The three below did not exist while retry was a flat module: the RetryPolicy value object,
-# the selectable wait schedule, and the imperative `call_with_backoff` executor. The split
-# itself is covered by `test_retry_package_exports_its_public_surface` — an introspective
-# check over `__all__` rather than five hand-listed imports, so adding a name to the package
-# without exporting it is what fails.
-
-
 def test_retry_package_exports_its_public_surface() -> None:
     """The package re-exports the four public names; the submodule split stays internal."""
     assert set(retry.__all__) == {
@@ -193,7 +171,6 @@ def test_policy_is_frozen() -> None:
 @pytest.mark.parametrize(
     ("str_strategy", "int_attempt", "float_expected"),
     [
-        # Every strategy waits the base before the FIRST retry — they diverge only after it.
         ("exponential", 1, 2.0),
         ("linear", 1, 2.0),
         ("constant", 1, 2.0),

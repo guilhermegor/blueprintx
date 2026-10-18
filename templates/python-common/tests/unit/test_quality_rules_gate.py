@@ -76,11 +76,6 @@ def _write(path_dir: Path, str_body: str) -> Path:
     return path_yaml
 
 
-# --------------------------
-# The parser rejects what it cannot consume
-# --------------------------
-
-
 def test_an_inline_comment_on_an_id_is_rejected_not_dropped(tmp_path: Path) -> None:
     """``- id: rule # comment`` is valid YAML this parser does not support.
 
@@ -148,11 +143,6 @@ def test_a_wellformed_registry_still_parses(tmp_path: Path) -> None:
     assert [dict_rule["id"] for dict_rule in list_rules] == ["sample"]
 
 
-# --------------------------
-# Every declared assertion is checked
-# --------------------------
-
-
 def test_every_declared_pattern_is_checked_not_only_the_first(tmp_path: Path) -> None:
     """A second declared value drifting is a finding.
 
@@ -195,11 +185,6 @@ def test_a_single_pattern_entry_still_works(tmp_path: Path) -> None:
     (tmp_path / "conf.txt").write_text("only_value=7\n", encoding="utf-8")
     dict_entry = {"file": "conf.txt", "pattern": "only_value=7"}
     assert gate.config_pattern_problems([{"id": "r", "python": dict_entry}], tmp_path) == []
-
-
-# --------------------------
-# Coverage accepts an explicit exception
-# --------------------------
 
 
 def test_an_exception_only_entry_counts_as_coverage() -> None:

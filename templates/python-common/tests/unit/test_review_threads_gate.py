@@ -22,11 +22,6 @@ from unittest.mock import Mock, call
 import pytest
 
 
-# --------------------------
-# Module Utilities
-# --------------------------
-
-
 def _find_gate_path() -> Path:
     """Locate ``check_review_threads.py``, whether run from the template tree or a scaffold.
 
@@ -46,8 +41,8 @@ def _find_gate_path() -> Path:
     """
     path_here = Path(__file__).resolve()
     tuple_candidates = (
-        path_here.parents[2] / "bin" / "check_review_threads.py",  # generated project
-        path_here.parents[3] / "common" / "bin" / "check_review_threads.py",  # template tree
+        path_here.parents[2] / "bin" / "check_review_threads.py",
+        path_here.parents[3] / "common" / "bin" / "check_review_threads.py",
     )
     return next(
         (path_candidate for path_candidate in tuple_candidates if path_candidate.is_file()),
@@ -65,9 +60,6 @@ def _load_gate() -> ModuleType:
     """
     path_gate = _find_gate_path()
     cls_spec = importlib.util.spec_from_file_location("_check_review_threads", path_gate)
-    # Split rather than combined. A conjunction in one assertion reports only that the
-    # whole thing was false, so a failure cannot say WHICH half broke — an absent loader
-    # and an absent spec are different faults with different causes.
     assert cls_spec is not None
     assert cls_spec.loader is not None
     cls_module = importlib.util.module_from_spec(cls_spec)
@@ -77,20 +69,12 @@ def _load_gate() -> ModuleType:
 
 _ROSTER = {"coderabbitai[bot]", "github-actions[bot]"}
 
-# The same two members as ``_ROSTER``, in the shape ``load_roster`` now returns — normalised
-# login to its ``posts:`` classification. The two are NOT interchangeable: the thread half of
-# the gate takes every member, the missing-review half takes only those that can review.
 _ROSTER_WITH_POSTS = {"coderabbitai": "threads", "github-actions": "status"}
 _LONG = "x" * 150
 
-# The PR head, and a commit it superseded. Two distinct oids because the gate's question is
-# "which commit was this review written against?" — measured on blueprintx#219, where the only
-# review was attributed to a commit pushed five minutes before the head.
 _HEAD = "9ae76ab0000000000000000000000000000000000"
 _SUPERSEDED = "9e7d1fe0000000000000000000000000000000000"
 
-# The head commit's committedDate. A completion notice is evidence only when it POSTDATES this —
-# otherwise it describes code the branch has since moved past (raised by review on #339).
 _HEAD_DATE = "2026-01-01T00:00:00Z"
 
 
@@ -156,11 +140,6 @@ def _reported(str_problem: str | None) -> str:
     return str_problem
 
 
-# --------------------------
-# should-FAIL
-# --------------------------
-
-
 def test_a_thread_the_bot_resolved_alone_is_reported() -> None:
     """The shape that motivated the gate: resolved by the reviewer, answered by nobody.
 
@@ -193,11 +172,6 @@ def test_a_terse_acknowledgement_is_not_an_answer() -> None:
         _thread([("coderabbitai[bot]", "**Finding.** " + _LONG), ("guilhermegor", "done")])
     ]
     assert len(cls_gate.find_thread_problems(list_threads, _ROSTER)) == 1
-
-
-# --------------------------
-# should-PASS
-# --------------------------
 
 
 def test_the_bot_may_acknowledge_and_resolve_after_a_real_answer() -> None:
@@ -259,11 +233,6 @@ def test_no_threads_is_not_a_THREAD_problem() -> None:
     """
     cls_gate = _load_gate()
     assert cls_gate.find_thread_problems([], _ROSTER) == []
-
-
-# --------------------------
-# 🔴 The empty set — a PR that merged with NO review at all
-# --------------------------
 
 
 def _review(str_login: str, str_oid: str = _HEAD) -> dict:
@@ -383,17 +352,6 @@ def test_the_query_excludes_unsubmitted_reviews(str_fragment: str, bool_present:
     assert (str_fragment in _load_gate()._QUERY) is bool_present
 
 
-# ⚠️ THE PAGINATION CASE IS THE "expensive shared setup" ONE FROM tests/CLAUDE.md.
-#
-# One two-page fetch backs FIVE independent claims, and splitting it into five tests that each
-# re-run the fetch is exactly the mechanical split that rule warns about. So the fetch happens
-# ONCE in a module-scoped fixture and the five tests read its immutable result — the pattern
-# tests/CLAUDE.md prescribes, applied to the case it was written for (blueprintx#544).
-#
-# The two pages are DATA in a side_effect sequence, not a stub that branches on its cursor
-# arguments. The branch put a decision inside the test and the green never said which side ran;
-# the sequence states "page one, then page two" where a reader looks for it. Mock also records
-# the calls for free, so the hand-rolled call list is gone too.
 _DICT_PAGE_ONE = {
     "author": {"login": "someone"},
     "reviews": {
@@ -617,13 +575,6 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
         cls_gate.fetch_pull_request("no-such-owner-xyz", "no-such-repo-xyz", 1)
 
 
-# --------------------------
-# 🔴 The bot-login spelling — why this gate was silently vacuous
-# --------------------------
-
-
-# The human login is the load-bearing third case, not padding: it must pass through
-# untouched, so nobody is accidentally normalised into looking like a reviewer.
 @pytest.mark.parametrize(
     ("str_login", "str_normalised"),
     [
@@ -665,7 +616,6 @@ def test_a_reviewer_comment_in_graphql_spelling_is_not_an_answer(tmp_path: Path)
     )
     set_roster = cls_gate.load_roster(tmp_path)
 
-    # GraphQL spelling — no suffix. Before the fix this counted as an answer.
     list_threads = [_thread([("coderabbitai", "**Finding.** " + _LONG)])]
     assert len(cls_gate.find_thread_problems(list_threads, set_roster)) == 1
 
@@ -687,11 +637,6 @@ def test_a_human_reply_in_the_same_thread_still_answers_it(tmp_path: Path) -> No
 
     list_threads = [_thread([("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)])]
     assert cls_gate.find_thread_problems(list_threads, set_roster) == []
-
-
-# --------------------------
-# Both halves: replied AND resolved
-# --------------------------
 
 
 def test_an_answered_but_unresolved_thread_is_reported(tmp_path: Path) -> None:
@@ -765,15 +710,6 @@ def test_a_roster_never_adopted_is_still_a_silent_no_op(
     assert cls_gate.load_roster(tmp_path) == {}
 
 
-# ⚠️ THE FLAG'S THREE CLAIMS, one test each (blueprintx#544). They are not one assertion over
-# three inputs — they are three different verdicts, and collapsing them hid the third.
-#
-# CI no longer passes ``False`` (#196): delegating the resolve half to
-# ``required_conversation_resolution`` looked safe because a merge-time setting cannot go
-# stale, but that setting DROPS AN OUTDATED THREAD — measured on blueprintx#193, merge button
-# enabled over an unresolved outdated thread with 29 of 29 checks green. The flag survives for
-# callers that genuinely cannot re-evaluate a resolve, so the reply-only mode must keep working
-# AND must not quietly disable the job altogether.
 _LIST_OPEN_BUT_ANSWERED = [
     _thread(
         [("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],
@@ -812,11 +748,6 @@ def test_switching_off_the_resolve_half_does_not_disable_the_reply_half() -> Non
         )
         == 1
     )
-
-
-# --------------------------
-# Tests — `posts:` splits the roster in two (#218)
-# --------------------------
 
 
 def test_a_status_only_member_cannot_satisfy_the_missing_review_gate() -> None:
@@ -921,11 +852,6 @@ def test_an_emptied_roster_is_rejected_like_a_deleted_one(tmp_path: Path) -> Non
         cls_gate.load_roster(tmp_path)
 
 
-# --------------------------
-# Tests — a review is pinned to a COMMIT (#220)
-# --------------------------
-
-
 def test_a_review_of_a_superseded_commit_does_not_satisfy_the_gate() -> None:
     """The negative control: this input PASSED before the head check existed.
 
@@ -1000,14 +926,6 @@ def test_the_query_asks_for_the_head_commit() -> None:
     assert "headRefOid" in cls_gate._QUERY
 
 
-# --------------------------
-# Tests — a redundant re-review is not an unreviewed PR (#259)
-# --------------------------
-
-
-# The reviewer's ACTUAL boilerplate, copied verbatim from blueprintx#264's own comment stream.
-# It is appended to EVERY outcome — performed, rate-limited and failed alike — which is what
-# defeated the first draft of this check.
 _FOOTNOTE = (
     "> Note: CodeRabbit is an incremental review system and does not re-review already "
     "reviewed commits. This command is applicable only when automatic reviews are paused."
@@ -1264,11 +1182,6 @@ def test_the_query_asks_for_the_prs_issue_comments() -> None:
     assert "comments(first:100, after:$cc)" in cls_gate._QUERY
 
 
-# --------------------------
-# Tests — an outdated thread is the one the merge button drops (#196)
-# --------------------------
-
-
 def test_an_outdated_unresolved_thread_is_reported() -> None:
     """GitHub drops it from the blocking set, so this gate is the only thing left asserting it.
 
@@ -1314,15 +1227,6 @@ def test_a_current_unresolved_thread_does_not_claim_to_be_outdated() -> None:
     assert "OUTDATED" not in cls_gate.find_thread_problems(list_current, _ROSTER)[0]
 
 
-# --------------------------
-# classify_reviewer_notice / parse_declared_wait (blueprintx#364)
-# --------------------------
-
-# The REAL notice bodies, fetched via `gh api graphql` from PR #363 (chat quota,
-# 2026-08-30T18:44:28Z) and PR #317 (review quota, 2026-08-29T17:11:51Z) — never retyped. The
-# issue this closes was itself first written against retyped text that classified differently
-# from the real bytes, which is why every should-fail witness below is pinned against these two
-# exact strings rather than an invented approximation.
 _CHAT_NOTICE = (
     "<!-- This is an auto-generated reply by CodeRabbit -->\n### Rate Limit Exceeded\n\n"
     "`@guilhermegor` have exceeded the limit for the number of chat messages per hour. Please "
@@ -1365,13 +1269,6 @@ def test_classify_reviewer_notice_a_clean_completion_is_ok() -> None:
     assert cls_gate.classify_reviewer_notice(str_notice) == cls_gate.NOTICE_OK
 
 
-# --------------------------
-# classify_reviewer_notice / find_missing_review_problem — the file-cap third state (#433)
-# --------------------------
-
-# The REAL notice body, reproduced live on PR #424, 2026-09-11 (quoted verbatim in the issue
-# rather than retyped — the same discipline as `_CHAT_NOTICE`/`_REVIEW_NOTICE` above, since a
-# retyped approximation is exactly the gap a reworded notice would exploit).
 _FILE_CAP_NOTICE = "Review skipped: 241 files exceed the limit of 100."
 
 
@@ -1477,13 +1374,6 @@ def test_print_missing_review_json_carries_the_file_cap_classification(
     assert dict_out["notice_classification"] == cls_gate.NOTICE_FILE_CAP_EXCEEDED
 
 
-# --------------------------
-# A second, unrelated "Review skipped" reason must not be conflated with the file cap (#433)
-# --------------------------
-
-# The REAL fragment measured on PR #400 (a one-file, bot-authored PR) — clearable simply by
-# asking, unlike the structural cap above. Sharing the bare "Review skipped" prefix with the
-# file-cap notice is exactly what makes this a genuine negative control rather than a strawman.
 _BOT_DETECTED_NOTICE = "Review skipped — Bot user detected."
 
 
@@ -1539,11 +1429,6 @@ def test_parse_declared_wait_returns_none_when_no_wait_is_declared() -> None:
     assert cls_gate.parse_declared_wait("Review rate limited.") is None
 
 
-# --------------------------
-# --json output (blueprintx#364)
-# --------------------------
-
-
 def test_parse_args_default_is_prose() -> None:
     """Without ``--json`` the gate keeps its historical prose-only behaviour."""
     cls_gate = _load_gate()
@@ -1578,7 +1463,6 @@ def test_print_missing_review_json_carries_the_notice_classification(
     """The exact gap #364 names: a caller must not have to grep the quoted notice itself."""
     cls_gate = _load_gate()
     list_notices = [{"author": {"login": "coderabbitai[bot]"}, "body": _CHAT_NOTICE}]
-    # Strip the bot suffix first, or the notice lookup silently finds nothing.
     set_roster = {cls_gate.normalise_login(str_login) for str_login in _ROSTER}
     cls_gate._print_missing_review(
         True, "no declared reviewer ever reported", list_notices, set_roster
@@ -1623,10 +1507,6 @@ def test_print_thread_verdict_json_fail_carries_the_problems(
     cls_gate._print_thread_verdict(True, ["src/thing.py: thread is open"], 1, True)
     assert json.loads(capsys.readouterr().out)["problems"] == ["src/thing.py: thread is open"]
 
-
-# --------------------------
-# Review BODY findings need a reply too (blueprintx#630)
-# --------------------------
 
 _BODY_ROSTER = {"coderabbitai"}
 _BOTH_ROSTER = {"coderabbitai", "guilhermegor-review-ladder", "copilot-pull-request-reviewer"}
@@ -1818,12 +1698,6 @@ def test_print_review_body_problems_json_carries_the_reason(
     assert json.loads(capsys.readouterr().out)["reason"] == "unanswered_review_body"
 
 
-# --------------------------
-# Classification by declared structure (blueprintx#630, docs/faq.md)
-# --------------------------
-# Each shape below is a trimmed copy of a real body from this repo's PRs (#347, #671-#687). The
-# witness is the same text with only its structural marker removed.
-
 _LADDER = (
     "Fallback review — runtime: {}, model: default (selected by: {})\nReviewed head: 1a2b3c4\n\n"
 )
@@ -1832,7 +1706,6 @@ _LADDER_CLI = _LADDER.format("coderabbit", "live-probe")
 _PROSE = "I couldn't check any of this against the tree. Every tool call failed."
 _LOOP = "the retry loop swallows the final error."
 
-# Real CodeRabbit body (#347): its only finding sits in a body section, not in an inline thread.
 _CR_SECTION = "⚠️ Outside diff range comments (1)"
 _CR_OUTSIDE_DIFF = (
     "> [!CAUTION]\n> Some comments are outside the diff and can't be posted inline.\n>\n"
@@ -2160,11 +2033,6 @@ def test_answer_shape_from_the_roster_is_not_an_answer() -> None:
     assert len(_body_problems(_REVIEWED, list_notices)) == 1
 
 
-# --------------------------
-# Fail-closed audit: no success without positive evidence (blueprintx#630)
-# --------------------------
-
-
 def test_body_section_without_a_parsable_count_is_a_finding() -> None:
     """A section heading whose count is missing or unparsable is a finding, never a clean 0."""
     str_body = "**Actionable comments posted: 0**\n\n⚠️ Outside diff range comments\n\nx"
@@ -2306,18 +2174,8 @@ def test_a_failing_comment_page_raises_instead_of_stopping_early(
         cls_gate.fetch_pull_request("o", "r", 1)
 
 
-# ⚠️ WITNESS FOR blueprintx#372 — THE DISPLAY BUDGET MUST NOT REACH A MATCHER.
-#
-# `summarise_reviewer_notice` cuts the notice to 200 chars so a failure message stays readable.
-# Two matchers used to read that cut string, and a phrase past the budget therefore read as
-# ABSENT. Measured over 112 real reviewer notices in this repo: 4 flipped UNKNOWN -> OK (phrase
-# at offsets 394, 583, 583, 2700) and 4 lost a completion phrase. Both directions are silent.
 _STR_FILLER = "x" * 400
 
-# ⚠️ NORMALISED, unlike `_ROSTER`. These four call the notice helpers DIRECTLY, and those take
-# the roster already stripped of `[bot]` (`find_missing_review_problem` normalises on the way
-# in). Passing `_ROSTER` here matches nothing and every helper returns "" — a green-looking
-# empty answer, not an error.
 _ROSTER_NORMALISED = set(_ROSTER_WITH_POSTS)
 
 
@@ -2672,11 +2530,6 @@ def test_load_roster_ignores_the_marker_row(path_marker_root: Path) -> None:
     assert _load_gate().load_roster(path_marker_root) == {"coderabbitai": "threads"}
 
 
-# --------------------------
-# A review carries forward across a merge of the base (blueprintx#698)
-# --------------------------
-
-
 def _git(path_repo: Path, *list_args: str, bool_check: bool = True) -> str:
     """Run git in ``path_repo`` and return stdout, raising on a non-zero exit.
 
@@ -2759,7 +2612,6 @@ def _patch_id(path_repo: Path, str_oid: str) -> str:
         text=True,
         check=True,
     )
-    # `<patch-id> <commit-id>`; unpacking fails loudly on empty output instead of IndexError.
     str_patch_id, _ = cls_run.stdout.split()
     return str_patch_id
 
@@ -2895,7 +2747,7 @@ def dict_repo(tmp_path: Path) -> dict:
     _git(tmp_path, "merge", "--no-edit", "main~1")
     str_clean = _git(tmp_path, "rev-parse", "HEAD")
     _git(tmp_path, "checkout", "-b", "conflict", str_review)
-    _git(tmp_path, "merge", "--no-edit", "main", bool_check=False)  # conflicts by design
+    _git(tmp_path, "merge", "--no-edit", "main", bool_check=False)
     str_conflict = _commit(tmp_path, "a.txt", str_text.format("resolved"))
     _git(tmp_path, "checkout", "-b", "more", str_review)
     str_new = _commit(tmp_path, "c.txt", "new\n")
@@ -3112,9 +2964,9 @@ def test_review_covers_head_production_fingerprint_on_real_diffs(
 @pytest.mark.parametrize(
     ("str_old", "str_new", "bool_expected"),
     [
-        ("\n20\n", "\nmain\n", True),  # below the hunk
-        ("1\n2\n", "0\n1\n2\n", True),  # a line inserted above shifts the coordinates
-        ("\n12\n", "\nmain\n", True),  # inside the hunk's 3-line context window
+        ("\n20\n", "\nmain\n", True),
+        ("1\n2\n", "0\n1\n2\n", True),
+        ("\n12\n", "\nmain\n", True),
     ],
 )
 def test_review_covers_head_main_edit_relative_to_the_hunk(
