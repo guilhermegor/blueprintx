@@ -56,7 +56,11 @@ gate did not read until P0.
 
 ## Completed — kept as a record
 
-The sweep finished with every slice above merged. Measured on the merged tree with the gate's own
-tool: `check_comment_budget.py --root . --write-baseline` writes 0 files and 0 comment lines (from
-11665 lines in 422 files at spike time). `make verify_tiers`, the otel and storage opt-in scaffolds
-and `pre-commit run --all-files` pass. Kept per the backlog rule: do not delete a finished tracker.
+This PR merges last, after every slice above: #841, #843, #844, #845, #846, #847, #854, #858 and
+#862 (9d, the banner exemption removal). Measured on `main` with all of them applied, plus
+this PR: `check_comment_budget.py --root . --write-baseline` writes 0 files and 0 comment lines
+and the gate reports OK over 766 files (from 11665 lines in 422 files at spike time), so the
+baseline holds only its `scope` row, which is zero tolerance. The gate's 153 unit tests pass with
+the exemption gone, and `make verify_tiers` (all six Python tiers), the otel and storage opt-in
+scaffolds and `pre-commit run --all-files` pass on the slice PRs. Kept per the backlog rule: do
+not delete a finished tracker.
