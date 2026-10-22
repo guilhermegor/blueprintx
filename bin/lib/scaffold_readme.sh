@@ -61,6 +61,9 @@ scaffold_render_readme() {
         return 1
     fi
     resolve_linkedin_url
+    LINKEDIN_URL="${LINKEDIN_URL//(/%28}"
+    LINKEDIN_URL="${LINKEDIN_URL//)/%29}"
+    LINKEDIN_URL="${LINKEDIN_URL// /%20}"
 
     AUTHOR_NAME="${AUTHOR_NAME:-$GITHUB_USERNAME}"
     PROJECT_LICENSE="${PROJECT_LICENSE:-${LICENSE_CHOICE:-}}"

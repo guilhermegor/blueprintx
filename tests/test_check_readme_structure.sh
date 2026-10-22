@@ -242,6 +242,19 @@ test_canonical_template_passes_for_every_archetype() {
     done
 }
 
+test_lookalike_author_hosts_fail() {
+    expect_gate "notgithub.com / notlinkedin.com author links" \
+        "$(good_readme | sed 's#https://github.com/#https://notgithub.com/#; s#https://www.linkedin.com/#https://notlinkedin.com/#')" \
+        fail "author without a github.com/<user> link"
+    expect_gate "country-subdomain LinkedIn link is a real host" \
+        "$(good_readme | sed 's#https://www.linkedin.com/#https://br.linkedin.com/#')" pass
+}
+
+test_indented_heading_is_recognised() {
+    expect_gate "heading indented by three spaces" \
+        "$(good_readme | sed 's/^### Usage/   ### Usage/')" pass
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do

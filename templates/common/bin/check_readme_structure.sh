@@ -90,8 +90,8 @@ authors_body() {
 
 check_authors() {
 	local path_file="$1" str_item i_count=0 re_github re_linkedin
-	re_github='github\.com/[^[:space:])/]+'
-	re_linkedin='linkedin\.com/in/[^[:space:])/]+'
+	re_github='(^|[^[:alnum:].-])(www\.)?github\.com/[^[:space:])/]+'
+	re_linkedin='(^|[^[:alnum:].-])([a-z]{2,3}\.)?linkedin\.com/in/[^[:space:])/]+'
 	[ "$BOOL_TEMPLATE" -eq 1 ] && re_linkedin="$re_linkedin|"'\$\{LINKEDIN_URL\}'
 	while IFS= read -r str_item; do
 		[[ "$str_item" =~ ^[[:space:]]*[-*][[:space:]] ]] || continue

@@ -90,6 +90,15 @@ test_skeleton_without_archetype_is_refused() {
     expect "meta without readme_archetype is refused" "refused" "${str_got##*$'\n'}"
 }
 
+test_linkedin_destination_is_escaped() {
+    local path_out
+    path_out="$(mktemp)"
+    LINKEDIN_URL="https://www.linkedin.com/in/a(b) c" render_python_readme ddd-service-native-db "$path_out"
+    grep -qF '[LinkedIn](https://www.linkedin.com/in/a%28b%29%20c)' "$path_out" \
+        || expect "parenthesis and space in LINKEDIN_URL are percent-encoded" "encoded" "raw"
+    rm -f "$path_out"
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do

@@ -48,9 +48,9 @@ md_headings() {
             s = $0; sub(/^<!--[[:space:]]*slug:[[:space:]]*/, "", s); sub(/[[:space:]]*-->.*$/, "", s)
             slug = s; next
         }
-        match($0, /^#+[[:space:]]/) {
-            hashes = $0; sub(/[[:space:]].*$/, "", hashes)
-            text = $0; sub(/^#+[[:space:]]+/, "", text)
+        match($0, /^ ? ? ?#+[[:space:]]/) {
+            hashes = $0; sub(/^ +/, "", hashes); sub(/[[:space:]].*$/, "", hashes)
+            text = $0; sub(/^ *#+[[:space:]]+/, "", text)
             printf "%d\t%d\t%s\t%s\n", NR, length(hashes), (slug == "" ? "-" : slug), trim(text)
         }
         { slug = "" }
