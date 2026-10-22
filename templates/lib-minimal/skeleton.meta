@@ -2,3 +2,4 @@ language=python
 display_name=Library (Minimal)
 description=PyPI-ready Python library starter with packaging, tests, CI, and PyPI/Test-PyPI release workflows
 scaffold=bin/scaffold/python_lib_minimal.sh
+readme_archetype=library

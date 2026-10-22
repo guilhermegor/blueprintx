@@ -5,6 +5,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$REPO_ROOT/bin/lib/common.sh"
+# shellcheck source=templates/common/bin/lib/md_structure.sh
+source "$REPO_ROOT/templates/common/bin/lib/md_structure.sh"
 
 readonly -a ARR_OPTIONAL=("F:Additional Notes/Dependencies" "F:Additional Notes/Follow-up")
 readonly -a ARR_CHANGE_GROUP=("F:Changes Made/Added" "F:Changes Made/Updated" "F:Changes Made/Fixed")
@@ -16,35 +18,6 @@ readonly STR_SEP=$'\037'
 declare -a ARR_TPL_KEYS=() ARR_BODY_KEYS=()
 declare -A MAP_TPL_LINES=() MAP_BODY_LINES=() MAP_BODY_PAR=() MAP_REAL=() MAP_PH=()
 declare -a ARR_PROBLEMS=()
-
-normalize() {
-    tr -d '\r' | awk '
-        BEGIN { in_comment = 0; in_fence = 0 }
-        {
-            if (!in_comment && match($0, /^[[:space:]]*(```+|~~~+)/)) {
-                run = substr($0, RSTART, RLENGTH); gsub(/[[:space:]]/, "", run)
-                ch = substr(run, 1, 1)
-                if (!in_fence) { in_fence = 1; f_ch = ch; f_len = length(run); next }
-                rest = substr($0, RSTART + RLENGTH)
-                if (ch == f_ch && length(run) >= f_len && rest ~ /^[[:space:]]*$/) in_fence = 0
-                next
-            }
-            if (in_fence) next
-            line = $0; out = ""
-            while (length(line) > 0) {
-                if (in_comment) {
-                    p = index(line, "-->")
-                    if (p == 0) { line = ""; break }
-                    line = substr(line, p + 3); in_comment = 0
-                } else {
-                    p = index(line, "<!--")
-                    if (p == 0) { out = out line; line = ""; break }
-                    out = out substr(line, 1, p - 1); line = substr(line, p + 4); in_comment = 1
-                }
-            }
-            print out
-        }'
-}
 
 parse_layout() {
     awk -v sep="$STR_SEP" '
@@ -81,7 +54,7 @@ load_layout() {
             MAP_BODY_PAR["$str_key"]="$str_par"
             ARR_BODY_KEYS+=("$str_key")
         fi
-    done < <(normalize <"$path_file" | parse_layout)
+    done < <(md_normalize <"$path_file" | parse_layout)
 }
 
 tally_body() {

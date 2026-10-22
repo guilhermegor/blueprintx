@@ -29,6 +29,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `issue-scope.md` | Utility page | Declaring and enforcing an issue's file surface so a gate can verify dispatched work at PR time (blueprintx#314) |
 | `lockfile-sync.md` | Utility page | The package.json vs package-lock.json gate, its regression test, and the ts-lib Dependabot grouping (blueprintx#588) |
 | `docs-boundary-gate.md` | Utility page | What `check_docs_boundary.sh` denies, where each case belongs, and why it ships to generated projects (blueprintx#576) |
+| `readme-layout.md` | Utility page | The README layout gate: slug-marked sections, archetypes, plain headings, Authors links, `LINKEDIN_URL` resolution, and where the gate runs (blueprintx#867) |
 | `offline-to-online.md` | Utility page | Promoting an offline scaffold to online with `bin/promote_offline_to_online.sh` — per-tier manifests, flags, preconditions, idempotency (blueprintx#382) |
 | `prompt-defaults.md` | Utility page | The non-terminal stdin guard on scaffold prompts, the helpers, and the per-prompt default table (blueprintx#539) |
 | `template-drift.md` | Utility page | The drift doctor and the provenance stamp it reads, plus the promote-script mirror notes (blueprintx#109) |

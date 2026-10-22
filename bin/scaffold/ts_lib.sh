@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_readme.sh
+source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
 # shellcheck source=bin/lib/scaffold_package_json.sh
 source "$SCRIPT_DIR/../lib/scaffold_package_json.sh"
 
@@ -245,9 +247,8 @@ copy_common_templates() {
         > "$project_path/AGENTS.md"
     cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_LICENSE} ${GITHUB_USERNAME}' \
-        < "$SKELETON_TEMPLATE_ROOT/README.md" \
-        > "$project_path/README.md"
+    scaffold_render_readme ts-lib "$SKELETON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
+    scaffold_copy_readme_gate "$project_path"
 
     for doc_file in index usage examples faq contributing; do
         envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \

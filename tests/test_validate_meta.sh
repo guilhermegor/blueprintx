@@ -23,6 +23,9 @@ make_sandbox() {
     str_root="$(mktemp -d)"
     mkdir -p "$str_root/bin/ci" "$str_root/templates"
     cp "$REPO_ROOT/bin/ci/validate_meta.sh" "$str_root/bin/ci/validate_meta.sh"
+    mkdir -p "$str_root/templates/common/bin/lib"
+    cp "$REPO_ROOT/templates/common/bin/check_readme_structure.sh" "$str_root/templates/common/bin/"
+    cp "$REPO_ROOT/templates/common/bin/lib/md_structure.sh" "$str_root/templates/common/bin/lib/"
     printf '# CLAUDE.md\n\nfake-skeleton is documented here.\n' > "$str_root/CLAUDE.md"
     printf '%s' "$str_root"
 }
@@ -126,19 +129,47 @@ test_skeleton_not_documented_in_claude_md() {
         "skeleton 'fake-skeleton' is not mentioned in CLAUDE.md"
 }
 
+test_readme_archetype() {
+    local str_root str_value
+    for str_value in library cli spa service usb-tool; do
+        str_root="$(make_sandbox)"
+        mkdir -p "$str_root/bin/scaffold"
+        : > "$str_root/bin/scaffold/fake.sh"
+        write_meta "$str_root" \
+            "language=$(base_value language)" \
+            "display_name=$(base_value display_name)" \
+            "description=$(base_value description)" \
+            "scaffold=$(base_value scaffold)" \
+            "readme_archetype=$str_value"
+        expect_gate "readme_archetype=$str_value" "$str_root" "pass"
+    done
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    : > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)" \
+        "readme_archetype=monolith"
+    expect_gate "readme_archetype outside the allowed set" "$str_root" "fail" \
+        "readme_archetype 'monolith' is not one of"
+}
+
 main() {
     test_valid_meta_passes
     test_missing_key
     test_empty_value
     test_missing_scaffold_path
     test_skeleton_not_documented_in_claude_md
+    test_readme_archetype
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures validate_meta.sh regression assertion(s) failed"
         exit 1
     fi
     print_status "success" \
-        "validate_meta.sh rejects missing keys, empty values, dead scaffold paths, and undocumented skeletons"
+        "validate_meta.sh rejects missing keys, empty values, dead scaffold paths, undocumented skeletons, and unknown readme archetypes"
 }
 
 main "$@"

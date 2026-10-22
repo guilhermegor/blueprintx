@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_readme.sh
+source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
 
 PROJECT_ROOT="${1:-}"
 PROJECT_NAME="${2:-}"
@@ -102,9 +104,8 @@ copy_skeleton_files() {
 
     envsubst '${PROJECT_NAME}' < "$SKELETON_TEMPLATE_ROOT/Makefile" > "$project_path/Makefile"
     envsubst '${PROJECT_NAME}' < "$SKELETON_TEMPLATE_ROOT/AGENTS.md" > "$project_path/AGENTS.md"
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
-        < "$SKELETON_TEMPLATE_ROOT/README.md" \
-        > "$project_path/README.md"
+    scaffold_render_readme ventoy-usb "$SKELETON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
+    scaffold_copy_readme_gate "$project_path"
     cp "$SKELETON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
 
     envsubst '${PROJECT_NAME}' \

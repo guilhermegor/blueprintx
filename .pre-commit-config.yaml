@@ -341,7 +341,21 @@ repos:
         entry: bash tests/test_check_pr_template.sh
         language: system
         pass_filenames: false
-        files: ^(bin/ci/check_pr_template\.sh|tests/test_check_pr_template\.sh|\.github/PULL_REQUEST_TEMPLATE\.md)$
+        files: ^(bin/ci/check_pr_template\.sh|tests/test_check_pr_template\.sh|\.github/PULL_REQUEST_TEMPLATE\.md|templates/common/bin/lib/md_structure\.sh)$
+
+      - id: readme-structure
+        name: README structure (plain headings, slug sections, Authors links, blueprintx#867)
+        entry: bash bin/ci/check_readme_structure.sh
+        language: system
+        pass_filenames: false
+        files: ^(README\.md|templates/[^/]+/README(\.template)?\.md|templates/common/bin/(check_readme_structure\.sh|lib/md_structure\.sh)|bin/ci/check_readme_structure\.sh)$
+
+      - id: readme-structure-tests
+        name: check_readme_structure.sh and scaffold README should-fail tests (blueprintx#867)
+        entry: bash -c 'bash tests/test_check_readme_structure.sh && bash tests/test_scaffold_readme.sh'
+        language: system
+        pass_filenames: false
+        files: ^(templates/common/(bin/(check_readme_structure\.sh|lib/md_structure\.sh)|README\.template\.md)|templates/python-common/README\.md|bin/lib/scaffold_readme\.sh|tests/test_(check_readme_structure|scaffold_readme)\.sh)$
 
       - id: lockfile-sync
         name: lockfile sync (template package.json vs package-lock.json, blueprintx#588)

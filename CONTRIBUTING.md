@@ -385,6 +385,28 @@ cannot see (the web UI, Dependabot, API-created PRs).
 The job is **not yet a required check**. As with #507 and #535, it becomes one once the open-PR
 population is clean, because requiring a gate that most open PRs fail blocks them all at once.
 
+### README layout — blueprintx#867
+
+`templates/common/bin/check_readme_structure.sh` checks a README against one layout: a
+`<!-- readme-archetype: NAME -->` first line, the core sections in order, the archetype's own
+sections, plain-text headings, and an Authors list whose every item has a GitHub and a
+LinkedIn link. Sections are matched by a `<!-- slug: x -->` marker on the line above the
+heading, never by heading text, so a Portuguese heading conforms without renaming. The rules,
+the archetype table and the `LINKEDIN_URL` resolution are in `docs/readme-layout.md`.
+
+- **One parser.** `templates/common/bin/lib/md_structure.sh` is shared with
+  `bin/ci/check_pr_template.sh`; a second heading parser is the drift
+  `check_codespell_sync.sh` exists to police.
+- **No icons in headings.** An emoji, `<img>`, `![...]` or `<picture>` in any H1 to H6 fails.
+  The logo goes on its own line under the H1; badges and images stay allowed in the body.
+- **Adding a skeleton.** Set `readme_archetype=` in its `skeleton.meta` (`validate_meta.sh`
+  enforces the allowed values), and render its README through `scaffold_render_readme` from
+  `bin/lib/scaffold_readme.sh`, then call `scaffold_copy_readme_gate` so the project ships the
+  gate. `bin/ci/check_readme_structure.sh --generated` scaffolds every skeleton and runs the
+  shipped gate on the result.
+- **Template READMEs** are checked with `--template`, which accepts `${...}` placeholders; the
+  rendered README is checked without it, so an unrendered variable fails there.
+
 ### Required checks and the allowlist of optional ones — blueprintx#535
 
 A required check is matched by name, so `bin/ci/check_required_checks_sync.py` fails when a
@@ -1855,6 +1877,17 @@ grouped by what they guard.
   last statement would exit under `set -e`. A classification naming a label the template no
   longer has fails rather than rotting. **Not Applicable** is required exactly when a testing
   subsection is not filled in. Rationale for humans is in "PR template layout".
+- **`check_readme_structure.sh` (#867).** Lives in `templates/common/bin/`, not `bin/ci/`,
+  because it is copied into every generated project; `bin/ci/check_readme_structure.sh` only
+  chooses the files (the root README, and with `--template` every template README) or, with
+  `--generated`, scaffolds each skeleton and runs the shipped copy. The shipped scripts are
+  **tab-indented**: a generated project's `poe lint` runs `shfmt -w` over `bin/*.sh`, and
+  `scaffold_lint_test.sh` fails when that rewrites the fresh tree (measured on its first
+  run). Quote an associative-array key that contains a hyphen (`["usb-tool"]=`): unquoted,
+  `shfmt` rewrote it to `[usb - tool]`. Slugs, not heading text, identify a section; a slug
+  marker is a comment above the heading (blank lines between are fine), and `md_headings` clears a
+  pending slug on any other non-blank line so a stray marker cannot attach to a later heading.
+  Rationale for humans is in "README layout".
 - **`check_shell.sh`.** ShellCheck at warning or above, with `-x` following `source` into
   `bin/lib` guided by `# shellcheck source=` directives: a variable whose only consumer is a
   sourced lib otherwise reads as SC2034, which is a question ShellCheck cannot answer one file

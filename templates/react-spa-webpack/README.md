@@ -1,3 +1,4 @@
+<!-- readme-archetype: spa -->
 # ${PROJECT_NAME}
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
@@ -10,71 +11,69 @@
 ![Open Issues](https://img.shields.io/github/issues/${GITHUB_USERNAME}/${PROJECT_NAME})
 ![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-darkgreen.svg)
 
+<!-- slug: overview -->
+## Overview
+
 ${PROJECT_DESCRIPTION}
 
-## ✨ Key Features
+## Key Features
 
-### 🧭 Pages & Routes
+### Pages & Routes
 - [Page placeholder 1](#)
 - [Page placeholder 2](#)
 - [Page placeholder 3](#)
 
-### 🧩 Capabilities (vertical slices)
+### Capabilities (vertical slices)
 - [Capability placeholder 1](#)
 - [Capability placeholder 2](#)
 - [Capability placeholder 3](#)
 
-### 🔁 State Management
+### State Management
 - Variant: **${STATE_MANAGEMENT_VARIANT}** — see `src/capabilities/<feature>/context.tsx`
 
-### 🎨 UI & Accessibility
+### UI & Accessibility
 - [a11y / i18n / theming placeholder](#)
 - [Design-system placeholder](#)
 
-### ⚡ Performance
+### Performance
 - [Code-splitting / lazy-loading placeholder](#)
 - [Bundle-analysis placeholder](#)
 
-### 🧪 Testing
+### Testing
 - Unit / component: **Jest + React Testing Library**
 - End-to-end: **Playwright** (chromium)
 
-## 🚀 Getting Started
+<!-- slug: getting-started -->
+## Getting Started
 
-### Prerequisites
+<!-- slug: install -->
+### Install
+
+#### Prerequisites
 - Node ≥ 22 — the exact version is pinned in `.nvmrc` (`nvm use` / `fnm use`)
 - npm (bundled with Node) — pnpm / yarn also work
 - A modern browser for development (Chrome, Firefox, Safari)
 
-### Installation
+Clone and install:
+
 ```bash
 git clone https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git
 cd ${PROJECT_NAME}
 npm install
-npm run dev   # webpack-dev-server with HMR at http://localhost:3000
 ```
 
-### Build for production
+<!-- slug: usage -->
+### Usage
+
 ```bash
-npm run build  # emits to dist/
+npm run dev    # webpack-dev-server with HMR at http://localhost:3000
+npm run build  # production build, emits to dist/
 ```
 
-### Running Tests
-```bash
-npm test                       # Jest + RTL (unit / component)
-npm test -- --watch            # watch mode
-npm run test:e2e:frontend      # Playwright e2e
-npm run test:e2e:frontend:ui   # Playwright UI runner
-```
+<!-- slug: project-structure -->
+## Project Structure
 
-### Type-check & lint
-```bash
-npm run type-check  # tsc --noEmit
-npm run lint        # eslint --fix
-```
-
-## 📂 Project Structure (template)
-```
+```text
 ${PROJECT_NAME}/
 ├── .github/
 │   ├── workflows/             # CI: build, lint, test, type-check (+ deploy-spa for Pages)
@@ -122,7 +121,27 @@ ${PROJECT_NAME}/
 └── README.md
 ```
 
-## 🚢 Deployment — GitHub Pages
+<!-- slug: development -->
+## Development
+
+### Running Tests
+
+```bash
+npm test                       # Jest + RTL (unit / component)
+npm test -- --watch            # watch mode
+npm run test:e2e:frontend      # Playwright e2e
+npm run test:e2e:frontend:ui   # Playwright UI runner
+```
+
+### Type-check & lint
+
+```bash
+npm run type-check  # tsc --noEmit
+npm run lint        # eslint --fix
+```
+
+<!-- slug: deployment -->
+## Deployment — GitHub Pages
 
 The scaffold ships `.github/workflows/deploy-spa.yml`, which builds the SPA
 with `PUBLIC_PATH=/<repo-name>/`, adds a `404.html` fallback for client-side
@@ -141,7 +160,7 @@ gh api -X POST repos/${GITHUB_USERNAME}/${PROJECT_NAME}/pages \
 See `CLAUDE.md → Deployment` for the full rationale (token scopes, router
 basename, custom domains).
 
-## 🐳 Docker (optional)
+## Docker (optional)
 
 If you scaffolded with the Docker option, the project root has a `Dockerfile`,
 `nginx.conf`, and `.dockerignore`. The build is **multi-stage** (Node build →
@@ -159,7 +178,7 @@ docker run --rm -p 8080:80 ${PROJECT_NAME}   # → http://localhost:8080
 To pin the build to the Node version in `.nvmrc`, add
 `--build-arg NODE_VERSION="$(cat .nvmrc)"`. See `CLAUDE.md → Docker` for details.
 
-## 📦 Plain-JavaScript delivery copy (optional)
+## Plain-JavaScript delivery copy (optional)
 
 If you scaffolded with the JS-copy option, `scripts/emit-js-copy.mjs` and
 `scripts/verify-js-copy.mjs` are present. Use this when a delivery must not
@@ -178,15 +197,28 @@ generated `webpack.config.js` — build it with `npx webpack --mode production`
 from inside `js-copy/`, resolving `webpack`/`babel-loader` from the parent
 project's `node_modules`.
 
-## 👨‍💻 Authors
-- ${GITHUB_USERNAME} — [GitHub](https://github.com/${GITHUB_USERNAME})
+<!-- slug: contributing -->
+## Contributing
 
-## 📜 License
-This project is licensed under ${PROJECT_LICENSE}.
+See `CLAUDE.md` for the layout and gate rules; branch from `main`, use Conventional Commits,
+and open a pull request.
 
-## 🙌 Acknowledgments
+<!-- slug: license -->
+## License
+
+This project is licensed under ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
+
+<!-- slug: authors -->
+## Authors
+
+- ${AUTHOR_NAME} — [GitHub](https://github.com/${GITHUB_USERNAME}) | [LinkedIn](${LINKEDIN_URL})
+
+## Acknowledgments
+
 - Scaffolded with [BlueprintX](https://github.com/guilhermegor/blueprintx)'s `react-spa-webpack` skeleton.
 
-## 🔗 Useful Links
+<!-- slug: useful-links -->
+## Useful Links
+
 - [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME})
 - [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}/issues)
