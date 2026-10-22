@@ -39,6 +39,13 @@ repos:
         pass_filenames: false
         files: \.(sh|bats)$|^bin/
 
+      - id: readme-structure
+        name: README structure (plain headings, slug sections, Authors links)
+        entry: bash bin/check_readme_structure.sh README.md
+        language: system
+        pass_filenames: false
+        files: ^(README\.md|bin/check_readme_structure\.sh|bin/lib/md_structure\.sh)$
+
       - id: check-comment-budget
         name: comment budget (zero-comment ratchet)
         entry: python3 bin/check_comment_budget.py --require-baseline

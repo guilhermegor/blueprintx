@@ -413,6 +413,7 @@ copy_common_templates() {
     cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     scaffold_render_readme react-spa-webpack "$SKELETON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
+    scaffold_copy_readme_gate "$project_path"
 
     copy_static_ts_common_files "$project_path"
     if [ -d "$SKELETON_TEMPLATE_ROOT/.github" ]; then

@@ -187,6 +187,16 @@ The manifest file itself is the list (per-skeleton `.greptile/rules.md` and `fil
 
 The **dependabot guard** (`bin/ci/check_dependabot_shipped.sh --static`, hook and CI job `dependabot-shipped`) fails when a skeleton stops copying a `dependabot.yml` with a `cooldown`; there is no `--generated` mode because default answers scaffold offline. See `docs/dependabot-config.md`.
 
+The **README structure gate** follows the one-implementation rule too:
+`templates/common/bin/check_readme_structure.sh` (slug-marked sections, per-archetype extras,
+plain-text headings, Authors with GitHub and LinkedIn links), built on the heading parser
+`templates/common/bin/lib/md_structure.sh` that `bin/ci/check_pr_template.sh` also sources.
+`bin/ci/check_readme_structure.sh` runs it over the root README and, with `--template`, every
+template README; `--generated` scaffolds every skeleton and runs the copy each generated project
+ships. Each `skeleton.meta` carries an optional `readme_archetype=` that `validate_meta.sh`
+enforces, and `bin/lib/scaffold_readme.sh` renders the README (archetype blocks, `LINKEDIN_URL`
+resolution) for all 11 scaffolds. Rules and rationale: `docs/readme-layout.md`.
+
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
 GitHub Action** (`release.yml`, `workflow_dispatch` → `version` field): the `tag` job pushes

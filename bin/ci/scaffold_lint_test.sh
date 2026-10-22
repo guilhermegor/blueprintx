@@ -81,7 +81,8 @@ if [ -n "${SCAFFOLD_SPEC_FILE:-}" ] && { [ ! -f "$SCAFFOLD_SPEC_FILE" ] || [ ! -
 fi
 spec_validate_answers "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" || exit 1
 spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
-    | BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold_rel" \
+    | BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot LINKEDIN_URL=https://www.linkedin.com/in/ci-bot \
+        bash "$REPO_ROOT/$str_scaffold_rel" \
         "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
 
@@ -129,6 +130,20 @@ if bash "$PROJECT_PATH/bin/check_docs_boundary.sh" --root "$str_probe" >/dev/nul
 fi
 rm -rf "$str_probe"
 echo "The project's docs/ gate passes its skeleton and rejects docs/backlog/."
+
+bash "$PROJECT_PATH/bin/check_readme_structure.sh" "$PROJECT_PATH/README.md"
+str_probe="$(mktemp -d)"
+sed 's/^## Overview$/## 🚀 Overview/' "$PROJECT_PATH/README.md" >"$str_probe/emoji.md"
+grep -vF '<!-- slug: license -->' "$PROJECT_PATH/README.md" >"$str_probe/no-license.md"
+for str_broken in emoji no-license; do
+    if bash "$PROJECT_PATH/bin/check_readme_structure.sh" "$str_probe/$str_broken.md" >/dev/null 2>&1; then
+        echo "ERROR: the project's README gate accepted a README with: $str_broken" >&2
+        rm -rf "$str_probe"
+        exit 1
+    fi
+done
+rm -rf "$str_probe"
+echo "The project's README gate passes its skeleton and rejects an emoji heading and a missing core section."
 
 cd "$PROJECT_PATH"
 

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if [ -n "${_BX_SCAFFOLD_README_LOADED:-}" ]; then
+    return 0
+fi
+_BX_SCAFFOLD_README_LOADED=1
+
 readonly STR_LINKEDIN_PLACEHOLDER_URL="https://www.linkedin.com/in/your-linkedin-handle"
 readonly STR_README_VARS='${README_ARCHETYPE} ${LINKEDIN_URL} ${AUTHOR_NAME} ${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_DISPLAY_NAME} ${GITHUB_USERNAME} ${PROJECT_LICENSE} ${STATE_MANAGEMENT_VARIANT}'
 
@@ -64,4 +69,14 @@ scaffold_render_readme() {
 
     scaffold_filter_archetype_blocks "$README_ARCHETYPE" <"$path_template" \
         | envsubst "$STR_README_VARS" >"$path_dest"
+}
+
+scaffold_copy_readme_gate() {
+    local path_project="$1"
+    local path_common="$BLUEPRINTX_ROOT/templates/common/bin"
+
+    mkdir -p "$path_project/bin/lib"
+    cp "$path_common/check_readme_structure.sh" "$path_project/bin/check_readme_structure.sh"
+    cp "$path_common/lib/md_structure.sh" "$path_project/bin/lib/md_structure.sh"
+    chmod +x "$path_project/bin/check_readme_structure.sh"
 }

@@ -76,7 +76,7 @@ TIER=mvc-service-native-db
 make_checkout() {
 	local path_root="$1"
 	mkdir -p "$path_root/bin/lib"
-	cp "$REPO_ROOT"/bin/lib/{scaffold_python_templates,scaffold_provenance,common}.sh "$path_root/bin/lib/"
+	cp "$REPO_ROOT"/bin/lib/{scaffold_python_templates,scaffold_provenance,scaffold_readme,common}.sh "$path_root/bin/lib/"
 	cp -r "$REPO_ROOT/templates" "$path_root/templates"
 }
 

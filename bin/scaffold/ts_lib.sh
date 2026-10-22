@@ -248,6 +248,7 @@ copy_common_templates() {
     cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$project_path/PRINCIPLES.md"
     scaffold_render_readme ts-lib "$SKELETON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
+    scaffold_copy_readme_gate "$project_path"
 
     for doc_file in index usage examples faq contributing; do
         envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \

@@ -92,6 +92,7 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/Dockerfile" "$project_path/Dockerfile"
 
     scaffold_render_readme etcher-chromeos "$SKELETON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
+    scaffold_copy_readme_gate "$project_path"
 
     envsubst '${PROJECT_NAME}' \
         < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release.yml" \

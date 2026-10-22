@@ -2,6 +2,8 @@
 
 # shellcheck source=bin/lib/scaffold_provenance.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_provenance.sh"
+# shellcheck source=bin/lib/scaffold_readme.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scaffold_readme.sh"
 
 scaffold_render_pyproject() {
 	local str_tier="$1"
@@ -171,6 +173,7 @@ scaffold_copy_executables_and_vscode() {
 		"$str_project_path/bin/check_required_checks_sync.py"
 	cp "$BLUEPRINTX_ROOT/bin/ci/check_docs_boundary.sh" "$str_project_path/bin/check_docs_boundary.sh"
 	chmod +x "$str_project_path/bin/check_docs_boundary.sh"
+	scaffold_copy_readme_gate "$str_project_path"
 
 	mkdir -p "$str_project_path/dist"
 	cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$str_project_path/dist/.keep"

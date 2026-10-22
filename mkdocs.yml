@@ -48,6 +48,7 @@ nav:
       - Complexity Ceilings Measured: complexity-ceilings-measured.md
       - Lockfile Sync: lockfile-sync.md
       - Docs Boundary Gate: docs-boundary-gate.md
+      - README Layout Gate: readme-layout.md
       - Issue Scope: issue-scope.md
       - Secret Scanning: secret-scanning.md
       - Required Status Checks: required-status-checks.md

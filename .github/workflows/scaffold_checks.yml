@@ -454,6 +454,30 @@ jobs:
       - name: Should-fail regression tests for the boundary gate
         run: bash tests/test_check_docs_boundary.sh
 
+  readme-structure:
+    name: README structure gate — plain headings, slug sections, Authors links
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install envsubst
+        run: command -v envsubst >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y gettext-base)
+
+      - name: Check the root README and every template README (blueprintx#867)
+        run: bash bin/ci/check_readme_structure.sh
+
+      - name: Scaffold every skeleton and run the generated project's own README gate
+        run: bash bin/ci/check_readme_structure.sh --generated
+
+      - name: Should-fail regression tests for the README gate
+        run: bash tests/test_check_readme_structure.sh
+
+      - name: Should-fail regression tests for the scaffold README render
+        run: bash tests/test_scaffold_readme.sh
+
   review-config-shipped:
     name: Every skeleton ships the hosted-reviewer config
     runs-on: ubuntu-latest

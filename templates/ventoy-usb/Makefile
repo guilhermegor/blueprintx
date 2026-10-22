@@ -5,6 +5,7 @@ all: build
 lint:
 	@shellcheck --severity=warning --exclude=SC1091 bin/${PROJECT_NAME} lib/*.sh
 	@shfmt -i 4 -ci -d bin/${PROJECT_NAME} $(filter-out lib/common.sh,$(wildcard lib/*.sh))
+	@bash bin/check_readme_structure.sh README.md
 
 test:
 	@bats tests/

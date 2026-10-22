@@ -105,6 +105,7 @@ copy_skeleton_files() {
     envsubst '${PROJECT_NAME}' < "$SKELETON_TEMPLATE_ROOT/Makefile" > "$project_path/Makefile"
     envsubst '${PROJECT_NAME}' < "$SKELETON_TEMPLATE_ROOT/AGENTS.md" > "$project_path/AGENTS.md"
     scaffold_render_readme ventoy-usb "$SKELETON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
+    scaffold_copy_readme_gate "$project_path"
     cp "$SKELETON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
 
     envsubst '${PROJECT_NAME}' \

@@ -447,6 +447,7 @@ lib_minimal_copy_project_scaffolding() {
     touch "$project_path/.specs/backlog/.gitkeep"
     cp "$BLUEPRINTX_ROOT"/bin/ci/{check_specs_structure.sh,check_docs_boundary.sh,check_required_checks_sync.py} "$project_path/bin/"
     chmod +x "$project_path"/bin/check_{specs_structure,docs_boundary}.sh
+    scaffold_copy_readme_gate "$project_path"
     mkdir -p "$project_path/dist"
     cp "$SHARED_TEMPLATE_ROOT/dist/.keep" "$project_path/dist/.keep"
     mkdir -p "$project_path/.vscode"

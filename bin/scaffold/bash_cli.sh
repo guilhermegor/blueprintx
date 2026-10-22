@@ -86,6 +86,7 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
 
     scaffold_render_readme bash-cli "$SKELETON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
+    scaffold_copy_readme_gate "$project_path"
 
     envsubst '${PROJECT_NAME}' \
         < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release.yml" \

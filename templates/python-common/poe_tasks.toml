@@ -102,6 +102,10 @@ help = "Optionally install shellcheck + shfmt as system binaries (choco/scoop/br
 cmd = "python bin/check_docstrings.py"
 help = "Verify NumPy docstrings against their signatures"
 
+[tool.poe.tasks.check_readme_structure]
+cmd = "bash bin/check_readme_structure.sh README.md"
+help = "Check the README layout: plain headings, slug sections, Authors links"
+
 [tool.poe.tasks.check_function_length]
 cmd = "python bin/check_function_length.py"
 help = "Cap a function at 60 lines of code (docstring excluded)"

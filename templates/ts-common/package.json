@@ -17,6 +17,7 @@
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "lint:css": "stylelint \"src/**/*.css\"",
     "lint:css:fix": "stylelint \"src/**/*.css\" --fix",
+    "lint:readme": "bash bin/check_readme_structure.sh README.md",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:e2e:frontend": "playwright test",

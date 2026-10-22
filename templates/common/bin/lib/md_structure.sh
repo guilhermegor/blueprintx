@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 md_strip_fences() {
-    tr -d '\r' | awk '
+	tr -d '\r' | awk '
         BEGIN { in_fence = 0 }
         {
             if (match($0, /^[[:space:]]*(```+|~~~+)/)) {
@@ -17,7 +17,7 @@ md_strip_fences() {
 }
 
 md_strip_comments() {
-    awk '
+	awk '
         BEGIN { in_comment = 0 }
         {
             line = $0; out = ""
@@ -37,11 +37,11 @@ md_strip_comments() {
 }
 
 md_normalize() {
-    md_strip_fences | md_strip_comments
+	md_strip_fences | md_strip_comments
 }
 
 md_headings() {
-    awk '
+	awk '
         function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
         /^[[:space:]]*$/ { next }
         match($0, /^<!--[[:space:]]*slug:[[:space:]]*[A-Za-z0-9_-]+[[:space:]]*-->[[:space:]]*$/) {
