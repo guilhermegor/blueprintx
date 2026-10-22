@@ -1,4 +1,8 @@
+<!-- readme-archetype: usb-tool -->
 # ${PROJECT_NAME}
+
+<!-- slug: overview -->
+## Overview
 
 ${PROJECT_DESCRIPTION}
 
@@ -7,18 +11,28 @@ This repo replaces a roughly 50 GB backup of a Ventoy multiboot drive. The repo 
 the persistence image is downloaded, and the small files that cannot be downloaded live in
 `payload/`. On a new machine, `git clone` and `make` rebuild the whole drive tree.
 
-## Usage
+<!-- slug: getting-started -->
+## Getting Started
+
+<!-- slug: install -->
+### Install
+
+Requirements: `bash` >= 4, `curl`, `jq`, `rsync`, `7z`, `gpg`, `sha256sum`, `sudo` (persistence image,
+Ventoy install, mounting).
 
 ```bash
-make tools                       # latest Ventoy into .tools/ (also run automatically)
+make tools   # latest Ventoy into .tools/ (also run automatically)
+```
+
+<!-- slug: usage -->
+### Usage
+
+```bash
 make                             # = make build: download, verify, assemble build/drive
 make drive DRY_RUN=1             # preview the sync; nothing is written
 make drive                       # asks for the pendrive path, then installs or syncs
 make drive TARGET=/media/me/Ventoy
 ```
-
-Requirements: `bash` >= 4, `curl`, `jq`, `rsync`, `7z`, `gpg`, `sha256sum`, `sudo` (persistence image,
-Ventoy install, mounting).
 
 ## What `make drive` does
 
@@ -56,12 +70,6 @@ A failing entry is reported and skipped; the rest continue. A missing checksum f
 `none:<reason>` is the only opt-out. Microsoft sometimes rejects automated requests: download the
 ISO by hand into `payload/isos/Windows/` then.
 
-## Payload
-
-Anything under `payload/` is copied verbatim onto the drive tree (for example
-`payload/recovery_tools/disk-rescue.sh` or small PDFs). `*.iso *.exe *.zip *.dat *.7z` are
-git-ignored; PDFs and scripts are not, so keep this repo private if they are not yours to share.
-
 ## Persistence and ventoy.json
 
 The persistence image is downloaded from Ventoy's `ventoy/backend` releases and verified against
@@ -79,6 +87,21 @@ key whose fingerprint is in the manifest), `two-origin` (Ventoy: GitHub digest a
 agree), `same-origin-digest` (detects corruption only) or `none`. See the BlueprintX docs page for
 the table.
 
+<!-- slug: project-structure -->
+## Project Structure
+
+```text
+${PROJECT_NAME}/
+├── sources.manifest   one line per ISO or installer to fetch
+├── payload/           files copied verbatim onto the drive tree
+├── persistance/       persistence image and its release marker
+├── tests/             bats suites (network and devices stubbed)
+└── .specs/            feature specs and backlog trackers
+```
+
+Feature specs live under `.specs/features/`; `.specs/CLAUDE.md` holds the layout rules.
+
+<!-- slug: development -->
 ## Development
 
 ```bash
@@ -86,11 +109,36 @@ make lint     # shellcheck + shfmt
 make test     # bats tests/ (network and devices stubbed)
 ```
 
-## Feature specs
+<!-- slug: payload -->
+## Payload
 
-Feature specs live under `.specs/features/`; `.specs/CLAUDE.md` holds the layout rules.
+Anything under `payload/` is copied verbatim onto the drive tree (for example
+`payload/recovery_tools/disk-rescue.sh` or small PDFs). `*.iso *.exe *.zip *.dat *.7z` are
+git-ignored; PDFs and scripts are not, so keep this repo private if they are not yours to share.
 
 ## Releasing
 
 The version is the git tag; there is no hand-bump. Cut a release from the **Release** GitHub
 Action (`.github/workflows/release.yml`).
+
+<!-- slug: contributing -->
+## Contributing
+
+Branch from `main`, use Conventional Commits, and open a pull request; the repository's
+`.github/PULL_REQUEST_TEMPLATE.md` lists what a reviewer expects.
+
+<!-- slug: license -->
+## License
+
+${PROJECT_LICENSE}; see [LICENSE](LICENSE).
+
+<!-- slug: authors -->
+## Authors
+
+- ${AUTHOR_NAME} — [GitHub](https://github.com/${GITHUB_USERNAME}) | [LinkedIn](${LINKEDIN_URL})
+
+<!-- slug: useful-links -->
+## Useful Links
+
+- [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME})
+- [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}/issues)

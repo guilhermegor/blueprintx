@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_readme.sh
+source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
 
 PROJECT_ROOT="${1:-}"
 PROJECT_NAME="${2:-}"
@@ -83,9 +85,7 @@ copy_skeleton_files() {
         > "$project_path/AGENTS.md"
     cp "$SKELETON_TEMPLATE_ROOT/CLAUDE.md" "$project_path/CLAUDE.md"
 
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
-        < "$SKELETON_TEMPLATE_ROOT/README.md" \
-        > "$project_path/README.md"
+    scaffold_render_readme bash-cli "$SKELETON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
 
     envsubst '${PROJECT_NAME}' \
         < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release.yml" \

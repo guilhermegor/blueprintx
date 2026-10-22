@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_readme.sh
+source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
 # shellcheck source=bin/lib/scaffold_provenance.sh
 source "$SCRIPT_DIR/../lib/scaffold_provenance.sh"
 
@@ -210,7 +212,8 @@ add_library_badges() {
     local project_path="$1"
     local readme="$project_path/README.md"
     [ -f "$readme" ] || return 0
-    python3 - "$readme" <<'PY'
+    PROJECT_NAME="$PROJECT_NAME" GITHUB_USERNAME="$GITHUB_USERNAME" python3 - "$readme" <<'PY'
+import os
 import sys
 
 path = sys.argv[1]
@@ -220,13 +223,15 @@ with open(path, encoding="utf-8") as fh:
 if any("PyPI Version" in ln for ln in lines):
     sys.exit(0)  # already added — idempotent
 
+name = os.environ["PROJECT_NAME"]
+user = os.environ["GITHUB_USERNAME"]
 badges = [
-    "![PyPI Version](https://img.shields.io/pypi/v/${PYPI_NAME})\n",
-    "[![Snyk Vulnerabilities](https://snyk.io/test/github/${GITHUB_USERNAME}/${PROJECT_SLUG}/badge.svg)]"
-    "(https://snyk.io/test/github/${GITHUB_USERNAME}/${PROJECT_SLUG})\n",
-    "[![Snyk License](https://snyk.io/advisor/python/${PYPI_NAME}/badge.svg)]"
-    "(https://snyk.io/advisor/python/${PYPI_NAME})\n",
-    "![PyPI Downloads](https://static.pepy.tech/badge/${PYPI_NAME})\n",
+    f"![PyPI Version](https://img.shields.io/pypi/v/{name})\n",
+    f"[![Snyk Vulnerabilities](https://snyk.io/test/github/{user}/{name}/badge.svg)]"
+    f"(https://snyk.io/test/github/{user}/{name})\n",
+    f"[![Snyk License](https://snyk.io/advisor/python/{name}/badge.svg)]"
+    f"(https://snyk.io/advisor/python/{name})\n",
+    f"![PyPI Downloads](https://static.pepy.tech/badge/{name})\n",
 ]
 
 out: list[str] = []
@@ -260,7 +265,7 @@ copy_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
     mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$SHARED_TEMPLATE_ROOT/.greptile/graphite.md" "$BLUEPRINTX_ROOT/templates/lib-minimal/.greptile/"* "$project_path/.greptile/"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
-    PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" envsubst '${PROJECT_DISPLAY_NAME}' < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
+    scaffold_render_readme lib-minimal "$COMMON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/coverage.svg" "$project_path/coverage.svg"
     add_library_badges "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"

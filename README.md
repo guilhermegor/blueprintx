@@ -1,5 +1,8 @@
 <!-- markdownlint-disable MD013 -->
-# BlueprintX <img src="assets/logo.png" align="right" width="180" style="border-radius: 12px;" alt="BlueprintX logo">
+<!-- readme-archetype: cli -->
+# BlueprintX
+
+<p align="center"><img src="assets/logo.png" width="180" style="border-radius: 12px;" alt="BlueprintX logo"></p>
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![Bash](https://img.shields.io/badge/bash-%3E%3D4-4EAA25?logo=gnubash&logoColor=white)
@@ -9,7 +12,11 @@
 
 **BlueprintX** is a lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
 
-## ✨ Highlights
+<!-- slug: overview -->
+## Overview
+
+### Highlights
+
 - Interactive CLI (`make new`) with auto-discovered language and skeleton menus
 - **Python skeletons**: **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, **MVC service (Native DB)**, **MVC service (ORM DB)**, and **lib-minimal**
 - **TypeScript skeletons**: **React SPA (Webpack)** — React 19 + TypeScript + Webpack 5 + Babel + ESLint + Prettier
@@ -20,7 +27,11 @@
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
 - **Extensible by design**: drop a `skeleton.meta` file into any `templates/` directory and it appears in the menu automatically
 
-## 📦 Installation
+<!-- slug: getting-started -->
+## Getting Started
+
+<!-- slug: install -->
+### Install
 
 <details>
 <summary><strong>Homebrew</strong> (macOS / Linux)</summary>
@@ -108,9 +119,10 @@ make new
 
 </details>
 
-## 🚀 Usage
+<!-- slug: usage -->
+### Usage
 
-### After a package manager installation
+#### After a package manager installation
 
 The `blueprintx` command is available system-wide:
 
@@ -126,7 +138,7 @@ blueprintx --help           # show all commands and options
 `new`, `preview`, and `help` are the only `blueprintx` subcommands — `--dev`, `--dry-run`, and
 `--clean` are flags on `new`, not standalone subcommands.
 
-### After git clone
+#### After git clone
 
 The same targets are available via `make` or `./tasks.sh` from the repo root:
 
@@ -141,7 +153,7 @@ make mkdocs_serve  # serve the docs site locally at http://0.0.0.0:8000
 
 **Requirements:** `bash` ≥ 4. For Python skeletons, use `pyenv`/`poetry` in the generated project. For TypeScript skeletons, the Node.js floor is per skeleton — `react-spa-webpack` and `ts-lib` both need `^22.18.0 || >=24.11.0` — and each declares its own `engines.node`; run `npm install` after scaffolding. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.
 
-## 🏗️ Supported skeletons
+## Supported skeletons
 
 ### DDD service — Native DB (templates/ddd-service-native-db)
 Domain-Driven Design service skeleton with hexagonal/ports-and-adapters structure. Uses **native database libraries** (psycopg, sqlite3, oracledb, pyodbc, mysql-connector-python) for direct DB access. `chassis/` holds shared cross-cutting providers; `capabilities/<feature>/` hosts each bounded context's domain, application layer, and adapters.
@@ -334,7 +346,7 @@ After scaffolding, run `npm install && npm run build && npm test` to build all t
 ### Ventoy USB (templates/ventoy-usb)
 Rebuilds a [Ventoy](https://www.ventoy.net) multiboot drive with a fixed folder layout. A source manifest drives everything: latest ISOs are resolved and downloaded at build time, each verified against an upstream checksum (the build fails closed without one), an empty persistence image is created the way Ventoy does it, and `ventoy.json` is generated and path-checked. `make drive` asks for the pendrive, then installs Ventoy (after a typed confirmation) or syncs an existing one, asking before deleting anything outside the layout; `DRY_RUN=1` previews. ISOs, installers and persistence images are never committed; small own files go in `payload/`. Replaces a ~50 GB drive backup. See `docs/skeletons/ventoy-usb.md`.
 
-## 🔁 Offline git-diff sync
+## Offline git-diff sync
 
 When you scaffold a project and **decline** connecting it to a GitHub remote, BlueprintX adds a small offline-sync workflow so you can move changes between machines as patch files (e.g. attach to an email) — useful in restricted/air-gapped environments. It is **only** added in this no-GitHub case; projects pushed to GitHub stay clean.
 
@@ -346,7 +358,7 @@ When you scaffold a project and **decline** connecting it to a GitHub remote, Bl
 
 Cross-platform (Windows Git Bash, macOS, Linux); the scripts live in `bin/` and source a shared `bin/lib/common.sh` status helper.
 
-## 🧭 Folder attribution (ddd-service templates)
+## Folder attribution (ddd-service templates)
 - `chassis/`: shared cross-cutting providers (DB handlers, storage, type enforcement).
 - `chassis/db/`: `DatabaseHandler` ABC — contract all backends implement.
 - `chassis/db_schema/`: SQL-backed handlers + `build_database_handler()` factory.
@@ -358,7 +370,11 @@ Cross-platform (Windows Git Bash, macOS, Linux); the scripts live in `bin/` and 
 - `app/`: `bootstrap.py` (env/logging) + `container.py` (composition root).
 - `config/`: module-level singletons and YAML config; secrets stay in `.env`.
 
-## 📂 Repo layout (this tool)
+<!-- slug: project-structure -->
+## Project Structure
+
+The layout of this tool itself (generated projects have their own, see the skeleton previews above).
+
 
 ```
 BlueprintX/
@@ -408,13 +424,39 @@ BlueprintX/
 └── assets/logo.png          # logo used in this README
 ```
 
-## 👨‍💻 Authors
+<!-- slug: development -->
+## Development
 
-**Guilherme Rodrigues**  
-[![GitHub](https://img.shields.io/badge/GitHub-guilhermegor-181717?style=flat&logo=github)](https://github.com/guilhermegor)  
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Guilherme_Rodrigues-0077B5?style=flat&logo=linkedin)](https://www.linkedin.com/in/guilhermegor/)
+```bash
+make init           # bootstrap the venv and install the pre-commit hooks
+make lint           # run every pre-commit hook across the repo (mirrors CI)
+make verify_tiers   # scaffold each Python tier and run that project's lint and tests
+```
 
-## 🔗 Useful Links
+<!-- slug: releasing -->
+## Releasing
+
+The version is the git tag; there is no hand-bump. Cut a release from the **Release**
+GitHub Action (`release.yml`, `workflow_dispatch` with a `version` field).
+
+<!-- slug: contributing -->
+## Contributing
+
+Issues and PRs are welcome. Please keep templates minimal, opinionated, and consistent across skeletons.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+<!-- slug: license -->
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+<!-- slug: authors -->
+## Authors
+
+- Guilherme Rodrigues — [GitHub](https://github.com/guilhermegor) | [LinkedIn](https://www.linkedin.com/in/guilhermegor/)
+
+<!-- slug: useful-links -->
+## Useful Links
 
 * [GitHub Repository](https://github.com/guilhermegor/BlueprintX)
 
@@ -423,9 +465,3 @@ BlueprintX/
 * [Versioning & the v1.0.0 entry bar](docs/versioning.md)
 
 * [Quality rules — the registry, per language](docs/quality-rules.md)
-
-## 🤝 Contributing
-Issues and PRs are welcome. Please keep templates minimal, opinionated, and consistent across skeletons.
-
-## 📜 License
-MIT. See [LICENSE](LICENSE).

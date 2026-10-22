@@ -1,4 +1,8 @@
+<!-- readme-archetype: usb-tool -->
 # ${PROJECT_NAME}
+
+<!-- slug: overview -->
+## Overview
 
 ${PROJECT_DESCRIPTION}
 
@@ -6,10 +10,20 @@ Rebuilds a ChromeOS-family pendrive: pick the target device, pick **ChromeOS Fle
 **FydeOS**, and the CLI fetches (Flex) or verifies (FydeOS) the image and writes it.
 The image defines the partition layout; this tool selects, verifies and flashes.
 
-## Usage
+<!-- slug: getting-started -->
+## Getting Started
+
+<!-- slug: install -->
+### Install
 
 ```bash
-make tools                                  # uses the distro bmaptool, else tells you how to install it
+make tools   # uses the distro bmaptool, else tells you how to install it
+```
+
+<!-- slug: usage -->
+### Usage
+
+```bash
 bin/${PROJECT_NAME} flash                   # asks for the pendrive path first
 bin/${PROJECT_NAME} flash --target /dev/sdb --os chromeos-flex --dry-run
 bin/${PROJECT_NAME} flash --target /dev/sdb --os fydeos \
@@ -35,14 +49,21 @@ bin/${PROJECT_NAME} flash --target /dev/sdb --os fydeos \
 - **Docker.** The `Dockerfile` is for tests and resolvers only. It cannot flash: that would
   need `--privileged` and would lose the removable-device check.
 
-## Default OS
+<!-- slug: project-structure -->
+## Project Structure
 
-The default for `--os` is stamped at scaffold time (`DEFAULT_OS` in `bin/${PROJECT_NAME}`).
-
-## Feature specs
+```text
+${PROJECT_NAME}/
+├── bin/${PROJECT_NAME}   CLI entrypoint
+├── lib/                  device, image and flashing helpers
+├── tests/                bats suites (network and devices stubbed)
+├── Dockerfile            tests and resolvers only
+└── .specs/               feature specs and backlog trackers
+```
 
 Feature specs live under `.specs/features/`; `.specs/CLAUDE.md` holds the layout rules.
 
+<!-- slug: development -->
 ## Development
 
 ```bash
@@ -50,7 +71,35 @@ make lint     # shellcheck + shfmt
 make test     # bats tests/ (network and devices stubbed)
 ```
 
+<!-- slug: payload -->
+## Payload
+
+The default for `--os` is stamped at scaffold time (`DEFAULT_OS` in `bin/${PROJECT_NAME}`).
+
+<!-- slug: releasing -->
 ## Releasing
 
 The version is the git tag; there is no hand-bump. Cut a release from the **Release**
 GitHub Action (`.github/workflows/release.yml`, `workflow_dispatch` with a `version`).
+
+<!-- slug: contributing -->
+## Contributing
+
+Branch from `main`, use Conventional Commits, and open a pull request; the repository's
+`.github/PULL_REQUEST_TEMPLATE.md` lists what a reviewer expects.
+
+<!-- slug: license -->
+## License
+
+${PROJECT_LICENSE}; see [LICENSE](LICENSE).
+
+<!-- slug: authors -->
+## Authors
+
+- ${AUTHOR_NAME} — [GitHub](https://github.com/${GITHUB_USERNAME}) | [LinkedIn](${LINKEDIN_URL})
+
+<!-- slug: useful-links -->
+## Useful Links
+
+- [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME})
+- [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}/issues)

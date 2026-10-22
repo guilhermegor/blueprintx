@@ -8,6 +8,8 @@ source "$SCRIPT_DIR/../lib/common.sh"
 source "$SCRIPT_DIR/../lib/scaffold_python_templates.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_readme.sh
+source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -134,9 +136,7 @@ copy_templates() {
     cp "$SHARED_TEMPLATE_ROOT/.coderabbit.yaml" "$project_path/.coderabbit.yaml"
     mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$SHARED_TEMPLATE_ROOT/.greptile/graphite.md" "$BLUEPRINTX_ROOT/templates/api-service-native-db/.greptile/"* "$project_path/.greptile/"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
-    PROJECT_DISPLAY_NAME="$PROJECT_DISPLAY_NAME" GITHUB_USERNAME="$GITHUB_USERNAME" \
-        envsubst '${PROJECT_DISPLAY_NAME} ${GITHUB_USERNAME}' \
-        < "$COMMON_TEMPLATE_ROOT/README.md" > "$project_path/README.md"
+    scaffold_render_readme api-service-native-db "$COMMON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
     cp "$COMMON_TEMPLATE_ROOT/coverage.svg" "$project_path/coverage.svg"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/api-service-native-db/.env.example" "$project_path/.env"
