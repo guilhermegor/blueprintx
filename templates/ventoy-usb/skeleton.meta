@@ -2,3 +2,4 @@ language=bash
 display_name=Ventoy USB
 description=Rebuild a Ventoy multiboot drive from a manifest, fetching the latest verified ISOs
 scaffold=bin/scaffold/ventoy_usb.sh
+readme_archetype=usb-tool

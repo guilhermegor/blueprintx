@@ -26,7 +26,7 @@ BOOL_TEMPLATE=0
 problem() { ARR_PROBLEMS+=("$1: $2"); }
 
 usage() {
-    echo "usage: check_readme_structure.sh [--template] [README.md ...]" >&2
+    echo "usage: check_readme_structure.sh [--template | --list-archetypes] [README.md ...]" >&2
     exit 2
 }
 
@@ -125,6 +125,7 @@ main() {
     while [ $# -gt 0 ]; do
         case "$1" in
             --template) BOOL_TEMPLATE=1; shift ;;
+            --list-archetypes) printf '%s\n' "${!MAP_ARCHETYPE[@]}" | sort; exit 0 ;;
             -h | --help) usage ;;
             *) arr_files+=("$1"); shift ;;
         esac

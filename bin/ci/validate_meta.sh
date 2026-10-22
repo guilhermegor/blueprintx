@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TEMPLATES_DIR="$REPO_ROOT/templates"
 CLAUDE_MD="$REPO_ROOT/CLAUDE.md"
 REQUIRED_FIELDS=(language display_name description scaffold)
+CHECK_README="$REPO_ROOT/templates/common/bin/check_readme_structure.sh"
 errors=0
 
 if [ ! -f "$CLAUDE_MD" ]; then
@@ -29,6 +30,12 @@ for meta in "$TEMPLATES_DIR"/*/skeleton.meta; do
     scaffold_rel="$(grep '^scaffold=' "$meta" | cut -d= -f2- || true)"
     if [ -n "$scaffold_rel" ] && [ ! -f "$REPO_ROOT/$scaffold_rel" ]; then
         echo "  ERROR: scaffold path does not exist: $scaffold_rel" >&2
+        errors=$((errors + 1))
+    fi
+
+    str_archetype="$(grep '^readme_archetype=' "$meta" | cut -d= -f2- | tr -d '[:space:]' || true)"
+    if [ -n "$str_archetype" ] && ! bash "$CHECK_README" --list-archetypes | grep -qxF -- "$str_archetype"; then
+        echo "  ERROR: readme_archetype '$str_archetype' is not one of: $(bash "$CHECK_README" --list-archetypes | tr '\n' ' ')" >&2
         errors=$((errors + 1))
     fi
 
