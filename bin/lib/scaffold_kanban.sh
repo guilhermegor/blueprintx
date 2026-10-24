@@ -83,7 +83,7 @@ scaffold_kanban_status_options() {
 		--jq '.fields[] | select(.name=="Status") | .id' 2>/dev/null | head -n1)"
 	[ -n "$str_field" ] || return 1
 	str_existing="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
-		--jq '.fields[] | select(.name=="Status") | .options[]? | "\(.id)|\(.name)"' 2>/dev/null)" || str_existing=""
+		--jq '.fields[] | select(.name=="Status") | .options[]? | "\(.id)|\(.name)"' 2>/dev/null)" || return 1
 	while IFS='|' read -r str_name str_colour str_desc; do
 		str_id="$(scaffold_kanban_option_id "$str_existing" "$str_name")"
 		str_idjson=""

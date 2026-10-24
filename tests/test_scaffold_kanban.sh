@@ -40,7 +40,9 @@ case "$1 $2" in
     echo 7 ;;
 "project field-list")
     case "$(jq_arg "$@")" in
-    *options*) [ -z "${GH_STATUS_OPTIONS:-}" ] || printf '%b\n' "$GH_STATUS_OPTIONS" ;;
+    *options*)
+        [ -z "${GH_OPTIONS_FAIL:-}" ] || exit 1
+        [ -z "${GH_STATUS_OPTIONS:-}" ] || printf '%b\n' "$GH_STATUS_OPTIONS" ;;
     *) echo "PVTSSF_status" ;;
     esac ;;
 "api graphql") cat >>"$GH_LOG.stdin" ;;
@@ -143,6 +145,13 @@ test_existing_status_option_ids_are_preserved() {
     expect_log "existing ids" '{"id":"PVTSSO_done","name":"Done","color":"ORANGE"' present
     expect_log "existing ids" '{"name":"Backlog","color":"GREEN"' present
     expect_log "existing ids" 'PVTSSO_todo' absent
+}
+
+test_a_failed_option_lookup_never_sends_the_mutation() {
+    local str_out
+    str_out="$(run_setup '\n\n' GH_OPTIONS_FAIL=1)"
+    expect_log "lookup failure" '"name":"Backlog"' absent
+    expect_out "lookup failure" "$str_out" "Could not set the Status options"
 }
 
 test_visibility_follows_the_answer_and_the_repo() {
@@ -302,6 +311,7 @@ main() {
     test_default_creates_the_full_board
     test_status_options_carry_the_house_colours_and_descriptions
     test_existing_status_option_ids_are_preserved
+    test_a_failed_option_lookup_never_sends_the_mutation
     test_visibility_follows_the_answer_and_the_repo
     test_an_existing_board_is_skipped_not_duplicated
     test_an_ambiguous_board_is_never_guessed
