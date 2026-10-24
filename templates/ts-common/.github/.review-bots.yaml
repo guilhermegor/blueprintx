@@ -24,8 +24,8 @@ reviewers:
     note: >-
       The fallback reviewer ladder (codex/qwen), posting as its own GitHub App so its review is
       a submitted review on the head commit. Without this row a ladder review is invisible to
-      the missing-review check (blueprintx#870). Replace the login if another App runs your
-      ladder.
+      the missing-review check (blueprintx#870). This trusts that App by default: replace the
+      login, or delete the row, if another App runs your ladder.
 
   - kind: comment-marker
     marker: "Fallback review — runtime:"

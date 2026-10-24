@@ -138,7 +138,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
       ) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login } commit { oid } state body submittedAt }
+        nodes { author { login __typename } commit { oid } state body submittedAt }
       }
       commits(last:1) { nodes { commit { committedDate } } }
       allCommits: commits(first:100) {
@@ -355,6 +355,17 @@ def _next_cursor(dict_side: dict | None) -> str | None:
     return dict_side["pageInfo"]["endCursor"]
 
 
+def _is_user_actor(dict_node: dict) -> bool:
+    """Return whether a node's author is an explicit GitHub ``User``.
+
+    ``normalise_login`` strips ``[bot]``, so a human who registers a roster App's bare name
+    would otherwise compare equal to it. GraphQL ``__typename`` tells the two apart; a node
+    that carries no type is not rejected, which only fixtures omit, since the query always
+    asks for it.
+    """
+    return (dict_node.get("author") or {}).get("__typename") == "User"
+
+
 def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
     """Fetch the PR's author, submitted reviews and review threads in one GraphQL call.
 
@@ -392,6 +403,9 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
                 continue
             dict_side["nodes"].extend(dict_next[str_key]["nodes"])
             dict_side["pageInfo"] = dict_next[str_key]["pageInfo"]
+    dict_reviews = dict_pr.get("reviews")
+    if dict_reviews:
+        dict_reviews["nodes"] = [d for d in dict_reviews["nodes"] if not _is_user_actor(d)]
     return dict_pr
 
 
@@ -2008,7 +2022,7 @@ def _missing_review(
     return check_missing_review(
         dict_pr.get("reviews", {}).get("nodes", []),
         set_reviewers,
-        (dict_pr.get("author") or {}).get("login") or "",
+        "" if _is_user_actor(dict_pr) else (dict_pr.get("author") or {}).get("login") or "",
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=dict_pr.get("comments", {}).get("nodes", []),
         str_head_date=_head_committed_date(dict_pr),
