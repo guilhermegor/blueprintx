@@ -2404,11 +2404,11 @@ def _stage_venv_project(path_root: Path) -> tuple[Path, Path, Path]:
     return path_script, _stage_tools_dir(path_root), path_root / ".venv" / "bin"
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module")  # fixture-scope-ok: one shared read-only run
 def tuple_inside_venv_with_base(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path]:
-    """Run ``venv.sh`` with the project ``.venv/bin`` first on ``PATH`` and a base python behind it.
+    """Run ``venv.sh`` with ``.venv/bin`` first on ``PATH`` and a base python behind it.
 
     Parameters
     ----------
@@ -2436,7 +2436,7 @@ def tuple_inside_venv_with_base(
     return cls_result, path_root, path_venv_log, path_base_log
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module")  # fixture-scope-ok: one shared read-only run
 def tuple_inside_venv_no_base(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
@@ -2463,7 +2463,7 @@ def tuple_inside_venv_no_base(
     return cls_result, path_root, path_venv_log
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module")  # fixture-scope-ok: one shared read-only run
 def tuple_fresh_clone(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
