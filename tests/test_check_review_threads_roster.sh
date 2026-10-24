@@ -35,6 +35,9 @@ cls_spec = importlib.util.spec_from_file_location("gate", path_gate)
 cls_gate = importlib.util.module_from_spec(cls_spec)
 cls_spec.loader.exec_module(cls_gate)
 
+if cls_gate.yaml is None:
+    sys.exit("PyYAML is missing: the gate would load an empty roster and pass nothing")
+
 str_app = "guilhermegor-review-ladder"
 str_head = "9ae76ab0000000000000000000000000000000000"
 str_key = cls_gate.normalise_login(str_app)
