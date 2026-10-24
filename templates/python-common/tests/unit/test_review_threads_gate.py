@@ -250,7 +250,10 @@ def _review(str_login: str, str_oid: str = _HEAD) -> dict:
     dict
         A review shaped like the GraphQL response.
     """
-    return {"author": {"login": str_login}, "commit": {"oid": str_oid}}
+    return {
+        "author": {"login": str_login, "__typename": "Bot"},
+        "commit": {"oid": str_oid},
+    }
 
 
 def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:00Z") -> dict:
@@ -3256,7 +3259,15 @@ def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: li
         "baseRefOid": "base",
         "timelineItems": {"nodes": []},
         "comments": {"nodes": [], "pageInfo": {"hasNextPage": False}},
-        "reviews": {"nodes": [{**_review("coderabbitai[bot]", "a" * 40), "state": "COMMENTED"}]},
+        "reviews": {
+            "nodes": [
+                {
+                    **_review("coderabbitai[bot]", "a" * 40),
+                    "author": {"login": "coderabbitai[bot]", "__typename": "Bot"},
+                    "state": "COMMENTED",
+                }
+            ]
+        },
         "reviewThreads": {"nodes": []},
         "commits": {"nodes": []},
     }

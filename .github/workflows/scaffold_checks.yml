@@ -508,6 +508,9 @@ jobs:
       - name: Should-fail regression tests for the dependabot guard
         run: bash tests/test_check_dependabot_shipped.sh
 
+      - name: Template review rosters trust the reviewer ladder
+        run: bash tests/test_check_review_threads_roster.sh
+
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json
     runs-on: ubuntu-latest

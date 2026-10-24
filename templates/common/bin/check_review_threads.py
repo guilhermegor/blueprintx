@@ -138,7 +138,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
       ) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login } commit { oid } state body submittedAt }
+        nodes { author { login __typename } commit { oid } state body submittedAt }
       }
       commits(last:1) { nodes { commit { committedDate } } }
       allCommits: commits(first:100) {
@@ -355,7 +355,35 @@ def _next_cursor(dict_side: dict | None) -> str | None:
     return dict_side["pageInfo"]["endCursor"]
 
 
-def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
+def _borrows_bot_login(dict_node: dict, set_declared: set[str]) -> bool:
+    """Return whether a node's author borrows the login of a roster entry.
+
+    ``normalise_login`` strips ``[bot]``, so a human who registers a roster App's bare name
+    would otherwise compare equal to it. Roster members are Apps by contract, so only a
+    ``__typename`` of ``Bot`` proves one and a missing one fails closed. Authors outside the
+    roster are never touched, so human reviews still reach every other check.
+    """
+    dict_author = dict_node.get("author") or {}
+    set_roster = {normalise_login(s) for s in set_declared}
+    return (
+        normalise_login(dict_author.get("login") or "") in set_roster
+        and dict_author.get("__typename") != "Bot"
+    )
+
+
+def _drop_borrowed(dict_pr: dict, set_declared: set[str]) -> None:
+    """Remove the reviews and issue comments whose author borrows a roster login."""
+    for str_key in ("reviews", "comments"):
+        dict_side = dict_pr.get(str_key)
+        if dict_side:
+            dict_side["nodes"] = [
+                d for d in dict_side["nodes"] if not _borrows_bot_login(d, set_declared)
+            ]
+
+
+def fetch_pull_request(
+    str_owner: str, str_repo: str, int_number: int, set_declared: frozenset[str] = frozenset()
+) -> dict:
     """Fetch the PR's author, submitted reviews and review threads in one GraphQL call.
 
     Parameters
@@ -366,6 +394,9 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
         Repository name.
     int_number : int
         Pull-request number.
+    set_declared : frozenset of str, optional
+        Roster and marker-poster logins. A review or comment under one of them that is not
+        typed ``Bot`` is dropped here, so no caller can read a borrowed identity.
 
     Returns
     -------
@@ -392,6 +423,7 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
                 continue
             dict_side["nodes"].extend(dict_next[str_key]["nodes"])
             dict_side["pageInfo"] = dict_next[str_key]["pageInfo"]
+    _drop_borrowed(dict_pr, set_declared)
     return dict_pr
 
 
@@ -2005,10 +2037,11 @@ def _missing_review(
     """Return :func:`check_missing_review` for one fetched ``pullRequest`` node."""
     if dependabot_review_exempt(dict_pr, functools.partial(dependabot_pushed_head, str_repo_full)):
         return None, ""
+    str_author = (dict_pr.get("author") or {}).get("login") or ""
     return check_missing_review(
         dict_pr.get("reviews", {}).get("nodes", []),
         set_reviewers,
-        (dict_pr.get("author") or {}).get("login") or "",
+        "" if _borrows_bot_login(dict_pr, set_reviewers) else str_author,
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=dict_pr.get("comments", {}).get("nodes", []),
         str_head_date=_head_committed_date(dict_pr),
@@ -2050,7 +2083,12 @@ def main(list_argv: list[str] | None = None) -> int:
     set_reviewers = reviewer_logins(dict_roster)
 
     str_owner, _, str_repo = str_repo_full.partition("/")
-    dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
+    dict_pr = fetch_pull_request(
+        str_owner,
+        str_repo,
+        int(str_number),
+        frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
+    )
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 

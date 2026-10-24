@@ -74,7 +74,7 @@ def _find_gate_path() -> Path:
 _DT_NOW = datetime(2026, 8, 24, 23, 55, 0, tzinfo=timezone.utc)
 
 
-def _comment(str_login: str, str_body: str, int_min_ago: int = 0) -> dict:
+def _comment(str_login: str, str_body: str, int_min_ago: int = 0, str_type: str = "Bot") -> dict:
     """Build one normalised issue comment.
 
     Parameters
@@ -85,15 +85,18 @@ def _comment(str_login: str, str_body: str, int_min_ago: int = 0) -> dict:
         The comment body.
     int_min_ago : int
         How many minutes before ``_DT_NOW`` it was posted.
+    str_type : str
+        The author's account type as REST reports it.
 
     Returns
     -------
     dict
-        A comment with ``login``, ``body`` and ``created_at``.
+        A comment with ``login``, ``type``, ``body`` and ``created_at``.
     """
     dt_at = _DT_NOW - timedelta(minutes=int_min_ago)
     return {
         "login": str_login,
+        "type": str_type,
         "body": str_body,
         "created_at": dt_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
@@ -986,3 +989,35 @@ def test_count_self_asks_counts_only_our_own_marker(
     ]
 
     assert cls_retry.count_self_asks(list_comments, "guilhermegor", cls_gate.normalise_login) == 1
+
+
+def test_newest_roster_comment_ignores_a_user_typed_borrower(cls_retry: ModuleType) -> None:
+    """A User named like the roster App is not the reviewer speaking.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    """
+    list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED, str_type="User")]
+    assert cls_retry.newest_roster_comment(list_comments, {"coderabbitai"}, str) is None
+
+
+def test_build_candidate_passes_the_roster_to_the_fetch(
+    cls_retry: ModuleType, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The retry reads the PR through the gate's roster-aware fetch, so no caller skips it.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    cls_gate : types.ModuleType
+        The gate module.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to record the fetch call.
+    """
+    mock_fetch = Mock(side_effect=RuntimeError("stop"))
+    monkeypatch.setattr(cls_gate, "fetch_pull_request", mock_fetch)
+    cls_retry.build_candidate("acme/widget", 7, "2026-08-24T00:00:00Z", {"coderabbitai"}, cls_gate)
+    assert mock_fetch.call_args.args[3] == frozenset({"coderabbitai"})
