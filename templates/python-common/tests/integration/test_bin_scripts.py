@@ -2280,3 +2280,335 @@ def test_run_with_no_extra_argument_still_calls_the_entrypoint(tmp_path: Path) -
 
     assert cls_result.returncode == 0, f"run.sh did not exit cleanly: {str_all}"
     assert cls_result.stdout.splitlines()[-2:] == ["ARG:-m", "ARG:src.main"], str_all
+
+
+_TUPLE_VENV_SH_TOOLS = ("basename", "cat", "cp", "date", "dirname", "grep", "head", "mkdir", "rm")
+
+
+def _link_tool(path_dir: Path, str_tool: str) -> None:
+    """Symlink one host tool into a directory so a hermetic ``PATH`` can still resolve it.
+
+    Parameters
+    ----------
+    path_dir : pathlib.Path
+        The directory that will stand in for ``/usr/bin``.
+    str_tool : str
+        The command name to link.
+
+    Returns
+    -------
+    None
+    """
+    (path_dir / str_tool).symlink_to(shutil.which(str_tool) or "/bin/false")
+
+
+def _stage_tools_dir(path_root: Path) -> Path:
+    """Build a ``PATH`` directory holding only the tools ``venv.sh`` needs and no Python.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Throwaway project root; the directory is created beneath it.
+
+    Returns
+    -------
+    pathlib.Path
+        The tools directory.
+    """
+    path_tools = path_root / "_tools"
+    path_tools.mkdir(parents=True)
+    tuple(map(lambda str_tool: _link_tool(path_tools, str_tool), _TUPLE_VENV_SH_TOOLS))
+    return path_tools
+
+
+def _write_stub_python(path_dir: Path, int_in_venv: int) -> Path:
+    """Write a ``python3`` stub that logs its argv and answers only what ``venv.sh`` asks first.
+
+    ``--version`` answers, ``-c`` exits ``int_in_venv`` (0 means "I am a venv interpreter",
+    which is what ``python_in_venv`` reads), ``-m venv <dir>`` creates ``<dir>/bin`` and every
+    other invocation (pip, poetry) fails, which is what forces the pip fallback.
+
+    Parameters
+    ----------
+    path_dir : pathlib.Path
+        Directory to hold the stub and its ``calls.log``.
+    int_in_venv : int
+        Exit code of ``python3 -c ...``.
+
+    Returns
+    -------
+    pathlib.Path
+        The call log the stub appends to.
+    """
+    path_log = path_dir / "calls.log"
+    path_stub = _write(
+        path_dir / "python3",
+        f'#!{_STR_BASH}\nprintf "%s\\n" "$*" >>"{path_log}"\ncase "$1" in\n'
+        f'--version) echo "Python 3.12.2" ;;\n-c) exit {int_in_venv} ;;\n'
+        '-m) [ "$2" = venv ] && mkdir -p "$3/bin" || exit 1 ;;\n*) exit 1 ;;\nesac\n',
+    )
+    path_stub.chmod(0o755)
+    path_log.touch()
+    return path_log
+
+
+def _run_venv_sh(
+    path_script: Path, list_path_dirs: list[Path], dict_extra_env: Mapping[str, str]
+) -> subprocess.CompletedProcess[str]:
+    """Run ``venv.sh`` with a constructed environment so the host's Python never leaks in.
+
+    Parameters
+    ----------
+    path_script : pathlib.Path
+        The copied ``venv.sh``.
+    list_path_dirs : list[pathlib.Path]
+        ``PATH`` entries, first wins.
+    dict_extra_env : Mapping[str, str]
+        Variables added on top of ``PATH`` and ``HOME`` (e.g. ``VIRTUAL_ENV``).
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        The completed run.
+    """
+    dict_env = {
+        "PATH": ":".join(map(str, list_path_dirs)),
+        "HOME": str(path_script.parent),
+        **dict_extra_env,
+    }
+    return subprocess.run(  # noqa: S603
+        [_STR_BASH, str(path_script)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+        env=dict_env,
+    )
+
+
+def _stage_venv_project(path_root: Path) -> tuple[Path, Path, Path]:
+    """Copy ``venv.sh`` and its libs into a project tree and add the tools directory.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Project root to build.
+
+    Returns
+    -------
+    tuple[pathlib.Path, pathlib.Path, pathlib.Path]
+        The copied ``venv.sh``, the tools directory and the ``.venv/bin`` directory path (not
+        yet created).
+    """
+    path_script = _materialise_gate_tree(path_root, "venv.sh")
+    return path_script, _stage_tools_dir(path_root), path_root / ".venv" / "bin"
+
+
+@pytest.fixture(scope="module")
+def tuple_inside_venv_with_base(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path]:
+    """Run ``venv.sh`` with the project ``.venv/bin`` first on ``PATH`` and a base python behind it.
+
+    Parameters
+    ----------
+    tmp_path_factory : pytest.TempPathFactory
+        Pytest factory for the module-scoped throwaway tree.
+
+    Returns
+    -------
+    tuple
+        The completed run, the project root, the venv stub's call log and the base stub's.
+    """
+    path_root = tmp_path_factory.mktemp("inside_venv_with_base")
+    path_script, path_tools, path_venv_bin = _stage_venv_project(path_root)
+    path_venv_bin.mkdir(parents=True)
+    _write(path_root / ".venv" / "sentinel.txt", "keep me\n")
+    path_venv_log = _write_stub_python(path_venv_bin, 0)
+    path_base = path_root / "_base"
+    path_base.mkdir()
+    path_base_log = _write_stub_python(path_base, 1)
+    cls_result = _run_venv_sh(
+        path_script,
+        [path_venv_bin, path_base, path_tools],
+        {"VIRTUAL_ENV": str(path_root / ".venv")},
+    )
+    return cls_result, path_root, path_venv_log, path_base_log
+
+
+@pytest.fixture(scope="module")
+def tuple_inside_venv_no_base(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+    """Run ``venv.sh`` from inside the project venv when no interpreter exists outside it.
+
+    Parameters
+    ----------
+    tmp_path_factory : pytest.TempPathFactory
+        Pytest factory for the module-scoped throwaway tree.
+
+    Returns
+    -------
+    tuple
+        The completed run, the project root and the venv stub's call log.
+    """
+    path_root = tmp_path_factory.mktemp("inside_venv_no_base")
+    path_script, path_tools, path_venv_bin = _stage_venv_project(path_root)
+    path_venv_bin.mkdir(parents=True)
+    _write(path_root / ".venv" / "sentinel.txt", "keep me\n")
+    path_venv_log = _write_stub_python(path_venv_bin, 0)
+    cls_result = _run_venv_sh(
+        path_script, [path_venv_bin, path_tools], {"VIRTUAL_ENV": str(path_root / ".venv")}
+    )
+    return cls_result, path_root, path_venv_log
+
+
+@pytest.fixture(scope="module")
+def tuple_fresh_clone(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+    """Run ``venv.sh`` on a fresh clone: no ``.venv`` yet, only a base interpreter on ``PATH``.
+
+    Parameters
+    ----------
+    tmp_path_factory : pytest.TempPathFactory
+        Pytest factory for the module-scoped throwaway tree.
+
+    Returns
+    -------
+    tuple
+        The completed run, the project root and the base stub's call log.
+    """
+    path_root = tmp_path_factory.mktemp("fresh_clone")
+    path_script, path_tools, _ = _stage_venv_project(path_root)
+    path_base = path_root / "_base"
+    path_base.mkdir()
+    path_base_log = _write_stub_python(path_base, 1)
+    cls_result = _run_venv_sh(path_script, [path_base, path_tools], {})
+    return cls_result, path_root, path_base_log
+
+
+def test_venv_sh_from_inside_the_project_venv_fails_instead_of_reporting_success(
+    tuple_inside_venv_with_base: tuple[subprocess.CompletedProcess[str], Path, Path, Path],
+) -> None:
+    """Recreating ``.venv`` from inside it must exit non-zero, never look like success."""
+    cls_result, _, _, _ = tuple_inside_venv_with_base
+
+    assert cls_result.returncode != 0
+
+
+def test_venv_sh_from_inside_the_project_venv_keeps_the_venv(
+    tuple_inside_venv_with_base: tuple[subprocess.CompletedProcess[str], Path, Path, Path],
+) -> None:
+    """The should-fail control for blueprintx#871: ``rm -rf .venv`` must not run from inside it."""
+    _, path_root, _, _ = tuple_inside_venv_with_base
+
+    assert (path_root / ".venv" / "sentinel.txt").exists()
+
+
+def test_venv_sh_from_inside_the_project_venv_names_the_remedy(
+    tuple_inside_venv_with_base: tuple[subprocess.CompletedProcess[str], Path, Path, Path],
+) -> None:
+    """The refusal tells the user what to do instead of dying on a deleted interpreter."""
+    cls_result, _, _, _ = tuple_inside_venv_with_base
+
+    assert "from a shell outside" in cls_result.stdout + cls_result.stderr
+
+
+def test_venv_sh_from_inside_the_project_venv_never_recreates_the_venv(
+    tuple_inside_venv_with_base: tuple[subprocess.CompletedProcess[str], Path, Path, Path],
+) -> None:
+    """The base interpreter is never asked to build a venv over the one in use."""
+    _, _, _, path_base_log = tuple_inside_venv_with_base
+
+    assert "-m venv" not in path_base_log.read_text(encoding="utf-8")
+
+
+def test_venv_sh_from_inside_the_project_venv_bootstraps_with_the_base_interpreter(
+    tuple_inside_venv_with_base: tuple[subprocess.CompletedProcess[str], Path, Path, Path],
+) -> None:
+    """``python3`` on ``PATH`` is the venv's, so the pip bootstrap must use the one behind it."""
+    _, _, _, path_base_log = tuple_inside_venv_with_base
+
+    assert "-m pip install" in path_base_log.read_text(encoding="utf-8")
+
+
+def test_venv_sh_from_inside_the_project_venv_never_uses_the_venv_interpreter_for_pip(
+    tuple_inside_venv_with_base: tuple[subprocess.CompletedProcess[str], Path, Path, Path],
+) -> None:
+    """The venv's own interpreter is only probed, never asked to install into itself."""
+    _, _, path_venv_log, _ = tuple_inside_venv_with_base
+
+    assert "-m pip" not in path_venv_log.read_text(encoding="utf-8")
+
+
+def test_venv_sh_installs_poetry_with_user_scheme_on_a_base_interpreter(
+    tuple_inside_venv_with_base: tuple[subprocess.CompletedProcess[str], Path, Path, Path],
+) -> None:
+    """Outside a venv ``--user`` is correct and stays, so restricted hosts keep working."""
+    _, _, _, path_base_log = tuple_inside_venv_with_base
+
+    assert "--user" in path_base_log.read_text(encoding="utf-8")
+
+
+def test_venv_sh_never_passes_user_to_pip_when_only_a_venv_interpreter_exists(
+    tuple_inside_venv_no_base: tuple[subprocess.CompletedProcess[str], Path, Path],
+) -> None:
+    """``pip install --user`` inside a virtualenv always fails, so it must not be attempted."""
+    _, _, path_venv_log = tuple_inside_venv_no_base
+
+    assert "--user" not in path_venv_log.read_text(encoding="utf-8")
+
+
+def test_venv_sh_with_only_a_venv_interpreter_still_keeps_the_venv(
+    tuple_inside_venv_no_base: tuple[subprocess.CompletedProcess[str], Path, Path],
+) -> None:
+    """No base interpreter is a reason to fail, not a reason to delete the venv in use."""
+    _, path_root, _ = tuple_inside_venv_no_base
+
+    assert (path_root / ".venv" / "sentinel.txt").exists()
+
+
+def test_venv_sh_on_a_fresh_clone_builds_the_venv_with_the_base_interpreter(
+    tuple_fresh_clone: tuple[subprocess.CompletedProcess[str], Path, Path],
+) -> None:
+    """With no ``.venv`` and nothing to be inside of, the guard must not refuse to bootstrap."""
+    _, _, path_base_log = tuple_fresh_clone
+
+    assert "-m venv" in path_base_log.read_text(encoding="utf-8")
+
+
+def test_ensure_env_without_an_example_is_an_info_no_op(tmp_path: Path) -> None:
+    """A library tier ships no ``.env.example``: ``ensure_env`` exits 0 and prints no failure."""
+    path_script = _materialise_gate_tree(tmp_path, "ensure_env.sh")
+
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, str(path_script)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    str_all = cls_result.stdout + cls_result.stderr
+
+    assert (cls_result.returncode, "[✗]" in str_all, "nothing to seed" in str_all) == (
+        0,
+        False,
+        True,
+    ), str_all
+
+
+def test_ensure_env_with_an_example_still_seeds_the_env_file(tmp_path: Path) -> None:
+    """The no-op for a missing template must not weaken the seeding it exists for."""
+    path_script = _materialise_gate_tree(tmp_path, "ensure_env.sh")
+    _write(tmp_path / ".env.example", "KEY=value\n")
+
+    subprocess.run(  # noqa: S603
+        [_STR_BASH, str(path_script)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+    assert (tmp_path / ".env").read_text(encoding="utf-8") == "KEY=value\n"

@@ -66,6 +66,51 @@ resolve_python() {
 	return 1
 }
 
+python_in_venv() {
+	"$1" -c 'import sys; sys.exit(sys.prefix == sys.base_prefix)' >/dev/null 2>&1
+}
+
+running_inside_project_venv() {
+	local str_venv="$PROJECT_ROOT/.venv"
+
+	if [[ -n "${VIRTUAL_ENV:-}" && "$VIRTUAL_ENV" -ef "$str_venv" ]]; then
+		return 0
+	fi
+	[[ ":$PATH:" == *":$str_venv/bin:"* || ":$PATH:" == *":$str_venv/Scripts:"* ]]
+}
+
+path_without_active_venvs() {
+	local str_dir
+	local str_clean=""
+	local -a arr_dirs
+
+	IFS=: read -ra arr_dirs <<<"$PATH"
+	for str_dir in "${arr_dirs[@]}"; do
+		case "$str_dir" in
+		"$PROJECT_ROOT/.venv"/* | "${VIRTUAL_ENV:-/nonexistent}"/*) continue ;;
+		esac
+		str_clean+="${str_clean:+:}$str_dir"
+	done
+
+	printf '%s\n' "$str_clean"
+}
+
+resolve_base_python() {
+	local str_candidate
+	local str_found
+	local str_path_clean
+
+	str_path_clean="$(path_without_active_venvs)"
+	for str_candidate in python3 python py; do
+		str_found="$(PATH="$str_path_clean" command -v "$str_candidate" 2>/dev/null)" || continue
+		if ! python_in_venv "$str_found"; then
+			printf '%s\n' "$str_found"
+			return 0
+		fi
+	done
+	return 1
+}
+
 resolve_poetry() {
 	if command -v poetry >/dev/null 2>&1; then
 		POETRY_CMD=(poetry)
@@ -114,6 +159,9 @@ bootstrap_init() {
 	print_status "info" "Detected OS: $OS_TYPE"
 
 	PYTHON="$(resolve_python)"
+	if python_in_venv "$PYTHON"; then
+		PYTHON="$(resolve_base_python)" || PYTHON="$(resolve_python)"
+	fi
 	export PYTHON
 	print_status "info" "Python binary: $PYTHON ($("$PYTHON" --version 2>&1))"
 
