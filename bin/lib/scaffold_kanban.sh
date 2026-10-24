@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
-SCAFFOLD_KANBAN_STATUS_OPTIONS="Blocked Backlog Ready In-progress In-review Done"
+SCAFFOLD_KANBAN_STATUS_OPTIONS="Blocked|RED|Cannot start: a named blocker is unfinished
+Backlog|GREEN|This item hasn't been started
+Ready|BLUE|This is ready to be picked up
+In progress|YELLOW|This is actively being worked on
+In review|PURPLE|This item is in review
+Done|ORANGE|This has been completed"
 
 SCAFFOLD_HOUSE_LABELS="type:task|0E8A16|A unit of work
 type:research|1D76DB|A question to answer, not code to ship
@@ -64,16 +69,28 @@ scaffold_kanban_find() {
 	printf '%s' "$str_numbers"
 }
 
+scaffold_kanban_option_id() {
+	local str_existing="$1" str_want="$2" str_id str_name
+	while IFS='|' read -r str_id str_name; do
+		[ "$str_name" = "$str_want" ] && { printf '%s' "$str_id"; return 0; }
+	done <<<"$str_existing"
+	return 0
+}
+
 scaffold_kanban_status_options() {
-	local str_owner="$1" str_number="$2" str_field str_json str_opt str_name str_sep=""
+	local str_owner="$1" str_number="$2" str_field str_existing str_json str_name str_colour str_desc str_id str_idjson str_sep=""
 	str_field="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
 		--jq '.fields[] | select(.name=="Status") | .id' 2>/dev/null | head -n1)"
 	[ -n "$str_field" ] || return 1
-	for str_opt in $SCAFFOLD_KANBAN_STATUS_OPTIONS; do
-		str_name="${str_opt//-/ }"
-		str_json+="${str_sep}{\"name\":\"${str_name}\",\"color\":\"GRAY\",\"description\":\"\"}"
+	str_existing="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
+		--jq '.fields[] | select(.name=="Status") | .options[]? | "\(.id)|\(.name)"' 2>/dev/null)" || str_existing=""
+	while IFS='|' read -r str_name str_colour str_desc; do
+		str_id="$(scaffold_kanban_option_id "$str_existing" "$str_name")"
+		str_idjson=""
+		[ -z "$str_id" ] || str_idjson="\"id\":\"${str_id}\","
+		str_json+="${str_sep}{${str_idjson}\"name\":\"${str_name}\",\"color\":\"${str_colour}\",\"description\":\"${str_desc}\"}"
 		str_sep=","
-	done
+	done <<<"$SCAFFOLD_KANBAN_STATUS_OPTIONS"
 	printf '{"query":"mutation($f:ID!,$o:[ProjectV2SingleSelectFieldOptionInput!]!){updateProjectV2Field(input:{fieldId:$f,singleSelectOptions:$o}){clientMutationId}}","variables":{"f":"%s","o":[%s]}}' \
 		"$str_field" "$str_json" | gh api graphql --input - >/dev/null 2>&1
 }
