@@ -375,10 +375,10 @@ def test_a_missing_git_executable_falls_back_to_the_directory_walk(
     assert gate._template_files(tmp_path, path_dir) == ["a.txt"]
 
 
-def test_a_tier_outside_the_shared_lib_is_skipped_loudly(
+def test_lib_minimal_reads_its_own_scaffold_entry_not_the_shared_lib(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
-    """lib-minimal has its own copy list; comparing it to the service-tier list is a false flood.
+    """lib-minimal answers ``--list-copies`` from its own script, so its copies are required.
 
     Parameters
     ----------
@@ -387,8 +387,118 @@ def test_a_tier_outside_the_shared_lib_is_skipped_loudly(
     capsys : pytest.CaptureFixture
         Captures the printed report.
     """
-    (tmp_path / gate._PROVENANCE_FILENAME).write_text("tier: lib-minimal\n", encoding="utf-8")
+    path_root = _checkout(tmp_path / "bx", [], list_files=(f"{_COMMON}/a.txt",))
+    path_entry = path_root / gate._TIER_LIST_SCRIPTS["lib-minimal"]
+    path_entry.parent.mkdir(parents=True, exist_ok=True)
+    path_entry.write_text(f"printf 'COPY\\tfile\\t{_COMMON}/a.txt\\ta.txt\\n'\n", encoding="utf-8")
+    path_project = _project(tmp_path, "tier: lib-minimal\n")
 
-    gate.main(["--root", str(tmp_path), "--blueprintx-root", str(tmp_path)])
+    gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
 
-    assert "SKIPPED" in capsys.readouterr().out
+    assert "➖ a.txt" in capsys.readouterr().out
+
+
+def _versioned_checkout(path_tmp: Path) -> tuple[Path, str]:
+    """Build a checkout whose one template file is committed as ``base``.
+
+    Parameters
+    ----------
+    path_tmp : pathlib.Path
+        A temporary directory to build under.
+
+    Returns
+    -------
+    tuple of (pathlib.Path, str)
+            The checkout root and the commit that holds the base content.
+    """
+    path_root = _checkout(
+        path_tmp / "bx", [_copy(f"{_COMMON}/a.txt", "a.txt")], list_files=(f"{_COMMON}/a.txt",)
+    )
+    (path_root / _COMMON / "a.txt").write_text("base\n", encoding="utf-8")
+    _git(path_root, "init", "-q")
+    _git(path_root, "add", "-A")
+    _git(
+        path_root,
+        *("-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"),
+        *("commit", "-q", "-m", "base"),
+    )
+    cls_head = subprocess.run(  # noqa: S603
+        ["git", "-C", str(path_root), "rev-parse", "HEAD"],  # noqa: S607
+        capture_output=True,
+        encoding="utf-8",
+        check=True,
+    )
+    return path_root, cls_head.stdout.strip()
+
+
+def _drift_output(
+    path_tmp: Path,
+    capsys: pytest.CaptureFixture,
+    str_ours: str,
+    str_theirs: str,
+    bool_stamp_commit: bool = True,
+) -> str:
+    """Run the reporter with the project at ``str_ours`` and the template now at ``str_theirs``.
+
+    Parameters
+    ----------
+    path_tmp : pathlib.Path
+        A temporary directory to build under.
+    capsys : pytest.CaptureFixture
+        Captures the printed report.
+    str_ours : str
+        The project's content for the template file.
+    str_theirs : str
+        The template's current content (the committed base stays ``base``).
+    bool_stamp_commit : bool
+        Whether the provenance stamp carries ``blueprintx_commit``.
+
+    Returns
+    -------
+    str
+            Everything the reporter printed.
+    """
+    path_root, str_sha = _versioned_checkout(path_tmp)
+    (path_root / _COMMON / "a.txt").write_text(str_theirs, encoding="utf-8")
+    str_commit_line = f"blueprintx_commit: {str_sha}\n" if bool_stamp_commit else ""
+    path_project = _project(path_tmp, f"tier: mvc-service-native-db\n{str_commit_line}")
+    (path_project / "a.txt").write_text(str_ours, encoding="utf-8")
+    capsys.readouterr()
+    gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
+    return capsys.readouterr().out
+
+
+def test_an_untouched_file_the_template_changed_is_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Project equals base, template moved on: the fast-forward case."""
+    str_out = _drift_output(tmp_path, capsys, "base\n", "new\n")
+
+    assert "template changed since scaffold: a.txt" in str_out
+
+
+def test_a_file_changed_on_both_sides_is_reported_as_both(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Project and template both moved off base: the merge case."""
+    str_out = _drift_output(tmp_path, capsys, "mine\n", "new\n")
+
+    assert "both changed: a.txt" in str_out
+
+
+def test_a_local_edit_the_template_never_touched_is_not_drift(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A project's own edit, with the template unchanged, must stay silent."""
+    str_out = _drift_output(tmp_path, capsys, "mine\n", "base\n")
+
+    assert "changed" not in str_out
+
+
+def test_a_stamp_without_a_commit_skips_content_drift_loudly(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """No merge base is a SKIPPED line, never a clean content verdict."""
+    str_out = _drift_output(tmp_path, capsys, "base\n", "new\n", bool_stamp_commit=False)
+
+    assert "SKIPPED content drift" in str_out

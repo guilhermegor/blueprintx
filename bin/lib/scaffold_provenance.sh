@@ -23,3 +23,48 @@ scaffold_stamp_provenance() {
 	scaffolded_at: ${str_scaffolded_at}
 	EOF
 }
+
+scaffold_dry_cp() {
+	local str_project_path="$1"
+	shift
+	while [[ "${1:-}" == -* ]]; do shift; done
+	local str_dst="${!#}" str_src str_kind str_rel_dst
+	for str_src in "${@:1:$#-1}"; do
+		str_rel_dst="${str_dst#"$str_project_path"}"
+		if [[ $# -gt 2 || "$str_dst" == */ ]]; then
+			str_rel_dst="${str_rel_dst%/}/${str_src##*/}"
+		fi
+		str_kind="file"
+		[[ -d "$str_src" ]] && str_kind=dir
+		str_src="${str_src%/.}"
+		printf 'COPY\t%s\t%s\t%s\n' "$str_kind" "${str_src#"$BLUEPRINTX_ROOT"/}" "${str_rel_dst#/}"
+	done
+}
+
+scaffold_dry_rm() {
+	local str_project_path="$1" str_arg
+	shift
+	for str_arg in "$@"; do
+		[[ "$str_arg" == -* ]] && continue
+		printf 'RM\t%s\n' "${str_arg#"$str_project_path"/}"
+	done
+}
+
+scaffold_dry_run() {
+	local str_fn="$1" str_project_path int_status
+	str_project_path="$(mktemp -d)"
+	(
+		set -e
+		print_status() { :; }
+		envsubst() { :; }
+		mkdir() { :; }
+		touch() { :; }
+		chmod() { :; }
+		cp() { scaffold_dry_cp "$str_project_path" "$@"; }
+		rm() { scaffold_dry_rm "$str_project_path" "$@"; }
+		"$str_fn" "$str_project_path"
+	)
+	int_status=$?
+	rm -rf "$str_project_path"
+	return "$int_status"
+}

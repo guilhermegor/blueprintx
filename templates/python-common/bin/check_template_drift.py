@@ -8,15 +8,11 @@ remembers to backfill it by hand. Two independent real cases motivated this: a n
 ``conftest.py`` guard and a ``.codespellrc`` skip pattern, both missing from a downstream
 project scaffolded before either was added to ``templates/python-common/``.
 
-Shape: PRESENCE-ONLY, deliberately, not a content diff. A project's own legitimate local
-changes are not drift — only a file/tool the template ships that the project simply does not
-have. This is the cheap, high-signal, low-false-positive half of the drift question; the two
-real cases above are both absence. A content-diff check on files a project should never
-customise (the shared ``bin/check_*.py`` gates, ``.pre-commit-config.yaml`` hook ids) is a
-real follow-on but needs a notion of "not meant to be edited locally" this module does not
-attempt — a check that fires on legitimate local edits gets disabled the first week it is
-noisy, the same "a number nobody pays is a gate nobody keeps" reasoning that set the ``bin/``
-complexity ceiling.
+Shape: presence first, then content. Presence reports files the template ships that the
+project never received. Content uses the stamped ``blueprintx_commit`` as a merge base and
+reports "template changed since scaffold" for a file the project left alone and "both
+changed" for one it edited too; a project's own edits are never reported on their own.
+Rationale: ``templates/python-common/docs/template-updates.md`` in the BlueprintX checkout.
 
 Reporter, not a gate — like ``check_contract_drift.py`` in this same directory (read its
 header first; the reasoning is identical). Drift in a downstream project is not that
@@ -34,21 +30,17 @@ loudly: that is the path BlueprintX's OWN tree always takes (not a scaffolded pr
 tier — ``--root .`` here never falls through to a comparison), and the path any project
 scaffolded before this feature shipped takes too.
 
-What the stamp is used for: ``tier`` and ``review_bot_roster`` are READ and select what to
-compare. ``blueprintx_version`` and ``blueprintx_commit`` are NOT read; they are provenance
-for a human. The comparison is always against the checkout's CURRENT template, never the
-stamped commit: comparing against the stamped commit would need that commit's history and
-would answer "what did this project start with", while this check asks what the template
-has gained since.
+What the stamp is used for: ``tier`` and ``review_bot_roster`` select what to compare;
+``blueprintx_commit`` is the merge base for content drift. Without a usable commit the
+content section self-skips loudly while the presence section still runs.
 
-The required-path set is DERIVED, not a hand-maintained second list: the checkout's
-``bin/lib/scaffold_python_templates.sh --list-copies`` dry-runs the one shared step every
-service tier's scaffold calls and prints the copies it would make, so this check reads the
-scaffold's own output instead of parsing its source, and cannot drift from what it copies.
-Deliberately scoped to ``templates/python-common/`` and ``templates/common/`` sources, not
-the tier-specific ``templates/<tier>/src/`` (each ``bin/scaffold/python_*.sh`` copies that
-with its own logic) — a narrower, honest MVP over a wider check that would risk false
-positives on conditional tier files it cannot see.
+The required-path set is DERIVED, not a hand-maintained second list: each tier's scaffold
+entry (``bin/lib/scaffold_python_templates.sh`` for the service tiers,
+``bin/scaffold/python_lib_minimal.sh`` for lib-minimal) answers ``--list-copies`` by
+dry-running the copies it would make, so this check cannot drift from what a scaffold copies.
+Scoped to ``templates/python-common/``, ``templates/common/`` and ``templates/<tier>/``
+sources; a file a scaffold renders through ``envsubst`` is not a verbatim copy and is out of
+scope.
 """
 
 import argparse
@@ -63,7 +55,12 @@ import sys
 _PROVENANCE_FILENAME = ".blueprintx-provenance.yaml"
 _SCAFFOLD_LIB_RELPATH = pathlib.Path("bin/lib/scaffold_python_templates.sh")
 _COMMON_TEMPLATE_RELPATH = pathlib.Path("templates/python-common")
-_TIERS_OUTSIDE_SHARED_LIB = frozenset({"lib-minimal"})
+_TIER_LIST_SCRIPTS = {"lib-minimal": pathlib.Path("bin/scaffold/python_lib_minimal.sh")}
+_UNKNOWN_COMMIT = "unknown"
+_CONTENT_LABELS = {
+    "⬆️ template changed since scaffold:": "template_changed",
+    "⚠️ both changed:": "both_changed",
+}
 _INT_COPY_FIELDS = 4
 _INT_RM_FIELDS = 2
 
@@ -118,29 +115,33 @@ def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
     return None
 
 
-def _template_roots(path_blueprintx_root: pathlib.Path) -> list[pathlib.Path]:
+def _template_roots(path_blueprintx_root: pathlib.Path, str_tier: str) -> list[pathlib.Path]:
     """Return the template directories whose copies the drift check polices.
 
     Parameters
     ----------
     path_blueprintx_root : pathlib.Path
         Root of a BlueprintX checkout.
+    str_tier : str
+        The project's stamped tier, whose own template directory is policed too.
 
     Returns
     -------
     list of pathlib.Path
-            ``templates/python-common`` and the language-agnostic ``templates/common``.
+            ``templates/python-common``, the language-agnostic ``templates/common`` and
+            ``templates/<tier>``.
     """
     return [
         path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
         path_blueprintx_root / "templates/common",
+        path_blueprintx_root / "templates" / str_tier,
     ]
 
 
 def _dry_run_lines(
     path_blueprintx_root: pathlib.Path, str_tier: str, bool_roster: bool
 ) -> list[str] | None:
-    """Run the checkout's scaffold lib in ``--list-copies`` mode and return its stdout lines.
+    """Run the tier's scaffold entry in ``--list-copies`` mode and return its stdout lines.
 
     This sources and executes shell from ``path_blueprintx_root``, so that checkout has the
     same trust level as running the scaffolder itself.
@@ -160,7 +161,7 @@ def _dry_run_lines(
             The output lines, or ``None`` when the lib is missing, bash is missing, or the
             dry run failed — the caller treats that as SKIPPED, never as "nothing required".
     """
-    path_lib = path_blueprintx_root / _SCAFFOLD_LIB_RELPATH
+    path_lib = path_blueprintx_root / _TIER_LIST_SCRIPTS.get(str_tier, _SCAFFOLD_LIB_RELPATH)
     str_bash = shutil.which("bash")
     if not path_lib.exists() or str_bash is None:
         return None
@@ -207,8 +208,8 @@ def _copy_destinations(
     path_blueprintx_root: pathlib.Path,
     tuple_copy: tuple[str, str, str],
     dict_tracked: dict[pathlib.Path, set[str]],
-) -> set[str]:
-    """Return the project-relative paths one dry-run copy delivers, or none if out of scope.
+) -> dict[str, str]:
+    """Return the project paths one dry-run copy delivers, mapped to their sources.
 
     A directory source delivers every tracked file under it. A file source is dropped only
     when it exists but git does not track it (a draft matched by a shell glob is not a
@@ -225,8 +226,9 @@ def _copy_destinations(
 
     Returns
     -------
-    set of str
-            Project-relative destinations; empty when the source is outside the policed roots.
+    dict of str to str
+            Project-relative destination to checkout-relative source; empty when the source
+            is outside the policed roots.
     """
     str_kind, str_src, str_dst = tuple_copy
     path_src = path_blueprintx_root / str_src
@@ -235,25 +237,20 @@ def _copy_destinations(
             continue
         if str_kind == "dir":
             return {
-                posixpath.join(str_dst, str_rel)
+                posixpath.join(str_dst, str_rel): posixpath.join(str_src, str_rel)
                 for str_rel in _template_files(path_blueprintx_root, path_src)
             }
         bool_draft = (
             path_src.exists() and path_src.relative_to(path_root).as_posix() not in set_tracked
         )
-        return set() if bool_draft else {str_dst}
-    return set()
+        return {} if bool_draft else {str_dst: str_src}
+    return {}
 
 
 def required_relpaths(
     path_blueprintx_root: pathlib.Path, str_tier: str, bool_roster: bool = False
 ) -> set[str]:
-    """Derive every python-common-sourced path a scaffold of ``str_tier`` copies.
-
-    Read from the lib's ``--list-copies`` dry run rather than hand-listed or parsed out of
-    shell source, so a copy written in any shell form is seen. Copies guarded by the
-    review-bot roster flag are present exactly when ``bool_roster`` is true, because the dry
-    run evaluates the guard with that value.
+    """Derive every template-sourced path a scaffold of ``str_tier`` copies.
 
     Parameters
     ----------
@@ -267,23 +264,55 @@ def required_relpaths(
     Returns
     -------
     set of str
-            Project-relative paths (POSIX separators) the shared scaffold step copies.
-            Empty when the dry run could not be made — the caller treats that as SKIPPED,
-            never as "nothing is required".
+            The keys of :func:`required_sources`.
+    """
+    return set(required_sources(path_blueprintx_root, str_tier, bool_roster))
+
+
+def required_sources(
+    path_blueprintx_root: pathlib.Path, str_tier: str, bool_roster: bool = False
+) -> dict[str, str]:
+    """Derive every template-sourced path a scaffold of ``str_tier`` copies, with its source.
+
+    Read from the tier's ``--list-copies`` dry run rather than hand-listed or parsed out of
+    shell source, so a copy written in any shell form is seen. Copies guarded by the
+    review-bot roster flag are present exactly when ``bool_roster`` is true, because the dry
+    run evaluates the guard with that value. When two copies hit one destination the later
+    one wins, as it does in the scaffold.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_tier : str
+        The project's stamped tier.
+    bool_roster : bool
+        Whether the project opted into the review-bot roster.
+
+    Returns
+    -------
+    dict of str to str
+            Project-relative path (POSIX separators) to checkout-relative source. Empty when
+            the dry run could not be made — the caller treats that as SKIPPED, never as
+            "nothing is required".
     """
     list_lines = _dry_run_lines(path_blueprintx_root, str_tier, bool_roster)
     if list_lines is None:
-        return set()
+        return {}
     list_copies, set_removed = _parse_dry_run(list_lines)
     dict_tracked = {
         path_root: set(_template_files(path_blueprintx_root, path_root))
-        for path_root in _template_roots(path_blueprintx_root)
+        for path_root in _template_roots(path_blueprintx_root, str_tier)
         if path_root.is_dir()
     }
-    set_required: set[str] = set()
+    dict_sources: dict[str, str] = {}
     for tuple_copy in list_copies:
-        set_required |= _copy_destinations(path_blueprintx_root, tuple_copy, dict_tracked)
-    return {str_rel for str_rel in set_required if not _is_removed(str_rel, set_removed)}
+        dict_sources |= _copy_destinations(path_blueprintx_root, tuple_copy, dict_tracked)
+    return {
+        str_rel: str_src
+        for str_rel, str_src in dict_sources.items()
+        if not _is_removed(str_rel, set_removed)
+    }
 
 
 def _is_removed(str_rel: str, set_removed: set[str]) -> bool:
@@ -365,6 +394,193 @@ def missing_relpaths(path_root: pathlib.Path, set_required: set[str]) -> list[st
             Sorted relative paths present in the template but absent from the project.
     """
     return sorted(str_rel for str_rel in set_required if not (path_root / str_rel).exists())
+
+
+def read_commit(path_root: pathlib.Path) -> str | None:
+    """Return the ``blueprintx_commit:`` value stamped at scaffold time, or ``None``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root to inspect.
+
+    Returns
+    -------
+    str or None
+            The stamped commit, or ``None`` when the stamp is absent, silent on it, or
+            recorded ``unknown`` (a scaffold run outside a git checkout).
+    """
+    path_stamp = path_root / _PROVENANCE_FILENAME
+    if not path_stamp.exists():
+        return None
+    for str_line in path_stamp.read_text(encoding="utf-8").splitlines():
+        str_stripped = str_line.strip()
+        if str_stripped.startswith("blueprintx_commit:"):
+            str_value = str_stripped.split(":", 1)[1].strip()
+            return None if str_value in {"", _UNKNOWN_COMMIT} else str_value
+    return None
+
+
+def base_blob(path_blueprintx_root: pathlib.Path, str_commit: str, str_src: str) -> bytes | None:
+    """Return a template file as it was at the stamped commit, or ``None``.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_commit : str
+        The commit stamped at scaffold time.
+    str_src : str
+        Checkout-relative path of the template file.
+
+    Returns
+    -------
+    bytes or None
+            The file content at that commit; ``None`` when the commit is not in the checkout
+            or the file did not exist then.
+    """
+    dict_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    try:
+        cls_git = subprocess.run(  # noqa: S603
+            ["git", "-C", str(path_blueprintx_root), "show", f"{str_commit}:{str_src}"],  # noqa: S607
+            capture_output=True,
+            check=False,
+            env=dict_env,
+        )
+    except FileNotFoundError:
+        return None
+    return cls_git.stdout if cls_git.returncode == 0 else None
+
+
+def _commit_known(path_blueprintx_root: pathlib.Path, str_commit: str) -> bool:
+    """Return whether ``str_commit`` resolves to a commit in the checkout.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_commit : str
+        The commit stamped at scaffold time.
+
+    Returns
+    -------
+    bool
+            ``True`` when the checkout can read that commit.
+    """
+    dict_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    try:
+        cls_git = subprocess.run(  # noqa: S603
+            ["git", "-C", str(path_blueprintx_root), "cat-file", "-e", f"{str_commit}^{{commit}}"],  # noqa: S607, E501
+            capture_output=True,
+            check=False,
+            env=dict_env,
+        )
+    except FileNotFoundError:
+        return False
+    return cls_git.returncode == 0
+
+
+def _content_state(
+    path_project_file: pathlib.Path, path_theirs: pathlib.Path, bytes_base: bytes | None
+) -> str:
+    """Classify one present file against its base and the current template.
+
+    Parameters
+    ----------
+    path_project_file : pathlib.Path
+        The project's copy.
+    path_theirs : pathlib.Path
+        The template file in the current checkout.
+    bytes_base : bytes or None
+        The template file at the stamped commit; ``None`` when it did not exist then.
+
+    Returns
+    -------
+    str
+            ``same``, ``template_changed`` (project left it alone) or ``both_changed``.
+    """
+    bytes_ours = path_project_file.read_bytes()
+    bytes_theirs = path_theirs.read_bytes()
+    if bytes_theirs in (bytes_ours, bytes_base):
+        return "same"
+    return "template_changed" if bytes_ours == bytes_base else "both_changed"
+
+
+def content_drift(
+    path_root: pathlib.Path,
+    path_blueprintx_root: pathlib.Path,
+    str_commit: str,
+    dict_sources: dict[str, str],
+) -> dict[str, list[str]]:
+    """Group the project's template-managed files by how their content drifted.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_commit : str
+        The commit stamped at scaffold time (the merge base).
+    dict_sources : dict of str to str
+        Project-relative path to checkout-relative template source.
+
+    Returns
+    -------
+    dict of str to list of str
+            ``template_changed`` and ``both_changed`` to sorted project-relative paths.
+    """
+    dict_drift: dict[str, list[str]] = {"template_changed": [], "both_changed": []}
+    for str_rel, str_src in sorted(dict_sources.items()):
+        path_theirs = path_blueprintx_root / str_src
+        if not (path_root / str_rel).is_file() or not path_theirs.is_file():
+            continue
+        bytes_base = base_blob(path_blueprintx_root, str_commit, str_src)
+        str_state = _content_state(path_root / str_rel, path_theirs, bytes_base)
+        if str_state != "same":
+            dict_drift[str_state].append(str_rel)
+    return dict_drift
+
+
+def _report_content(
+    path_root: pathlib.Path, path_blueprintx_root: pathlib.Path, dict_sources: dict[str, str]
+) -> bool | None:
+    """Print the content-drift section, or say loudly why it could not be computed.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    dict_sources : dict of str to str
+        Project-relative path to checkout-relative template source.
+
+    Returns
+    -------
+    bool or None
+            ``True`` when content drifted, ``False`` when clean, ``None`` when not checked.
+    """
+    str_commit = read_commit(path_root)
+    if str_commit is None or not _commit_known(path_blueprintx_root, str_commit):
+        print(
+            f"SKIPPED content drift: the stamped blueprintx_commit ({str_commit}) is missing "
+            f"or not in {path_blueprintx_root}, so there is no merge base. This run proves "
+            f"nothing about content drift."
+        )
+        return None
+    dict_drift = content_drift(path_root, path_blueprintx_root, str_commit, dict_sources)
+    if not any(dict_drift.values()):
+        return False
+    for str_label, str_key in _CONTENT_LABELS.items():
+        for str_rel in dict_drift[str_key]:
+            print(f"{str_label} {str_rel}")
+    print(
+        f"\n{len(dict_drift['template_changed'])} file(s) changed in the template since "
+        f"scaffold, {len(dict_drift['both_changed'])} changed on both sides. This is a "
+        f"REPORT, not a gate."
+    )
+    return True
 
 
 def _parse_args(list_argv: list) -> tuple[pathlib.Path, pathlib.Path | None]:
@@ -456,32 +672,27 @@ def main(list_argv: list) -> int:
         )
         return 0
 
-    if str_tier in _TIERS_OUTSIDE_SHARED_LIB:
-        print(
-            f"SKIPPED: tier '{str_tier}' copies files through its own scaffold script, not "
-            f"{_SCAFFOLD_LIB_RELPATH}, so there is no required list to compare against. This "
-            f"run proves nothing about drift."
-        )
-        return 0
-
-    set_required = required_relpaths(
+    dict_sources = required_sources(
         path_blueprintx, str_tier, bool(review_bot_roster_enabled(path_root))
     )
-    if not set_required:
+    if not dict_sources:
         print(
-            f"SKIPPED: found no required paths under {path_blueprintx} — "
-            f"{_SCAFFOLD_LIB_RELPATH} is missing there, or its --list-copies dry run failed or "
+            f"SKIPPED: found no required paths under {path_blueprintx} — the scaffold entry "
+            f"for tier '{str_tier}' is missing there, or its --list-copies dry run failed or "
             f"printed nothing (bash is also required). This run proves nothing about drift, "
             f"and is NOT the same as a clean comparison."
         )
         return 0
 
-    list_missing = missing_relpaths(path_root, set_required)
-    if not list_missing:
-        print(f"No template drift detected — {len(set_required)} required path(s) present.")
-        return 0
-
-    _report_missing(str_tier, list_missing, len(set_required))
+    list_missing = missing_relpaths(path_root, set(dict_sources))
+    if list_missing:
+        _report_missing(str_tier, list_missing, len(dict_sources))
+    bool_content_drift = _report_content(path_root, path_blueprintx, dict_sources)
+    if not list_missing and not bool_content_drift:
+        str_note = "" if bool_content_drift is False else " (content not checked)"
+        print(
+            f"No template drift detected — {len(dict_sources)} required path(s) present{str_note}."
+        )
     return 0
 
 
