@@ -380,16 +380,22 @@ def _borrows_bot_login(dict_node: dict, set_declared: set[str]) -> bool:
     )
 
 
-def drop_borrowed_reviews(dict_pr: dict, set_declared: set[str]) -> None:
-    """Remove from a fetched PR the reviews whose author borrows a roster login."""
-    dict_reviews = dict_pr.get("reviews")
-    if dict_reviews:
-        dict_reviews["nodes"] = [
-            d for d in dict_reviews["nodes"] if not _borrows_bot_login(d, set_declared)
-        ]
+def _drop_borrowed(dict_pr: dict, set_declared: set[str]) -> None:
+    """Remove the reviews and issue comments whose author borrows a roster login."""
+    for str_key in ("reviews", "comments"):
+        dict_side = dict_pr.get(str_key)
+        if dict_side:
+            dict_side["nodes"] = [
+                d for d in dict_side["nodes"] if not _borrows_bot_login(d, set_declared)
+            ]
 
 
-def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
+def fetch_pull_request(
+    str_owner: str,
+    str_repo: str,
+    int_number: int,
+    set_declared: frozenset[str] = frozenset(),
+) -> dict:
     """Fetch the PR's author, submitted reviews and review threads in one GraphQL call.
 
     Parameters
@@ -400,6 +406,9 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
         Repository name.
     int_number : int
         Pull-request number.
+    set_declared : frozenset of str, optional
+        Roster and marker-poster logins. A review or comment under one of them that is not
+        typed ``Bot`` is dropped here, so no caller can read a borrowed identity.
 
     Returns
     -------
@@ -428,6 +437,7 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
                 continue
             dict_side["nodes"].extend(dict_next[str_key]["nodes"])
             dict_side["pageInfo"] = dict_next[str_key]["pageInfo"]
+    _drop_borrowed(dict_pr, set_declared)
     return dict_pr
 
 
@@ -2181,8 +2191,12 @@ def main(list_argv: list[str] | None = None) -> int:
     set_reviewers = reviewer_logins(dict_roster)
 
     str_owner, _, str_repo = str_repo_full.partition("/")
-    dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
-    drop_borrowed_reviews(dict_pr, set_reviewers)
+    dict_pr = fetch_pull_request(
+        str_owner,
+        str_repo,
+        int(str_number),
+        frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
+    )
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 

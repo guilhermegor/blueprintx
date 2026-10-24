@@ -14,6 +14,9 @@ CASE_NAMES=(
     "User-typed review from outside the roster is kept"
     "Bot-typed review with the ladder login is accepted"
     "User-typed PR author with the bare login is not exempt"
+    "User-typed notice with the ladder login is dropped"
+    "untyped notice with the ladder login is dropped"
+    "Bot-typed notice with the ladder login is kept"
     "Bot-typed PR author with the ladder login is exempt"
 )
 
@@ -64,11 +67,35 @@ def missing(list_reviews, dict_roster_used=None):
     )
 
 
-def fetched(list_reviews, dict_roster_used=None):
-    dict_pr = {"reviews": {"nodes": list_reviews}}
-    dict_use = dict_roster if dict_roster_used is None else dict_roster_used
-    cls_gate.drop_borrowed_reviews(dict_pr, cls_gate.reviewer_logins(dict_use))
-    return dict_pr["reviews"]["nodes"]
+PY
+}
+
+harness_fetch() {
+    cat <<'PY'
+def fetched_pr(list_reviews, list_comments=()):
+    dict_page = {"pageInfo": {"hasNextPage": False, "endCursor": None}}
+    dict_pr = {
+        "reviews": {**dict_page, "nodes": list_reviews},
+        "reviewThreads": {**dict_page, "nodes": []},
+        "comments": {**dict_page, "nodes": list(list_comments)},
+    }
+    cls_gate._fetch_page = lambda *args: dict_pr
+    return cls_gate.fetch_pull_request("o", "r", 1, frozenset(dict_roster) | set_posters)
+
+
+def fetched(list_reviews):
+    return fetched_pr(list_reviews)["reviews"]["nodes"]
+
+
+def notice(str_login, str_type=None):
+    dict_author = {"login": str_login}
+    if str_type:
+        dict_author["__typename"] = str_type
+    return {"author": dict_author, "body": "x", "createdAt": "2026-01-01T00:00:00Z"}
+
+
+def kept_notices(list_comments):
+    return fetched_pr([], list_comments)["comments"]["nodes"]
 
 
 def author_problem(str_type):
@@ -85,6 +112,11 @@ def without_row():
     return {k: v for k, v in dict_roster.items() if k != str_key}
 
 
+PY
+}
+
+harness_list() {
+    cat <<'PY'
 LIST_CASES = [
     lambda: missing([review(str_app + "[bot]", "Bot")]) is None,
     lambda: dict_roster.get(str_key) == "threads",
@@ -96,6 +128,9 @@ LIST_CASES = [
     lambda: missing(fetched([review(str_app + "[bot]", "Bot")])) is None,
     lambda: author_problem("User") is not None,
     lambda: author_problem("Bot") is None,
+    lambda: kept_notices([notice(str_app, "User")]) == [],
+    lambda: kept_notices([notice(str_app)]) == [],
+    lambda: len(kept_notices([notice(str_app + "[bot]", "Bot")])) == 1,
 ]
 sys.exit(0 if LIST_CASES[int_case]() else 1)
 PY
@@ -103,7 +138,7 @@ PY
 
 run_case() {
     local str_roster="$1" int_case="$2"
-    python3 - "$REPO_ROOT" "$str_roster" "$int_case" < <(harness_setup; harness_cases)
+    python3 - "$REPO_ROOT" "$str_roster" "$int_case" < <(harness_setup; harness_cases; harness_fetch; harness_list)
 }
 
 main() {
