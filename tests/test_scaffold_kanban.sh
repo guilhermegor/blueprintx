@@ -38,7 +38,13 @@ case "$1 $2" in
     fi
     [ -z "${GH_NOISE:-}" ] || echo "A new release of gh is available" >&2
     echo 7 ;;
-"project field-list") echo "PVTSSF_status" ;;
+"project field-list")
+    case "$(jq_arg "$@")" in
+    *options*)
+        [ -z "${GH_OPTIONS_FAIL:-}" ] || exit 1
+        [ -z "${GH_STATUS_OPTIONS:-}" ] || printf '%b\n' "$GH_STATUS_OPTIONS" ;;
+    *) echo "PVTSSF_status" ;;
+    esac ;;
 "api graphql") cat >>"$GH_LOG.stdin" ;;
 "repo view") echo "${GH_REPO_PRIVATE:-false}" ;;
 "api users/"*) echo "User" ;;
@@ -115,6 +121,37 @@ test_default_creates_the_full_board() {
     expect_log "board status" '"name":"Done"' present
     expect_out "board" "$str_out" "No public API for views or built-in workflows"
     expect_out "board" "$str_out" "https://github.com/users/octo/projects/7/workflows"
+}
+
+test_status_options_carry_the_house_colours_and_descriptions() {
+    local str_pair str_name str_colour str_desc
+    run_setup '\n\n' >/dev/null
+    for str_pair in 'Blocked|RED|Cannot start: a named blocker is unfinished' \
+        "Backlog|GREEN|This item hasn't been started" \
+        'Ready|BLUE|This is ready to be picked up' \
+        'In progress|YELLOW|This is actively being worked on' \
+        'In review|PURPLE|This item is in review' \
+        'Done|ORANGE|This has been completed'; do
+        IFS='|' read -r str_name str_colour str_desc <<<"$str_pair"
+        expect_log "status payload" "{\"name\":\"${str_name}\",\"color\":\"${str_colour}\",\"description\":\"${str_desc}\"}" present
+    done
+    expect_log "status payload" '"color":"GRAY"' absent
+    expect_log "fresh board" '"id":' absent
+}
+
+test_existing_status_option_ids_are_preserved() {
+    run_setup '\n\n' 'GH_STATUS_OPTIONS=PVTSSO_todo|Todo\nPVTSSO_done|Done\nPVTSSO_blocked|Blocked' >/dev/null
+    expect_log "existing ids" '{"id":"PVTSSO_blocked","name":"Blocked","color":"RED"' present
+    expect_log "existing ids" '{"id":"PVTSSO_done","name":"Done","color":"ORANGE"' present
+    expect_log "existing ids" '{"name":"Backlog","color":"GREEN"' present
+    expect_log "existing ids" 'PVTSSO_todo' absent
+}
+
+test_a_failed_option_lookup_never_sends_the_mutation() {
+    local str_out
+    str_out="$(run_setup '\n\n' GH_OPTIONS_FAIL=1)"
+    expect_log "lookup failure" '"name":"Backlog"' absent
+    expect_out "lookup failure" "$str_out" "Could not set the Status options"
 }
 
 test_visibility_follows_the_answer_and_the_repo() {
@@ -272,6 +309,9 @@ main() {
     test_house_labels_are_created_idempotently
     test_declining_makes_no_board
     test_default_creates_the_full_board
+    test_status_options_carry_the_house_colours_and_descriptions
+    test_existing_status_option_ids_are_preserved
+    test_a_failed_option_lookup_never_sends_the_mutation
     test_visibility_follows_the_answer_and_the_repo
     test_an_existing_board_is_skipped_not_duplicated
     test_an_ambiguous_board_is_never_guessed
