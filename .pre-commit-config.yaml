@@ -413,6 +413,13 @@ repos:
         pass_filenames: false
         files: ^(bin/scaffold/.*\.sh|templates/.*dependabot\.yml|bin/ci/check_dependabot_shipped\.sh|tests/test_check_dependabot_shipped\.sh)$
 
+      - id: review-roster-ladder-tests
+        name: template review rosters trust the reviewer ladder (blueprintx#870)
+        entry: bash tests/test_check_review_threads_roster.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/python-common/\.review-bots\.yaml|templates/ts-common/\.github/\.review-bots\.yaml|templates/common/bin/check_review_threads\.py|tests/test_check_review_threads_roster\.sh)$
+
       - id: precommit-ci-parity
         name: pre-commit and CI run the same checks, both directions (blueprintx#384)
         entry: bash bin/check_precommit_ci_parity.sh
