@@ -10,6 +10,8 @@ CASE_NAMES=(
     "marker poster names the ladder"
     "same review fails with the row removed"
     "User-typed review with the bare login is rejected"
+    "untyped review with the ladder login is rejected"
+    "User-typed review from outside the roster is kept"
     "Bot-typed review with the ladder login is accepted"
     "User-typed PR author with the bare login is not exempt"
     "Bot-typed PR author with the ladder login is exempt"
@@ -44,9 +46,12 @@ PY
 
 harness_cases() {
     cat <<'PY'
-def review(str_login, str_type):
+def review(str_login, str_type=None):
+    dict_author = {"login": str_login}
+    if str_type:
+        dict_author["__typename"] = str_type
     return {
-        "author": {"login": str_login, "__typename": str_type},
+        "author": dict_author,
         "commit": {"oid": str_head},
         "state": "COMMENTED",
     }
@@ -59,15 +64,11 @@ def missing(list_reviews, dict_roster_used=None):
     )
 
 
-def fetched(list_reviews):
-    dict_page = {"pageInfo": {"hasNextPage": False, "endCursor": None}}
-    dict_pr = {
-        "reviews": {**dict_page, "nodes": list_reviews},
-        "reviewThreads": {**dict_page, "nodes": []},
-        "comments": {**dict_page, "nodes": []},
-    }
-    cls_gate._fetch_page = lambda *args: dict_pr
-    return cls_gate.fetch_pull_request("o", "r", 1)["reviews"]["nodes"]
+def fetched(list_reviews, dict_roster_used=None):
+    dict_pr = {"reviews": {"nodes": list_reviews}}
+    dict_use = dict_roster if dict_roster_used is None else dict_roster_used
+    cls_gate.drop_borrowed_reviews(dict_pr, cls_gate.reviewer_logins(dict_use))
+    return dict_pr["reviews"]["nodes"]
 
 
 def author_problem(str_type):
@@ -90,6 +91,8 @@ LIST_CASES = [
     lambda: str_key in set_posters,
     lambda: missing([review(str_app + "[bot]", "Bot")], without_row()) is not None,
     lambda: missing(fetched([review(str_app, "User")])) is not None,
+    lambda: missing(fetched([review(str_app)])) is not None,
+    lambda: fetched([review("alice", "User")]) == [review("alice", "User")],
     lambda: missing(fetched([review(str_app + "[bot]", "Bot")])) is None,
     lambda: author_problem("User") is not None,
     lambda: author_problem("Bot") is None,

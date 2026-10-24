@@ -105,7 +105,9 @@ def normalise_login(str_login: str) -> str:
         The login without a trailing ``[bot]`` suffix, so the two spellings compare equal.
     """
     str_clean = (str_login or "").strip()
-    return str_clean[: -len(_BOT_SUFFIX)] if str_clean.endswith(_BOT_SUFFIX) else str_clean
+    return (
+        str_clean[: -len(_BOT_SUFFIX)] if str_clean.endswith(_BOT_SUFFIX) else str_clean
+    )
 
 
 _MIN_REPLY_CHARS = 100
@@ -172,7 +174,14 @@ def _roster_exists_on_default_branch(path_root: pathlib.Path) -> bool:
     """
     for str_ref in ("origin/HEAD", "origin/main", "origin/master"):
         cls_run = subprocess.run(  # noqa: S603
-            ["git", "-C", str(path_root), "cat-file", "-e", f"{str_ref}:{_ROSTER_FILE}"],  # noqa: S607
+            [
+                "git",
+                "-C",
+                str(path_root),
+                "cat-file",
+                "-e",
+                f"{str_ref}:{_ROSTER_FILE}",
+            ],  # noqa: S607
             capture_output=True,
             check=False,
         )
@@ -355,15 +364,29 @@ def _next_cursor(dict_side: dict | None) -> str | None:
     return dict_side["pageInfo"]["endCursor"]
 
 
-def _is_user_actor(dict_node: dict) -> bool:
-    """Return whether a node's author is an explicit GitHub ``User``.
+def _borrows_bot_login(dict_node: dict, set_declared: set[str]) -> bool:
+    """Return whether a node's author borrows the login of a roster entry.
 
     ``normalise_login`` strips ``[bot]``, so a human who registers a roster App's bare name
-    would otherwise compare equal to it. GraphQL ``__typename`` tells the two apart; a node
-    that carries no type is not rejected, which only fixtures omit, since the query always
-    asks for it.
+    would otherwise compare equal to it. Roster members are Apps by contract, so only a
+    ``__typename`` of ``Bot`` proves one and a missing one fails closed. Authors outside the
+    roster are never touched, so human reviews still reach every other check.
     """
-    return (dict_node.get("author") or {}).get("__typename") == "User"
+    dict_author = dict_node.get("author") or {}
+    return (
+        normalise_login(dict_author.get("login") or "")
+        in {normalise_login(s) for s in set_declared}
+        and dict_author.get("__typename") != "Bot"
+    )
+
+
+def drop_borrowed_reviews(dict_pr: dict, set_declared: set[str]) -> None:
+    """Remove from a fetched PR the reviews whose author borrows a roster login."""
+    dict_reviews = dict_pr.get("reviews")
+    if dict_reviews:
+        dict_reviews["nodes"] = [
+            d for d in dict_reviews["nodes"] if not _borrows_bot_login(d, set_declared)
+        ]
 
 
 def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
@@ -389,7 +412,9 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
         If the API call fails, so an unreachable API is never mistaken for a clean PR.
     """
     dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None, None)
-    list_sides = [(dict_pr[str_key], str_key) for str_key in _TUPLE_PAGED if str_key in dict_pr]
+    list_sides = [
+        (dict_pr[str_key], str_key) for str_key in _TUPLE_PAGED if str_key in dict_pr
+    ]
 
     while any(dict_side["pageInfo"]["hasNextPage"] for dict_side, _ in list_sides):
         dict_next = _fetch_page(
@@ -403,9 +428,6 @@ def fetch_pull_request(str_owner: str, str_repo: str, int_number: int) -> dict:
                 continue
             dict_side["nodes"].extend(dict_next[str_key]["nodes"])
             dict_side["pageInfo"] = dict_next[str_key]["pageInfo"]
-    dict_reviews = dict_pr.get("reviews")
-    if dict_reviews:
-        dict_reviews["nodes"] = [d for d in dict_reviews["nodes"] if not _is_user_actor(d)]
     return dict_pr
 
 
@@ -435,7 +457,8 @@ def reviewers_who_reported(
     return {
         normalise_login((d.get("author") or {}).get("login") or "")
         for d in list_reviews
-        if not str_commit_oid or ((d.get("commit") or {}).get("oid") or "") == str_commit_oid
+        if not str_commit_oid
+        or ((d.get("commit") or {}).get("oid") or "") == str_commit_oid
     } & set_roster
 
 
@@ -518,12 +541,18 @@ def patch_fingerprint(list_files: list[dict]) -> str:
         If the list is malformed, empty, possibly truncated, or a file carries no patch text
             (a pure rename has none and is hashed by its names).
     """
-    if not isinstance(list_files, list) or not all(isinstance(d, dict) for d in list_files):
+    if not isinstance(list_files, list) or not all(
+        isinstance(d, dict) for d in list_files
+    ):
         raise ValueError("patch unavailable: the file list is malformed")
     if not list_files or len(list_files) >= _INT_COMPARE_FILES:
-        raise ValueError(f"patch unavailable: {len(list_files)} file(s) in the comparison")
+        raise ValueError(
+            f"patch unavailable: {len(list_files)} file(s) in the comparison"
+        )
     if any(d.get("patch") is None and not _is_pure_rename(d) for d in list_files):
-        raise ValueError("patch unavailable: a file has no patch text (binary or too large)")
+        raise ValueError(
+            "patch unavailable: a file has no patch text (binary or too large)"
+        )
     try:
         list_parts = [
             [
@@ -531,16 +560,24 @@ def patch_fingerprint(list_files: list[dict]) -> str:
                 d.get("status", ""),
                 d.get("previous_filename", ""),
                 d.get("sha", "") if d.get("patch") is None else "",
-                [s for s in (d.get("patch") or "").splitlines() if s[:1] in _TUPLE_PATCH_PREFIXES],
+                [
+                    s
+                    for s in (d.get("patch") or "").splitlines()
+                    if s[:1] in _TUPLE_PATCH_PREFIXES
+                ],
             ]
             for d in sorted(list_files, key=lambda d: d["filename"])
         ]
     except (KeyError, TypeError, AttributeError) as cls_error:
-        raise ValueError(f"patch unavailable: malformed file entry ({cls_error!r})") from cls_error
+        raise ValueError(
+            f"patch unavailable: malformed file entry ({cls_error!r})"
+        ) from cls_error
     return hashlib.sha256(json.dumps(list_parts).encode()).hexdigest()
 
 
-def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oid: str) -> str:
+def fetch_patch_fingerprint(
+    str_owner: str, str_repo: str, str_base: str, str_oid: str
+) -> str:
     """Return the PR's own patch fingerprint at ``str_oid`` via the compare API.
 
     The CI checkout is shallow (``actions/checkout`` defaults to ``fetch-depth: 1``), so
@@ -769,7 +806,10 @@ def newest_roster_notice_date(list_notices: list[dict], set_roster: set[str]) ->
             :func:`summarise_reviewer_notice`, which walks the same stream for the same comment.
     """
     for dict_comment in reversed(list_notices):
-        if normalise_login((dict_comment.get("author") or {}).get("login") or "") in set_roster:
+        if (
+            normalise_login((dict_comment.get("author") or {}).get("login") or "")
+            in set_roster
+        ):
             return dict_comment.get("createdAt") or ""
     return ""
 
@@ -935,7 +975,9 @@ def _row_posters(posters: object) -> frozenset[str]:
     """
     if posters is None:
         return frozenset()
-    if not isinstance(posters, list) or not all(isinstance(x, str) and x.strip() for x in posters):
+    if not isinstance(posters, list) or not all(
+        isinstance(x, str) and x.strip() for x in posters
+    ):
         print(
             "check_review_threads: ignoring a comment-marker `posters:` that is not a list of "
             "non-empty strings; no marker will be accepted from that row",
@@ -991,9 +1033,13 @@ def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
             findings", so a prose review never satisfies the gate (blueprintx#630).
     """
     list_stripped = [str_line.strip() for str_line in list_lines]
-    list_counts = [m.group(1) for m in map(_RE_FINDINGS_LINE.search, list_stripped) if m]
+    list_counts = [
+        m.group(1) for m in map(_RE_FINDINGS_LINE.search, list_stripped) if m
+    ]
     list_zero = [m for m in map(_RE_FINDINGS_LINE.fullmatch, list_stripped) if m]
-    return list_counts == ["0"] and len(list_zero) == 1 and int(list_zero[0].group(2)) > 0
+    return (
+        list_counts == ["0"] and len(list_zero) == 1 and int(list_zero[0].group(2)) > 0
+    )
 
 
 def _is_allowlisted_bot(dict_notice: dict, set_posters: frozenset[str]) -> bool:
@@ -1066,7 +1112,9 @@ def ladder_marker_declared(
     return ladder_reports_zero_findings(list_lines)
 
 
-def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: list[dict]) -> str:
+def _zero_review_message(
+    str_quote: str, set_roster: set[str], list_notices: list[dict]
+) -> str:
     """Return the message for a PR with zero reviews submitted by the roster.
 
     Parameters
@@ -1102,14 +1150,19 @@ def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: lis
         "reviewer never ran, and nothing on this PR has been looked at.\n"
         "Trigger it with '@coderabbitai full review' from a user account. ⚠️ Prefer FULL over "
         "a plain 'review': an incremental reviewer answers 'already reviewed' on commits it has "
-        "seen on another PR (a reopen, a rebase, a re-PR), and a full review does not." + str_quote
+        "seen on another PR (a reopen, a rebase, a re-PR), and a full review does not."
+        + str_quote
     )
 
 
 def _notice_quote(list_notices: list[dict], set_roster: set[str]) -> str:
     """Return the reviewer's newest notice as a message suffix, or ``""`` when there is none."""
     str_seen = summarise_reviewer_notice(list_notices, set_roster)
-    return f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
+    return (
+        f"\nThe reviewer's most recent notice on this PR reads: {str_seen}"
+        if str_seen
+        else ""
+    )
 
 
 def _notice_declares_review(
@@ -1190,11 +1243,17 @@ def check_missing_review(  # noqa: PLR0913
         return None, ""
 
     if _notice_declares_review(
-        list_notices or [], set_roster, (tuple_markers, set_posters), str_head_date, str_head_oid
+        list_notices or [],
+        set_roster,
+        (tuple_markers, set_posters),
+        str_head_date,
+        str_head_oid,
     ):
         return None, ""
 
-    str_carried = review_carried_forward(fn_fingerprint, list_reviews, set_roster, str_head_oid)
+    str_carried = review_carried_forward(
+        fn_fingerprint, list_reviews, set_roster, str_head_oid
+    )
     if str_carried:
         return None, str_carried
 
@@ -1283,7 +1342,8 @@ def find_thread_problems(
         list_answers = [
             c
             for c in list_comments
-            if normalise_login((c.get("author") or {}).get("login") or "") not in set_roster
+            if normalise_login((c.get("author") or {}).get("login") or "")
+            not in set_roster
             and len((c.get("body") or "").strip()) >= int_min_chars
         ]
         str_first = (list_comments[0].get("body") or "").strip().splitlines()
@@ -1342,7 +1402,9 @@ _RE_LADDER_COUNT = re.compile(
     r"^[ \t*_#-]*(\d+)\s+finding\(?s?\)?\s+across\b", re.IGNORECASE | re.MULTILINE
 )
 _RE_LADDER_HEAD = re.compile(r"^\s*fallback review\s*[—–-]\s*runtime\s*:", re.I | re.M)
-_RE_LADDER_META = re.compile(r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M)
+_RE_LADDER_META = re.compile(
+    r"^\s*(?:fallback review\b|reviewed head\s*:).*$", re.I | re.M
+)
 _STR_CLEAN_LINE = (
     r"^[^\w\n]*(?:(?:review|findings?|summary|result)\s*[:—–-]\s*)?"
     r"(?:no\s+(?:[\w*-]+\s+){0,2}(?:findings?|issues?|bugs?|problems?)(?:\s+found)?"
@@ -1352,7 +1414,8 @@ _STR_CLEAN_LINE = (
 )
 _RE_BODY_CLEAN_LINE = re.compile(_STR_CLEAN_LINE, re.I | re.M)
 _RE_BODY_CLEAN_SECTION = re.compile(
-    r"^#{1,6}\s*(?:findings|issues|problems|review)\b[^\n]*\n(?:[^\S\n]*\n)*" + _STR_CLEAN_LINE,
+    r"^#{1,6}\s*(?:findings|issues|problems|review)\b[^\n]*\n(?:[^\S\n]*\n)*"
+    + _STR_CLEAN_LINE,
     re.I | re.M,
 )
 _RES_BODY_FINDING = (
@@ -1363,7 +1426,9 @@ _RES_BODY_FINDING = (
 )
 
 
-_RE_QUOTED = re.compile(r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*", re.M | re.S)
+_RE_QUOTED = re.compile(
+    r"^[ \t]*(?:```|~~~).*?^[ \t]*(?:```|~~~)|^[ \t]*>[^\n]*", re.M | re.S
+)
 
 
 _SET_HEADER_AUTHORS = frozenset({"coderabbitai"})
@@ -1440,14 +1505,20 @@ def review_body_finding_lines(str_body: str | None, str_login: str = "") -> list
     list_declared = _declared_findings(str_body or "", str_login)
     if list_declared is not None:
         return list_declared
-    str_text = _RE_BODY_CLEAN_LINE.sub("", _RE_BODY_CLEAN_SECTION.sub("", str_body or ""))
+    str_text = _RE_BODY_CLEAN_LINE.sub(
+        "", _RE_BODY_CLEAN_SECTION.sub("", str_body or "")
+    )
     list_lines = [
         str_line.strip()
         for str_line in str_text.splitlines()
         if any(re_.search(str_line) for re_ in _RES_BODY_FINDING)
     ]
     if _RE_LADDER_HEAD.search(str_body or ""):
-        return list_lines or _ladder_prose_line(str_text) or _ladder_empty_findings(str_body or "")
+        return (
+            list_lines
+            or _ladder_prose_line(str_text)
+            or _ladder_empty_findings(str_body or "")
+        )
     return list_lines
 
 
@@ -1496,9 +1567,7 @@ def _answered_after(
     )
 
 
-_STR_REVIEW_NOUN = (
-    r"(?:the\s+|our\s+|my\s+)?(?:(?:ladder|fallback|claude|coderabbit|cli|rung)\s+)*review\b"
-)
+_STR_REVIEW_NOUN = r"(?:the\s+|our\s+|my\s+)?(?:(?:ladder|fallback|claude|coderabbit|cli|rung)\s+)*review\b"
 _RE_ANSWER_SHAPE = re.compile(
     r"^[\s*_#-]*(?:re\s*:|(?:repl(?:y|ies)|answers?|responses?|verdicts?|judg(?:e)?ments?)"
     rf"(?:\s+(?:to|on))?\s*:?)\s*{_STR_REVIEW_NOUN}"
@@ -1510,7 +1579,9 @@ _RE_ANSWER_SHAPE = re.compile(
 )
 
 
-def _is_human_answer(dict_notice: dict, set_roster: set[str], int_min_chars: int) -> bool:
+def _is_human_answer(
+    dict_notice: dict, set_roster: set[str], int_min_chars: int
+) -> bool:
     """Return whether one comment is by a known human outside the roster and reads as an answer."""
     dict_author = dict_notice.get("author") or {}
     str_login = dict_author.get("login") or ""
@@ -1540,7 +1611,8 @@ def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[
             "submittedAt": dict_notice.get("createdAt"),
         }
         for dict_notice in list_notices
-        if normalise_login((dict_notice.get("author") or {}).get("login") or "") in set_roster
+        if normalise_login((dict_notice.get("author") or {}).get("login") or "")
+        in set_roster
         and any(
             re_.search(dict_notice.get("body") or "")
             for re_ in (_RE_LADDER_HEAD, _RE_ACTIONABLE, _RE_BODY_SECTION)
@@ -1566,7 +1638,8 @@ def _marker_notices_as_reviews(
         for dict_notice in list_notices
         if dict_notice.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
         and _is_marker_comment(dict_notice, tuple_markers)
-        and normalise_login((dict_notice.get("author") or {}).get("login") or "") not in set_roster
+        and normalise_login((dict_notice.get("author") or {}).get("login") or "")
+        not in set_roster
     ]
 
 
@@ -1631,7 +1704,8 @@ def find_review_body_problems(
         + _marker_notices_as_reviews(list_notices, tuple_markers, set_roster)
         if dict_review.get("state") != "DISMISSED"
         and (
-            normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+            normalise_login((dict_review.get("author") or {}).get("login") or "")
+            in set_roster
             or _is_marker_comment(dict_review, tuple_markers)
         )
     ]
@@ -1720,7 +1794,11 @@ def parse_args(list_argv: list[str] | None = None) -> argparse.Namespace:
 
 def _print_skip(bool_json: bool, str_reason: str) -> int:
     """Print a self-skip in the requested representation and return ``0``."""
-    print(json.dumps({"status": "skipped", "reason": str_reason}) if bool_json else str_reason)
+    print(
+        json.dumps({"status": "skipped", "reason": str_reason})
+        if bool_json
+        else str_reason
+    )
     return 0
 
 
@@ -1798,17 +1876,23 @@ def _print_thread_verdict(
         print(json.dumps(dict_verdict))
         return 1 if list_problems else 0
     if str_carried:
-        print(f"Review carried forward from {str_carried[:7]} (the PR's own patch is unchanged).")
+        print(
+            f"Review carried forward from {str_carried[:7]} (the PR's own patch is unchanged)."
+        )
     return report_verdict(list_problems, int_threads, bool_require_resolved)
 
 
 def _head_committed_date(dict_pr: dict) -> str:
     """Return the head commit's ``committedDate``, or ``""`` when the query did not carry it."""
-    dict_commit = ((dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit")) or {}
+    dict_commit = (
+        (dict_pr.get("commits", {}).get("nodes") or [{}])[0].get("commit")
+    ) or {}
     return dict_commit.get("committedDate") or ""
 
 
-def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[str]) -> list[str]:
+def _unanswered_bodies(
+    dict_pr: dict, list_notices: list[dict], set_roster: set[str]
+) -> list[str]:
     """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node."""
     return find_review_body_problems(
         dict_pr.get("reviews", {}).get("nodes", []),
@@ -1838,13 +1922,17 @@ def _review_times(
         and dict_review.get("state") != "DISMISSED"
         and (
             set_roster is None
-            or normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+            or normalise_login((dict_review.get("author") or {}).get("login") or "")
+            in set_roster
         )
     ]
 
 
 def _reviewed_before_base_change(
-    dict_pr: dict, list_changes: list[dict], str_oid: str, set_roster: set[str] | None = None
+    dict_pr: dict,
+    list_changes: list[dict],
+    str_oid: str,
+    set_roster: set[str] | None = None,
 ) -> bool:
     """Return whether the newest review at ``str_oid`` predates the PR's latest base change.
 
@@ -1869,7 +1957,9 @@ def _reviewed_before_base_change(
         ``True`` when the carry-forward must be refused.
     """
     try:
-        dt_change = max(_parse_time(dict_ev.get("createdAt") or "") for dict_ev in list_changes)
+        dt_change = max(
+            _parse_time(dict_ev.get("createdAt") or "") for dict_ev in list_changes
+        )
         list_times = _review_times(dict_pr, str_oid, set_roster)
     except (ValueError, AttributeError, TypeError):
         return True
@@ -1908,17 +1998,23 @@ def _compare_fingerprint(
 
     def fn_fingerprint(str_oid: str) -> str:
         if not isinstance(list_changes, list):
-            raise ValueError("the PR's retarget state is unknown: a review is not carried across")
+            raise ValueError(
+                "the PR's retarget state is unknown: a review is not carried across"
+            )
         if list_changes and _reviewed_before_base_change(
             dict_pr, list_changes, str_oid, set_roster
         ):
-            raise ValueError("the PR's base branch was changed: a review is not carried across")
+            raise ValueError(
+                "the PR's base branch was changed: a review is not carried across"
+            )
         return fetch_patch_fingerprint(str_owner, str_repo, str_base, str_oid)
 
     return fn_fingerprint
 
 
-_RE_UPDATE_TYPE = re.compile(r"^\s*update-type:\s*version-update:semver-(\w+)\s*$", re.M)
+_RE_UPDATE_TYPE = re.compile(
+    r"^\s*update-type:\s*version-update:semver-(\w+)\s*$", re.M
+)
 _RE_DEPENDENCY_NAME = re.compile(r"^\s*-?\s*dependency-name:", re.M)
 _SET_EXEMPT_UPDATES = frozenset({"patch", "minor"})
 _STR_DEPENDABOT_EMAIL = "+dependabot[bot]@users.noreply.github.com"
@@ -1962,7 +2058,11 @@ def dependabot_pushed_head(str_repo_full: str, str_head_oid: str) -> bool:
     ]
     try:
         cls_run = subprocess.run(  # noqa: S603
-            list_cmd, capture_output=True, text=True, check=False, timeout=_INT_COMPARE_TIMEOUT_S
+            list_cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_INT_COMPARE_TIMEOUT_S,
         )
         dict_out = json.loads(cls_run.stdout)
     except (OSError, ValueError, subprocess.TimeoutExpired):
@@ -1970,9 +2070,16 @@ def dependabot_pushed_head(str_repo_full: str, str_head_oid: str) -> bool:
     if not isinstance(dict_out, dict):
         return False
     list_runs = dict_out.get("workflow_runs") or []
-    if cls_run.returncode != 0 or not list_runs or dict_out.get("total_count") != len(list_runs):
+    if (
+        cls_run.returncode != 0
+        or not list_runs
+        or dict_out.get("total_count") != len(list_runs)
+    ):
         return False
-    return all(((d.get("actor") or {}).get("login") or "") == "dependabot[bot]" for d in list_runs)
+    return all(
+        ((d.get("actor") or {}).get("login") or "") == "dependabot[bot]"
+        for d in list_runs
+    )
 
 
 def dependabot_review_exempt(
@@ -2000,7 +2107,10 @@ def dependabot_review_exempt(
         return False
     dict_all = dict_pr.get("allCommits") or {}
     list_nodes = dict_all.get("nodes") or []
-    if not list_nodes or (dict_all.get("pageInfo") or {}).get("hasNextPage") is not False:
+    if (
+        not list_nodes
+        or (dict_all.get("pageInfo") or {}).get("hasNextPage") is not False
+    ):
         return False
     if not all(_is_dependabot_commit(dict_node) for dict_node in list_nodes):
         return False
@@ -2017,19 +2127,24 @@ def _missing_review(
     set_reviewers: set[str],
 ) -> tuple[str | None, str]:
     """Return :func:`check_missing_review` for one fetched ``pullRequest`` node."""
-    if dependabot_review_exempt(dict_pr, functools.partial(dependabot_pushed_head, str_repo_full)):
+    if dependabot_review_exempt(
+        dict_pr, functools.partial(dependabot_pushed_head, str_repo_full)
+    ):
         return None, ""
+    str_author = (dict_pr.get("author") or {}).get("login") or ""
     return check_missing_review(
         dict_pr.get("reviews", {}).get("nodes", []),
         set_reviewers,
-        "" if _is_user_actor(dict_pr) else (dict_pr.get("author") or {}).get("login") or "",
+        "" if _borrows_bot_login(dict_pr, set_reviewers) else str_author,
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=dict_pr.get("comments", {}).get("nodes", []),
         str_head_date=_head_committed_date(dict_pr),
         tuple_markers=load_comment_markers(pathlib.Path.cwd()),
         set_posters=load_marker_posters(pathlib.Path.cwd()),
         fn_fingerprint=_compare_fingerprint(
-            dict_pr, str_repo_full, {normalise_login(str_login) for str_login in set_reviewers}
+            dict_pr,
+            str_repo_full,
+            {normalise_login(str_login) for str_login in set_reviewers},
         ),
     )
 
@@ -2052,7 +2167,9 @@ def main(list_argv: list[str] | None = None) -> int:
     str_repo_full = os.environ.get("GITHUB_REPOSITORY", "")
     str_number = os.environ.get("PR_NUMBER", "")
     if not str_repo_full or not str_number.isdigit():
-        return _print_skip(bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
+        return _print_skip(
+            bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check"
+        )
 
     dict_roster = load_roster(pathlib.Path.cwd())
     if not dict_roster:
@@ -2065,16 +2182,21 @@ def main(list_argv: list[str] | None = None) -> int:
 
     str_owner, _, str_repo = str_repo_full.partition("/")
     dict_pr = fetch_pull_request(str_owner, str_repo, int(str_number))
+    drop_borrowed_reviews(dict_pr, set_reviewers)
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 
     str_missing, str_carried = _missing_review(dict_pr, str_repo_full, set_reviewers)
     if str_missing:
-        return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
+        return _print_missing_review(
+            bool_json, str_missing, list_notices, set_reviewers
+        )
 
     list_body_problems = _unanswered_bodies(dict_pr, list_notices, set_roster)
 
-    bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
+    bool_require_resolved = (
+        os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
+    )
     list_problems = find_thread_problems(
         list_threads, set_roster, bool_require_resolved=bool_require_resolved
     )
