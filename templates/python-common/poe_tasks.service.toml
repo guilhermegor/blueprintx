@@ -1,0 +1,19 @@
+[tool.poe.tasks.run]
+cmd = "bash bin/run.sh"
+help = "Run the project entrypoint"
+
+[tool.poe.tasks.wheelhouse]
+cmd = "bash bin/build_wheelhouse.sh build"
+help = "Build the offline wheelhouse (../_wheels/<repo>) for a corporate/air-gapped install"
+
+[tool.poe.tasks.wheelhouse_assemble]
+cmd = "bash bin/build_wheelhouse.sh assemble"
+help = "Assemble a transferred wheelhouse payload into installable wheels, refusing a mismatch"
+
+[tool.poe.tasks.ship]
+cmd = "bash bin/ship.sh"
+help = "Package the committed default-branch tree into dist/<repo>_<timestamp>.zip"
+
+[tool.poe.tasks.fix_playwright]
+cmd = "bash bin/fix_playwright.sh"
+help = "Reinstall the Playwright browsers (OS-aware)"
