@@ -738,6 +738,7 @@ list_copies_step() {
     copy_shared_utils "$1"
     copy_typing_chassis "$1"
     copy_templates "$1"
+    copy_migration_templates "$1"
     copy_common_templates "$1"
     copy_mkdocs_templates "$1"
 }

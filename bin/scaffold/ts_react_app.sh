@@ -643,6 +643,7 @@ main() {
 list_copies_step() {
     create_directory_structure "$1"
     copy_skeleton_files "$1"
+    apply_file_variants "$1"
     copy_common_templates "$1"
 }
 

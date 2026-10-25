@@ -255,6 +255,7 @@ list_copies_step() {
     create_directory_structure "$1"
     copy_skeleton_files "$1"
     copy_common_templates "$1"
+    scaffold_prune_review_bot_roster "$1"
 }
 
 if [[ "${1:-}" == "--list-copies" ]]; then
