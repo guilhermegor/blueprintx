@@ -318,6 +318,23 @@ def required_sources(
     }
 
 
+def is_offline_project(path_root: pathlib.Path) -> bool:
+    """Return whether the project was scaffolded without a GitHub remote.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Root of the scaffolded project.
+
+    Returns
+    -------
+    bool
+            ``True`` when the offline git-diff tooling is present and ``.github`` is gone,
+            which is the state ``apply_offline_mode`` leaves behind.
+    """
+    return (path_root / "bin/git_diff_export.sh").is_file() and not (path_root / ".github").exists()
+
+
 def _is_removed(str_rel: str, set_removed: set[str]) -> bool:
     """Return whether the scaffold ``rm``s this destination, or a directory above it.
 
@@ -682,6 +699,8 @@ def main(list_argv: list) -> int:
     dict_sources = required_sources(
         path_blueprintx, str_tier, bool(review_bot_roster_enabled(path_root))
     )
+    if is_offline_project(path_root):
+        dict_sources = {k: v for k, v in dict_sources.items() if not k.startswith(".github/")}
     if not dict_sources:
         print(
             f"SKIPPED: found no required paths under {path_blueprintx} — the scaffold entry "

@@ -141,6 +141,23 @@ def _project(path_tmp: Path, str_stamp: str) -> Path:
     return path_project
 
 
+def test_a_project_with_offline_tooling_and_no_github_dir_is_offline(tmp_path: Path) -> None:
+    """`apply_offline_mode` removes `.github` and adds the git-diff scripts."""
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin/git_diff_export.sh").touch()
+
+    assert gate.is_offline_project(tmp_path) is True
+
+
+def test_a_project_keeping_its_github_dir_is_online(tmp_path: Path) -> None:
+    """An online project that lost `.github` must still be reported, so it is not offline."""
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin/git_diff_export.sh").touch()
+    (tmp_path / ".github").mkdir()
+
+    assert gate.is_offline_project(tmp_path) is False
+
+
 def test_a_printed_copy_is_required(tmp_path: Path) -> None:
     """Whatever the dry run prints is what the scaffold copies, so it is required."""
     path_root = _checkout(
