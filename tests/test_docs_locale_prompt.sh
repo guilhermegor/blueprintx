@@ -69,7 +69,7 @@ test_templates_and_scaffolds_wired() {
         grep -q 'mkdocs.yml' "$str_scaffold" || continue
         int_seen=$((int_seen + 1))
         grep -q 'export DOCS_LOCALE="\${DOCS_LOCALE:-en}"' "$str_scaffold" \
-            && grep -q "envsubst '\${PROJECT_DISPLAY_NAME} \${REPOSITORY} \${DOCS_LOCALE}'" "$str_scaffold" \
+            && grep -q "envsubst '\${PROJECT_DISPLAY_NAME} \${PROJECT_DESCRIPTION_ESC} \${REPOSITORY} \${DOCS_LOCALE}'" "$str_scaffold" \
             && pass "default + envsubst in ${str_scaffold#"$REPO_ROOT"/}" \
             || fail "DOCS_LOCALE not rendered in ${str_scaffold#"$REPO_ROOT"/}"
     done

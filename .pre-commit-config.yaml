@@ -294,6 +294,13 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/(scaffold_git_remote|common)\.sh|tests/test_scaffold_git_remote\.sh)$
 
+      - id: description-sync-tests
+        name: description reaches every slot in every tier (blueprintx#895)
+        entry: bash tests/test_description_sync.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/common\.sh|bin/scaffold/(python|ts)_.*\.sh|templates/[^/]+/(mkdocs\.yml|pyproject\.toml|package\.json|docusaurus\.config\.js)|templates/python-common/bin/check_description_sync\.sh|tests/test_description_sync\.sh)$
+
       - id: scaffold-python-templates-tests
         name: scaffold provenance and copy-list tests (blueprintx#635)
         entry: bash tests/test_scaffold_python_templates.sh

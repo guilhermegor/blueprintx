@@ -401,9 +401,10 @@ copy_common_templates() {
     print_status "info" "Applying common TypeScript templates..."
 
     PROJECT_LICENSE="${LICENSE_CHOICE}"
+    scaffold_escape_description
     export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME \
            STATE_MANAGEMENT_VARIANT STATE_MANAGEMENT_DESC STATE_MANAGEMENT_ANTIPATTERN
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
+    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION_ESC}' \
         < "$COMMON_TEMPLATE_ROOT/package.json" \
         > "$project_path/package.json"
     cp "$COMMON_TEMPLATE_ROOT/package-lock.json" "$project_path/package-lock.json"
