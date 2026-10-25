@@ -154,11 +154,18 @@ has already run.
 
 ## Pull Request Process
 
-1. **Create an Issue First**:
+1. **Open an Issue First**:
    - Check existing issues on this repository's [GitHub Issues](../../issues) page
-   - Open a new issue if none exists for your work
+   - Open a new issue using the repository's issue template if none exists for your work
+   - State what you want to change and why, and list the files it will touch
+   - For non-trivial work, wait for the issue to be accepted before writing code
 
-2. **Opening a PR**:
+2. **Branch from the Default Branch**:
+   - Name it `<type>/<issue-number>-<slug>` (for example `feat/42-user-authentication`);
+     see "Branch Naming Convention" above
+
+3. **Opening a PR**:
+   - Put `Closes #<N>` in the PR body so the issue closes when the PR merges
    - Fill out the PR template completely
    - Include:
      - Detailed description
