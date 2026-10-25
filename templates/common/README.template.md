@@ -9,7 +9,7 @@
 [![PyPI](https://img.shields.io/pypi/v/${PROJECT_NAME}.svg)](https://pypi.org/project/${PROJECT_NAME}/)
 <!-- /only -->
 [![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/)
-[![Linting](https://img.shields.io/badge/linting-ruff_|_codespell-blue)](https://github.com/astral-sh/ruff+https://github.com/codespell-project/codespell)
+[![Linting](https://img.shields.io/badge/linting-ruff_|_codespell-blue)](https://github.com/astral-sh/ruff)
 [![Mypy](https://img.shields.io/badge/type_checked-mypy-blue)](https://mypy-lang.org)
 ![Test Coverage](https://raw.githubusercontent.com/${GITHUB_USERNAME}/${PROJECT_NAME}/main/coverage.svg)
 ![License](https://img.shields.io/badge/license-${PROJECT_LICENSE}-green.svg)

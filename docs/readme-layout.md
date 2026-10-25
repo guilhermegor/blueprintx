@@ -46,9 +46,10 @@ Further rules:
 - README images use absolute `raw.githubusercontent.com` URLs (logo, coverage badge), because
   `readme = "README.md"` ships to PyPI where relative paths break. `scaffold_render_readme` fills
   them from `GITHUB_USERNAME` and `PROJECT_NAME`.
-- A footer closes the README: a rule, then `<sub>` text, no heading (so no slug), reading
-  "Generated from the <tier> template via BlueprintX" (`README_TIER`) followed by any project
-  disclaimer. Disclaimers go here, not in the body.
+- A footer closes the README rendered from `README.template.md` and the Python README (the other
+  skeleton READMEs, ts-lib included, have none): a rule, then `<sub>` text, no heading (so no
+  slug), reading "Generated from the <tier> template via BlueprintX" (`README_TIER`) followed by
+  any project disclaimer. Disclaimers go here, not in the body.
 - Every list item under `authors` carries a `github.com/<user>` link and a
   `linkedin.com/in/<handle>` link, and none uses the placeholder
   `linkedin.com/in/your-linkedin-handle`.
