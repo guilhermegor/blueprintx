@@ -98,7 +98,7 @@ def test_main(capsys: pytest.CaptureFixture[str]) -> None:
 2. Mirror the source structure under `tests/unit/` — one test module per source module.
 3. Run tests: `poe unit_tests` (or `pytest tests/unit/ -v`)
 4. Add integration tests in `tests/integration/` for any I/O-dependent code.
-5. Keep `docs/` in sync with the public API; host locally with `poe docs_server`.
+5. Keep `docs/` in sync with the public API; host locally with `poe docs_serve`.
 
 ---
 

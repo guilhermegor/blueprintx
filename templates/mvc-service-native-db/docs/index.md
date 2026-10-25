@@ -18,7 +18,7 @@ A layered MVC service (Model–View–Controller) using native database drivers 
 ```bash
 bash bin/venv.sh   # bootstrap the venv (poe lives inside it, so bootstrap is shell)
 poe run            # run the application (src/controller/main.py)
-poe docs_server   # serve this documentation at http://0.0.0.0:8000
+poe docs_serve   # serve this documentation at http://0.0.0.0:8000
 ```
 
 ---
