@@ -2794,7 +2794,7 @@ heading (blank lines between are fine): <code>&lt;!-- slug: install --&gt;</code
 <tbody>
 <tr>
 <td>Core, first</td>
-<td><code>overview</code>, <code>getting-started</code>, <code>install</code>, <code>usage</code>, <code>project-structure</code>, <code>development</code></td>
+<td><code>overview</code>, optional <code>features</code>, <code>library</code> only: <code>documentation</code>, then <code>getting-started</code>, <code>install</code>, <code>usage</code>, <code>project-structure</code>, <code>development</code></td>
 </tr>
 <tr>
 <td>Archetype</td>
@@ -2812,6 +2812,21 @@ heading (blank lines between are fine): <code>&lt;!-- slug: install --&gt;</code
 <li>The first line is <code>&lt;!-- readme-archetype: NAME --&gt;</code>, one of the archetypes above.</li>
 <li>No H1 to H6 contains an emoji, <code>&lt;img&gt;</code>, <code>![...]</code> or <code>&lt;picture&gt;</code>. The logo sits on its own
   line under the H1. Badges and images stay allowed in the body.</li>
+<li><code>features</code> is optional: its position is checked only when the section is present.
+  <code>documentation</code> is required for <code>library</code> and holds the docs site URL plus the local serve command: <code>bash bin/poe_exec.sh docs_serve</code>
+  for Python libraries, <code>npm run docs:start</code> for TypeScript libraries.</li>
+<li>The logo is centered on its own line under the H1 (<code>&lt;p align="center"&gt;&lt;img ... width="200"&gt;&lt;/p&gt;</code>),
+  never inside the heading.</li>
+<li>Badge order: status, python, pypi, docs, linting, mypy, coverage, license, issues,
+  contributions. <code>pypi</code> is <code>library</code> only; no Snyk License advisor badge, and no pepy badge before
+  the first publish. The order is a review convention, not a gate.</li>
+<li>README images use absolute <code>raw.githubusercontent.com</code> URLs (logo, coverage badge), because
+  <code>readme = "README.md"</code> ships to PyPI where relative paths break. <code>scaffold_render_readme</code> fills
+  them from <code>GITHUB_USERNAME</code> and <code>PROJECT_NAME</code>.</li>
+<li>A footer closes the README rendered from <code>README.template.md</code> and the Python README (the other
+  skeleton READMEs, ts-lib included, have none): a rule, then <code>&lt;sub&gt;</code> text, no heading (so no
+  slug), reading "Generated from the <tier> template via BlueprintX" (<code>README_TIER</code>) followed by
+  any project disclaimer. Disclaimers go here, not in the body.</li>
 <li>Every list item under <code>authors</code> carries a <code>github.com/&lt;user&gt;</code> link and a
   <code>linkedin.com/in/&lt;handle&gt;</code> link, and none uses the placeholder
   <code>linkedin.com/in/your-linkedin-handle</code>.</li>
