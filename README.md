@@ -5,7 +5,7 @@
 <p align="center"><img src="https://raw.githubusercontent.com/guilhermegor/BlueprintX/main/assets/logo.png" width="200" alt="BlueprintX logo"></p>
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-[![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://guilhermegor.github.io/BlueprintX/)
+[![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://guilhermegor.github.io/blueprintx/)
 ![Bash](https://img.shields.io/badge/bash-%3E%3D4-4EAA25?logo=gnubash&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Open Issues](https://img.shields.io/github/issues/guilhermegor/BlueprintX)
@@ -31,7 +31,7 @@
 <!-- slug: documentation -->
 ## Documentation
 
-The documentation site lives at https://guilhermegor.github.io/BlueprintX/. Serve it locally with `make mkdocs_serve`.
+The documentation site lives at https://guilhermegor.github.io/blueprintx/. Serve it locally with `make mkdocs_serve`.
 
 <!-- slug: getting-started -->
 ## Getting Started
