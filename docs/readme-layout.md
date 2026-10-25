@@ -36,7 +36,8 @@ Further rules:
 - No H1 to H6 contains an emoji, `<img>`, `![...]` or `<picture>`. The logo sits on its own
   line under the H1. Badges and images stay allowed in the body.
 - `features` is optional: its position is checked only when the section is present.
-  `documentation` is required for `library` and holds the docs site URL plus `bash bin/poe_exec.sh docs_serve`.
+  `documentation` is required for `library` and holds the docs site URL plus the local serve command: `bash bin/poe_exec.sh docs_serve`
+  for Python libraries, `npm run docs:start` for TypeScript libraries.
 - The logo is centered on its own line under the H1 (`<p align="center"><img ... width="200"></p>`),
   never inside the heading.
 - Badge order: status, python, pypi, docs, linting, mypy, coverage, license, issues,
