@@ -31,7 +31,7 @@ ${PROJECT_DESCRIPTION}
 <!-- slug: documentation -->
 ## Documentation
 
-The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/. Serve it locally with `poe docs_serve`.
+The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/. Serve it locally with `bash bin/poe_exec.sh docs_serve`.
 <!-- /only -->
 
 <!-- slug: getting-started -->
@@ -123,4 +123,5 @@ ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 
 ---
 
-<sub>Generated from the ${README_TIER} template via BlueprintX. Add any project disclaimer here.</sub>
+<sub>Generated from the ${README_TIER} template via BlueprintX.</sub>
+<!-- add any project disclaimer inside the sub tag above -->
