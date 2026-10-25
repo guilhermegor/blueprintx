@@ -330,6 +330,7 @@ lib_minimal_copy_tooling_configs() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/poe_tasks.library.toml" \
         "$project_path/poe_tasks.library.toml"
     add_poe_include "$project_path" "poe_tasks.library.toml"
+    copy_poe_fragments lib-minimal "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
@@ -421,6 +422,7 @@ lib_minimal_copy_project_scaffolding() {
 
     cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
+    rm -f "$project_path"/bin/{db.sh,run.sh,build_wheelhouse.sh,fix_playwright.sh}
     mkdir -p "$project_path/tests/integration"
     cp "$COMMON_TEMPLATE_ROOT/tests/integration/test_bin_scripts.py" \
         "$project_path/tests/integration/test_bin_scripts.py"
@@ -438,9 +440,8 @@ lib_minimal_copy_project_scaffolding() {
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
         "$project_path/tests/unit/test_family_convention_example.py"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
-    cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"
-    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh" "$project_path/bin/commit.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/commit.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
     mkdir -p "$project_path/.specs/backlog"

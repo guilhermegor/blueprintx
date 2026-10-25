@@ -215,6 +215,7 @@ scaffold_copy_common_templates() {
 	print_status "info" "Applying common Python templates..."
 	scaffold_render_pyproject "$str_tier" "$str_project_path"
 	scaffold_copy_tooling_configs "$str_project_path"
+	copy_poe_fragments "$str_tier" "$str_project_path"
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
 	scaffold_copy_executables_and_vscode "$str_tier" "$str_project_path"
@@ -228,6 +229,7 @@ scaffold_copy_common_templates() {
 }
 
 scaffold_list_copies_step() {
+	add_poe_include() { :; }
 	scaffold_copy_common_templates "$str_list_tier" "$1"
 }
 

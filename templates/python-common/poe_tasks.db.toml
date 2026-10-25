@@ -1,0 +1,11 @@
+[tool.poe.tasks.db_up]
+cmd = "bash bin/db.sh up"
+help = "Start the database services, ensure the schema and apply migrations"
+
+[tool.poe.tasks.db_backup]
+cmd = "bash bin/db.sh backup"
+help = "Back the database up (pg_dump)"
+
+[tool.poe.tasks.db_restore]
+cmd = "bash bin/db.sh restore"
+help = "Restore the database from a backup (pg_restore)"
