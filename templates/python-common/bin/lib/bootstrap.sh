@@ -103,7 +103,7 @@ resolve_base_python() {
 	str_path_clean="$(path_without_active_venvs)"
 	for str_candidate in python3 python py; do
 		str_found="$(PATH="$str_path_clean" command -v "$str_candidate" 2>/dev/null)" || continue
-		if ! python_in_venv "$str_found"; then
+		if "$str_found" --version >/dev/null 2>&1 && ! python_in_venv "$str_found"; then
 			printf '%s\n' "$str_found"
 			return 0
 		fi

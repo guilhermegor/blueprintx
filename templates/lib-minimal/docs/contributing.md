@@ -10,7 +10,7 @@ Everything you need to develop, test, and release this library.
 ## Setting up for development
 
 `poe` is a dev dependency, so it exists only once the virtualenv does. Bootstrap with the shell
-entry point first, from a plain shell (not inside `poetry run`, `poe` or an activated venv),
+entry point first. For that very first bootstrap use a plain shell (not inside `poetry run`, `poe` or an activated venv),
 then let `poe_exec.sh` find the venv's `poe` for the rest:
 
 ```bash

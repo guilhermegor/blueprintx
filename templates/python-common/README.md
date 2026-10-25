@@ -20,7 +20,7 @@ ${PROJECT_DESCRIPTION}
 <!-- slug: getting-started -->
 ## Getting Started
 
-Python 3.10+ and [Poetry](https://python-poetry.org/) are the only prerequisites.
+Python 3.10+ is the only prerequisite; `bin/venv.sh` installs [Poetry](https://python-poetry.org/) when it is missing.
 
 <!-- slug: install -->
 ### Install
