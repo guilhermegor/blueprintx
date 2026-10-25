@@ -114,7 +114,7 @@ def _write_all(path_root: Path, dict_files: dict[str, str]) -> None:
     ----------
     path_root : pathlib.Path
         The directory the paths are relative to.
-    dict_files : dict of str to str
+    dict_files : dict[str, str]
         Relative path to content.
 
     Returns
@@ -153,11 +153,11 @@ def _scenario(
     ----------
     path_tmp : pathlib.Path
         A temporary directory to build under.
-    dict_base : dict of str to str
+    dict_base : dict[str, str]
         Template files at the commit the project was scaffolded from.
-    dict_ours : dict of str to str
+    dict_ours : dict[str, str]
         The project's files.
-    dict_theirs : dict of str to str
+    dict_theirs : dict[str, str]
         Template files now, written over the base ones.
     bool_stamp_commit : bool
         Whether the provenance stamp carries ``blueprintx_commit``.
