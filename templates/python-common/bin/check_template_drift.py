@@ -332,7 +332,8 @@ def is_offline_project(path_root: pathlib.Path) -> bool:
             ``True`` when the offline git-diff tooling is present and ``.github`` is gone,
             which is the state ``apply_offline_mode`` leaves behind.
     """
-    return (path_root / "bin/git_diff_export.sh").is_file() and not (path_root / ".github").exists()
+    bool_tooling = (path_root / "bin/git_diff_export.sh").is_file()
+    return bool_tooling and not (path_root / ".github").exists()
 
 
 def _is_removed(str_rel: str, set_removed: set[str]) -> bool:
