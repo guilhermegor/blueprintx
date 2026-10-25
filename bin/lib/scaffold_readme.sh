@@ -6,7 +6,7 @@ fi
 _BX_SCAFFOLD_README_LOADED=1
 
 readonly STR_LINKEDIN_PLACEHOLDER_URL="https://www.linkedin.com/in/your-linkedin-handle"
-readonly STR_README_VARS='${README_ARCHETYPE} ${LINKEDIN_URL} ${AUTHOR_NAME} ${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_DISPLAY_NAME} ${GITHUB_USERNAME} ${PROJECT_LICENSE} ${STATE_MANAGEMENT_VARIANT}'
+readonly STR_README_VARS='${README_ARCHETYPE} ${LINKEDIN_URL} ${AUTHOR_NAME} ${PROJECT_NAME} ${PROJECT_DESCRIPTION} ${PROJECT_DISPLAY_NAME} ${GITHUB_USERNAME} ${PROJECT_LICENSE} ${STATE_MANAGEMENT_VARIANT} ${README_TIER}'
 
 resolve_linkedin_url() {
     local str_input
@@ -55,6 +55,7 @@ scaffold_render_readme() {
     local path_dest="$3"
     local str_meta="$BLUEPRINTX_ROOT/templates/$str_skeleton_dir/skeleton.meta"
 
+    README_TIER="$str_skeleton_dir"
     README_ARCHETYPE="$(sed -n 's/^readme_archetype=//p' "$str_meta" | head -n1)"
     if [ -z "$README_ARCHETYPE" ]; then
         print_status "error" "templates/$str_skeleton_dir/skeleton.meta has no readme_archetype="
@@ -67,7 +68,7 @@ scaffold_render_readme() {
 
     AUTHOR_NAME="${AUTHOR_NAME:-$GITHUB_USERNAME}"
     PROJECT_LICENSE="${PROJECT_LICENSE:-${LICENSE_CHOICE:-}}"
-    export README_ARCHETYPE LINKEDIN_URL AUTHOR_NAME PROJECT_LICENSE PROJECT_NAME PROJECT_DESCRIPTION \
+    export README_TIER README_ARCHETYPE LINKEDIN_URL AUTHOR_NAME PROJECT_LICENSE PROJECT_NAME PROJECT_DESCRIPTION \
         PROJECT_DISPLAY_NAME GITHUB_USERNAME STATE_MANAGEMENT_VARIANT
 
     scaffold_filter_archetype_blocks "$README_ARCHETYPE" <"$path_template" \

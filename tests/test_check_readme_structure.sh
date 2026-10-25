@@ -30,6 +30,16 @@ good_readme_head() {
 
 Business-day arithmetic.
 
+<!-- slug: features -->
+## Features
+
+- Business-day arithmetic.
+
+<!-- slug: documentation -->
+## Documentation
+
+Docs at https://guilhermegor.github.io/acme-dates/; run `poe docs_serve`.
+
 <!-- slug: getting-started -->
 ## Getting Started
 
@@ -89,6 +99,10 @@ MIT.
 ## Useful Links
 
 - [Issue tracker](https://github.com/guilhermegor/acme-dates/issues)
+
+---
+
+<sub>Generated from the lib-minimal template via BlueprintX.</sub>
 EOF
 }
 
@@ -138,6 +152,29 @@ test_missing_core_slug_fails_naming_it() {
 test_missing_archetype_slug_fails() {
     expect_gate "library without public-api" "$(without_slug public-api)" fail "missing section 'public-api'"
     expect_gate "library without publishing" "$(without_slug publishing)" fail "missing section 'publishing'"
+}
+
+test_library_requires_documentation() {
+    expect_gate "library without documentation" "$(without_slug documentation)" fail "missing section 'documentation'"
+}
+
+test_documentation_must_follow_overview() {
+    local str_body
+    str_body="$(good_readme | sed 's/slug: documentation/slug: TMP/; s/slug: development/slug: documentation/; s/slug: TMP/slug: development/')"
+    expect_gate "documentation after development" "$str_body" fail "is out of order"
+}
+
+test_features_is_optional_but_ordered() {
+    local str_body
+    expect_gate "README without features" "$(without_slug features)" pass
+    str_body="$(good_readme | sed 's/slug: features/slug: TMP/; s/slug: documentation/slug: features/; s/slug: TMP/slug: documentation/')"
+    expect_gate "features after documentation" "$str_body" fail "is out of order"
+    str_body="$(good_readme | sed 's/slug: features/slug: TMP/; s/slug: development/slug: features/; s/slug: TMP/slug: development/')"
+    expect_gate "features after development" "$str_body" fail "is out of order"
+}
+
+test_footer_without_heading_is_optional() {
+    expect_gate "README with no footer" "$(good_readme | sed '/^---$/,$d')" pass
 }
 
 test_other_archetype_slug_is_required() {

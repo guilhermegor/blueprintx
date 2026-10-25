@@ -1,14 +1,38 @@
 <!-- readme-archetype: ${README_ARCHETYPE} -->
 # ${PROJECT_NAME}
 
-<p align="center"><img src="assets/logo.png" width="160" alt="${PROJECT_NAME} logo"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/${GITHUB_USERNAME}/${PROJECT_NAME}/main/assets/logo.png" width="200" alt="${PROJECT_DISPLAY_NAME} logo"></p>
 
+[![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+<!-- only: library -->
+[![PyPI](https://img.shields.io/pypi/v/${PROJECT_NAME}.svg)](https://pypi.org/project/${PROJECT_NAME}/)
+<!-- /only -->
+[![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/)
+[![Linting](https://img.shields.io/badge/linting-ruff_|_codespell-blue)](https://github.com/astral-sh/ruff+https://github.com/codespell-project/codespell)
+[![Mypy](https://img.shields.io/badge/type_checked-mypy-blue)](https://mypy-lang.org)
+![Test Coverage](https://raw.githubusercontent.com/${GITHUB_USERNAME}/${PROJECT_NAME}/main/coverage.svg)
 ![License](https://img.shields.io/badge/license-${PROJECT_LICENSE}-green.svg)
+![Open Issues](https://img.shields.io/github/issues/${GITHUB_USERNAME}/${PROJECT_NAME})
+![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-darkgreen.svg)
 
 <!-- slug: overview -->
 ## Overview
 
 ${PROJECT_DESCRIPTION}
+
+<!-- optional section: delete it when the project has no feature list -->
+<!-- slug: features -->
+## Features
+
+- The capabilities users care about, one line each.
+
+<!-- only: library -->
+<!-- slug: documentation -->
+## Documentation
+
+The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/. Serve it locally with `poe docs_serve`.
+<!-- /only -->
 
 <!-- slug: getting-started -->
 ## Getting Started
@@ -93,3 +117,10 @@ ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 
 - [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME})
 - [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}/issues)
+<!-- only: library -->
+- [Documentation](https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/)
+<!-- /only -->
+
+---
+
+<sub>Generated from the ${README_TIER} template via BlueprintX. Add any project disclaimer here.</sub>

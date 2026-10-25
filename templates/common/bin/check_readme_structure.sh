@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=templates/common/bin/lib/md_structure.sh
 source "$SCRIPT_DIR/lib/md_structure.sh"
 
-readonly -a ARR_SLUGS_HEAD=(overview getting-started install usage project-structure development)
+readonly -a ARR_SLUGS_HEAD=(getting-started install usage project-structure development)
 readonly -a ARR_SLUGS_TAIL=(contributing license authors useful-links)
 readonly STR_ICON_RE=$'\xf0\x9f|\xe2[\x98-\x9e]|\xef\xb8\x8f|\xe2\xad[\x90-\x95]|\xe2\x8c[\x9a\x9b]|\xe2\x8f|\xe2\x80\x8d'
 readonly STR_LINKEDIN_PLACEHOLDER="linkedin.com/in/your-linkedin-handle"
@@ -18,7 +18,11 @@ declare -A MAP_ARCHETYPE=(
 	["service"]="configuration"
 	["usb-tool"]="payload"
 )
+declare -A MAP_ARCHETYPE_AFTER_OVERVIEW=(
+	["library"]="documentation"
+)
 declare -a ARR_PROBLEMS=()
+STR_ARCHETYPE=""
 STR_HEADINGS=""
 STR_EXTRA=""
 BOOL_TEMPLATE=0
@@ -33,6 +37,7 @@ usage() {
 archetype_slugs() {
 	local path_file="$1" str_name
 	STR_EXTRA=""
+	STR_ARCHETYPE=""
 	str_name="$(md_strip_fences <"$path_file" | sed -n 's/^<!--[[:space:]]*readme-archetype:[[:space:]]*\([^[:space:]]*\)[[:space:]]*-->.*/\1/p' | head -n1)"
 	if [ -z "$str_name" ]; then
 		problem "$path_file" "no '<!-- readme-archetype: NAME -->' marker (one of: ${!MAP_ARCHETYPE[*]})"
@@ -42,14 +47,20 @@ archetype_slugs() {
 		problem "$path_file" "unknown archetype '$str_name' (one of: ${!MAP_ARCHETYPE[*]})"
 	else
 		STR_EXTRA="${MAP_ARCHETYPE[$str_name]}"
+		STR_ARCHETYPE="$str_name"
 	fi
 }
 
 check_slugs() {
-	local path_file="$1" str_extra="$2" str_slug i_pos i_idx i_last=0
-	local -a arr_doc
+	local path_file="$1" str_extra="$2" str_slug i_pos i_idx i_last=0 str_after=""
+	local -a arr_doc arr_seq=(overview)
 	mapfile -t arr_doc < <(printf '%s\n' "$STR_HEADINGS" | awk -F'\t' '$3 != "-" { print $3 }')
-	for str_slug in "${ARR_SLUGS_HEAD[@]}" $str_extra "${ARR_SLUGS_TAIL[@]}"; do
+	[ -z "$STR_ARCHETYPE" ] || str_after="${MAP_ARCHETYPE_AFTER_OVERVIEW[$STR_ARCHETYPE]:-}"
+	if printf '%s\n' "${arr_doc[@]}" | grep -qx 'features'; then
+		arr_seq+=(features)
+	fi
+	arr_seq+=($str_after "${ARR_SLUGS_HEAD[@]}" $str_extra "${ARR_SLUGS_TAIL[@]}")
+	for str_slug in "${arr_seq[@]}"; do
 		i_pos=0
 		for i_idx in "${!arr_doc[@]}"; do
 			if [ "${arr_doc[$i_idx]}" = "$str_slug" ]; then

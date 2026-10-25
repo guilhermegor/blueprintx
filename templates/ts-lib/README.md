@@ -13,6 +13,11 @@
 
 ${PROJECT_DESCRIPTION}
 
+<!-- slug: documentation -->
+## Documentation
+
+The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/. Serve it locally with `npm run docs:start`.
+
 <!-- slug: getting-started -->
 ## Getting Started
 
