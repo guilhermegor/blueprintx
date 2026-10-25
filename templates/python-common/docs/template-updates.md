@@ -33,8 +33,10 @@ renders through `envsubst` (`pyproject.toml`, `LICENSE`, `README.md`, `SECURITY.
 verbatim copies, so they are outside the comparison, as are files copied from `bin/ci/`.
 Copies guarded by an answer given at scaffold time (the review-bot roster) are listed exactly
 when the dry run is given the matching value, read back from the stamp. Other guarded copies
-(a GitGuardian key, publish targets) are not policed yet. A file absent at the stamped commit
-that the project wrote itself is reported as both changed.
+(a GitGuardian key, publish targets) are not policed yet, and the dry run ignores the
+caller's `GITGUARDIAN_API_KEY` so the verdict never depends on the environment. A file absent
+at the stamped commit that the project wrote itself is reported as both changed, unless its
+content already equals the current template, in which case it is the same.
 
 ## Why it self-skips
 

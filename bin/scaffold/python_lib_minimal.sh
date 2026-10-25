@@ -907,7 +907,7 @@ lib_minimal_list_copies() {
         esac
         shift 2
     done
-    INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run lib_minimal_list_copies_step
+    GITGUARDIAN_API_KEY="" INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run lib_minimal_list_copies_step
 }
 
 if [[ "${1:-}" == "--list-copies" ]]; then
