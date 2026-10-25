@@ -33,7 +33,7 @@ remove_work_dir() {
     local path_work="$1"
     for _ in 1 2 3; do
         rm -rf "$path_work" 2>/dev/null && return 0
-        sleep "${README_GATE_CLEANUP_PAUSE:-1}"
+        sleep "${README_GATE_CLEANUP_PAUSE:-1}" 2>/dev/null || true
     done
     echo "[warn] could not remove $path_work after 3 attempts; leaving it behind" >&2
 }

@@ -281,7 +281,7 @@ echo \$((int_seen + 1)) >"$path_fake/rm_calls"
 exec /bin/rm "\$@"
 EOF
     chmod +x "$path_stub/rm"
-    PATH="$path_stub:$PATH" README_GATE_CLEANUP_PAUSE=0 \
+    PATH="$path_stub:$PATH" README_GATE_CLEANUP_PAUSE="${3:-0}" \
         bash "$path_fake/bin/ci/check_readme_structure.sh" --generated 2>&1
 }
 
@@ -300,6 +300,13 @@ test_generated_cleanup_failure_never_changes_verdict() {
     str_out="$(run_generated_with_failing_rm "$path_fake" 99)" || int_rc=$?
     if [ "$int_rc" -ne 0 ] || ! printf '%s' "$str_out" | grep -qF "[warn] could not remove"; then
         print_status "error" "persistent rm failure -> rc=$int_rc, expected rc=0 with [warn]: $str_out"
+        int_failures=$((int_failures + 1))
+    fi
+    /bin/rm -rf "$path_fake/stub" "$path_fake/rm_calls"
+    int_rc=0
+    str_out="$(run_generated_with_failing_rm "$path_fake" 99 bogus)" || int_rc=$?
+    if [ "$int_rc" -ne 0 ] || ! printf '%s' "$str_out" | grep -qF "[warn] could not remove"; then
+        print_status "error" "invalid pause value -> rc=$int_rc, expected rc=0 with [warn]: $str_out"
         int_failures=$((int_failures + 1))
     fi
     /bin/rm -rf "$path_fake"
