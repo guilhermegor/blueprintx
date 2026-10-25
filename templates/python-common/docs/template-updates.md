@@ -74,3 +74,13 @@ the same base.
 
 Without a usable stamp, checkout or `blueprintx_commit` the command prints `SKIPPED update`
 (or the reporter's `SKIPPED`) and exits 0 without touching the project.
+
+### Retrying after a conflict
+
+Run `poe template_update --apply` again while the update branch is still checked out. The
+branch is reused, files already written are not rewritten, and a conflicted or merged file
+counts as resolved once it holds no `<<<<<<<` or `>>>>>>>` marker line. Only then does
+`blueprintx_commit` move. An unmergeable file keeps blocking until it is dealt with by hand.
+
+`--apply` also refuses a BlueprintX checkout with uncommitted or untracked changes, because
+theirs is read from the working tree while the stamped commit comes from history.

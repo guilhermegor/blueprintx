@@ -38,6 +38,9 @@ _LABELS = {
     "error": "❌ unmergeable (left untouched):",
 }
 _RE_STAMP_COMMIT = re.compile(r"^blueprintx_commit:.*$", re.MULTILINE)
+_RE_MARKERS = re.compile(r"^(<<<<<<< |>>>>>>> )", re.MULTILINE)
+_MERGE_ACTIONS = frozenset({"merged", "conflict"})
+_TRIVIAL = frozenset({"add", "fast_forward"})
 
 
 def _git_env() -> dict[str, str]:
@@ -215,7 +218,7 @@ def _write_plan(
     path_blueprintx : pathlib.Path
         Root of a BlueprintX checkout.
     dict_plan : dict of str to tuple of (str, bytes or None)
-        The result of :func:`build_plan`.
+        The plan to write.
     dict_sources : dict of str to str
         Project-relative path to checkout-relative template source.
 
@@ -233,13 +236,125 @@ def _write_plan(
             shutil.copymode(path_blueprintx / dict_sources[str_rel], path_file)
 
 
+def _has_markers(path_file: pathlib.Path) -> bool:
+    """Return whether a file still holds ``git merge-file`` conflict markers.
+
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The project file to inspect.
+
+    Returns
+    -------
+    bool
+            ``True`` when a marker line is present.
+    """
+    return bool(_RE_MARKERS.search(path_file.read_text(encoding="utf-8", errors="replace")))
+
+
+def _blocked(path_root: pathlib.Path, dict_plan: dict, bool_resume: bool) -> list[str]:
+    """List the files that still need a human.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    dict_plan : dict of str to tuple of (str, bytes or None)
+        The plan.
+    bool_resume : bool
+        Whether this run continues an earlier one on the same branch.
+
+    Returns
+    -------
+    list of str
+            On a fresh run, every conflict or error. On a resumed run, every error and every
+            planned merged or conflicted file that still holds markers.
+    """
+    if not bool_resume:
+        return [k for k, v in dict_plan.items() if v[0] in _BLOCKING]
+    return [
+        k
+        for k, v in dict_plan.items()
+        if v[0] == "error" or (v[0] in _MERGE_ACTIONS and _has_markers(path_root / k))
+    ]
+
+
+def _enter_branch(path_root: pathlib.Path, str_branch: str) -> bool | None:
+    """Create the update branch, or recognise that it is already checked out.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    str_branch : str
+        The update branch name.
+
+    Returns
+    -------
+    bool or None
+            ``True`` when resuming on an existing checkout of the branch, ``False`` when it
+            was just created, ``None`` (after printing why) when neither is possible.
+    """
+    list_vcs = ["git", "-C", str(path_root)]
+    cls_now = subprocess.run(  # noqa: S603
+        [*list_vcs, "branch", "--show-current"],
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+        env=_git_env(),
+    )
+    if cls_now.stdout.strip() == str_branch:
+        return True
+    cls_switch = subprocess.run(  # noqa: S603
+        [*list_vcs, "switch", "-c", str_branch],
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+        env=_git_env(),
+    )
+    if cls_switch.returncode != 0:
+        print(f"ERROR: cannot create branch {str_branch}: {cls_switch.stderr.strip()}")
+        return None
+    return False
+
+
+def _checkout_dirty(path_blueprintx: pathlib.Path) -> bool:
+    """Return whether the BlueprintX checkout has tracked or untracked changes.
+
+    The merge base is read from history but "theirs" from the working tree, so a dirty
+    checkout would deliver text that no commit holds and then stamp that commit.
+
+    Parameters
+    ----------
+    path_blueprintx : pathlib.Path
+        Root of a BlueprintX checkout.
+
+    Returns
+    -------
+    bool
+            ``True`` when ``status --porcelain`` prints anything or git cannot answer.
+    """
+    cls_run = subprocess.run(  # noqa: S603
+        ["git", "-C", str(path_blueprintx), "status", "--porcelain"],  # noqa: S607
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+        env=_git_env(),
+    )
+    return cls_run.returncode != 0 or bool(cls_run.stdout.strip())
+
+
 def _apply(
     path_root: pathlib.Path,
     path_blueprintx: pathlib.Path,
     dict_plan: dict,
     dict_sources: dict[str, str],
 ) -> int:
-    """Switch to the update branch, write the plan, and stamp the new commit if all was clean.
+    """Enter the update branch, write the plan, and stamp the new commit if all was clean.
+
+    Running it again while the update branch is checked out resumes: only added and
+    fast-forwarded files are written, merged and conflicted files are never rewritten, and
+    a file counts as resolved once it holds no conflict markers.
 
     Parameters
     ----------
@@ -263,18 +378,12 @@ def _apply(
         print(f"ERROR: cannot read HEAD of {path_blueprintx}; nothing was changed.")
         return 1
     str_branch = f"chore/template-update-{str_short}"
-    cls_switch = subprocess.run(  # noqa: S603
-        ["git", "-C", str(path_root), "switch", "-c", str_branch],  # noqa: S607
-        capture_output=True,
-        encoding="utf-8",
-        check=False,
-        env=_git_env(),
-    )
-    if cls_switch.returncode != 0:
-        print(f"ERROR: cannot create branch {str_branch}: {cls_switch.stderr.strip()}")
+    bool_resume = _enter_branch(path_root, str_branch)
+    if bool_resume is None:
         return 1
-    _write_plan(path_root, path_blueprintx, dict_plan, dict_sources)
-    list_blocked = [k for k, v in dict_plan.items() if v[0] in _BLOCKING]
+    dict_write = {k: v for k, v in dict_plan.items() if not bool_resume or v[0] in _TRIVIAL}
+    _write_plan(path_root, path_blueprintx, dict_write, dict_sources)
+    list_blocked = _blocked(path_root, dict_plan, bool_resume)
     if list_blocked:
         print(
             f"\nApplied on branch {str_branch}, but {len(list_blocked)} file(s) need a human; "
@@ -352,6 +461,9 @@ def main(list_argv: list) -> int:
     if not bool_apply:
         print(f"\n{len(dict_plan)} file(s) would change. Dry run; pass --apply to write them.")
         return 0
+    if _checkout_dirty(path_blueprintx):
+        print(f"ERROR: {path_blueprintx} has uncommitted changes; nothing was changed.")
+        return 1
     return _apply(path_root, path_blueprintx, dict_plan, dict_sources)
 
 

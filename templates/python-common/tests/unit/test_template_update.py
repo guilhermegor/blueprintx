@@ -6,6 +6,7 @@ The checkout's scaffold lib is a stand-in speaking the ``--list-copies`` contrac
 """
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -64,6 +65,7 @@ def _git(path_root: Path, *tuple_args: str) -> str:
         capture_output=True,
         encoding="utf-8",
         check=True,
+        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
     )
     return cls_run.stdout.strip()
 
@@ -364,3 +366,71 @@ def test_a_missing_checkout_skips_loudly(tmp_path: Path, capsys: pytest.CaptureF
     updater.main(["--root", str(path_project), "--blueprintx-root", str(tmp_path / "absent")])
 
     assert "SKIPPED" in capsys.readouterr().out
+
+
+def test_a_dirty_checkout_is_refused(tmp_path: Path) -> None:
+    """Theirs is read from the working tree, so uncommitted template edits must stop --apply."""
+    path_project, path_bx, _ = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    (path_bx / _COMMON / "a.txt").write_text("uncommitted\n", encoding="utf-8")
+
+    assert _update(path_project, path_bx, "--apply") == 1
+
+
+def test_a_dirty_checkout_leaves_the_project_untouched(tmp_path: Path) -> None:
+    """The refusal happens before any branch or file change."""
+    path_project, path_bx, _ = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    (path_bx / _COMMON / "a.txt").write_text("uncommitted\n", encoding="utf-8")
+
+    _update(path_project, path_bx, "--apply")
+
+    assert (path_project / "a.txt").read_text(encoding="utf-8") == "base\n"
+
+
+def _conflict_then_resolve(path_tmp: Path) -> tuple[Path, Path, str]:
+    """Apply a conflicting update, then replace the conflicted file with a resolution.
+
+    Parameters
+    ----------
+    path_tmp : pathlib.Path
+        A temporary directory to build under.
+
+    Returns
+    -------
+    tuple of (pathlib.Path, pathlib.Path, str)
+            The project root, the checkout root and the checkout HEAD.
+    """
+    path_project, path_bx, str_head = _scenario(
+        path_tmp, _BASE, {"a.txt": "mine\n"}, {"a.txt": "new\n"}
+    )
+    _update(path_project, path_bx, "--apply")
+    (path_project / "a.txt").write_text("resolved\n", encoding="utf-8")
+    return path_project, path_bx, str_head
+
+
+def test_rerunning_after_resolving_a_conflict_advances_the_stamp(tmp_path: Path) -> None:
+    """The branch is reused and a marker-free resolution is accepted."""
+    path_project, path_bx, str_head = _conflict_then_resolve(tmp_path)
+
+    _update(path_project, path_bx, "--apply")
+
+    assert drift.read_commit(path_project) == str_head
+
+
+def test_rerunning_keeps_the_resolution_text(tmp_path: Path) -> None:
+    """A resolved file is never overwritten by a fresh merge on retry."""
+    path_project, path_bx, _ = _conflict_then_resolve(tmp_path)
+
+    _update(path_project, path_bx, "--apply")
+
+    assert (path_project / "a.txt").read_text(encoding="utf-8") == "resolved\n"
+
+
+def test_rerunning_with_markers_still_left_keeps_the_stamp(tmp_path: Path) -> None:
+    """Unresolved markers on retry keep blocking the stamp."""
+    path_project, path_bx, _ = _scenario(tmp_path, _BASE, {"a.txt": "mine\n"}, {"a.txt": "new\n"})
+    str_before = drift.read_commit(path_project)
+    _update(path_project, path_bx, "--apply")
+
+    _update(path_project, path_bx, "--apply")
+
+    assert drift.read_commit(path_project) == str_before
