@@ -306,7 +306,7 @@ repos:
         entry: bash tests/test_scaffold_list_copies.sh
         language: system
         pass_filenames: false
-        files: ^(bin/lib/(scaffold_provenance|common)\.sh|bin/scaffold/[a-z_]+\.sh|tests/test_scaffold_list_copies\.sh)$
+        files: ^(bin/lib/[a-z_]+\.sh|bin/scaffold/[a-z_]+\.sh|templates/.*|tests/test_scaffold_list_copies\.sh)$
 
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)

@@ -22,15 +22,10 @@ for the service tiers, `bin/scaffold/python_lib_minimal.sh` for lib-minimal) and
 `envsubst` and `print_status` through `scaffold_dry_run` in `bin/lib/scaffold_provenance.sh`,
 so the output cannot disagree with what the scaffold does.
 
-Every skeleton's scaffold answers `--list-copies`, not only the Python tiers: `python_api_service`,
-`python_ddd_service`, `python_ddd_service_orm`, `python_mvc_service`, `python_mvc_service_orm`,
-`python_lib_minimal`, `ts_react_app`, `ts_lib`, `bash_cli`, `etcher_chromeos` and `ventoy_usb`
-(`bin/scaffold/<name>.sh --list-copies [--roster true|false]`). Each runs a `list_copies_step`
-through the shared `scaffold_cli_list_copies` in `bin/lib/scaffold_provenance.sh`, which clears
-`GITGUARDIAN_API_KEY` so the output never depends on the caller's environment. Files that are
-rendered rather than copied (`README.md`, `pyproject.toml`, `package.json`) do not appear, and
-prompt-driven optional copies are not listed. `tests/test_scaffold_list_copies.sh` checks all
-eleven.
+The dry run takes `--roster true|false` to match the project's review-bot roster choice, and
+clears `GITGUARDIAN_API_KEY` so the output never depends on the caller's environment. Files that
+are rendered rather than copied (`README.md`, `pyproject.toml`) do not appear. BlueprintX's own CI
+scaffolds every tier for real and fails when `--list-copies` and the generated tree disagree.
 
 ## What it reports
 

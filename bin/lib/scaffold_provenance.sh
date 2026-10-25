@@ -31,7 +31,7 @@ scaffold_dry_cp() {
 	local str_dst="${!#}" str_src str_kind str_rel_dst
 	for str_src in "${@:1:$#-1}"; do
 		str_rel_dst="${str_dst#"$str_project_path"}"
-		if [[ $# -gt 2 || "$str_dst" == */ ]]; then
+		if [[ "$str_src" != */. && ($# -gt 2 || "$str_dst" == */) ]]; then
 			str_rel_dst="${str_rel_dst%/}/${str_src##*/}"
 		fi
 		str_kind="file"
@@ -60,7 +60,7 @@ scaffold_dry_run() {
 		mkdir() {
 			local str_dir
 			for str_dir in "$@"; do
-				[[ "$str_dir" == "$str_project_path"* ]] && command mkdir -p "$str_dir"
+				[[ "$str_dir" == "$str_project_path" || "$str_dir" == "$str_project_path"/* ]] && command mkdir -p "$str_dir"
 			done
 			return 0
 		}
@@ -75,12 +75,29 @@ scaffold_dry_run() {
 	return "$int_status"
 }
 
+scaffold_list_comment_budget() {
+	python3() { :; }
+	scaffold_comment_budget "$1"
+	unset -f python3
+}
+
+scaffold_list_step_with_budget() {
+	"$SCAFFOLD_LIST_STEP_FN" "$1"
+	scaffold_list_comment_budget "$1"
+}
+
 scaffold_cli_list_copies() {
 	local str_step_fn="$1" str_roster=true
 	shift 2
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
-		--roster) str_roster="${2:?--roster needs a value}" ;;
+		--roster)
+			str_roster="${2:?--roster needs a value}"
+			[[ "$str_roster" == true || "$str_roster" == false ]] || {
+				print_status "error" "--roster takes true or false, got: $str_roster"
+				return 2
+			}
+			;;
 		*)
 			print_status "error" "unknown argument: $1"
 			return 2
@@ -90,5 +107,5 @@ scaffold_cli_list_copies() {
 	done
 	export PROJECT_NAME=project
 	add_poe_include() { :; }
-	GITGUARDIAN_API_KEY="" INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run "$str_step_fn"
+	GITGUARDIAN_API_KEY="" INCLUDE_REVIEW_BOT_ROSTER="$str_roster" SCAFFOLD_LIST_STEP_FN="$str_step_fn" scaffold_dry_run scaffold_list_step_with_budget
 }
