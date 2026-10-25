@@ -2244,6 +2244,9 @@ def _run_run_sh(path_script: Path, list_args: list[str]) -> subprocess.Completed
     )
 
 
+@pytest.mark.skipif(
+    not _bin_script("run.sh").exists(), reason="run.sh ships to service tiers only"
+)
 def test_run_forwards_an_argument_to_the_entrypoint(tmp_path: Path) -> None:
     """The should-fail control for blueprintx#252.
 
@@ -2271,6 +2274,9 @@ def test_run_forwards_an_argument_to_the_entrypoint(tmp_path: Path) -> None:
     ], str_all
 
 
+@pytest.mark.skipif(
+    not _bin_script("run.sh").exists(), reason="run.sh ships to service tiers only"
+)
 def test_run_with_no_extra_argument_still_calls_the_entrypoint(tmp_path: Path) -> None:
     """Forwarding ``"$@"`` must not break the existing zero-argument invocation."""
     path_script = _materialise_run_sh(tmp_path)
