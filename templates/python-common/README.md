@@ -20,7 +20,7 @@ ${PROJECT_DESCRIPTION}
 <!-- slug: getting-started -->
 ## Getting Started
 
-Python 3.10+ and [Poetry](https://python-poetry.org/) are the only prerequisites.
+Python 3.10+ is the only prerequisite; `bin/venv.sh` installs [Poetry](https://python-poetry.org/) when it is missing.
 
 <!-- slug: install -->
 ### Install
@@ -28,8 +28,12 @@ Python 3.10+ and [Poetry](https://python-poetry.org/) are the only prerequisites
 ```bash
 git clone https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git
 cd ${PROJECT_NAME}
-poetry install --no-root
+bash bin/venv.sh
+bash bin/poe_exec.sh init
 ```
+
+`poe` lives inside the virtualenv, so `bin/venv.sh` creates it first; `bin/poe_exec.sh` then
+runs `poe init` without activating anything.
 
 <!-- slug: usage -->
 ### Usage
