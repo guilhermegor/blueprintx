@@ -127,6 +127,12 @@ test_the_roster_choice_decides_whether_its_file_is_listed() {
 	expect_gate_silent "roster declined omits .review-bots.yaml" '.review-bots.yaml' "$(copies "$WORK_DIR/c1" false)"
 }
 
+test_lib_minimal_list_copies_ignores_the_callers_gitguardian_key() {
+	local str_out
+	str_out="$(GITGUARDIAN_API_KEY=x bash "$REPO_ROOT/bin/scaffold/python_lib_minimal.sh" --list-copies --tier lib-minimal --roster true)"
+	expect_gate_silent "an exported GitGuardian key does not add secret_scan.yaml" "secret_scan.yaml" "$str_out"
+}
+
 test_a_complete_project_is_clean_and_a_missing_file_is_named() {
 	make_checkout "$WORK_DIR/c2"
 	make_project "$WORK_DIR/c2" "$WORK_DIR/p3"
@@ -172,6 +178,7 @@ test_a_dry_run_that_fails_midway_exits_nonzero_and_the_gate_says_so
 test_a_checkout_stamps_its_own_tag_and_commit
 test_lib_minimal_has_no_stamp_function_of_its_own
 test_the_roster_choice_decides_whether_its_file_is_listed
+test_lib_minimal_list_copies_ignores_the_callers_gitguardian_key
 test_a_complete_project_is_clean_and_a_missing_file_is_named
 test_dropping_a_copy_from_the_lib_stops_requiring_it
 test_a_copy_in_a_form_a_regex_cannot_read_is_still_required

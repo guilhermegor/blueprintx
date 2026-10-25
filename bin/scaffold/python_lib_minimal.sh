@@ -883,4 +883,35 @@ main() {
     print_status "info" "Project path: $PROJECT_PATH"
 }
 
-main
+lib_minimal_list_copies_step() {
+    unset -f mkdir
+    mkdir -p "$1/.github/workflows"
+    scaffold_render_readme() { :; }
+    add_library_badges() { :; }
+    add_poe_include() { :; }
+    copy_templates "$1"
+    copy_common_templates "$1"
+}
+
+lib_minimal_list_copies() {
+    local str_roster=true
+    shift
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --tier) ;;
+        --roster) str_roster="${2:?--roster needs a value}" ;;
+        *)
+            print_status "error" "unknown argument: $1"
+            return 2
+            ;;
+        esac
+        shift 2
+    done
+    GITGUARDIAN_API_KEY="" INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run lib_minimal_list_copies_step
+}
+
+if [[ "${1:-}" == "--list-copies" ]]; then
+    lib_minimal_list_copies "$@"
+else
+    main
+fi
