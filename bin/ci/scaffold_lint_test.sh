@@ -191,6 +191,9 @@ case "$str_cz_version" in
         ;;
 esac
 
+poetry run python "$REPO_ROOT/bin/ci/check_poe_task_set.py" "$SKELETON"
+bash bin/poe_exec.sh --help >/dev/null
+
 echo "::group::poe lint (must leave the tree unchanged)"
 bash bin/poe_exec.sh lint
 if [ -n "$(git status --porcelain)" ]; then
