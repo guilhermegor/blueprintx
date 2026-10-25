@@ -56,8 +56,14 @@ scaffold_dry_run() {
 	(
 		set -e
 		print_status() { :; }
-		envsubst() { :; }
-		mkdir() { :; }
+		envsubst() { cat >/dev/null; }
+		mkdir() {
+			local str_dir
+			for str_dir in "$@"; do
+				[[ "$str_dir" == "$str_project_path"* ]] && command mkdir -p "$str_dir"
+			done
+			return 0
+		}
 		touch() { :; }
 		chmod() { :; }
 		cp() { scaffold_dry_cp "$str_project_path" "$@"; }
@@ -67,4 +73,21 @@ scaffold_dry_run() {
 	wait $! || int_status=$?
 	rm -rf "$str_project_path"
 	return "$int_status"
+}
+
+scaffold_cli_list_copies() {
+	local str_step_fn="$1" str_roster=true
+	shift 2
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		--roster) str_roster="${2:?--roster needs a value}" ;;
+		*)
+			print_status "error" "unknown argument: $1"
+			return 2
+			;;
+		esac
+		shift 2
+	done
+	export PROJECT_NAME=project
+	GITGUARDIAN_API_KEY="" INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run "$str_step_fn"
 }

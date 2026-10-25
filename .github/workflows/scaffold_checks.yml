@@ -424,6 +424,9 @@ jobs:
       - name: Run the scaffold provenance and copy-list suite (blueprintx#635)
         run: bash tests/test_scaffold_python_templates.sh
 
+      - name: Run the scaffold --list-copies suite, every tier (blueprintx#872)
+        run: bash tests/test_scaffold_list_copies.sh
+
   specs-structure:
     name: .specs/ structure guard
     runs-on: ubuntu-latest
