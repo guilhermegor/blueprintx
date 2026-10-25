@@ -234,6 +234,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      pages: read
     env:
       NEW_VERSION: ${{ needs.details.outputs.new_version }}
     steps:
@@ -266,3 +267,18 @@ jobs:
           MINOR_VERSION="$(echo "$NEW_VERSION" | cut -d. -f1-2)"
           poetry run mike deploy --update-aliases --push "$MINOR_VERSION" latest
           poetry run mike set-default --push latest
+
+      - name: Report GitHub Pages Status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          str_source="$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .source.branch 2>/dev/null || true)"
+          if [ "$str_source" = "gh-pages" ]; then
+            echo 'GitHub Pages already serves the versioned docs from `gh-pages`.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo '### Action required: enable GitHub Pages'
+              echo 'The `gh-pages` branch now exists, but the Pages source is not set to it. `GITHUB_TOKEN` cannot change it (the endpoint needs repository admin rights).'
+              echo 'Now run `poe enable_pages` once as a repository admin, or set Settings > Pages > Deploy from a branch > `gh-pages`.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

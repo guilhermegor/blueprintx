@@ -100,8 +100,8 @@ Releases are **tag-driven and secret-free** when the project is connected to a G
   (`Release to PyPI` / `Release to Test PyPI`, `workflow_dispatch` with the version), or by pushing
   a `vX.Y.Z` tag.
 - The release workflow runs the **full test suite** as a hard gate, builds with `python -m build`,
-  and publishes via **OIDC trusted publishing** (`pypa/gh-action-pypi-publish`) — no stored
-  `PYPI_TOKEN`.
+  and publishes via **OIDC trusted publishing** (`pypa/gh-action-pypi-publish`) — no token secrets
+  are needed.
 - The changelog is regenerated from tags at release/build time (`poe changelog` locally); CI never
   commits `CHANGELOG.md` back to the protected default branch.
 
@@ -123,6 +123,13 @@ The GitHub Release step exists only in `release-pypi.yaml`, not in the Test PyPI
 For the very first upload the project does not exist yet — register a **pending publisher** at the
 account level (not under an existing project's settings). Publishing from a laptop instead of CI is
 the one case that still needs an API token; OIDC works only from GitHub Actions.
+
+### Serving the docs — first release
+
+The first `release-pypi.yaml` run creates the `gh-pages` branch with `mike deploy`.
+`GITHUB_TOKEN` cannot set the Pages source (the endpoint needs repository admin rights), so the
+`deploy_docs` job prints the remedy in its job summary. Run `poe enable_pages` once as a
+repository admin afterwards.
 
 ### Choosing publish targets
 
