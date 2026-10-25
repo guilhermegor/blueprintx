@@ -66,8 +66,7 @@ bootstrap_local_venv_with_pip() {
 	local str_venv_python
 
 	print_status "warning" "Creating local .venv with stdlib venv + pip fallback..."
-	rm -rf "$PROJECT_ROOT/.venv"
-	"$PYTHON" -m venv "$PROJECT_ROOT/.venv"
+	pip_fallback_recreate_project_venv || return 1
 
 	str_venv_python="$(pip_fallback_project_venv_python)"
 	if ! pip_fallback_install_groups_in_venv \

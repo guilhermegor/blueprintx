@@ -9,18 +9,20 @@ Everything you need to develop, test, and release this library.
 
 ## Setting up for development
 
-The project ships both a `Makefile` and a parallel `tasks.sh`, so use whichever suits your
-machine — **`bash bin/venv.sh`**.
+`poe` is a dev dependency, so it exists only once the virtualenv does. Bootstrap with the shell
+entry point first. For that very first bootstrap use a plain shell (not inside `poetry run`, `poe` or an activated venv),
+then let `poe_exec.sh` find the venv's `poe` for the rest:
 
 ```bash
-bash bin/venv.sh        # create the Poetry venv + install deps
-bash bin/ensure_env.sh  # seed .env from .env.example
-bash bin/precommit.sh   # install the git hooks
+bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
+bash bin/poe_exec.sh init  # .env (when the tier ships one), venv, git hooks, GitHub helpers
 ```
 
-`init` composes `ensure_env` (seed `.env`), `venv` (create the Poetry virtualenv, install **all**
-dependencies including dev + docs), and `precommit` (install the git hooks). Poetry is
-auto-installed if missing.
+`init` composes `ensure_env` (seed `.env`; an info-line no-op here, since a library ships no
+`.env.example`), `venv` (create the Poetry virtualenv, install **all** dependencies including
+dev + docs), and `precommit` (install the git hooks). Poetry is auto-installed if missing.
+Re-running `venv` from inside the project virtualenv is safe: it bootstraps from a base
+interpreter, and refuses to delete the `.venv` it is running from.
 
 ## Tests and linting
 

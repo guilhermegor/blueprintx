@@ -36,7 +36,8 @@ cross-platform setup logic shared by `venv.sh`, `run.sh`, and
 
 | Function | Purpose |
 |----------|---------|
-| `bootstrap_init` | Resolve + export `OS_TYPE`, `PYTHON`, `PROJECT_ROOT`, `BIN_DIR`, `CORPORATE_CA_PEM`, `PY_VERSION`. Call once before the rest. |
+| `bootstrap_init` | Resolve + export `OS_TYPE`, `PYTHON`, `PROJECT_ROOT`, `BIN_DIR`, `CORPORATE_CA_PEM`, `PY_VERSION`. Call once before the rest. `PYTHON` is a base interpreter found outside every active venv whenever one exists, so a bootstrap run through `poe`/`poetry run` never builds on the venv it may rebuild. |
+| `running_inside_project_venv` | True when `VIRTUAL_ENV` or `PATH` puts the project `.venv` in use. `pip_fallback_recreate_project_venv` refuses to `rm -rf .venv` then, and pip installs drop `--user` when the interpreter is itself a venv. |
 | `detect_os` | `linux` / `macos` / `windows` / `unknown` from `uname`. |
 | `resolve_python` | First working of `python3` → `python` → `py`. |
 | `resolve_poetry` / `run_poetry` | Populate the `POETRY_CMD` array (`poetry` or `python -m poetry`) and invoke it. |
@@ -127,7 +128,7 @@ that failed. `export` is a *plugin* subcommand, so `requirements.txt` pins
 subcommand?".
 
 `bin/ensure_env.sh` seeds `.env` from `.env.example` for `init` (no-op if `.env`
-exists; aborts only itself on a missing template). `bin/precommit.sh` installs the
+exists; an info-line no-op when the tier ships no template). `bin/precommit.sh` installs the
 pre-commit hooks and **skips gracefully** when run off a git work tree (a shipped zip
 with no `.git`) so `init` still completes.
 

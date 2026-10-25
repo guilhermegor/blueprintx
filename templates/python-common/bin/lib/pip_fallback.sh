@@ -18,6 +18,7 @@ source "$PIP_FALLBACK_LIB_DIR/common.sh"
 source "$PIP_FALLBACK_LIB_DIR/bootstrap.sh"
 
 PIP_FALLBACK_ARGS=()
+PIP_FALLBACK_USER_ARGS=()
 
 pip_fallback_project_venv_python() {
 	if [[ "$OS_TYPE" == "windows" ]]; then
@@ -25,6 +26,17 @@ pip_fallback_project_venv_python() {
 	else
 		echo "$PROJECT_ROOT/.venv/bin/python"
 	fi
+}
+
+pip_fallback_recreate_project_venv() {
+	if running_inside_project_venv; then
+		print_status "error" "Refusing to recreate .venv from inside it — that would delete the interpreter in use"
+		print_status "error" "Run 'bash bin/venv.sh' from a shell outside 'poetry run', 'poe' and any activated virtualenv"
+		return 1
+	fi
+
+	rm -rf "$PROJECT_ROOT/.venv"
+	"$PYTHON" -m venv "$PROJECT_ROOT/.venv"
 }
 
 pip_fallback_normalize_path_for_compare() {
@@ -67,6 +79,11 @@ pip_fallback_populate_pip_args() {
 	if [[ -n "${PIP_CERT:-}" ]]; then
 		PIP_FALLBACK_ARGS+=(--cert "$PIP_CERT")
 	fi
+
+	PIP_FALLBACK_USER_ARGS=(--user)
+	if python_in_venv "$PYTHON"; then
+		PIP_FALLBACK_USER_ARGS=()
+	fi
 }
 
 pip_fallback_ensure_toml_reader() {
@@ -80,7 +97,7 @@ pip_fallback_ensure_toml_reader() {
 
 	pip_fallback_populate_pip_args
 	print_status "info" "Installing tomli for pyproject fallback parsing..."
-	"$PYTHON" -m pip install "${PIP_FALLBACK_ARGS[@]}" --user tomli
+	"$PYTHON" -m pip install "${PIP_FALLBACK_ARGS[@]}" ${PIP_FALLBACK_USER_ARGS[@]+"${PIP_FALLBACK_USER_ARGS[@]}"} tomli
 }
 
 pip_fallback_ensure_project_poetry() {
@@ -90,7 +107,7 @@ pip_fallback_ensure_project_poetry() {
 	str_poetry_spec="$(pip_fallback_poetry_spec_from_requirements)"
 
 	print_status "info" "Ensuring Poetry matches spec: $str_poetry_spec"
-	"$PYTHON" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade --user "$str_poetry_spec"
+	"$PYTHON" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade ${PIP_FALLBACK_USER_ARGS[@]+"${PIP_FALLBACK_USER_ARGS[@]}"} "$str_poetry_spec"
 
 	if "$PYTHON" -m poetry --version >/dev/null 2>&1; then
 		# shellcheck disable=SC2034
