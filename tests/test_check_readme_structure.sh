@@ -292,6 +292,75 @@ test_indented_heading_is_recognised() {
         "$(good_readme | sed 's/^### Usage/   ### Usage/')" pass
 }
 
+build_fake_repo() {
+    local path_fake="$1"
+    mkdir -p "$path_fake/bin/ci" "$path_fake/bin/lib" "$path_fake/bin/scaffold" "$path_fake/templates/fake"
+    cp "$REPO_ROOT/bin/ci/check_readme_structure.sh" "$path_fake/bin/ci/"
+    cp "$REPO_ROOT/bin/lib/spec.sh" "$path_fake/bin/lib/"
+    printf 'scaffold=bin/scaffold/fake.sh\n' >"$path_fake/templates/fake/skeleton.meta"
+    cat >"$path_fake/bin/scaffold/fake.sh" <<'EOF'
+#!/bin/bash
+mkdir -p "$1/ci-scaffold/bin"
+printf '#!/bin/bash\nexit 0\n' >"$1/ci-scaffold/bin/check_readme_structure.sh"
+: >"$1/ci-scaffold/README.md"
+EOF
+}
+
+run_generated_with_failing_rm() {
+    local path_fake="$1" int_fail_count="$2" path_stub
+    path_stub="$path_fake/stub"
+    mkdir -p "$path_stub"
+    cat >"$path_stub/rm" <<EOF
+#!/bin/bash
+int_seen=\$(cat "$path_fake/rm_calls" 2>/dev/null || echo 0)
+echo \$((int_seen + 1)) >"$path_fake/rm_calls"
+[ "\$int_seen" -lt $int_fail_count ] && exit 1
+exec /bin/rm "\$@"
+EOF
+    chmod +x "$path_stub/rm"
+    PATH="$path_stub:$PATH" README_GATE_CLEANUP_PAUSE="${3:-0}" \
+        bash "$path_fake/bin/ci/check_readme_structure.sh" --generated 2>&1
+}
+
+assert_rm_attempts() {
+    local path_fake="$1" int_expected="$2" str_case="$3" int_attempts
+    int_attempts="$(cat "$path_fake/rm_calls" 2>/dev/null || echo 0)"
+    if [ "$int_attempts" -ne "$int_expected" ]; then
+        print_status "error" "$str_case -> $int_attempts rm attempts, expected $int_expected"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
+test_generated_cleanup_failure_never_changes_verdict() {
+    local path_fake str_out int_rc
+    path_fake="$(mktemp -d)"
+    build_fake_repo "$path_fake"
+    int_rc=0
+    str_out="$(run_generated_with_failing_rm "$path_fake" 1)" || int_rc=$?
+    if [ "$int_rc" -ne 0 ] || printf '%s' "$str_out" | grep -qF "[warn]"; then
+        print_status "error" "one transient rm failure -> rc=$int_rc: $str_out"
+        int_failures=$((int_failures + 1))
+    fi
+    assert_rm_attempts "$path_fake" 2 "one transient rm failure"
+    /bin/rm -rf "$path_fake/stub" "$path_fake/rm_calls"
+    int_rc=0
+    str_out="$(run_generated_with_failing_rm "$path_fake" 99)" || int_rc=$?
+    if [ "$int_rc" -ne 0 ] || ! printf '%s' "$str_out" | grep -qF "[warn] could not remove"; then
+        print_status "error" "persistent rm failure -> rc=$int_rc, expected rc=0 with [warn]: $str_out"
+        int_failures=$((int_failures + 1))
+    fi
+    assert_rm_attempts "$path_fake" 3 "persistent rm failure"
+    /bin/rm -rf "$path_fake/stub" "$path_fake/rm_calls"
+    int_rc=0
+    str_out="$(run_generated_with_failing_rm "$path_fake" 99 bogus)" || int_rc=$?
+    if [ "$int_rc" -ne 0 ] || ! printf '%s' "$str_out" | grep -qF "[warn] could not remove"; then
+        print_status "error" "invalid pause value -> rc=$int_rc, expected rc=0 with [warn]: $str_out"
+        int_failures=$((int_failures + 1))
+    fi
+    assert_rm_attempts "$path_fake" 3 "invalid pause value"
+    /bin/rm -rf "$path_fake"
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do
