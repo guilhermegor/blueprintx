@@ -24,7 +24,7 @@ heading (blank lines between are fine): `<!-- slug: install -->`.
 
 | Slot | Slugs, in this order |
 |---|---|
-| Core, first | `overview`, `getting-started`, `install`, `usage`, `project-structure`, `development` |
+| Core, first | `overview`, optional `features`, `library` only: `documentation`, then `getting-started`, `install`, `usage`, `project-structure`, `development` |
 | Archetype | `library`: `public-api`, `publishing`. `cli`: `releasing`. `spa`: `deployment`. `service`: `configuration`. `usb-tool`: `payload` |
 | Core, last | `contributing`, `license`, `authors`, `useful-links` |
 
@@ -35,6 +35,21 @@ Further rules:
 - The first line is `<!-- readme-archetype: NAME -->`, one of the archetypes above.
 - No H1 to H6 contains an emoji, `<img>`, `![...]` or `<picture>`. The logo sits on its own
   line under the H1. Badges and images stay allowed in the body.
+- `features` is optional: its position is checked only when the section is present.
+  `documentation` is required for `library` and holds the docs site URL plus the local serve command: `bash bin/poe_exec.sh docs_serve`
+  for Python libraries, `npm run docs:start` for TypeScript libraries.
+- The logo is centered on its own line under the H1 (`<p align="center"><img ... width="200"></p>`),
+  never inside the heading.
+- Badge order: status, python, pypi, docs, linting, mypy, coverage, license, issues,
+  contributions. `pypi` is `library` only; no Snyk License advisor badge, and no pepy badge before
+  the first publish. The order is a review convention, not a gate.
+- README images use absolute `raw.githubusercontent.com` URLs (logo, coverage badge), because
+  `readme = "README.md"` ships to PyPI where relative paths break. `scaffold_render_readme` fills
+  them from `GITHUB_USERNAME` and `PROJECT_NAME`.
+- A footer closes the README rendered from `README.template.md` and the Python README (the other
+  skeleton READMEs, ts-lib included, have none): a rule, then `<sub>` text, no heading (so no
+  slug), reading "Generated from the <tier> template via BlueprintX" (`README_TIER`) followed by
+  any project disclaimer. Disclaimers go here, not in the body.
 - Every list item under `authors` carries a `github.com/<user>` link and a
   `linkedin.com/in/<handle>` link, and none uses the placeholder
   `linkedin.com/in/your-linkedin-handle`.
