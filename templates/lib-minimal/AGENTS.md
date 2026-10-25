@@ -131,11 +131,15 @@ set to "Deploy from a branch → gh-pages" via `poe enable_pages`, which waits u
 release creates that branch. See `docs/contributing.md`.
 
 Both gate on the version being greater than what is already published, build with Poetry,
-and fall back to `twine` if `poetry publish` is unavailable. Configure these repository
-secrets and a GitHub Environment named **`release`**:
+and publish through **OIDC trusted publishing** (`pypa/gh-action-pypi-publish`) — no token
+secrets are needed. Register a **pending publisher** once per index (pypi.org and test.pypi.org):
 
-- `PYPI_TOKEN` — a PyPI API token.
-- `TEST_PYPI_TOKEN` — a Test PyPI API token.
+- PyPI: workflow `release-pypi.yaml`, environment `release-pypi`.
+- Test PyPI: workflow `release-test-pypi.yaml`, environment `release-test-pypi`.
+
+The first `release-pypi.yaml` run creates the `gh-pages` branch, but `GITHUB_TOKEN` cannot set
+the Pages source (it needs admin rights). The `deploy_docs` job prints the remedy in its job
+summary: run `poe enable_pages` once afterwards.
 
 ## Extending this template
 
