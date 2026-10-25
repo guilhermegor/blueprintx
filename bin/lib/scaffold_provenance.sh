@@ -89,5 +89,6 @@ scaffold_cli_list_copies() {
 		shift 2
 	done
 	export PROJECT_NAME=project
+	add_poe_include() { :; }
 	GITGUARDIAN_API_KEY="" INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run "$str_step_fn"
 }
