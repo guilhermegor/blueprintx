@@ -285,6 +285,15 @@ EOF
         bash "$path_fake/bin/ci/check_readme_structure.sh" --generated 2>&1
 }
 
+assert_rm_attempts() {
+    local path_fake="$1" int_expected="$2" str_case="$3" int_attempts
+    int_attempts="$(cat "$path_fake/rm_calls" 2>/dev/null || echo 0)"
+    if [ "$int_attempts" -ne "$int_expected" ]; then
+        print_status "error" "$str_case -> $int_attempts rm attempts, expected $int_expected"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 test_generated_cleanup_failure_never_changes_verdict() {
     local path_fake str_out int_rc
     path_fake="$(mktemp -d)"
@@ -295,6 +304,7 @@ test_generated_cleanup_failure_never_changes_verdict() {
         print_status "error" "one transient rm failure -> rc=$int_rc: $str_out"
         int_failures=$((int_failures + 1))
     fi
+    assert_rm_attempts "$path_fake" 2 "one transient rm failure"
     /bin/rm -rf "$path_fake/stub" "$path_fake/rm_calls"
     int_rc=0
     str_out="$(run_generated_with_failing_rm "$path_fake" 99)" || int_rc=$?
@@ -302,6 +312,7 @@ test_generated_cleanup_failure_never_changes_verdict() {
         print_status "error" "persistent rm failure -> rc=$int_rc, expected rc=0 with [warn]: $str_out"
         int_failures=$((int_failures + 1))
     fi
+    assert_rm_attempts "$path_fake" 3 "persistent rm failure"
     /bin/rm -rf "$path_fake/stub" "$path_fake/rm_calls"
     int_rc=0
     str_out="$(run_generated_with_failing_rm "$path_fake" 99 bogus)" || int_rc=$?
@@ -309,6 +320,7 @@ test_generated_cleanup_failure_never_changes_verdict() {
         print_status "error" "invalid pause value -> rc=$int_rc, expected rc=0 with [warn]: $str_out"
         int_failures=$((int_failures + 1))
     fi
+    assert_rm_attempts "$path_fake" 3 "invalid pause value"
     /bin/rm -rf "$path_fake"
 }
 
