@@ -99,6 +99,29 @@ test_linkedin_destination_is_escaped() {
     rm -f "$path_out"
 }
 
+test_rendered_readme_carries_absolute_urls_and_footer() {
+    local path_out str_raw="https://raw.githubusercontent.com/ci-bot/acme/main"
+    path_out="$(mktemp)"
+    LINKEDIN_URL=https://www.linkedin.com/in/ci-bot render_python_readme lib-minimal "$path_out"
+    expect "logo is an absolute raw URL at width 200" "1" \
+        "$(grep -cF "img src=\"$str_raw/assets/logo_lorem_ipsum.png\" width=\"200\"" "$path_out")"
+    expect "coverage badge is an absolute raw URL" "1" "$(grep -cF "($str_raw/coverage.svg)" "$path_out")"
+    expect "no relative image left" "0" "$(grep -cE '(src="|\]\()(\./|assets/|coverage)' "$path_out" || true)"
+    expect "footer names the tier" "1" "$(grep -c '^<sub>Generated from the lib-minimal template via BlueprintX' "$path_out")"
+    expect "library README has Documentation" "1" "$(grep -c '^## Documentation$' "$path_out")"
+    expect "library README has the pypi badge" "1" "$(grep -c 'img.shields.io/pypi/v/acme' "$path_out")"
+    rm -f "$path_out"
+}
+
+test_service_readme_has_no_documentation_or_pypi() {
+    local path_out
+    path_out="$(mktemp)"
+    LINKEDIN_URL=https://www.linkedin.com/in/ci-bot render_python_readme ddd-service-native-db "$path_out"
+    expect "service README has no Documentation section" "0" "$(grep -c '^## Documentation$' "$path_out" || true)"
+    expect "service README has no pypi badge" "0" "$(grep -c 'pypi' "$path_out" || true)"
+    rm -f "$path_out"
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do
