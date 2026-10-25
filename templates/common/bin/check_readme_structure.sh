@@ -53,13 +53,15 @@ archetype_slugs() {
 
 check_slugs() {
 	local path_file="$1" str_extra="$2" str_slug i_pos i_idx i_last=0 str_after=""
-	local -a arr_doc arr_seq=(overview)
+	local -a arr_doc arr_after arr_extra arr_seq=(overview)
 	mapfile -t arr_doc < <(printf '%s\n' "$STR_HEADINGS" | awk -F'\t' '$3 != "-" { print $3 }')
 	[ -z "$STR_ARCHETYPE" ] || str_after="${MAP_ARCHETYPE_AFTER_OVERVIEW[$STR_ARCHETYPE]:-}"
 	if printf '%s\n' "${arr_doc[@]}" | grep -qx 'features'; then
 		arr_seq+=(features)
 	fi
-	arr_seq+=($str_after "${ARR_SLUGS_HEAD[@]}" $str_extra "${ARR_SLUGS_TAIL[@]}")
+	read -ra arr_after <<<"$str_after"
+	read -ra arr_extra <<<"$str_extra"
+	arr_seq+=("${arr_after[@]}" "${ARR_SLUGS_HEAD[@]}" "${arr_extra[@]}" "${ARR_SLUGS_TAIL[@]}")
 	for str_slug in "${arr_seq[@]}"; do
 		i_pos=0
 		for i_idx in "${!arr_doc[@]}"; do
