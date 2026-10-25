@@ -386,6 +386,15 @@ def test_a_dirty_checkout_leaves_the_project_untouched(tmp_path: Path) -> None:
     assert (path_project / "a.txt").read_text(encoding="utf-8") == "base\n"
 
 
+def test_a_listed_source_the_checkout_lacks_blocks_the_stamp(tmp_path: Path) -> None:
+    """A copy whose source is missing is an error, never a silent skip."""
+    path_project, path_bx, str_commit = _scenario(tmp_path, _BASE, _BASE, _BASE)
+
+    dict_plan = updater.build_plan(path_project, path_bx, str_commit, {"gone.txt": "gone.txt"})
+
+    assert dict_plan == {"gone.txt": ("error", None)}
+
+
 def _conflict_then_resolve(path_tmp: Path) -> tuple[Path, Path, str]:
     """Apply a conflicting update, then replace the conflicted file with a resolution.
 

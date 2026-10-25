@@ -149,7 +149,9 @@ def build_plan(
     Returns
     -------
     dict of str to tuple of (str, bytes or None)
-            Project-relative path to ``(action, new content)``, sorted, without ``same``.
+            Project-relative path to ``(action, new content)``, sorted, without ``same``. A
+            source the copy list names but the checkout lacks is an ``error``, so it blocks the
+            stamp instead of being skipped.
     """
     dict_plan = {
         str_rel: plan_file(
@@ -157,8 +159,9 @@ def build_plan(
             path_blueprintx / str_src,
             drift.base_blob(path_blueprintx, str_commit, str_src),
         )
-        for str_rel, str_src in sorted(dict_sources.items())
         if (path_blueprintx / str_src).is_file()
+        else ("error", None)
+        for str_rel, str_src in sorted(dict_sources.items())
     }
     return {k: v for k, v in dict_plan.items() if v[0] != "same"}
 
