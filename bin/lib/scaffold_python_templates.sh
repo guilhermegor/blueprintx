@@ -227,49 +227,13 @@ scaffold_copy_common_templates() {
 	print_status "success" "Common templates applied"
 }
 
-scaffold_dry_cp() {
-	local str_project_path="$1"
-	shift
-	while [[ "${1:-}" == -* ]]; do shift; done
-	local str_dst="${!#}" str_src str_kind str_rel_dst
-	for str_src in "${@:1:$#-1}"; do
-		str_rel_dst="${str_dst#"$str_project_path"}"
-		if [[ $# -gt 2 || "$str_dst" == */ ]]; then
-			str_rel_dst="${str_rel_dst%/}/${str_src##*/}"
-		fi
-		str_kind="file"
-		[[ -d "$str_src" ]] && str_kind=dir
-		str_src="${str_src%/.}"
-		printf 'COPY\t%s\t%s\t%s\n' "$str_kind" "${str_src#"$BLUEPRINTX_ROOT"/}" "${str_rel_dst#/}"
-	done
-}
-
-scaffold_dry_rm() {
-	local str_project_path="$1" str_arg
-	shift
-	for str_arg in "$@"; do
-		[[ "$str_arg" == -* ]] && continue
-		printf 'RM\t%s\n' "${str_arg#"$str_project_path"/}"
-	done
+scaffold_list_copies_step() {
+	scaffold_copy_common_templates "$str_list_tier" "$1"
 }
 
 scaffold_list_copies() {
-	local str_tier="$1" str_roster="$2" str_project_path int_status
-	str_project_path="$(mktemp -d)"
-	(
-		set -e
-		print_status() { :; }
-		envsubst() { :; }
-		mkdir() { :; }
-		touch() { :; }
-		chmod() { :; }
-		cp() { scaffold_dry_cp "$str_project_path" "$@"; }
-		rm() { scaffold_dry_rm "$str_project_path" "$@"; }
-		INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_copy_common_templates "$str_tier" "$str_project_path"
-	)
-	int_status=$?
-	rm -rf "$str_project_path"
-	return "$int_status"
+	local str_list_tier="$1" str_roster="$2"
+	INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run scaffold_list_copies_step
 }
 
 scaffold_list_copies_main() {
