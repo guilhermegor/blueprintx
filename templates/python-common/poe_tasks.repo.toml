@@ -35,3 +35,7 @@ help = "Flatten the repo into repo_context.txt for pasting into a web-UI LLM"
 [tool.poe.tasks.export_deps]
 cmd = "bash bin/export_deps.sh"
 help = "Export the locked set to requirements-lock.txt (hosts that can pip but not Poetry)"
+
+[tool.poe.tasks.template_update]
+cmd = "python bin/template_update.py"
+help = "Three-way merge template fixes into this project; dry run unless --apply (needs --blueprintx-root or BLUEPRINTX_TEMPLATE_ROOT)"

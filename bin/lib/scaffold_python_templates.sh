@@ -109,6 +109,8 @@ scaffold_copy_shared_test_gates() {
 		"$str_project_path/tests/unit/test_contract_drift.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
 		"$str_project_path/tests/unit/test_template_drift_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_update.py" \
+		"$str_project_path/tests/unit/test_template_update.py"
 
 	mkdir -p "$str_project_path/tests/fixtures"
 	cp "$COMMON_TEMPLATE_ROOT/tests/fixtures/example_source__header.csv" \
