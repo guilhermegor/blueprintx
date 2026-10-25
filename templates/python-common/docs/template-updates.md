@@ -43,3 +43,34 @@ content already equals the current template, in which case it is the same.
 Without a BlueprintX checkout, a stamp, or a usable `blueprintx_commit` (absent, `unknown`, or
 not in the checkout's history), the content section prints `SKIPPED content drift` and says why.
 It never prints a clean verdict for a comparison that did not run. The command always exits 0.
+
+## Applying updates: `poe template_update`
+
+`poe template_update` reads the same base, ours and theirs data and acts on it. It is a dry run
+unless `--apply` is passed. The checkout comes from `--blueprintx-root` or
+`BLUEPRINTX_TEMPLATE_ROOT`, as for the reporter, and the reporter's resolution of the managed
+paths is reused rather than repeated (`managed_sources` in `bin/check_template_drift.py`).
+
+| Project file | Action |
+|---|---|
+| missing | add it, with the template's file mode |
+| equal to base | fast-forward to theirs |
+| equal to theirs, or theirs equal to base | nothing to do |
+| edited locally and the template moved too | `git merge-file` base, ours, theirs |
+
+A clean merge is written as is. A conflict is written with `<<<<<<< ours`, `||||||| base` and
+`>>>>>>> template` markers and listed in the output. A file git cannot merge (binary content)
+is listed as unmergeable and left untouched. A local edit is never overwritten silently, and a
+file whose base is unknown (added to the template after the stamped commit) merges against an
+empty base, so a differing local copy surfaces as a conflict.
+
+`--apply` first runs `git switch -c chore/template-update-<short-sha>`, where the short sha is
+the checkout's HEAD. It never writes to the branch you were on, and it stops before changing
+anything when the branch cannot be created (not a git work tree, or the branch exists). It then
+writes the files and leaves them uncommitted for review. `blueprintx_commit` in the stamp moves
+to the checkout's HEAD only when every file applied cleanly; after a conflict the stamp is
+unchanged and the command exits 1, so resolving the markers and running it again continues from
+the same base.
+
+Without a usable stamp, checkout or `blueprintx_commit` the command prints `SKIPPED update`
+(or the reporter's `SKIPPED`) and exits 0 without touching the project.
