@@ -131,11 +131,14 @@ def _template_roots(path_blueprintx_root: pathlib.Path, str_tier: str) -> list[p
             ``templates/python-common``, the language-agnostic ``templates/common`` and
             ``templates/<tier>``.
     """
-    return [
+    list_roots = [
         path_blueprintx_root / _COMMON_TEMPLATE_RELPATH,
         path_blueprintx_root / "templates/common",
-        path_blueprintx_root / "templates" / str_tier,
     ]
+    path_tier = path_blueprintx_root / "templates" / str_tier
+    if (path_tier / "skeleton.meta").is_file():
+        list_roots.append(path_tier)
+    return list_roots
 
 
 def _dry_run_lines(
@@ -439,6 +442,8 @@ def base_blob(path_blueprintx_root: pathlib.Path, str_commit: str, str_src: str)
             The file content at that commit; ``None`` when the commit is not in the checkout
             or the file did not exist then.
     """
+    if str_commit.startswith("-"):
+        return None
     dict_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     try:
         cls_git = subprocess.run(  # noqa: S603
@@ -467,6 +472,8 @@ def _commit_known(path_blueprintx_root: pathlib.Path, str_commit: str) -> bool:
     bool
             ``True`` when the checkout can read that commit.
     """
+    if str_commit.startswith("-"):
+        return False
     dict_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     try:
         cls_git = subprocess.run(  # noqa: S603

@@ -51,7 +51,7 @@ scaffold_dry_rm() {
 }
 
 scaffold_dry_run() {
-	local str_fn="$1" str_project_path int_status
+	local str_fn="$1" str_project_path int_status=0
 	str_project_path="$(mktemp -d)"
 	(
 		set -e
@@ -63,8 +63,8 @@ scaffold_dry_run() {
 		cp() { scaffold_dry_cp "$str_project_path" "$@"; }
 		rm() { scaffold_dry_rm "$str_project_path" "$@"; }
 		"$str_fn" "$str_project_path"
-	)
-	int_status=$?
+	) &
+	wait $! || int_status=$?
 	rm -rf "$str_project_path"
 	return "$int_status"
 }

@@ -31,9 +31,10 @@ so the output cannot disagree with what the scaffold does.
 A file the project edited while the template stood still is not drift. Files a scaffold
 renders through `envsubst` (`pyproject.toml`, `LICENSE`, `README.md`, `SECURITY.md`) are not
 verbatim copies, so they are outside the comparison, as are files copied from `bin/ci/`.
-Copies guarded by an answer given at scaffold time (the review-bot roster, a GitGuardian key,
-publish targets) are listed exactly when the dry run is given the matching value; the roster
-choice is read back from the stamp.
+Copies guarded by an answer given at scaffold time (the review-bot roster) are listed exactly
+when the dry run is given the matching value, read back from the stamp. Other guarded copies
+(a GitGuardian key, publish targets) are not policed yet. A file absent at the stamped commit
+that the project wrote itself is reported as both changed.
 
 ## Why it self-skips
 
