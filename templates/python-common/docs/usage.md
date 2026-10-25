@@ -85,7 +85,7 @@ poe integration_tests   # pytest tests/integration/
 poe lint                # ruff + mypy + codespell + pydocstyle + shell/sql/yaml gates
 poe test_cov            # unit tests with coverage + badge
 poe db_up               # start the database (Docker), ensure schema, apply migrations
-poe docs_server         # serve these docs at http://0.0.0.0:8000
+poe docs_serve         # serve these docs at http://0.0.0.0:8000
 ```
 
 Run `poe` with no arguments for the full list.
