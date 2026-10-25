@@ -1,0 +1,29 @@
+[tool.poe.tasks.migrate_new]
+cmd = "alembic revision --autogenerate -m \"${message}\""
+help = "Create a migration by diffing models against the DB (online — needs a live connection)"
+
+	[[tool.poe.tasks.migrate_new.args]]
+	name = "message"
+	positional = true
+	required = true
+	help = "short description, e.g. add_status_column_to_users"
+
+[tool.poe.tasks.migrate_up]
+cmd = "alembic upgrade head"
+help = "Apply every pending migration (online — needs a live DB connection)"
+
+[tool.poe.tasks.migrate_down]
+cmd = "alembic downgrade -1"
+help = "Roll back the most recent migration (online — needs a live DB connection)"
+
+[tool.poe.tasks.migrate_current]
+cmd = "alembic current"
+help = "Show the revision currently applied to the DB"
+
+[tool.poe.tasks.migrate_history]
+cmd = "alembic history --verbose"
+help = "Show full migration history"
+
+[tool.poe.tasks.migrate_sql]
+cmd = "alembic upgrade head --sql"
+help = "Generate the FULL base-to-head upgrade as offline SQL (no DB connection; for a fresh DB)"
