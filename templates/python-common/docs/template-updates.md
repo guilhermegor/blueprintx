@@ -58,7 +58,7 @@ paths is reused rather than repeated (`managed_sources` in `bin/check_template_d
 | equal to theirs, or theirs equal to base | nothing to do |
 | edited locally and the template moved too | `git merge-file` base, ours, theirs |
 
-A clean merge is written as is. A conflict is written with `<<<<<<< ours`, `||||||| base` and
+A clean merge is written as is. A conflict is written with `<<<<<<< ours`, `=======` and
 `>>>>>>> template` markers and listed in the output. A file git cannot merge (binary content)
 is listed as unmergeable and left untouched. A local edit is never overwritten silently, and a
 file whose base is unknown (added to the template after the stamped commit) merges against an
