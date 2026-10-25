@@ -156,7 +156,10 @@ def newest_roster_comment(
         The newest roster comment, or ``None`` when the roster has said nothing.
     """
     for dict_comment in reversed(list_comments):
-        if fn_norm(dict_comment.get("login") or "") in set_roster:
+        if (
+            fn_norm(dict_comment.get("login") or "") in set_roster
+            and dict_comment.get("type") == "Bot"
+        ):
             return dict_comment
     return None
 
@@ -324,7 +327,8 @@ def fetch_comments(str_repo: str, int_number: int) -> list[dict]:
     Returns
     -------
     list of dict
-        Comments as ``{"login", "body", "created_at"}``, oldest first; empty when unreadable.
+        Comments as ``{"login", "type", "body", "created_at"}``, oldest first; empty when
+        unreadable.
     """
     list_raw = _gh_json(
         [
@@ -339,6 +343,7 @@ def fetch_comments(str_repo: str, int_number: int) -> list[dict]:
     return [
         {
             "login": (dict_c.get("user") or {}).get("login") or "",
+            "type": (dict_c.get("user") or {}).get("type") or "",
             "body": dict_c.get("body") or "",
             "created_at": dict_c.get("created_at") or "",
         }
@@ -518,7 +523,9 @@ def build_candidate(
     """
     str_owner, _, str_name = str_repo.partition("/")
     try:
-        dict_pr = cls_gate.fetch_pull_request(str_owner, str_name, int_number)
+        dict_pr = cls_gate.fetch_pull_request(
+            str_owner, str_name, int_number, frozenset(set_reviewers)
+        )
         list_comments = fetch_comments(str_repo, int_number)
     except Exception as cls_error:  # noqa: BLE001 - see the block above: degrade per PR
         print(f"::warning::could not read #{int_number}, skipping it: {str(cls_error)[:200]}")
