@@ -368,7 +368,7 @@ toolkit_readme() {
 test_toolkit_archetype_requires_commands() {
     expect_gate "toolkit without commands" "$(toolkit_readme)" fail "missing section 'commands'"
     expect_gate "toolkit with commands" \
-        "$(toolkit_readme | sed 's|^<!-- slug: contributing -->|<!-- slug: commands -->\n## Commands\n\n`make setup`.\n\n&|')" pass
+        "$(toolkit_readme | awk '/^<!-- slug: contributing -->/ { print "<!-- slug: commands -->"; print "## Commands"; print ""; print "`make setup`."; print "" } 1')" pass
 }
 
 main() {
