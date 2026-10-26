@@ -1,0 +1,4 @@
+#!/bin/bash
+
+unset GIT_DIR GIT_INDEX_FILE
+git init -q "$1"

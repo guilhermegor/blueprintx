@@ -324,6 +324,26 @@ content checks, such as keeping Greptile queue-only. `tests/test_check_review_co
 removes a `cp` line, a manifest file and an unshipped entry from a copy of the tree and shows
 the gate going red in both modes.
 
+## Why must a test clear the GIT_* environment before running git?
+
+Git exports `GIT_DIR`, `GIT_INDEX_FILE` and `GIT_WORK_TREE` to hooks. A test that runs
+`git init`, `git commit` or a real scaffold from a pre-commit hook then acts on the calling
+repository, not on its temporary directory. `git -C <dir>` does not help, because `GIT_DIR`
+wins over it. This left junk commits on a developer's branch three times (blueprintx#901).
+
+`bin/ci/check_test_git_env.sh` (pre-commit hook `test-git-env` and the `test-git-env` CI job)
+fails when a `tests/*.sh` runs `git init`, `git commit` or a `bin/scaffold/` script before it
+clears the variables. Put this near the top of the test:
+
+```bash
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
+```
+
+`tests/test_check_test_git_env.sh` feeds the gate fixtures from `tests/fixtures/test_git_env/`,
+including the uncleared and clear-too-late cases that must fail. Generated Python projects get
+the same protection from the autouse `isolate_git_environment` fixture in
+`tests/conftest.py`, which removes the repository pointers for every test.
+
 ## Which install methods are supported?
 
 Homebrew, Chocolatey, Snap, apt, and `make install` from a clone — see the project README.
