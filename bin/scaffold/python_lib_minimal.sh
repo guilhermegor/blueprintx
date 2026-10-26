@@ -494,6 +494,9 @@ copy_mkdocs_templates() {
     mkdir -p "$project_path/docs/assets"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" \
         "$project_path/docs/assets/logo.png"
+    mkdir -p "$project_path/docs/stylesheets"
+    cp "$COMMON_TEMPLATE_ROOT/docs/stylesheets/brand.css" \
+        "$project_path/docs/stylesheets/brand.css"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/examples.md" \
         "$project_path/docs/examples.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/faq.md" \
