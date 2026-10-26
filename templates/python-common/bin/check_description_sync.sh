@@ -8,45 +8,11 @@ source "$SCRIPT_DIR/lib/common.sh"
 ROOT="${1:-.}"
 
 manifest_description() {
-	python3 - "$ROOT" <<'PY'
-import json
-import pathlib
-import sys
-import tomllib
-
-path_root = pathlib.Path(sys.argv[1])
-path_toml = path_root / "pyproject.toml"
-path_json = path_root / "package.json"
-if path_toml.is_file():
-    dict_toml = tomllib.loads(path_toml.read_text(encoding="utf-8"))
-    dict_meta = dict_toml.get("project") or dict_toml.get("tool", {}).get("poetry", {})
-    sys.stdout.write(dict_meta.get("description", ""))
-elif path_json.is_file():
-    sys.stdout.write(json.loads(path_json.read_text(encoding="utf-8")).get("description", ""))
-else:
-    sys.exit(3)
-PY
+	python3 "$SCRIPT_DIR/lib/description_sources.py" manifest "$ROOT"
 }
 
 mkdocs_description() {
-	python3 - "$ROOT/mkdocs.yml" <<'PY'
-import json
-import re
-import sys
-
-for str_line in open(sys.argv[1], encoding="utf-8"):
-    match = re.match(r"site_description:\s*(.*?)\s*$", str_line)
-    if not match:
-        continue
-    str_value = match.group(1)
-    if str_value.startswith('"'):
-        str_value = json.loads(str_value)
-    elif str_value.startswith("'"):
-        str_value = str_value[1:-1].replace("''", "'")
-    sys.stdout.write(str_value)
-    sys.exit(0)
-sys.exit(4)
-PY
+	python3 "$SCRIPT_DIR/lib/description_sources.py" mkdocs "$ROOT/mkdocs.yml"
 }
 
 github_about() {
@@ -75,18 +41,27 @@ compare() {
 }
 
 main() {
-	local str_manifest str_other int_status=0 int_compared=0
+	local str_manifest str_other int_status=0 int_compared=0 int_rc=0
 
-	str_manifest="$(manifest_description)" || {
+	str_manifest="$(manifest_description)" || int_rc=$?
+	if [[ "$int_rc" -eq 3 ]]; then
 		print_status "warning" "SKIPPED description sync: no pyproject.toml or package.json in $ROOT"
 		return 0
-	}
+	elif [[ "$int_rc" -ne 0 ]]; then
+		print_status "error" "the manifest in $ROOT exists but its description cannot be read"
+		return 1
+	fi
 
-	if str_other="$(mkdocs_description)"; then
+	int_rc=0
+	str_other="$(mkdocs_description)" || int_rc=$?
+	if [[ "$int_rc" -eq 0 ]]; then
 		compare "mkdocs.yml site_description" "$str_manifest" "$str_other" || int_status=1
 		int_compared=$((int_compared + 1))
-	else
+	elif [[ "$int_rc" -eq 4 ]]; then
 		print_status "warning" "SKIPPED mkdocs.yml comparison: no site_description in $ROOT/mkdocs.yml"
+	else
+		print_status "error" "mkdocs.yml site_description is present but cannot be parsed"
+		int_status=1
 	fi
 
 	if str_other="$(github_about)"; then

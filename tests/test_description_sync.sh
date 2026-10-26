@@ -93,6 +93,18 @@ check_drift_gate() {
 	if ! bash "$path_project/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
 		fail "drift gate" "rejected a freshly scaffolded project"
 	fi
+	python3 -c 'import pathlib, re, sys; p = pathlib.Path(sys.argv[1]); p.write_text(re.sub(r"(?m)^(site_description:.*)$", r"\1 # note", p.read_text(), count=1))' "$path_project/mkdocs.yml"
+	if ! bash "$path_project/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
+		fail "drift gate" "rejected a matching site_description followed by a YAML comment"
+	fi
+	sed -i 's|^site_description: .*|site_description: "drifted" # note|' "$path_project/mkdocs.yml"
+	if bash "$path_project/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
+		fail "drift gate" "accepted a commented mkdocs.yml that diverged from pyproject.toml"
+	fi
+	sed -i 's|^site_description: .*|site_description: "unterminated|' "$path_project/mkdocs.yml"
+	if bash "$path_project/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
+		fail "drift gate" "accepted an unparseable site_description as absent"
+	fi
 	sed -i 's|^site_description: .*|site_description: "drifted"|' "$path_project/mkdocs.yml"
 	if bash "$path_project/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
 		fail "drift gate" "accepted a mkdocs.yml that diverged from pyproject.toml"
