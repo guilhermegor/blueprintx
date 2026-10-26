@@ -18,6 +18,15 @@ Or with Poetry:
 poetry add <package-name>
 ```
 
+With an optional extra, keep the extras identical on both sides:
+
+```bash
+pip install "<package-name>[<extra>]"
+poetry add "<package-name>[<extra>]"
+```
+
+Every `pip install` line has a Poetry twin.
+
 ---
 
 ## Basic usage
