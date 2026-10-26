@@ -907,7 +907,13 @@ lib_minimal_list_copies() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
         --tier) ;;
-        --roster) str_roster="${2:?--roster needs a value}" ;;
+        --roster)
+            str_roster="${2:?--roster needs a value}"
+            [[ "$str_roster" == true || "$str_roster" == false ]] || {
+                print_status "error" "--roster takes true or false, got: $str_roster"
+                return 2
+            }
+            ;;
         *)
             print_status "error" "unknown argument: $1"
             return 2

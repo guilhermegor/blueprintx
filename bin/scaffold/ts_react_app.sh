@@ -645,6 +645,7 @@ list_copies_step() {
     copy_skeleton_files "$1"
     apply_file_variants "$1"
     copy_common_templates "$1"
+    scaffold_prune_review_bot_roster "$1"
 }
 
 if [[ "${1:-}" == "--list-copies" ]]; then

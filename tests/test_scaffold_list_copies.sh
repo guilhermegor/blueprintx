@@ -88,8 +88,12 @@ check_scaffold() {
 	str_keyed="$(run_list "$str_scaffold" sentinel-key 2>&1)"
 	[[ "$str_out" == "$str_keyed" ]] || { fail "$str_name" "output depends on the API key"; return; }
 
-	if run_list "$str_scaffold" "" --roster false | grep -qE '	\.(github/)?\.review-bots\.yaml$'; then
-		fail "$str_name" "--roster false still lists .review-bots.yaml"
+	if ! run_list "$str_scaffold" "" --roster false | awk -F'\t' '
+		$1 == "COPY" && $2 == "file" && $4 ~ /(^|\/)\.review-bots\.yaml$/ { copied = 1 }
+		$1 == "COPY" && $2 == "dir" && $4 ~ /^\.github\/?$/ { copied = 1 }
+		$1 == "RM" && $2 ~ /^\.github\/\.review-bots\.yaml$/ { rm = 1 }
+		END { exit (copied && !rm) }'; then
+		fail "$str_name" "--roster false still delivers .review-bots.yaml"
 		return
 	fi
 
@@ -110,11 +114,13 @@ for str_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
 	check_scaffold "$(basename "$(dirname "$str_meta")")" "$str_scaffold"
 done
 
-if run_list bin/scaffold/ts_lib.sh "" --roster maybe >/dev/null 2>&1; then
-	fail "roster-validation" "--roster maybe was accepted"
-else
-	pass "roster-validation"
-fi
+for str_scaffold in bin/scaffold/ts_lib.sh bin/scaffold/python_lib_minimal.sh; do
+	if run_list "$str_scaffold" "" --roster maybe >/dev/null 2>&1; then
+		fail "roster-validation" "$str_scaffold accepted --roster maybe"
+	else
+		pass "roster-validation: $str_scaffold"
+	fi
+done
 
 ((int_failures == 0)) || { echo "$int_failures failure(s)"; exit 1; }
 echo "all list-copies checks passed"
