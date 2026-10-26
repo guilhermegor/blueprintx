@@ -49,6 +49,7 @@ nav:
       - Lockfile Sync: lockfile-sync.md
       - Docs Boundary Gate: docs-boundary-gate.md
       - README Layout Gate: readme-layout.md
+      - README Standard Adoption: readme-standard.md
       - Issue Scope: issue-scope.md
       - Secret Scanning: secret-scanning.md
       - Required Status Checks: required-status-checks.md

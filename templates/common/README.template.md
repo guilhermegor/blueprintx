@@ -96,6 +96,12 @@ The environment variables and config files the service reads.
 
 What is written to the device and where it comes from.
 <!-- /only -->
+<!-- only: toolkit -->
+<!-- slug: commands -->
+## Commands
+
+The Make or task entry points and what each one does.
+<!-- /only -->
 
 <!-- slug: contributing -->
 ## Contributing

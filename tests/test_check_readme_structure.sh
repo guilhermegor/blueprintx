@@ -361,6 +361,16 @@ test_generated_cleanup_failure_never_changes_verdict() {
     /bin/rm -rf "$path_fake"
 }
 
+toolkit_readme() {
+    good_readme | sed '1s/library/toolkit/' | sed '/^<!-- slug: public-api -->$/,/^Cut a release from the Release action\.$/d'
+}
+
+test_toolkit_archetype_requires_commands() {
+    expect_gate "toolkit without commands" "$(toolkit_readme)" fail "missing section 'commands'"
+    expect_gate "toolkit with commands" \
+        "$(toolkit_readme | awk '/^<!-- slug: contributing -->/ { print "<!-- slug: commands -->"; print "## Commands"; print ""; print "`make setup`."; print "" } 1')" pass
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do
