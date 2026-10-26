@@ -19,8 +19,16 @@ fi
 	exit 2
 }
 
-re_spawn='(^|[^[:alnum:]_./-])git( +-[cC] +[^ ]+)* +(init|commit)\b|(bash|sh|source) +"?[^ ]*bin/scaffold/|^[[:space:]]*("[^ =]*|[^ ="]*)bin/scaffold/[^ ]+\.sh'
-re_clear="unset[^#]*GIT_DIR[^#]*GIT_INDEX_FILE|unset[^#]*GIT_INDEX_FILE[^#]*GIT_DIR|compgen -e *[|] *grep '\\^GIT_'|env +-u +GIT_DIR"
+re_spawn='(^|[^[:alnum:]_./-])git( +-[cC] +[^ ]+)* +(init|commit|add|rm|mv|reset|checkout|switch|restore|merge|rebase|cherry-pick|tag|stash|update-ref|update-index|am|apply)\b|(bash|sh|source) +"?[^ ]*bin/scaffold/|^[[:space:]]*("[^ =]*|[^ ="]*)bin/scaffold/[^ ]+\.sh'
+
+first_clear_line() {
+	awk '
+		/^[[:space:]]*#/ { next }
+		{ n++ }
+		/unset/ && /compgen -e *[|] *grep .\^GIT_/ { print n; exit }
+		/unset/ && /GIT_DIR/ && /GIT_INDEX_FILE/ && /GIT_WORK_TREE/ { print n; exit }
+	' "$1"
+}
 
 errors=0
 checked=0
@@ -29,7 +37,7 @@ for path_test in "$REPO_ROOT"/tests/*.sh; do
 	checked=$((checked + 1))
 	int_spawn="$(grep -vE '^[[:space:]]*#' "$path_test" | grep -nE "$re_spawn" | head -n 1 | cut -d: -f1 || true)"
 	[ -n "$int_spawn" ] || continue
-	int_clear="$(grep -vE '^[[:space:]]*#' "$path_test" | grep -nE "$re_clear" | head -n 1 | cut -d: -f1 || true)"
+	int_clear="$(first_clear_line "$path_test")"
 	if [ -z "$int_clear" ] || [ "$int_clear" -gt "$int_spawn" ]; then
 		print_status "error" "tests/$(basename "$path_test") — spawns git or a scaffold (code line $int_spawn) without first clearing the inherited GIT_* env; under pre-commit, GIT_DIR and GIT_INDEX_FILE point at the calling repository, so its commits land there. Add: while IFS= read -r str_var; do unset \"\$str_var\"; done < <(compgen -e | grep '^GIT_')"
 		errors=$((errors + 1))
