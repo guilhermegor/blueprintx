@@ -49,6 +49,15 @@ report the seed and the failing test instead of retrying.
 
 ## Pull requests
 
+1. Open an issue first, using the repository's issue template. State what you want to change
+   and why, and list the files it will touch. For non-trivial work, wait for the issue to be
+   accepted before writing code.
+2. Branch off the default branch as `<type>/<issue-number>-<slug>` (for example
+   `feat/42-user-authentication`); see "Branch naming" above.
+3. Put `Closes #<N>` in the PR body so the issue closes when the PR merges.
+
+Then:
+
 - Keep PRs focused: one logical change per PR.
 - All CI checks must pass before merging.
 - Direct commits to `main` are not allowed.
