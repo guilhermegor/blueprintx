@@ -9,12 +9,12 @@ Everything you need to develop, test, and ship changes to this service.
 
 ## Setting up for development
 
-Bootstrap once with the shell helpers below, then run `poe init`.
+`poe` is a dev dependency, so it exists only once the virtualenv does. Bootstrap with the shell
+entry point first, then let `poe_exec.sh` find the venv's `poe` for the rest:
 
 ```bash
-bash bin/venv.sh        # create the Poetry venv + install deps
-bash bin/ensure_env.sh  # seed .env from .env.example
-bash bin/precommit.sh   # install the git hooks
+bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
+bash bin/poe_exec.sh init  # .env, venv, git hooks, GitHub helpers
 ```
 
 

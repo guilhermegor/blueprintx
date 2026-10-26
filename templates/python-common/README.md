@@ -78,14 +78,8 @@ ${PROJECT_NAME}/
 <!-- slug: development -->
 ## Development
 
-```bash
-bash bin/venv.sh
-poetry run poe init
-```
-
-`bin/venv.sh` runs once, first: `poe` lives inside the venv it creates. `poe init` then seeds
-`.env`, installs the git hooks and runs the repo-rules and security helpers. Day to day, run
-`poetry run poe <task>`; bare `poetry run poe` lists them.
+After the bootstrap under Install, every task runs through the same entry point:
+`bash bin/poe_exec.sh <task>`, and `bash bin/poe_exec.sh` with no task lists them.
 
 ```bash
 poetry run pytest tests/unit/ -v
@@ -93,7 +87,7 @@ poetry run pytest tests/integration/ -v
 ```
 
 <!-- only: library -->
-After the first release to PyPI, run `poetry run poe enable_pages` once: until the release's
+After the first release to PyPI, run `bash bin/poe_exec.sh enable_pages` once: until the release's
 docs deploy creates `gh-pages`, `init` leaves Pages untouched.
 <!-- /only -->
 
