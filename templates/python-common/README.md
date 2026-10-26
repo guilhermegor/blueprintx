@@ -78,10 +78,18 @@ ${PROJECT_NAME}/
 <!-- slug: development -->
 ## Development
 
+After the bootstrap under Install, any task can be run with the bootstrap script:
+`bash bin/poe_exec.sh <task>`, and `bash bin/poe_exec.sh` with no task lists them.
+
 ```bash
-poetry run pytest tests/unit/ -v
-poetry run pytest tests/integration/ -v
+bash bin/poe_exec.sh unit_tests
+bash bin/poe_exec.sh integration_tests
 ```
+
+<!-- only: library -->
+Once the first release's docs deploy has created the `gh-pages` branch, run
+`bash bin/poe_exec.sh enable_pages` once: until that branch exists, `init` leaves Pages untouched.
+<!-- /only -->
 
 <!-- only: service -->
 <!-- slug: configuration -->
@@ -130,4 +138,4 @@ This project is licensed under ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 ---
 
 <sub>Generated from the ${README_TIER} template via BlueprintX.</sub>
-<!-- add any project disclaimer inside the sub tag above -->
+<!-- add any project disclaimer inside the sub tag above; for a library wrapping a third party, e.g. "Unofficial, community library. Not affiliated with or endorsed by ORG_NAME." -->

@@ -9,13 +9,12 @@ Everything you need to develop, test, and ship changes to this service.
 
 ## Setting up for development
 
-The project ships both a `Makefile` and a parallel `tasks.sh` — use whichever suits your
-machine (`poe init`, or `poe init` when `make` is unavailable).
+`poe` is a dev dependency, so it exists only once the virtualenv does. Bootstrap with the shell
+entry point first, then let `poe_exec.sh` find the venv's `poe` for the rest:
 
 ```bash
-bash bin/venv.sh        # create the Poetry venv + install deps
-bash bin/ensure_env.sh  # seed .env from .env.example
-bash bin/precommit.sh   # install the git hooks
+bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
+bash bin/poe_exec.sh init  # .env, venv, git hooks, GitHub helpers
 ```
 
 
@@ -23,8 +22,14 @@ bash bin/precommit.sh   # install the git hooks
 commands create and cannot be the thing that builds it. After bootstrap, everything is a poe
 task — run bare `poe` to list them. See [Usage](usage.md).
 
+The bare `poe <task>` commands on this page assume the venv is active (`poetry shell`, or
+`source .venv/bin/activate`). Without it, run each one as `bash bin/poe_exec.sh <task>`, which
+finds the venv's `poe` on its own.
+
 `init` composes `ensure_env` (seed `.env`), `venv` (create the Poetry virtualenv, install all
-deps), and `precommit` (install the git hooks). Poetry is auto-installed if missing.
+deps), `precommit` (install the git hooks), then `enable_pages`, `enable_repo_rules` and
+`enable_security` (the GitHub helpers below). Poetry is auto-installed if missing. Pages stays
+untouched until the first release creates `gh-pages`; run `poe enable_pages` again afterward.
 
 ## Tests and linting
 
@@ -54,8 +59,8 @@ poe enable_pages
 ```
 
 This step already runs inside `poe init`. It is **idempotent and
-non-blocking**: it waits until the first release creates the `gh-pages` branch (mike creates it
-on its first deploy), does nothing if Pages already points there, and just warns and continues
+non-blocking**: it leaves Pages untouched until the first release creates the `gh-pages` branch (mike
+creates it on its first deploy; re-run it then), does nothing if Pages already points there, and just warns and continues
 if `gh` is absent/unauthenticated, no remote resolves, or you are not a repo admin (a fork) — it
 never breaks `init`. Manual alternative: *Settings → Pages → Build and deployment → Source:
 Deploy from a branch → gh-pages*.
