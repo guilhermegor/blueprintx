@@ -22,6 +22,10 @@ bash bin/poe_exec.sh init  # .env, venv, git hooks, GitHub helpers
 commands create and cannot be the thing that builds it. After bootstrap, everything is a poe
 task — run bare `poe` to list them. See [Usage](usage.md).
 
+The bare `poe <task>` commands on this page assume the venv is active (`poetry shell`, or
+`source .venv/bin/activate`). Without it, run each one as `bash bin/poe_exec.sh <task>`, which
+finds the venv's `poe` on its own.
+
 `init` composes `ensure_env` (seed `.env`), `venv` (create the Poetry virtualenv, install all
 deps), and `precommit` (install the git hooks). Poetry is auto-installed if missing.
 
