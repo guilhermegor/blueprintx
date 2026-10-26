@@ -191,6 +191,17 @@ happening silently:
    rows marked `yes` in the `In .env.example` column differ in either direction. A variable
    left out of the file on purpose (`DB_PORT`) gets a `no` row.
 
+   The description typed at the scaffold prompt is rendered, JSON-escaped, into
+   `pyproject.toml` / `package.json`, `mkdocs.yml` `site_description`, the docusaurus
+   `tagline`, the README overview and `gh repo create --description`
+   (`scaffold_escape_description` in `bin/lib/common.sh` exports `PROJECT_DESCRIPTION_ESC`
+   for the quoted slots). `templates/python-common/bin/check_description_sync.sh` then fails
+   a generated project whose manifest and `site_description` diverge, and its GitHub About
+   text too when an origin remote, `gh` and a token exist; any comparison it cannot make is
+   reported as `SKIPPED`. `tests/test_description_sync.sh` scaffolds every tier with a
+   description holding a quote, an apostrophe and a backslash. The drift gate ships to
+   the Python tiers only; the TypeScript tiers are not covered by it yet.
+
 **Docs navigation ceiling** (blueprintx#860). `check_docs_gap.py` fails a `mkdocs.yml` whose `nav:`
 has more than 8 top-level entries (`INT_NAV_TOP_LEVEL_CEILING`), so the sidebar cannot grow
 back into a flat list; pages go into sections. `bin/ci/scaffold_lint_test.sh` runs it against every generated Python tier. The TypeScript library

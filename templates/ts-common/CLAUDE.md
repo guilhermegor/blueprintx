@@ -42,7 +42,7 @@ for now — a gate here is worth adding once `ts-common/src/` grows past one sub
 | `optional/otel-log-emitter.test.ts` | Unit tests for the pure guard functions (`resolveSignalOverride`, `resolveOtlpLogsUrl`, `isCleartextWithCredentials` — both the Node and browser-simulated branches, the latter via a temporary `globalThis.window`) plus `withOtelLogExport`'s contract using an INJECTED `install` parameter (fake resolve / fake reject) rather than relying on `@opentelemetry/*` being absent from `ts-common`'s own devDependencies — a CodeRabbit finding on PR #505: that assumption holds inside `ts-common` but not once `conditional_copy_otel` adds the real packages to an opted-in project, where Jest could construct a real exporter against `http://localhost:4318` instead of exercising the fallback. `installOtelLogger` itself gets one more test, run unmocked, asserting only that it never throws synchronously (its actual resolve/reject outcome is environment-dependent, same reason) |
 | `optional/otel.env.fragment` | `.env` block appended on the OTel opt-in (`react-spa-webpack` only — see below) |
 | `docker-compose.otel-collector.yml` / `otel-collector-config.yaml` | Local-dev OTel Collector, copied on the OTel opt-in. Byte-identical to `python-common`'s own copies (the collector is language-agnostic) — a deliberate parallel copy rather than a single shared source under `templates/common/`, because that move would require editing the four `bin/scaffold/python_*_service*.sh` `cp` lines, which were held by an open PR at the time this shipped. See `CONTRIBUTING.md` ("Collector files are a deliberate parallel copy") |
-| `package.json` | Project manifest with `${PROJECT_NAME}` and `${PROJECT_DESCRIPTION}` placeholders; pins React 19, TypeScript 6, Webpack 5, Babel, ESLint 10 (with `@eslint-react/eslint-plugin` and `eslint-plugin-import-x`, since `eslint-plugin-react` and `eslint-plugin-import` do not support it), Prettier, react-refresh, cross-env |
+| `package.json` | Project manifest with `${PROJECT_NAME}` and `${PROJECT_DESCRIPTION_ESC}` placeholders; pins React 19, TypeScript 6, Webpack 5, Babel, ESLint 10 (with `@eslint-react/eslint-plugin` and `eslint-plugin-import-x`, since `eslint-plugin-react` and `eslint-plugin-import` do not support it), Prettier, react-refresh, cross-env |
 | `.gitignore` | Node + dist + env patterns |
 | `.vscode/settings.json` | Format-on-save (Prettier), ESLint fix-on-save, workspace TypeScript SDK |
 | `CONTRIBUTING.md` | Branch naming, commit style, and code-style guide template |
@@ -53,7 +53,7 @@ for now — a gate here is worth adding once `ts-common/src/` grows past one sub
 
 ## Editing rules
 
-- **`package.json`**: Uses `${PROJECT_NAME}` and `${PROJECT_DESCRIPTION}` placeholders — do not replace them with literal values; they are resolved by `envsubst` during scaffolding. Keep dependency versions pinned to a major range (`^X.0.0`).
+- **`package.json`**: Uses `${PROJECT_NAME}` and `${PROJECT_DESCRIPTION_ESC}` placeholders — do not replace them with literal values; they are resolved by `envsubst` during scaffolding. Keep dependency versions pinned to a major range (`^X.0.0`).
 - When bumping a dependency here, verify it is compatible with all TypeScript skeletons that consume it.
 - Do not add skeleton-specific files here — only files that belong in every TypeScript project.
 
