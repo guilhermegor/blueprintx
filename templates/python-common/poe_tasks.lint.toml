@@ -38,6 +38,10 @@ help = "Docs pages registered in nav, top-level nav ceiling of 8 (#860)"
 cmd = "python bin/check_env_docs_sync.py"
 help = ".env.example keys and docs/configuration.md rows must match"
 
+[tool.poe.tasks.check_description_sync]
+cmd = "bash bin/check_description_sync.sh"
+help = "pyproject description, mkdocs site_description and GitHub About must match"
+
 [tool.poe.tasks.check_secrets]
 cmd = "bash bin/check_secrets.sh"
 help = "Secret scan via gitleaks — no API key, no account (blueprintx#305)"

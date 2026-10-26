@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_provenance.sh
+source "$SCRIPT_DIR/../lib/scaffold_provenance.sh"
 # shellcheck source=bin/lib/scaffold_readme.sh
 source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
 # shellcheck source=bin/lib/scaffold_package_json.sh
@@ -401,9 +403,10 @@ copy_common_templates() {
     print_status "info" "Applying common TypeScript templates..."
 
     PROJECT_LICENSE="${LICENSE_CHOICE}"
+    scaffold_escape_description
     export PROJECT_NAME PROJECT_DESCRIPTION PROJECT_LICENSE GITHUB_USERNAME \
            STATE_MANAGEMENT_VARIANT STATE_MANAGEMENT_DESC STATE_MANAGEMENT_ANTIPATTERN
-    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION}' \
+    envsubst '${PROJECT_NAME} ${PROJECT_DESCRIPTION_ESC}' \
         < "$COMMON_TEMPLATE_ROOT/package.json" \
         > "$project_path/package.json"
     cp "$COMMON_TEMPLATE_ROOT/package-lock.json" "$project_path/package-lock.json"
@@ -637,5 +640,18 @@ main() {
     print_status "info" "Project path: $PROJECT_PATH"
     print_status "info" "Run 'npm install && npm start' to begin development"
 }
+
+list_copies_step() {
+    create_directory_structure "$1"
+    copy_skeleton_files "$1"
+    apply_file_variants "$1"
+    copy_common_templates "$1"
+    scaffold_prune_review_bot_roster "$1"
+}
+
+if [[ "${1:-}" == "--list-copies" ]]; then
+    scaffold_cli_list_copies list_copies_step "$@"
+    exit
+fi
 
 main

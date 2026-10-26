@@ -294,12 +294,26 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/(scaffold_git_remote|common)\.sh|tests/test_scaffold_git_remote\.sh)$
 
+      - id: description-sync-tests
+        name: description reaches every slot in every tier (blueprintx#895)
+        entry: bash tests/test_description_sync.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/common\.sh|bin/scaffold/(python|ts)_.*\.sh|templates/[^/]+/(mkdocs\.yml|pyproject\.toml|package\.json|docusaurus\.config\.js)|templates/python-common/bin/check_description_sync\.sh|tests/test_description_sync\.sh)$
+
       - id: scaffold-python-templates-tests
         name: scaffold provenance and copy-list tests (blueprintx#635)
         entry: bash tests/test_scaffold_python_templates.sh
         language: system
         pass_filenames: false
         files: ^(bin/lib/(scaffold_(python_templates|provenance)|common)\.sh|templates/(python-)?common/.*|bin/scaffold/python_lib_minimal\.sh|templates/python-common/bin/check_template_drift\.py|tests/test_scaffold_python_templates\.sh)$
+
+      - id: scaffold-list-copies-tests
+        name: scaffold --list-copies tests, every tier (blueprintx#872)
+        entry: bash tests/test_scaffold_list_copies.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/[a-z_]+\.sh|bin/scaffold/[a-z_]+\.sh|templates/.*|tests/test_scaffold_list_copies\.sh)$
 
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)

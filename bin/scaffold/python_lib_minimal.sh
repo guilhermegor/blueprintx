@@ -301,6 +301,7 @@ lib_minimal_render_pyproject() {
         *) PROJECT_LICENSE_CLASSIFIER="License :: OSI Approved" ;;
     esac
 
+    scaffold_escape_description
     export PROJECT_NAME PROJECT_PKG_NAME PROJECT_VERSION PROJECT_DESCRIPTION \
         PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME \
         COPYRIGHT_YEAR AUTHOR_NAME PROJECT_LICENSE PROJECT_LICENSE_CLASSIFIER
@@ -478,7 +479,7 @@ copy_mkdocs_templates() {
     print_status "info" "Copying MkDocs templates..."
 
     export DOCS_LOCALE="${DOCS_LOCALE:-en}"
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
+    envsubst '${PROJECT_DISPLAY_NAME} ${PROJECT_DESCRIPTION_ESC} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/mkdocs.yml" \
         > "$project_path/mkdocs.yml"
     envsubst '${PROJECT_DISPLAY_NAME}' \
@@ -895,8 +896,15 @@ lib_minimal_list_copies_step() {
     scaffold_render_readme() { :; }
     add_library_badges() { :; }
     add_poe_include() { :; }
+    create_directory_structure "$1"
+    create_python_files "$1"
+    copy_internal_utils "$1"
+    copy_internal_config "$1"
+    copy_internal_ports "$1"
     copy_templates "$1"
     copy_common_templates "$1"
+    copy_mkdocs_templates "$1"
+    scaffold_list_comment_budget "$1"
 }
 
 lib_minimal_list_copies() {
@@ -905,7 +913,13 @@ lib_minimal_list_copies() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
         --tier) ;;
-        --roster) str_roster="${2:?--roster needs a value}" ;;
+        --roster)
+            str_roster="${2:?--roster needs a value}"
+            [[ "$str_roster" == true || "$str_roster" == false ]] || {
+                print_status "error" "--roster takes true or false, got: $str_roster"
+                return 2
+            }
+            ;;
         *)
             print_status "error" "unknown argument: $1"
             return 2
@@ -913,6 +927,8 @@ lib_minimal_list_copies() {
         esac
         shift 2
     done
+    PROJECT_NAME=project
+    PROJECT_PKG_NAME="$(to_import_package_name "$PROJECT_NAME")"
     GITGUARDIAN_API_KEY="" INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run lib_minimal_list_copies_step
 }
 
