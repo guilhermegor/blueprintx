@@ -301,6 +301,7 @@ lib_minimal_render_pyproject() {
         *) PROJECT_LICENSE_CLASSIFIER="License :: OSI Approved" ;;
     esac
 
+    scaffold_escape_description
     export PROJECT_NAME PROJECT_PKG_NAME PROJECT_VERSION PROJECT_DESCRIPTION \
         PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME \
         COPYRIGHT_YEAR AUTHOR_NAME PROJECT_LICENSE PROJECT_LICENSE_CLASSIFIER
@@ -478,7 +479,7 @@ copy_mkdocs_templates() {
     print_status "info" "Copying MkDocs templates..."
 
     export DOCS_LOCALE="${DOCS_LOCALE:-en}"
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
+    envsubst '${PROJECT_DISPLAY_NAME} ${PROJECT_DESCRIPTION_ESC} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/mkdocs.yml" \
         > "$project_path/mkdocs.yml"
     envsubst '${PROJECT_DISPLAY_NAME}' \

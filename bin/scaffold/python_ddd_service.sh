@@ -157,7 +157,7 @@ copy_mkdocs_templates() {
     print_status "info" "Copying MkDocs templates..."
 
     export DOCS_LOCALE="${DOCS_LOCALE:-en}"
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
+    envsubst '${PROJECT_DISPLAY_NAME} ${PROJECT_DESCRIPTION_ESC} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/mkdocs.yml" \
         > "$project_path/mkdocs.yml"
     envsubst '${PROJECT_DISPLAY_NAME}' \
