@@ -976,6 +976,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-must-a-test-clear-the-git_-environment-before-running-git" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why must a test clear the GIT_* environment before running git?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#which-install-methods-are-supported" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3052,6 +3063,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-must-a-test-clear-the-git_-environment-before-running-git" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why must a test clear the GIT_* environment before running git?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#which-install-methods-are-supported" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3361,6 +3383,20 @@ to the manifest in the same pull request. <code>check_content</code> in the scri
 content checks, such as keeping Greptile queue-only. <code>tests/test_check_review_config_shipped.sh</code>
 removes a <code>cp</code> line, a manifest file and an unshipped entry from a copy of the tree and shows
 the gate going red in both modes.</p>
+<h2 id="why-must-a-test-clear-the-git_-environment-before-running-git">Why must a test clear the GIT_* environment before running git?<a class="headerlink" href="#why-must-a-test-clear-the-git_-environment-before-running-git" title="Permanent link">&para;</a></h2>
+<p>Git exports <code>GIT_DIR</code>, <code>GIT_INDEX_FILE</code> and <code>GIT_WORK_TREE</code> to hooks. A test that runs
+<code>git init</code>, <code>git commit</code> or a real scaffold from a pre-commit hook then acts on the calling
+repository, not on its temporary directory. <code>git -C &lt;dir&gt;</code> does not help, because <code>GIT_DIR</code>
+wins over it. This left junk commits on a developer's branch three times (blueprintx#901).</p>
+<p><code>bin/ci/check_test_git_env.sh</code> (pre-commit hook <code>test-git-env</code> and the <code>test-git-env</code> CI job)
+fails when a <code>tests/*.sh</code> runs <code>git init</code>, <code>git commit</code> or a <code>bin/scaffold/</code> script before it
+clears the variables. Put this near the top of the test:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">while</span><span class="w"> </span><span class="nv">IFS</span><span class="o">=</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>str_var<span class="p">;</span><span class="w"> </span><span class="k">do</span><span class="w"> </span><span class="nb">unset</span><span class="w"> </span><span class="s2">"</span><span class="nv">$str_var</span><span class="s2">"</span><span class="p">;</span><span class="w"> </span><span class="k">done</span><span class="w"> </span>&lt;<span class="w"> </span>&lt;<span class="o">(</span><span class="nb">compgen</span><span class="w"> </span>-e<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'^GIT_'</span><span class="o">)</span>
+</span></code></pre></div>
+<p><code>tests/test_check_test_git_env.sh</code> feeds the gate fixtures from <code>tests/fixtures/test_git_env/</code>,
+including the uncleared and clear-too-late cases that must fail. Generated Python projects get
+the same protection from the autouse <code>isolate_git_environment</code> fixture in
+<code>tests/conftest.py</code>, which removes the repository pointers for every test.</p>
 <h2 id="which-install-methods-are-supported">Which install methods are supported?<a class="headerlink" href="#which-install-methods-are-supported" title="Permanent link">&para;</a></h2>
 <p>Homebrew, Chocolatey, Snap, apt, and <code>make install</code> from a clone — see the project README.</p>
 
