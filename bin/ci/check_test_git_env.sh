@@ -19,15 +19,24 @@ fi
 	exit 2
 }
 
-re_spawn='(^|[^[:alnum:]_./-])git( +-[cC] +[^ ]+)* +(init|commit|add|rm|mv|reset|checkout|switch|restore|merge|rebase|cherry-pick|tag|stash|update-ref|update-index|am|apply)\b|(bash|sh|source) +"?[^ ]*bin/scaffold/|^[[:space:]]*("[^ =]*|[^ ="]*)bin/scaffold/[^ ]+\.sh'
+re_spawn='(^|[^[:alnum:]_./-])git([[:space:]]+-[cC][[:space:]]+[^[:space:]]+)*[[:space:]]+(init|commit|add|rm|mv|reset|checkout|switch|restore|merge|rebase|cherry-pick|tag|stash|update-ref|update-index|am|apply)\b|(bash|sh|source) +"?[^ ]*bin/scaffold/|^[[:space:]]*("[^ =]*|[^ ="]*)bin/scaffold/[^ ]+\.sh'
+
+logical_lines() {
+	awk '
+		/^[[:space:]]*#/ && str_pending == "" { next }
+		/\\$/ { str_pending = str_pending substr($0, 1, length($0) - 1) " "; next }
+		{ print str_pending $0; str_pending = "" }
+		END { if (str_pending != "") print str_pending }
+	' "$1"
+}
 
 first_clear_line() {
-	awk '
-		/^[[:space:]]*#/ { next }
+	logical_lines "$1" | awk '
 		{ n++ }
-		/unset/ && /compgen -e *[|] *grep .\^GIT_/ { print n; exit }
-		/unset/ && /GIT_DIR/ && /GIT_INDEX_FILE/ && /GIT_WORK_TREE/ { print n; exit }
-	' "$1"
+		!/(^|[;&|({]|then|do|else)[[:space:]]*unset[[:space:]]/ { next }
+		/compgen -e *[|] *grep .\^GIT_/ { print n; exit }
+		/GIT_DIR/ && /GIT_INDEX_FILE/ && /GIT_WORK_TREE/ { print n; exit }
+	'
 }
 
 errors=0
@@ -35,7 +44,7 @@ checked=0
 shopt -s nullglob
 for path_test in "$REPO_ROOT"/tests/*.sh; do
 	checked=$((checked + 1))
-	int_spawn="$(grep -vE '^[[:space:]]*#' "$path_test" | grep -nE "$re_spawn" | head -n 1 | cut -d: -f1 || true)"
+	int_spawn="$(logical_lines "$path_test" | grep -nE "$re_spawn" | head -n 1 | cut -d: -f1 || true)"
 	[ -n "$int_spawn" ] || continue
 	int_clear="$(first_clear_line "$path_test")"
 	if [ -z "$int_clear" ] || [ "$int_clear" -gt "$int_spawn" ]; then

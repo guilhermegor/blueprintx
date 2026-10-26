@@ -1,0 +1,4 @@
+#!/bin/bash
+
+git -C "$1" \
+	commit -q --allow-empty -m seed

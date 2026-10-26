@@ -41,6 +41,8 @@ expect_gate grep_without_unset fail
 expect_gate uncleared_git_add fail
 expect_gate partial_unset fail
 expect_gate compgen_without_unset fail
+expect_gate continued_git_commit fail
+expect_gate echoed_unset fail
 
 str_empty="$(mktemp -d)"
 if bash "$REPO_ROOT/bin/ci/check_test_git_env.sh" --root "$str_empty" >/dev/null 2>&1; then
