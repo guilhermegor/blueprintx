@@ -106,6 +106,7 @@ create_python_files() {
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dynamic_version_stub_gate.py" "$project_path/tests/unit/test_dynamic_version_stub_gate.py"
 
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_main.py.tmpl" \
@@ -675,16 +676,14 @@ path, version = sys.argv[1], sys.argv[2]
 with open(path, encoding="utf-8") as fh:
     text = fh.read()
 
-# 1) Stub the version — the real one is derived from the git tag at build time.
-text = text.replace(f'version = "{version}"', 'version = "0.0.0"', 1)
+text = text.replace(
+    f'version = "{version}"',
+    'version = "0.0.0"  # set from the git tag, see docs/contributing.md#releasing',
+    1,
+)
 
-# 2) Insert the dynamic-versioning config just before [build-system].
 dynamic_block = (
     "[tool.poetry-dynamic-versioning]\n"
-    "# Published version is derived from the latest git tag matching `v$version` (e.g. v0.2.0). On\n"
-    "# an exact tag the build is clean (0.2.0); off-tag builds get a PEP 440 dev version. The CI\n"
-    "# release workflows pass POETRY_DYNAMIC_VERSIONING_BYPASS to build a specific version. Needs\n"
-    "# `python -m build` (a PEP 517 frontend), not `poetry build` (which ignores the backend).\n"
     "enable = true\n"
     'vcs = "git"\n'
     'style = "pep440"\n'

@@ -121,6 +121,8 @@ scaffold_copy_shared_test_gates() {
 scaffold_copy_gate_tests() {
 	local str_project_path="$1"
 
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dynamic_version_stub_gate.py" \
+		"$str_project_path/tests/unit/test_dynamic_version_stub_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
 		"$str_project_path/tests/unit/test_function_length_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
