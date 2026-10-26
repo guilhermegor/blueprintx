@@ -1,0 +1,4 @@
+#!/bin/bash
+
+compgen -e | grep '^GIT_'
+git init -q "$1"

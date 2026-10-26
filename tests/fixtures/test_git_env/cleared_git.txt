@@ -1,0 +1,5 @@
+#!/bin/bash
+
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
+git -C "$1" init -q
+git -C "$1" commit -q --allow-empty -m seed

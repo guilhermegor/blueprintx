@@ -1,0 +1,4 @@
+#!/bin/bash
+
+grep -q x "$REPO_ROOT/bin/scaffold/ts_lib.sh"
+printf 'scaffold=bin/scaffold/a.sh\n'

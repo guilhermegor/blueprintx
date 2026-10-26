@@ -1,0 +1,4 @@
+#!/bin/bash
+
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+bash "$REPO_ROOT/bin/scaffold/ts_lib.sh" out
