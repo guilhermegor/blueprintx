@@ -107,7 +107,7 @@ Releases are **tag-driven and secret-free** when the project is connected to a G
 - The published version is derived from the latest git tag matching `vX.Y.Z`. On an exact tag
   the build is clean (`0.2.0`); off-tag builds get a PEP 440 dev version. The release workflows
   pass `POETRY_DYNAMIC_VERSIONING_BYPASS` to build a specific version. Build with
-  `python -m build` (a PEP 517 frontend), not `poetry build`, which ignores the build backend.
+  `python -m build` (a PEP 517 frontend).
 - A hand-bumped `version` fails the `dynamic-version-stub` pre-commit hook
   (`bin/check_dynamic_version_stub.py`): it contradicts the tag and the package index. The hook
   is a no-op for projects that do not enable `poetry-dynamic-versioning`.
