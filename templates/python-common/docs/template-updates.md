@@ -22,6 +22,11 @@ for the service tiers, `bin/scaffold/python_lib_minimal.sh` for lib-minimal) and
 `envsubst` and `print_status` through `scaffold_dry_run` in `bin/lib/scaffold_provenance.sh`,
 so the output cannot disagree with what the scaffold does.
 
+The dry run takes `--roster true|false` to match the project's review-bot roster choice, and
+clears `GITGUARDIAN_API_KEY` so the output never depends on the caller's environment. Files that
+are rendered rather than copied (`README.md`, `pyproject.toml`) do not appear. BlueprintX's own CI
+scaffolds every tier for real and fails when `--list-copies` and the generated tree disagree.
+
 ## What it reports
 
 - Missing: the template ships a path the project does not have.

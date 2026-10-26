@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 # shellcheck source=bin/lib/scaffold_git_remote.sh
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
+# shellcheck source=bin/lib/scaffold_provenance.sh
+source "$SCRIPT_DIR/../lib/scaffold_provenance.sh"
 # shellcheck source=bin/lib/scaffold_readme.sh
 source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
 
@@ -249,5 +251,17 @@ main() {
     print_status "info" "Project path: $PROJECT_PATH"
     print_status "info" "Run 'make lint && make test', then 'make build' to assemble the drive tree"
 }
+
+list_copies_step() {
+    INCLUDE_WINDOWS=false INCLUDE_ANDROID=false PERSISTENCE_SIZE_MB=0
+    create_directory_structure "$1"
+    copy_skeleton_files "$1"
+    copy_common_templates "$1"
+}
+
+if [[ "${1:-}" == "--list-copies" ]]; then
+    scaffold_cli_list_copies list_copies_step "$@"
+    exit
+fi
 
 main

@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "${PROJECT_NAME}"
 version = "${PROJECT_VERSION}"
-description = "${PROJECT_DESCRIPTION}"
+description = "${PROJECT_DESCRIPTION_ESC}"
 authors = ["${AUTHOR_NAME}"]
 readme = "README.md"
 license = "${PROJECT_LICENSE}"

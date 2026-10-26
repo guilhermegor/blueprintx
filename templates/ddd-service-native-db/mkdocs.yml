@@ -1,5 +1,5 @@
 site_name: ${PROJECT_DISPLAY_NAME}
-site_description: Documentation for ${PROJECT_DISPLAY_NAME}
+site_description: "${PROJECT_DESCRIPTION_ESC}"
 repo_url: ${REPOSITORY}
 nav:
   - Home: index.md

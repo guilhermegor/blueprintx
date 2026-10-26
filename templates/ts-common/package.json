@@ -1,7 +1,7 @@
 {
   "name": "${PROJECT_NAME}",
   "version": "1.0.0",
-  "description": "${PROJECT_DESCRIPTION}",
+  "description": "${PROJECT_DESCRIPTION_ESC}",
   "main": "index.js",
   "type": "module",
   "engines": {

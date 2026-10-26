@@ -306,6 +306,13 @@ repos:
         pass_filenames: false
         files: (^|/)(\.env\.example|configuration\.md|check_env_docs_sync\.py)$
 
+      - id: check-description-sync
+        name: manifest, mkdocs and GitHub About share one description
+        entry: bash bin/check_description_sync.sh
+        language: system
+        pass_filenames: false
+        files: (^|/)(pyproject\.toml|package\.json|mkdocs\.yml|check_description_sync\.sh)$
+
       - id: mypy
         name: mypy (static type check)
         entry: bash -c 'cd src && bash ../bin/poetry_exec.sh run mypy --config-file ../mypy.ini .'
