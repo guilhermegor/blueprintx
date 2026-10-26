@@ -86,6 +86,11 @@ scaffold_add_git_remote() {
 	git -C "$str_project_path" remote add origin "git@github.com:${str_slug}.git"
 }
 
+scaffold_set_origin_head() {
+	git -C "$1" remote set-head origin -a >/dev/null 2>&1 ||
+		print_status "warning" "Could not set origin/HEAD; run: git remote set-head origin -a"
+}
+
 scaffold_create_github_repo() {
 	local str_project_path="$1"
 	local str_slug str_vis_choice str_vis_flag
@@ -123,6 +128,7 @@ scaffold_create_github_repo() {
 			return 0
 		fi
 		gh repo edit "$str_slug" --default-branch main "${list_homepage[@]}" >/dev/null 2>&1 || true
+		scaffold_set_origin_head "$str_project_path"
 		print_status "success" "Repository created and pushed via gh."
 		scaffold_kanban_setup
 		return 0
@@ -143,6 +149,7 @@ scaffold_push_initial_commit() {
 	fi
 	if git -C "$str_project_path" push -u origin main >/dev/null 2>&1; then
 		print_status "success" "Pushed to origin/main."
+		scaffold_set_origin_head "$str_project_path"
 	else
 		print_status "warning" \
 			"Push to origin/main failed; create the repo on GitHub and retry 'git push -u origin main'."

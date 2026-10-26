@@ -460,6 +460,21 @@ jobs:
       - name: Should-fail regression tests for the boundary gate
         run: bash tests/test_check_docs_boundary.sh
 
+  test-git-env:
+    name: tests clear inherited GIT_* env
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check every git-spawning test clears GIT_* (blueprintx#901)
+        run: bash bin/ci/check_test_git_env.sh
+
+      - name: Should-fail regression tests for the gate
+        run: bash tests/test_check_test_git_env.sh
+
   readme-structure:
     name: README structure gate — plain headings, slug sections, Authors links
     runs-on: ubuntu-latest

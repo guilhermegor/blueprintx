@@ -18,3 +18,4 @@ optional|Scaffold + lint + test (otel opt-in) — api-service-native-db|new job;
 optional|Scaffold + lint + test (otel opt-in) — ddd-service-orm-db|new job; require once it has a green record on main
 optional|Scaffold + lint + test (otel opt-in) — lib-minimal|new job; require once it has a green record on main
 optional|Scaffold + lint + test (otel opt-in) — mvc-service-orm-db|new job; require once it has a green record on main
+optional|tests clear inherited GIT_* env|new gate (blueprintx#901); require once it has a green record on main
