@@ -9,8 +9,7 @@ Everything you need to develop, test, and ship changes to this service.
 
 ## Setting up for development
 
-The project ships both a `Makefile` and a parallel `tasks.sh` — use whichever suits your
-machine (`poe init`, or `poe init` when `make` is unavailable).
+Bootstrap once with the shell helpers below, then run `poe init`.
 
 ```bash
 bash bin/venv.sh        # create the Poetry venv + install deps

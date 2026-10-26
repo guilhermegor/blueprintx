@@ -79,9 +79,23 @@ ${PROJECT_NAME}/
 ## Development
 
 ```bash
+bash bin/venv.sh
+poetry run poe init
+```
+
+`bin/venv.sh` runs once, first: `poe` lives inside the venv it creates. `poe init` then seeds
+`.env`, installs the git hooks and runs the repo-rules and security helpers. Day to day, run
+`poetry run poe <task>`; bare `poetry run poe` lists them.
+
+```bash
 poetry run pytest tests/unit/ -v
 poetry run pytest tests/integration/ -v
 ```
+
+<!-- only: library -->
+After the first release to PyPI, run `poetry run poe enable_pages` once: until the release's
+docs deploy creates `gh-pages`, `init` leaves Pages untouched.
+<!-- /only -->
 
 <!-- only: service -->
 <!-- slug: configuration -->
@@ -130,4 +144,4 @@ This project is licensed under ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 ---
 
 <sub>Generated from the ${README_TIER} template via BlueprintX.</sub>
-<!-- add any project disclaimer inside the sub tag above -->
+<!-- add any project disclaimer inside the sub tag above; for a library wrapping a third party, e.g. "Unofficial, community library. Not affiliated with or endorsed by <Org>." -->
