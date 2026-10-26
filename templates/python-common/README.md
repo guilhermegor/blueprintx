@@ -82,8 +82,8 @@ After the bootstrap under Install, every task runs through the same entry point:
 `bash bin/poe_exec.sh <task>`, and `bash bin/poe_exec.sh` with no task lists them.
 
 ```bash
-poetry run pytest tests/unit/ -v
-poetry run pytest tests/integration/ -v
+bash bin/poe_exec.sh unit_tests
+bash bin/poe_exec.sh integration_tests
 ```
 
 <!-- only: library -->
