@@ -9,6 +9,7 @@ scaffold_render_pyproject() {
 	local str_tier="$1"
 	local str_project_path="$2"
 
+	scaffold_escape_description
 	HOMEPAGE="${HOMEPAGE:-https://example.com/${PROJECT_NAME}}"
 	REPOSITORY="${REPOSITORY:-https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}}"
 	BUG_REPORTS_URL="${BUG_REPORTS_URL:-${REPOSITORY}/issues}"
@@ -109,6 +110,8 @@ scaffold_copy_shared_test_gates() {
 		"$str_project_path/tests/unit/test_contract_drift.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
 		"$str_project_path/tests/unit/test_template_drift_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_update.py" \
+		"$str_project_path/tests/unit/test_template_update.py"
 
 	mkdir -p "$str_project_path/tests/fixtures"
 	cp "$COMMON_TEMPLATE_ROOT/tests/fixtures/example_source__header.csv" \

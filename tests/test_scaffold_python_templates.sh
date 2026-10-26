@@ -173,6 +173,41 @@ test_a_dry_run_that_fails_midway_exits_nonzero_and_the_gate_says_so() {
 	expect_gate_output "the gate reports the failed dry run" "dry run failed" "$(run_gate "$WORK_DIR/p6" "$WORK_DIR/c5")"
 }
 
+test_template_update_delivers_a_template_fix_to_a_lib_minimal_project() {
+	local path_bx="$WORK_DIR/lm" path_project="$WORK_DIR/lm_project" str_kind str_src str_dst str_base str_out
+	local -a list_git=(-c user.name=t -c user.email=t@t -c commit.gpgsign=false)
+	mkdir -p "$path_bx"
+	cp -r "$REPO_ROOT/bin" "$REPO_ROOT/templates" "$path_bx/"
+	git -C "$path_bx" init -q
+	git -C "$path_bx" add -A
+	git -C "$path_bx" "${list_git[@]}" commit -q -m base
+	str_base="$(git -C "$path_bx" rev-parse HEAD)"
+	mkdir -p "$path_project"
+	printf 'tier: lib-minimal\nreview_bot_roster: false\nblueprintx_commit: %s\n' "$str_base" >"$path_project/.blueprintx-provenance.yaml"
+	while IFS=$'\t' read -r _ str_kind str_src str_dst; do
+		mkdir -p "$(dirname "$path_project/$str_dst")"
+		if [[ "$str_kind" == dir ]]; then
+			mkdir -p "$path_project/$str_dst"
+			cp -r "$path_bx/$str_src/." "$path_project/$str_dst"
+		else
+			cp "$path_bx/$str_src" "$path_project/$str_dst"
+		fi
+	done < <(GITGUARDIAN_API_KEY= bash "$path_bx/bin/scaffold/python_lib_minimal.sh" --list-copies --tier lib-minimal --roster false | grep '^COPY')
+	git -C "$path_project" init -q
+	git -C "$path_project" add -A
+	git -C "$path_project" "${list_git[@]}" commit -q -m scaffold
+	printf '\n# fixed after the scaffold\n' >>"$path_bx/templates/python-common/bin/venv.sh"
+	git -C "$path_bx" "${list_git[@]}" commit -q -am "fix venv"
+	str_out="$(python3 "$path_bx/templates/python-common/bin/template_update.py" --root "$path_project" --blueprintx-root "$path_bx" --apply 2>&1)"
+	expect_gate_output "lib-minimal picks up the venv.sh fix" "fast-forward: bin/venv.sh" "$str_out"
+	if cmp -s "$path_bx/templates/python-common/bin/venv.sh" "$path_project/bin/venv.sh"; then
+		pass "the project's venv.sh now equals the template's"
+	else
+		fail "venv.sh update" "project copy differs from the template after --apply"
+	fi
+	expect_gate_output "the stamp moved to the checkout HEAD" "blueprintx_commit: $(git -C "$path_bx" rev-parse HEAD)" "$(cat "$path_project/.blueprintx-provenance.yaml")"
+}
+
 test_packaged_install_nested_in_a_foreign_repo_uses_the_literal
 test_a_dry_run_that_fails_midway_exits_nonzero_and_the_gate_says_so
 test_a_checkout_stamps_its_own_tag_and_commit
@@ -182,5 +217,6 @@ test_lib_minimal_list_copies_ignores_the_callers_gitguardian_key
 test_a_complete_project_is_clean_and_a_missing_file_is_named
 test_dropping_a_copy_from_the_lib_stops_requiring_it
 test_a_copy_in_a_form_a_regex_cannot_read_is_still_required
+test_template_update_delivers_a_template_fix_to_a_lib_minimal_project
 
 exit "$int_failures"

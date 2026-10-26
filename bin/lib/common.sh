@@ -378,3 +378,10 @@ scaffold_git_commit() {
     git -C "$str_dir" -c user.name="BlueprintX Scaffold" -c user.email="scaffold@blueprintx.invalid" \
         commit -q "$@" -m "$str_message"
 }
+
+scaffold_escape_description() {
+    PROJECT_DESCRIPTION_ESC="$(python3 -c \
+        'import json, sys; print(json.dumps(sys.argv[1], ensure_ascii=False)[1:-1])' \
+        "${PROJECT_DESCRIPTION:-}")"
+    export PROJECT_DESCRIPTION_ESC
+}
