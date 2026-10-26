@@ -25,15 +25,17 @@ theme:
   favicon: assets/logo.png
   palette:
     - scheme: default
-      primary: indigo
+      primary: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
+      primary: custom
       toggle:
         icon: material/white-balance-sunny
         name: Switch to light mode
+extra_css:
+  - stylesheets/brand.css
 extra:
   version:
     provider: mike

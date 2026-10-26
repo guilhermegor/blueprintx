@@ -394,6 +394,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_function_length_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
         "$project_path/tests/unit/test_template_drift_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_update.py" \
+        "$project_path/tests/unit/test_template_update.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
         "$project_path/tests/unit/test_comment_budget_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_docs_sync_gate.py" \
@@ -493,6 +495,9 @@ copy_mkdocs_templates() {
     mkdir -p "$project_path/docs/assets"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" \
         "$project_path/docs/assets/logo.png"
+    mkdir -p "$project_path/docs/stylesheets"
+    cp "$COMMON_TEMPLATE_ROOT/docs/stylesheets/brand.css" \
+        "$project_path/docs/stylesheets/brand.css"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/examples.md" \
         "$project_path/docs/examples.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/faq.md" \
@@ -891,8 +896,15 @@ lib_minimal_list_copies_step() {
     scaffold_render_readme() { :; }
     add_library_badges() { :; }
     add_poe_include() { :; }
+    create_directory_structure "$1"
+    create_python_files "$1"
+    copy_internal_utils "$1"
+    copy_internal_config "$1"
+    copy_internal_ports "$1"
     copy_templates "$1"
     copy_common_templates "$1"
+    copy_mkdocs_templates "$1"
+    scaffold_list_comment_budget "$1"
 }
 
 lib_minimal_list_copies() {
@@ -901,7 +913,13 @@ lib_minimal_list_copies() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
         --tier) ;;
-        --roster) str_roster="${2:?--roster needs a value}" ;;
+        --roster)
+            str_roster="${2:?--roster needs a value}"
+            [[ "$str_roster" == true || "$str_roster" == false ]] || {
+                print_status "error" "--roster takes true or false, got: $str_roster"
+                return 2
+            }
+            ;;
         *)
             print_status "error" "unknown argument: $1"
             return 2
@@ -909,6 +927,8 @@ lib_minimal_list_copies() {
         esac
         shift 2
     done
+    PROJECT_NAME=project
+    PROJECT_PKG_NAME="$(to_import_package_name "$PROJECT_NAME")"
     GITGUARDIAN_API_KEY="" INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run lib_minimal_list_copies_step
 }
 

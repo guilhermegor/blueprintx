@@ -11,7 +11,7 @@ from pathlib import Path
 SET_BOOTSTRAP = {"init", "ensure_env", "venv", "update_venv", "precommit"}
 SET_REPO = {
     "enable_pages", "enable_repo_rules", "enable_security", "bump_version", "changelog",
-    "get_corporate_ca", "export_context", "export_deps",
+    "get_corporate_ca", "export_context", "export_deps", "template_update",
 }
 SET_TEST = {
     "unit_tests", "integration_tests", "test_cov", "test_cov_report", "test_cov_serve",

@@ -308,6 +308,13 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/(scaffold_(python_templates|provenance)|common)\.sh|templates/(python-)?common/.*|bin/scaffold/python_lib_minimal\.sh|templates/python-common/bin/check_template_drift\.py|tests/test_scaffold_python_templates\.sh)$
 
+      - id: scaffold-list-copies-tests
+        name: scaffold --list-copies tests, every tier (blueprintx#872)
+        entry: bash tests/test_scaffold_list_copies.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/[a-z_]+\.sh|bin/scaffold/[a-z_]+\.sh|templates/.*|tests/test_scaffold_list_copies\.sh)$
+
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)
         entry: bash bin/ci/check_specs_structure.sh --root .
