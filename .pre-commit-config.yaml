@@ -350,6 +350,20 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/check_docs_boundary\.sh|tests/test_check_docs_boundary\.sh)$
 
+      - id: test-git-env
+        name: tests clear inherited GIT_* env before spawning git (blueprintx#901)
+        entry: bash bin/ci/check_test_git_env.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: test-git-env-tests
+        name: check_test_git_env.sh should-fail regression tests (blueprintx#901)
+        entry: bash tests/test_check_test_git_env.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/check_test_git_env\.sh|tests/test_check_test_git_env\.sh|tests/fixtures/test_git_env/)
+
       - id: pr-template-tests
         name: check_pr_template.sh should-fail regression tests (blueprintx#587)
         entry: bash tests/test_check_pr_template.sh

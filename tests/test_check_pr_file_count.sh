@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$REPO_ROOT/bin/lib/common.sh"

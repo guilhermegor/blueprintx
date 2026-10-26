@@ -21,6 +21,7 @@ resolves *and* connects, so the hostname path is still caught there.
 from __future__ import annotations
 
 import socket
+from functools import partial
 from typing import NoReturn
 
 import pytest
@@ -112,3 +113,30 @@ def block_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatc
         "create_connection",
         socket.create_connection if bool_allowed else _blocked,
     )
+
+
+LIST_GIT_REPOSITORY_POINTERS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_PREFIX",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+)
+
+
+@pytest.fixture(autouse=True)
+def isolate_git_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop the repository pointers git exports to hooks so a test never touches the host repo.
+
+    Applied automatically to every test. Under pre-commit, ``GIT_DIR`` and
+    ``GIT_INDEX_FILE`` name the calling repository, so a test that runs ``git init`` or
+    ``git commit`` would otherwise write there instead of in its temporary directory.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Pytest's patcher; restores the variables at teardown.
+    """
+    list(map(partial(monkeypatch.delenv, raising=False), LIST_GIT_REPOSITORY_POINTERS))

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+git init -q "$1"
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
