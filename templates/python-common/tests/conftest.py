@@ -20,8 +20,8 @@ resolves *and* connects, so the hostname path is still caught there.
 
 from __future__ import annotations
 
-import socket
 from functools import partial
+import socket
 from typing import NoReturn
 
 import pytest
