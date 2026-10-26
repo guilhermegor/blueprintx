@@ -176,7 +176,7 @@ dependency hashes moved, not risk.)
 | `src` | `src/` | ❌ defines what "passing" means |
 | `tests` | `tests/` | ❌ defines what "passing" means |
 | `other` | anything unmatched | ❌ unknown = unsafe (default-deny) |
-| `ci` | `.github/`, `bin/`, `Makefile`, `tasks.sh`, `.pre-commit-config.yaml` | ✅ |
+| `ci` | `.github/`, `bin/`, `poe_tasks*.toml`, `.pre-commit-config.yaml` | ✅ |
 | `deps` | `pyproject.toml`, `poetry.lock`, `requirements.txt` | ✅ (the test suite is the gate) |
 | `docs` | `docs/`, `mkdocs.yml`, `README.md`, `CHANGELOG.md`, … | ✅ |
 
