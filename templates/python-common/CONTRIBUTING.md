@@ -174,13 +174,13 @@ has already run.
      - Documentation updates
      - Any technical debt created
 
-3. **Code Review**:
+4. **Code Review**:
    - Expect constructive feedback
    - Address all review comments
    - Update documentation as needed
    - Keep commits logically organized
 
-4. **Merge Approval**:
+5. **Merge Approval**:
    - Requires at least one approval
    - All tests must pass
    - Code coverage should not decrease
