@@ -87,8 +87,8 @@ poetry run pytest tests/integration/ -v
 ```
 
 <!-- only: library -->
-After the first release to PyPI, run `bash bin/poe_exec.sh enable_pages` once: until the release's
-docs deploy creates `gh-pages`, `init` leaves Pages untouched.
+Once the first release's docs deploy has created the `gh-pages` branch, run
+`bash bin/poe_exec.sh enable_pages` once: until that branch exists, `init` leaves Pages untouched.
 <!-- /only -->
 
 <!-- only: service -->

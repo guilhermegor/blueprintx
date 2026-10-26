@@ -27,7 +27,8 @@ The bare `poe <task>` commands on this page assume the venv is active (`poetry s
 finds the venv's `poe` on its own.
 
 `init` composes `ensure_env` (seed `.env`), `venv` (create the Poetry virtualenv, install all
-deps), and `precommit` (install the git hooks). Poetry is auto-installed if missing.
+deps), `precommit` (install the git hooks), then `enable_pages`, `enable_repo_rules` and
+`enable_security` (the GitHub helpers below). Poetry is auto-installed if missing.
 
 ## Tests and linting
 
@@ -180,7 +181,7 @@ dependency hashes moved, not risk.)
 | `src` | `src/` | ❌ defines what "passing" means |
 | `tests` | `tests/` | ❌ defines what "passing" means |
 | `other` | anything unmatched | ❌ unknown = unsafe (default-deny) |
-| `ci` | `.github/`, `bin/`, `poe_tasks*.toml`, `.pre-commit-config.yaml` | ✅ |
+| `ci` | `.github/`, `bin/`, `Makefile`, `tasks.sh`, `.pre-commit-config.yaml` | ✅ |
 | `deps` | `pyproject.toml`, `poetry.lock`, `requirements.txt` | ✅ (the test suite is the gate) |
 | `docs` | `docs/`, `mkdocs.yml`, `README.md`, `CHANGELOG.md`, … | ✅ |
 
