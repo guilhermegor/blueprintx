@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -uo pipefail
-unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e GIT_)
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="$(mktemp -d)"
@@ -13,7 +13,7 @@ run_create() {
     mkdir -p "$dir"
     git -C "$dir" init -q -b main
     git -C "$dir" -c user.email=t@example.com -c user.name=T commit -q --allow-empty -m "chore: seed"
-    git init -q --bare "$bare"
+    git init -q --bare -b main "$bare"
     git -C "$dir" remote add origin "$bare"
     : >"$log"
     printf 'y\n1\n' | BLUEPRINTX_STDIN_ANSWERS=1 GITGUARDIAN_API_KEY=k bash -c '
@@ -48,6 +48,18 @@ test_secret_is_set_before_the_push() {
         echo "ok: the secret is set before the first push"
     else
         echo "FAIL (secret before push): $(tr '\n' '|' <<<"$out")"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
+test_origin_head_is_set_after_the_push() {
+    local str_head
+    run_create head >/dev/null
+    str_head="$(git -C "$WORK_DIR/proj-head" symbolic-ref --short refs/remotes/origin/HEAD 2>&1)"
+    if [ "$str_head" = "origin/main" ]; then
+        echo "ok: origin/HEAD is set after the push"
+    else
+        echo "FAIL (origin/HEAD): $str_head"
         int_failures=$((int_failures + 1))
     fi
 }
@@ -126,6 +138,7 @@ test_prompt_fails_when_first_push_fails() {
 
 test_secret_is_set_before_the_push
 test_prompt_fails_when_first_push_fails
+test_origin_head_is_set_after_the_push
 test_fallback_sets_secret_before_the_push
 test_failed_push_is_reported_incomplete
 test_no_classic_protection_put() {

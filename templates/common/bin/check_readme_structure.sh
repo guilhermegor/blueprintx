@@ -17,6 +17,7 @@ declare -A MAP_ARCHETYPE=(
 	["spa"]="deployment"
 	["service"]="configuration"
 	["usb-tool"]="payload"
+	["toolkit"]="commands"
 )
 declare -A MAP_ARCHETYPE_AFTER_OVERVIEW=(
 	["library"]="documentation"

@@ -2,9 +2,10 @@
 <!-- readme-archetype: cli -->
 # BlueprintX
 
-<p align="center"><img src="assets/logo.png" width="180" style="border-radius: 12px;" alt="BlueprintX logo"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/guilhermegor/BlueprintX/main/assets/logo.png" width="200" alt="BlueprintX logo"></p>
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+[![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://guilhermegor.github.io/blueprintx/)
 ![Bash](https://img.shields.io/badge/bash-%3E%3D4-4EAA25?logo=gnubash&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Open Issues](https://img.shields.io/github/issues/guilhermegor/BlueprintX)
@@ -26,6 +27,11 @@
 - **Offline git-diff sync**: when you scaffold a project without connecting it to GitHub, BlueprintX adds a `git_diff_export` / `git_diff_check` / `git_diff_apply` workflow for moving changes between machines via patch files (e.g. email) — no GitHub required
 - Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
 - **Extensible by design**: drop a `skeleton.meta` file into any `templates/` directory and it appears in the menu automatically
+
+<!-- slug: documentation -->
+## Documentation
+
+The documentation site lives at https://guilhermegor.github.io/blueprintx/. Serve it locally with `make mkdocs_serve`.
 
 <!-- slug: getting-started -->
 ## Getting Started
@@ -465,3 +471,7 @@ MIT. See [LICENSE](LICENSE).
 * [Versioning & the v1.0.0 entry bar](docs/versioning.md)
 
 * [Quality rules — the registry, per language](docs/quality-rules.md)
+
+---
+
+<sub>BlueprintX follows its own README standard; see [README standard](docs/readme-standard.md).</sub>

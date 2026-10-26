@@ -96,6 +96,11 @@ and updates `versions.json` — Docusaurus's version dropdown reads from these a
 
 ## Pull requests
 
-1. Branch off the default branch following the prefix policy (`feat/…`, `fix/…`, …).
-2. Fill out the PR template completely.
-3. Ensure CI (build, lint, test, type-check, pack:smoke) passes — it is the merge gate.
+1. Open an issue first, using the repository's issue template. State what you want to change
+   and why, and list the files it will touch. For non-trivial work, wait for the issue to be
+   accepted before writing code.
+2. Branch off the default branch as `<type>/<issue-number>-<slug>` (for example
+   `feat/42-user-authentication`), following the prefix policy (`feat/…`, `fix/…`, …).
+3. Put `Closes #<N>` in the PR body so the issue closes when the PR merges.
+4. Fill out the PR template completely.
+5. Ensure CI (build, lint, test, type-check, pack:smoke) passes — it is the merge gate.
