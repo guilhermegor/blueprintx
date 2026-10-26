@@ -25,7 +25,7 @@ heading (blank lines between are fine): `<!-- slug: install -->`.
 | Slot | Slugs, in this order |
 |---|---|
 | Core, first | `overview`, optional `features`, `library` only: `documentation`, then `getting-started`, `install`, `usage`, `project-structure`, `development` |
-| Archetype | `library`: `public-api`, `publishing`. `cli`: `releasing`. `spa`: `deployment`. `service`: `configuration`. `usb-tool`: `payload` |
+| Archetype | `library`: `public-api`, `publishing`. `cli`: `releasing`. `spa`: `deployment`. `service`: `configuration`. `usb-tool`: `payload`. `toolkit`: `commands` |
 | Core, last | `contributing`, `license`, `authors`, `useful-links` |
 
 Other sections are allowed anywhere; only the slugged ones are ordered.
