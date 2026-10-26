@@ -28,6 +28,7 @@ unit-tested
 offline with no network. Only `main()` touches the API.
 """
 
+from fnmatch import fnmatchcase
 import json
 import os
 import sys
@@ -47,8 +48,8 @@ RISK_ORDER = ("src", "tests", "other", "ci", "deps", "docs")
 
 RISK_PATHS = {
     "src": ("src/",),
-    "tests": ("tests/",),
-    "ci": (".github/", "bin/", "Makefile", "tasks.sh", ".pre-commit-config.yaml"),
+    "tests": ("tests/", "poe_tasks.toml", "poe_tasks.*.toml"),
+    "ci": (".github/", "bin/", ".pre-commit-config.yaml"),
     "deps": ("pyproject.toml", LOCKFILE, "requirements.txt"),
     "docs": (
         "docs/",
@@ -84,6 +85,9 @@ def classify_path(str_path: str) -> str:
         for str_rule in RISK_PATHS.get(str_class, ()):
             if str_rule.endswith("/"):
                 if str_path.startswith(str_rule):
+                    return str_class
+            elif "*" in str_rule:
+                if "/" not in str_path and fnmatchcase(str_path, str_rule):
                     return str_class
             elif str_path == str_rule:
                 return str_class
