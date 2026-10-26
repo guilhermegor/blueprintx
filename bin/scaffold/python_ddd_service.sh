@@ -697,4 +697,21 @@ main() {
     print_status "info" "Project path: $PROJECT_PATH"
 }
 
+list_copies_step() {
+    create_directory_structure "$1"
+    create_python_files "$1"
+    copy_global_config "$1"
+    copy_shared_utils "$1"
+    copy_typing_chassis "$1"
+    copy_required_chassis_db "$1"
+    copy_templates "$1"
+    copy_common_templates "$1"
+    copy_mkdocs_templates "$1"
+}
+
+if [[ "${1:-}" == "--list-copies" ]]; then
+    scaffold_cli_list_copies list_copies_step "$@"
+    exit
+fi
+
 main
