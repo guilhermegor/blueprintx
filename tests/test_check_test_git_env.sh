@@ -36,6 +36,8 @@ expect_gate uncleared_git_init fail
 expect_gate uncleared_git_commit fail
 expect_gate uncleared_scaffold fail
 expect_gate clear_after_spawn fail
+expect_gate uncleared_git_dash_c fail
+expect_gate grep_without_unset fail
 
 str_empty="$(mktemp -d)"
 if bash "$REPO_ROOT/bin/ci/check_test_git_env.sh" --root "$str_empty" >/dev/null 2>&1; then
