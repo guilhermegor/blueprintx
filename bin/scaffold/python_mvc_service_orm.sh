@@ -183,6 +183,9 @@ copy_mkdocs_templates() {
     mkdir -p "$project_path/docs/assets"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" \
         "$project_path/docs/assets/logo.png"
+    mkdir -p "$project_path/docs/stylesheets"
+    cp "$COMMON_TEMPLATE_ROOT/docs/stylesheets/brand.css" \
+        "$project_path/docs/stylesheets/brand.css"
     local doc
     for doc in usage examples faq contributing changelog; do
         cp "$COMMON_TEMPLATE_ROOT/docs/${doc}.md" "$project_path/docs/${doc}.md"

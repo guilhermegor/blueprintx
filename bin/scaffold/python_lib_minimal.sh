@@ -393,6 +393,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_function_length_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
         "$project_path/tests/unit/test_template_drift_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_update.py" \
+        "$project_path/tests/unit/test_template_update.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
         "$project_path/tests/unit/test_comment_budget_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_docs_sync_gate.py" \
@@ -492,6 +494,9 @@ copy_mkdocs_templates() {
     mkdir -p "$project_path/docs/assets"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" \
         "$project_path/docs/assets/logo.png"
+    mkdir -p "$project_path/docs/stylesheets"
+    cp "$COMMON_TEMPLATE_ROOT/docs/stylesheets/brand.css" \
+        "$project_path/docs/stylesheets/brand.css"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/examples.md" \
         "$project_path/docs/examples.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/faq.md" \
