@@ -157,7 +157,7 @@ copy_mkdocs_templates() {
     print_status "info" "Copying MkDocs templates..."
 
     export DOCS_LOCALE="${DOCS_LOCALE:-en}"
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY} ${DOCS_LOCALE}' \
+    envsubst '${PROJECT_DISPLAY_NAME} ${PROJECT_DESCRIPTION_ESC} ${REPOSITORY} ${DOCS_LOCALE}' \
         < "$BLUEPRINTX_ROOT/templates/api-service-native-db/mkdocs.yml" \
         > "$project_path/mkdocs.yml"
     envsubst '${PROJECT_DISPLAY_NAME}' \
@@ -173,6 +173,9 @@ copy_mkdocs_templates() {
     mkdir -p "$project_path/docs/assets"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" \
         "$project_path/docs/assets/logo.png"
+    mkdir -p "$project_path/docs/stylesheets"
+    cp "$COMMON_TEMPLATE_ROOT/docs/stylesheets/brand.css" \
+        "$project_path/docs/stylesheets/brand.css"
     local doc
     for doc in usage examples faq contributing changelog; do
         cp "$COMMON_TEMPLATE_ROOT/docs/${doc}.md" "$project_path/docs/${doc}.md"
@@ -733,5 +736,22 @@ main() {
     print_status "success" "Hex-service scaffold complete!"
     print_status "info" "Project path: $PROJECT_PATH"
 }
+
+list_copies_step() {
+    create_directory_structure "$1"
+    create_python_files "$1"
+    copy_global_config "$1"
+    copy_shared_utils "$1"
+    copy_typing_chassis "$1"
+    copy_required_chassis_db "$1"
+    copy_templates "$1"
+    copy_common_templates "$1"
+    copy_mkdocs_templates "$1"
+}
+
+if [[ "${1:-}" == "--list-copies" ]]; then
+    scaffold_cli_list_copies list_copies_step "$@"
+    exit
+fi
 
 main

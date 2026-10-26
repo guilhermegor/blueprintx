@@ -475,7 +475,7 @@ def base_blob(path_blueprintx_root: pathlib.Path, str_commit: str, str_src: str)
     return cls_git.stdout if cls_git.returncode == 0 else None
 
 
-def _commit_known(path_blueprintx_root: pathlib.Path, str_commit: str) -> bool:
+def commit_known(path_blueprintx_root: pathlib.Path, str_commit: str) -> bool:
     """Return whether ``str_commit`` resolves to a commit in the checkout.
 
     Parameters
@@ -587,7 +587,7 @@ def _report_content(
             ``True`` when content drifted, ``False`` when clean, ``None`` when not checked.
     """
     str_commit = read_commit(path_root)
-    if str_commit is None or not _commit_known(path_blueprintx_root, str_commit):
+    if str_commit is None or not commit_known(path_blueprintx_root, str_commit):
         print(
             f"SKIPPED content drift: the stamped blueprintx_commit ({str_commit}) is missing "
             f"or not in {path_blueprintx_root}, so there is no merge base. This run proves "
@@ -664,6 +664,65 @@ def _report_missing(str_tier: str, list_missing: list, int_total: int) -> None:
     )
 
 
+def managed_sources(
+    path_root: pathlib.Path, path_blueprintx: pathlib.Path | None
+) -> tuple[str, dict[str, str], str | None]:
+    """Resolve the project's tier and the template-managed paths, or say why it cannot.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    path_blueprintx : pathlib.Path or None
+        Root of a BlueprintX checkout, or ``None`` when none was given.
+
+    Returns
+    -------
+    tuple of (str, dict of str to str, str or None)
+            The stamped tier, the project-relative path to checkout-relative source map and,
+            when nothing can be compared, the SKIPPED message to print (the map is then empty).
+    """
+    str_tier = read_tier(path_root)
+    if str_tier is None:
+        return (
+            "",
+            {},
+            (
+                f"SKIPPED: no {_PROVENANCE_FILENAME} at {path_root} — nothing to check. Either "
+                f"this tree was not scaffolded by BlueprintX (this repo, run over itself, always "
+                f"takes this path), or it predates provenance stamping (blueprintx#109). This "
+                f"run proves nothing about drift."
+            ),
+        )
+    if path_blueprintx is None or not path_blueprintx.exists():
+        return (
+            str_tier,
+            {},
+            (
+                f"SKIPPED: tier is '{str_tier}' but no BlueprintX checkout is available to "
+                f"compare against — pass --blueprintx-root or set BLUEPRINTX_TEMPLATE_ROOT. This "
+                f"run proves nothing about drift."
+            ),
+        )
+    dict_sources = required_sources(
+        path_blueprintx, str_tier, bool(review_bot_roster_enabled(path_root))
+    )
+    if is_offline_project(path_root):
+        dict_sources = {k: v for k, v in dict_sources.items() if not k.startswith(".github/")}
+    if not dict_sources:
+        return (
+            str_tier,
+            {},
+            (
+                f"SKIPPED: found no required paths under {path_blueprintx} — the scaffold entry "
+                f"for tier '{str_tier}' is missing there, or its --list-copies dry run failed or "
+                f"printed nothing (bash is also required). This run proves nothing about drift, "
+                f"and is NOT the same as a clean comparison."
+            ),
+        )
+    return str_tier, dict_sources, None
+
+
 def main(list_argv: list) -> int:
     """Report template drift for the project at ``--root``. Always returns 0 (a reporter).
 
@@ -678,37 +737,9 @@ def main(list_argv: list) -> int:
             Always 0 — see the module docstring for why this never gates.
     """
     path_root, path_blueprintx = _parse_args(list_argv)
-
-    str_tier = read_tier(path_root)
-    if str_tier is None:
-        print(
-            f"SKIPPED: no {_PROVENANCE_FILENAME} at {path_root} — nothing to check. Either this "
-            f"tree was not scaffolded by BlueprintX (this repo, run over itself, always takes "
-            f"this path), or it predates provenance stamping (blueprintx#109). This run proves "
-            f"nothing about drift."
-        )
-        return 0
-
-    if path_blueprintx is None or not path_blueprintx.exists():
-        print(
-            f"SKIPPED: tier is '{str_tier}' but no BlueprintX checkout is available to compare "
-            f"against — pass --blueprintx-root or set BLUEPRINTX_TEMPLATE_ROOT. This run proves "
-            f"nothing about drift."
-        )
-        return 0
-
-    dict_sources = required_sources(
-        path_blueprintx, str_tier, bool(review_bot_roster_enabled(path_root))
-    )
-    if is_offline_project(path_root):
-        dict_sources = {k: v for k, v in dict_sources.items() if not k.startswith(".github/")}
-    if not dict_sources:
-        print(
-            f"SKIPPED: found no required paths under {path_blueprintx} — the scaffold entry "
-            f"for tier '{str_tier}' is missing there, or its --list-copies dry run failed or "
-            f"printed nothing (bash is also required). This run proves nothing about drift, "
-            f"and is NOT the same as a clean comparison."
-        )
+    str_tier, dict_sources, str_skip = managed_sources(path_root, path_blueprintx)
+    if str_skip is not None:
+        print(str_skip)
         return 0
 
     list_missing = missing_relpaths(path_root, set(dict_sources))

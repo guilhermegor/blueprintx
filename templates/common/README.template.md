@@ -40,7 +40,7 @@ The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_N
 <!-- slug: install -->
 ### Install
 
-Prerequisites and the install command.
+Prerequisites and the install command for pip and Poetry, extras included.
 
 <!-- slug: usage -->
 ### Usage

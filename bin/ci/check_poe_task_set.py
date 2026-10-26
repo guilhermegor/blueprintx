@@ -11,7 +11,7 @@ from pathlib import Path
 SET_BOOTSTRAP = {"init", "ensure_env", "venv", "update_venv", "precommit"}
 SET_REPO = {
     "enable_pages", "enable_repo_rules", "enable_security", "bump_version", "changelog",
-    "get_corporate_ca", "export_context", "export_deps",
+    "get_corporate_ca", "export_context", "export_deps", "template_update",
 }
 SET_TEST = {
     "unit_tests", "integration_tests", "test_cov", "test_cov_report", "test_cov_serve",
@@ -20,7 +20,8 @@ SET_TEST = {
 SET_LINT = {
     "lint", "install_shell_linters", "check_docstrings", "check_readme_structure",
     "check_function_length", "check_fixture_scope", "check_complexity",
-    "check_comment_budget", "check_docs_gap", "check_env_docs_sync", "check_secrets",
+    "check_comment_budget", "check_docs_gap", "check_env_docs_sync", "check_description_sync",
+    "check_secrets",
     "template_drift", "check_commit_msg",
 }
 SET_DOCS = {"docs_serve", "docs_server"}
