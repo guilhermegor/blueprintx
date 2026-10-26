@@ -197,7 +197,7 @@ prompt_env_wise_config() {
 
 strip_bump_version() {
     local project_path="$1"
-    python3 - "$project_path/poe_tasks.toml" <<'PY'
+    python3 - "$project_path/poe_tasks.repo.toml" <<'PY'
 import re
 import sys
 
@@ -254,6 +254,32 @@ else:
 with open(path_tasks, "w", encoding="utf-8") as fh:
     fh.write(text)
 PY_INNER
+}
+
+poe_fragments_for_tier() {
+    local tier="$1"
+    local fragments="test lint repo docs"
+    case "$tier" in
+        lib-minimal) ;;
+        *-orm-db) fragments="$fragments db migrate service" ;;
+        *-db) fragments="$fragments db service" ;;
+        *)
+            print_status "error" "poe_fragments_for_tier: unknown tier '$tier'"
+            return 1
+            ;;
+    esac
+    echo "$fragments"
+}
+
+copy_poe_fragments() {
+    local tier="$1"
+    local project_path="$2"
+    local fragments fragment
+    fragments="$(poe_fragments_for_tier "$tier")" || return 1
+    for fragment in $fragments; do
+        cp "$COMMON_TEMPLATE_ROOT/poe_tasks.$fragment.toml" "$project_path/poe_tasks.$fragment.toml"
+        add_poe_include "$project_path" "poe_tasks.$fragment.toml"
+    done
 }
 
 apply_env_wise_config() {

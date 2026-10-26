@@ -330,6 +330,7 @@ lib_minimal_copy_tooling_configs() {
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/poe_tasks.library.toml" \
         "$project_path/poe_tasks.library.toml"
     add_poe_include "$project_path" "poe_tasks.library.toml"
+    copy_poe_fragments lib-minimal "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
     cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
@@ -392,6 +393,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_function_length_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
         "$project_path/tests/unit/test_template_drift_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_update.py" \
+        "$project_path/tests/unit/test_template_update.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_budget_gate.py" \
         "$project_path/tests/unit/test_comment_budget_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_docs_sync_gate.py" \
@@ -421,6 +424,7 @@ lib_minimal_copy_project_scaffolding() {
 
     cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$project_path/.gitlint"
     cp -r "$COMMON_TEMPLATE_ROOT/bin/." "$project_path/bin"
+    rm -f "$project_path"/bin/{db.sh,run.sh,build_wheelhouse.sh,fix_playwright.sh}
     mkdir -p "$project_path/tests/integration"
     cp "$COMMON_TEMPLATE_ROOT/tests/integration/test_bin_scripts.py" \
         "$project_path/tests/integration/test_bin_scripts.py"
@@ -438,9 +442,8 @@ lib_minimal_copy_project_scaffolding() {
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_family_convention_example.py" \
         "$project_path/tests/unit/test_family_convention_example.py"
     cp "$SHARED_TEMPLATE_ROOT/bin/export_repo_content.sh" "$project_path/bin/export_repo_content.sh"
-    cp "$SHARED_TEMPLATE_ROOT/bin/ship.sh" "$project_path/bin/ship.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"
-    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/ship.sh" "$project_path/bin/commit.sh"
+    chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/commit.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
     mkdir -p "$project_path/.specs/backlog"
@@ -491,6 +494,9 @@ copy_mkdocs_templates() {
     mkdir -p "$project_path/docs/assets"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" \
         "$project_path/docs/assets/logo.png"
+    mkdir -p "$project_path/docs/stylesheets"
+    cp "$COMMON_TEMPLATE_ROOT/docs/stylesheets/brand.css" \
+        "$project_path/docs/stylesheets/brand.css"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/examples.md" \
         "$project_path/docs/examples.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/faq.md" \
@@ -883,4 +889,50 @@ main() {
     print_status "info" "Project path: $PROJECT_PATH"
 }
 
-main
+lib_minimal_list_copies_step() {
+    unset -f mkdir
+    mkdir -p "$1/.github/workflows"
+    scaffold_render_readme() { :; }
+    add_library_badges() { :; }
+    add_poe_include() { :; }
+    create_directory_structure "$1"
+    create_python_files "$1"
+    copy_internal_utils "$1"
+    copy_internal_config "$1"
+    copy_internal_ports "$1"
+    copy_templates "$1"
+    copy_common_templates "$1"
+    copy_mkdocs_templates "$1"
+    scaffold_list_comment_budget "$1"
+}
+
+lib_minimal_list_copies() {
+    local str_roster=true
+    shift
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --tier) ;;
+        --roster)
+            str_roster="${2:?--roster needs a value}"
+            [[ "$str_roster" == true || "$str_roster" == false ]] || {
+                print_status "error" "--roster takes true or false, got: $str_roster"
+                return 2
+            }
+            ;;
+        *)
+            print_status "error" "unknown argument: $1"
+            return 2
+            ;;
+        esac
+        shift 2
+    done
+    PROJECT_NAME=project
+    PROJECT_PKG_NAME="$(to_import_package_name "$PROJECT_NAME")"
+    GITGUARDIAN_API_KEY="" INCLUDE_REVIEW_BOT_ROSTER="$str_roster" scaffold_dry_run lib_minimal_list_copies_step
+}
+
+if [[ "${1:-}" == "--list-copies" ]]; then
+    lib_minimal_list_copies "$@"
+else
+    main
+fi

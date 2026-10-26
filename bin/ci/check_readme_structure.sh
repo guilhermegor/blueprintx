@@ -29,6 +29,15 @@ scaffold_skeleton() {
     fi
 }
 
+remove_work_dir() {
+    local path_work="$1"
+    for _ in 1 2 3; do
+        rm -rf "$path_work" 2>/dev/null && return 0
+        sleep "${README_GATE_CLEANUP_PAUSE:-1}" 2>/dev/null || true
+    done
+    echo "[warn] could not remove $path_work after 3 attempts; leaving it behind" >&2
+}
+
 check_generated() {
     local path_meta str_name str_scaffold path_work path_project int_rc=0
     for path_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
@@ -46,7 +55,7 @@ check_generated() {
             echo "[x] $str_name: the generated README fails its own gate" >&2
             int_rc=1
         fi
-        rm -rf "$path_work"
+        remove_work_dir "$path_work"
     done
     return "$int_rc"
 }

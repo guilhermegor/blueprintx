@@ -100,8 +100,8 @@ Releases are **tag-driven and secret-free** when the project is connected to a G
   (`Release to PyPI` / `Release to Test PyPI`, `workflow_dispatch` with the version), or by pushing
   a `vX.Y.Z` tag.
 - The release workflow runs the **full test suite** as a hard gate, builds with `python -m build`,
-  and publishes via **OIDC trusted publishing** (`pypa/gh-action-pypi-publish`) — no stored
-  `PYPI_TOKEN`.
+  and publishes via **OIDC trusted publishing** (`pypa/gh-action-pypi-publish`) — no token secrets
+  are needed.
 - The changelog is regenerated from tags at release/build time (`poe changelog` locally); CI never
   commits `CHANGELOG.md` back to the protected default branch.
 
@@ -124,6 +124,13 @@ For the very first upload the project does not exist yet — register a **pendin
 account level (not under an existing project's settings). Publishing from a laptop instead of CI is
 the one case that still needs an API token; OIDC works only from GitHub Actions.
 
+### Serving the docs — first release
+
+The first `release-pypi.yaml` run creates the `gh-pages` branch with `mike deploy`.
+`GITHUB_TOKEN` cannot set the Pages source (the endpoint needs repository admin rights), so the
+`deploy_docs` job prints the remedy in its job summary. Run `poe enable_pages` once as a
+repository admin afterwards.
+
 ### Choosing publish targets
 
 The scaffold wires the release workflows for the official public registry (PyPI) and a staging
@@ -143,6 +150,8 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
    `mkdocs.yml` paths and the `<img>` in `docs/index.md`).
 2. Tune size, position and border inline on the `<img>` — `width="200"` (scale),
    `align="right"` (position) and `style="border-radius: 15px;"` (rounded) — in `docs/index.md`.
+3. Set the header colour in `docs/stylesheets/brand.css` (`--md-primary-fg-color`, plus the
+   `slate` variant for dark mode) to match your logo.
 
 ## Repository protection & security (one-time, scripted)
 

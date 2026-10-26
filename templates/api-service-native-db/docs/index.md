@@ -20,7 +20,7 @@ over queries and connections.
 ```bash
 bash bin/venv.sh   # bootstrap the venv (poe lives inside it, so bootstrap is shell)
 poe run            # serve the application (uvicorn on :8000)
-poe docs_server   # serve this documentation at http://0.0.0.0:8000
+poe docs_serve   # serve this documentation at http://0.0.0.0:8000
 ```
 
 ---
