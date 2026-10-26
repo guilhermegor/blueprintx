@@ -31,6 +31,7 @@ expect_gate() {
 
 expect_gate cleared_git pass
 expect_gate cleared_scaffold pass
+expect_gate cleared_compgen_prefix pass
 expect_gate no_spawn pass
 expect_gate uncleared_git_init fail
 expect_gate uncleared_git_commit fail

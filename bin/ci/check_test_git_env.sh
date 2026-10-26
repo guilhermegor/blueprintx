@@ -34,7 +34,7 @@ first_clear_line() {
 	logical_lines "$1" | awk '
 		{ n++ }
 		int_found || !/(^|[;&|({]|then|do|else)[[:space:]]*unset[[:space:]]/ { next }
-		/compgen -e *[|] *grep .\^GIT_/ { int_found = n }
+		/compgen -e *([|] *grep .\^GIT_|GIT_)/ { int_found = n }
 		/GIT_DIR/ && /GIT_INDEX_FILE/ && /GIT_WORK_TREE/ { int_found = n }
 		END { if (int_found) print int_found }
 	'
