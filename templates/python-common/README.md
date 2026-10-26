@@ -78,7 +78,7 @@ ${PROJECT_NAME}/
 <!-- slug: development -->
 ## Development
 
-After the bootstrap under Install, every task runs through the same entry point:
+After the bootstrap under Install, any task can be run with the bootstrap script:
 `bash bin/poe_exec.sh <task>`, and `bash bin/poe_exec.sh` with no task lists them.
 
 ```bash

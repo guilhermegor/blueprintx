@@ -28,7 +28,8 @@ finds the venv's `poe` on its own.
 
 `init` composes `ensure_env` (seed `.env`), `venv` (create the Poetry virtualenv, install all
 deps), `precommit` (install the git hooks), then `enable_pages`, `enable_repo_rules` and
-`enable_security` (the GitHub helpers below). Poetry is auto-installed if missing.
+`enable_security` (the GitHub helpers below). Poetry is auto-installed if missing. Pages stays
+untouched until the first release creates `gh-pages`; run `poe enable_pages` again afterward.
 
 ## Tests and linting
 
@@ -58,8 +59,8 @@ poe enable_pages
 ```
 
 This step already runs inside `poe init`. It is **idempotent and
-non-blocking**: it waits until the first release creates the `gh-pages` branch (mike creates it
-on its first deploy), does nothing if Pages already points there, and just warns and continues
+non-blocking**: it leaves Pages untouched until the first release creates the `gh-pages` branch (mike
+creates it on its first deploy; re-run it then), does nothing if Pages already points there, and just warns and continues
 if `gh` is absent/unauthenticated, no remote resolves, or you are not a repo admin (a fork) — it
 never breaks `init`. Manual alternative: *Settings → Pages → Build and deployment → Source:
 Deploy from a branch → gh-pages*.
