@@ -429,6 +429,9 @@ def _apply(
         return 1
     path_stamp = path_root / drift._PROVENANCE_FILENAME
     str_stamp = path_stamp.read_text(encoding="utf-8")
+    str_scaffold = drift.read_scaffold_commit(path_root)
+    if str_scaffold and "scaffold_commit:" not in str_stamp:
+        str_stamp = f"{str_stamp.rstrip()}\nscaffold_commit: {str_scaffold}\n"
     path_stamp.write_text(_RE_STAMP_COMMIT.sub(f"blueprintx_commit: {str_full}", str_stamp))
     print(
         f"\nApplied on branch {str_branch}; blueprintx_commit is now {str_full}. "

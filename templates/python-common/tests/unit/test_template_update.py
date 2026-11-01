@@ -558,3 +558,23 @@ def test_orphans_are_still_listed_after_an_apply_moved_the_stamp(
     _update(path_project, path_bx)
 
     assert "removed: dropped.txt" in capsys.readouterr().out
+
+
+def test_orphans_survive_an_apply_on_a_stamp_without_scaffold_commit(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """An old stamp gains the baseline on apply instead of losing it to the moved stamp."""
+    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
+    path_stamp = path_project / drift._PROVENANCE_FILENAME
+    path_stamp.write_text(
+        "\n".join(
+            line for line in path_stamp.read_text().splitlines() if "scaffold_commit" not in line
+        )
+        + "\n"
+    )
+    _update(path_project, path_bx, "--apply")
+    capsys.readouterr()
+
+    _update(path_project, path_bx)
+
+    assert "removed: dropped.txt" in capsys.readouterr().out
