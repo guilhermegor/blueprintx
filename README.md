@@ -434,7 +434,7 @@ BlueprintX/
 ## Development
 
 ```bash
-make init           # bootstrap the venv and install the pre-commit hooks
+make init           # bootstrap the venv, install the pre-commit hooks, set fetch.prune
 make lint           # run every pre-commit hook across the repo (mirrors CI)
 make verify_tiers   # scaffold each Python tier and run that project's lint and tests
 ```

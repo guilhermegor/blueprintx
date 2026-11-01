@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=bin/lib/scaffold_repo_settings.sh
+source "$SCRIPT_DIR/lib/scaffold_repo_settings.sh"
 
 TIERS=(ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db api-service-native-db lib-minimal react-spa-webpack ts-lib bash-cli)
 
@@ -493,6 +495,7 @@ create_remote() {
     [ "$VISIBILITY" = "public" ] && visibility_flag="--public"
     (cd "$PROJECT_PATH" && gh repo create "$REPOSITORY" "$visibility_flag" --source=. --remote=origin) \
         || exit_error "Failed to create $REPOSITORY via gh repo create. If it now exists on GitHub, add it with: git -C $PROJECT_PATH remote add origin <url> && git -C $PROJECT_PATH push -u origin HEAD"
+    scaffold_enable_delete_branch_on_merge "$REPOSITORY"
     print_status "success" "Created $REPOSITORY"
 }
 
