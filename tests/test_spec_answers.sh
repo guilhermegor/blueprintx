@@ -325,9 +325,9 @@ test_ts_lib_answer_stream_order() {
     str_remote="$(ts_lib_stream git_remote=y)"
     str_priv="$(ts_lib_stream git_remote=y create_repo=y)"
     str_full="$(ts_lib_stream review_bot_roster=y otel=n git_remote=y create_repo=y \
-        repo_visibility=public kanban=y protect_branch=y human_reviewers=y)"
+        repo_visibility=public kanban=y kanban_visibility=private protect_branch=y human_reviewers=y)"
     if [ "$str_def" = "n,n,n" ] && [ "$str_remote" = "n,n,y,n" ] \
-        && [ "$str_priv" = "n,n,y,y,2,n,n" ] && [ "$str_full" = "y,n,y,y,1,y,y,y" ]; then
+        && [ "$str_priv" = "n,n,y,y,2,n,n" ] && [ "$str_full" = "y,n,y,y,1,y,3,y,y" ]; then
         pass "ts-lib answer stream: roster, otel, git_remote, create_repo, visibility, kanban, protect, reviewers"
     else
         fail "ts-lib stream" "default=$str_def remote=$str_remote private=$str_priv full=$str_full"
@@ -372,6 +372,10 @@ case "$1 $2" in
         [ "${STUB_VIEW_ERROR:-0}" = 1 ] && { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
         echo "GraphQL: Could not resolve to a Repository with the name '$3'. (repository)" >&2
         exit 1 ;;
+    "project list")
+        [ "${STUB_PROJECT:-none}" = fail ] && exit 1
+        [ "${STUB_PROJECT:-none}" = exists ] && echo 7
+        exit 0 ;;
     "repo create") touch "$STUB_STATE/created" ;;
     "api -X") case "$*" in *rulesets*) cat >"$STUB_STATE/protection.json" ;; esac ;;
 esac
@@ -510,6 +514,48 @@ test_etcher_chromeos_answer_stream_and_prompt_order() {
     fi
 }
 
+test_kanban_yes_keeps_branch_protection_aligned() {
+    run_ts_lib_with_gh_stub e2e-kanban -- git_remote=y create_repo=y repo_visibility=public \
+        kanban=y protect_branch=y human_reviewers=n
+    if [ -e "$WORK_DIR/e2e-kanban-state/protection.json" ] \
+        && [[ "$(tr -d '\n ' <"$WORK_DIR/e2e-kanban-state/protection.json")" == *'"required_approving_review_count":0'* ]]; then
+        pass "kanban=y: the visibility sub-prompt is answered, so branch protection is still sent"
+    else
+        fail "kanban e2e" "out=$(tail -c 300 "$WORK_DIR/e2e-kanban.out")"
+    fi
+}
+
+test_kanban_lookup_skip_keeps_branch_protection_aligned() {
+    local str_mode str_name
+    for str_mode in fail exists; do
+        str_name="e2e-kanban-$str_mode"
+        STUB_PROJECT="$str_mode" run_ts_lib_with_gh_stub "$str_name" -- git_remote=y create_repo=y \
+            repo_visibility=public kanban=y kanban_visibility=private protect_branch=y human_reviewers=n
+        if [ -e "$WORK_DIR/$str_name-state/protection.json" ]; then
+            pass "kanban lookup ($str_mode): the visibility answer is consumed, so protection is still sent"
+        else
+            fail "kanban lookup $str_mode" "out=$(tail -c 300 "$WORK_DIR/$str_name.out")"
+        fi
+    done
+}
+
+test_kanban_visibility_dry_run_and_bad_value() {
+    local file out str_bad
+    file="$(SPEC_LANGUAGE=typescript write_spec kv-dry ts-lib "project_root=$WORK_DIR/kv-root" \
+        git_remote=y create_repo=y kanban=y kanban_visibility=private)"
+    make_gh_stub
+    out="$(STUB_STATE="$WORK_DIR" PATH="$WORK_DIR/stubbin:$PATH" run_blueprintx new --spec "$file" --dry-run)"
+    file="$(SPEC_LANGUAGE=typescript write_spec kv-bad ts-lib "project_root=$WORK_DIR/kv-bad-root" \
+        git_remote=y create_repo=y kanban=y kanban_visibility=internal)"
+    str_bad="$(run_blueprintx new --spec "$file")"
+    if [[ "$out" == *"kanban_visibility=private"* ]] \
+        && [[ "$str_bad" == *"'kanban_visibility' must be repo, public or private, got 'internal'"* ]]; then
+        pass "kanban_visibility: --dry-run prints it when kanban=y; an unknown value names the key"
+    else
+        fail "kanban_visibility" "dry=${out: -200} bad=${str_bad: -200}"
+    fi
+}
+
 ventoy_stream() {
     local file
     file="$(SPEC_LANGUAGE=bash write_spec "ventoy-$RANDOM" ventoy-usb "$@")"
@@ -526,6 +572,8 @@ test_ventoy_usb_answer_stream_order() {
     str_bad="$(ventoy_stream persistence_size_mb=1500)"
     if [ "$str_def" = "y,y,4096,n,n" ] && [ "$str_remote" = "y,y,4096,n,y,n" ] \
         && [ "$str_full" = "n,n,2048,y,y,y,2,n,n" ] \
+        && [ "$(ventoy_stream git_remote=y create_repo=y repo_visibility=public kanban=y kanban_visibility=public \
+            protect_branch=n)" = "y,y,4096,n,y,y,1,y,2,n" ] \
         && [[ "$str_bad" == *"'persistence_size_mb' must be a multiple of 1024"* ]]; then
         pass "ventoy-usb stream: windows, android, size, roster, git_remote, create_repo; bad size refused"
     else
@@ -626,6 +674,9 @@ main() {
     test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes
     test_ts_lib_remote_keys_defaults
     test_create_repo_runs_gh_with_the_chosen_visibility_and_protection
+    test_kanban_yes_keeps_branch_protection_aligned
+    test_kanban_lookup_skip_keeps_branch_protection_aligned
+    test_kanban_visibility_dry_run_and_bad_value
     test_create_repo_n_never_calls_gh_repo_create
     test_create_repo_preflight_stops_before_any_file_is_written
     test_remote_key_validation_names_the_key
