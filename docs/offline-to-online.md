@@ -180,3 +180,17 @@ then push.
 - `tests/test_scaffold_git_remote.sh` makes the order observable with a logging `gh` stub and a
   local bare remote: the stub records whether `main` already exists on the remote when the secret
   is set. It covers the ok path, the existing-remote fallback and the failed-push path.
+
+## Merged-branch cleanup (#923)
+
+Right after a successful `gh repo create`, both the scaffold (every skeleton, via
+`bin/lib/scaffold_git_remote.sh`) and `bin/promote_offline_to_online.sh` call
+`scaffold_enable_delete_branch_on_merge` (`bin/lib/scaffold_repo_settings.sh`). It sends
+`gh api -X PATCH repos/<slug> -F delete_branch_on_merge=true` and reads the setting back. A
+failure prints a warning and carries on, like branch protection: a repo that already exists is
+never aborted over a cosmetic setting.
+
+Every `git init` a scaffold runs, including offline ones, also sets `fetch.prune=true`, so
+branches deleted on GitHub disappear from `git branch -r` on the next fetch. `make init` (and
+`./tasks.sh init`) sets the same in the BlueprintX clone. Squash-merged local branches are not
+deleted; that is a non-goal.

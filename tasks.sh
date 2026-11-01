@@ -31,6 +31,7 @@ cmd_precommit() {
 cmd_init() {
 	cmd_venv
 	cmd_precommit
+	git config fetch.prune true
 }
 
 cmd_lint() { poetry run pre-commit run --all-files; }

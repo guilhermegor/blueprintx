@@ -181,6 +181,7 @@ initialize_git_repo() {
     if ! (
         cd "$project_path" || exit 1
         git init -q -b main &&
+            git config fetch.prune true &&
             git add . &&
             scaffold_git_commit . "feat: first commit"
     ); then
