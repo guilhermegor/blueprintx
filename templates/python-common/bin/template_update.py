@@ -208,38 +208,6 @@ def _print_plan(dict_plan: dict[str, tuple[str, bytes | None]]) -> None:
         print(f"{_LABELS[str_action]} {str_rel}")
 
 
-def _print_removed(
-    path_root: pathlib.Path,
-    path_blueprintx: pathlib.Path,
-    str_commit: str,
-    str_tier: str,
-    dict_sources: dict[str, str],
-) -> None:
-    """Print the files the template no longer ships, with their successors; delete nothing.
-
-    Parameters
-    ----------
-    path_root : pathlib.Path
-        The project root.
-    path_blueprintx : pathlib.Path
-        Root of a BlueprintX checkout.
-    str_commit : str
-        The commit stamped at scaffold time, known to the checkout.
-    str_tier : str
-        The project's stamped tier.
-    dict_sources : dict of str to str
-        Project-relative path to checkout-relative template source, as the template ships it now.
-
-    Returns
-    -------
-    None
-    """
-    list_lines, _ = drift.removed_section(
-        path_root, path_blueprintx, str_commit, str_tier, dict_sources
-    )
-    list(map(print, list_lines))
-
-
 def _write_plan(
     path_root: pathlib.Path,
     path_blueprintx: pathlib.Path,
@@ -495,9 +463,7 @@ def main(list_argv: list) -> int:
         return 0
     dict_plan = build_plan(path_root, path_blueprintx, str_commit, dict_sources)
     _print_plan(dict_plan)
-    _print_removed(
-        path_root, path_blueprintx, drift.read_scaffold_commit(path_root), str_tier, dict_sources
-    )
+    drift._report_removed(path_root, path_blueprintx, str_tier, dict_sources)
     if not dict_plan:
         print("Template files are up to date.")
         return 0

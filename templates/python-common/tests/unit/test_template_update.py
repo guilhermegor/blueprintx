@@ -8,6 +8,7 @@ The checkout's scaffold lib is a stand-in speaking the ``--list-copies`` contrac
 import importlib.util
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 from types import ModuleType
@@ -566,15 +567,28 @@ def test_orphans_survive_an_apply_on_a_stamp_without_scaffold_commit(
     """An old stamp gains the baseline on apply instead of losing it to the moved stamp."""
     path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
     path_stamp = path_project / drift._PROVENANCE_FILENAME
-    path_stamp.write_text(
-        "\n".join(
-            line for line in path_stamp.read_text().splitlines() if "scaffold_commit" not in line
-        )
-        + "\n"
-    )
+    str_stamp = path_stamp.read_text()
+    path_stamp.write_text(re.sub(r"scaffold_commit: .*\n", "", str_stamp))
     _update(path_project, path_bx, "--apply")
     capsys.readouterr()
 
     _update(path_project, path_bx)
 
     assert "removed: dropped.txt" in capsys.readouterr().out
+
+
+def test_update_says_why_when_the_scaffold_commit_is_unknown_to_the_checkout(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The reporter's accurate skip message reaches the update output too."""
+    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
+    path_stamp = path_project / drift._PROVENANCE_FILENAME
+    str_stamp = path_stamp.read_text()
+    path_stamp.write_text(
+        re.sub(r"scaffold_commit: \w+", f"scaffold_commit: {'0' * 40}", str_stamp)
+    )
+    capsys.readouterr()
+
+    _update(path_project, path_bx)
+
+    assert "SKIPPED removed-file check: the scaffold_commit" in capsys.readouterr().out
