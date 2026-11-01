@@ -1816,4 +1816,9 @@ def test_a_failing_run_names_where_the_baseline_was_taken(
     """
     str_sha = _commit_tree(tmp_path)
     _tree(tmp_path, "# one\n# two\nX = 1\n", f"{gate.STR_BASE_ROW}{str_sha}\n1 a.py\n")
-    assert f"baselined at {str_sha}, HEAD is at {str_sha}" in _run(tmp_path, capsys)[1]
+    int_code, str_output = _run(tmp_path, capsys)
+    assert (
+        int_code,
+        "a.py" in str_output,
+        f"baselined at {str_sha}, HEAD is at {str_sha}" in str_output,
+    ) == (1, True, True)
