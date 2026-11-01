@@ -371,6 +371,7 @@ lib_minimal_copy_github_assets() {
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$project_path/.github/ISSUE_TEMPLATE" && cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$project_path/.github/ISSUE_TEMPLATE/feature_or_fix.md"
+    cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/release-1-0-0.md" "$project_path/.github/ISSUE_TEMPLATE/release-1-0-0.md"
     copy_repo_policy_workflows "$project_path"
 }
 
@@ -447,6 +448,7 @@ lib_minimal_copy_project_scaffolding() {
     cp "$SHARED_TEMPLATE_ROOT/bin/commit.sh" "$project_path/bin/commit.sh"
     chmod +x "$project_path/bin/export_repo_content.sh" "$project_path/bin/commit.sh"
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
+    cp "$SHARED_TEMPLATE_ROOT/bin/check_release_gate.py" "$project_path/bin/check_release_gate.py"
     cp -r "$SHARED_TEMPLATE_ROOT/.specs" "$project_path/.specs"
     mkdir -p "$project_path/.specs/backlog"
     touch "$project_path/.specs/backlog/.gitkeep"
@@ -507,6 +509,8 @@ copy_mkdocs_templates() {
         "$project_path/docs/contributing.md"
     cp "$COMMON_TEMPLATE_ROOT/docs/changelog.md" \
         "$project_path/docs/changelog.md"
+    cp "$SHARED_TEMPLATE_ROOT/docs/releasing-1-0-0.md" \
+        "$project_path/docs/releasing-1-0-0.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
 
