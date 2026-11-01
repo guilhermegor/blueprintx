@@ -76,8 +76,9 @@ jobs:
       - name: Fetch Information from PyPI
         id: pypi
         run: |
+          pep440_max() { sed -E 'h; s/\.?dev([0-9]+)/~~dev\1/; s/([0-9])(a|b|rc)([0-9]+)/\1~\2\3/; G; s/\n/\t/' | sort -t "$(printf '\t')" -k1,1V | tail -n 1 | cut -f2; }
           response=$(curl -s https://pypi.org/pypi/${{ env.PACKAGE_NAME }}/json || echo "{}")
-          latest_previous_version=$(echo "$response" | jq -r '.releases // {} | keys[]' 2>/dev/null | sort -rV | head -n 1)
+          latest_previous_version=$(echo "$response" | jq -r '.releases // {} | keys[]' 2>/dev/null | pep440_max)
           if [ -z "$latest_previous_version" ]; then
             echo "Package not found on PyPI."
             latest_previous_version="0.0.0"
@@ -90,7 +91,8 @@ jobs:
         run: |
           NEW_VERSION=${{ needs.details.outputs.new_version }}
           LATEST_VERSION=$latest_previous_version
-          if [ "$(printf '%s\n' "$LATEST_VERSION" "$NEW_VERSION" | sort -rV | head -n 1)" != "$NEW_VERSION" ] || [ "$NEW_VERSION" == "$LATEST_VERSION" ]; then
+          pep440_max() { sed -E 'h; s/\.?dev([0-9]+)/~~dev\1/; s/([0-9])(a|b|rc)([0-9]+)/\1~\2\3/; G; s/\n/\t/' | sort -t "$(printf '\t')" -k1,1V | tail -n 1 | cut -f2; }
+          if [ "$(printf '%s\n' "$LATEST_VERSION" "$NEW_VERSION" | pep440_max)" != "$NEW_VERSION" ] || [ "$NEW_VERSION" == "$LATEST_VERSION" ]; then
             echo "The new version $NEW_VERSION is not greater than the latest version $LATEST_VERSION on PyPI."
             exit 1
           else
