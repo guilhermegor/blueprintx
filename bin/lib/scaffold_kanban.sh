@@ -166,6 +166,7 @@ scaffold_kanban_setup() {
 		;;
 	esac
 
+	str_vis="$(scaffold_kanban_visibility "$str_slug")"
 	str_found="$(scaffold_kanban_find "$str_owner" "$str_title")" || int_rc=$?
 	if [ "$int_rc" -eq 2 ]; then
 		print_status "warning" "More than one '${str_title}' project exists — not guessing which; resolve it by hand"
@@ -177,7 +178,6 @@ scaffold_kanban_setup() {
 		return 0
 	fi
 
-	str_vis="$(scaffold_kanban_visibility "$str_slug")"
 	scaffold_kanban_create "$str_slug" "$str_owner" "$str_title" "$str_vis" || true
 	return 0
 }
