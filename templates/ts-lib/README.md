@@ -85,7 +85,8 @@ Packaged as dual ESM + CommonJS with bundled `.d.ts` declarations (see `exports`
 in `package.json`). Releases publish via **npm OIDC trusted publishing** — no
 long-lived `NPM_TOKEN` is stored. See `docs/contributing.md` for the release
 workflow and the one-time bootstrap steps required before the first automated
-publish.
+publish. The path from 0.x to 1.0.0, and the release gate that guards it, is in
+`docs/releasing-1-0-0.md`.
 
 <!-- slug: contributing -->
 ## Contributing

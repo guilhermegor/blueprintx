@@ -109,6 +109,9 @@ under `_internal/` is private.
 
 Releases go out from the release workflows under `.github/workflows/`; the git tag is the
 version.
+
+The path from 0.x to 1.0.0, and the release gate that guards it, is in
+[docs/releasing-1-0-0.md](docs/releasing-1-0-0.md).
 <!-- /only -->
 
 <!-- slug: contributing -->
