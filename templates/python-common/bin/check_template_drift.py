@@ -176,6 +176,8 @@ def _dry_run_lines(
     str_bash = shutil.which("bash")
     if not path_lib.exists() or str_bash is None:
         return None
+    if "--list-copies" not in path_lib.read_text(encoding="utf-8", errors="replace"):
+        return None
     dict_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     list_argv = [str_bash, str(path_lib), "--list-copies", "--tier", str_tier]
     list_argv += ["--roster", "true" if bool_roster else "false"]
@@ -186,6 +188,7 @@ def _dry_run_lines(
         errors="replace",
         check=False,
         env=dict_env,
+        stdin=subprocess.DEVNULL,
     )
     return cls_run.stdout.splitlines() if cls_run.returncode == 0 else None
 
@@ -732,7 +735,7 @@ def _successors(
             Sorted project-relative successors the current copy list ships; empty when none
             is known.
     """
-    str_moved = dict_renamed.get(str_src)
+    str_moved = dict_renamed.get(str_src, str_src)
     list_renamed = [str_dst for str_dst, str_now in dict_now.items() if str_now == str_moved]
     str_rule = _SUCCESSOR_RULES.get(str_rel)
     list_ruled = [str_rule] if str_rule in dict_now else []
@@ -1003,7 +1006,8 @@ def main(list_argv: list) -> int:
     bool_content_drift = _report_content(path_root, path_blueprintx, dict_sources)
     bool_removed = _report_removed(path_root, path_blueprintx, str_tier, dict_sources)
     if not (list_missing or bool_content_drift or bool_removed):
-        str_note = "" if bool_content_drift is False else " (content not checked)"
+        bool_all_checked = bool_content_drift is False and bool_removed is False
+        str_note = "" if bool_all_checked else " (not every check ran)"
         print(
             f"No template drift detected — {len(dict_sources)} required path(s) present{str_note}."
         )

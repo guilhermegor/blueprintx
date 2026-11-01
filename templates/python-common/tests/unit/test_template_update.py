@@ -175,7 +175,14 @@ def _scenario(
     _commit_all(path_bx, "base")
     str_base = _git(path_bx, "rev-parse", "HEAD")
     _write_all(path_bx / _COMMON, dict_theirs)
-    _write(path_bx, _LIB, "cat <<'X'\n" + "\n".join(map(_copy_line, dict_theirs)) + "\nX\n")
+    _write(
+        path_bx,
+        _LIB,
+        '[[ "$1" == --list-copies ]] || exit 2\n'
+        + "cat <<'X'\n"
+        + "\n".join(map(_copy_line, dict_theirs))
+        + "\nX\n",
+    )
     _commit_all(path_bx, "template moves on")
     path_project = path_tmp / "project"
     _git(path_tmp, "init", "-q", str(path_project))
@@ -468,12 +475,26 @@ def _removal_scenario(
     path_tpl = path_bx / _COMMON
     _git(path_tmp, "init", "-q", str(path_bx))
     _write_all(path_tpl, dict_then)
-    _write(path_bx, _LIB, "cat <<'X'\n" + "\n".join(map(_copy_line, dict_then)) + "\nX\n")
+    _write(
+        path_bx,
+        _LIB,
+        '[[ "$1" == --list-copies ]] || exit 2\n'
+        + "cat <<'X'\n"
+        + "\n".join(map(_copy_line, dict_then))
+        + "\nX\n",
+    )
     _commit_all(path_bx, "base")
     str_base = _git(path_bx, "rev-parse", "HEAD")
     list(map(lambda str_rel: (path_tpl / str_rel).unlink(), set(dict_then) - set(dict_now)))
     _write_all(path_tpl, dict_now)
-    _write(path_bx, _LIB, "cat <<'X'\n" + "\n".join(map(_copy_line, dict_now)) + "\nX\n")
+    _write(
+        path_bx,
+        _LIB,
+        '[[ "$1" == --list-copies ]] || exit 2\n'
+        + "cat <<'X'\n"
+        + "\n".join(map(_copy_line, dict_now))
+        + "\nX\n",
+    )
     _commit_all(path_bx, "template moves on")
     path_project = path_tmp / "project"
     _git(path_tmp, "init", "-q", str(path_project))

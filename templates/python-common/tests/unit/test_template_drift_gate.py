@@ -93,7 +93,7 @@ def _checkout(
     path_lib = path_tmp / gate._SCAFFOLD_LIB_RELPATH
     path_lib.parent.mkdir(parents=True, exist_ok=True)
     path_lib.write_text(
-        f'case "$*" in\n*"--roster true"*) cat <<\'X\'\n{str_on}\nX\n;;\n'
+        f'case "$*" in\n*"--list-copies"*"--roster true"*) cat <<\'X\'\n{str_on}\nX\n;;\n'
         f"*) cat <<'X'\n{str_off}\nX\n;;\nesac\n",
         encoding="utf-8",
     )
@@ -407,7 +407,9 @@ def test_lib_minimal_reads_its_own_scaffold_entry_not_the_shared_lib(
     path_root = _checkout(tmp_path / "bx", [], list_files=(f"{_COMMON}/a.txt",))
     path_entry = path_root / gate._TIER_LIST_SCRIPTS["lib-minimal"]
     path_entry.parent.mkdir(parents=True, exist_ok=True)
-    path_entry.write_text(f"printf 'COPY\\tfile\\t{_COMMON}/a.txt\\ta.txt\\n'\n", encoding="utf-8")
+    path_entry.write_text(
+        f"# --list-copies\nprintf 'COPY\\tfile\\t{_COMMON}/a.txt\\ta.txt\\n'\n", encoding="utf-8"
+    )
     path_project = _project(tmp_path, "tier: lib-minimal\n")
 
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
@@ -717,3 +719,61 @@ def test_a_stamped_commit_whose_dry_run_cannot_be_made_is_skipped_loudly(
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
 
     assert "SKIPPED removed-file check" in capsys.readouterr().out
+
+
+def test_a_lib_that_predates_list_copies_is_never_executed(tmp_path: Path) -> None:
+    """An entry script without the flag would run its interactive main, so it is not run."""
+    path_lib = tmp_path / gate._SCAFFOLD_LIB_RELPATH
+    path_lib.parent.mkdir(parents=True)
+    path_lib.write_text(f"touch {tmp_path}/ran\necho COPY\n", encoding="utf-8")
+
+    gate.required_sources(tmp_path, "mvc-service-native-db")
+
+    assert not (tmp_path / "ran").exists()
+
+
+def test_a_source_kept_but_copied_to_a_new_path_names_its_successor(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """No git rename exists when only the destination moved, so the same source is the link."""
+    list_then = [_copy(f"{_COMMON}/shared.txt", "old/shared.txt")]
+    path_root = tmp_path / "bx"
+    _checkout(path_root, list_then)
+    _write_files(path_root / _COMMON, {"shared.txt": "shared\n" * 8})
+    _git(path_root, "init", "-q")
+    str_sha = _commit_all(path_root, "base")
+    _checkout(path_root, [_copy(f"{_COMMON}/shared.txt", "new/shared.txt")])
+    _commit_all(path_root, "destination moves")
+    path_project = _project(
+        tmp_path, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+    )
+    _write_files(path_project, {"old/shared.txt": "shared\n" * 8})
+    capsys.readouterr()
+
+    gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
+
+    assert "replaced by new/shared.txt: old/shared.txt" in capsys.readouterr().out
+
+
+def test_a_skipped_removed_check_is_not_summed_up_as_a_clean_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A check that did not run must not leave a bare 'No template drift detected'."""
+    path_root = tmp_path / "bx"
+    _write_files(path_root / _COMMON, _KEPT)
+    _checkout(path_root, _copy_lines(_KEPT))
+    path_lib = path_root / gate._SCAFFOLD_LIB_RELPATH
+    path_lib.write_text("exit 0\n", encoding="utf-8")
+    _git(path_root, "init", "-q")
+    str_sha = _commit_all(path_root, "base predates the flag")
+    _checkout(path_root, _copy_lines(_KEPT))
+    _commit_all(path_root, "flag added")
+    path_project = _project(
+        tmp_path, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+    )
+    _write_files(path_project, _KEPT)
+    capsys.readouterr()
+
+    gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
+
+    assert "(not every check ran)" in capsys.readouterr().out
