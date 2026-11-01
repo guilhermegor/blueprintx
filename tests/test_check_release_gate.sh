@@ -94,6 +94,7 @@ main() {
 
 	case_with_issues "0.x to 1.0.0 with an unlabelled open issue fails and names it" "$str_open" 1 "#7"
 	case_with_issues "0.x to 1.0.0 with only post-1.0 issues passes" "$str_deferred" 0 "gate passed"
+	case_with_issues "a look-alike Cut 1.0.0 title still blocks" '[{"number":11,"title":"Cut 1.0.0 docs rewrite","labels":[]}]' 1 "#11"
 	case_with_issues "0.x to 1.0.0 with no open issues passes" "[]" 0 "gate passed"
 
 	run_gate "1.0.0" "1.0.1"

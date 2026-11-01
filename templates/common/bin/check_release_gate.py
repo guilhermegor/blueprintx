@@ -17,7 +17,7 @@ import urllib.request
 
 
 STR_EXEMPT_LABEL = "post-1.0"
-STR_FORM_TITLE_PREFIX = "Cut 1.0.0"
+STR_FORM_TITLE = "Cut 1.0.0"
 INT_PAGE_SIZE = 100
 INT_TIMEOUT_S = 30
 RE_MAJOR = re.compile(r"^v?(\d+)\.")
@@ -131,7 +131,7 @@ def blocking(list_items: list[dict]) -> list[dict]:
             dict_label.get("name") == STR_EXEMPT_LABEL
             for dict_label in dict_item.get("labels", [])
         )
-        and not str(dict_item.get("title", "")).startswith(STR_FORM_TITLE_PREFIX)
+        and str(dict_item.get("title", "")).strip() != STR_FORM_TITLE
     ]
 
 
