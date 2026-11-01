@@ -835,6 +835,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#merged-branch-cleanup-923" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Merged-branch cleanup (#923)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2928,6 +2939,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#merged-branch-cleanup-923" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Merged-branch cleanup (#923)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3134,6 +3156,17 @@ then push.</p>
   local bare remote: the stub records whether <code>main</code> already exists on the remote when the secret
   is set. It covers the ok path, the existing-remote fallback and the failed-push path.</li>
 </ul>
+<h2 id="merged-branch-cleanup-923">Merged-branch cleanup (#923)<a class="headerlink" href="#merged-branch-cleanup-923" title="Permanent link">&para;</a></h2>
+<p>Right after a successful <code>gh repo create</code>, both the scaffold (every skeleton, via
+<code>bin/lib/scaffold_git_remote.sh</code>) and <code>bin/promote_offline_to_online.sh</code> call
+<code>scaffold_enable_delete_branch_on_merge</code> (<code>bin/lib/scaffold_repo_settings.sh</code>). It sends
+<code>gh api -X PATCH repos/&lt;slug&gt; -F delete_branch_on_merge=true</code> and reads the setting back. A
+failure prints a warning and carries on, like branch protection: a repo that already exists is
+never aborted over a cosmetic setting.</p>
+<p>Every <code>git init</code> a scaffold runs, including offline ones, also sets <code>fetch.prune=true</code>, so
+branches deleted on GitHub disappear from <code>git branch -r</code> on the next fetch. <code>make init</code> (and
+<code>./tasks.sh init</code>) sets the same in the BlueprintX clone. Squash-merged local branches are not
+deleted; that is a non-goal.</p>
 
 
 
