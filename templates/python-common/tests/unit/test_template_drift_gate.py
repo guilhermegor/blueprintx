@@ -519,3 +519,197 @@ def test_a_stamp_without_a_commit_skips_content_drift_loudly(
     str_out = _drift_output(tmp_path, capsys, "base\n", "new\n", bool_stamp_commit=False)
 
     assert "SKIPPED content drift" in str_out
+
+
+def _write_files(path_root: Path, dict_files: dict[str, str]) -> None:
+    """Write text files under ``path_root``, creating parent directories.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The directory the paths are relative to.
+    dict_files : dict[str, str]
+        Relative path to content.
+
+    Returns
+    -------
+    None
+    """
+    list_paths = [path_root / str_rel for str_rel in dict_files]
+    list(map(lambda path_f: path_f.parent.mkdir(parents=True, exist_ok=True), list_paths))
+    list(map(Path.write_text, list_paths, dict_files.values()))
+
+
+def _commit_all(path_root: Path, str_message: str) -> str:
+    """Stage everything, commit without signing and return the new commit.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The repository directory.
+    str_message : str
+        The commit message.
+
+    Returns
+    -------
+    str
+            The full sha of the new commit.
+    """
+    _git(path_root, "add", "-A")
+    _git(
+        path_root,
+        *("-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"),
+        *("commit", "-q", "-m", str_message),
+    )
+    cls_head = subprocess.run(  # noqa: S603
+        ["git", "-C", str(path_root), "rev-parse", "HEAD"],  # noqa: S607
+        capture_output=True,
+        encoding="utf-8",
+        check=True,
+    )
+    return cls_head.stdout.strip()
+
+
+def _copy_lines(dict_files: dict[str, str]) -> list[str]:
+    """Return the dry-run COPY lines for template files named like their project paths.
+
+    Parameters
+    ----------
+    dict_files : dict[str, str]
+        Project-relative path to content.
+
+    Returns
+    -------
+    list of str
+            One COPY line per path.
+    """
+    return [_copy(f"{_COMMON}/{str_rel}", str_rel) for str_rel in dict_files]
+
+
+def _removal_output(
+    path_tmp: Path,
+    capsys: pytest.CaptureFixture,
+    dict_then: dict[str, str],
+    dict_now: dict[str, str],
+    tuple_deleted: tuple[str, ...] = (),
+) -> str:
+    """Run the reporter for a project scaffolded from ``dict_then`` against ``dict_now``.
+
+    The checkout commits ``dict_then`` (with a dry run listing it), then commits ``dict_now``
+    (with a dry run listing that); the project holds every ``dict_then`` file except
+    ``tuple_deleted`` and is stamped with the first commit.
+
+    Parameters
+    ----------
+    path_tmp : pathlib.Path
+        A temporary directory to build under.
+    capsys : pytest.CaptureFixture
+        Captures the printed report.
+    dict_then : dict[str, str]
+        Template files, by project path, at the stamped commit.
+    dict_now : dict[str, str]
+        Template files, by project path, at the current commit.
+    tuple_deleted : tuple[str, ...]
+        Project paths the project owner deleted.
+
+    Returns
+    -------
+    str
+            Everything the reporter printed.
+    """
+    path_root = path_tmp / "bx"
+    path_tpl = path_root / _COMMON
+    _checkout(path_root, _copy_lines(dict_then))
+    _write_files(path_tpl, dict_then)
+    _git(path_root, "init", "-q")
+    str_sha = _commit_all(path_root, "base")
+    list(map(lambda str_rel: (path_tpl / str_rel).unlink(), set(dict_then) - set(dict_now)))
+    _write_files(path_tpl, dict_now)
+    _checkout(path_root, _copy_lines(dict_now))
+    _commit_all(path_root, "template moves on")
+    path_project = _project(path_tmp, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n")
+    _write_files(path_project, dict_then)
+    list(map(lambda str_rel: (path_project / str_rel).unlink(), tuple_deleted))
+    capsys.readouterr()
+    gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
+    return capsys.readouterr().out
+
+
+_KEPT = {"a.txt": "kept\n" * 8}
+_DROPPED = {"dropped.txt": "dropped\n" * 8}
+_RENAMED = {"old_name.txt": "renamed\n" * 8}
+
+
+def test_a_file_the_template_dropped_is_reported_as_removed(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The template stopped shipping it and the project still has it."""
+    str_out = _removal_output(tmp_path, capsys, _KEPT | _DROPPED | _RENAMED, _KEPT)
+
+    assert "removed: dropped.txt" in str_out
+
+
+def test_a_file_the_template_renamed_names_its_successor(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A git rename between the two commits is the successor."""
+    dict_now = _KEPT | {"new_name.txt": _RENAMED["old_name.txt"]}
+
+    str_out = _removal_output(tmp_path, capsys, _KEPT | _RENAMED, dict_now)
+
+    assert "replaced by new_name.txt: old_name.txt" in str_out
+
+
+@pytest.mark.parametrize(
+    ("str_old", "str_new"),
+    [
+        ("Makefile", "poe_tasks.toml"),
+        ("tasks.sh", "poe_tasks.toml"),
+        ("make/library.mk", "poe_tasks.library.toml"),
+    ],
+)
+def test_a_known_non_rename_successor_comes_from_the_rule_table(
+    tmp_path: Path, capsys: pytest.CaptureFixture, str_old: str, str_new: str
+) -> None:
+    """The make-to-poe move is a rewrite, not a rename, so git cannot name the successor."""
+    str_out = _removal_output(
+        tmp_path, capsys, _KEPT | {str_old: "old\n" * 8}, _KEPT | {str_new: "[tool.poe]\n" * 8}
+    )
+
+    assert f"replaced by {str_new}: {str_old}" in str_out
+
+
+def test_a_rule_table_successor_the_template_no_longer_ships_is_only_removed(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The table is consulted only for a successor the current copy list really holds."""
+    str_out = _removal_output(tmp_path, capsys, _KEPT | {"Makefile": "old\n" * 8}, _KEPT)
+
+    assert "removed: Makefile" in str_out
+
+
+def test_a_dropped_file_the_project_already_deleted_is_not_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Only files that still exist in the project are drift."""
+    str_out = _removal_output(tmp_path, capsys, _KEPT | _DROPPED, _KEPT, ("dropped.txt",))
+
+    assert "dropped.txt" not in str_out
+
+
+def test_a_stamped_commit_whose_dry_run_cannot_be_made_is_skipped_loudly(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A commit that predates ``--list-copies`` has no copy list, which is not 'nothing removed'."""
+    path_root = tmp_path / "bx"
+    _write_files(path_root / _COMMON, _KEPT)
+    _git(path_root, "init", "-q")
+    str_sha = _commit_all(path_root, "before the dry run existed")
+    _checkout(path_root, _copy_lines(_KEPT))
+    _commit_all(path_root, "dry run added")
+    path_project = _project(tmp_path, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n")
+    capsys.readouterr()
+
+    gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
+
+    assert "SKIPPED removed-file check" in capsys.readouterr().out
