@@ -3280,6 +3280,11 @@ answer shows up as the wrong visibility or the wrong protection payload.</p>
 <td><code>y</code> also creates the linked GitHub Project. Read only when <code>create_repo=y</code>.</td>
 </tr>
 <tr>
+<td><code>kanban_visibility</code></td>
+<td><code>repo</code></td>
+<td><code>repo</code> (same as the repo), <code>public</code> or <code>private</code>. Read only when <code>kanban=y</code>; an unknown value stops the run naming the key.</td>
+</tr>
+<tr>
 <td><code>protect_branch</code></td>
 <td><code>n</code></td>
 <td><code>y</code> protects <code>main</code>. Read only when <code>create_repo=y</code>.</td>
@@ -3366,6 +3371,11 @@ failure stops the run, names the cause and creates nothing. A missing
 <td><code>kanban</code></td>
 <td><code>n</code></td>
 <td><code>y</code> also creates the linked GitHub Project.</td>
+</tr>
+<tr>
+<td><code>kanban_visibility</code></td>
+<td><code>repo</code></td>
+<td><code>repo</code> (same as the repo), <code>public</code> or <code>private</code>. Read only when <code>kanban=y</code>; an unknown value stops the run naming the key.</td>
 </tr>
 <tr>
 <td><code>protect_branch</code></td>
