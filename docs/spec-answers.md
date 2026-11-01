@@ -141,6 +141,7 @@ answer shows up as the wrong visibility or the wrong protection payload.
 | `create_repo` | `n` | `y` creates the repo on GitHub and pushes. Needs `git_remote=y`. |
 | `repo_visibility` | `private` | `public` or `private`. Read only when `create_repo=y`. |
 | `kanban` | `n` | `y` also creates the linked GitHub Project. Read only when `create_repo=y`. |
+| `kanban_visibility` | `repo` | `repo` (same as the repo), `public` or `private`. Read only when `kanban=y`; an unknown value stops the run naming the key. |
 | `protect_branch` | `n` | `y` protects `main`. Read only when `create_repo=y`. |
 | `human_reviewers` | `n` | `y` requires one approving review. Read only when `protect_branch=y`. |
 
@@ -188,6 +189,7 @@ human_reviewers=n
 | `create_repo` | `n` | `y` creates the repo on GitHub and pushes. Needs `git_remote=y`. |
 | `repo_visibility` | `private` | `public` or `private`. Read only when `create_repo=y`. Defaults to `private`, as for `ts-lib`: a repo made public by omission cannot be taken back. |
 | `kanban` | `n` | `y` also creates the linked GitHub Project. |
+| `kanban_visibility` | `repo` | `repo` (same as the repo), `public` or `private`. Read only when `kanban=y`; an unknown value stops the run naming the key. |
 | `protect_branch` | `n` | `y` protects `main`. |
 
 The folder tree is the same either way: the two switches only decide what is downloaded.
