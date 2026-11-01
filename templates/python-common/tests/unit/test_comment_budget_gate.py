@@ -19,7 +19,6 @@ import sys
 from types import ModuleType
 
 import pytest
-from pytest_mock import MockerFixture
 
 
 _BIN = Path(__file__).resolve().parents[2] / "bin"
@@ -1755,7 +1754,7 @@ def test_write_baseline_prints_the_commit_it_measured(
 
 
 def test_write_baseline_without_git_records_unknown(
-    tmp_path: Path, capsys: pytest.CaptureFixture, mocker: MockerFixture
+    tmp_path: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Failing soft: with git unavailable the row says ``unknown`` and nothing crashes.
 
@@ -1765,10 +1764,10 @@ def test_write_baseline_without_git_records_unknown(
         A throwaway directory pytest provides per test.
     capsys : pytest.CaptureFixture
         Captures the gate's report.
-    mocker : pytest_mock.MockerFixture
+    monkeypatch : pytest.MonkeyPatch
         Patches the gate's git boundary to behave as an absent git.
     """
-    mocker.patch.object(gate, "git_out", return_value="")
+    monkeypatch.setattr(gate, "git_out", lambda *args, **kwargs: "")
     (tmp_path / "a.py").write_text("X = 1\n", encoding="utf-8")
     _run(tmp_path, capsys, "--write-baseline")
     str_written = (tmp_path / gate.STR_BASELINE_NAME).read_text(encoding="utf-8")
