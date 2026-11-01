@@ -900,7 +900,13 @@ def _report_removed(
             checked (the content section already said why when the commit is unusable).
     """
     str_commit = read_scaffold_commit(path_root)
-    if str_commit is None or not commit_known(path_blueprintx_root, str_commit):
+    if str_commit is None:
+        return None
+    if not commit_known(path_blueprintx_root, str_commit):
+        print(
+            f"SKIPPED removed-file check: the scaffold_commit ({str_commit}) is not in "
+            f"{path_blueprintx_root}. This run proves nothing about files the template removed."
+        )
         return None
     list_lines, bool_found = removed_section(
         path_root, path_blueprintx_root, str_commit, str_tier, dict_now

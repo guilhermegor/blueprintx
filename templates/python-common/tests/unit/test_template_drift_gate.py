@@ -831,3 +831,24 @@ def test_an_archive_member_outside_the_destination_is_not_written(tmp_path: Path
     gate._unpack_archive(cls_buf.getvalue(), tmp_path / "dest")
 
     assert not (tmp_path / "escaped.txt").exists()
+
+
+def test_a_scaffold_commit_the_checkout_does_not_know_is_skipped_loudly(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A usable but unreachable scaffold commit must say why the check did not run."""
+    path_root = tmp_path / "bx"
+    _write_files(path_root / _COMMON, _KEPT)
+    _checkout(path_root, _copy_lines(_KEPT))
+    _git(path_root, "init", "-q")
+    str_sha = _commit_all(path_root, "base")
+    path_project = _project(
+        tmp_path,
+        f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+        f"scaffold_commit: {'0' * 40}\n",
+    )
+    capsys.readouterr()
+
+    gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
+
+    assert "SKIPPED removed-file check: the scaffold_commit" in capsys.readouterr().out
