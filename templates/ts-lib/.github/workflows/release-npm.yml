@@ -67,7 +67,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          previous_version=$(npm view "$PACKAGE_NAME" versions --json 2>/dev/null | jq -r 'if type == "array" then .[] else . end' | sort -V | tail -n 1)
+          previous_version=$(npm view "$PACKAGE_NAME" versions --json 2>/dev/null | jq -r 'if type == "array" then .[] elif type == "string" then . else empty end' | sort -V | tail -n 1)
           previous_version=${previous_version:-0.0.0}
           echo "Latest version on npm: $previous_version"
           python3 bin/check_release_gate.py --new-version "$INPUT_VERSION" --previous-version "$previous_version"

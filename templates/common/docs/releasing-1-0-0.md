@@ -7,10 +7,10 @@ backlog is done, and the docs describe the code that actually ships.
 
 ## The path
 
-1. Open the **Cut 1.0.0** issue from the issue form. It is created `state:blocked`, blocked by
+1. Open the **Cut 1.0.0** issue from the issue template. It is created `state:blocked`, blocked by
    every other open issue.
 2. Implement the backlog. An issue that will not make 1.0.0 gets the `post-1.0` label, set by
-   the owner, so it is deferred on the record rather than dropped.
+   the owner (create it once with `gh label create post-1.0`), so it is deferred on the record rather than dropped.
 3. Work the issue's checklist: the docs audit, runnable examples, the 1.x supported-versions
    table in `SECURITY.md`, then the rehearsal and publish.
 4. After the release, switch the documented version policy to full semver.

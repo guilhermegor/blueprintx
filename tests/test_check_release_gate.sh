@@ -45,7 +45,13 @@ start_server() {
 	printf '%s' "$str_body" >"$WORK_DIR/body.json"
 	python3 "$WORK_DIR/server.py" "$int_status" "$WORK_DIR/body.json" >"$WORK_DIR/port" &
 	int_server_pid=$!
-	until [ -s "$WORK_DIR/port" ]; do sleep 0.05; done
+	local int_tries=0
+	until [ -s "$WORK_DIR/port" ]; do
+		kill -0 "$int_server_pid" 2>/dev/null || { echo "test server died" >&2; return 1; }
+		int_tries=$((int_tries + 1))
+		[ "$int_tries" -lt 200 ] || { echo "test server never started" >&2; return 1; }
+		sleep 0.05
+	done
 }
 
 stop_server() {

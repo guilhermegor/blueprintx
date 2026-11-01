@@ -89,7 +89,7 @@ def fetch_page(str_repo: str, int_page: int) -> list[dict]:
     GateError
         On any transport, HTTP or decoding failure.
     """
-    str_api = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+    str_api = os.environ.get("GITHUB_API_URL") or "https://api.github.com"
     str_url = (
         f"{str_api}/repos/{str_repo}/issues?state=open&per_page={INT_PAGE_SIZE}&page={int_page}"
     )
