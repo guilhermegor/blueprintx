@@ -140,11 +140,14 @@ export default [
         { type: 'infrastructure', pattern: 'capabilities/*/infrastructure/**' },
         { type: 'ui', pattern: 'capabilities/*/ui/**' },
         { type: 'composition-root', pattern: 'capabilities/*/{context,*ContextProvider,use-*-context}*' },
-        { type: 'barrel', pattern: 'capabilities/*/index.ts' },
         { type: 'shared', pattern: 'shared/**' },
         { type: 'routes', pattern: 'routes/**' },
       ],
+      'boundaries/files': [{ category: 'barrel', pattern: 'capabilities/*/index.ts' }],
       'boundaries/ignore': ['**/*.test.*', '**/*.spec.*'],
+      'import/resolver': {
+        typescript: { alwaysTryTypes: true, project: './tsconfig.json' },
+      },
     },
     rules: {
       'boundaries/dependencies': [
@@ -157,13 +160,26 @@ export default [
               ['infrastructure', ['domain']],
               ['ui', ['application', 'domain', 'composition-root', 'shared']],
               ['composition-root', ['domain', 'application', 'infrastructure', 'shared']],
-              ['barrel', ['domain', 'application', 'ui', 'composition-root']],
               ['shared', ['shared']],
-              ['routes', ['barrel', 'shared']],
             ].map(([from, list_to]) => ({
               from: { element: { type: from } },
               allow: { to: { element: { types: { anyOf: list_to } } } },
             })),
+            {
+              from: { file: { categories: 'barrel' } },
+              allow: {
+                to: {
+                  element: { types: { anyOf: ['domain', 'application', 'ui', 'composition-root'] } },
+                },
+              },
+            },
+            {
+              from: { element: { type: 'routes' } },
+              allow: [
+                { to: { file: { categories: 'barrel' } } },
+                { to: { element: { type: 'shared' } } },
+              ],
+            },
           ],
         },
       ],

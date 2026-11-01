@@ -211,6 +211,8 @@ npm run build        # webpack --mode production
 | `shared` | `shared` |
 | `routes` | `barrel`, `shared` |
 
+Boundaries resolves each import through `eslint-import-resolver-typescript` (the `import/resolver` setting in `eslint.config.js`). Without a resolver the import target is an unknown element and the `default: 'disallow'` policy never fires, so every cross-layer import lints clean. The barrel is a file category (`boundaries/files`), not an element, because element patterns match folders. CI asserts the gate works: `bin/ci/check_boundaries_witness.sh` writes a `domain` -> `ui` import into a scaffold and fails unless eslint rejects it under `boundaries/dependencies` (blueprintx#932).
+
 ### State management variants
 
 | Choice | Files that differ | Extra deps |
