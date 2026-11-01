@@ -2110,6 +2110,7 @@ def _seed_fake_blueprintx_checkout(path_root: Path) -> None:
     """
     _write(
         path_root / "bin" / "lib" / "scaffold_python_templates.sh",
+        '[ "$1" = --list-copies ] || exit 1\n'
         "printf 'COPY\\tfile\\ttemplates/python-common/.codespellrc\\t.codespellrc\\n'\n"
         "printf 'COPY\\tdir\\ttemplates/python-common/bin\\tbin\\n'\n",
     )
