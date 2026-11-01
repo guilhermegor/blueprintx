@@ -129,6 +129,15 @@ _spec_visibility_choice() {
     esac
 }
 
+_spec_kanban_visibility_choice() {
+    case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+        repo) echo 1 ;;
+        public) echo 2 ;;
+        private) echo 3 ;;
+        *) return 1 ;;
+    esac
+}
+
 _spec_answer_create_repo() {
     local file="$1" ans
     [ "$(spec_yn "$file" git_remote n)" = y ] || return 0
@@ -136,7 +145,9 @@ _spec_answer_create_repo() {
     echo "$ans"
     [ "$ans" = y ] || return 0
     _spec_visibility_choice "$(spec_get "$file" repo_visibility private)"
-    spec_yn "$file" kanban n
+    ans="$(spec_yn "$file" kanban n)"
+    echo "$ans"
+    [ "$ans" = y ] && _spec_kanban_visibility_choice "$(spec_get "$file" kanban_visibility repo)"
     ans="$(spec_yn "$file" protect_branch n)"
     echo "$ans"
     [ "$ans" = y ] && spec_yn "$file" human_reviewers n || true
@@ -249,12 +260,13 @@ _spec_key_map() {
             ;;
         ts-lib)
             keys=(review_bot_roster:n otel:n git_remote:n create_repo:n \
-                repo_visibility:private kanban:n protect_branch:n human_reviewers:n)
+                repo_visibility:private kanban:n kanban_visibility:repo \
+                protect_branch:n human_reviewers:n)
             ;;
         ventoy-usb)
             keys=(include_windows:y include_android:y persistence_size_mb:4096 \
                 review_bot_roster:n git_remote:n create_repo:n repo_visibility:private \
-                kanban:n protect_branch:n)
+                kanban:n kanban_visibility:repo protect_branch:n)
             ;;
         etcher-chromeos)
             keys=(default_os:chromeos-flex review_bot_roster:n git_remote:n)
@@ -296,6 +308,11 @@ _spec_validate_remote() {
     str_vis="$(spec_get "$file" repo_visibility private)"
     if ! _spec_visibility_choice "$str_vis" >/dev/null; then
         echo "spec: 'repo_visibility' must be public or private, got '$str_vis'" >&2
+        int_bad=1
+    fi
+    str_vis="$(spec_get "$file" kanban_visibility repo)"
+    if ! _spec_kanban_visibility_choice "$str_vis" >/dev/null; then
+        echo "spec: 'kanban_visibility' must be repo, public or private, got '$str_vis'" >&2
         int_bad=1
     fi
     if [ "$(spec_yn "$file" create_repo n 2>/dev/null)" = y ] \
@@ -340,6 +357,7 @@ spec_describe_skeleton() {
     local str_map str_entry
     str_map="$(_spec_key_map "$skeleton")" || return 1
     while IFS= read -r str_entry; do
+        [ "${str_entry%%:*}" != kanban_visibility ] || [ "$(spec_yn "$file" kanban n)" = y ] || continue
         printf '%s=%s\n' "${str_entry%%:*}" "$(spec_get "$file" "${str_entry%%:*}" "${str_entry#*:}")"
     done <<<"$str_map"
 }

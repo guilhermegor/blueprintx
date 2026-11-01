@@ -43,6 +43,45 @@ caller's `GITGUARDIAN_API_KEY` so the verdict never depends on the environment. 
 at the stamped commit that the project wrote itself is reported as both changed, unless its
 content already equals the current template, in which case it is the same.
 
+## Files the template removed
+
+A third class covers the opposite direction: a file the template shipped at the stamped
+commit, no longer ships now, and the project still has. Today it is invisible, because every
+other class starts from the current copy list. A project scaffolded before a removal keeps the
+orphan (`Makefile`, `tasks.sh`, `docs/api.md`) and nothing says so. Each is reported as
+`removed` or `replaced by <successor>`:
+
+```text
+🗑️ removed: docs/api.md
+🔁 replaced by poe_tasks.toml: Makefile
+```
+
+The stamped copy list is computed with the same `--list-copies` dry run, run against the
+stamped commit: `git archive` exports that commit's `bin/` and `templates/` to a temporary
+directory and its own scaffold entry answers there. A path in that list and not in the current
+one, present in the project, is removed. A successor is named from two sources only:
+
+- **A git rename.** `git diff -M` between the stamped commit and the checkout maps the old
+  template source to its new path, and the successor is every project path the current copy
+  list delivers from it.
+- **An explicit rule table.** A rewrite is not a rename, so git cannot say that `Makefile`
+  and `tasks.sh` became `poe_tasks.toml`, or `make/library.mk` became
+  `poe_tasks.library.toml`. `_SUCCESSOR_RULES` in `bin/check_template_drift.py` lists these
+  pairs. A rule applies only when its successor is in the current copy list, so a table entry
+  can never name a file the template does not ship.
+
+With neither, the file is plain `removed`. A guessed successor would be worse than none.
+
+When the stamped commit cannot list its copies (it predates `--list-copies`, or the export
+fails) the section prints `SKIPPED removed-file check` and says why, like the content section.
+Nothing is reported as removed from a comparison that did not run.
+
+`poe template_update` prints the same lines, in the dry run and in `--apply`, and never deletes
+or moves one: removing a project file stays a human decision. The `blueprintx_commit` stamp still moves when the
+other files applied cleanly, because an orphan is not a conflict. Orphans are measured from
+`scaffold_commit`, which `--apply` never moves, so they stay listed until you delete them. A stamp
+written before that field existed falls back to `blueprintx_commit`.
+
 ## Why it self-skips
 
 Without a BlueprintX checkout, a stamp, or a usable `blueprintx_commit` (absent, `unknown`, or

@@ -20,6 +20,7 @@ scaffold_stamp_provenance() {
 	review_bot_roster: $([[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]] && echo true || echo false)
 	blueprintx_version: ${str_version#v}
 	blueprintx_commit: ${str_commit}
+	scaffold_commit: ${str_commit}
 	scaffolded_at: ${str_scaffolded_at}
 	EOF
 }
