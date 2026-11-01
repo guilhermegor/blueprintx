@@ -55,6 +55,7 @@ test_a_checkout_stamps_its_own_tag_and_commit() {
 	stamp "$path_root" "$WORK_DIR/p2" lib-minimal
 	if grep -qx 'blueprintx_version: 0.1.0' "$WORK_DIR/p2/.blueprintx-provenance.yaml" \
 		&& grep -qx "blueprintx_commit: $str_head" "$WORK_DIR/p2/.blueprintx-provenance.yaml" \
+		&& grep -qx "scaffold_commit: $str_head" "$WORK_DIR/p2/.blueprintx-provenance.yaml" \
 		&& grep -qx 'tier: lib-minimal' "$WORK_DIR/p2/.blueprintx-provenance.yaml"; then
 		pass "a git checkout stamps its own tag and HEAD"
 	else
