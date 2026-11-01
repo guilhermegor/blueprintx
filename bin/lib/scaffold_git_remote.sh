@@ -4,6 +4,8 @@
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_kanban.sh"
 # shellcheck source=bin/lib/scaffold_comment_budget.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_comment_budget.sh"
+# shellcheck source=bin/lib/scaffold_repo_settings.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scaffold_repo_settings.sh"
 
 : "${SCAFFOLD_REPO_HOMEPAGE:=}"
 
@@ -120,6 +122,7 @@ scaffold_create_github_repo() {
 
 	if gh repo create "$str_slug" "${list_homepage[@]}" \
 		--description "$PROJECT_DESCRIPTION" "$str_vis_flag"; then
+		scaffold_enable_delete_branch_on_merge "$str_slug"
 		scaffold_set_secret_scan_key
 		if ! git -C "$str_project_path" push -u origin HEAD:main; then
 			print_status "warning" \
@@ -234,6 +237,7 @@ scaffold_initial_commit() {
 	if ! (
 		cd "$str_project_path" || exit 1
 		git init -q -b main &&
+			git config fetch.prune true &&
 			git add . &&
 			scaffold_git_commit . "feat: first commit"
 	); then

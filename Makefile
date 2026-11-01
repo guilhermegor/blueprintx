@@ -28,6 +28,7 @@ dry-run: dry_run
 .PHONY: init venv update_venv precommit
 
 init: venv precommit
+	@git config fetch.prune true
 
 venv:
 	@bash bin/venv.sh

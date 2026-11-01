@@ -13,7 +13,7 @@ Targets (no make required):
   dev           Scaffold into a temporary directory
   dev_clean     Scaffold into a temp directory and delete it on exit
   dry_run       Show structure only, no files created
-  init          Bootstrap venv + install pre-commit hooks (venv + precommit)
+  init          Bootstrap venv, install pre-commit hooks, set fetch.prune
   venv          Create local Poetry venv using .python-version (installs deps)
   precommit     Install pre-commit hooks (pre-commit + commit-msg stages)
   lint          Run all pre-commit hooks across the repo (mirrors CI)
