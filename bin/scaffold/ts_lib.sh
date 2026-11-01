@@ -232,6 +232,7 @@ copy_shared_github_overlay() {
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$project_path/.github/ISSUE_TEMPLATE" && cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$project_path/.github/ISSUE_TEMPLATE/feature_or_fix.md"
+    cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/release-1-0-0.md" "$project_path/.github/ISSUE_TEMPLATE/release-1-0-0.md"
     cp "$COMMON_TEMPLATE_ROOT/dependabot.yml" "$project_path/.github/dependabot.yml"
     copy_repo_policy_workflows "$project_path"
 }
@@ -257,6 +258,7 @@ copy_common_templates() {
             < "$SKELETON_TEMPLATE_ROOT/docs/$doc_file.md" \
             > "$project_path/docs/$doc_file.md"
     done
+    cp "$SHARED_TEMPLATE_ROOT/docs/releasing-1-0-0.md" "$project_path/docs/releasing-1-0-0.md"
     render_docusaurus_config "$project_path"
     envsubst '${PROJECT_NAME}' \
         < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release-npm.yml" \
@@ -291,6 +293,7 @@ copy_static_ts_lib_files() {
     chmod +x "$project_path/bin/export_repo_content.sh"
 
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
+    cp "$SHARED_TEMPLATE_ROOT/bin/check_release_gate.py" "$project_path/bin/check_release_gate.py"
 }
 
 apply_branch_protection() {

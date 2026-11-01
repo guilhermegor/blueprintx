@@ -532,6 +532,9 @@ jobs:
       - name: Template review rosters trust the reviewer ladder
         run: bash tests/test_check_review_threads_roster.sh
 
+      - name: 1.0.0 release gate should-fail cases
+        run: bash tests/test_check_release_gate.sh
+
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json
     runs-on: ubuntu-latest
