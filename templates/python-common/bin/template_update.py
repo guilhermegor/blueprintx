@@ -492,7 +492,9 @@ def main(list_argv: list) -> int:
         return 0
     dict_plan = build_plan(path_root, path_blueprintx, str_commit, dict_sources)
     _print_plan(dict_plan)
-    _print_removed(path_root, path_blueprintx, str_commit, str_tier, dict_sources)
+    _print_removed(
+        path_root, path_blueprintx, drift.read_scaffold_commit(path_root), str_tier, dict_sources
+    )
     if not dict_plan:
         print("Template files are up to date.")
         return 0

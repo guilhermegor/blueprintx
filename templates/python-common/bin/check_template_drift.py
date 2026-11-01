@@ -428,6 +428,33 @@ def missing_relpaths(path_root: pathlib.Path, set_required: set[str]) -> list[st
     return sorted(str_rel for str_rel in set_required if not (path_root / str_rel).exists())
 
 
+def _read_stamp_field(path_root: pathlib.Path, str_key: str) -> str | None:
+    """Return one provenance value, or ``None`` when absent, empty or ``unknown``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root to inspect.
+    str_key : str
+        The stamp key, without the colon.
+
+    Returns
+    -------
+    str or None
+            The stamped value, or ``None`` when the stamp is absent, silent on the key, or
+            recorded ``unknown`` (a scaffold run outside a git checkout).
+    """
+    path_stamp = path_root / _PROVENANCE_FILENAME
+    if not path_stamp.exists():
+        return None
+    for str_line in path_stamp.read_text(encoding="utf-8").splitlines():
+        str_stripped = str_line.strip()
+        if str_stripped.startswith(f"{str_key}:"):
+            str_value = str_stripped.split(":", 1)[1].strip()
+            return None if str_value in {"", _UNKNOWN_COMMIT} else str_value
+    return None
+
+
 def read_commit(path_root: pathlib.Path) -> str | None:
     """Return the ``blueprintx_commit:`` value stamped at scaffold time, or ``None``.
 
@@ -439,18 +466,26 @@ def read_commit(path_root: pathlib.Path) -> str | None:
     Returns
     -------
     str or None
-            The stamped commit, or ``None`` when the stamp is absent, silent on it, or
-            recorded ``unknown`` (a scaffold run outside a git checkout).
+            The stamped commit, or ``None`` when absent, silent on it, or ``unknown``.
     """
-    path_stamp = path_root / _PROVENANCE_FILENAME
-    if not path_stamp.exists():
-        return None
-    for str_line in path_stamp.read_text(encoding="utf-8").splitlines():
-        str_stripped = str_line.strip()
-        if str_stripped.startswith("blueprintx_commit:"):
-            str_value = str_stripped.split(":", 1)[1].strip()
-            return None if str_value in {"", _UNKNOWN_COMMIT} else str_value
-    return None
+    return _read_stamp_field(path_root, "blueprintx_commit")
+
+
+def read_scaffold_commit(path_root: pathlib.Path) -> str | None:
+    """Return the commit the project was scaffolded from, which ``--apply`` never moves.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root to inspect.
+
+    Returns
+    -------
+    str or None
+            The ``scaffold_commit:`` value; a stamp written before that field existed falls
+            back to ``blueprintx_commit:``, and ``None`` when neither is usable.
+    """
+    return _read_stamp_field(path_root, "scaffold_commit") or read_commit(path_root)
 
 
 def base_blob(path_blueprintx_root: pathlib.Path, str_commit: str, str_src: str) -> bytes | None:
@@ -622,6 +657,8 @@ def _report_content(
 def _unpack_archive(bytes_tar: bytes, path_dest: pathlib.Path) -> None:
     """Write the regular files of a ``git archive`` tarball under ``path_dest``.
 
+    Symlinks and any member whose path would land outside ``path_dest`` are skipped.
+
     Parameters
     ----------
     bytes_tar : bytes
@@ -636,6 +673,8 @@ def _unpack_archive(bytes_tar: bytes, path_dest: pathlib.Path) -> None:
     with tarfile.open(fileobj=io.BytesIO(bytes_tar), mode="r:") as cls_tar:
         for cls_member in filter(tarfile.TarInfo.isfile, cls_tar):
             path_file = path_dest / cls_member.name
+            if not path_file.resolve().is_relative_to(path_dest.resolve()):
+                continue
             path_file.parent.mkdir(parents=True, exist_ok=True)
             path_file.write_bytes(cls_tar.extractfile(cls_member).read())
             path_file.chmod(cls_member.mode)
@@ -700,8 +739,8 @@ def renamed_sources(path_blueprintx_root: pathlib.Path, str_commit: str) -> dict
             cannot answer.
     """
     cls_git = subprocess.run(  # noqa: S603
-        ["git", "-C", str(path_blueprintx_root), "diff", "-M", "--name-status", str_commit]  # noqa: S607
-        + ["--", "templates"],
+        ["git", "-C", str(path_blueprintx_root), "diff", "--no-color", "-z", "-M", "-l0"]  # noqa: S607
+        + ["--name-status", str_commit, "--", "templates"],
         capture_output=True,
         encoding="utf-8",
         check=False,
@@ -709,8 +748,12 @@ def renamed_sources(path_blueprintx_root: pathlib.Path, str_commit: str) -> dict
     )
     if cls_git.returncode != 0:
         return {}
-    list_rows = [str_line.split("\t") for str_line in cls_git.stdout.splitlines()]
-    return {row[1]: row[2] for row in list_rows if row[0].startswith("R") and len(row) == 3}  # noqa: PLR2004
+    list_fields = cls_git.stdout.split("\0")
+    return {
+        list_fields[int_i + 1]: list_fields[int_i + 2]
+        for int_i, str_field in enumerate(list_fields[:-2])
+        if str_field.startswith("R")
+    }
 
 
 def _successors(
@@ -856,7 +899,7 @@ def _report_removed(
             ``True`` when removed files were found, ``False`` when none, ``None`` when not
             checked (the content section already said why when the commit is unusable).
     """
-    str_commit = read_commit(path_root)
+    str_commit = read_scaffold_commit(path_root)
     if str_commit is None or not commit_known(path_blueprintx_root, str_commit):
         return None
     list_lines, bool_found = removed_section(

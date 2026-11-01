@@ -499,7 +499,9 @@ def _removal_scenario(
     path_project = path_tmp / "project"
     _git(path_tmp, "init", "-q", str(path_project))
     _write(
-        path_project, drift._PROVENANCE_FILENAME, f"tier: {_TIER}\nblueprintx_commit: {str_base}\n"
+        path_project,
+        drift._PROVENANCE_FILENAME,
+        f"tier: {_TIER}\nblueprintx_commit: {str_base}\nscaffold_commit: {str_base}\n",
     )
     _write_all(path_project, dict_then)
     _commit_all(path_project, "scaffold")
@@ -539,6 +541,19 @@ def test_removed_files_are_listed_when_nothing_else_needs_updating(
     """An otherwise up-to-date project still hears about its orphans."""
     dict_now = {"a.txt": _REMOVAL_THEN["a.txt"]}
     path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, dict_now)
+
+    _update(path_project, path_bx)
+
+    assert "removed: dropped.txt" in capsys.readouterr().out
+
+
+def test_orphans_are_still_listed_after_an_apply_moved_the_stamp(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The stamp moves on apply, but the scaffold commit it is measured from does not."""
+    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
+    _update(path_project, path_bx, "--apply")
+    capsys.readouterr()
 
     _update(path_project, path_bx)
 

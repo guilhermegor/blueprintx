@@ -77,8 +77,10 @@ fails) the section prints `SKIPPED removed-file check` and says why, like the co
 Nothing is reported as removed from a comparison that did not run.
 
 `poe template_update` prints the same lines, in the dry run and in `--apply`, and never deletes
-or moves one: removing a project file stays a human decision. The stamp still moves when the
-other files applied cleanly, because an orphan is not a conflict.
+or moves one: removing a project file stays a human decision. The `blueprintx_commit` stamp still moves when the
+other files applied cleanly, because an orphan is not a conflict. Orphans are measured from
+`scaffold_commit`, which `--apply` never moves, so they stay listed until you delete them. A stamp
+written before that field existed falls back to `blueprintx_commit`.
 
 ## Why it self-skips
 

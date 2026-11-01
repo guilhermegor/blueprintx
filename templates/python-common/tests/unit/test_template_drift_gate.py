@@ -9,9 +9,11 @@ The checkouts here are synthetic and their lib is a stand-in speaking the same c
 """
 
 import importlib.util
+import io
 from pathlib import Path
 import subprocess
 import sys
+import tarfile
 from types import ModuleType
 
 import pytest
@@ -777,3 +779,55 @@ def test_a_skipped_removed_check_is_not_summed_up_as_a_clean_run(
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
 
     assert "(not every check ran)" in capsys.readouterr().out
+
+
+def test_a_stamp_without_scaffold_commit_falls_back_to_the_stamped_commit(
+    tmp_path: Path,
+) -> None:
+    """Projects scaffolded before the field existed still have a measuring point."""
+    path_project = _project(tmp_path, "tier: lib-minimal\nblueprintx_commit: abc123\n")
+
+    assert gate.read_scaffold_commit(path_project) == "abc123"
+
+
+def test_the_removed_summary_counts_the_orphans(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The count line says how many files the template no longer ships."""
+    str_out = _removal_output(tmp_path, capsys, _KEPT | _DROPPED | _RENAMED, _KEPT)
+
+    assert "2 file(s) the template no longer ships" in str_out
+
+
+def test_a_removal_is_not_summed_up_as_no_drift(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Orphans alone suppress the clean-run line."""
+    str_out = _removal_output(tmp_path, capsys, _KEPT | _DROPPED, _KEPT)
+
+    assert "No template drift detected" not in str_out
+
+
+def test_a_non_ascii_rename_names_its_successor(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """NUL-separated output keeps unusual paths intact, so the rename is still found."""
+    dict_old = {"ação.txt": "renamed\n" * 8}
+    dict_now = _KEPT | {"action.txt": dict_old["ação.txt"]}
+
+    str_out = _removal_output(tmp_path, capsys, _KEPT | dict_old, dict_now)
+
+    assert "replaced by action.txt: ação.txt" in str_out
+
+
+def test_an_archive_member_outside_the_destination_is_not_written(tmp_path: Path) -> None:
+    """A traversal path in the tarball is skipped."""
+    cls_buf = io.BytesIO()
+    with tarfile.open(fileobj=cls_buf, mode="w") as cls_tar:
+        cls_info = tarfile.TarInfo("../escaped.txt")
+        cls_info.size = 1
+        cls_tar.addfile(cls_info, io.BytesIO(b"x"))
+
+    gate._unpack_archive(cls_buf.getvalue(), tmp_path / "dest")
+
+    assert not (tmp_path / "escaped.txt").exists()
