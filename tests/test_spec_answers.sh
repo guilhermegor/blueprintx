@@ -372,6 +372,10 @@ case "$1 $2" in
         [ "${STUB_VIEW_ERROR:-0}" = 1 ] && { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
         echo "GraphQL: Could not resolve to a Repository with the name '$3'. (repository)" >&2
         exit 1 ;;
+    "project list")
+        [ "${STUB_PROJECT:-none}" = fail ] && exit 1
+        [ "${STUB_PROJECT:-none}" = exists ] && echo 7
+        exit 0 ;;
     "repo create") touch "$STUB_STATE/created" ;;
     "api -X") case "$*" in *rulesets*) cat >"$STUB_STATE/protection.json" ;; esac ;;
 esac
@@ -521,6 +525,20 @@ test_kanban_yes_keeps_branch_protection_aligned() {
     fi
 }
 
+test_kanban_lookup_skip_keeps_branch_protection_aligned() {
+    local str_mode str_name
+    for str_mode in fail exists; do
+        str_name="e2e-kanban-$str_mode"
+        STUB_PROJECT="$str_mode" run_ts_lib_with_gh_stub "$str_name" -- git_remote=y create_repo=y \
+            repo_visibility=public kanban=y kanban_visibility=private protect_branch=y human_reviewers=n
+        if [ -e "$WORK_DIR/$str_name-state/protection.json" ]; then
+            pass "kanban lookup ($str_mode): the visibility answer is consumed, so protection is still sent"
+        else
+            fail "kanban lookup $str_mode" "out=$(tail -c 300 "$WORK_DIR/$str_name.out")"
+        fi
+    done
+}
+
 test_kanban_visibility_dry_run_and_bad_value() {
     local file out str_bad
     file="$(SPEC_LANGUAGE=typescript write_spec kv-dry ts-lib "project_root=$WORK_DIR/kv-root" \
@@ -657,6 +675,7 @@ main() {
     test_ts_lib_remote_keys_defaults
     test_create_repo_runs_gh_with_the_chosen_visibility_and_protection
     test_kanban_yes_keeps_branch_protection_aligned
+    test_kanban_lookup_skip_keeps_branch_protection_aligned
     test_kanban_visibility_dry_run_and_bad_value
     test_create_repo_n_never_calls_gh_repo_create
     test_create_repo_preflight_stops_before_any_file_is_written
