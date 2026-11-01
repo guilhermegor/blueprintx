@@ -443,3 +443,82 @@ def test_rerunning_with_markers_still_left_keeps_the_stamp(tmp_path: Path) -> No
     _update(path_project, path_bx, "--apply")
 
     assert drift.read_commit(path_project) == str_before
+
+
+def _removal_scenario(
+    path_tmp: Path, dict_then: dict[str, str], dict_now: dict[str, str]
+) -> tuple[Path, Path]:
+    """Build a checkout whose copy list changes between two commits, and a project from the first.
+
+    Parameters
+    ----------
+    path_tmp : pathlib.Path
+        A temporary directory to build under.
+    dict_then : dict[str, str]
+        Template files, by project path, at the stamped commit.
+    dict_now : dict[str, str]
+        Template files, by project path, at the current commit.
+
+    Returns
+    -------
+    tuple of (pathlib.Path, pathlib.Path)
+            The project root and the checkout root.
+    """
+    path_bx = path_tmp / "bx"
+    path_tpl = path_bx / _COMMON
+    _git(path_tmp, "init", "-q", str(path_bx))
+    _write_all(path_tpl, dict_then)
+    _write(path_bx, _LIB, "cat <<'X'\n" + "\n".join(map(_copy_line, dict_then)) + "\nX\n")
+    _commit_all(path_bx, "base")
+    str_base = _git(path_bx, "rev-parse", "HEAD")
+    list(map(lambda str_rel: (path_tpl / str_rel).unlink(), set(dict_then) - set(dict_now)))
+    _write_all(path_tpl, dict_now)
+    _write(path_bx, _LIB, "cat <<'X'\n" + "\n".join(map(_copy_line, dict_now)) + "\nX\n")
+    _commit_all(path_bx, "template moves on")
+    path_project = path_tmp / "project"
+    _git(path_tmp, "init", "-q", str(path_project))
+    _write(
+        path_project, drift._PROVENANCE_FILENAME, f"tier: {_TIER}\nblueprintx_commit: {str_base}\n"
+    )
+    _write_all(path_project, dict_then)
+    _commit_all(path_project, "scaffold")
+    return path_project, path_bx
+
+
+_REMOVAL_THEN = {"a.txt": "kept\n" * 8, "dropped.txt": "dropped\n" * 8, "old.txt": "moved\n" * 8}
+_REMOVAL_NOW = {"a.txt": "kept\n" * 8, "new.txt": "moved\n" * 8}
+
+
+@pytest.mark.parametrize("tuple_flags", [(), ("--apply",)])
+@pytest.mark.parametrize("str_line", ["removed: dropped.txt", "replaced by new.txt: old.txt"])
+def test_removed_files_are_named_in_the_dry_run_and_in_apply(
+    tmp_path: Path, capsys: pytest.CaptureFixture, tuple_flags: tuple[str, ...], str_line: str
+) -> None:
+    """The class is listed with its successor in both modes."""
+    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
+
+    _update(path_project, path_bx, *tuple_flags)
+
+    assert str_line in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("str_rel", ["dropped.txt", "old.txt"])
+def test_apply_never_deletes_a_file_the_template_removed(tmp_path: Path, str_rel: str) -> None:
+    """Removing a project file stays a human decision."""
+    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
+
+    _update(path_project, path_bx, "--apply")
+
+    assert (path_project / str_rel).is_file()
+
+
+def test_removed_files_are_listed_when_nothing_else_needs_updating(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """An otherwise up-to-date project still hears about its orphans."""
+    dict_now = {"a.txt": _REMOVAL_THEN["a.txt"]}
+    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, dict_now)
+
+    _update(path_project, path_bx)
+
+    assert "removed: dropped.txt" in capsys.readouterr().out

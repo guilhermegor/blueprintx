@@ -627,7 +627,9 @@ def _removal_output(
     _write_files(path_tpl, dict_now)
     _checkout(path_root, _copy_lines(dict_now))
     _commit_all(path_root, "template moves on")
-    path_project = _project(path_tmp, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n")
+    path_project = _project(
+        path_tmp, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+    )
     _write_files(path_project, dict_then)
     list(map(lambda str_rel: (path_project / str_rel).unlink(), tuple_deleted))
     capsys.readouterr()
@@ -700,14 +702,16 @@ def test_a_dropped_file_the_project_already_deleted_is_not_reported(
 def test_a_stamped_commit_whose_dry_run_cannot_be_made_is_skipped_loudly(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
-    """A commit that predates ``--list-copies`` has no copy list, which is not 'nothing removed'."""
+    """A commit predating ``--list-copies`` has no copy list, which is not 'nothing removed'."""
     path_root = tmp_path / "bx"
     _write_files(path_root / _COMMON, _KEPT)
     _git(path_root, "init", "-q")
     str_sha = _commit_all(path_root, "before the dry run existed")
     _checkout(path_root, _copy_lines(_KEPT))
     _commit_all(path_root, "dry run added")
-    path_project = _project(tmp_path, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n")
+    path_project = _project(
+        tmp_path, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+    )
     capsys.readouterr()
 
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])

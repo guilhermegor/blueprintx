@@ -44,12 +44,15 @@ scope.
 """
 
 import argparse
+import io
 import os
 import pathlib
 import posixpath
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 
 
 _PROVENANCE_FILENAME = ".blueprintx-provenance.yaml"
@@ -63,6 +66,11 @@ _CONTENT_LABELS = {
 }
 _INT_COPY_FIELDS = 4
 _INT_RM_FIELDS = 2
+_SUCCESSOR_RULES = {
+    "Makefile": "poe_tasks.toml",
+    "tasks.sh": "poe_tasks.toml",
+    "make/library.mk": "poe_tasks.library.toml",
+}
 
 
 def read_tier(path_root: pathlib.Path) -> str | None:
@@ -608,6 +616,253 @@ def _report_content(
     return True
 
 
+def _unpack_archive(bytes_tar: bytes, path_dest: pathlib.Path) -> None:
+    """Write the regular files of a ``git archive`` tarball under ``path_dest``.
+
+    Parameters
+    ----------
+    bytes_tar : bytes
+        The tar stream produced by ``git archive --format=tar``.
+    path_dest : pathlib.Path
+        The directory to unpack into.
+
+    Returns
+    -------
+    None
+    """
+    with tarfile.open(fileobj=io.BytesIO(bytes_tar), mode="r:") as cls_tar:
+        for cls_member in filter(tarfile.TarInfo.isfile, cls_tar):
+            path_file = path_dest / cls_member.name
+            path_file.parent.mkdir(parents=True, exist_ok=True)
+            path_file.write_bytes(cls_tar.extractfile(cls_member).read())
+            path_file.chmod(cls_member.mode)
+
+
+def stamped_sources(
+    path_blueprintx_root: pathlib.Path, str_commit: str, str_tier: str, bool_roster: bool
+) -> dict[str, str]:
+    """Derive the copy list the tier's scaffold made at the stamped commit.
+
+    The commit's ``bin/`` and ``templates/`` are exported to a temporary directory and its
+    own scaffold entry answers ``--list-copies`` there, so the list is what that scaffold
+    copied and not a guess made from today's script.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_commit : str
+        The commit stamped at scaffold time.
+    str_tier : str
+        The project's stamped tier.
+    bool_roster : bool
+        Whether the project opted into the review-bot roster.
+
+    Returns
+    -------
+    dict of str to str
+            Project-relative path to checkout-relative source at that commit; empty when the
+            commit cannot be exported or predates ``--list-copies``.
+    """
+    if str_commit.startswith("-"):
+        return {}
+    cls_git = subprocess.run(  # noqa: S603
+        ["git", "-C", str(path_blueprintx_root), "archive", "--format=tar", str_commit]  # noqa: S607
+        + ["bin", "templates"],
+        capture_output=True,
+        check=False,
+        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+    )
+    if cls_git.returncode != 0:
+        return {}
+    with tempfile.TemporaryDirectory() as str_dir:
+        _unpack_archive(cls_git.stdout, pathlib.Path(str_dir))
+        return required_sources(pathlib.Path(str_dir), str_tier, bool_roster)
+
+
+def renamed_sources(path_blueprintx_root: pathlib.Path, str_commit: str) -> dict[str, str]:
+    """Map each template path git renamed between the stamped commit and the checkout.
+
+    Parameters
+    ----------
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_commit : str
+        The commit stamped at scaffold time.
+
+    Returns
+    -------
+    dict of str to str
+            Checkout-relative path at the stamped commit to its path now; empty when git
+            cannot answer.
+    """
+    cls_git = subprocess.run(  # noqa: S603
+        ["git", "-C", str(path_blueprintx_root), "diff", "-M", "--name-status", str_commit]  # noqa: S607
+        + ["--", "templates"],
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+    )
+    if cls_git.returncode != 0:
+        return {}
+    list_rows = [str_line.split("\t") for str_line in cls_git.stdout.splitlines()]
+    return {row[1]: row[2] for row in list_rows if row[0].startswith("R") and len(row) == 3}  # noqa: PLR2004
+
+
+def _successors(
+    str_rel: str, str_src: str, dict_renamed: dict[str, str], dict_now: dict[str, str]
+) -> list[str]:
+    """Name what replaced one removed path, from a git rename or the rule table.
+
+    Parameters
+    ----------
+    str_rel : str
+        The removed project-relative path.
+    str_src : str
+        Its checkout-relative source at the stamped commit.
+    dict_renamed : dict of str to str
+        The result of :func:`renamed_sources`.
+    dict_now : dict of str to str
+        The current copy list, project-relative path to source.
+
+    Returns
+    -------
+    list of str
+            Sorted project-relative successors the current copy list ships; empty when none
+            is known.
+    """
+    str_moved = dict_renamed.get(str_src)
+    list_renamed = [str_dst for str_dst, str_now in dict_now.items() if str_now == str_moved]
+    str_rule = _SUCCESSOR_RULES.get(str_rel)
+    list_ruled = [str_rule] if str_rule in dict_now else []
+    return sorted(list_renamed or list_ruled)
+
+
+def removed_files(
+    path_root: pathlib.Path,
+    path_blueprintx_root: pathlib.Path,
+    str_commit: str,
+    str_tier: str,
+    dict_now: dict[str, str],
+) -> dict[str, list[str]] | None:
+    """Find files the template shipped at the stamped commit, no longer ships, and the project has.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_commit : str
+        The commit stamped at scaffold time.
+    str_tier : str
+        The project's stamped tier.
+    dict_now : dict of str to str
+        The current copy list, project-relative path to checkout-relative source.
+
+    Returns
+    -------
+    dict of str to list of str or None
+            Removed project-relative path to its successors (empty for plain ``removed``),
+            sorted; ``None`` when the stamped commit has no copy list to compare against.
+    """
+    dict_then = stamped_sources(
+        path_blueprintx_root, str_commit, str_tier, bool(review_bot_roster_enabled(path_root))
+    )
+    if not dict_then:
+        return None
+    dict_renamed = renamed_sources(path_blueprintx_root, str_commit)
+    return {
+        str_rel: _successors(str_rel, str_src, dict_renamed, dict_now)
+        for str_rel, str_src in sorted(dict_then.items())
+        if str_rel not in dict_now and (path_root / str_rel).is_file()
+    }
+
+
+def removed_section(
+    path_root: pathlib.Path,
+    path_blueprintx_root: pathlib.Path,
+    str_commit: str,
+    str_tier: str,
+    dict_now: dict[str, str],
+) -> tuple[list[str], bool | None]:
+    """Render the removed-file section, or say loudly why it could not be computed.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_commit : str
+        The commit stamped at scaffold time, known to the checkout.
+    str_tier : str
+        The project's stamped tier.
+    dict_now : dict of str to str
+        The current copy list, project-relative path to checkout-relative source.
+
+    Returns
+    -------
+    tuple of (list of str, bool or None)
+            The lines to print and whether any file was found (``None`` when not checked).
+    """
+    dict_removed = removed_files(path_root, path_blueprintx_root, str_commit, str_tier, dict_now)
+    if dict_removed is None:
+        return [
+            f"SKIPPED removed-file check: the scaffold at the stamped blueprintx_commit "
+            f"({str_commit}) cannot list its copies (it predates --list-copies, or the export "
+            f"failed). This run proves nothing about files the template removed."
+        ], None
+    list_lines = [
+        f"🔁 replaced by {', '.join(list_succ)}: {str_rel}"
+        if list_succ
+        else f"🗑️ removed: {str_rel}"
+        for str_rel, list_succ in dict_removed.items()
+    ]
+    if list_lines:
+        list_lines.append(
+            f"\n{len(list_lines)} file(s) the template no longer ships are still in the "
+            f"project. They are left in place; deleting one is a human decision."
+        )
+    return list_lines, bool(dict_removed)
+
+
+def _report_removed(
+    path_root: pathlib.Path,
+    path_blueprintx_root: pathlib.Path,
+    str_tier: str,
+    dict_now: dict[str, str],
+) -> bool | None:
+    """Print the removed-file section when there is a usable stamped commit.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    path_blueprintx_root : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_tier : str
+        The project's stamped tier.
+    dict_now : dict of str to str
+        The current copy list, project-relative path to checkout-relative source.
+
+    Returns
+    -------
+    bool or None
+            ``True`` when removed files were found, ``False`` when none, ``None`` when not
+            checked (the content section already said why when the commit is unusable).
+    """
+    str_commit = read_commit(path_root)
+    if str_commit is None or not commit_known(path_blueprintx_root, str_commit):
+        return None
+    list_lines, bool_found = removed_section(
+        path_root, path_blueprintx_root, str_commit, str_tier, dict_now
+    )
+    list(map(print, list_lines))
+    return bool_found
+
+
 def _parse_args(list_argv: list) -> tuple[pathlib.Path, pathlib.Path | None]:
     """Parse ``--root`` and ``--blueprintx-root`` out of argv, with env-var fallbacks.
 
@@ -746,7 +1001,8 @@ def main(list_argv: list) -> int:
     if list_missing:
         _report_missing(str_tier, list_missing, len(dict_sources))
     bool_content_drift = _report_content(path_root, path_blueprintx, dict_sources)
-    if not list_missing and not bool_content_drift:
+    bool_removed = _report_removed(path_root, path_blueprintx, str_tier, dict_sources)
+    if not (list_missing or bool_content_drift or bool_removed):
         str_note = "" if bool_content_drift is False else " (content not checked)"
         print(
             f"No template drift detected — {len(dict_sources)} required path(s) present{str_note}."

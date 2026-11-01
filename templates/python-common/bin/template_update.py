@@ -13,7 +13,9 @@ Dry run by default. ``--apply`` creates ``chore/template-update-<short-sha>`` (n
 current branch), writes the files and rewrites ``blueprintx_commit`` in the stamp only when
 every file applied cleanly. Nothing is committed. A conflict or an unmergeable file makes
 ``--apply`` exit 1; a self-skip (no stamp, no checkout, no usable commit) prints why and
-exits 0, like the reporter. Rationale: ``docs/template-updates.md``.
+exits 0, like the reporter. Files the template shipped at the stamped commit and no longer
+ships are listed, with their successor, in both modes and never deleted. Rationale:
+``docs/template-updates.md``.
 """
 
 import argparse
@@ -204,6 +206,38 @@ def _print_plan(dict_plan: dict[str, tuple[str, bytes | None]]) -> None:
     """
     for str_rel, (str_action, _) in dict_plan.items():
         print(f"{_LABELS[str_action]} {str_rel}")
+
+
+def _print_removed(
+    path_root: pathlib.Path,
+    path_blueprintx: pathlib.Path,
+    str_commit: str,
+    str_tier: str,
+    dict_sources: dict[str, str],
+) -> None:
+    """Print the files the template no longer ships, with their successors; delete nothing.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    path_blueprintx : pathlib.Path
+        Root of a BlueprintX checkout.
+    str_commit : str
+        The commit stamped at scaffold time, known to the checkout.
+    str_tier : str
+        The project's stamped tier.
+    dict_sources : dict of str to str
+        Project-relative path to checkout-relative template source, as the template ships it now.
+
+    Returns
+    -------
+    None
+    """
+    list_lines, _ = drift.removed_section(
+        path_root, path_blueprintx, str_commit, str_tier, dict_sources
+    )
+    list(map(print, list_lines))
 
 
 def _write_plan(
@@ -445,7 +479,7 @@ def main(list_argv: list) -> int:
             0 for a dry run, a self-skip or a clean apply; 1 when ``--apply`` could not finish.
     """
     path_root, path_blueprintx, bool_apply = _parse_args(list_argv)
-    _, dict_sources, str_skip = drift.managed_sources(path_root, path_blueprintx)
+    str_tier, dict_sources, str_skip = drift.managed_sources(path_root, path_blueprintx)
     if str_skip is not None:
         print(str_skip)
         return 0
@@ -458,6 +492,7 @@ def main(list_argv: list) -> int:
         return 0
     dict_plan = build_plan(path_root, path_blueprintx, str_commit, dict_sources)
     _print_plan(dict_plan)
+    _print_removed(path_root, path_blueprintx, str_commit, str_tier, dict_sources)
     if not dict_plan:
         print("Template files are up to date.")
         return 0
