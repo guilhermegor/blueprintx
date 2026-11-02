@@ -3340,6 +3340,7 @@
 </tr>
 </tbody>
 </table>
+<p>Boundaries resolves each import through <code>eslint-import-resolver-typescript</code> (the <code>import/resolver</code> setting in <code>eslint.config.js</code>). Without a resolver the import target is an unknown element and the <code>default: 'disallow'</code> policy never fires, so every cross-layer import lints clean. The barrel is a file category (<code>boundaries/files</code>), not an element, because element patterns match folders. CI asserts the gate works: <code>bin/ci/check_boundaries_witness.sh</code> writes a <code>domain</code> -&gt; <code>ui</code> import into a scaffold and fails unless eslint rejects it under <code>boundaries/dependencies</code> (blueprintx#932).</p>
 <h3 id="state-management-variants">State management variants<a class="headerlink" href="#state-management-variants" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
