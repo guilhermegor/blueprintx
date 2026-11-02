@@ -828,6 +828,10 @@ jobs:
         working-directory: ${{ runner.temp }}/ci-scaffold
         run: npm run lint
 
+      - name: Boundaries should-fail witness (blueprintx#932)
+        if: matrix.skeleton == 'react-spa-webpack'
+        run: bash bin/ci/check_boundaries_witness.sh "$RUNNER_TEMP/ci-scaffold"
+
   spell-check:
     name: Spell check — docs/ and templates/
     runs-on: ubuntu-latest
