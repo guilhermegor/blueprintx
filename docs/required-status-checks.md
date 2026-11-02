@@ -71,6 +71,15 @@ Measured 2026-09-26 by reading `jobs.*.name` and `on:` in every
 | `build` | `docs.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter), `ts-lib` only |
 | `pack-smoke`, `verdaccio-rehearsal` | `pack-smoke.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter), `ts-lib` only |
 
+`verdaccio-rehearsal` publishes a throwaway
+`<version>-rehearsal.<run id>.<attempt>` prerelease (`--tag rehearsal`) and
+installs that exact version, rather than running a Verdaccio config without an
+npmjs uplink (blueprintx#934). Reason: the stock `verdaccio/verdaccio:5` image
+proxies npmjs, so publishing `package.json`'s own version 409s once it exists
+upstream, and a bare-name install could resolve the upstream package. A
+prerelease with a run-unique suffix works regardless of Verdaccio's config and
+can never collide with a real npm version.
+
 ### Bash tier — `bash-cli`
 
 | Emitted check name | Workflow | Trigger | Qualifies? |
