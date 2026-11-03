@@ -41,14 +41,16 @@ stub_roster_for() {
 
 gh() {
 	case "$*" in
-	*"contents/"*".review-bots.yaml"*) [[ -n "${STUB_NO_ROSTER:-}" ]] && return 1 ;;&
+	*"contents/"*".review-bots.yaml"*) [[ -n "${STUB_NO_ROSTER:-}" ]] && { echo "gh: Not Found (HTTP 404)" >&2; return 1; } ;;&
 	*"contents/.github/.review-bots.yaml"*)
-		[[ "$STUB_ROSTER_AT" == root ]] && return 1
+		[[ "$STUB_ROSTER_AT" == error ]] && { echo "gh: Server Error (HTTP 502)" >&2; return 1; }
+		[[ "$STUB_ROSTER_AT" == empty ]] && return 0
+		[[ "$STUB_ROSTER_AT" == root ]] && { echo "gh: Not Found (HTTP 404)" >&2; return 1; }
 		[[ "$STUB_ROSTER_AT" == both ]] && { printf '%s\n' "$STUB_GITHUB_ROSTER"; return 0; }
 		stub_roster_for "$@"
 		;;
 	*"contents/.review-bots.yaml"*)
-		[[ "$STUB_ROSTER_AT" == github ]] && return 1
+		[[ "$STUB_ROSTER_AT" == github ]] && { echo "gh: Not Found (HTTP 404)" >&2; return 1; }
 		stub_roster_for "$@"
 		;;
 	"pr merge"*)
@@ -142,6 +144,11 @@ STUB_REVIEWS=$(bot_review abc "github-only-bot[bot]" Bot)
 expect ".github/ roster wins over the root one" arm "$major"
 STUB_REVIEWS=$(bot_review abc "coderabbitai[bot]" Bot)
 expect "root roster is ignored when .github/ has one" wait-review "$major"
+STUB_ROSTER_AT=error
+STUB_REVIEWS=$(bot_review abc "coderabbitai[bot]" Bot)
+expect "non-404 error on .github/ does not fall back to the root roster" wait-review "$major"
+STUB_ROSTER_AT=empty
+expect "empty .github/ roster is not replaced by the root one" wait-review "$major"
 STUB_ROSTER_AT=root
 STUB_REVIEWS=$(bot_review abc "guilhermegor-review-ladder[bot]" Bot)
 expect "roster only at the root still arms a major" arm "$major"

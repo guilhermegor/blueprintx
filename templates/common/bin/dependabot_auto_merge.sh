@@ -38,9 +38,12 @@ pushed_by_dependabot() {
 fetch_roster() {
 	local str_base="$1" str_path str_out
 	for str_path in .github/.review-bots.yaml .review-bots.yaml; do
-		str_out=$(gh api -H "Accept: application/vnd.github.raw" \
-			"repos/$GH_REPO/contents/$str_path?ref=$str_base" 2>/dev/null) || continue
-		[[ -n "$str_out" ]] || continue
+		if ! str_out=$(gh api -H "Accept: application/vnd.github.raw" \
+			"repos/$GH_REPO/contents/$str_path?ref=$str_base" 2>&1); then
+			[[ "$str_out" == *"HTTP 404"* ]] && continue
+			echo "roster fetch failed for $str_path: $str_out" >&2
+			return 1
+		fi
 		printf '%s\n' "$str_out"
 		return 0
 	done
