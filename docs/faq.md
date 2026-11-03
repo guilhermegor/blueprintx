@@ -46,9 +46,12 @@ The scaffolder asks *"Do you have (or will you install) a PR review bot such as 
 on this repo?"*. Answer **no** and it skips copying `.review-bots.yaml` instead of shipping
 it empty — `reviewers: []` is treated by the gate as "switched off from inside the very PR
 it polices" and raises, which is worse than never having adopted the gate at all. With the
-file absent, `check_review_threads.py` reads "the review-thread gate is not adopted here"
-and exits 0: the required check still runs on every PR (nothing else changes in `.github/`),
-it just reports success instead of demanding a reviewer that will never exist. Answer **yes**
+file absent, `check_review_threads.py` now **fails closed** (blueprintx#952): a required check
+that reads a missing roster as "not adopted" is permanently green and checks nothing. The
+explicit opt-out is a roster that declares `adopted: false` (no `reviewers:` needed); the gate
+then exits 0 with an opt-out message. A project scaffolded with the answer **no** has no roster
+at all, so create a one-line `.review-bots.yaml` containing `adopted: false` (the scaffolds do
+not ship it yet). Answer **yes**
 later and re-adding the roster turns the gate back on — at the path the gate reads, which differs
 by language: for Python copy `templates/python-common/.review-bots.yaml` to the project root; for
 TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed

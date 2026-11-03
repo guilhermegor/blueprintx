@@ -1742,6 +1742,44 @@ def _print_skip(bool_json: bool, str_reason: str) -> int:
     return 0
 
 
+def roster_opted_out(path_root: pathlib.Path) -> bool:
+    """Return whether the roster explicitly declares ``adopted: false``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Repository root holding ``.review-bots.yaml``.
+
+    Returns
+    -------
+    bool
+        ``True`` only for a present roster whose top-level ``adopted`` is the boolean
+            ``false``. An absent file is never an opt-out: the gate runs as a required check,
+            so silence must not read as consent (blueprintx#952).
+    """
+    path_roster = path_root / _ROSTER_FILE
+    if yaml is None or not path_roster.is_file():
+        return False
+    dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
+    return isinstance(dict_yaml, dict) and dict_yaml.get("adopted") is False
+
+
+def _print_missing_roster(bool_json: bool) -> int:
+    """Print the missing-roster failure in the requested representation and return ``1``."""
+    str_reason = (
+        f"{_ROSTER_FILE} is missing or unreadable, so this required gate would check nothing. "
+        f"Copy it from the BlueprintX template (templates/python-common/{_ROSTER_FILE}, or "
+        f"templates/ts-common/.github/{_ROSTER_FILE}), or opt out explicitly with "
+        f"`adopted: false` in {_ROSTER_FILE}."
+    )
+    print(
+        json.dumps({"status": "fail", "reason": "missing_roster", "detail": str_reason})
+        if bool_json
+        else f"❌ {str_reason}"
+    )
+    return 1
+
+
 def _print_missing_review(
     bool_json: bool, str_missing: str, list_notices: list[dict], set_reviewers: set[str]
 ) -> int:
@@ -2073,11 +2111,14 @@ def main(list_argv: list[str] | None = None) -> int:
     if not str_repo_full or not str_number.isdigit():
         return _print_skip(bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
 
-    dict_roster = load_roster(pathlib.Path.cwd())
-    if not dict_roster:
+    path_cwd = pathlib.Path.cwd()
+    if roster_opted_out(path_cwd):
         return _print_skip(
-            bool_json, f"No {_ROSTER_FILE} — the review-thread gate is not adopted here"
+            bool_json, f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out"
         )
+    dict_roster = load_roster(path_cwd)
+    if not dict_roster:
+        return _print_missing_roster(bool_json)
 
     set_roster = set(dict_roster)
     set_reviewers = reviewer_logins(dict_roster)
