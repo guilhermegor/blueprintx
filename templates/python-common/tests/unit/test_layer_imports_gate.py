@@ -296,6 +296,45 @@ def _output_at(tuple_result: tuple[int, str], int_expected: int) -> str:
     return str_out
 
 
+_STR_LIB_POLICY = """\
+src_prefix_depth: 2
+layers:
+  __root__:
+    allow: {}
+  config:
+    allow:
+      pydantic: "config/schemas is the one home of pydantic models"
+"""
+
+
+def _lib_project(tmp_path: Path, str_rel: str) -> None:
+    """Write a lib-shaped project with a pydantic model at ``src/pkg/<str_rel>``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    str_rel : str
+        Module path below ``src/pkg``.
+    """
+    path_file = tmp_path / "src" / "pkg" / str_rel
+    path_file.parent.mkdir(parents=True)
+    path_file.write_text("from pydantic import BaseModel\n", encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(_STR_LIB_POLICY, encoding="utf-8")
+
+
+def test_pydantic_model_at_package_root_is_flagged(tmp_path: Path) -> None:
+    """A root-level ``schemas/`` package importing pydantic fails the layer gate."""
+    _lib_project(tmp_path, "schemas/doc.py")
+    assert "pydantic" in _output_at(_run_main(tmp_path), 1)
+
+
+def test_pydantic_model_in_internal_config_passes(tmp_path: Path) -> None:
+    """The same model under ``_internal/config/schemas`` is the sanctioned home."""
+    _lib_project(tmp_path, "_internal/config/schemas/doc.py")
+    assert "OK" in _output_at(_run_main(tmp_path), 0)
+
+
 def _seed_project(path_root: Path, str_module: str = "import os\n") -> None:
     """Build a minimal project tree holding one module under ``src/model/``.
 

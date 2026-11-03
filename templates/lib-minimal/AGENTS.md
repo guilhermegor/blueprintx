@@ -40,7 +40,9 @@ src/<project_name>/
         config/            # ALL private structural declarations (one config/CLAUDE.md maps them)
             contracts/     # FileContract declarations (one per input source)
             ports/         # private behavioural ABCs (hexagonal ports; ABCTypeCheckerMeta) — opt-in
-            # schemas/     # (opt-in) Pydantic models mirroring an external standard
+            # schemas/     # (opt-in) Pydantic models mirroring an external standard — the ONLY
+                           #   home of pydantic (check-layer-imports bans it at the package root;
+                           #   check_all_exports bans an _internal name in __all__)
 tests/
     unit/  integration/  performance/
 ```

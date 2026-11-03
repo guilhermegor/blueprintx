@@ -158,3 +158,21 @@ def test_the_shipped_contracts_package_passes_the_gate() -> None:
     teaches its first reader to skip it.
     """
     assert _load_gate().check_package(_PATH_CONTRACTS_INIT) == []
+
+
+def test_all_name_defined_under_internal_is_flagged(tmp_path: Path) -> None:
+    """Re-exporting an ``_internal`` name through ``__all__`` breaks the underscore's promise."""
+    path_init = _package(
+        tmp_path,
+        'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n',
+        "",
+    )
+    assert "_internal" in _sole(_load_gate().check_package(path_init))
+
+
+def test_all_name_from_public_module_is_not_flagged(tmp_path: Path) -> None:
+    """A name imported from a public sibling is untouched by the ``_internal`` guard."""
+    path_init = _package(
+        tmp_path, 'from pkg.member import THING\n\n__all__ = ["THING"]\n', "THING = 1\n"
+    )
+    assert _load_gate().check_package(path_init) == []

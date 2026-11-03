@@ -94,6 +94,44 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     return {str_name for str_name in set_names if not str_name.startswith("_")}
 
 
+def internal_exports(path_init: pathlib.Path, set_exported: set[str]) -> list[str]:
+    """Return one message per exported name imported from a module under ``_internal``.
+
+    The leading underscore is a promise that a path is not public API, and ``__all__`` must
+    not break it. A package that is itself inside ``_internal`` is out of scope.
+
+    Parameters
+    ----------
+    path_init : pathlib.Path
+        The package's ``__init__.py``.
+    set_exported : set of str
+        The names in its ``__all__``.
+
+    Returns
+    -------
+    list of str
+        Human-readable problems; empty when no exported name originates under ``_internal``.
+    """
+    if "_internal" in path_init.parts:
+        return []
+    list_problems: list[str] = []
+    cls_tree = ast.parse(path_init.read_text(encoding="utf-8"))
+    for cls_node in ast.walk(cls_tree):
+        if not isinstance(cls_node, ast.ImportFrom):
+            continue
+        if "_internal" not in (cls_node.module or "").split("."):
+            continue
+        for cls_alias in cls_node.names:
+            str_bound = cls_alias.asname or cls_alias.name
+            if str_bound in set_exported:
+                list_problems.append(
+                    f"{path_init}: '{str_bound}' in __all__ is defined under _internal "
+                    f"({cls_node.module}) — the underscore marks it private, so it must not be "
+                    f"part of the public surface"
+                )
+    return list_problems
+
+
 def check_package(path_init: pathlib.Path) -> list[str]:
     """Return one message per public name the package defines but does not export.
 
@@ -111,7 +149,7 @@ def check_package(path_init: pathlib.Path) -> list[str]:
     if list_exported is None:
         return []
     set_exported = set(list_exported)
-    list_problems: list[str] = []
+    list_problems: list[str] = internal_exports(path_init, set_exported)
     for path_module in sorted(path_init.parent.glob("*.py")):
         if path_module.name == "__init__.py":
             continue
