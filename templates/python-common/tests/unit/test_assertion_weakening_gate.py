@@ -291,6 +291,79 @@ def test_a_bare_marker_with_no_reason_does_not_justify(monkeypatch: pytest.Monke
     assert gate.report(["some finding"], "base-sha", 1) == 1
 
 
+@pytest.fixture(autouse=True)
+def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:  # complexity-ok: unrolling drifts from TUPLE_CI_MARKERS
+    """Start every test from a local shell with no ``TEST_CHANGE_OK`` and no CI marker.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Removes the CI markers and the hatch variable so no test inherits the operator's shell.
+    """
+    for str_marker in (*gate.TUPLE_CI_MARKERS, "TEST_CHANGE_OK"):
+        monkeypatch.delenv(str_marker, raising=False)
+
+
+def test_env_reason_returns_the_stripped_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``TEST_CHANGE_OK`` is the one hatch reachable at commit time (blueprintx#941)."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "  fixing the pinned truncation value  ")
+
+    assert gate.env_reason() == "fixing the pinned truncation value"
+
+
+def test_env_reason_rejects_whitespace_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A blank reason must not satisfy the hatch."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "   ")
+
+    assert gate.env_reason() == ""
+
+
+@pytest.mark.parametrize("str_marker", ["CI", "GITHUB_ACTIONS"])
+def test_env_reason_is_ignored_under_ci(monkeypatch: pytest.MonkeyPatch, str_marker: str) -> None:
+    """A workflow ``env:`` line cannot stand in for a justification a reviewer can read."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "set by a workflow")
+    monkeypatch.setenv(str_marker, "true")
+
+    assert gate.env_reason() == ""
+
+
+def test_the_report_passes_a_flagged_diff_with_the_env_justification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """THE SHOULD-PASS WITNESS: no finished commit and no PR, yet the report clears."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "fixing the ROUND_DOWN bug this test pins")
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+
+    assert gate.report(["some finding"], "base-sha", 1) == 0
+
+
+@pytest.mark.parametrize(
+    "str_needle",
+    [
+        "`TEST_CHANGE_OK='<reason>' git commit -m ...`",
+        "commit-trailer 'test-change-ok: <reason>' line is CI-only",
+    ],
+)
+def test_the_unjustified_failure_says_how_to_justify_locally(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], str_needle: str
+) -> None:
+    """The error names the env var for a local commit and says the trailer is CI-only.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces the git runner so no trailer is found.
+    capsys : pytest.CaptureFixture[str]
+        Captures the report text.
+    str_needle : str
+        The exact phrase the error must carry.
+    """
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    gate.report(["some finding"], "base-sha", 1)
+
+    assert str_needle in capsys.readouterr().out
+
+
 def test_two_classes_sharing_a_method_name_are_tracked_separately() -> None:
     """A bare method name is not identity: two classes routinely define ``test_value``.
 
