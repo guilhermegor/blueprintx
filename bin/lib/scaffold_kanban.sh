@@ -15,7 +15,8 @@ afk|C2E0C6|Safe to run unattended
 oracle:strong|0052CC|Verifiable by a strong oracle (tests, types, gates)
 oracle:weak|BFD4F2|No strong oracle; needs review
 do-not-merge|B60205|Hold: must not be merged yet
-state:blocked|D93F0B|Cannot start: see the Blocked by line"
+state:blocked|D93F0B|Cannot start: see the Blocked by line
+post-1.0|C5DEF5|Deferred past the 1.0.0 release"
 
 scaffold_kanban_scope_hint() {
 	if grep -qiE 'scope|403|insufficient|read:project' <<<"$1"; then
@@ -179,5 +180,47 @@ scaffold_kanban_setup() {
 	fi
 
 	scaffold_kanban_create "$str_slug" "$str_owner" "$str_title" "$str_vis" || true
+	return 0
+}
+
+scaffold_release_issue_card() {
+	local str_slug="$1" str_url="$2" str_owner str_title str_number str_pid str_item str_field str_opt
+	str_owner="${str_slug%%/*}"
+	str_title="${PROJECT_NAME} kanban"
+	str_number="$(scaffold_kanban_find "$str_owner" "$str_title" 2>/dev/null)" || return 0
+	[ -n "$str_number" ] || return 0
+	str_pid="$(gh project view "$str_number" --owner "$str_owner" --format json --jq '.id' 2>/dev/null)" || return 0
+	str_item="$(gh project item-add "$str_number" --owner "$str_owner" --url "$str_url" \
+		--format json --jq '.id' 2>/dev/null)" || return 0
+	str_field="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
+		--jq '.fields[] | select(.name=="Status") | .id' 2>/dev/null | head -n1)"
+	str_opt="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
+		--jq '.fields[] | select(.name=="Status") | .options[]? | select(.name=="Blocked") | .id' 2>/dev/null | head -n1)"
+	[ -n "$str_pid" ] && [ -n "$str_item" ] && [ -n "$str_field" ] && [ -n "$str_opt" ] || return 0
+	gh project item-edit --id "$str_item" --project-id "$str_pid" --field-id "$str_field" \
+		--single-select-option-id "$str_opt" >/dev/null 2>&1 ||
+		print_status "warning" "Could not set the Cut 1.0.0 card to Blocked"
+}
+
+scaffold_open_release_issue() {
+	local str_path="$1" str_slug str_tpl str_body str_url str_manual
+	str_tpl="${str_path}/.github/ISSUE_TEMPLATE/release-1-0-0.md"
+	[ -f "$str_tpl" ] || return 0
+	command -v gh >/dev/null 2>&1 || return 0
+	str_slug="$(scaffold_repo_slug)"
+	str_manual="gh issue create --repo ${str_slug} --title 'Cut 1.0.0' --label state:blocked, body from .github/ISSUE_TEMPLATE/release-1-0-0.md"
+	if [ -n "$(gh issue list --repo "$str_slug" --state all --search '"Cut 1.0.0" in:title' \
+		--json title --jq '.[] | select(.title=="Cut 1.0.0") | .title' 2>/dev/null)" ]; then
+		print_status "info" "A 'Cut 1.0.0' issue already exists on ${str_slug} - skipping"
+		return 0
+	fi
+	str_body="$(awk 'NR==1&&/^---$/{f=1;next} f&&/^---$/{f=0;next} !f' "$str_tpl")"
+	if str_url="$(gh issue create --repo "$str_slug" --title "Cut 1.0.0" --label state:blocked \
+		--body "$str_body" 2>/dev/null)"; then
+		print_status "success" "Opened the Cut 1.0.0 issue: ${str_url}"
+		scaffold_release_issue_card "$str_slug" "$str_url"
+	else
+		print_status "warning" "Could not open the Cut 1.0.0 issue; open it by hand: ${str_manual}"
+	fi
 	return 0
 }

@@ -46,6 +46,12 @@ case "$1 $2" in
     *) echo "PVTSSF_status" ;;
     esac ;;
 "api graphql") cat >>"$GH_LOG.stdin" ;;
+"issue list") [ -z "${GH_ISSUE_EXISTS:-}" ] || echo "Cut 1.0.0" ;;
+"issue create")
+    [ -z "${GH_ISSUE_FAIL:-}" ] || exit 1
+    echo "https://github.com/octo/widget/issues/1" ;;
+"project view") echo "PVT_1" ;;
+"project item-add") echo "PVTI_1" ;;
 "repo view") echo "${GH_REPO_PRIVATE:-false}" ;;
 "api users/"*) echo "User" ;;
 esac
@@ -68,6 +74,63 @@ run_setup() {
         source "$REPO_ROOT/bin/lib/scaffold_git_remote.sh"
         printf '%b' "$str_answers" | BLUEPRINTX_STDIN_ANSWERS=1 scaffold_kanban_setup 2>&1
     )
+}
+
+run_release_issue() {
+    local str_tpl="$1"
+    shift
+    : >"$WORK_DIR/gh.log"
+    : >"$WORK_DIR/gh.log.stdin"
+    rm -rf "$WORK_DIR/proj"
+    mkdir -p "$WORK_DIR/proj/.github/ISSUE_TEMPLATE"
+    [ "$str_tpl" = none ] || cp "$REPO_ROOT/templates/common/.github/ISSUE_TEMPLATE/release-1-0-0.md" "$WORK_DIR/proj/.github/ISSUE_TEMPLATE/"
+    (
+        export GH_LOG="$WORK_DIR/gh.log" PATH="$WORK_DIR/bin:$PATH" GITHUB_USERNAME=octo PROJECT_NAME=widget
+        export DEFAULT_GITHUB_USERNAME=octo
+        local str_kv
+        for str_kv in "$@"; do export "${str_kv?}"; done
+        # shellcheck source=bin/lib/scaffold_git_remote.sh
+        source "$REPO_ROOT/bin/lib/scaffold_git_remote.sh"
+        scaffold_open_release_issue "$WORK_DIR/proj" 2>&1
+        echo "rc=$?"
+    )
+}
+
+test_release_issue_opens_once_for_a_package_tier() {
+    local str_out
+    str_out="$(run_release_issue yes)"
+    expect_log "release issue" "issue create --repo octo/widget --title Cut 1.0.0 --label state:blocked" present
+    expect_log "release issue" "issue-template-guard: require" present
+    expect_log "release issue" "name: Cut 1.0.0" absent
+    expect_out "release issue" "$str_out" "rc=0"
+}
+
+test_release_issue_skipped_without_the_template() {
+    run_release_issue none >/dev/null
+    expect_log "no template" "issue list" absent
+    expect_log "no template" "issue create" absent
+}
+
+test_release_issue_is_idempotent() {
+    run_release_issue yes GH_ISSUE_EXISTS=1 >/dev/null
+    expect_log "second run" "issue list --repo octo/widget --state all" present
+    expect_log "second run" "issue create" absent
+}
+
+test_release_issue_failure_warns_and_exits_zero() {
+    local str_out
+    str_out="$(run_release_issue yes GH_ISSUE_FAIL=1)"
+    expect_out "gh failure" "$str_out" "open it by hand"
+    expect_out "gh failure" "$str_out" "rc=0"
+}
+
+test_release_issue_card_is_set_to_blocked() {
+    run_release_issue yes 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":7}]}' \
+        'GH_STATUS_OPTIONS=PVTSSO_b|Blocked' >/dev/null
+    expect_log "card" "project item-add 7 --owner octo --url https://github.com/octo/widget/issues/1" present
+    expect_log "card" "project item-edit --id PVTI_1 --project-id PVT_1" present
+    run_release_issue yes >/dev/null
+    expect_log "no board" "project item-add" absent
 }
 
 expect_log() {
@@ -319,6 +382,11 @@ main() {
     test_a_failed_project_list_still_prints_the_scope_fix
     test_stderr_noise_on_success_never_corrupts_values
     test_empty_stdin_means_no_board
+    test_release_issue_opens_once_for_a_package_tier
+    test_release_issue_skipped_without_the_template
+    test_release_issue_is_idempotent
+    test_release_issue_failure_warns_and_exits_zero
+    test_release_issue_card_is_set_to_blocked
     test_no_gnu_only_install_in_bin
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
