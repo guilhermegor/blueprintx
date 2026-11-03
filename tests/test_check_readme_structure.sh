@@ -102,7 +102,7 @@ MIT.
 
 ---
 
-<sub>Generated from the lib-minimal template via BlueprintX.</sub>
+<sub>Generated from the lib-minimal template via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>
 EOF
 }
 
@@ -175,6 +175,10 @@ test_features_is_optional_but_ordered() {
 
 test_footer_without_heading_is_optional() {
     expect_gate "README with no footer" "$(good_readme | sed '/^---$/,$d')" pass
+    expect_gate "footer without the BlueprintX link" \
+        "$(good_readme | sed 's|via \[BlueprintX\]([^)]*)|via BlueprintX|')" fail "footer does not link BlueprintX"
+    expect_gate "footer linking BlueprintX relatively" \
+        "$(good_readme | sed 's|(https://github.com/guilhermegor/blueprintx)|(../blueprintx)|')" fail "footer does not link BlueprintX"
 }
 
 test_other_archetype_slug_is_required() {

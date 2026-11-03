@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/lib/md_structure.sh"
 readonly -a ARR_SLUGS_HEAD=(getting-started install usage project-structure development)
 readonly -a ARR_SLUGS_TAIL=(contributing license authors useful-links)
 readonly STR_ICON_RE=$'\xf0\x9f|\xe2[\x98-\x9e]|\xef\xb8\x8f|\xe2\xad[\x90-\x95]|\xe2\x8c[\x9a\x9b]|\xe2\x8f|\xe2\x80\x8d'
+readonly STR_BLUEPRINTX_URL="https://github.com/guilhermegor/blueprintx"
 readonly STR_LINKEDIN_PLACEHOLDER="linkedin.com/in/your-linkedin-handle"
 declare -A MAP_ARCHETYPE=(
 	["library"]="public-api publishing"
@@ -119,6 +120,13 @@ check_authors() {
 	[ "$i_count" -gt 0 ] || problem "$path_file" "the Authors section lists no one"
 }
 
+check_footer() {
+	local path_file="$1" str_footer
+	str_footer="$(md_strip_fences <"$path_file" | grep -E '^<sub>Generated from' || true)"
+	[ -z "$str_footer" ] || [[ "$str_footer" == *"]($STR_BLUEPRINTX_URL)"* ]] ||
+		problem "$path_file" "footer does not link BlueprintX: use [BlueprintX]($STR_BLUEPRINTX_URL)"
+}
+
 check_placeholders() {
 	local path_file="$1" str_hits
 	[ "$BOOL_TEMPLATE" -eq 0 ] || return 0
@@ -137,6 +145,7 @@ check_file() {
 	check_slugs "$path_file" "$STR_EXTRA"
 	check_headings "$path_file"
 	check_authors "$path_file"
+	check_footer "$path_file"
 	check_placeholders "$path_file"
 }
 

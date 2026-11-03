@@ -107,7 +107,7 @@ test_rendered_readme_carries_absolute_urls_and_footer() {
         "$(grep -cF "img src=\"$str_raw/assets/logo_lorem_ipsum.png\" width=\"200\"" "$path_out")"
     expect "coverage badge is an absolute raw URL" "1" "$(grep -cF "($str_raw/coverage.svg)" "$path_out")"
     expect "no relative image left" "0" "$(grep -cE '(src="|\]\()(\./|assets/|coverage)' "$path_out" || true)"
-    expect "footer names the tier" "1" "$(grep -c '^<sub>Generated from the lib-minimal template via BlueprintX' "$path_out")"
+    expect "footer names the tier" "1" "$(grep -cF '<sub>Generated from the lib-minimal template via [BlueprintX](https://github.com/guilhermegor/blueprintx).' "$path_out")"
     expect "library README has Documentation" "1" "$(grep -c '^## Documentation$' "$path_out")"
     expect "library README has the pypi badge" "1" "$(grep -c 'img.shields.io/pypi/v/acme' "$path_out")"
     rm -f "$path_out"
