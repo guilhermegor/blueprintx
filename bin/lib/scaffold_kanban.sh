@@ -189,29 +189,37 @@ scaffold_release_issue_card() {
 	str_title="${PROJECT_NAME} kanban"
 	str_number="$(scaffold_kanban_find "$str_owner" "$str_title" 2>/dev/null)" || return 0
 	[ -n "$str_number" ] || return 0
-	str_pid="$(gh project view "$str_number" --owner "$str_owner" --format json --jq '.id' 2>/dev/null)" || return 0
+	str_pid="$(gh project view "$str_number" --owner "$str_owner" --format json --jq '.id' 2>/dev/null)" || str_pid=""
 	str_item="$(gh project item-add "$str_number" --owner "$str_owner" --url "$str_url" \
-		--format json --jq '.id' 2>/dev/null)" || return 0
+		--format json --jq '.id' 2>/dev/null)" || str_item=""
 	str_field="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
 		--jq '.fields[] | select(.name=="Status") | .id' 2>/dev/null | head -n1)"
 	str_opt="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
 		--jq '.fields[] | select(.name=="Status") | .options[]? | select(.name=="Blocked") | .id' 2>/dev/null | head -n1)"
-	[ -n "$str_pid" ] && [ -n "$str_item" ] && [ -n "$str_field" ] && [ -n "$str_opt" ] || return 0
+	if [ -z "$str_pid" ] || [ -z "$str_item" ] || [ -z "$str_field" ] || [ -z "$str_opt" ]; then
+		print_status "warning" "Could not place the Cut 1.0.0 card on '${str_title}' (project #${str_number}) as Blocked; do it by hand"
+		return 0
+	fi
 	gh project item-edit --id "$str_item" --project-id "$str_pid" --field-id "$str_field" \
 		--single-select-option-id "$str_opt" >/dev/null 2>&1 ||
 		print_status "warning" "Could not set the Cut 1.0.0 card to Blocked"
 }
 
 scaffold_open_release_issue() {
-	local str_path="$1" str_slug str_tpl str_body str_url str_manual
+	local str_path="$1" str_slug str_tpl str_body str_url str_manual str_existing
 	str_tpl="${str_path}/.github/ISSUE_TEMPLATE/release-1-0-0.md"
 	[ -f "$str_tpl" ] || return 0
 	command -v gh >/dev/null 2>&1 || return 0
 	str_slug="$(scaffold_repo_slug)"
-	str_manual="gh issue create --repo ${str_slug} --title 'Cut 1.0.0' --label state:blocked, body from .github/ISSUE_TEMPLATE/release-1-0-0.md"
-	if [ -n "$(gh issue list --repo "$str_slug" --state all --search '"Cut 1.0.0" in:title' \
-		--json title --jq '.[] | select(.title=="Cut 1.0.0") | .title' 2>/dev/null)" ]; then
+	str_manual="awk 'NR==1&&/^---\$/{f=1;next} f&&/^---\$/{f=0;next} !f' ${str_tpl} | gh issue create --repo ${str_slug} --title 'Cut 1.0.0' --label state:blocked --body-file -"
+	str_existing="$(gh api --paginate "repos/${str_slug}/issues?state=all&per_page=100" \
+		--jq '.[] | select((has("pull_request") | not) and .title=="Cut 1.0.0") | .html_url' 2>/dev/null)" || {
+		print_status "warning" "Could not check for an existing Cut 1.0.0 issue on ${str_slug}; not creating one. Open it by hand: ${str_manual}"
+		return 0
+	}
+	if [ -n "$str_existing" ]; then
 		print_status "info" "A 'Cut 1.0.0' issue already exists on ${str_slug} - skipping"
+		scaffold_release_issue_card "$str_slug" "$(head -n1 <<<"$str_existing")"
 		return 0
 	fi
 	str_body="$(awk 'NR==1&&/^---$/{f=1;next} f&&/^---$/{f=0;next} !f' "$str_tpl")"

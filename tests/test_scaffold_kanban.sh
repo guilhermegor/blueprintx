@@ -46,7 +46,9 @@ case "$1 $2" in
     *) echo "PVTSSF_status" ;;
     esac ;;
 "api graphql") cat >>"$GH_LOG.stdin" ;;
-"issue list") [ -z "${GH_ISSUE_EXISTS:-}" ] || echo "Cut 1.0.0" ;;
+"api --paginate")
+    [ -z "${GH_LOOKUP_FAIL:-}" ] || exit 1
+    [ -z "${GH_ISSUE_EXISTS:-}" ] || echo "https://github.com/octo/widget/issues/9" ;;
 "issue create")
     [ -z "${GH_ISSUE_FAIL:-}" ] || exit 1
     echo "https://github.com/octo/widget/issues/1" ;;
@@ -107,13 +109,13 @@ test_release_issue_opens_once_for_a_package_tier() {
 
 test_release_issue_skipped_without_the_template() {
     run_release_issue none >/dev/null
-    expect_log "no template" "issue list" absent
+    expect_log "no template" "api --paginate" absent
     expect_log "no template" "issue create" absent
 }
 
 test_release_issue_is_idempotent() {
     run_release_issue yes GH_ISSUE_EXISTS=1 >/dev/null
-    expect_log "second run" "issue list --repo octo/widget --state all" present
+    expect_log "second run" "api --paginate repos/octo/widget/issues?state=all" present
     expect_log "second run" "issue create" absent
 }
 
@@ -122,6 +124,27 @@ test_release_issue_failure_warns_and_exits_zero() {
     str_out="$(run_release_issue yes GH_ISSUE_FAIL=1)"
     expect_out "gh failure" "$str_out" "open it by hand"
     expect_out "gh failure" "$str_out" "rc=0"
+}
+
+test_release_issue_lookup_failure_never_creates() {
+    local str_out
+    str_out="$(run_release_issue yes GH_LOOKUP_FAIL=1)"
+    expect_log "lookup failure" "issue create" absent
+    expect_out "lookup failure" "$str_out" "not creating one"
+    expect_out "lookup failure" "$str_out" "--body-file -"
+}
+
+test_existing_release_issue_still_gets_its_card() {
+    run_release_issue yes GH_ISSUE_EXISTS=1 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":7}]}' \
+        'GH_STATUS_OPTIONS=PVTSSO_b|Blocked' >/dev/null
+    expect_log "existing card" "issue create" absent
+    expect_log "existing card" "project item-add 7 --owner octo --url https://github.com/octo/widget/issues/9" present
+}
+
+test_card_failure_warns_when_a_board_exists() {
+    local str_out
+    str_out="$(run_release_issue yes 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":7}]}')"
+    expect_out "card failure" "$str_out" "Could not place the Cut 1.0.0 card"
 }
 
 test_release_issue_card_is_set_to_blocked() {
@@ -386,6 +409,9 @@ main() {
     test_release_issue_skipped_without_the_template
     test_release_issue_is_idempotent
     test_release_issue_failure_warns_and_exits_zero
+    test_release_issue_lookup_failure_never_creates
+    test_existing_release_issue_still_gets_its_card
+    test_card_failure_warns_when_a_board_exists
     test_release_issue_card_is_set_to_blocked
     test_no_gnu_only_install_in_bin
     if [ "$int_failures" -gt 0 ]; then
