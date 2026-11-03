@@ -303,6 +303,14 @@ prompt_project_description() {
     echo "$PROJECT_DESCRIPTION"
 }
 
+expand_tilde() {
+    case "$1" in
+        \~) echo "$HOME" ;;
+        \~/*) echo "$HOME/${1#\~/}" ;;
+        *) echo "$1" ;;
+    esac
+}
+
 prompt_project_root() {
     printf "${CYAN}Select directory${NC}\n" >&2
     printf "  1) Current directory ($PWD)\n" >&2
@@ -321,7 +329,7 @@ prompt_project_root() {
             if [ -z "$TARGET_DIR" ]; then
                 exit_error "Target directory cannot be empty."
             fi
-            TARGET_DIR="${TARGET_DIR/#\~/$HOME}"
+            TARGET_DIR="$(expand_tilde "$TARGET_DIR")"
             mkdir -p "$TARGET_DIR"
             echo "$TARGET_DIR"
             return 0
@@ -653,7 +661,9 @@ run_create_flow_from_spec() {
     if [ "$DEV_MODE" -eq 1 ]; then
         select_dev_project_root
     else
-        PROJECT_ROOT=$(spec_get "$SPEC_FILE" project_root "$PWD")
+        PROJECT_ROOT=$(expand_tilde "$(spec_get "$SPEC_FILE" project_root "$PWD")")
+        [ "$(basename "$PROJECT_ROOT")" != "$PROJECT_NAME" ] \
+            || exit_error "--spec: 'project_root' ($PROJECT_ROOT) ends in the project name; it is the parent directory, not the project directory. Set it to the directory that will contain '$PROJECT_NAME'."
         mkdir -p "$PROJECT_ROOT"
     fi
 
