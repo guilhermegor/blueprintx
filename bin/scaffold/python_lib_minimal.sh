@@ -418,6 +418,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_rmw_race_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
         "$project_path/tests/unit/test_ruff_ret_rule.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_py_floor_gate.py" \
+        "$project_path/tests/unit/test_py_floor_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
         "$project_path/tests/unit/test_migration_slug_gate.py"
 }
