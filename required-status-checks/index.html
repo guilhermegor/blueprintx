@@ -3031,6 +3031,22 @@ reported yet" from "this check will never report."</p>
 </tr>
 </tbody>
 </table>
+<p><code>verdaccio-rehearsal</code> publishes a throwaway
+<code>&lt;version&gt;-rehearsal.&lt;run id&gt;.&lt;attempt&gt;</code> prerelease (<code>--tag rehearsal</code>) and
+installs that exact version, rather than running a Verdaccio config without an
+npmjs uplink (blueprintx#934). Reason: the stock <code>verdaccio/verdaccio:5</code> image
+proxies npmjs, so publishing <code>package.json</code>'s own version 409s once it exists
+upstream, and a bare-name install could resolve the upstream package. A
+prerelease with a run-unique suffix works regardless of Verdaccio's config and
+cannot collide with any version this project publishes. Build metadata (<code>+…</code>)
+is stripped from the base first, since npm drops it and the suffix would vanish
+with it, and <code>npm version --ignore-scripts</code> keeps the project's own
+<code>version</code> lifecycle scripts out of the rehearsal. What the job no longer covers:
+publishing the literal <code>package.json</code> version. Anything that depends on that
+exact string (a tag-comparison <code>prepublishOnly</code>, dist-tag logic) is owned by
+<code>release-npm.yml</code> and its version-already-published guard. Every step after the
+bump sees the rewritten <code>package.json</code>/<code>package-lock.json</code>.
+<code>tests/test_ts_lib_pack_smoke_shape.sh</code> pins the two halves of the fix.</p>
 <h3 id="bash-tier-bash-cli">Bash tier — <code>bash-cli</code><a class="headerlink" href="#bash-tier-bash-cli" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
