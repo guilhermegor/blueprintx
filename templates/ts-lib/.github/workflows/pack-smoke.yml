@@ -56,8 +56,9 @@ jobs:
       - name: Publish a throwaway prerelease to Verdaccio
         run: |
           base=$(node -p "require('./package.json').version")
+          base="${base%%+*}"
           rehearsal="${base}-rehearsal.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
-          npm version --no-git-tag-version "$rehearsal"
+          npm version --no-git-tag-version --ignore-scripts "$rehearsal"
           echo "REHEARSAL_VERSION=$rehearsal" >> "$GITHUB_ENV"
           npm publish --tag rehearsal \
             --registry http://localhost:4873 --userconfig ./.npmrc.verdaccio

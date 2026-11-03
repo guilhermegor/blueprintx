@@ -78,7 +78,15 @@ npmjs uplink (blueprintx#934). Reason: the stock `verdaccio/verdaccio:5` image
 proxies npmjs, so publishing `package.json`'s own version 409s once it exists
 upstream, and a bare-name install could resolve the upstream package. A
 prerelease with a run-unique suffix works regardless of Verdaccio's config and
-can never collide with a real npm version.
+cannot collide with any version this project publishes. Build metadata (`+…`)
+is stripped from the base first, since npm drops it and the suffix would vanish
+with it, and `npm version --ignore-scripts` keeps the project's own
+`version` lifecycle scripts out of the rehearsal. What the job no longer covers:
+publishing the literal `package.json` version. Anything that depends on that
+exact string (a tag-comparison `prepublishOnly`, dist-tag logic) is owned by
+`release-npm.yml` and its version-already-published guard. Every step after the
+bump sees the rewritten `package.json`/`package-lock.json`.
+`tests/test_ts_lib_pack_smoke_shape.sh` pins the two halves of the fix.
 
 ### Bash tier — `bash-cli`
 

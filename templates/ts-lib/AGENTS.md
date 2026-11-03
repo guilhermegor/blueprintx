@@ -139,7 +139,10 @@ hosted test registry exists and published versions are immutable. The rehearsal
 never publishes `package.json`'s own version: it bumps to a throwaway
 `<version>-rehearsal.<run id>.<attempt>` prerelease, publishes it with
 `--tag rehearsal`, and installs that exact `<name>@<version>` into the consumer —
-so it cannot 409 against, or silently install, a version already on npmjs.
+so it cannot 409 against, or silently install, a version already on npmjs. The bump
+strips build metadata and runs with `--ignore-scripts`, and every later step in that
+job sees the rewritten `package.json`; publishing the literal version stays the job of
+`release-npm.yml`.
 
 ## Do not
 
