@@ -31,7 +31,8 @@ check "build metadata is stripped before the suffix" 'base="${base%%+*}"'
 check "version bump skips lifecycle scripts" 'npm version --no-git-tag-version --ignore-scripts'
 check "publish uses a non-latest dist-tag" 'npm publish --tag rehearsal'
 check "consumer installs the exact rehearsal version" 'npm install "$pkg_name@$REHEARSAL_VERSION"'
-check_absent "no bare-name install from Verdaccio" 'npm install "\$pkg_name" '
+check "installed version is asserted against the rehearsal version" '[ "$installed" = "$REHEARSAL_VERSION" ]'
+check_absent "no bare-name install from Verdaccio" 'npm (i|install) "?\$\{?pkg_name\}?"?([[:space:]]|$)'
 
 [ "$int_failures" -eq 0 ] || { printf '%d check(s) failed\n' "$int_failures"; exit 1; }
 printf 'all pack-smoke shape checks passed\n'
