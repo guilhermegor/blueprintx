@@ -123,7 +123,7 @@ check_authors() {
 check_footer() {
 	local path_file="$1" str_footer
 	str_footer="$(md_strip_fences <"$path_file" | grep -E '^<sub>Generated from' || true)"
-	[ -z "$str_footer" ] || [[ "$str_footer" == *"]($STR_BLUEPRINTX_URL)"* ]] ||
+	[ -z "$str_footer" ] || [[ "$str_footer" == *"[BlueprintX]($STR_BLUEPRINTX_URL)"* ]] ||
 		problem "$path_file" "footer does not link BlueprintX: use [BlueprintX]($STR_BLUEPRINTX_URL)"
 }
 
