@@ -713,6 +713,116 @@ def test_a_roster_never_adopted_is_still_a_silent_no_op(
     assert cls_gate.load_roster(tmp_path) == {}
 
 
+def _opt_out_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, str_base_roster: str | None
+) -> ModuleType:
+    """Stage a PR checkout whose roster opts out, with a stubbed base-branch roster.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir used as the working directory.
+    monkeypatch : pytest.MonkeyPatch
+        Sets the gate environment and stubs the REST read of the base roster.
+    str_base_roster : str or None
+        Text the stubbed base read returns; ``None`` simulates an unreadable base.
+
+    Returns
+    -------
+    types.ModuleType
+        The loaded gate module.
+    """
+    cls_gate = _load_gate()
+    (tmp_path / ".review-bots.yaml").write_text("adopted: false\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    monkeypatch.setenv("GITHUB_BASE_REF", "main")
+    monkeypatch.setattr(cls_gate, "_gh_api_text", lambda _args: str_base_roster)
+    return cls_gate
+
+
+def test_opt_out_only_on_the_pr_side_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A PR cannot opt itself out: the base roster must declare it too (blueprintx#952).
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Supplies a base roster that does not opt out.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
+
+    with pytest.raises(RuntimeError, match="no reviewers"):
+        cls_gate.main([])
+
+
+def test_opt_out_with_an_unreadable_base_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the base roster cannot be read, the PR-side opt-out is not honoured.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Makes the base read fail.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+
+    with pytest.raises(RuntimeError, match="no reviewers"):
+        cls_gate.main([])
+
+
+def test_opt_out_declared_on_the_base_side_is_accepted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An opt-out present on both the PR and the base branch skips the gate.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Supplies a base roster that opts out.
+    capsys : pytest.CaptureFixture
+        Captures the skip message.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "adopted: false\n")
+
+    assert cls_gate.main([]) == 0
+    assert "opted out" in capsys.readouterr().out
+
+
+def test_missing_pyyaml_reports_the_parser_not_the_roster(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Without PyYAML the failure names the parser and does not blame the roster file.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir used as the working directory.
+    monkeypatch : pytest.MonkeyPatch
+        Removes the parser and sets the gate environment.
+    capsys : pytest.CaptureFixture
+        Captures the failure message.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    monkeypatch.setattr(cls_gate, "yaml", None)
+
+    int_status = cls_gate.main([])
+    str_out = capsys.readouterr().out
+
+    assert int_status == 1
+    assert "pip install pyyaml" in str_out
+    assert "Copy it" not in str_out
+
+
 _LIST_OPEN_BUT_ANSWERED = [
     _thread(
         [("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)],

@@ -49,7 +49,9 @@ it polices" and raises, which is worse than never having adopted the gate at all
 file absent, `check_review_threads.py` now **fails closed** (blueprintx#952): a required check
 that reads a missing roster as "not adopted" is permanently green and checks nothing. The
 explicit opt-out is a roster that declares `adopted: false` (no `reviewers:` needed); the gate
-then exits 0 with an opt-out message. A project scaffolded with the answer **no** has no roster
+then exits 0 with an opt-out message. The opt-out only counts when the PR's base branch roster
+declares it too (read over the REST contents API; an unreadable base fails closed), so a PR cannot
+opt itself out. A project scaffolded with the answer **no** has no roster
 at all, so create a one-line `.review-bots.yaml` containing `adopted: false` (the scaffolds do
 not ship it yet). Answer **yes**
 later and re-adding the roster turns the gate back on — at the path the gate reads, which differs
