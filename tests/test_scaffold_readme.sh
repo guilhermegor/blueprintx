@@ -113,6 +113,22 @@ test_rendered_readme_carries_absolute_urls_and_footer() {
     rm -f "$path_out"
 }
 
+test_library_badge_row_is_live_and_not_duplicated() {
+    local path_out str_scaffold="$REPO_ROOT/bin/scaffold/python_lib_minimal.sh"
+    path_out="$(mktemp)"
+    LINKEDIN_URL=https://www.linkedin.com/in/ci-bot render_python_readme lib-minimal "$path_out"
+    expect "scaffold script no longer appends badges" "0" \
+        "$(grep -c 'add_library_badges\|snyk\.io\|pepy\.tech' "$str_scaffold" || true)"
+    expect "the PyPI version badge is emitted once" "1" "$(grep -c 'img.shields.io/pypi/v/' "$path_out")"
+    expect "no Snyk badge" "0" "$(grep -c 'snyk' "$path_out" || true)"
+    expect "no pepy badge" "0" "$(grep -c 'pepy' "$path_out" || true)"
+    expect "type-checked text is escaped for shields" "1" "$(grep -cF 'badge/type--checked-mypy-blue' "$path_out")"
+    expect "linting separator is escaped for shields" "1" "$(grep -cF 'badge/linting-ruff_%7C_codespell-blue' "$path_out")"
+    expect "docs badge links the project docs site" "1" \
+        "$(grep -cF 'badge/docs-latest-blue.svg)](https://ci-bot.github.io/acme/)' "$path_out")"
+    rm -f "$path_out"
+}
+
 test_service_readme_has_no_documentation_or_pypi() {
     local path_out
     path_out="$(mktemp)"
