@@ -9,7 +9,7 @@ library's core, never `_internal`):
 |-------------|----------|-------|
 | `contracts/` | `FileContract` — the columns an input file must carry | always (drop if the library never reads tabular inputs) |
 | `ports/` | private behavioural ABCs (the hexagonal *ports*) | **opt-in** — only when two macro-sections share an operation |
-| `schemas/` | direction-neutral Pydantic models, one per external standard | **opt-in** — same condition as `ports/` |
+| `schemas/` | direction-neutral Pydantic models, one per external standard | **opt-in** — same condition as `ports/`, or the models are the library's product |
 
 The organising split is **declaration vs machinery**: `config/` answers "*what shape /
 interface must this conform to?*"; `_internal/utils/` answers "*how is it done?*" (the engines:
@@ -20,7 +20,8 @@ pure data declaration, but it still declares a *contract to conform to*, so it l
 ⚠️ `ports/` and `schemas/` are an **opt-in tier** — a single-purpose library should carry
 **neither** (an interface with one implementation is over-abstraction). This starter ships a
 reference `ports/` seam to copy; delete it (and never add `schemas/`) unless the library really
-grows two macro-sections over a shared domain.
+grows two macro-sections over a shared domain — or, for `schemas/` only, its product is the
+models themselves.
 
 ## The `contracts/` sub-package
 
@@ -80,3 +81,12 @@ reader consumes (an open-data CSV of the *same* standard) — **`FileContract` �
 reader that consumes a *different artifact* of a standard your schema already models declares its
 **own `FileContract`**; it does **not** reuse the schema. Same domain, two artifacts, two
 declarations — both living here under `config/`.
+
+## Consumer-built models still live in `schemas/`
+
+When consumers **construct** the models (the library's product is the schema), they stay in
+`_internal/config/schemas/`; do not promote them to a public `schemas/` package. Re-export each
+class from the package's top-level `__all__`: consumers only ever write
+`from <pkg> import X`, so the file location is an implementation detail. Accepted cost: the
+class's `__module__` (tracebacks, mkdocstrings paths, pickles) shows the `_internal` path, so
+moving the file later is a pickle-compatibility change.
