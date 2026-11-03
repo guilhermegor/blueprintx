@@ -18,7 +18,7 @@ scaffold_prompt_review_bot_roster() {
 	n | N)
 		# shellcheck disable=SC2034
 		INCLUDE_REVIEW_BOT_ROSTER=false
-		print_status "config" ".review-bots.yaml: not shipped — the review-thread required check will self-skip (pass) until a reviewer is declared"
+		print_status "config" ".review-bots.yaml: shipped with adopted: false — the review-thread required check opts out until a reviewer is declared"
 		;;
 	*)
 		# shellcheck disable=SC2034
@@ -30,7 +30,8 @@ scaffold_prompt_review_bot_roster() {
 scaffold_prune_review_bot_roster() {
 	local str_project_path="$1"
 	[[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]] ||
-		rm -f "$str_project_path/.github/.review-bots.yaml"
+		cp "$BLUEPRINTX_ROOT/templates/common/review-bots-optout.yaml" \
+			"$str_project_path/.github/.review-bots.yaml"
 }
 
 SCAFFOLD_REMOTE_VERIFIED=0
