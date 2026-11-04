@@ -249,8 +249,9 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
     if not path_roster.is_file():
         if _roster_exists_on_default_branch(path_root):
             raise RuntimeError(
-                f"{_ROSTER_FILE} exists on the default branch but not here — deleting it "
-                f"disables this gate. Restore it, or remove it on the default branch first."
+                f"{_ROSTER_FILE} exists on the default branch but not here — deleting it does "
+                f"not opt out, it fails this gate. Restore it, or opt out with "
+                f"`adopted: false`, which counts only when the base branch declares it too."
             )
         return {}
     dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
@@ -294,8 +295,8 @@ def reviewer_logins(dict_roster: dict[str, str]) -> set[str]:
     if dict_roster and not set_reviewers:
         raise RuntimeError(
             f"{_ROSTER_FILE} declares no member with posts: {_POSTS_THREADS}, so no PR can "
-            f"ever satisfy the missing-review check. Declare a reviewer, or delete the "
-            f"roster to opt out of this gate entirely."
+            f"ever satisfy the missing-review check. Declare a reviewer, or opt out with "
+            f"`adopted: false`, which counts only when the base branch declares it too."
         )
     return set_reviewers
 
@@ -2230,7 +2231,8 @@ def main(list_argv: list[str] | None = None) -> int:
     Returns
     -------
     int
-        ``0`` when every thread is answered (or the repo declares no roster), ``1`` otherwise.
+        ``0`` when every thread is answered (or the roster opts out with a base-backed
+        ``adopted: false``), ``1`` otherwise; a missing roster is ``1``.
     """
     bool_json = parse_args(list_argv).json
 

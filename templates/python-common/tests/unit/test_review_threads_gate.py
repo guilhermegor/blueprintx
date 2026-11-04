@@ -687,7 +687,7 @@ def test_deleting_the_roster_is_not_a_silent_opt_out(
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
 
-    with pytest.raises(RuntimeError, match="disables this gate"):
+    with pytest.raises(RuntimeError, match="does not opt out"):
         cls_gate.load_roster(tmp_path)
 
 
