@@ -237,7 +237,8 @@ def published_pages(
     list_pages = []
     for path_md in sorted(_walk_markdown(path_docs)[0]):
         str_rel = path_md.relative_to(path_docs).as_posix()
-        if str_rel == "CLAUDE.md" or any(spec.match_file(str_rel) for spec in tuple_specs):
+        is_excluded = any(spec.match_file(str_rel) for spec in tuple_specs)
+        if str_rel in ("CLAUDE.md", "AGENTS.md") or is_excluded:
             continue
         list_pages.append(str_rel)
     return list_pages
@@ -368,6 +369,25 @@ def check_claude_index(
 _INT_FLAG_WITH_VALUE = 2
 
 
+def docs_index_table(path_docs: pathlib.Path) -> set[str] | None:
+    """Return the docs file-index paths, read from ``AGENTS.md`` and else ``CLAUDE.md``.
+
+    Parameters
+    ----------
+    path_docs : Path
+        The project's docs directory.
+
+    Returns
+    -------
+    set[str] | None
+        The first column of the file-index table, or None when neither file carries one.
+    """
+    set_indexed = claude_index_table(path_docs / "AGENTS.md")
+    if set_indexed is None:
+        return claude_index_table(path_docs / "CLAUDE.md")
+    return set_indexed
+
+
 def main(list_argv: list) -> int:
     """Run both layers over the project's docs directory; return 1 on any violation.
 
@@ -414,7 +434,7 @@ def main(list_argv: list) -> int:
     list_errors += walk_problems(path_docs)
     list_errors += check_nav_ceiling(dict_mkdocs.get("nav"))
 
-    set_indexed = claude_index_table(path_docs / "CLAUDE.md")
+    set_indexed = docs_index_table(path_docs)
     if set_indexed is not None:
         list_errors += check_claude_index(set_indexed, list_pages, path_docs, str_docs)
 

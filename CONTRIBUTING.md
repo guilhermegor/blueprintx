@@ -2102,3 +2102,27 @@ grouped by what they guard.
   distribution), so the AGPL preamble states the dual-licensing model: organisations that
   cannot comply must obtain a commercial licence from the copyright holder. SPDX ids map to
   GitHub Licenses API keys in display order.
+
+## CLAUDE.md and AGENTS.md pairing (blueprintx#273, #754, #973)
+
+`AGENTS.md` is the source and `CLAUDE.md` is a bridge, at the root of a skeleton and at every
+leaf directory. A leaf `CLAUDE.md` is the stub below, minus the `@PRINCIPLES.md` line, which
+stays root-only because the leaves inherit it through the root. Claude-Code-only lines go
+below the marker.
+
+```
+@AGENTS.md
+
+Edit AGENTS.md, not this file. Claude-Code-only lines go below this one.
+```
+
+`templates/common/bin/check_agents_md_pairs.sh` is the one implementation. It fails when a
+`CLAUDE.md` has no sibling `AGENTS.md`, does not start with `@AGENTS.md`, lacks the marker,
+holds a non-import line above it, or imports a file that does not exist. It skips `.claude/`,
+and it fails when it finds no `CLAUDE.md` or cannot read one. `bin/ci/check_agents_md_bridge.sh`
+runs it over every leaf under `templates/`, and every scaffold copies it to the project's
+`bin/`, where the Python, Bash CLI and etcher tiers run it from pre-commit and the Python tier
+from CI too. `templates/common/CLAUDE.md` is exempt: it ships as `.claude/CLAUDE.md`. A leaf
+template whose name differs from its deployed name (`utils_CLAUDE.md`) pairs with the same prefix
+(`utils_AGENTS.md`). The TypeScript tiers ship no `.pre-commit-config.yaml`, so they carry the
+script but no hook.
