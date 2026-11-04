@@ -3136,16 +3136,18 @@ projects also switch versioning: online = tag-driven, offline = a local <code>po
 (<code>cz bump</code>, run inside the generated project — not a BlueprintX <code>make</code> target).</p>
 <h2 id="i-dont-use-a-pr-review-bot-will-the-generated-projects-required-check-ever-pass">I don't use a PR review bot — will the generated project's required check ever pass?<a class="headerlink" href="#i-dont-use-a-pr-review-bot-will-the-generated-projects-required-check-ever-pass" title="Permanent link">&para;</a></h2>
 <p>The scaffolder asks <em>"Do you have (or will you install) a PR review bot such as CodeRabbit
-on this repo?"</em>. Answer <strong>no</strong> and it skips copying <code>.review-bots.yaml</code> instead of shipping
-it empty — <code>reviewers: []</code> is treated by the gate as "switched off from inside the very PR
-it polices" and raises, which is worse than never having adopted the gate at all. With the
-file absent, <code>check_review_threads.py</code> reads "the review-thread gate is not adopted here"
-and exits 0: the required check still runs on every PR (nothing else changes in <code>.github/</code>),
-it just reports success instead of demanding a reviewer that will never exist. Answer <strong>yes</strong>
-later and re-adding the roster turns the gate back on — at the path the gate reads, which differs
-by language: for Python copy <code>templates/python-common/.review-bots.yaml</code> to the project root; for
-TypeScript copy <code>templates/ts-common/.github/.review-bots.yaml</code> to <code>.github/.review-bots.yaml</code>. See blueprintx#374 (why this needed
-a fix) and blueprintx#262 (why an empty roster is not the opt-out).</p>
+on this repo?"</em>. Answer <strong>no</strong> and it ships <code>.review-bots.yaml</code> containing <code>adopted: false</code>
+(<code>templates/common/review-bots-optout.yaml</code>) instead of the real roster. The gate fails closed
+on a missing file, and a bare <code>reviewers: []</code> is read as "switched off from inside the very PR
+it polices", so the explicit <code>adopted: false</code> is the only opt-out: the required check still runs
+on every PR (nothing else changes in <code>.github/</code>), it just reports success instead of demanding a
+reviewer that will never exist. Answer <strong>yes</strong> later and replacing that file with the real roster
+turns the gate back on — at the path the gate reads, which differs by language: for Python copy
+<code>templates/python-common/.review-bots.yaml</code> to the project root; for TypeScript copy
+<code>templates/ts-common/.github/.review-bots.yaml</code> to <code>.github/.review-bots.yaml</code>. Replace the file
+rather than adding reviewers to it: while <code>adopted: false</code> is present the gate stays opted out.
+See blueprintx#374 (why this needed a fix), blueprintx#262 (why an empty roster is not the
+opt-out) and blueprintx#956 (why the file ships instead of being omitted).</p>
 <h3 id="how-does-a-fallback-ladder-review-satisfy-the-gate">How does a fallback (ladder) review satisfy the gate?<a class="headerlink" href="#how-does-a-fallback-ladder-review-satisfy-the-gate" title="Permanent link">&para;</a></h3>
 <p>A roster row with <code>kind: comment-marker</code> and a <code>marker:</code> string (here <code>Fallback review — runtime:</code>)
 lets a plain issue comment count as a review. The comment must start with the marker, name the head SHA on its
