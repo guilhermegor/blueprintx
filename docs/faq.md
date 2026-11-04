@@ -43,16 +43,18 @@ projects also switch versioning: online = tag-driven, offline = a local `poe bum
 ## I don't use a PR review bot — will the generated project's required check ever pass?
 
 The scaffolder asks *"Do you have (or will you install) a PR review bot such as CodeRabbit
-on this repo?"*. Answer **no** and it skips copying `.review-bots.yaml` instead of shipping
-it empty — `reviewers: []` is treated by the gate as "switched off from inside the very PR
-it polices" and raises, which is worse than never having adopted the gate at all. With the
-file absent, `check_review_threads.py` reads "the review-thread gate is not adopted here"
-and exits 0: the required check still runs on every PR (nothing else changes in `.github/`),
-it just reports success instead of demanding a reviewer that will never exist. Answer **yes**
-later and re-adding the roster turns the gate back on — at the path the gate reads, which differs
-by language: for Python copy `templates/python-common/.review-bots.yaml` to the project root; for
-TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
-a fix) and blueprintx#262 (why an empty roster is not the opt-out).
+on this repo?"*. Answer **no** and it ships `.review-bots.yaml` containing `adopted: false`
+(`templates/common/review-bots-optout.yaml`) instead of the real roster. The gate fails closed
+on a missing file, and a bare `reviewers: []` is read as "switched off from inside the very PR
+it polices", so the explicit `adopted: false` is the only opt-out: the required check still runs
+on every PR (nothing else changes in `.github/`), it just reports success instead of demanding a
+reviewer that will never exist. Answer **yes** later and replacing that file with the real roster
+turns the gate back on — at the path the gate reads, which differs by language: for Python copy
+`templates/python-common/.review-bots.yaml` to the project root; for TypeScript copy
+`templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. Replace the file
+rather than adding reviewers to it: while `adopted: false` is present the gate stays opted out.
+See blueprintx#374 (why this needed a fix), blueprintx#262 (why an empty roster is not the
+opt-out) and blueprintx#956 (why the file ships instead of being omitted).
 
 ### How does a fallback (ladder) review satisfy the gate?
 
@@ -347,3 +349,9 @@ the same protection from the autouse `isolate_git_environment` fixture in
 ## Which install methods are supported?
 
 Homebrew, Chocolatey, Snap, apt, and `make install` from a clone — see the project README.
+
+## Why does the coverage badge 404 before the first push to main?
+
+The coverage badge is published by `publish-badge.yaml` to an orphan `badges` branch on every push to `main`, so the committed repo never carries a stale `coverage.svg`. Until the first `main` push completes, the README badge URL returns 404.
+
+Publishing lives in its own `workflow_run` workflow rather than a job in `tests.yaml` because `release-pypi.yaml` and `release-test-pypi.yaml` call `tests.yaml` as a reusable workflow: a nested job requesting `contents: write` under a read-only caller makes GitHub reject the whole run, which would break releases. `tests.yaml` therefore declares `contents: read` at workflow level. The publisher runs in a `concurrency` group without cancellation and skips itself when the tested commit is no longer the tip of `main`, so an older run cannot overwrite a newer badge. It resets the working tree to the fetched `badges` tip with `git reset --hard`, because `--soft` leaves the index empty and the next commit would delete every other file on that branch.

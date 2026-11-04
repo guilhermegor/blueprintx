@@ -44,6 +44,8 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$str_project_path/.codespellrc"
 	if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
 		cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$str_project_path/.review-bots.yaml"
+	else
+		cp "$BLUEPRINTX_ROOT/templates/common/review-bots-optout.yaml" "$str_project_path/.review-bots.yaml"
 	fi
 	cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$str_project_path/mypy.ini"
 	cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$str_project_path/.sqlfluff"
@@ -151,6 +153,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_orm_model_guards_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
 		"$str_project_path/tests/unit/test_ruff_ret_rule.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_py_floor_gate.py" \
+		"$str_project_path/tests/unit/test_py_floor_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
 		"$str_project_path/tests/unit/test_migration_slug_gate.py"
 }
