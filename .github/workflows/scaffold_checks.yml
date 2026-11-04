@@ -863,6 +863,12 @@ jobs:
       - name: CLAUDE.md bridge gate (blueprintx#754)
         run: bash bin/ci/check_agents_md_bridge.sh && bash tests/test_check_agents_md_bridge.sh
 
+      - name: Python floor drift gate (blueprintx#951)
+        run: |
+          python bin/python_eol_bump.py --check
+          pip install pytest
+          python -m pytest tests/test_python_eol_bump.py -q
+
   makefile-pairing:
     name: Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)
     runs-on: ubuntu-latest

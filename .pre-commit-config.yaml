@@ -57,6 +57,13 @@ repos:
         pass_filenames: false
         files: \.codespellrc$
 
+      - id: python-floor-drift
+        name: Python floor drift gate (blueprintx#951)
+        entry: python3 bin/python_eol_bump.py --check
+        language: system
+        pass_filenames: false
+        files: ^(templates/.*(pyproject\.toml|\.python-version|ruff\.toml|mypy\.ini|requirements\.txt|README.*\.md|tests\.yaml)|bin/python_eol_bump\.py)$
+
       - id: agents-md-bridge
         name: CLAUDE.md bridge gate (blueprintx#754)
         entry: bash -c 'bash bin/ci/check_agents_md_bridge.sh && bash tests/test_check_agents_md_bridge.sh'

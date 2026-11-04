@@ -43,7 +43,7 @@ board whose point is to tell a human where to look.
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 import importlib.util
 import json
 import os
@@ -396,7 +396,7 @@ def pr_needs_retry(
     if not _RE_RATE_LIMIT.search(str_notice):
         return False
 
-    dt_when = dt_now or datetime.now(timezone.utc)
+    dt_when = dt_now or datetime.now(UTC)
 
     if declared_wait_still_open(dict_notice, dt_when):
         return False
@@ -861,7 +861,7 @@ def main() -> int:
     list_open, list_candidates = tuple_waiting
 
     str_self_login = resolve_self_login()
-    dt_now = datetime.now(timezone.utc)
+    dt_now = datetime.now(UTC)
     int_chosen = choose_pr_to_retry(
         list_open, list_candidates, set_reviewers, cls_gate, str_self_login, dt_now
     )

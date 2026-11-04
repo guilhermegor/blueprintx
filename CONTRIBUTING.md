@@ -2102,3 +2102,18 @@ grouped by what they guard.
   distribution), so the AGPL preamble states the dual-licensing model: organisations that
   cannot comply must obtain a commercial licence from the copyright holder. SPDX ids map to
   GitHub Licenses API keys in display order.
+
+### Python floor (`bin/python_eol_bump.py`, #951)
+
+`templates/python-common/.python-version` holds the supported floor (a `MAJOR.MINOR` cycle) and
+is the single source of truth. The `python` constraint of every `templates/*/pyproject.toml`,
+the `tests.yaml` matrix, ruff's `target-version`, `mypy.ini`, the `requirements.txt` markers
+and the README badges are derived from it. `python bin/python_eol_bump.py --check` (pre-commit
+hook `python-floor-drift`, `scaffold_checks.yml`) fails when any of them disagrees.
+
+The monthly `python-eol-bump.yaml` workflow runs the script without `--check`: it reads
+`https://endoflife.date/api/v1/products/python/`, sets the floor to the lowest maintained cycle
+and the matrix to every maintained cycle, and opens a PR. It fails closed (unreachable API,
+malformed JSON or no maintained cycle changes nothing and exits 1) and never lowers the floor.
+Ruff does not follow `.python-version` and falls back to py39 on Poetry-only tiers, so
+`target-version` stays explicit and the gate compares it.
