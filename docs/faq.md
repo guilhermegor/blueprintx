@@ -349,3 +349,9 @@ the same protection from the autouse `isolate_git_environment` fixture in
 ## Which install methods are supported?
 
 Homebrew, Chocolatey, Snap, apt, and `make install` from a clone — see the project README.
+
+## Why does the coverage badge 404 before the first push to main?
+
+The coverage badge is published by `publish-badge.yaml` to an orphan `badges` branch on every push to `main`, so the committed repo never carries a stale `coverage.svg`. Until the first `main` push completes, the README badge URL returns 404.
+
+Publishing lives in its own `workflow_run` workflow rather than a job in `tests.yaml` because `release-pypi.yaml` and `release-test-pypi.yaml` call `tests.yaml` as a reusable workflow: a nested job requesting `contents: write` under a read-only caller makes GitHub reject the whole run, which would break releases. `tests.yaml` therefore declares `contents: read` at workflow level. The publisher runs in a `concurrency` group without cancellation and skips itself when the tested commit is no longer the tip of `main`, so an older run cannot overwrite a newer badge. It resets the working tree to the fetched `badges` tip with `git reset --hard`, because `--soft` leaves the index empty and the next commit would delete every other file on that branch.

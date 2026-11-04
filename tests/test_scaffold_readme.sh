@@ -107,7 +107,7 @@ test_rendered_readme_carries_absolute_urls_and_footer() {
     LINKEDIN_URL=https://www.linkedin.com/in/ci-bot render_python_readme lib-minimal "$path_out"
     expect "logo is an absolute raw URL at width 200" "1" \
         "$(grep -cF "img src=\"$str_raw/assets/logo_lorem_ipsum.png\" width=\"200\"" "$path_out")"
-    expect "coverage badge is an absolute raw URL" "1" "$(grep -cF "($str_raw/coverage.svg)" "$path_out")"
+    expect "coverage badge is an absolute raw URL" "1" "$(grep -cF "(${str_raw%/main}/badges/coverage.svg)" "$path_out")"
     expect "no relative image left" "0" "$(grep -cE '(src="|\]\()(\./|assets/|coverage)' "$path_out" || true)"
     expect "footer names the tier" "1" "$(grep -cF '<sub>Generated from the lib-minimal template via [BlueprintX](https://github.com/guilhermegor/blueprintx).' "$path_out")"
     expect "library README has Documentation" "1" "$(grep -c '^## Documentation$' "$path_out")"
