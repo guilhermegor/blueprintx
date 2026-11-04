@@ -292,7 +292,7 @@ def test_a_bare_marker_with_no_reason_does_not_justify(monkeypatch: pytest.Monke
 
 
 @pytest.fixture(autouse=True)
-def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:  # complexity-ok: unrolling drifts from TUPLE_CI_MARKERS
+def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:  # complexity-ok: loop over CI markers
     """Start every test from a local shell with no ``TEST_CHANGE_OK`` and no CI marker.
 
     Parameters
