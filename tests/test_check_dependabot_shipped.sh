@@ -25,6 +25,22 @@ expect_gate() {
     fi
 }
 
+test_missing_assignees_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i '/assignees:/,+1d' "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "template without assignees" "$str_root" fail "needs an assignees entry"
+}
+
+test_dropped_substitution_fails() {
+    local str_script str_root
+    for str_script in ts_lib ts_react_app bash_cli python_lib_minimal; do
+        str_root="$(make_copy)"
+        sed -i -E 's#^(\s*)envsubst .* < ("[^"]*dependabot\.yml") .*#\1cp \2 "\$project_path/.github/dependabot.yml"#' "$str_root/bin/scaffold/$str_script.sh"
+        expect_gate "dropped substitution, $str_script" "$str_root" fail "$str_script.sh never copies"
+    done
+}
+
 test_real_tree_passes() {
     expect_gate "real tree" "$(make_copy)" pass "OK:"
 }
@@ -78,6 +94,8 @@ test_missing_source_fails() {
 }
 
 test_real_tree_passes
+test_missing_assignees_fails
+test_dropped_substitution_fails
 test_dropped_copy_line_fails
 test_missing_cooldown_fails
 test_partial_cooldown_fails
