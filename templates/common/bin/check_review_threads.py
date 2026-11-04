@@ -230,16 +230,16 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
         Normalised login mapped to its ``posts:`` classification. Every member counts as a
             reviewer rather than as an answer for the THREAD half; only the ``threads`` members
             can satisfy the MISSING-REVIEW half — see :func:`reviewer_logins`. Empty when the
-            file was NEVER there, which makes the gate a no-op rather than a source of false
-            failures.
+            file was never there (or PyYAML is absent); :func:`main` fails that case closed.
 
     Raises
     ------
     RuntimeError
         When the roster is absent HERE but present on the default branch — that is a
             deletion, and since an empty roster makes this gate a no-op, it would switch the
-            gate off inside the very PR it is meant to police. Also propagated from
-            :func:`posts_of` for a row that does not declare a usable ``posts:``.
+            gate off inside the very PR it is meant to police. Also raised for a roster with
+            no reviewers, and propagated from :func:`posts_of` for a row that does not declare
+            a usable ``posts:``. :func:`main` reports all of these as a failing verdict.
     """
     path_roster = path_root / _ROSTER_FILE
     if yaml is None:
@@ -260,8 +260,8 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
     if not dict_roster:
         raise RuntimeError(
             f"{_ROSTER_FILE} exists but declares no reviewers — an empty roster makes this "
-            f"gate a no-op, which is the same as deleting it. Declare a reviewer, or delete "
-            f"the file to opt out (that path self-skips with a message)."
+            f"gate a no-op, which is the same as deleting it. Declare a reviewer, or opt out "
+            f"explicitly with `adopted: false`."
         )
     return dict_roster
 
@@ -1828,9 +1828,9 @@ def _print_missing_parser(bool_json: bool) -> int:
     return 1
 
 
-def _print_missing_roster(bool_json: bool) -> int:
+def _print_missing_roster(bool_json: bool, str_detail: str = "") -> int:
     """Print the missing-roster failure in the requested representation and return ``1``."""
-    str_reason = (
+    str_reason = str_detail or (
         f"{_ROSTER_FILE} is missing or unreadable, so this required gate would check nothing. "
         f"Copy it from the BlueprintX template (templates/python-common/{_ROSTER_FILE}, or "
         f"templates/ts-common/.github/{_ROSTER_FILE}), or opt out explicitly with "
@@ -2155,6 +2155,24 @@ def _missing_review(
     )
 
 
+def _roster_or_verdict(
+    bool_json: bool, str_repo_full: str, str_number: str
+) -> tuple[dict[str, str], int | None]:
+    """Return the roster, or the exit code of the skip/failure that ends the run early."""
+    path_cwd = pathlib.Path.cwd()
+    if roster_opted_out(path_cwd) and base_opted_out(str_repo_full, str_number):
+        return {}, _print_skip(
+            bool_json, f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out"
+        )
+    try:
+        dict_roster = load_roster(path_cwd)
+    except RuntimeError as err:
+        return {}, _print_missing_roster(bool_json, str(err))
+    if not dict_roster:
+        return {}, _print_missing_roster(bool_json)
+    return dict_roster, None
+
+
 def main(list_argv: list[str] | None = None) -> int:
     """Check the current PR's review threads.
 
@@ -2178,14 +2196,9 @@ def main(list_argv: list[str] | None = None) -> int:
     if yaml is None:
         return _print_missing_parser(bool_json)
 
-    path_cwd = pathlib.Path.cwd()
-    if roster_opted_out(path_cwd) and base_opted_out(str_repo_full, str_number):
-        return _print_skip(
-            bool_json, f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out"
-        )
-    dict_roster = load_roster(path_cwd)
-    if not dict_roster:
-        return _print_missing_roster(bool_json)
+    dict_roster, int_exit = _roster_or_verdict(bool_json, str_repo_full, str_number)
+    if int_exit is not None:
+        return int_exit
 
     set_roster = set(dict_roster)
     set_reviewers = reviewer_logins(dict_roster)

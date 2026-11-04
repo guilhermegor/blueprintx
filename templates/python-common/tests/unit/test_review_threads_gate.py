@@ -713,6 +713,31 @@ def test_a_roster_never_adopted_is_still_a_silent_no_op(
     assert cls_gate.load_roster(tmp_path) == {}
 
 
+def test_a_deleted_roster_reports_a_json_verdict_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A roster deleted in the PR yields the ``--json`` missing_roster verdict.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir standing in for a checkout with no roster.
+    monkeypatch : pytest.MonkeyPatch
+        Stubs the default-branch probe and the PR environment.
+    capsys : pytest.CaptureFixture[str]
+        Captures the printed verdict.
+    """
+    cls_gate = _load_gate()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
+
+    cls_gate.main(["--json"])
+
+    assert '"reason": "missing_roster"' in capsys.readouterr().out
+
+
 def _opt_out_checkout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, str_base_roster: str | None
 ) -> ModuleType:
@@ -743,7 +768,7 @@ def _opt_out_checkout(
 
 
 def test_opt_out_only_on_the_pr_side_is_rejected(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A PR cannot opt itself out: the base roster must declare it too (blueprintx#952).
 
@@ -753,15 +778,18 @@ def test_opt_out_only_on_the_pr_side_is_rejected(
         Pytest throwaway dir holding the PR-side roster.
     monkeypatch : pytest.MonkeyPatch
         Supplies a base roster that does not opt out.
+    capsys : pytest.CaptureFixture[str]
+        Captures the failing verdict.
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
 
-    with pytest.raises(RuntimeError, match="no reviewers"):
-        cls_gate.main([])
+    cls_gate.main([])
+
+    assert "no reviewers" in capsys.readouterr().out
 
 
 def test_opt_out_with_an_unreadable_base_fails_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """When the base roster cannot be read, the PR-side opt-out is not honoured.
 
@@ -771,11 +799,14 @@ def test_opt_out_with_an_unreadable_base_fails_closed(
         Pytest throwaway dir holding the PR-side roster.
     monkeypatch : pytest.MonkeyPatch
         Makes the base read fail.
+    capsys : pytest.CaptureFixture[str]
+        Captures the failing verdict.
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
 
-    with pytest.raises(RuntimeError, match="no reviewers"):
-        cls_gate.main([])
+    cls_gate.main([])
+
+    assert "no reviewers" in capsys.readouterr().out
 
 
 def test_opt_out_declared_on_the_base_side_is_accepted(
