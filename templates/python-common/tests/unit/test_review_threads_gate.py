@@ -853,7 +853,14 @@ def test_base_opt_out_declared_only_under_dot_github_is_honoured(
 def test_base_roster_at_the_root_wins_over_dot_github(monkeypatch: pytest.MonkeyPatch) -> None:
     """The root roster is read first, so a root without an opt-out is not overridden."""
     cls_gate = _load_gate()
-    monkeypatch.setattr(cls_gate, "_gh_api_text", lambda _args: "reviewers: []\n")
+    dict_answers = {
+        ".base.ref": "main",
+        "repos/o/r/contents/.review-bots.yaml?ref=main": "reviewers: []\n",
+        "repos/o/r/contents/.github/.review-bots.yaml?ref=main": "adopted: false\n",
+    }
+    monkeypatch.setattr(
+        cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
+    )
 
     assert cls_gate.base_opted_out("o/r", "1") is False
 

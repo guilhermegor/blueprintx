@@ -169,7 +169,7 @@ check_roster_presence() {
 
     printf 'adopted: false\n' >"$path_dir/.review-bots.yaml"
     status=0
-    out="$(SHIM_GH_OUT=$'adopted: false\n' GITHUB_BASE_REF=main run_gate_in "$path_dir" 2>&1)" || status=$?
+    out="$(SHIM_GH_OUT=$'adopted: false\n' run_gate_in "$path_dir" 2>&1)" || status=$?
     if [ "$status" -eq 0 ] && [[ "$out" == *"opted out"* ]]; then
         echo "ok: explicit adopted: false opts out and passes"
     else
