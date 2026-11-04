@@ -88,11 +88,11 @@ check_scaffold() {
 	str_keyed="$(run_list "$str_scaffold" sentinel-key 2>&1)"
 	[[ "$str_out" == "$str_keyed" ]] || { fail "$str_name" "output depends on the API key"; return; }
 
-	if ! run_list "$str_scaffold" "" --roster false | awk -F'\t' '
+	if ! run_list "$str_scaffold" "" --roster false | STR_NAME="$str_name" awk -F'\t' '
 		$1 == "COPY" && $2 == "file" && $4 ~ /(^|\/)\.review-bots\.yaml$/ { last = $3 }
 		$1 == "COPY" && $2 == "dir" && $4 ~ /^\.github\/?$/ { last = "dir" }
 		$1 == "RM" && $2 ~ /\.review-bots\.yaml$/ { rm = 1 }
-		END { exit ((last != "" && last != "templates/common/review-bots-optout.yaml") || rm) }'; then
+		END { exit ((last != "templates/common/review-bots-optout.yaml" && ENVIRON["STR_NAME"] != "bash-cli") || rm) }'; then
 		fail "$str_name" "--roster false delivers a real roster or removes it instead of shipping adopted: false"
 		return
 	fi

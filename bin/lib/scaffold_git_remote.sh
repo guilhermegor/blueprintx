@@ -18,7 +18,7 @@ scaffold_prompt_review_bot_roster() {
 	n | N)
 		# shellcheck disable=SC2034
 		INCLUDE_REVIEW_BOT_ROSTER=false
-		print_status "config" ".review-bots.yaml: shipped with adopted: false — the review-thread required check opts out until a reviewer is declared"
+		print_status "config" ".review-bots.yaml: shipped with adopted: false — the review-thread required check stays opted out while adopted: false remains; replace the file to opt in"
 		;;
 	*)
 		# shellcheck disable=SC2034
