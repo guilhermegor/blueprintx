@@ -121,10 +121,11 @@ check_authors() {
 }
 
 check_footer() {
-	local path_file="$1" str_footer
-	str_footer="$(md_strip_fences <"$path_file" | grep -E '^<sub>Generated from' || true)"
-	[ -z "$str_footer" ] || [[ "$str_footer" == *"[BlueprintX]($STR_BLUEPRINTX_URL)"* ]] ||
-		problem "$path_file" "footer does not link BlueprintX: use [BlueprintX]($STR_BLUEPRINTX_URL)"
+	local path_file="$1" str_line
+	while IFS= read -r str_line; do
+		[[ "$str_line" == *"[BlueprintX]($STR_BLUEPRINTX_URL)"* ]] ||
+			problem "$path_file" "footer does not link BlueprintX: use [BlueprintX]($STR_BLUEPRINTX_URL)"
+	done < <(md_strip_fences <"$path_file" | grep -E '^<sub>Generated from' || true)
 }
 
 check_placeholders() {

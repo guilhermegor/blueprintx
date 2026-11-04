@@ -181,6 +181,8 @@ test_footer_without_heading_is_optional() {
         "$(good_readme | sed 's|via \[BlueprintX\](|via [docs](|')" fail "footer does not link BlueprintX"
     expect_gate "footer linking BlueprintX relatively" \
         "$(good_readme | sed 's|(https://github.com/guilhermegor/blueprintx)|(../blueprintx)|')" fail "footer does not link BlueprintX"
+    expect_gate "a valid footer does not mask a second unlinked one" \
+        "$(good_readme; echo '<sub>Generated from the cli template via BlueprintX.</sub>')" fail "footer does not link BlueprintX"
 }
 
 test_other_archetype_slug_is_required() {
