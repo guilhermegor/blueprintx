@@ -41,10 +41,20 @@ assignees_per_block() {
     awk '
         /^  - package-ecosystem:/ { if (int_in && int_n != 1) int_bad = 1; int_in = 1; int_n = 0; int_blocks++ }
         /^    assignees:/ { int_a = 1; next }
-        int_a && /^      - "[^"]+"[[:space:]]*$/ { int_n++ }
+        int_a && /^      - "[$][{]GITHUB_USERNAME[}]"[[:space:]]*$/ { int_n++ }
         { int_a = 0 }
         END { if (int_in && int_n != 1) int_bad = 1; exit (int_blocks > 0 && !int_bad) ? 0 : 1 }
     ' "$1"
+}
+
+check_promote() {
+    local str_promote="$REPO_ROOT/bin/promote_offline_to_online.sh" str_bad
+    [ -f "$str_promote" ] || return 0
+    grep -qE '^[[:space:]]*export .*GITHUB_USERNAME' "$str_promote" \
+        || fail "promote_offline_to_online.sh never exports GITHUB_USERNAME"
+    str_bad="$(grep -vE '^[[:space:]]*#' "$str_promote" | grep -E 'dependabot\.yml"$' \
+        | grep -vE "envsubst '\\\$\{GITHUB_USERNAME\}' .*<" || true)"
+    [ -z "$str_bad" ] || fail "promote_offline_to_online.sh writes dependabot.yml without envsubst: $str_bad"
 }
 
 check_static() {
@@ -57,8 +67,9 @@ check_static() {
         cooldown_per_block "$str_src" \
             || fail "${str_src#"$REPO_ROOT"/} needs exactly one cooldown on every ecosystem"
         assignees_per_block "$str_src" \
-            || fail "${str_src#"$REPO_ROOT"/} needs an assignees entry on every ecosystem"
+            || fail "${str_src#"$REPO_ROOT"/} needs the \${GITHUB_USERNAME} assignee on every ecosystem"
     done < <(skeleton_meta_files)
+    check_promote
 }
 
 usage() {

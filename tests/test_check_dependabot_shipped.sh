@@ -29,7 +29,7 @@ test_missing_assignees_fails() {
     local str_root
     str_root="$(make_copy)"
     sed -i '/assignees:/,+1d' "$str_root/templates/ts-common/dependabot.yml"
-    expect_gate "template without assignees" "$str_root" fail "needs an assignees entry"
+    expect_gate "template without assignees" "$str_root" fail "needs the \${GITHUB_USERNAME} assignee"
 }
 
 test_dropped_substitution_fails() {
@@ -55,7 +55,29 @@ test_empty_assignee_fails() {
     local str_root
     str_root="$(make_copy)"
     sed -i -E 's#^(      - )"\$\{GITHUB_USERNAME\}"#\1""#' "$str_root/templates/ts-common/dependabot.yml"
-    expect_gate "empty assignee value" "$str_root" fail "needs an assignees entry"
+    expect_gate "empty assignee value" "$str_root" fail "needs the \${GITHUB_USERNAME} assignee"
+}
+
+test_hardcoded_assignee_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E 's#^(      - )"\$\{GITHUB_USERNAME\}"#\1"someone"#' "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "hard-coded assignee" "$str_root" fail "needs the \${GITHUB_USERNAME} assignee"
+}
+
+test_promote_unrendered_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E '0,/envsubst .*dependabot\.yml/s#envsubst [^<]*< ("[^"]*dependabot\.yml")#cp \1#' \
+        "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote copies dependabot.yml raw" "$str_root" fail "promote_offline_to_online.sh writes"
+}
+
+test_promote_unexported_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E 's#^(\s*export .*)GITHUB_USERNAME#\1#' "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote never exports owner" "$str_root" fail "never exports GITHUB_USERNAME"
 }
 
 test_real_tree_passes() {
@@ -116,6 +138,9 @@ test_dropped_substitution_fails
 test_dropped_copy_line_fails
 test_dropped_inline_prefix_fails
 test_empty_assignee_fails
+test_hardcoded_assignee_fails
+test_promote_unrendered_fails
+test_promote_unexported_fails
 test_missing_cooldown_fails
 test_partial_cooldown_fails
 test_unparseable_file_fails

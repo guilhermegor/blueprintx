@@ -20,7 +20,8 @@ A release is aged before Dependabot proposes it. Security updates ignore the coo
 
 ## Assignee
 
-Every ecosystem block carries `assignees: ["${GITHUB_USERNAME}"]`, so dependency PRs have an owner
+Every ecosystem block carries a block-style `assignees:` list whose single item is
+`"${GITHUB_USERNAME}"`, so dependency PRs have an owner
 (the `assignee` PR-policy check skips bot PRs, so this is for triage, not for the gate). The
 scaffold scripts and `promote_offline_to_online.sh` substitute the resolved username right after
 copying the file. `resolve_github_username` always yields a value (it falls back to
@@ -37,10 +38,14 @@ every npm block, so the lint stack moves as a unit. A lone `@eslint/js` major on
 
 `bin/ci/check_dependabot_shipped.sh --static` (pre-commit hook `dependabot-shipped`, CI job
 `dependabot-shipped`) fails when a skeleton script stops copying `dependabot.yml`, copies a
-file that does not exist, any block of the copied file lacks a `cooldown` or a non-empty
-`assignees` item, or the script does not render it with
+file that does not exist, any block of the copied file lacks a `cooldown` or the
+`"${GITHUB_USERNAME}"` assignee item, or the script does not render it with
 `GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}'`. The inline prefix is
 required because several scripts never export `GITHUB_USERNAME`, and `envsubst` sees only
-exported variables. `promote_offline_to_online.sh` is not checked. There is no `--generated`
+exported variables. `promote_offline_to_online.sh` is checked more loosely: it must export
+`GITHUB_USERNAME` and pipe every `dependabot.yml` it writes through `envsubst`. The copy line
+is matched as a single-line text pattern in exactly that spelling, so a reformatted
+equivalent (a `\` continuation, an `env` prefix, a double-quoted `envsubst` argument) is
+reported as "never copies"; rewrite it in the canonical form. There is no `--generated`
 mode: the default scaffold answers take the offline path, which removes `.github/`, so a
 generated tree would never contain the file.
