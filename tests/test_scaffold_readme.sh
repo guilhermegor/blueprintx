@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_' || true)
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$REPO_ROOT/bin/lib/common.sh"
@@ -105,12 +107,42 @@ test_rendered_readme_carries_absolute_urls_and_footer() {
     LINKEDIN_URL=https://www.linkedin.com/in/ci-bot render_python_readme lib-minimal "$path_out"
     expect "logo is an absolute raw URL at width 200" "1" \
         "$(grep -cF "img src=\"$str_raw/assets/logo_lorem_ipsum.png\" width=\"200\"" "$path_out")"
-    expect "coverage badge is an absolute raw URL" "1" "$(grep -cF "($str_raw/coverage.svg)" "$path_out")"
+    expect "coverage badge is an absolute raw URL" "1" "$(grep -cF "(${str_raw%/main}/badges/coverage.svg)" "$path_out")"
     expect "no relative image left" "0" "$(grep -cE '(src="|\]\()(\./|assets/|coverage)' "$path_out" || true)"
-    expect "footer names the tier" "1" "$(grep -c '^<sub>Generated from the lib-minimal template via BlueprintX' "$path_out")"
+    expect "footer names the tier" "1" "$(grep -cF '<sub>Generated from the lib-minimal template via [BlueprintX](https://github.com/guilhermegor/blueprintx).' "$path_out")"
     expect "library README has Documentation" "1" "$(grep -c '^## Documentation$' "$path_out")"
     expect "library README has the pypi badge" "1" "$(grep -c 'img.shields.io/pypi/v/acme' "$path_out")"
     rm -f "$path_out"
+}
+
+test_library_badge_row_is_live_and_not_duplicated() {
+    local path_out str_scaffold="$REPO_ROOT/bin/scaffold/python_lib_minimal.sh"
+    path_out="$(mktemp)"
+    LINKEDIN_URL=https://www.linkedin.com/in/ci-bot render_python_readme lib-minimal "$path_out"
+    expect "scaffold script no longer appends badges" "0" \
+        "$(grep -c 'add_library_badges\|snyk\.io\|pepy\.tech' "$str_scaffold" || true)"
+    expect "the PyPI version badge is emitted once" "1" "$(grep -c 'img.shields.io/pypi/v/' "$path_out")"
+    expect "no Snyk badge" "0" "$(grep -c 'snyk' "$path_out" || true)"
+    expect "no pepy badge" "0" "$(grep -c 'pepy' "$path_out" || true)"
+    expect "type-checked text is escaped for shields" "1" "$(grep -cF 'badge/type--checked-mypy-blue' "$path_out")"
+    expect "linting separator is escaped for shields" "1" "$(grep -cF 'badge/linting-ruff_%7C_codespell-blue' "$path_out")"
+    expect "docs badge links the project docs site" "1" \
+        "$(grep -cF 'badge/docs-latest-blue.svg)](https://ci-bot.github.io/acme/)' "$path_out")"
+    rm -f "$path_out"
+}
+
+test_real_scaffold_readme_has_one_pypi_badge_and_no_dead_ones() {
+    local path_work path_readme
+    path_work="$(mktemp -d)"
+    path_readme="$path_work/ci-scaffold/README.md"
+    LINKEDIN_URL=https://www.linkedin.com/in/ci-bot GITHUB_USERNAME=ci-bot \
+        bash "$REPO_ROOT/bin/scaffold/python_lib_minimal.sh" "$path_work" ci-scaffold "CI badge check" 0.0.1 \
+        < <(printf '\n%.0s' {1..100}) >/dev/null 2>&1 || true
+    expect "the real scaffold wrote a README" "1" "$([ -f "$path_readme" ] && echo 1 || echo 0)"
+    expect "scaffolded README has the PyPI badge once" "1" "$(grep -c 'img.shields.io/pypi/v/' "$path_readme" || true)"
+    expect "scaffolded README has no Snyk badge" "0" "$(grep -c 'snyk' "$path_readme" || true)"
+    expect "scaffolded README has no pepy badge" "0" "$(grep -c 'pepy' "$path_readme" || true)"
+    rm -rf "$path_work"
 }
 
 test_service_readme_has_no_documentation_or_pypi() {
