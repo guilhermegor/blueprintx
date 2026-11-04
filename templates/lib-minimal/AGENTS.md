@@ -40,9 +40,10 @@ src/<project_name>/
         config/            # ALL private structural declarations (one config/CLAUDE.md maps them)
             contracts/     # FileContract declarations (one per input source)
             ports/         # private behavioural ABCs (hexagonal ports; ABCTypeCheckerMeta) — opt-in
-            # schemas/     # (opt-in) Pydantic models mirroring an external standard — the ONLY
-                           #   home of pydantic (check-layer-imports bans it at the package root;
-                           #   check_all_exports bans an _internal name in __all__)
+            # schemas/     # (opt-in) Pydantic models mirroring an external standard, or the
+                           #   library's own product — the ONLY home of pydantic
+                           #   (check-layer-imports bans it at the package root);
+                           #   re-exported from the top-level __all__
 tests/
     unit/  integration/  performance/
 ```
@@ -52,6 +53,13 @@ tests/
 resolve after `pip install`), but the leading underscore marks it off-limits — keep it out
 of your public `__all__`. The internal imports are package-qualified
 (`from <project_name>._internal.utils.dtypes import …`).
+
+**Consumer-built schema models stay in `_internal/config/schemas/`.** When the models are the
+library's product (consumers construct them), the file location is still an implementation
+detail: re-export each class from the package `__all__` and let consumers write
+`from <project_name> import X`, never the `_internal` path. Do not move them to a public
+`schemas/` package. Accepted cost: the class's `__module__` (tracebacks, mkdocstrings paths,
+pickles) shows the `_internal` path, so moving the file later is a pickle-compatibility change.
 
 ## Architecture
 
