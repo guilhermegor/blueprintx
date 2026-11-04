@@ -240,10 +240,51 @@ ensure_optout_label() {
 		print_status "warning" "Could not create the 'do-not-merge' label on $str_repo"
 }
 
+check_ruleset_present() {
+	require_gh || return 0
+	local str_repo str_ids
+	str_repo="$(resolve_repo)"
+	[ -n "$str_repo" ] || return 0
+	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
+		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>&1)"; then
+		print_status "warning" "Could not READ rulesets from $str_repo (presence UNKNOWN): ${str_ids:-no output from gh}"
+		return 0
+	fi
+	[ -n "$str_ids" ] && return 0
+	[ "${GITHUB_ACTIONS:-}" = "true" ] && echo "::warning title=Ruleset missing::'$RULESET_NAME' is not enabled on $str_repo, so merges are unprotected. A maintainer with admin rights must run 'poe enable_repo_rules'."
+	print_status "error" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — run 'poe enable_repo_rules' (needs repo-admin)"
+	return 1
+}
+
+report_stranded_prs() {
+	local str_repo="$1"
+	local str_line int_pr str_sha str_analysed
+	local list_stranded=()
+	while read -r int_pr str_sha; do
+		[ -n "$int_pr" ] || continue
+		str_analysed="$(gh api "repos/$str_repo/code-scanning/analyses?ref=refs/pull/$int_pr/head" \
+			--jq "[.[].commit_sha] | index(\"$str_sha\") // empty" 2>/dev/null || true)"
+		[ -n "$str_analysed" ] || list_stranded+=("#$int_pr")
+	done < <(gh pr list --repo "$str_repo" --state open --json number,headRefOid \
+		--jq '.[] | "\(.number) \(.headRefOid)"' 2>/dev/null || true)
+	[ ${#list_stranded[@]} -gt 0 ] || return 0
+	str_line="${list_stranded[*]}"
+	print_status "warning" "Open PRs with no CodeQL analysis on their head: $str_line — the code_scanning rule blocks their merge (HTTP 405) until each gets a fresh push, e.g. 'git commit --allow-empty -m \"chore: trigger CodeQL\" && git push'"
+}
+
 main() {
 	if [ "${1:-}" = "verify" ]; then
 		verify_strict_required_checks
 		return $?
+	fi
+	if [ "${1:-}" = "check_ruleset" ]; then
+		check_ruleset_present
+		return $?
+	fi
+	if [ "${1:-}" = "stranded" ]; then
+		require_gh || return 0
+		report_stranded_prs "$(resolve_repo)"
+		return 0
 	fi
 
 	print_status "section" "Repository Rules & Merge Settings"
@@ -262,6 +303,7 @@ main() {
 	enable_merge_settings "$str_repo"
 	ensure_optout_label "$str_repo"
 	apply_ruleset "$str_repo"
+	report_stranded_prs "$str_repo"
 
 	report_blocking_checks "$str_repo" || true
 
