@@ -104,6 +104,12 @@ check_scaffold() {
 		return
 	fi
 	str_diff="$(diff_against_real "$str_out" "$str_work/project")"
+	if grep -qx 'language=python' "$REPO_ROOT/templates/$str_name/skeleton.meta" \
+		&& { [[ -e "$str_work/project/coverage.svg" ]] || ! grep -qx 'coverage.svg' "$str_work/project/.gitignore"; }; then
+		fail "$str_name" "python scaffold must not ship coverage.svg and must gitignore it (blueprintx#949)"
+		rm -rf "$str_work"
+		return
+	fi
 	rm -rf "$str_work"
 	[[ -z "$str_diff" ]] || { fail "$str_name" "--list-copies drifted from the real scaffold:"$'\n'"$str_diff"; return; }
 	pass "$str_name"
