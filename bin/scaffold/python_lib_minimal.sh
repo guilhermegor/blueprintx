@@ -171,6 +171,7 @@ copy_internal_utils() {
     cp -r "$COMMON_TEMPLATE_ROOT/optional/typing/." "$internal_dir/utils/typing"
     copy_internal_otel "$internal_dir" "$project_path"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/utils_AGENTS.md" "$internal_dir/utils/AGENTS.md"
 
     rewrite_internal_imports "$internal_dir"
 
@@ -192,6 +193,7 @@ copy_internal_config() {
     cp "$config_src/contracts/__init__.py" "$internal_dir/config/contracts/__init__.py"
     cp "$config_src/contracts/example_source.py" "$internal_dir/config/contracts/example_source.py"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/config_CLAUDE.md" "$internal_dir/config/CLAUDE.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/config_AGENTS.md" "$internal_dir/config/AGENTS.md"
 
     rewrite_internal_imports "$internal_dir"
     print_status "success" "Private internal config (_internal/config/contracts) applied"
@@ -326,6 +328,7 @@ lib_minimal_copy_github_assets() {
         < "$SHARED_TEMPLATE_ROOT/SECURITY.md" > "$project_path/SECURITY.md"
     cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
+    cp "$SHARED_TEMPLATE_ROOT/.github/AGENTS.md" "$project_path/.github/AGENTS.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$project_path/.github/ISSUE_TEMPLATE" && cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$project_path/.github/ISSUE_TEMPLATE/feature_or_fix.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/release-1-0-0.md" "$project_path/.github/ISSUE_TEMPLATE/release-1-0-0.md"
@@ -393,6 +396,7 @@ lib_minimal_copy_project_scaffolding() {
     rm -f "$project_path/tests/integration/.keep"
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/CLAUDE.md" "$project_path/tests/CLAUDE.md"
+    cp "$COMMON_TEMPLATE_ROOT/tests/AGENTS.md" "$project_path/tests/AGENTS.md"
     cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$project_path/tests/conftest.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
         "$project_path/tests/unit/test_pr_gate.py"
@@ -472,6 +476,7 @@ copy_mkdocs_templates() {
         "$project_path/docs/releasing-1-0-0.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/AGENTS.md" "$project_path/docs/AGENTS.md"
 
 
     print_status "success" "MkDocs templates copied"

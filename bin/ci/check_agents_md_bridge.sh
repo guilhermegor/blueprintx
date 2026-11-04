@@ -62,6 +62,13 @@ check_bridge() {
 	return "$int_fail"
 }
 
+check_leaves() {
+	local -a arr_leaves
+	mapfile -t arr_leaves < <(find "$REPO_ROOT/templates" -mindepth 2 -type f \( -name 'CLAUDE.md' -o -name '*_CLAUDE.md' \) \
+		! -path "$REPO_ROOT/templates/common/CLAUDE.md" | grep -vE "^$REPO_ROOT/templates/[^/]+/CLAUDE\.md$" | sort)
+	bash "$REPO_ROOT/templates/common/bin/check_agents_md_pairs.sh" "${arr_leaves[@]}"
+}
+
 main() {
 	local str_meta str_dir int_fail=0 int_count=0
 	for str_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
@@ -78,6 +85,7 @@ main() {
 		echo "no skeleton ships a CLAUDE.md bridge; the gate checked nothing" >&2
 		int_fail=1
 	fi
+	check_leaves || int_fail=1
 	if [ "$int_fail" -ne 0 ]; then
 		exit 1
 	fi

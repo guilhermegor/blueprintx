@@ -17,6 +17,8 @@ make_fixture() {
 	cp -r "$REPO_ROOT/bin/scaffold" "$REPO_ROOT/bin/lib" "$str_root/bin/"
 	mkdir -p "$str_root/templates/common"
 	cp "$REPO_ROOT/templates/common/PRINCIPLES.md" "$str_root/templates/common/"
+	mkdir -p "$str_root/templates/common/bin"
+	cp "$REPO_ROOT/templates/common/bin/check_agents_md_pairs.sh" "$str_root/templates/common/bin/"
 	printf '%s' "$str_root"
 }
 
@@ -72,6 +74,28 @@ str_fx="$(make_fixture)"
 mkdir -p "$str_fx/templates/orphan"
 cp "$str_fx/templates/lib-minimal/skeleton.meta" "$str_fx/templates/orphan/skeleton.meta"
 expect_gate "skeleton without a bridge fails" fail "missing CLAUDE.md bridge" "$str_fx"
+rm -rf "$str_fx"
+
+str_fx="$(make_fixture)"
+rm "$str_fx/templates/lib-minimal/docs/AGENTS.md"
+expect_gate "leaf without a sibling AGENTS.md fails" fail "has no sibling AGENTS.md" "$str_fx"
+rm -rf "$str_fx"
+
+str_fx="$(make_fixture)"
+printf '@AGENTS.md\n\nSome guidance.\n\nEdit AGENTS.md, not this file. Claude-Code-only lines go below this one.\n' \
+	>"$str_fx/templates/lib-minimal/docs/CLAUDE.md"
+expect_gate "leaf with content above the marker fails" fail "non-import line above the marker" "$str_fx"
+rm -rf "$str_fx"
+
+str_fx="$(make_fixture)"
+printf '@AGENTS.md\n@NOPE.md\n\nEdit AGENTS.md, not this file. Claude-Code-only lines go below this one.\n' \
+	>"$str_fx/templates/lib-minimal/docs/CLAUDE.md"
+expect_gate "leaf with a broken import fails" fail "@NOPE.md but no such file exists" "$str_fx"
+rm -rf "$str_fx"
+
+str_fx="$(make_fixture)"
+printf '@AGENTS.md\n' >"$str_fx/templates/lib-minimal/docs/CLAUDE.md"
+expect_gate "leaf without the marker fails" fail "lacks the marker line" "$str_fx"
 rm -rf "$str_fx"
 
 [ "$int_failures" -eq 0 ]
