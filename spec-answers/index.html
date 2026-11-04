@@ -3045,7 +3045,7 @@ file is a valid (all-default) spec.</p>
 <td><code>project_root</code></td>
 <td>no</td>
 <td><code>$PWD</code></td>
-<td>Parent directory the project is created under.</td>
+<td>Parent directory the project is created under, not the project directory itself. A leading <code>~</code> or <code>~/</code> expands to <code>$HOME</code>, as in the interactive prompt; no other expansion is done. A <code>project_root</code> you set whose last component equals <code>project_name</code> (also when spelled with a trailing <code>/</code> or <code>/.</code>, whether or not the directory exists; the check is on the path as written, symlinks are not followed and <code>.</code>/<code>..</code> components are not resolved) stops the run before anything is created, naming the key; this check is <code>--spec</code> only and does not run under <code>--dev</code>, which replaces <code>project_root</code> with a temp directory, and the unset <code>$PWD</code> default is never refused. An explicit empty <code>project_root=</code> behaves as unset. There is no override key: a parent that shares the project's name must be avoided.</td>
 </tr>
 <tr>
 <td><code>language</code></td>
