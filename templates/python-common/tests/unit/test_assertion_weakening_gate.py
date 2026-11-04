@@ -298,9 +298,9 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:  # complexity-ok: loop 
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-        Removes the CI markers and the hatch variable so no test inherits the operator's shell.
+        Removes the CI markers, the hatch variable and the event path from the shell.
     """
-    for str_marker in (*gate.TUPLE_CI_MARKERS, "TEST_CHANGE_OK"):
+    for str_marker in (*gate.TUPLE_CI_MARKERS, "TEST_CHANGE_OK", "GITHUB_EVENT_PATH"):
         monkeypatch.delenv(str_marker, raising=False)
 
 
@@ -362,6 +362,15 @@ def test_the_unjustified_failure_says_how_to_justify_locally(
     gate.report(["some finding"], "base-sha", 1)
 
     assert str_needle in capsys.readouterr().out
+
+
+def test_ci_ignores_test_change_ok_end_to_end(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Under CI the env hatch cannot justify a finding: ``report`` still fails."""
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("TEST_CHANGE_OK", "a reason")
+
+    assert gate.report(["some finding"], "base-sha", 1) == 1
 
 
 def test_two_classes_sharing_a_method_name_are_tracked_separately() -> None:
