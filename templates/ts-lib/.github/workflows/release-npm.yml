@@ -122,7 +122,12 @@ jobs:
       - run: npm run build
 
       - name: Stage publish
-        run: npm stage publish --access public
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          dist_tag=latest
+          [[ "$INPUT_VERSION" == *-* ]] && dist_tag=next
+          npm stage publish --access public --tag "$dist_tag"
 
       - name: Pack tarball for the GitHub release
         run: npm pack

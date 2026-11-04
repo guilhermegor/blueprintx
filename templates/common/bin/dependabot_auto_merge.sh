@@ -35,11 +35,24 @@ pushed_by_dependabot() {
 	[[ "$str_n" == 0 ]]
 }
 
+fetch_roster() {
+	local str_base="$1" str_path str_out
+	for str_path in .github/.review-bots.yaml .review-bots.yaml; do
+		if ! str_out=$(gh api -H "Accept: application/vnd.github.raw" \
+			"repos/$GH_REPO/contents/$str_path?ref=$str_base" 2>&1); then
+			[[ "$str_out" == *"HTTP 404"* ]] && continue
+			echo "roster fetch failed for $str_path: $str_out" >&2
+			return 1
+		fi
+		printf '%s\n' "$str_out"
+		return 0
+	done
+}
+
 roster_bots() {
 	local str_pr="$1" str_base
 	str_base=$(gh api "repos/$GH_REPO/pulls/$str_pr" | jq -r .base.sha) || return 1
-	{ gh api -H "Accept: application/vnd.github.raw" \
-		"repos/$GH_REPO/contents/.review-bots.yaml?ref=$str_base" 2>/dev/null || true; } |
+	fetch_roster "$str_base" |
 		awk '/^[[:space:]]*-[[:space:]]+login:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/#.*/, ""); gsub(/["\047[:space:]]/, ""); str_login = $0 }
 			/^[[:space:]]+posts:[[:space:]]*threads[[:space:]]*(#.*)?$/ && str_login != "" { print str_login; str_login = "" }'
 }
