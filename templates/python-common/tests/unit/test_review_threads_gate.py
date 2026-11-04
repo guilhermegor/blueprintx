@@ -739,6 +739,11 @@ def test_a_deleted_roster_reports_a_json_verdict_not_a_traceback(
     assert '"reason": "missing_roster"' in capsys.readouterr().out
 
 
+def _serve_base(str_base_roster: str | None, list_args: list[str]) -> str | None:
+    """Answer the base-ref lookup with ``main`` and every roster read with ``str_base_roster``."""
+    return {".base.ref": "main"}.get(list_args[-1], str_base_roster)
+
+
 def _opt_out_checkout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, str_base_roster: str | None
 ) -> ModuleType:
@@ -763,8 +768,7 @@ def _opt_out_checkout(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
     monkeypatch.setenv("PR_NUMBER", "1")
-    monkeypatch.setenv("GITHUB_BASE_REF", "main")
-    monkeypatch.setattr(cls_gate, "_gh_api_text", lambda _args: str_base_roster)
+    monkeypatch.setattr(cls_gate, "_gh_api_text", functools.partial(_serve_base, str_base_roster))
     return cls_gate
 
 
@@ -784,7 +788,7 @@ def test_opt_out_only_on_the_pr_side_is_rejected(
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
 
-    assert (cls_gate.main([]), "no reviewers" in capsys.readouterr().out) == (1, True)
+    assert (cls_gate.main([]), "opt-out is refused" in capsys.readouterr().out) == (1, True)
 
 
 def test_opt_out_with_an_unreadable_base_fails_closed(
@@ -803,7 +807,7 @@ def test_opt_out_with_an_unreadable_base_fails_closed(
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
 
-    assert (cls_gate.main([]), "no reviewers" in capsys.readouterr().out) == (1, True)
+    assert (cls_gate.main([]), "opt-out is refused" in capsys.readouterr().out) == (1, True)
 
 
 def test_opt_out_declared_on_the_base_side_is_accepted(
@@ -828,7 +832,7 @@ def test_opt_out_declared_on_the_base_side_is_accepted(
 def _serve_dot_github_only(str_text: str, list_args: list[str]) -> str | None:
     """Answer a contents call for the ``.github/`` roster only; 404 (``""``) the rest."""
     str_dot_github = "repos/o/r/contents/.github/.review-bots.yaml?ref=main"
-    return {str_dot_github: str_text}.get(list_args[-1], "")
+    return {".base.ref": "main", str_dot_github: str_text}.get(list_args[-1], "")
 
 
 def _github_dir_only(str_text: str) -> Callable[[list[str]], str | None]:
@@ -841,7 +845,6 @@ def test_base_opt_out_declared_only_under_dot_github_is_honoured(
 ) -> None:
     """A TypeScript base keeps its roster at ``.github/``; its opt-out must count (#969)."""
     cls_gate = _load_gate()
-    monkeypatch.setenv("GITHUB_BASE_REF", "main")
     monkeypatch.setattr(cls_gate, "_gh_api_text", _github_dir_only("adopted: false\n"))
 
     assert cls_gate.base_opted_out("o/r", "1") is True
@@ -850,7 +853,6 @@ def test_base_opt_out_declared_only_under_dot_github_is_honoured(
 def test_base_roster_at_the_root_wins_over_dot_github(monkeypatch: pytest.MonkeyPatch) -> None:
     """The root roster is read first, so a root without an opt-out is not overridden."""
     cls_gate = _load_gate()
-    monkeypatch.setenv("GITHUB_BASE_REF", "main")
     monkeypatch.setattr(cls_gate, "_gh_api_text", lambda _args: "reviewers: []\n")
 
     assert cls_gate.base_opted_out("o/r", "1") is False
@@ -861,8 +863,8 @@ def test_a_root_read_error_does_not_fall_through_to_dot_github(
 ) -> None:
     """Only a 404 on the root roster moves on; a 5xx/timeout (``None``) fails closed (#955)."""
     cls_gate = _load_gate()
-    monkeypatch.setenv("GITHUB_BASE_REF", "main")
     dict_answers = {"repos/o/r/contents/.github/.review-bots.yaml?ref=main": "adopted: false\n"}
+    dict_answers[".base.ref"] = "main"
     monkeypatch.setattr(
         cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
     )
@@ -4039,3 +4041,33 @@ def test_an_unreadable_roster_reports_a_verdict_not_a_traceback(
     monkeypatch.setattr(cls_gate, "roster_opted_out", Mock(side_effect=PermissionError("no")))
 
     assert (cls_gate.main([]), bool(capsys.readouterr().out)) == (1, True)
+
+
+def test_a_rerun_with_a_stale_base_ref_env_cannot_bypass_the_base_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The base comes from the API, so a re-run's stale ``GITHUB_BASE_REF`` is ignored (#955)."""
+    cls_gate = _load_gate()
+    monkeypatch.setenv("GITHUB_BASE_REF", "adopted-branch")
+    dict_answers = {
+        ".base.ref": "main",
+        "repos/o/r/contents/.review-bots.yaml?ref=adopted-branch": "adopted: false\n",
+        "repos/o/r/contents/.review-bots.yaml?ref=main": "reviewers: []\n",
+    }
+    monkeypatch.setattr(
+        cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
+    )
+
+    assert cls_gate.base_opted_out("o/r", "1") is False
+
+
+def test_an_invalid_yaml_date_in_the_base_roster_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``ValueError`` from the parser is a failed read, not a traceback (#955)."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(
+        cls_gate, "_gh_api_text", functools.partial(_serve_base, "d: 2024-13-45\n")
+    )
+
+    assert cls_gate.base_opted_out("o/r", "1") is False

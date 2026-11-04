@@ -78,7 +78,7 @@ import urllib.parse
 
 try:
     import yaml
-except ModuleNotFoundError:  # pragma: no cover - the gate self-skips without its parser
+except ModuleNotFoundError:  # pragma: no cover - main() fails closed without it
     yaml = None  # type: ignore[assignment]
 
 
@@ -1784,7 +1784,7 @@ def _gh_api_text(list_args: list[str]) -> str | None:
     except (OSError, subprocess.TimeoutExpired):
         return None
     if cls_run.returncode == 0:
-        return cls_run.stdout
+        return cls_run.stdout or "\n"
     return "" if "(HTTP 404)" in cls_run.stderr else None
 
 
@@ -1817,7 +1817,8 @@ def base_opted_out(str_repo_full: str, str_number: str) -> bool:
     str_repo_full : str
         ``owner/repo``.
     str_number : str
-        Pull request number, used to resolve the base branch when ``GITHUB_BASE_REF`` is unset.
+        Pull request number; the base branch is always read from the API, never from the event
+        environment, which a workflow re-run keeps stale after a retarget (blueprintx#955).
 
     Returns
     -------
@@ -1828,17 +1829,14 @@ def base_opted_out(str_repo_full: str, str_number: str) -> bool:
             gate off (blueprintx#952).
     """
     str_base = (
-        os.environ.get("GITHUB_BASE_REF")
-        or (
-            _gh_api_text([f"repos/{str_repo_full}/pulls/{str_number}", "--jq", ".base.ref"]) or ""
-        ).strip()
-    )
+        _gh_api_text([f"repos/{str_repo_full}/pulls/{str_number}", "--jq", ".base.ref"]) or ""
+    ).strip()
     if not str_base:
         return False
     str_text = _base_roster_text(str_repo_full, str_base)
     try:
         return str_text is not None and _declares_opt_out(str_text)
-    except yaml.YAMLError:
+    except (yaml.YAMLError, ValueError):
         return False
 
 
@@ -2202,10 +2200,18 @@ def _roster_or_verdict(
                 bool_json,
                 f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out",
             )
+        if bool_pr_opt_out:
+            return {}, _print_missing_roster(
+                bool_json,
+                f"{_ROSTER_FILE} opts out with `adopted: false`, but the base branch's roster "
+                "does not (or could not be read), so the opt-out is refused. Land the opt-out "
+                "on the base branch first.",
+                "opt_out_refused",
+            )
         dict_roster = load_roster(path_cwd)
-    except (RuntimeError, yaml.YAMLError, OSError, UnicodeDecodeError) as err:
-        str_code = "opt_out_refused" if bool_pr_opt_out else "missing_roster"
-        if isinstance(err, yaml.YAMLError):
+    except (RuntimeError, ValueError, OSError, yaml.YAMLError) as err:
+        str_code = "missing_roster"
+        if isinstance(err, (yaml.YAMLError, ValueError)):
             str_code = "malformed_roster"
         return {}, _print_missing_roster(bool_json, str(err), str_code)
     if not dict_roster:
