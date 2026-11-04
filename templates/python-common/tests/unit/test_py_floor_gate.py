@@ -7,14 +7,9 @@ stdlib name that only exists on a newer interpreter fails locally and not on a C
 import configparser
 from pathlib import Path
 import re
+import tomllib
 
 from mypy import api
-
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
-    import tomli as tomllib  # type: ignore[no-redef]
 
 
 _PATH_ROOT = Path(__file__).parents[2]
@@ -42,7 +37,7 @@ def test_mypy_python_version_matches_declared_floor() -> None:
 
 
 def test_mypy_rejects_post_floor_stdlib_name(tmp_path: Path) -> None:
-    """A ``datetime.UTC`` import (3.11+) must fail under the shipped ``mypy.ini``.
+    """An ``itertools.batched`` import (3.12+) must fail under the shipped ``mypy.ini``.
 
     Parameters
     ----------
@@ -50,7 +45,7 @@ def test_mypy_rejects_post_floor_stdlib_name(tmp_path: Path) -> None:
         Disposable directory holding the fixture module and the mypy cache.
     """
     path_fixture = tmp_path / "uses_utc.py"
-    path_fixture.write_text("from datetime import UTC\n\nprint(UTC)\n", encoding="utf-8")
+    path_fixture.write_text("from itertools import batched\n\nprint(batched)\n", encoding="utf-8")
     str_stdout, _, _ = api.run(
         [
             "--config-file",
