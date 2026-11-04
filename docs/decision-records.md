@@ -961,8 +961,8 @@ is shaped as it is; a generated project gets the behavior, not the history.
   so a workflow submitting a review with the ambient `GITHUB_TOKEN` cannot satisfy a gate that
   exists to say a real reviewer looked. A row that omits it or spells it otherwise fails loudly;
   at least one `posts: threads` member is required. Zero threads is judged against a submitted
-  review, never against silence (#208). Delete the file to opt out: the gate self-skips with a
-  message. See also the records at the top of this page.
+  review, never against silence (#208). A missing file fails the gate; opt out with `adopted: false` in the roster, which
+  counts only when the base branch declares it too (#952). See also the records at the top of this page.
 - **`.shellcheckrc`.** `severity=warning` is the level at which the scripts are clean while still
   catching real bugs (unquoted expansions, undefined variables, bad test syntax). SC1091 is
   disabled because `lib/common.sh` is resolved at run time, not lint time.
