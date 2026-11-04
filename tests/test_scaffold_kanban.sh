@@ -104,6 +104,10 @@ test_release_issue_opens_once_for_a_package_tier() {
     expect_log "release issue" "issue create --repo octo/widget --title Cut 1.0.0 --label state:blocked" present
     expect_log "release issue" "issue-template-guard: require" present
     expect_log "release issue" "name: Cut 1.0.0" absent
+    expect_log "release issue" "---" absent
+    expect_log "release issue" "about: The blocked path" absent
+    expect_log "release issue" 'title: "Cut 1.0.0"' absent
+    expect_log "release issue" 'labels: ["state:blocked"]' absent
     expect_out "release issue" "$str_out" "rc=0"
 }
 
