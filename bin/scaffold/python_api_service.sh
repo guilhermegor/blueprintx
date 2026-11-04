@@ -454,7 +454,7 @@ copy_github_assets() {
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
         < "$SHARED_TEMPLATE_ROOT/SECURITY.md" > "$project_path/SECURITY.md"
-    envsubst '${GITHUB_USERNAME}' < "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" > "$project_path/.github/dependabot.yml"
+    GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" > "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$project_path/.github/ISSUE_TEMPLATE" && cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$project_path/.github/ISSUE_TEMPLATE/feature_or_fix.md"

@@ -37,6 +37,10 @@ every npm block, so the lint stack moves as a unit. A lone `@eslint/js` major on
 
 `bin/ci/check_dependabot_shipped.sh --static` (pre-commit hook `dependabot-shipped`, CI job
 `dependabot-shipped`) fails when a skeleton script stops copying `dependabot.yml`, copies a
-file that does not exist, the copied file sets no `cooldown` or no `assignees`, or the script never substitutes the owner. There is no `--generated`
+file that does not exist, any block of the copied file lacks a `cooldown` or a non-empty
+`assignees` item, or the script does not render it with
+`GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}'`. The inline prefix is
+required because several scripts never export `GITHUB_USERNAME`, and `envsubst` sees only
+exported variables. `promote_offline_to_online.sh` is not checked. There is no `--generated`
 mode: the default scaffold answers take the offline path, which removes `.github/`, so a
 generated tree would never contain the file.

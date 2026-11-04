@@ -36,9 +36,26 @@ test_dropped_substitution_fails() {
     local str_script str_root
     for str_script in ts_lib ts_react_app bash_cli python_lib_minimal; do
         str_root="$(make_copy)"
-        sed -i -E 's#^(\s*)envsubst .* < ("[^"]*dependabot\.yml") .*#\1cp \2 "\$project_path/.github/dependabot.yml"#' "$str_root/bin/scaffold/$str_script.sh"
+        sed -i -E 's#^(\s*)(GITHUB_USERNAME="[^"]*" )?envsubst .* < ("[^"]*dependabot\.yml") .*#\1cp \3 "\$project_path/.github/dependabot.yml"#' "$str_root/bin/scaffold/$str_script.sh"
         expect_gate "dropped substitution, $str_script" "$str_root" fail "$str_script.sh never copies"
     done
+}
+
+test_dropped_inline_prefix_fails() {
+    local str_script str_root
+    for str_script in ts_lib ts_react_app bash_cli; do
+        str_root="$(make_copy)"
+        sed -i -E 's#^(\s*)GITHUB_USERNAME="\$GITHUB_USERNAME" (envsubst .*dependabot\.yml)#\1\2#' \
+            "$str_root/bin/scaffold/$str_script.sh"
+        expect_gate "dropped inline prefix, $str_script" "$str_root" fail "$str_script.sh never copies"
+    done
+}
+
+test_empty_assignee_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E 's#^(      - )"\$\{GITHUB_USERNAME\}"#\1""#' "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "empty assignee value" "$str_root" fail "needs an assignees entry"
 }
 
 test_real_tree_passes() {
@@ -97,6 +114,8 @@ test_real_tree_passes
 test_missing_assignees_fails
 test_dropped_substitution_fails
 test_dropped_copy_line_fails
+test_dropped_inline_prefix_fails
+test_empty_assignee_fails
 test_missing_cooldown_fails
 test_partial_cooldown_fails
 test_unparseable_file_fails

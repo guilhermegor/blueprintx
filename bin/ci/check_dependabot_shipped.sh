@@ -21,7 +21,7 @@ meta_field() {
 copy_source() {
     local str_script="$1" str_line str_src str_var str_dir
     str_line="$(grep -vE '^[[:space:]]*#' "$str_script" \
-        | grep -E "envsubst .*dependabot\.yml.* \"?\\\$\{?project_path\}?/\.github/dependabot\.yml" | head -1)"
+        | grep -E "GITHUB_USERNAME=\"\\\$GITHUB_USERNAME\" envsubst '\\\$\{GITHUB_USERNAME\}' .*dependabot\.yml.* \"?\\\$\{?project_path\}?/\.github/dependabot\.yml" | head -1)"
     [ -n "$str_line" ] || return 1
     str_src="$(sed -E 's/.*< *"([^"]+)".*/\1/' <<<"$str_line")"
     str_var="$(sed -E 's#^\$\{?([A-Z_]+)\}?/.*#\1#' <<<"$str_src")"
@@ -40,7 +40,9 @@ cooldown_per_block() {
 assignees_per_block() {
     awk '
         /^  - package-ecosystem:/ { if (int_in && int_n != 1) int_bad = 1; int_in = 1; int_n = 0; int_blocks++ }
-        /^    assignees:/ { int_n++ }
+        /^    assignees:/ { int_a = 1; next }
+        int_a && /^      - "[^"]+"[[:space:]]*$/ { int_n++ }
+        { int_a = 0 }
         END { if (int_in && int_n != 1) int_bad = 1; exit (int_blocks > 0 && !int_bad) ? 0 : 1 }
     ' "$1"
 }
