@@ -23,6 +23,7 @@ dist/*
 *.swp
 
 .coverage
+coverage.svg
 coverage.xml
 htmlcov/
 

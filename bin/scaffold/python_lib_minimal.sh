@@ -223,7 +223,6 @@ copy_templates() {
     mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$SHARED_TEMPLATE_ROOT/.greptile/graphite.md" "$BLUEPRINTX_ROOT/templates/lib-minimal/.greptile/"* "$project_path/.greptile/"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     scaffold_render_readme lib-minimal "$COMMON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
-    cp "$COMMON_TEMPLATE_ROOT/coverage.svg" "$project_path/coverage.svg"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/AGENTS.md" "$project_path/AGENTS.md"
@@ -274,6 +273,8 @@ lib_minimal_copy_tooling_configs() {
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
         cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
+    else
+        cp "$BLUEPRINTX_ROOT/templates/common/review-bots-optout.yaml" "$project_path/.review-bots.yaml"
     fi
     cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$project_path/mypy.ini"
     cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$project_path/.sqlfluff"
@@ -298,6 +299,7 @@ lib_minimal_copy_github_assets() {
     local project_path="$1"
 
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/publish-badge.yaml" "$project_path/.github/workflows/publish-badge.yaml"
     if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
         cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
     fi
@@ -373,6 +375,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_rmw_race_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ruff_ret_rule.py" \
         "$project_path/tests/unit/test_ruff_ret_rule.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_py_floor_gate.py" \
+        "$project_path/tests/unit/test_py_floor_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_slug_gate.py" \
         "$project_path/tests/unit/test_migration_slug_gate.py"
 }
