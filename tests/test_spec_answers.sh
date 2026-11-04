@@ -686,6 +686,19 @@ test_default_project_root_inside_a_dir_named_like_the_project_is_allowed() {
     fi
 }
 
+test_explicit_empty_project_root_defaults_to_pwd() {
+    local file out int_rc cwd="$WORK_DIR/empty-root-cwd"
+    mkdir -p "$cwd"
+    file="$(write_spec empty-root lib-minimal "project_root=")"
+    out="$(cd "$cwd" && TMPDIR="$WORK_DIR" bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null)"
+    int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [ -d "$cwd/spec-probe" ]; then
+        pass "an explicit empty project_root behaves as unset and scaffolds under \$PWD"
+    else
+        fail "empty project_root" "rc=$int_rc: ${out: -300}"
+    fi
+}
+
 test_an_undefined_test_name_fails_the_runner() {
     local file="$WORK_DIR/undefined-probe.sh" out int_rc
     { sed '/^main$/d' "${BASH_SOURCE[0]}"
@@ -758,6 +771,7 @@ main() {
     test_project_root_alternate_spellings_of_the_project_dir_are_refused
     test_project_root_alternate_spellings_are_refused_when_the_dir_does_not_exist
     test_default_project_root_inside_a_dir_named_like_the_project_is_allowed
+    test_explicit_empty_project_root_defaults_to_pwd
     test_api_service_asks_the_same_prompts_as_the_ddd_tiers
     test_api_service_storage_answer_reaches_the_storage_prompt
     test_dev_clean_uses_a_temp_root_and_removes_it
