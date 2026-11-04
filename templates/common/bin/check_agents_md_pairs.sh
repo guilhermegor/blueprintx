@@ -21,6 +21,7 @@ check_file() {
 	local str_file="$1" str_agents str_line str_first str_seen=0
 	str_agents="$(sibling_agents "$str_file")"
 	[ -f "$str_agents" ] || fail "$str_file has no sibling $(basename "$str_agents")"
+	[ ! -f "$str_agents" ] || [ -r "$str_agents" ] || fail "$str_file has an unreadable sibling $(basename "$str_agents")"
 	[ -r "$str_file" ] || {
 		fail "$str_file is unreadable"
 		return
@@ -71,7 +72,12 @@ main() {
 			echo "check_agents_md_pairs: $str_root is not a directory" >&2
 			exit 2
 		}
-		mapfile -t arr_files < <(discover "$str_root")
+		local str_found
+		str_found="$(discover "$str_root")" || {
+			echo "check_agents_md_pairs: discovery under $str_root failed; refusing a partial scan" >&2
+			exit 2
+		}
+		[ -z "$str_found" ] || mapfile -t arr_files <<<"$str_found"
 	fi
 	for str_file in "${arr_files[@]}"; do
 		int_count=$((int_count + 1))

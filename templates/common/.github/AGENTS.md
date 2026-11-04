@@ -4,8 +4,10 @@ Guidance for Claude Code and contributors working in this project's `.github/`.
 
 ## What ships by default
 
-The scaffold ships **event-driven** CI only — workflows triggered by `push` and
-`pull_request`. Nothing here runs on a clock. That is deliberate: a scheduled
+The base scaffold ships **event-driven** CI — workflows triggered by `push` and
+`pull_request`. The Python service tiers add a few scheduled workflows
+(`contract_drift.yaml`, `pr-reconcile.yaml`, `review_retry.yaml`), each with its
+reason in its own file; nothing else runs on a clock. That is deliberate: a scheduled
 job runs whether or not anyone needs it, costs runner minutes, and can fail
 silently long after the person who added it has moved on.
 

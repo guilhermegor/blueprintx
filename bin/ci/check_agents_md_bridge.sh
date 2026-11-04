@@ -63,9 +63,13 @@ check_bridge() {
 }
 
 check_leaves() {
-	local -a arr_leaves
-	mapfile -t arr_leaves < <(find "$REPO_ROOT/templates" -mindepth 2 -type f \( -name 'CLAUDE.md' -o -name '*_CLAUDE.md' \) \
-		! -path "$REPO_ROOT/templates/common/CLAUDE.md" | grep -vE "^$REPO_ROOT/templates/[^/]+/CLAUDE\.md$" | sort)
+	local -a arr_leaves=()
+	local str_file
+	while IFS= read -r str_file; do
+		[ "$(basename "$str_file")" = "CLAUDE.md" ] && [ -f "$(dirname "$str_file")/skeleton.meta" ] && continue
+		arr_leaves+=("$str_file")
+	done < <(find "$REPO_ROOT/templates" -mindepth 2 -type f \( -name 'CLAUDE.md' -o -name '*_CLAUDE.md' \) \
+		! -path "$REPO_ROOT/templates/common/CLAUDE.md" | sort)
 	bash "$REPO_ROOT/templates/common/bin/check_agents_md_pairs.sh" "${arr_leaves[@]}"
 }
 

@@ -334,8 +334,9 @@ def check_claude_index(
     list_pages: list[str],
     path_docs: pathlib.Path,
     str_docs: str = "docs",
+    str_index: str = "CLAUDE.md",
 ) -> list[str]:
-    """Return errors where ``docs/CLAUDE.md``'s file index and disk reality disagree.
+    """Return errors where the docs file index and disk reality disagree.
 
     Parameters
     ----------
@@ -347,6 +348,8 @@ def check_claude_index(
         The project's docs directory.
     str_docs : str
         The docs directory as written in ``mkdocs.yml`` ``docs_dir`` — for messages only.
+    str_index : str
+        The file the index was read from (``AGENTS.md`` or ``CLAUDE.md``) — for messages only.
 
     Returns
     -------
@@ -354,12 +357,12 @@ def check_claude_index(
         One message per stale or missing row.
     """
     list_errors = [
-        f"{str_docs}/CLAUDE.md file index lists `{str_path}`, which does not exist on disk"
+        f"{str_docs}/{str_index} file index lists `{str_path}`, which does not exist on disk"
         for str_path in sorted(set_indexed)
         if not (path_docs / str_path).is_file()
     ]
     list_errors += [
-        f"{str_docs}/{str_rel}: published page missing from the {str_docs}/CLAUDE.md file index"
+        f"{str_docs}/{str_rel}: published page missing from the {str_docs}/{str_index} file index"
         for str_rel in list_pages
         if str_rel not in set_indexed
     ]
@@ -369,7 +372,7 @@ def check_claude_index(
 _INT_FLAG_WITH_VALUE = 2
 
 
-def docs_index_table(path_docs: pathlib.Path) -> set[str] | None:
+def docs_index_table(path_docs: pathlib.Path) -> tuple[str, set[str]] | None:
     """Return the docs file-index paths, read from ``AGENTS.md`` and else ``CLAUDE.md``.
 
     Parameters
@@ -379,13 +382,15 @@ def docs_index_table(path_docs: pathlib.Path) -> set[str] | None:
 
     Returns
     -------
-    set[str] | None
-        The first column of the file-index table, or None when neither file carries one.
+    tuple[str, set[str]] | None
+        The name of the file read and the first column of its file-index table,
+        or None when neither file carries one.
     """
-    set_indexed = claude_index_table(path_docs / "AGENTS.md")
-    if set_indexed is None:
-        return claude_index_table(path_docs / "CLAUDE.md")
-    return set_indexed
+    for str_name in ("AGENTS.md", "CLAUDE.md"):
+        set_indexed = claude_index_table(path_docs / str_name)
+        if set_indexed is not None:
+            return str_name, set_indexed
+    return None
 
 
 def main(list_argv: list) -> int:
@@ -434,9 +439,10 @@ def main(list_argv: list) -> int:
     list_errors += walk_problems(path_docs)
     list_errors += check_nav_ceiling(dict_mkdocs.get("nav"))
 
-    set_indexed = docs_index_table(path_docs)
-    if set_indexed is not None:
-        list_errors += check_claude_index(set_indexed, list_pages, path_docs, str_docs)
+    tuple_index = docs_index_table(path_docs)
+    if tuple_index is not None:
+        str_index, set_indexed = tuple_index
+        list_errors += check_claude_index(set_indexed, list_pages, path_docs, str_docs, str_index)
 
     for str_error in list_errors:
         print(f"docs-gap: {str_error}", file=sys.stderr)
