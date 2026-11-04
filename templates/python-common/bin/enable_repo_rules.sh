@@ -243,8 +243,11 @@ ensure_optout_label() {
 check_ruleset_present() {
 	require_gh || return 0
 	local str_repo str_ids
-	str_repo="$(resolve_repo)"
-	[ -n "$str_repo" ] || return 0
+	str_repo="${GITHUB_REPOSITORY:-$(resolve_repo)}"
+	if [ -z "$str_repo" ]; then
+		print_status "warning" "Could not resolve the repository (ruleset presence UNKNOWN, not confirmed)"
+		return 0
+	fi
 	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (presence UNKNOWN): ${str_ids:-no output from gh}"
@@ -256,20 +259,38 @@ check_ruleset_present() {
 	return 1
 }
 
+pr_has_codeql_analysis() {
+	local str_repo="$1" int_pr="$2" str_sha="$3"
+	local str_merge str_ref str_shas
+	str_merge="$(gh api "repos/$str_repo/git/ref/pull/$int_pr/merge" --jq .object.sha 2>/dev/null || true)"
+	for str_ref in head merge; do
+		str_shas="$(gh api "repos/$str_repo/code-scanning/analyses?tool_name=CodeQL&ref=refs/pull/$int_pr/$str_ref" \
+			--jq '.[].commit_sha' 2>/dev/null)" || return 2
+		grep -qxF -e "$str_sha" -e "${str_merge:-$str_sha}" <<<"$str_shas" && return 0
+	done
+	return 1
+}
+
 report_stranded_prs() {
 	local str_repo="$1"
-	local str_line int_pr str_sha str_analysed
-	local list_stranded=()
+	local str_prs int_pr str_sha int_rc
+	local list_stranded=() list_unknown=()
+	if ! str_prs="$(gh pr list --repo "$str_repo" --state open --limit 1000 --json number,headRefOid \
+		--jq '.[] | "\(.number) \(.headRefOid)"' 2>&1)"; then
+		print_status "warning" "Could not LIST open PRs on $str_repo (stranded PRs UNKNOWN, not none): ${str_prs:-no output from gh}"
+		return 0
+	fi
 	while read -r int_pr str_sha; do
 		[ -n "$int_pr" ] || continue
-		str_analysed="$(gh api "repos/$str_repo/code-scanning/analyses?ref=refs/pull/$int_pr/head" \
-			--jq "[.[].commit_sha] | index(\"$str_sha\") // empty" 2>/dev/null || true)"
-		[ -n "$str_analysed" ] || list_stranded+=("#$int_pr")
-	done < <(gh pr list --repo "$str_repo" --state open --json number,headRefOid \
-		--jq '.[] | "\(.number) \(.headRefOid)"' 2>/dev/null || true)
+		pr_has_codeql_analysis "$str_repo" "$int_pr" "$str_sha" && int_rc=0 || int_rc=$?
+		case "$int_rc" in
+		1) list_stranded+=("#$int_pr") ;;
+		2) list_unknown+=("#$int_pr") ;;
+		esac
+	done <<<"$str_prs"
+	[ ${#list_unknown[@]} -eq 0 ] || print_status "warning" "Could not read CodeQL analyses for open PRs ${list_unknown[*]} (UNKNOWN, not confirmed stranded)"
 	[ ${#list_stranded[@]} -gt 0 ] || return 0
-	str_line="${list_stranded[*]}"
-	print_status "warning" "Open PRs with no CodeQL analysis on their head: $str_line — the code_scanning rule blocks their merge (HTTP 405) until each gets a fresh push, e.g. 'git commit --allow-empty -m \"chore: trigger CodeQL\" && git push'"
+	print_status "warning" "Open PRs with no CodeQL analysis on their head: ${list_stranded[*]} — the code_scanning rule blocks their merge (HTTP 405) until each gets a fresh push, e.g. 'git commit --allow-empty -m \"chore: trigger CodeQL\" && git push'"
 }
 
 main() {
@@ -283,7 +304,7 @@ main() {
 	fi
 	if [ "${1:-}" = "stranded" ]; then
 		require_gh || return 0
-		report_stranded_prs "$(resolve_repo)"
+		report_stranded_prs "${GITHUB_REPOSITORY:-$(resolve_repo)}"
 		return 0
 	fi
 
