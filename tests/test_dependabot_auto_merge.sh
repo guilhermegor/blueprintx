@@ -27,11 +27,32 @@ STUB_BASE_ROSTER='reviewers:
 STUB_HEAD_ROSTER_EXTRA='  - login: evil-bot[bot]
     posts: threads'
 
+STUB_ROSTER_AT=root
+STUB_GITHUB_ROSTER='reviewers:
+  - login: github-only-bot[bot]
+    posts: threads'
+stub_roster_for() {
+	if [[ "$*" == *"?ref=basesha"* ]]; then
+		printf '%s\n' "$STUB_BASE_ROSTER"
+	else
+		printf '%s\n%s\n' "$STUB_BASE_ROSTER" "$STUB_HEAD_ROSTER_EXTRA"
+	fi
+}
+
 gh() {
 	case "$*" in
-	*"contents/.review-bots.yaml"*) [[ -n "${STUB_NO_ROSTER:-}" ]] && return 1 ;;&
-	*"contents/.review-bots.yaml?ref=basesha"*) printf '%s\n' "$STUB_BASE_ROSTER" ;;
-	*"contents/.review-bots.yaml"*) printf '%s\n%s\n' "$STUB_BASE_ROSTER" "$STUB_HEAD_ROSTER_EXTRA" ;;
+	*"contents/"*".review-bots.yaml"*) [[ -n "${STUB_NO_ROSTER:-}" ]] && { echo "gh: Not Found (HTTP 404)" >&2; return 1; } ;;&
+	*"contents/.github/.review-bots.yaml"*)
+		[[ "$STUB_ROSTER_AT" == error ]] && { echo "gh: Server Error (HTTP 502)" >&2; return 1; }
+		[[ "$STUB_ROSTER_AT" == empty ]] && return 0
+		[[ "$STUB_ROSTER_AT" == root ]] && { echo "gh: Not Found (HTTP 404)" >&2; return 1; }
+		[[ "$STUB_ROSTER_AT" == both ]] && { printf '%s\n' "$STUB_GITHUB_ROSTER"; return 0; }
+		stub_roster_for "$@"
+		;;
+	*"contents/.review-bots.yaml"*)
+		[[ "$STUB_ROSTER_AT" == github ]] && { echo "gh: Not Found (HTTP 404)" >&2; return 1; }
+		stub_roster_for "$@"
+		;;
 	"pr merge"*)
 		printf "%s ;" "$*" >>"$CALLS_FILE"
 		[[ -n "${STUB_DISARM_ERR:-}" && "$*" == *--disable-auto* ]] && { echo "$STUB_DISARM_ERR" >&2; return 1; }
@@ -113,6 +134,24 @@ STUB_REVIEWS=$(bot_review abc "github-actions[bot]" Bot)
 expect "status-only roster member does not arm a major" wait-review "$major"
 STUB_REVIEWS=$(bot_review old "coderabbitai[bot]" Bot)
 expect "roster bot review on an older head does not arm" wait-review "$major"
+STUB_ROSTER_AT=github
+STUB_REVIEWS=$(bot_review abc "guilhermegor-review-ladder[bot]" Bot)
+expect "roster only under .github/ arms a major" arm "$major"
+STUB_REVIEWS=$(bot_review abc "evil-bot[bot]" Bot)
+expect "head-only bot under .github/ does not arm" wait-review "$major"
+STUB_ROSTER_AT=both
+STUB_REVIEWS=$(bot_review abc "github-only-bot[bot]" Bot)
+expect ".github/ roster wins over the root one" arm "$major"
+STUB_REVIEWS=$(bot_review abc "coderabbitai[bot]" Bot)
+expect "root roster is ignored when .github/ has one" wait-review "$major"
+STUB_ROSTER_AT=error
+STUB_REVIEWS=$(bot_review abc "coderabbitai[bot]" Bot)
+expect "non-404 error on .github/ does not fall back to the root roster" wait-review "$major"
+STUB_ROSTER_AT=empty
+expect "empty .github/ roster is not replaced by the root one" wait-review "$major"
+STUB_ROSTER_AT=root
+STUB_REVIEWS=$(bot_review abc "guilhermegor-review-ladder[bot]" Bot)
+expect "roster only at the root still arms a major" arm "$major"
 STUB_REVIEWS='[]'
 STUB_AUTHOR="mallory"
 expect "non-dependabot author is skipped" skip "$patch"

@@ -294,6 +294,20 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/(scaffold_git_remote|common)\.sh|tests/test_scaffold_git_remote\.sh)$
 
+      - id: enable-repo-rules-tests
+        name: enable_repo_rules missing-ruleset and stranded-PR tests (blueprintx#944)
+        entry: bash tests/test_enable_repo_rules.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/python-common/bin/enable_repo_rules\.sh|tests/test_enable_repo_rules\.sh)$
+
+      - id: ts-lib-pack-smoke-shape-tests
+        name: ts-lib verdaccio rehearsal publishes a prerelease and pins the install (blueprintx#934)
+        entry: bash tests/test_ts_lib_pack_smoke_shape.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/ts-lib/\.github/workflows/pack-smoke\.yml|tests/test_ts_lib_pack_smoke_shape\.sh)$
+
       - id: prune-merged-branches-tests
         name: scaffold deletes merged branches and prunes on fetch (blueprintx#923)
         entry: bash tests/test_prune_merged_branches.sh
