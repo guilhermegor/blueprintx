@@ -902,8 +902,8 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   import. Its pinned dependency declaration is deliberately separate from `copy_internal_utils`,
   which runs before `pyproject.toml` exists.
 - **No env files, library badges.** A distributable library has no runtime `.env`, so
-  `.env` and `.env.example` are removed. The PyPI badge comes from the shared README
-  template, library-only; no Snyk or pepy badges.
+  `.env` and `.env.example` are removed. PyPI and Snyk badges are added after the Python
+  version badge, library-only, in the same placeholder style as the existing ones.
 - **Publish and consume (Q1 to Q3).** Official registry is PyPI, staging is Test PyPI, and a
   private source is a PEP 503 index or git source. Only the selected release workflows are
   emitted, the defaults keep the previous behaviour (both shipped) for non-interactive runs,

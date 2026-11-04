@@ -230,16 +230,16 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
         Normalised login mapped to its ``posts:`` classification. Every member counts as a
             reviewer rather than as an answer for the THREAD half; only the ``threads`` members
             can satisfy the MISSING-REVIEW half — see :func:`reviewer_logins`. Empty when the
-            file was never there (or PyYAML is absent); :func:`main` fails that case closed.
+            file was NEVER there, which makes the gate a no-op rather than a source of false
+            failures.
 
     Raises
     ------
     RuntimeError
         When the roster is absent HERE but present on the default branch — that is a
             deletion, and since an empty roster makes this gate a no-op, it would switch the
-            gate off inside the very PR it is meant to police. Also raised for a roster with
-            no reviewers, and propagated from :func:`posts_of` for a row that does not declare
-            a usable ``posts:``. :func:`main` reports all of these as a failing verdict.
+            gate off inside the very PR it is meant to police. Also propagated from
+            :func:`posts_of` for a row that does not declare a usable ``posts:``.
     """
     path_roster = path_root / _ROSTER_FILE
     if yaml is None:
@@ -260,8 +260,8 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
     if not dict_roster:
         raise RuntimeError(
             f"{_ROSTER_FILE} exists but declares no reviewers — an empty roster makes this "
-            f"gate a no-op, which is the same as deleting it. Declare a reviewer, or opt out "
-            f"explicitly with `adopted: false`."
+            f"gate a no-op, which is the same as deleting it. Declare a reviewer, or delete "
+            f"the file to opt out (that path self-skips with a message)."
         )
     return dict_roster
 
@@ -1742,14 +1742,8 @@ def _print_skip(bool_json: bool, str_reason: str) -> int:
     return 0
 
 
-def _declares_opt_out(str_text: str) -> bool:
-    """Return whether roster text declares a top-level boolean ``adopted: false``."""
-    dict_yaml = yaml.safe_load(str_text) or {}
-    return isinstance(dict_yaml, dict) and dict_yaml.get("adopted") is False
-
-
 def roster_opted_out(path_root: pathlib.Path) -> bool:
-    """Return whether the checked-out roster explicitly declares ``adopted: false``.
+    """Return whether the roster explicitly declares ``adopted: false``.
 
     Parameters
     ----------
@@ -1761,79 +1755,18 @@ def roster_opted_out(path_root: pathlib.Path) -> bool:
     bool
         ``True`` only for a present roster whose top-level ``adopted`` is the boolean
             ``false``. An absent file is never an opt-out: the gate runs as a required check,
-            so silence must not read as consent (blueprintx#952). The checkout is the PR's own
-            tree, so this alone never authorises an opt-out; see :func:`base_opted_out`.
+            so silence must not read as consent (blueprintx#952).
     """
     path_roster = path_root / _ROSTER_FILE
-    return path_roster.is_file() and _declares_opt_out(path_roster.read_text(encoding="utf-8"))
-
-
-def _gh_api_text(list_args: list[str]) -> str | None:
-    """Run ``gh api`` and return stdout, or ``None`` on any failure."""
-    cls_run = subprocess.run(  # noqa: S603
-        ["gh", "api", *list_args],  # noqa: S607
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return cls_run.stdout if cls_run.returncode == 0 else None
-
-
-def base_opted_out(str_repo_full: str, str_number: str) -> bool:
-    """Return whether the PR's BASE branch roster declares ``adopted: false``.
-
-    Parameters
-    ----------
-    str_repo_full : str
-        ``owner/repo``.
-    str_number : str
-        Pull request number, used to resolve the base branch when ``GITHUB_BASE_REF`` is unset.
-
-    Returns
-    -------
-    bool
-        ``True`` only when the base branch's roster is readable and opts out. Every failure
-            (no base, no file, bad YAML, API error) is ``False``, so an unreadable base never
-            lets a PR switch the gate off (blueprintx#952).
-    """
-    str_base = (
-        os.environ.get("GITHUB_BASE_REF")
-        or (
-            _gh_api_text([f"repos/{str_repo_full}/pulls/{str_number}", "--jq", ".base.ref"]) or ""
-        ).strip()
-    )
-    if not str_base:
+    if yaml is None or not path_roster.is_file():
         return False
-    str_text = _gh_api_text(
-        [
-            "-H",
-            "Accept: application/vnd.github.raw+json",
-            f"repos/{str_repo_full}/contents/{_ROSTER_FILE}?ref={str_base}",
-        ]
-    )
-    try:
-        return str_text is not None and _declares_opt_out(str_text)
-    except yaml.YAMLError:
-        return False
+    dict_yaml = yaml.safe_load(path_roster.read_text(encoding="utf-8")) or {}
+    return isinstance(dict_yaml, dict) and dict_yaml.get("adopted") is False
 
 
-def _print_missing_parser(bool_json: bool) -> int:
-    """Print the missing-PyYAML failure in the requested representation and return ``1``."""
-    str_reason = (
-        f"PyYAML is not importable, so {_ROSTER_FILE} cannot be read and this required gate "
-        "would check nothing. Install it (`pip install pyyaml`)."
-    )
-    print(
-        json.dumps({"status": "fail", "reason": "missing_parser", "detail": str_reason})
-        if bool_json
-        else f"❌ {str_reason}"
-    )
-    return 1
-
-
-def _print_missing_roster(bool_json: bool, str_detail: str = "") -> int:
+def _print_missing_roster(bool_json: bool) -> int:
     """Print the missing-roster failure in the requested representation and return ``1``."""
-    str_reason = str_detail or (
+    str_reason = (
         f"{_ROSTER_FILE} is missing or unreadable, so this required gate would check nothing. "
         f"Copy it from the BlueprintX template (templates/python-common/{_ROSTER_FILE}, or "
         f"templates/ts-common/.github/{_ROSTER_FILE}), or opt out explicitly with "
@@ -2158,24 +2091,6 @@ def _missing_review(
     )
 
 
-def _roster_or_verdict(
-    bool_json: bool, str_repo_full: str, str_number: str
-) -> tuple[dict[str, str], int | None]:
-    """Return the roster, or the exit code of the skip/failure that ends the run early."""
-    path_cwd = pathlib.Path.cwd()
-    if roster_opted_out(path_cwd) and base_opted_out(str_repo_full, str_number):
-        return {}, _print_skip(
-            bool_json, f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out"
-        )
-    try:
-        dict_roster = load_roster(path_cwd)
-    except RuntimeError as err:
-        return {}, _print_missing_roster(bool_json, str(err))
-    if not dict_roster:
-        return {}, _print_missing_roster(bool_json)
-    return dict_roster, None
-
-
 def main(list_argv: list[str] | None = None) -> int:
     """Check the current PR's review threads.
 
@@ -2196,12 +2111,14 @@ def main(list_argv: list[str] | None = None) -> int:
     if not str_repo_full or not str_number.isdigit():
         return _print_skip(bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
 
-    if yaml is None:
-        return _print_missing_parser(bool_json)
-
-    dict_roster, int_exit = _roster_or_verdict(bool_json, str_repo_full, str_number)
-    if int_exit is not None:
-        return int_exit
+    path_cwd = pathlib.Path.cwd()
+    if roster_opted_out(path_cwd):
+        return _print_skip(
+            bool_json, f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out"
+        )
+    dict_roster = load_roster(path_cwd)
+    if not dict_roster:
+        return _print_missing_roster(bool_json)
 
     set_roster = set(dict_roster)
     set_reviewers = reviewer_logins(dict_roster)
