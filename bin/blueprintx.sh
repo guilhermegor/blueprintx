@@ -614,6 +614,19 @@ scaffold_from_spec() {
     rm -f "$path_answers"
 }
 
+resolve_spec_project_root() {
+    local str_raw_root str_resolved_root
+    str_raw_root="$(spec_get "$SPEC_FILE" project_root "")"
+    if [ -z "$str_raw_root" ]; then
+        PROJECT_ROOT="$PWD"
+        return 0
+    fi
+    PROJECT_ROOT="$(expand_tilde "$str_raw_root")"
+    str_resolved_root="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P)" || str_resolved_root="$PROJECT_ROOT"
+    [ "$(basename "$str_resolved_root")" != "$PROJECT_NAME" ] \
+        || exit_error "--spec: 'project_root' ($PROJECT_ROOT) ends in the project name; it is the parent directory, not the project directory. Set it to the directory that will contain '$PROJECT_NAME'."
+}
+
 run_create_flow_from_spec() {
     PROJECT_NAME=$(spec_get "$SPEC_FILE" project_name)
     [ -n "$PROJECT_NAME" ] || exit_error "--spec: 'project_name' key is required."
@@ -661,9 +674,7 @@ run_create_flow_from_spec() {
     if [ "$DEV_MODE" -eq 1 ]; then
         select_dev_project_root
     else
-        PROJECT_ROOT=$(expand_tilde "$(spec_get "$SPEC_FILE" project_root "$PWD")")
-        [ "$(basename "$PROJECT_ROOT")" != "$PROJECT_NAME" ] \
-            || exit_error "--spec: 'project_root' ($PROJECT_ROOT) ends in the project name; it is the parent directory, not the project directory. Set it to the directory that will contain '$PROJECT_NAME'."
+        resolve_spec_project_root
         mkdir -p "$PROJECT_ROOT"
     fi
 

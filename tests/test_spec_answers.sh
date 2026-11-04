@@ -646,6 +646,33 @@ test_project_root_naming_the_project_is_refused() {
     fi
 }
 
+test_project_root_alternate_spellings_of_the_project_dir_are_refused() {
+    local file root out int_rc
+    root="$WORK_DIR/spelling-root/spec-probe"
+    mkdir -p "$root"
+    file="$(write_spec spelling-root lib-minimal "project_root=$root/./")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'project_root'"*"parent directory"* && ! -e "$root/spec-probe" ]]; then
+        pass "a project_root spelled with a trailing /./ is still refused when it is the project dir"
+    else
+        fail "project_root alternate spelling" "rc=$int_rc, nested dir exists or message missing: ${out: -300}"
+    fi
+}
+
+test_default_project_root_inside_a_dir_named_like_the_project_is_allowed() {
+    local file out int_rc cwd="$WORK_DIR/default-cwd/spec-probe"
+    mkdir -p "$cwd"
+    file="$(write_spec default-root lib-minimal)"
+    out="$(cd "$cwd" && TMPDIR="$WORK_DIR" bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null)"
+    int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [ -d "$cwd/spec-probe" ] && [[ "$out" != *"'project_root'"* ]]; then
+        pass "an unset project_root defaults to \$PWD without the project-name refusal, even inside a dir named like the project"
+    else
+        fail "default project_root" "rc=$int_rc: ${out: -300}"
+    fi
+}
+
 test_an_undefined_test_name_fails_the_runner() {
     local file="$WORK_DIR/undefined-probe.sh" out int_rc
     { sed '/^main$/d' "${BASH_SOURCE[0]}"
@@ -715,6 +742,8 @@ main() {
     test_unmapped_skeleton_is_refused_before_creating_anything
     test_project_root_tilde_expands_to_home
     test_project_root_naming_the_project_is_refused
+    test_project_root_alternate_spellings_of_the_project_dir_are_refused
+    test_default_project_root_inside_a_dir_named_like_the_project_is_allowed
     test_api_service_asks_the_same_prompts_as_the_ddd_tiers
     test_api_service_storage_answer_reaches_the_storage_prompt
     test_dev_clean_uses_a_temp_root_and_removes_it
