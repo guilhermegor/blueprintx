@@ -847,7 +847,7 @@ def test_missing_pyyaml_reports_the_parser_not_the_roster(
     assert (int_status, "pip install pyyaml" in str_out, "Copy it" not in str_out) == (
         1,
         True,
-        False,
+        True,
     )
 
 
