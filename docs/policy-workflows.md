@@ -1,16 +1,15 @@
 # Repo policy workflows
 
-Scaffolded GitHub repos carry six server-side PR/issue policies in `.github/workflows/`
+Scaffolded GitHub repos carry five server-side PR/issue policies in `.github/workflows/`
 (blueprintx#604). Local hooks only guard one machine; these run for every contributor.
 Offline scaffolds (no GitHub remote) do not receive them.
 
 | Workflow | Rule |
 |----------|------|
 | `close-linked-issues.yml` | On a merged same-repo PR into the default branch, closes the issues named by the branch (`<type>/<N>-<slug>`) or by `Closes/Fixes/Resolves #N`. |
-| `branch-has-issue.yml` | Fails a PR whose head branch carries no issue number (`<type>/<N>-<slug>`), that has no assignee, or that is linked to no real issue. `release/`, `dependabot/` and `renovate/` branches are exempt from the branch rule. |
+| `branch-has-issue.yml` | Assigns the author when a same-repo PR is opened (job `assign`), then fails a PR whose head branch carries no issue number (`<type>/<N>-<slug>`), that has no assignee, or that is linked to no real issue. `release/`, `dependabot/` and `renovate/` branches are exempt from the branch rule. |
 | `pr-title-conventional.yml` | Fails a PR title that is not a Conventional Commit; squash merges use it as the commit subject. |
 | `pr-body-template.yml` | Fails a PR body missing a `## ` section of `.github/PULL_REQUEST_TEMPLATE.md`. |
-| `pr-self-assign.yml` | Assigns the author when a same-repo PR is opened. |
 | `dependabot-auto-merge.yml` | Arms auto-merge for Dependabot patch/minor bumps; majors wait for a review. See [Dependabot auto-merge](dependabot-auto-merge.md). |
 
 The checks run `bin/check_pr_policy.sh`, copied into the project (never fetched at run time).
@@ -28,7 +27,7 @@ user-owned Projects v2 board, so that stays in a local hook or behind a PAT secr
   `.github/PULL_REQUEST_TEMPLATE.md`) from the environment and exits 0 (pass), 1 (violation) or 2
   (bad usage). Sourcing it defines the functions without running them, which the tests use.
 - A trailing `-<N>` in a branch name is not an issue number (`chore/bump-node-20` is a version).
-- `pr-self-assign.yml` skips fork PRs (read-only token) and needs only `pull-requests: write`.
+- The `assign` job skips fork PRs and holds `pull-requests: write`; the `check` job, which `needs: assign`, stays read-only.
 - The new check names are deliberately absent from each tier's `bin/required-checks.txt`, which
   allows a name only after a real PR has emitted it. Add them once they have reported.
 - Offline scaffolds drop `.github/` but keep `close_linked_issues.sh` and `check_pr_policy.sh` in `bin/`, and drop `dependabot_auto_merge.sh` (tracked in #727).
@@ -49,7 +48,7 @@ The workflow reads the tracker from the repository variables `PR_TRACKER` and `P
 script takes forge and tracker only from the environment, so a GitLab caller (out of scope here) is a new
 wrapper, not a rewrite.
 
-The workflow reads assignees live from the API and also runs on `assigned`/`unassigned`: `pr-self-assign.yml` assigns with `GITHUB_TOKEN`, which never re-triggers workflows, so the `opened` payload would leave the check stale.
+Self-assignment lives in the same workflow as the check, as a job the check `needs:`, because a separate `pr-self-assign.yml` raced the check on `opened` and its `GITHUB_TOKEN` assignment never re-triggers workflows. The check reads assignees live from the API and also runs on `assigned`/`unassigned`, so a manual change re-evaluates it.
 
 Bot PRs are skipped by the workflow job (`user.type == 'Bot'`) and so never hit the assignee rule here.
 Giving each tier's `dependabot.yml` an `assignees:` entry set to the repo owner at scaffold time is

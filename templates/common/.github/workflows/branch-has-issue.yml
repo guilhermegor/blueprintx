@@ -10,7 +10,25 @@ permissions:
   pull-requests: read
 
 jobs:
+  assign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Assign the author
+        if: >-
+          github.event.action == 'opened'
+          && github.event.pull_request.head.repo.full_name == github.repository
+          && github.event.pull_request.user.type == 'User'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: gh api -X POST "repos/$GH_REPO/issues/$PR/assignees" -f "assignees[]=$AUTHOR"
   check:
+    needs: assign
     if: github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     timeout-minutes: 5
