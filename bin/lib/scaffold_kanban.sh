@@ -190,13 +190,17 @@ scaffold_release_issue_card() {
 	str_number="$(scaffold_kanban_find "$str_owner" "$str_title" 2>/dev/null)" || return 0
 	[ -n "$str_number" ] || return 0
 	str_pid="$(gh project view "$str_number" --owner "$str_owner" --format json --jq '.id' 2>/dev/null)" || str_pid=""
-	str_item="$(gh project item-add "$str_number" --owner "$str_owner" --url "$str_url" \
-		--format json --jq '.id' 2>/dev/null)" || str_item=""
 	str_field="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
 		--jq '.fields[] | select(.name=="Status") | .id' 2>/dev/null | head -n1)"
 	str_opt="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
 		--jq '.fields[] | select(.name=="Status") | .options[]? | select(.name=="Blocked") | .id' 2>/dev/null | head -n1)"
-	if [ -z "$str_pid" ] || [ -z "$str_item" ] || [ -z "$str_field" ] || [ -z "$str_opt" ]; then
+	if [ -n "$str_pid" ] && [ -n "$str_field" ] && [ -n "$str_opt" ]; then
+		str_item="$(gh project item-add "$str_number" --owner "$str_owner" --url "$str_url" \
+			--format json --jq '.id' 2>/dev/null)" || str_item=""
+	else
+		str_item=""
+	fi
+	if [ -z "$str_item" ]; then
 		print_status "warning" "Could not place the Cut 1.0.0 card on '${str_title}' (project #${str_number}) as Blocked; do it by hand"
 		return 0
 	fi
@@ -211,7 +215,9 @@ scaffold_open_release_issue() {
 	[ -f "$str_tpl" ] || return 0
 	command -v gh >/dev/null 2>&1 || return 0
 	str_slug="$(scaffold_repo_slug)"
-	str_manual="awk 'NR==1&&/^---\$/{f=1;next} f&&/^---\$/{f=0;next} !f' ${str_tpl} | gh issue create --repo ${str_slug} --title 'Cut 1.0.0' --label state:blocked --body-file -"
+	str_manual="$(printf "awk 'NR==1&&/^---\$/{f=1;next} f&&/^---\$/{f=0;next} !f' %q | gh issue create --repo %q --title 'Cut 1.0.0' --label state:blocked --body-file -" "$str_tpl" "$str_slug")"
+	gh label create state:blocked --repo "$str_slug" --color D93F0B \
+		--description "Cannot start: see the Blocked by line" --force >/dev/null 2>&1 || true
 	str_existing="$(gh api --paginate "repos/${str_slug}/issues?state=all&per_page=100" \
 		--jq '.[] | select((has("pull_request") | not) and .title=="Cut 1.0.0") | .html_url' 2>/dev/null)" || {
 		print_status "warning" "Could not check for an existing Cut 1.0.0 issue on ${str_slug}; not creating one. Open it by hand: ${str_manual}"

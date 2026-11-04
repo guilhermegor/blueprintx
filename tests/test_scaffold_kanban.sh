@@ -104,7 +104,7 @@ test_release_issue_opens_once_for_a_package_tier() {
     expect_log "release issue" "issue create --repo octo/widget --title Cut 1.0.0 --label state:blocked" present
     expect_log "release issue" "issue-template-guard: require" present
     expect_log "release issue" "name: Cut 1.0.0" absent
-    expect_log "release issue" "---" absent
+    expect_log "release issue" "label create state:blocked --repo octo/widget" present
     expect_log "release issue" "about: The blocked path" absent
     expect_log "release issue" 'title: "Cut 1.0.0"' absent
     expect_log "release issue" 'labels: ["state:blocked"]' absent
@@ -149,13 +149,14 @@ test_card_failure_warns_when_a_board_exists() {
     local str_out
     str_out="$(run_release_issue yes 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":7}]}')"
     expect_out "card failure" "$str_out" "Could not place the Cut 1.0.0 card"
+    expect_log "card failure" "project item-add" absent
 }
 
 test_release_issue_card_is_set_to_blocked() {
     run_release_issue yes 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":7}]}' \
         'GH_STATUS_OPTIONS=PVTSSO_b|Blocked' >/dev/null
     expect_log "card" "project item-add 7 --owner octo --url https://github.com/octo/widget/issues/1" present
-    expect_log "card" "project item-edit --id PVTI_1 --project-id PVT_1" present
+    expect_log "card" "project item-edit --id PVTI_1 --project-id PVT_1 --field-id PVTSSF_status --single-select-option-id PVTSSO_b" present
     run_release_issue yes >/dev/null
     expect_log "no board" "project item-add" absent
 }
