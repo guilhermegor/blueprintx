@@ -421,6 +421,12 @@ jobs:
       - name: Run the scaffold git-remote should-fail suite (blueprintx#732)
         run: bash tests/test_scaffold_git_remote.sh
 
+      - name: Run the enable_repo_rules suite (blueprintx#944)
+        run: bash tests/test_enable_repo_rules.sh
+
+      - name: Run the ts-lib pack-smoke shape suite (blueprintx#934)
+        run: bash tests/test_ts_lib_pack_smoke_shape.sh
+
       - name: Run the merged-branch cleanup suite (blueprintx#923)
         run: bash tests/test_prune_merged_branches.sh
 
