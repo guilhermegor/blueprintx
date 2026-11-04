@@ -73,6 +73,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import urllib.parse
 
 
 try:
@@ -82,6 +83,7 @@ except ModuleNotFoundError:  # pragma: no cover - the gate self-skips without it
 
 
 _ROSTER_FILE = ".review-bots.yaml"
+_ROSTER_PATHS = (_ROSTER_FILE, f".github/{_ROSTER_FILE}")
 
 _POSTS_THREADS = "threads"
 _POSTS_STATUS = "status"
@@ -1770,17 +1772,38 @@ def roster_opted_out(path_root: pathlib.Path) -> bool:
 
 
 def _gh_api_text(list_args: list[str]) -> str | None:
-    """Run ``gh api`` and return stdout, or ``None`` on any failure."""
+    """Run ``gh api`` and return stdout, or ``None`` on any failure, hang included."""
     try:
         cls_run = subprocess.run(  # noqa: S603
             ["gh", "api", *list_args],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,
+            timeout=_INT_COMPARE_TIMEOUT_S,
         )
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return None
     return cls_run.stdout if cls_run.returncode == 0 else None
+
+
+def _base_roster_text(str_repo_full: str, str_base: str) -> str | None:
+    """Return the base branch's roster text, trying each roster location in order.
+
+    The repo root comes first (Python scaffolds), then ``.github/`` (TypeScript scaffolds, whose
+    workflow stages that copy to the root only on the runner — blueprintx#969).
+    """
+    str_ref = urllib.parse.quote(str_base, safe="")
+    for str_path in _ROSTER_PATHS:
+        str_text = _gh_api_text(
+            [
+                "-H",
+                "Accept: application/vnd.github.raw+json",
+                f"repos/{str_repo_full}/contents/{str_path}?ref={str_ref}",
+            ]
+        )
+        if str_text is not None:
+            return str_text
+    return None
 
 
 def base_opted_out(str_repo_full: str, str_number: str) -> bool:
@@ -1796,9 +1819,10 @@ def base_opted_out(str_repo_full: str, str_number: str) -> bool:
     Returns
     -------
     bool
-        ``True`` only when the base branch's roster is readable and opts out. Every failure
-            (no base, no file, bad YAML, API error) is ``False``, so an unreadable base never
-            lets a PR switch the gate off (blueprintx#952).
+        ``True`` only when the base branch's roster is readable and opts out. The first roster
+            found decides, root before ``.github/``. Every failure (no base, no file, bad YAML,
+            API error or hang) is ``False``, so an unreadable base never lets a PR switch the
+            gate off (blueprintx#952).
     """
     str_base = (
         os.environ.get("GITHUB_BASE_REF")
@@ -1808,13 +1832,7 @@ def base_opted_out(str_repo_full: str, str_number: str) -> bool:
     )
     if not str_base:
         return False
-    str_text = _gh_api_text(
-        [
-            "-H",
-            "Accept: application/vnd.github.raw+json",
-            f"repos/{str_repo_full}/contents/{_ROSTER_FILE}?ref={str_base}",
-        ]
-    )
+    str_text = _base_roster_text(str_repo_full, str_base)
     try:
         return str_text is not None and _declares_opt_out(str_text)
     except yaml.YAMLError:
@@ -1835,8 +1853,14 @@ def _print_missing_parser(bool_json: bool) -> int:
     return 1
 
 
-def _print_missing_roster(bool_json: bool, str_detail: str = "") -> int:
-    """Print the missing-roster failure in the requested representation and return ``1``."""
+def _print_missing_roster(
+    bool_json: bool, str_detail: str = "", str_code: str = "missing_roster"
+) -> int:
+    """Print the missing-roster failure in the requested representation and return ``1``.
+
+    ``str_code`` is the ``--json`` ``reason``: ``opt_out_refused`` tells a consumer the roster IS
+    present and opts out, but the base branch does not back it (blueprintx#955).
+    """
     str_reason = str_detail or (
         f"{_ROSTER_FILE} is missing or unreadable, so this required gate would check nothing. "
         f"Copy it from the BlueprintX template (templates/python-common/{_ROSTER_FILE}, or "
@@ -1844,7 +1868,7 @@ def _print_missing_roster(bool_json: bool, str_detail: str = "") -> int:
         f"`adopted: false` in {_ROSTER_FILE}."
     )
     print(
-        json.dumps({"status": "fail", "reason": "missing_roster", "detail": str_reason})
+        json.dumps({"status": "fail", "reason": str_code, "detail": str_reason})
         if bool_json
         else f"❌ {str_reason}"
     )
@@ -2167,15 +2191,18 @@ def _roster_or_verdict(
 ) -> tuple[dict[str, str], int | None]:
     """Return the roster, or the exit code of the skip/failure that ends the run early."""
     path_cwd = pathlib.Path.cwd()
+    bool_pr_opt_out = False
     try:
-        if roster_opted_out(path_cwd) and base_opted_out(str_repo_full, str_number):
+        bool_pr_opt_out = roster_opted_out(path_cwd)
+        if bool_pr_opt_out and base_opted_out(str_repo_full, str_number):
             return {}, _print_skip(
                 bool_json,
                 f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out",
             )
         dict_roster = load_roster(path_cwd)
     except (RuntimeError, yaml.YAMLError, OSError, UnicodeDecodeError) as err:
-        return {}, _print_missing_roster(bool_json, str(err))
+        str_code = "opt_out_refused" if bool_pr_opt_out else "missing_roster"
+        return {}, _print_missing_roster(bool_json, str(err), str_code)
     if not dict_roster:
         return {}, _print_missing_roster(bool_json)
     return dict_roster, None

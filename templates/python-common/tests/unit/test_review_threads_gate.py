@@ -10,6 +10,7 @@ Every shape here was measured on a real PR (blueprintx#170), including the one t
 the gate: 14 threads all reading ``isResolved: true`` while 11 held no author reply at all.
 """
 
+from collections.abc import Callable
 import functools
 import importlib.util
 import json
@@ -822,6 +823,54 @@ def test_opt_out_declared_on_the_base_side_is_accepted(
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "adopted: false\n")
 
     assert (cls_gate.main([]), "opted out" in capsys.readouterr().out) == (0, True)
+
+
+def _serve_dot_github_only(str_text: str, list_args: list[str]) -> str | None:
+    """Answer a ``gh api`` contents call for the ``.github/`` roster only; 404 the rest."""
+    return {True: str_text}.get("contents/.github/" in list_args[-1])
+
+
+def _github_dir_only(str_text: str) -> Callable[[list[str]], str | None]:
+    """Return a ``gh api`` stub that serves ``str_text`` solely for the ``.github/`` roster."""
+    return functools.partial(_serve_dot_github_only, str_text)
+
+
+def test_base_opt_out_declared_only_under_dot_github_is_honoured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A TypeScript base keeps its roster at ``.github/``; its opt-out must count (#969)."""
+    cls_gate = _load_gate()
+    monkeypatch.setenv("GITHUB_BASE_REF", "main")
+    monkeypatch.setattr(cls_gate, "_gh_api_text", _github_dir_only("adopted: false\n"))
+
+    assert cls_gate.base_opted_out("o/r", "1") is True
+
+
+def test_base_roster_at_the_root_wins_over_dot_github(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The root roster is read first, so a root without an opt-out is not overridden."""
+    cls_gate = _load_gate()
+    monkeypatch.setenv("GITHUB_BASE_REF", "main")
+    monkeypatch.setattr(cls_gate, "_gh_api_text", lambda _args: "reviewers: []\n")
+
+    assert cls_gate.base_opted_out("o/r", "1") is False
+
+
+def test_gh_api_text_fails_closed_on_a_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hung ``gh api`` call returns ``None`` instead of hanging the gate."""
+    monkeypatch.setattr(subprocess, "run", Mock(side_effect=subprocess.TimeoutExpired("gh", 20)))
+
+    assert _load_gate()._gh_api_text(["x"]) is None
+
+
+def test_a_refused_opt_out_reports_its_own_json_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A present roster whose opt-out the base does not back is not ``missing_roster``."""
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
+
+    cls_gate.main(["--json"])
+
+    assert '"reason": "opt_out_refused"' in capsys.readouterr().out
 
 
 def test_missing_pyyaml_reports_the_parser_not_the_roster(
