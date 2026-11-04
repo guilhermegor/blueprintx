@@ -660,6 +660,19 @@ test_project_root_alternate_spellings_of_the_project_dir_are_refused() {
     fi
 }
 
+test_project_root_alternate_spellings_are_refused_when_the_dir_does_not_exist() {
+    local file root out int_rc
+    root="$WORK_DIR/spelling-missing/spec-probe"
+    file="$(write_spec spelling-missing lib-minimal "project_root=$root/.")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'project_root'"*"parent directory"* && ! -e "$root" ]]; then
+        pass "a trailing /. on a project_root that does not exist yet is refused too"
+    else
+        fail "project_root alternate spelling, missing dir" "rc=$int_rc, dir created or message missing: ${out: -300}"
+    fi
+}
+
 test_default_project_root_inside_a_dir_named_like_the_project_is_allowed() {
     local file out int_rc cwd="$WORK_DIR/default-cwd/spec-probe"
     mkdir -p "$cwd"
@@ -743,6 +756,7 @@ main() {
     test_project_root_tilde_expands_to_home
     test_project_root_naming_the_project_is_refused
     test_project_root_alternate_spellings_of_the_project_dir_are_refused
+    test_project_root_alternate_spellings_are_refused_when_the_dir_does_not_exist
     test_default_project_root_inside_a_dir_named_like_the_project_is_allowed
     test_api_service_asks_the_same_prompts_as_the_ddd_tiers
     test_api_service_storage_answer_reaches_the_storage_prompt

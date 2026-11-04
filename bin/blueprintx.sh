@@ -622,7 +622,14 @@ resolve_spec_project_root() {
         return 0
     fi
     PROJECT_ROOT="$(expand_tilde "$str_raw_root")"
-    str_resolved_root="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P)" || str_resolved_root="$PROJECT_ROOT"
+    str_resolved_root="$PROJECT_ROOT"
+    while :; do
+        case "$str_resolved_root" in
+            ?*/) str_resolved_root="${str_resolved_root%/}" ;;
+            ?*/.) str_resolved_root="${str_resolved_root%/.}" ;;
+            *) break ;;
+        esac
+    done
     [ "$(basename "$str_resolved_root")" != "$PROJECT_NAME" ] \
         || exit_error "--spec: 'project_root' ($PROJECT_ROOT) ends in the project name; it is the parent directory, not the project directory. Set it to the directory that will contain '$PROJECT_NAME'."
 }

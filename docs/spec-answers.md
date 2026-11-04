@@ -51,7 +51,7 @@ Answer `bin/blueprintx.sh`'s own prompts (before any scaffold script runs):
 |---|---|---|---|
 | `project_name` | yes | — | Project/folder name. Same validation as the interactive prompt. |
 | `project_description` | no | empty | One-line description. |
-| `project_root` | no | `$PWD` | Parent directory the project is created under, not the project directory itself. A leading `~` or `~/` expands to `$HOME`, as in the interactive prompt; no other expansion is done. A `project_root` you set whose last component equals `project_name` (also when spelled with a trailing `/.`) stops the run before anything is created, naming the key; this check is `--spec` only, and the unset `$PWD` default is never refused. |
+| `project_root` | no | `$PWD` | Parent directory the project is created under, not the project directory itself. A leading `~` or `~/` expands to `$HOME`, as in the interactive prompt; no other expansion is done. A `project_root` you set whose last component equals `project_name` (also when spelled with a trailing `/` or `/.`, whether or not the directory exists; the check is on the path as written, symlinks are not followed) stops the run before anything is created, naming the key; this check is `--spec` only, and the unset `$PWD` default is never refused. An explicit empty `project_root=` behaves as unset. There is no override key: a parent that shares the project's name must be avoided. |
 | `language` | yes | — | Must match a discovered `templates/*/skeleton.meta` `language=`. |
 | `skeleton` | yes | — | Must name a directory under `templates/` with a `skeleton.meta`. |
 | `license` | no | `MIT` | One of the choices `prompt_license` offers. |
