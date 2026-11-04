@@ -42,10 +42,13 @@ file that does not exist, any block of the copied file lacks a `cooldown` or the
 `"${GITHUB_USERNAME}"` assignee item, or the script does not render it with
 `GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}'`. The inline prefix is
 required because several scripts never export `GITHUB_USERNAME`, and `envsubst` sees only
-exported variables. `promote_offline_to_online.sh` is checked more loosely: it must export
-`GITHUB_USERNAME` and pipe every `dependabot.yml` it writes through `envsubst`. The copy line
-is matched as a single-line text pattern in exactly that spelling, so a reformatted
-equivalent (a `\` continuation, an `env` prefix, a double-quoted `envsubst` argument) is
-reported as "never copies"; rewrite it in the canonical form. There is no `--generated`
+exported variables. `promote_offline_to_online.sh` uses the same inline form, and the gate
+fails any line there that mentions `dependabot.yml` without it. The assignee list must hold
+exactly one item, the placeholder; any other item fails. Blocks are recognised by the
+two-space `  - package-ecosystem:` line (the `cooldown` check shares this limit), so an
+oddly indented block is not seen. The copy line is matched as a single-line text pattern in
+exactly that spelling, so a reformatted equivalent (a `\` continuation, an `env` prefix, a
+double-quoted `envsubst` argument) is reported as "never copies"; rewrite it in the
+canonical form. There is no `--generated`
 mode: the default scaffold answers take the offline path, which removes `.github/`, so a
 generated tree would never contain the file.

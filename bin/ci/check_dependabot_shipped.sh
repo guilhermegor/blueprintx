@@ -41,7 +41,7 @@ assignees_per_block() {
     awk '
         /^  - package-ecosystem:/ { if (int_in && int_n != 1) int_bad = 1; int_in = 1; int_n = 0; int_blocks++ }
         /^    assignees:/ { int_a = 1; next }
-        int_a && /^      - "[$][{]GITHUB_USERNAME[}]"[[:space:]]*$/ { int_n++ }
+        int_a && /^      - / { if ($0 ~ /^      - "[$][{]GITHUB_USERNAME[}]"[[:space:]]*$/) int_n++; else int_bad = 1; next }
         { int_a = 0 }
         END { if (int_in && int_n != 1) int_bad = 1; exit (int_blocks > 0 && !int_bad) ? 0 : 1 }
     ' "$1"
@@ -50,11 +50,9 @@ assignees_per_block() {
 check_promote() {
     local str_promote="$REPO_ROOT/bin/promote_offline_to_online.sh" str_bad
     [ -f "$str_promote" ] || return 0
-    grep -qE '^[[:space:]]*export .*GITHUB_USERNAME' "$str_promote" \
-        || fail "promote_offline_to_online.sh never exports GITHUB_USERNAME"
-    str_bad="$(grep -vE '^[[:space:]]*#' "$str_promote" | grep -E 'dependabot\.yml"$' \
-        | grep -vE "envsubst '\\\$\{GITHUB_USERNAME\}' .*<" || true)"
-    [ -z "$str_bad" ] || fail "promote_offline_to_online.sh writes dependabot.yml without envsubst: $str_bad"
+    str_bad="$(grep -vE '^[[:space:]]*#' "$str_promote" | grep -E 'dependabot\.yml' \
+        | grep -vE "GITHUB_USERNAME=\"\\\$GITHUB_USERNAME\" envsubst '\\\$\{GITHUB_USERNAME\}' .*<" || true)"
+    [ -z "$str_bad" ] || fail "promote_offline_to_online.sh renders dependabot.yml without the inline owner: $str_bad"
 }
 
 check_static() {
