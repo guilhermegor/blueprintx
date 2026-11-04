@@ -231,7 +231,7 @@ def is_ci() -> bool:
         anything but ``""``, ``0``, ``false`` or ``no``.
     """
     str_ci = os.environ.get("CI", "").strip().lower()
-    return bool(os.environ.get("GITHUB_ACTIONS")) or str_ci not in TUPLE_FALSY_ENV
+    return "GITHUB_ACTIONS" in os.environ or str_ci not in TUPLE_FALSY_ENV
 
 
 def env_reason() -> str:

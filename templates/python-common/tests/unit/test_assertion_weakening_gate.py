@@ -336,9 +336,12 @@ def test_a_falsy_ci_value_is_not_ci(monkeypatch: pytest.MonkeyPatch, str_value: 
     assert gate.env_reason() == "local reason"
 
 
-def test_a_falsy_github_actions_value_is_still_ci(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A runner never sets ``GITHUB_ACTIONS`` falsy, so any value means CI."""
-    monkeypatch.setenv("GITHUB_ACTIONS", "false")
+@pytest.mark.parametrize("str_value", ["false", "0", ""])
+def test_a_falsy_github_actions_value_is_still_ci(
+    monkeypatch: pytest.MonkeyPatch, str_value: str
+) -> None:
+    """Presence alone means CI: a runner never sets ``GITHUB_ACTIONS`` falsy."""
+    monkeypatch.setenv("GITHUB_ACTIONS", str_value)
     monkeypatch.setenv("TEST_CHANGE_OK", "a reason")
 
     assert gate.env_reason() == ""
