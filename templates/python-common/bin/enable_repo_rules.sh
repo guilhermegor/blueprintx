@@ -240,10 +240,72 @@ ensure_optout_label() {
 		print_status "warning" "Could not create the 'do-not-merge' label on $str_repo"
 }
 
+check_ruleset_present() {
+	require_gh || return 0
+	local str_repo str_ids
+	str_repo="${GITHUB_REPOSITORY:-$(resolve_repo)}"
+	if [ -z "$str_repo" ]; then
+		print_status "warning" "Could not resolve the repository (ruleset presence UNKNOWN, not confirmed)"
+		return 0
+	fi
+	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
+		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>&1)"; then
+		print_status "warning" "Could not READ rulesets from $str_repo (presence UNKNOWN): ${str_ids:-no output from gh}"
+		return 0
+	fi
+	[ -n "$str_ids" ] && return 0
+	[ "${GITHUB_ACTIONS:-}" = "true" ] && echo "::warning title=Ruleset missing::'$RULESET_NAME' is not enabled on $str_repo, so merges are unprotected. A maintainer with admin rights must run 'poe enable_repo_rules'."
+	print_status "error" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — run 'poe enable_repo_rules' (needs repo-admin)"
+	return 1
+}
+
+pr_has_codeql_analysis() {
+	local str_repo="$1" int_pr="$2" str_sha="$3"
+	local str_merge str_ref str_shas
+	str_merge="$(gh api "repos/$str_repo/git/ref/pull/$int_pr/merge" --jq .object.sha 2>/dev/null || true)"
+	for str_ref in head merge; do
+		str_shas="$(gh api "repos/$str_repo/code-scanning/analyses?tool_name=CodeQL&ref=refs/pull/$int_pr/$str_ref" \
+			--jq '.[].commit_sha' 2>/dev/null)" || return 2
+		grep -qxF -e "$str_sha" -e "${str_merge:-$str_sha}" <<<"$str_shas" && return 0
+	done
+	return 1
+}
+
+report_stranded_prs() {
+	local str_repo="$1"
+	local str_prs int_pr str_sha int_rc
+	local list_stranded=() list_unknown=()
+	if ! str_prs="$(gh pr list --repo "$str_repo" --state open --limit 1000 --json number,headRefOid \
+		--jq '.[] | "\(.number) \(.headRefOid)"' 2>&1)"; then
+		print_status "warning" "Could not LIST open PRs on $str_repo (stranded PRs UNKNOWN, not none): ${str_prs:-no output from gh}"
+		return 0
+	fi
+	while read -r int_pr str_sha; do
+		[ -n "$int_pr" ] || continue
+		pr_has_codeql_analysis "$str_repo" "$int_pr" "$str_sha" && int_rc=0 || int_rc=$?
+		case "$int_rc" in
+		1) list_stranded+=("#$int_pr") ;;
+		2) list_unknown+=("#$int_pr") ;;
+		esac
+	done <<<"$str_prs"
+	[ ${#list_unknown[@]} -eq 0 ] || print_status "warning" "Could not read CodeQL analyses for open PRs ${list_unknown[*]} (UNKNOWN, not confirmed stranded)"
+	[ ${#list_stranded[@]} -gt 0 ] || return 0
+	print_status "warning" "Open PRs with no CodeQL analysis on their head: ${list_stranded[*]} — the code_scanning rule blocks their merge (HTTP 405) until each gets a fresh push, e.g. 'git commit --allow-empty -m \"chore: trigger CodeQL\" && git push'"
+}
+
 main() {
 	if [ "${1:-}" = "verify" ]; then
 		verify_strict_required_checks
 		return $?
+	fi
+	if [ "${1:-}" = "check_ruleset" ]; then
+		check_ruleset_present
+		return $?
+	fi
+	if [ "${1:-}" = "stranded" ]; then
+		require_gh || return 0
+		report_stranded_prs "${GITHUB_REPOSITORY:-$(resolve_repo)}"
+		return 0
 	fi
 
 	print_status "section" "Repository Rules & Merge Settings"
@@ -262,6 +324,7 @@ main() {
 	enable_merge_settings "$str_repo"
 	ensure_optout_label "$str_repo"
 	apply_ruleset "$str_repo"
+	report_stranded_prs "$str_repo"
 
 	report_blocking_checks "$str_repo" || true
 

@@ -35,6 +35,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Surface a missing ruleset
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash bin/enable_repo_rules.sh check_ruleset
+
       - name: Run PR gate
         env:
           GITHUB_TOKEN: ${{ github.token }}
