@@ -154,7 +154,7 @@ check_roster_presence() {
     trap 'rm -rf "$path_dir"; trap - RETURN' RETURN
     mkdir -p "$path_dir/shim"
     # shellcheck disable=SC2016
-    printf '#!/bin/sh\nprintf "%%s" "$SHIM_GH_OUT"\n[ -n "$SHIM_GH_OUT" ]\n' >"$path_dir/shim/gh"
+    printf '#!/bin/sh\ncase "$*" in *.base.ref*) echo main; exit 0;; esac\nprintf "%%s" "$SHIM_GH_OUT"\n[ -n "$SHIM_GH_OUT" ]\n' >"$path_dir/shim/gh"
     chmod +x "$path_dir/shim/gh"
     local PATH="$path_dir/shim:$PATH"
 

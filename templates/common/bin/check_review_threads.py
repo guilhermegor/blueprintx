@@ -2210,6 +2210,7 @@ def _roster_or_verdict(
                 "opt_out_refused",
             )
         dict_roster = load_roster(path_cwd)
+        reviewer_logins(dict_roster)
     except (RuntimeError, ValueError, OSError, yaml.YAMLError) as err:
         str_code = "missing_roster"
         if isinstance(err, (yaml.YAMLError, ValueError)):

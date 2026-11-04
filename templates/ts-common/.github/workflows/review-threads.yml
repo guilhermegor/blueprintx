@@ -37,7 +37,7 @@ jobs:
           if [ -f .github/.review-bots.yaml ]; then
             cp .github/.review-bots.yaml .review-bots.yaml
           else
-            echo "No .github/.review-bots.yaml — the gate fails closed; add one or set adopted: false."
+            echo "No .github/.review-bots.yaml — the gate fails closed; add one, or set adopted: false (the base branch must declare it too)."
           fi
 
       - name: Every review thread is answered and resolved

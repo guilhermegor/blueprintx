@@ -821,7 +821,7 @@ def test_opt_out_declared_on_the_base_side_is_accepted(
         Pytest throwaway dir holding the PR-side roster.
     monkeypatch : pytest.MonkeyPatch
         Supplies a base roster that opts out.
-    capsys : pytest.CaptureFixture
+    capsys : pytest.CaptureFixture[str]
         Captures the skip message.
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "adopted: false\n")
@@ -916,7 +916,7 @@ def test_missing_pyyaml_reports_the_parser_not_the_roster(
         Pytest throwaway dir used as the working directory.
     monkeypatch : pytest.MonkeyPatch
         Removes the parser and sets the gate environment.
-    capsys : pytest.CaptureFixture
+    capsys : pytest.CaptureFixture[str]
         Captures the failure message.
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
@@ -4078,3 +4078,18 @@ def test_an_invalid_yaml_date_in_the_base_roster_fails_closed(
     )
 
     assert cls_gate.base_opted_out("o/r", "1") is False
+
+
+def test_a_roster_with_no_threads_member_reports_a_json_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A roster nobody can satisfy is a ``--json`` verdict, not a traceback (#955)."""
+    cls_gate = _load_gate()
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - login: a\n    posts: status\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+
+    assert (cls_gate.main(["--json"]), '"status": "fail"' in capsys.readouterr().out) == (1, True)
