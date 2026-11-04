@@ -69,6 +69,9 @@ import sys
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+TUPLE_CI_MARKERS = ("CI", "GITHUB_ACTIONS")
+TUPLE_FALSY_ENV = ("", "0", "false", "no")
+
 RE_JUSTIFICATION = re.compile(r"^\s*test-change-ok:\s*(\S.*)$", re.I | re.M)
 RE_TEST_PATH = re.compile(r"(^|/)tests/.*test_[^/]+\.py$")
 RE_DOC_PATH = re.compile(r"\.md$|(^|/)docs/")
@@ -218,7 +221,18 @@ def pr_body_text() -> str:
     return str(dict_pr.get("body") or "")
 
 
-TUPLE_CI_MARKERS = ("CI", "GITHUB_ACTIONS")
+def is_ci() -> bool:
+    """Return whether the process runs under CI (I/O seam).
+
+    Returns
+    -------
+    bool
+        True when a CI marker is set to anything but ``""``, ``0``, ``false`` or ``no``.
+    """
+    return any(
+        os.environ.get(str_marker, "").strip().lower() not in TUPLE_FALSY_ENV
+        for str_marker in TUPLE_CI_MARKERS
+    )
 
 
 def env_reason() -> str:
@@ -232,7 +246,7 @@ def env_reason() -> str:
         ``check_gate_integrity.py``. ``""`` under CI, so a workflow ``env:`` line cannot
         stand in for a justification a PR reviewer can read.
     """
-    if any(os.environ.get(str_marker) for str_marker in TUPLE_CI_MARKERS):
+    if is_ci():
         return ""
     return os.environ.get("TEST_CHANGE_OK", "").strip()
 
@@ -1019,12 +1033,12 @@ def unjustified_advice() -> str:
         that CI still needs a line a reviewer can read.
     """
     str_line = "add a 'test-change-ok: <reason>' line to the PR body or a commit trailer."
-    if any(os.environ.get(str_marker) for str_marker in TUPLE_CI_MARKERS):
+    if is_ci():
         return f"To justify it, {str_line} TEST_CHANGE_OK is ignored under CI."
     return (
         "Locally, prefix this one commit: `TEST_CHANGE_OK='<reason>' git commit -m ...` "
         "(never export it: one stale reason would cover every later finding). "
-        f"CI ignores the variable, so also {str_line} "
+        f"CI ignores the variable, so also {str_line} A bare marker with no reason fails. "
         "The commit being created cannot carry its own trailer at pre-commit time, so only "
         "trailers on earlier branch commits are read now."
     )
