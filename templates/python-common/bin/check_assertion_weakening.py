@@ -53,7 +53,7 @@ line, with a non-empty reason, in the PR body (`GITHUB_EVENT_PATH`) or as a trai
 commit since the merge-base. The PR body is CI-only, and the commit being created cannot
 carry its own trailer at `pre-commit` time (earlier branch commits' trailers are read).
 Locally, set `TEST_CHANGE_OK='<reason>'` for the commit (blueprintx#941); it is ignored
-when `CI` or `GITHUB_ACTIONS` is set.
+when `GITHUB_ACTIONS` is set at all or `CI` is set to a truthy value.
 
 CI must check out with `fetch-depth: 0` — a shallow clone has no common ancestor to resolve.
 """
@@ -227,12 +227,11 @@ def is_ci() -> bool:
     Returns
     -------
     bool
-        True when a CI marker is set to anything but ``""``, ``0``, ``false`` or ``no``.
+        True when ``GITHUB_ACTIONS`` is set (a runner never sets it falsy) or ``CI`` is
+        anything but ``""``, ``0``, ``false`` or ``no``.
     """
-    return any(
-        os.environ.get(str_marker, "").strip().lower() not in TUPLE_FALSY_ENV
-        for str_marker in TUPLE_CI_MARKERS
-    )
+    str_ci = os.environ.get("CI", "").strip().lower()
+    return bool(os.environ.get("GITHUB_ACTIONS")) or str_ci not in TUPLE_FALSY_ENV
 
 
 def env_reason() -> str:
@@ -1039,8 +1038,8 @@ def unjustified_advice() -> str:
         "Locally, prefix this one commit: `TEST_CHANGE_OK='<reason>' git commit -m ...` "
         "(never export it: one stale reason would cover every later finding). "
         f"CI ignores the variable, so also {str_line} A bare marker with no reason fails. "
-        "The commit being created cannot carry its own trailer at pre-commit time, so only "
-        "trailers on earlier branch commits are read now."
+        "One commit does both: `TEST_CHANGE_OK='<reason>' git commit -m ... "
+        "-m 'test-change-ok: <reason>'` (pre-commit reads the variable, CI the trailer)."
     )
 
 

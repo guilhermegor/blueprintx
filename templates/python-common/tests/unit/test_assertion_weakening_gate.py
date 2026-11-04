@@ -336,7 +336,23 @@ def test_a_falsy_ci_value_is_not_ci(monkeypatch: pytest.MonkeyPatch, str_value: 
     assert gate.env_reason() == "local reason"
 
 
-def test_the_env_reason_wins_over_a_trailer_and_whitespace_falls_back(
+def test_a_falsy_github_actions_value_is_still_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A runner never sets ``GITHUB_ACTIONS`` falsy, so any value means CI."""
+    monkeypatch.setenv("GITHUB_ACTIONS", "false")
+    monkeypatch.setenv("TEST_CHANGE_OK", "a reason")
+
+    assert gate.env_reason() == ""
+
+
+def test_the_env_reason_wins_over_a_trailer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With both sources valid, the env string is the one returned."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "from env")
+    monkeypatch.setattr(gate, "_git", lambda _args: "test-change-ok: from a trailer\n")
+
+    assert gate.justification_reason("base-sha") == "from env"
+
+
+def test_a_blank_env_var_falls_back_to_a_trailer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A blank env var falls through to a valid trailer rather than blocking it."""
