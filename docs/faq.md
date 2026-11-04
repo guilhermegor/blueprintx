@@ -43,22 +43,18 @@ projects also switch versioning: online = tag-driven, offline = a local `poe bum
 ## I don't use a PR review bot — will the generated project's required check ever pass?
 
 The scaffolder asks *"Do you have (or will you install) a PR review bot such as CodeRabbit
-on this repo?"*. Answer **no** and it skips copying `.review-bots.yaml` instead of shipping
-it empty — `reviewers: []` is treated by the gate as "switched off from inside the very PR
-it polices" and raises, which is worse than never having adopted the gate at all. With the
-file absent, `check_review_threads.py` now **fails closed** (blueprintx#952): a required check
-that reads a missing roster as "not adopted" is permanently green and checks nothing. The
-explicit opt-out is a roster that declares `adopted: false` (no `reviewers:` needed); the gate
-then exits 0 with an opt-out message. The opt-out only counts when the PR's base branch roster
-declares it too (read over the REST contents API; an unreadable base fails closed), so a PR cannot
-opt itself out — the first `adopted: false` must therefore land on the base branch by an
-admin bypass or direct push, and later PRs inherit it. A project scaffolded with the answer **no** has no roster
-at all, so create a one-line `.review-bots.yaml` containing `adopted: false` (the scaffolds do
-not ship it yet). Answer **yes**
-later and re-adding the roster turns the gate back on — at the path the gate reads, which differs
-by language: for Python copy `templates/python-common/.review-bots.yaml` to the project root; for
-TypeScript copy `templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. See blueprintx#374 (why this needed
-a fix) and blueprintx#262 (why an empty roster is not the opt-out).
+on this repo?"*. Answer **no** and it ships `.review-bots.yaml` containing `adopted: false`
+(`templates/common/review-bots-optout.yaml`) instead of the real roster. The gate fails closed
+on a missing file, and a bare `reviewers: []` is read as "switched off from inside the very PR
+it polices", so the explicit `adopted: false` is the only opt-out: the required check still runs
+on every PR (nothing else changes in `.github/`), it just reports success instead of demanding a
+reviewer that will never exist. The opt-out only counts when the PR's base branch roster declares it too (read over the REST contents API; an unreadable base fails closed), so a PR cannot opt itself out and the first `adopted: false` on an existing project must land by an admin bypass or direct push. Answer **yes** later and replacing that file with the real roster
+turns the gate back on — at the path the gate reads, which differs by language: for Python copy
+`templates/python-common/.review-bots.yaml` to the project root; for TypeScript copy
+`templates/ts-common/.github/.review-bots.yaml` to `.github/.review-bots.yaml`. Replace the file
+rather than adding reviewers to it: while `adopted: false` is present the gate stays opted out.
+See blueprintx#374 (why this needed a fix), blueprintx#262 (why an empty roster is not the
+opt-out) and blueprintx#956 (why the file ships instead of being omitted).
 
 ### How does a fallback (ladder) review satisfy the gate?
 
