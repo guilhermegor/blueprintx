@@ -1,4 +1,4 @@
-# CLAUDE.md — `_internal/config/`
+# AGENTS.md — `_internal/config/`
 
 `config/` is the home of **every private structural declaration** — the shapes and
 interfaces the library conforms to. It holds three sub-packages, all under `_internal/`

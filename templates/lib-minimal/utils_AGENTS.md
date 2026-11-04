@@ -1,4 +1,4 @@
-# CLAUDE.md — `_internal/utils/`
+# AGENTS.md — `_internal/utils/`
 
 Private helper modules for this library. Everything here ships inside the wheel under the
 `_internal/` package but is **not** part of the public API — consumers import the library's
