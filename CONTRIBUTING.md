@@ -1659,8 +1659,9 @@ grouped by what they guard.
   the `warning` floor (see `check_shell.sh`). Testing the subshell's status keeps the `cd`
   contained.
 - **Reviewer roster opt-out (#374).** With no reviewer, a generated project's "Review threads
-  answered" check can never pass. Omitting `.review-bots.yaml` (never shipping it empty,
-  #262) makes the gate self-skip. The TS scaffolds copy `.github` wholesale, so they remove it
+  answered" check can never pass. Answering "no" ships `templates/common/review-bots-optout.yaml`
+  (`adopted: false`) in place of the real roster, because the gate fails closed on a missing
+  file (#956). The TS scaffolds copy `.github` wholesale, so they overwrite the real roster
   afterwards; lib-minimal gates it in its own function. `docs/faq.md` has the full answer.
   `bin/ci/check_review_bot_roster_optout.sh` copies the real TypeScript `.github` tree (a hand-
   made roster made the "present" case pass even if the template stopped shipping it) and
