@@ -55,6 +55,30 @@ expect "script branch mode rejects" fail env BRANCH="feat/x" bash "$SCRIPT" bran
 expect "script title mode, env interface" pass env TITLE="fix: x" bash "$SCRIPT" title
 expect "script body mode, env interface" pass env BODY="$str_full" TEMPLATE="$TEMPLATE" bash "$SCRIPT" body
 expect "script body mode rejects" fail env BODY="" TEMPLATE="$TEMPLATE" bash "$SCRIPT" body
+expect "assignee present" pass check_assignee "octocat"
+expect "no assignee" fail check_assignee ""
+expect "whitespace-only assignee" fail check_assignee "  "
+
+gh() { [[ "$3" == "604" ]] && echo OPEN || echo CLOSED; }
+expect "closing reference passes" pass check_linked_issue "feat/x" "feat: t" github 1
+expect "branch number resolving to open issue" pass check_linked_issue "feat/604-x" "feat: t" github 0
+expect "branch number with closed issue" fail check_linked_issue "feat/999-x" "feat: t" github 0
+expect "no number and no closing reference" fail check_linked_issue "feat/x" "feat: t" github 0
+expect "dependabot branch skips linked-issue" pass check_linked_issue "dependabot/npm/foo" "chore: t" github 0
+expect "renovate branch skips linked-issue" pass check_linked_issue "renovate/foo" "chore: t" github 0
+expect "linear key in branch" pass check_linked_issue "feat/abc-123-x" "feat: t" linear 0
+expect "linear key in title" pass check_linked_issue "feat/x" "feat: ABC-123 t" linear 0
+expect "linear without key" fail check_linked_issue "feat/x" "feat: t" linear 0
+expect "custom regex match" pass env TRACKER_REGEX='JIRA-[0-9]+' bash -c 'source "$0"; check_linked_issue feat/x "feat: JIRA-7 t" regex 0' "$REPO_ROOT/templates/common/bin/check_pr_policy.sh"
+expect "custom regex miss" fail env TRACKER_REGEX='JIRA-[0-9]+' bash -c 'source "$0"; check_linked_issue feat/x "feat: t" regex 0' "$REPO_ROOT/templates/common/bin/check_pr_policy.sh"
+expect "unknown tracker is an error" fail check_linked_issue "feat/x" "feat: t" bogus 0
+unset -f gh
+
+expect "script assignee mode passes" pass env ASSIGNEES="octocat" bash "$REPO_ROOT/templates/common/bin/check_pr_policy.sh" assignee
+expect "script assignee mode rejects" fail env ASSIGNEES="" bash "$REPO_ROOT/templates/common/bin/check_pr_policy.sh" assignee
+expect "script linked-issue mode passes" pass env BRANCH="feat/x" TITLE="feat: t" CLOSING_COUNT=2 bash "$REPO_ROOT/templates/common/bin/check_pr_policy.sh" linked-issue
+expect "script linked-issue mode rejects" fail env BRANCH="feat/x" TITLE="feat: t" CLOSING_COUNT=0 bash "$REPO_ROOT/templates/common/bin/check_pr_policy.sh" linked-issue
+
 int_usage=0
 bash "$SCRIPT" bogus >/dev/null 2>&1 || int_usage=$?
 expect "usage path exits 2" pass test "$int_usage" -eq 2

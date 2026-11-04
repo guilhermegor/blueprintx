@@ -32,12 +32,43 @@ check_body() {
 	return "$int_missing"
 }
 
+check_assignee() {
+	local str_assignees="$1"
+	[[ "$str_assignees" =~ [^[:space:]] ]] && return 0
+	echo "PR has no assignee." >&2
+	return 1
+}
+
+check_linked_issue() {
+	local str_branch="$1" str_title="$2" str_tracker="${3:-github}" int_closing="${4:-0}" str_num str_re
+	[[ "$str_branch" =~ ^(dependabot|renovate)/ ]] && return 0
+	case "$str_tracker" in
+		github)
+			((int_closing > 0)) && return 0
+			if [[ "$str_branch" =~ ^[a-z]+/([0-9]+)(-|$) ]]; then
+				str_num="${BASH_REMATCH[1]}"
+				[[ "$(gh issue view "$str_num" --json state --jq .state 2>/dev/null)" == "OPEN" ]] && return 0
+			fi
+			echo "PR closes no issue and branch '$str_branch' resolves to no open issue." >&2
+			return 1
+			;;
+		linear) str_re='[A-Za-z][A-Za-z0-9]+-[0-9]+' ;;
+		regex) str_re="${TRACKER_REGEX:-}" ;;
+		*) echo "Unknown TRACKER '$str_tracker' (github|linear|regex)." >&2; return 2 ;;
+	esac
+	[[ -n "$str_re" && "$str_branch $str_title" =~ $str_re ]] && return 0
+	echo "No $str_tracker issue reference in branch or title." >&2
+	return 1
+}
+
 main() {
 	case "${1:-}" in
 		branch) check_branch "${BRANCH:-}" ;;
 		title) check_title "${TITLE:-}" ;;
 		body) check_body "${BODY:-}" "${TEMPLATE:-.github/PULL_REQUEST_TEMPLATE.md}" ;;
-		*) echo "usage: check_pr_policy.sh branch|title|body" >&2; return 2 ;;
+		assignee) check_assignee "${ASSIGNEES:-}" ;;
+		linked-issue) check_linked_issue "${BRANCH:-}" "${TITLE:-}" "${TRACKER:-github}" "${CLOSING_COUNT:-0}" ;;
+		*) echo "usage: check_pr_policy.sh branch|title|body|assignee|linked-issue" >&2; return 2 ;;
 	esac
 }
 
