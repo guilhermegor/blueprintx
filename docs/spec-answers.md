@@ -103,7 +103,15 @@ the stored answers.
 | `email` | `n` | `y` also reads `email_backend` (`outlook`\|`smtp`). |
 | `env_wise_config` | `n` | Split `inputs.yaml`/`outputs.yaml` into `_dev`/`_prd` pairs. |
 | `review_bot_roster` | `n` | `y` ships `.review-bots.yaml` (a PR review bot is expected). |
-| `git_remote` | `n` | `y` only adds `origin` here, answering the one remote prompt; creating the repo is mapped for `ts-lib` only (see below), so leave `n` for unattended/CI runs. |
+| `git_remote` | `n` | `y` adds `origin` and answers the remote prompt. Leave `n` for unattended runs that should not touch GitHub. |
+| `create_repo` | `n` | `y` creates the repo on GitHub and pushes. Needs `git_remote=y`; same preflight as `ts-lib`. |
+| `repo_visibility` | `private` | `public` or `private`. Read only when `create_repo=y`. |
+| `kanban` | `n` | `y` also creates the linked GitHub Project. Read only when `create_repo=y`. |
+| `kanban_visibility` | `repo` | `repo`, `public` or `private`. Read only when `kanban=y`. |
+| `protect_branch` | `n` | `y` protects `main`. Read only when `create_repo=y`. |
+| `human_reviewers` | `n` | `y` requires one approving review. Read only when `protect_branch=y`. |
+
+The remote block (`create_repo` onward) is shared by every Python tier and `etcher-chromeos`, and is described in full under `ts-lib`. It was once mapped for `ts-lib` and `ventoy-usb` only, which made an unattended scaffold answer the create-repo prompt with its default `n`: no repo, no board, nothing red (blueprintx#940). Omitting the keys keeps that behavior.
 
 ### MVC tiers (`mvc-service-native-db`, `mvc-service-orm-db`)
 
@@ -124,7 +132,7 @@ Same as the DDD tiers, **minus `storage`** (MVC has no schema-less storage promp
 | `publish_test_pypi` | `y` | Ship `release-test-pypi.yaml`. |
 | `consume_private` | `n` | Append a commented private-source template to `pyproject.toml`. |
 | `review_bot_roster` | `n` | Same as the service tiers. |
-| `git_remote` | `n` | Same as the service tiers. |
+| `git_remote` | `n` | Same as the service tiers, including the `create_repo` block above. |
 
 ### `ts-lib`
 
@@ -202,7 +210,8 @@ the git remote prompt.
 |---|---|---|
 | `default_os` | `chromeos-flex` | `chromeos-flex` or `fydeos`; stamped into the CLI as the `--os` default. Anything else stops the run naming the key. |
 | `review_bot_roster` | `n` | Same as the service tiers. |
-| `git_remote` | `n` | `y` adds `origin`. Creating the repo is not mapped for this tier. |
+| `git_remote` | `n` | `y` adds `origin`. |
+| `create_repo`, `repo_visibility`, `kanban`, `kanban_visibility`, `protect_branch` | as `ts-lib` | Same keys and defaults. This tier does not ask `human_reviewers`. |
 
 ## Publish/registry keys are answer-only — they do not implement publishing
 
