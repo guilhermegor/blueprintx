@@ -209,50 +209,6 @@ copy_internal_ports() {
     print_status "success" "Private internal ports (_internal/config/ports) applied"
 }
 
-add_library_badges() {
-    local project_path="$1"
-    local readme="$project_path/README.md"
-    [ -f "$readme" ] || return 0
-    PROJECT_NAME="$PROJECT_NAME" GITHUB_USERNAME="$GITHUB_USERNAME" python3 - "$readme" <<'PY'
-import os
-import sys
-
-path = sys.argv[1]
-with open(path, encoding="utf-8") as fh:
-    lines = fh.readlines()
-
-if any("PyPI Version" in ln for ln in lines):
-    sys.exit(0)  # already added — idempotent
-
-name = os.environ["PROJECT_NAME"]
-user = os.environ["GITHUB_USERNAME"]
-badges = [
-    f"![PyPI Version](https://img.shields.io/pypi/v/{name})\n",
-    f"[![Snyk Vulnerabilities](https://snyk.io/test/github/{user}/{name}/badge.svg)]"
-    f"(https://snyk.io/test/github/{user}/{name})\n",
-    f"[![Snyk License](https://snyk.io/advisor/python/{name}/badge.svg)]"
-    f"(https://snyk.io/advisor/python/{name})\n",
-    f"![PyPI Downloads](https://static.pepy.tech/badge/{name})\n",
-]
-
-out: list[str] = []
-inserted = False
-for ln in lines:
-    out.append(ln)
-    if not inserted and "Python Version" in ln and "img.shields.io" in ln:
-        out.extend(badges)
-        inserted = True
-if not inserted:  # no anchor found: prepend after the first badge line instead
-    for i, ln in enumerate(out):
-        if "img.shields.io" in ln or "repostatus.org" in ln:
-            out[i + 1 : i + 1] = badges
-            break
-
-with open(path, "w", encoding="utf-8") as fh:
-    fh.writelines(out)
-PY
-    print_status "success" "Library PyPI/Snyk badges added to README"
-}
 
 copy_templates() {
     local project_path="$1"
@@ -267,8 +223,6 @@ copy_templates() {
     mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$SHARED_TEMPLATE_ROOT/.greptile/graphite.md" "$BLUEPRINTX_ROOT/templates/lib-minimal/.greptile/"* "$project_path/.greptile/"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     scaffold_render_readme lib-minimal "$COMMON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
-    cp "$COMMON_TEMPLATE_ROOT/coverage.svg" "$project_path/coverage.svg"
-    add_library_badges "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/CLAUDE.md" "$project_path/CLAUDE.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/AGENTS.md" "$project_path/AGENTS.md"
@@ -319,6 +273,8 @@ lib_minimal_copy_tooling_configs() {
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
     if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
         cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
+    else
+        cp "$BLUEPRINTX_ROOT/templates/common/review-bots-optout.yaml" "$project_path/.review-bots.yaml"
     fi
     cp "$COMMON_TEMPLATE_ROOT/mypy.ini" "$project_path/mypy.ini"
     cp "$COMMON_TEMPLATE_ROOT/.sqlfluff" "$project_path/.sqlfluff"
@@ -343,6 +299,7 @@ lib_minimal_copy_github_assets() {
     local project_path="$1"
 
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/publish-badge.yaml" "$project_path/.github/workflows/publish-badge.yaml"
     if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
         cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
     fi
@@ -899,7 +856,6 @@ lib_minimal_list_copies_step() {
     unset -f mkdir
     mkdir -p "$1/.github/workflows"
     scaffold_render_readme() { :; }
-    add_library_badges() { :; }
     add_poe_include() { :; }
     create_directory_structure "$1"
     create_python_files "$1"

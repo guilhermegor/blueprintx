@@ -125,7 +125,8 @@ expect_gate_silent() {
 test_the_roster_choice_decides_whether_its_file_is_listed() {
 	make_checkout "$WORK_DIR/c1"
 	expect_gate_output "roster opted in lists .review-bots.yaml" $'file\ttemplates/python-common/.review-bots.yaml' "$(copies "$WORK_DIR/c1" true)"
-	expect_gate_silent "roster declined omits .review-bots.yaml" '.review-bots.yaml' "$(copies "$WORK_DIR/c1" false)"
+	expect_gate_silent "roster declined does not list the real roster" 'templates/python-common/.review-bots.yaml' "$(copies "$WORK_DIR/c1" false)"
+	expect_gate_output "roster declined lists the adopted: false roster" $'file\ttemplates/common/review-bots-optout.yaml' "$(copies "$WORK_DIR/c1" false)"
 }
 
 test_lib_minimal_list_copies_ignores_the_callers_gitguardian_key() {
