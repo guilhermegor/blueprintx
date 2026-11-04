@@ -1772,7 +1772,7 @@ def roster_opted_out(path_root: pathlib.Path) -> bool:
 
 
 def _gh_api_text(list_args: list[str]) -> str | None:
-    """Run ``gh api`` and return stdout, or ``None`` on any failure, hang included."""
+    """Run ``gh api``; return stdout, ``""`` on a confirmed 404, ``None`` on any other failure."""
     try:
         cls_run = subprocess.run(  # noqa: S603
             ["gh", "api", *list_args],  # noqa: S607
@@ -1783,14 +1783,17 @@ def _gh_api_text(list_args: list[str]) -> str | None:
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
-    return cls_run.stdout if cls_run.returncode == 0 else None
+    if cls_run.returncode == 0:
+        return cls_run.stdout
+    return "" if "(HTTP 404)" in cls_run.stderr else None
 
 
 def _base_roster_text(str_repo_full: str, str_base: str) -> str | None:
     """Return the base branch's roster text, trying each roster location in order.
 
     The repo root comes first (Python scaffolds), then ``.github/`` (TypeScript scaffolds, whose
-    workflow stages that copy to the root only on the runner — blueprintx#969).
+    workflow stages that copy to the root only on the runner — blueprintx#969). Only a confirmed
+    404 moves on to the next location; any other failure returns ``None`` (fail closed).
     """
     str_ref = urllib.parse.quote(str_base, safe="")
     for str_path in _ROSTER_PATHS:
@@ -1801,7 +1804,7 @@ def _base_roster_text(str_repo_full: str, str_base: str) -> str | None:
                 f"repos/{str_repo_full}/contents/{str_path}?ref={str_ref}",
             ]
         )
-        if str_text is not None:
+        if str_text != "":
             return str_text
     return None
 
@@ -1865,7 +1868,7 @@ def _print_missing_roster(
         f"{_ROSTER_FILE} is missing or unreadable, so this required gate would check nothing. "
         f"Copy it from the BlueprintX template (templates/python-common/{_ROSTER_FILE}, or "
         f"templates/ts-common/.github/{_ROSTER_FILE}), or opt out explicitly with "
-        f"`adopted: false` in {_ROSTER_FILE}."
+        "`adopted: false` in that file, at whichever of those two paths your project uses."
     )
     print(
         json.dumps({"status": "fail", "reason": str_code, "detail": str_reason})
@@ -2202,6 +2205,8 @@ def _roster_or_verdict(
         dict_roster = load_roster(path_cwd)
     except (RuntimeError, yaml.YAMLError, OSError, UnicodeDecodeError) as err:
         str_code = "opt_out_refused" if bool_pr_opt_out else "missing_roster"
+        if isinstance(err, yaml.YAMLError):
+            str_code = "malformed_roster"
         return {}, _print_missing_roster(bool_json, str(err), str_code)
     if not dict_roster:
         return {}, _print_missing_roster(bool_json)

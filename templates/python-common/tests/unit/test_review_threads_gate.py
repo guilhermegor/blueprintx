@@ -826,8 +826,9 @@ def test_opt_out_declared_on_the_base_side_is_accepted(
 
 
 def _serve_dot_github_only(str_text: str, list_args: list[str]) -> str | None:
-    """Answer a ``gh api`` contents call for the ``.github/`` roster only; 404 the rest."""
-    return {True: str_text}.get("contents/.github/" in list_args[-1])
+    """Answer a contents call for the ``.github/`` roster only; 404 (``""``) the rest."""
+    str_dot_github = "repos/o/r/contents/.github/.review-bots.yaml?ref=main"
+    return {str_dot_github: str_text}.get(list_args[-1], "")
 
 
 def _github_dir_only(str_text: str) -> Callable[[list[str]], str | None]:
@@ -853,6 +854,28 @@ def test_base_roster_at_the_root_wins_over_dot_github(monkeypatch: pytest.Monkey
     monkeypatch.setattr(cls_gate, "_gh_api_text", lambda _args: "reviewers: []\n")
 
     assert cls_gate.base_opted_out("o/r", "1") is False
+
+
+def test_a_root_read_error_does_not_fall_through_to_dot_github(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a 404 on the root roster moves on; a 5xx/timeout (``None``) fails closed (#955)."""
+    cls_gate = _load_gate()
+    monkeypatch.setenv("GITHUB_BASE_REF", "main")
+    dict_answers = {"repos/o/r/contents/.github/.review-bots.yaml?ref=main": "adopted: false\n"}
+    monkeypatch.setattr(
+        cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
+    )
+
+    assert cls_gate.base_opted_out("o/r", "1") is False
+
+
+def test_gh_api_text_reads_a_404_as_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A confirmed 404 is ``""`` so the caller can tell absence from a failed read."""
+    cls_done = subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)\n")
+    monkeypatch.setattr(subprocess, "run", Mock(return_value=cls_done))
+
+    assert _load_gate()._gh_api_text(["x"]) == ""
 
 
 def test_gh_api_text_fails_closed_on_a_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3975,6 +3998,27 @@ def test_a_malformed_roster_reports_a_verdict_not_a_traceback(
     (tmp_path / ".review-bots.yaml").write_text("adopted: [unclosed\n", encoding="utf-8")
 
     assert (cls_gate.main([]), bool(capsys.readouterr().out)) == (1, True)
+
+
+def test_a_malformed_roster_has_its_own_json_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A present but unparsable roster is ``malformed_roster``, never ``missing_roster``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the broken PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Stubs the base read and the environment.
+    capsys : pytest.CaptureFixture[str]
+        Captures the verdict.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    (tmp_path / ".review-bots.yaml").write_text("adopted: [unclosed\n", encoding="utf-8")
+    cls_gate.main(["--json"])
+
+    assert '"reason": "malformed_roster"' in capsys.readouterr().out
 
 
 def test_an_unreadable_roster_reports_a_verdict_not_a_traceback(

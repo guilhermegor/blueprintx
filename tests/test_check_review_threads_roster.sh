@@ -151,6 +151,12 @@ run_gate_in() {
 check_roster_presence() {
     local path_dir out status
     path_dir="$(mktemp -d)"
+    trap 'rm -rf "$path_dir"; trap - RETURN' RETURN
+    mkdir -p "$path_dir/shim"
+    # shellcheck disable=SC2016
+    printf '#!/bin/sh\nprintf "%%s" "$SHIM_GH_OUT"\n[ -n "$SHIM_GH_OUT" ]\n' >"$path_dir/shim/gh"
+    chmod +x "$path_dir/shim/gh"
+    local PATH="$path_dir/shim:$PATH"
 
     status=0
     out="$(run_gate_in "$path_dir" 2>&1)" || status=$?
@@ -162,11 +168,8 @@ check_roster_presence() {
     fi
 
     printf 'adopted: false\n' >"$path_dir/.review-bots.yaml"
-    mkdir -p "$path_dir/shim"
-    printf '#!/bin/sh\nprintf "adopted: false\\n"\n' >"$path_dir/shim/gh"
-    chmod +x "$path_dir/shim/gh"
     status=0
-    out="$(PATH="$path_dir/shim:$PATH" GITHUB_BASE_REF=main run_gate_in "$path_dir" 2>&1)" || status=$?
+    out="$(SHIM_GH_OUT=$'adopted: false\n' GITHUB_BASE_REF=main run_gate_in "$path_dir" 2>&1)" || status=$?
     if [ "$status" -eq 0 ] && [[ "$out" == *"opted out"* ]]; then
         echo "ok: explicit adopted: false opts out and passes"
     else
@@ -183,7 +186,6 @@ check_roster_presence() {
         echo "FAIL: adopted: true with no reviewers must not pass (out: $out)" >&2
         int_failures=$((int_failures + 1))
     fi
-    rm -rf "$path_dir"
 }
 
 main() {
