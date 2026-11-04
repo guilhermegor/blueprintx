@@ -140,5 +140,5 @@ This project is licensed under ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 
 ---
 
-<sub>Generated from the ${README_TIER} template via BlueprintX.</sub>
+<sub>Generated from the ${README_TIER} template via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>
 <!-- add any project disclaimer inside the sub tag above; for a library wrapping a third party, e.g. "Unofficial, community library. Not affiliated with or endorsed by ORG_NAME." -->
