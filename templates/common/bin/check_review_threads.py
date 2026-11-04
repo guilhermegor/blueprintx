@@ -1796,9 +1796,12 @@ def base_opted_out(str_repo_full: str, str_number: str) -> bool:
             (no base, no file, bad YAML, API error) is ``False``, so an unreadable base never
             lets a PR switch the gate off (blueprintx#952).
     """
-    str_base = os.environ.get("GITHUB_BASE_REF") or (
-        _gh_api_text([f"repos/{str_repo_full}/pulls/{str_number}", "--jq", ".base.ref"]) or ""
-    ).strip()
+    str_base = (
+        os.environ.get("GITHUB_BASE_REF")
+        or (
+            _gh_api_text([f"repos/{str_repo_full}/pulls/{str_number}", "--jq", ".base.ref"]) or ""
+        ).strip()
+    )
     if not str_base:
         return False
     str_text = _gh_api_text(
