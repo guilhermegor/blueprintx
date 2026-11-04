@@ -997,6 +997,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#why-does-the-coverage-badge-404-before-the-first-push-to-main" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does the coverage badge 404 before the first push to main?
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3084,6 +3095,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#why-does-the-coverage-badge-404-before-the-first-push-to-main" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does the coverage badge 404 before the first push to main?
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3401,6 +3423,9 @@ the same protection from the autouse <code>isolate_git_environment</code> fixtur
 <code>tests/conftest.py</code>, which removes the repository pointers for every test.</p>
 <h2 id="which-install-methods-are-supported">Which install methods are supported?<a class="headerlink" href="#which-install-methods-are-supported" title="Permanent link">&para;</a></h2>
 <p>Homebrew, Chocolatey, Snap, apt, and <code>make install</code> from a clone — see the project README.</p>
+<h2 id="why-does-the-coverage-badge-404-before-the-first-push-to-main">Why does the coverage badge 404 before the first push to main?<a class="headerlink" href="#why-does-the-coverage-badge-404-before-the-first-push-to-main" title="Permanent link">&para;</a></h2>
+<p>The coverage badge is published by <code>publish-badge.yaml</code> to an orphan <code>badges</code> branch on every push to <code>main</code>, so the committed repo never carries a stale <code>coverage.svg</code>. Until the first <code>main</code> push completes, the README badge URL returns 404.</p>
+<p>Publishing lives in its own <code>workflow_run</code> workflow rather than a job in <code>tests.yaml</code> because <code>release-pypi.yaml</code> and <code>release-test-pypi.yaml</code> call <code>tests.yaml</code> as a reusable workflow: a nested job requesting <code>contents: write</code> under a read-only caller makes GitHub reject the whole run, which would break releases. <code>tests.yaml</code> therefore declares <code>contents: read</code> at workflow level. The publisher runs in a <code>concurrency</code> group without cancellation and skips itself when the tested commit is no longer the tip of <code>main</code>, so an older run cannot overwrite a newer badge. It resets the working tree to the fetched <code>badges</code> tip with <code>git reset --hard</code>, because <code>--soft</code> leaves the index empty and the next commit would delete every other file on that branch.</p>
 
 
 
