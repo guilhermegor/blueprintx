@@ -347,3 +347,7 @@ the same protection from the autouse `isolate_git_environment` fixture in
 ## Which install methods are supported?
 
 Homebrew, Chocolatey, Snap, apt, and `make install` from a clone — see the project README.
+
+## Why does the coverage badge 404 before the first push to main?
+
+The coverage badge is published by the `publish-badge` job in `tests.yaml` to an orphan `badges` branch on every push to `main`, so the committed repo never carries a stale `coverage.svg`. Until the first `main` push completes, the README badge URL returns 404.

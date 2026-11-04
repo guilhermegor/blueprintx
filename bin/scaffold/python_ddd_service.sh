@@ -137,7 +137,6 @@ copy_templates() {
     mkdir -p "$project_path/.greptile" && cp "$SHARED_TEMPLATE_ROOT/.greptile/config.json" "$SHARED_TEMPLATE_ROOT/.greptile/graphite.md" "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/.greptile/"* "$project_path/.greptile/"
     PROJECT_DISPLAY_NAME="${PROJECT_DISPLAY_NAME:-$(format_display_name "$PROJECT_NAME")}"
     scaffold_render_readme ddd-service-native-db "$COMMON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
-    cp "$COMMON_TEMPLATE_ROOT/coverage.svg" "$project_path/coverage.svg"
     cp "$COMMON_TEMPLATE_ROOT/assets/logo_lorem_ipsum.png" "$project_path/assets/logo_lorem_ipsum.png"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/.env.example" "$project_path/.env"
     cp "$BLUEPRINTX_ROOT/templates/ddd-service-native-db/.env.example" "$project_path/.env.example"
