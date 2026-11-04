@@ -48,8 +48,11 @@ Further rules:
   them from `GITHUB_USERNAME` and `PROJECT_NAME`.
 - A footer closes the README rendered from `README.template.md` and the Python README (the other
   skeleton READMEs, ts-lib included, have none): a rule, then `<sub>` text, no heading (so no
-  slug), reading "Generated from the <tier> template via BlueprintX" (`README_TIER`) followed by
-  any project disclaimer. Disclaimers go here, not in the body.
+  slug), reading "Generated from the <tier> template via
+  [BlueprintX](https://github.com/guilhermegor/blueprintx)" (`README_TIER`) followed by
+  any project disclaimer. The link is absolute, like the images, because the README ships to
+  PyPI where relative links break, and the structure gate reports a footer without it.
+  Disclaimers go here, not in the body.
 - Every list item under `authors` carries a `github.com/<user>` link and a
   `linkedin.com/in/<handle>` link, and none uses the placeholder
   `linkedin.com/in/your-linkedin-handle`.
