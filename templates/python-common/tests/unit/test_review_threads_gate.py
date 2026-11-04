@@ -844,9 +844,11 @@ def test_missing_pyyaml_reports_the_parser_not_the_roster(
     int_status = cls_gate.main([])
     str_out = capsys.readouterr().out
 
-    assert int_status == 1
-    assert "pip install pyyaml" in str_out
-    assert "Copy it" not in str_out
+    assert (int_status, "pip install pyyaml" in str_out, "Copy it" not in str_out) == (
+        1,
+        True,
+        False,
+    )
 
 
 _LIST_OPEN_BUT_ANSWERED = [
