@@ -298,9 +298,15 @@ def _output_at(tuple_result: tuple[int, str], int_expected: int) -> str:
 
 _STR_LIB_POLICY = """\
 src_prefix_depth: 2
+src_prefix_marker: _internal
 layers:
   __root__:
     allow: {}
+  utils:
+    allow:
+      pydantic: "serialisers walk the models"
+    deny_class_bases:
+      BaseModel: "models are defined in config/schemas"
   config:
     allow:
       pydantic: "config/schemas is the one home of pydantic models"
@@ -327,6 +333,23 @@ def test_pydantic_model_at_package_root_is_flagged(tmp_path: Path) -> None:
     """A root-level ``schemas/`` package importing pydantic fails the layer gate."""
     _lib_project(tmp_path, "schemas/doc.py")
     assert "pydantic" in _output_at(_run_main(tmp_path), 1)
+
+
+def test_pydantic_under_a_non_internal_config_dir_is_flagged(tmp_path: Path) -> None:
+    """``src/pkg/schemas/config/`` has the remainder ``config/`` but no ``_internal`` marker."""
+    _lib_project(tmp_path, "schemas/config/doc.py")
+    assert "pydantic" in _output_at(_run_main(tmp_path), 1)
+
+
+def test_pydantic_model_defined_in_internal_utils_is_flagged(tmp_path: Path) -> None:
+    """A serialiser may import pydantic in utils, but must not define a model there."""
+    path_file = tmp_path / "src" / "pkg" / "_internal" / "utils" / "doc.py"
+    path_file.parent.mkdir(parents=True)
+    path_file.write_text(
+        "from pydantic import BaseModel\n\n\nclass Doc(BaseModel):\n    pass\n", encoding="utf-8"
+    )
+    (tmp_path / ".layer-policy.yaml").write_text(_STR_LIB_POLICY, encoding="utf-8")
+    assert "subclasses BaseModel" in _output_at(_run_main(tmp_path), 1)
 
 
 def test_pydantic_model_in_internal_config_passes(tmp_path: Path) -> None:

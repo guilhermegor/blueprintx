@@ -170,6 +170,37 @@ def test_all_name_defined_under_internal_is_flagged(tmp_path: Path) -> None:
     assert "_internal" in _sole(_load_gate().check_package(path_init))
 
 
+def test_all_module_alias_of_internal_import_is_flagged(tmp_path: Path) -> None:
+    """``import pkg._internal.x as schemas`` bound into ``__all__`` exposes an internal module."""
+    path_init = _package(
+        tmp_path,
+        'import pkg._internal.config.schemas as schemas\n\n__all__ = ["schemas"]\n',
+        "",
+    )
+    assert "_internal" in _sole(_load_gate().check_package(path_init))
+
+
+def test_all_name_reexported_through_public_sibling_is_flagged(tmp_path: Path) -> None:
+    """A name a public sibling took from ``_internal`` is still defined there."""
+    path_init = _package(
+        tmp_path,
+        'from .member import Doc\n\n__all__ = ["Doc"]\n',
+        "from pkg._internal.config.schemas import Doc\n",
+    )
+    assert "_internal" in _sole(_load_gate().check_package(path_init))
+
+
+def test_function_local_internal_import_does_not_flag_public_name(tmp_path: Path) -> None:
+    """An ``_internal`` import inside a function cannot shadow a public module-level name."""
+    path_init = _package(
+        tmp_path,
+        'from pkg.member import run\n\n__all__ = ["run"]\n\n\n'
+        "def helper() -> None:\n    from pkg._internal.x import run\n",
+        "def run() -> None:\n    return None\n",
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
 def test_all_name_from_public_module_is_not_flagged(tmp_path: Path) -> None:
     """A name imported from a public sibling is untouched by the ``_internal`` guard."""
     path_init = _package(
