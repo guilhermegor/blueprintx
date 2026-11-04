@@ -902,8 +902,8 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   import. Its pinned dependency declaration is deliberately separate from `copy_internal_utils`,
   which runs before `pyproject.toml` exists.
 - **No env files, library badges.** A distributable library has no runtime `.env`, so
-  `.env` and `.env.example` are removed. PyPI and Snyk badges are added after the Python
-  version badge, library-only, in the same placeholder style as the existing ones.
+  `.env` and `.env.example` are removed. The PyPI badge comes from the shared README
+  template, library-only; no Snyk or pepy badges.
 - **Publish and consume (Q1 to Q3).** Official registry is PyPI, staging is Test PyPI, and a
   private source is a PEP 503 index or git source. Only the selected release workflows are
   emitted, the defaults keep the previous behaviour (both shipped) for non-interactive runs,
@@ -1659,8 +1659,9 @@ grouped by what they guard.
   the `warning` floor (see `check_shell.sh`). Testing the subshell's status keeps the `cd`
   contained.
 - **Reviewer roster opt-out (#374).** With no reviewer, a generated project's "Review threads
-  answered" check can never pass. Omitting `.review-bots.yaml` (never shipping it empty,
-  #262) makes the gate self-skip. The TS scaffolds copy `.github` wholesale, so they remove it
+  answered" check can never pass. Answering "no" ships `templates/common/review-bots-optout.yaml`
+  (`adopted: false`) in place of the real roster, because the gate fails closed on a missing
+  file (#956). The TS scaffolds copy `.github` wholesale, so they overwrite the real roster
   afterwards; lib-minimal gates it in its own function. `docs/faq.md` has the full answer.
   `bin/ci/check_review_bot_roster_optout.sh` copies the real TypeScript `.github` tree (a hand-
   made roster made the "present" case pass even if the template stopped shipping it) and
