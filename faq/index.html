@@ -3163,7 +3163,7 @@ on this repo?"</em>. Answer <strong>no</strong> and it ships <code>.review-bots.
 on a missing file, and a bare <code>reviewers: []</code> is read as "switched off from inside the very PR
 it polices", so the explicit <code>adopted: false</code> is the only opt-out: the required check still runs
 on every PR (nothing else changes in <code>.github/</code>), it just reports success instead of demanding a
-reviewer that will never exist. Answer <strong>yes</strong> later and replacing that file with the real roster
+reviewer that will never exist. The opt-out only counts when the PR's base branch roster declares it too (read over the REST contents API from the project root first, then from <code>.github/</code>, so a TypeScript project's roster is found; an unreadable base fails closed, and <code>--json</code> reports it as <code>opt_out_refused</code>), so a PR cannot opt itself out through the roster alone (a PR that also rewrites the gate script or workflow is a change to the gate itself, caught in review, not by this check) and the first <code>adopted: false</code> on an existing project must land by an admin bypass or direct push. Answer <strong>yes</strong> later and replacing that file with the real roster
 turns the gate back on — at the path the gate reads, which differs by language: for Python copy
 <code>templates/python-common/.review-bots.yaml</code> to the project root; for TypeScript copy
 <code>templates/ts-common/.github/.review-bots.yaml</code> to <code>.github/.review-bots.yaml</code>. Replace the file
