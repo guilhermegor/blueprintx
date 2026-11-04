@@ -2,7 +2,7 @@ name: Branch has issue
 
 on:
   pull_request_target:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, assigned, unassigned]
 
 permissions:
   contents: read
@@ -25,8 +25,13 @@ jobs:
         run: bash bin/check_pr_policy.sh branch
       - name: Require an assignee
         env:
-          ASSIGNEES: ${{ join(github.event.pull_request.assignees.*.login, ' ') }}
-        run: bash bin/check_pr_policy.sh assignee
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ASSIGNEES=$(gh api "repos/$GH_REPO/issues/$PR_NUMBER" --jq '[.assignees[].login] | join(" ")') || ASSIGNEES=
+          export ASSIGNEES
+          bash bin/check_pr_policy.sh assignee
       - name: Require a linked issue
         env:
           GH_TOKEN: ${{ github.token }}

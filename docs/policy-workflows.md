@@ -49,6 +49,8 @@ The workflow reads the tracker from the repository variables `PR_TRACKER` and `P
 script takes forge and tracker only from the environment, so a GitLab caller (out of scope here) is a new
 wrapper, not a rewrite.
 
+The workflow reads assignees live from the API and also runs on `assigned`/`unassigned`: `pr-self-assign.yml` assigns with `GITHUB_TOKEN`, which never re-triggers workflows, so the `opened` payload would leave the check stale.
+
 Bot PRs are skipped by the workflow job (`user.type == 'Bot'`) and so never hit the assignee rule here.
 Giving each tier's `dependabot.yml` an `assignees:` entry set to the repo owner at scaffold time is
 tracked as a follow-up: it needs the scaffold scripts, which this change does not touch.
