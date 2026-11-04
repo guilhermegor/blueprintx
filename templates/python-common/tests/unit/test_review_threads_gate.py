@@ -253,6 +253,7 @@ def _review(str_login: str, str_oid: str = _HEAD) -> dict:
     return {
         "author": {"login": str_login, "__typename": "Bot"},
         "commit": {"oid": str_oid},
+        "body": "Reviewed.",
     }
 
 
@@ -275,6 +276,35 @@ def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:
         An issue comment shaped like the GraphQL response.
     """
     return {"author": {"login": str_login}, "body": str_body, "createdAt": str_created}
+
+
+_NO_BODY = {"body": ""}
+_REPLY_NODE = {"replyTo": {"id": "thread-root"}}
+_INLINE_NODE = {"replyTo": None}
+
+
+@pytest.mark.parametrize(
+    ("dict_shape", "bool_satisfies"),
+    [
+        ({**_NO_BODY, "comments": {"nodes": [_REPLY_NODE]}}, False),
+        ({**_NO_BODY, "comments": {"nodes": []}}, False),
+        ({"body": "Findings: none."}, True),
+        ({**_NO_BODY, "comments": {"nodes": [_INLINE_NODE]}}, True),
+        ({**_NO_BODY, "comments": {"nodes": [_REPLY_NODE, _INLINE_NODE]}}, True),
+    ],
+    ids=["reply-only", "empty", "body-only", "inline-only", "reply-plus-inline"],
+)
+def test_a_head_review_counts_only_with_a_body_or_a_non_reply_comment(
+    dict_shape: dict, bool_satisfies: bool
+) -> None:
+    """A thread reply is not a review of the head; a body or an inline comment is."""
+    cls_gate = _load_gate()
+    list_reviews = [{**_review("coderabbitai[bot]"), **dict_shape}]
+    str_problem = cls_gate.find_missing_review_problem(
+        list_reviews, _ROSTER, "some-human", str_head_oid=_HEAD
+    )
+
+    assert (str_problem is None) is bool_satisfies
 
 
 def test_a_pr_nobody_reviewed_fails() -> None:
