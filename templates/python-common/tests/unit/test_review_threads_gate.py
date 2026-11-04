@@ -690,7 +690,7 @@ def test_deleting_the_roster_is_not_a_silent_opt_out(
         cls_gate.load_roster(tmp_path)
 
 
-def test_a_roster_never_adopted_is_still_a_silent_no_op(
+def test_a_roster_absent_on_the_default_branch_is_not_a_deletion(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The positive control for the test above — and the reason it needs one.
@@ -783,8 +783,7 @@ def test_opt_out_only_on_the_pr_side_is_rejected(
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
 
-    cls_gate.main([])
-
+    assert cls_gate.main([]) == 1
     assert "no reviewers" in capsys.readouterr().out
 
 
@@ -804,8 +803,7 @@ def test_opt_out_with_an_unreadable_base_fails_closed(
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
 
-    cls_gate.main([])
-
+    assert cls_gate.main([]) == 1
     assert "no reviewers" in capsys.readouterr().out
 
 
@@ -3909,3 +3907,24 @@ def test_dependabot_pushed_head_fails_closed_on_a_timeout(monkeypatch: pytest.Mo
     cls_hang = Mock(side_effect=subprocess.TimeoutExpired("gh", 20))
     monkeypatch.setattr(subprocess, "run", cls_hang)
     assert not _load_gate().dependabot_pushed_head("o/r", "abc")
+
+
+def test_a_malformed_roster_reports_a_verdict_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A roster that is not valid YAML fails closed with a verdict.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the broken PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Stubs the base read and the environment.
+    capsys : pytest.CaptureFixture[str]
+        Captures the verdict.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    (tmp_path / ".review-bots.yaml").write_text("adopted: [unclosed\n", encoding="utf-8")
+
+    assert cls_gate.main([]) == 1
+    assert capsys.readouterr().out

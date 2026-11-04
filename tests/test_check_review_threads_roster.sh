@@ -145,7 +145,7 @@ run_case() {
 }
 
 run_gate_in() {
-    (cd "$1" && GITHUB_REPOSITORY=o/r PR_NUMBER=1 python3 "$REPO_ROOT/templates/common/bin/check_review_threads.py")
+    (cd "$1" && unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE && GITHUB_REPOSITORY=o/r PR_NUMBER=1 python3 "$REPO_ROOT/templates/common/bin/check_review_threads.py")
 }
 
 check_roster_presence() {

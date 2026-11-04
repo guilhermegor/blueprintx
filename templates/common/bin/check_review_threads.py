@@ -261,7 +261,8 @@ def load_roster(path_root: pathlib.Path) -> dict[str, str]:
         raise RuntimeError(
             f"{_ROSTER_FILE} exists but declares no reviewers — an empty roster makes this "
             f"gate a no-op, which is the same as deleting it. Declare a reviewer, or opt out "
-            f"explicitly with `adopted: false`."
+            f"explicitly with `adopted: false` — the opt-out counts only when the base "
+            f"branch's roster declares it too."
         )
     return dict_roster
 
@@ -1770,12 +1771,15 @@ def roster_opted_out(path_root: pathlib.Path) -> bool:
 
 def _gh_api_text(list_args: list[str]) -> str | None:
     """Run ``gh api`` and return stdout, or ``None`` on any failure."""
-    cls_run = subprocess.run(  # noqa: S603
-        ["gh", "api", *list_args],  # noqa: S607
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        cls_run = subprocess.run(  # noqa: S603
+            ["gh", "api", *list_args],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
     return cls_run.stdout if cls_run.returncode == 0 else None
 
 
@@ -2163,13 +2167,14 @@ def _roster_or_verdict(
 ) -> tuple[dict[str, str], int | None]:
     """Return the roster, or the exit code of the skip/failure that ends the run early."""
     path_cwd = pathlib.Path.cwd()
-    if roster_opted_out(path_cwd) and base_opted_out(str_repo_full, str_number):
-        return {}, _print_skip(
-            bool_json, f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out"
-        )
     try:
+        if roster_opted_out(path_cwd) and base_opted_out(str_repo_full, str_number):
+            return {}, _print_skip(
+                bool_json,
+                f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out",
+            )
         dict_roster = load_roster(path_cwd)
-    except RuntimeError as err:
+    except (RuntimeError, yaml.YAMLError, UnicodeDecodeError) as err:
         return {}, _print_missing_roster(bool_json, str(err))
     if not dict_roster:
         return {}, _print_missing_roster(bool_json)
