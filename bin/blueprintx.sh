@@ -305,9 +305,9 @@ prompt_project_description() {
 
 expand_tilde() {
     case "$1" in
-        \~) echo "$HOME" ;;
-        \~/*) echo "$HOME/${1#\~/}" ;;
-        *) echo "$1" ;;
+        \~) printf '%s\n' "$HOME" ;;
+        \~/*) printf '%s\n' "$HOME/${1#\~/}" ;;
+        *) printf '%s\n' "$1" ;;
     esac
 }
 
@@ -630,7 +630,7 @@ resolve_spec_project_root() {
             *) break ;;
         esac
     done
-    [ "$(basename "$str_resolved_root")" != "$PROJECT_NAME" ] \
+    [ "${str_resolved_root##*/}" != "$PROJECT_NAME" ] \
         || exit_error "--spec: 'project_root' ($PROJECT_ROOT) ends in the project name; it is the parent directory, not the project directory. Set it to the directory that will contain '$PROJECT_NAME'."
 }
 
