@@ -340,8 +340,8 @@ def test_the_report_passes_a_flagged_diff_with_the_env_justification(
 @pytest.mark.parametrize(
     "str_needle",
     [
-        "`TEST_CHANGE_OK='<reason>' git commit -m ...`",
-        "commit-trailer 'test-change-ok: <reason>' line is CI-only",
+        "TEST_CHANGE_OK='<reason>' git commit",
+        "CI ignores the variable, so also add a 'test-change-ok: <reason>' line",
     ],
 )
 def test_the_unjustified_failure_says_how_to_justify_locally(
@@ -362,6 +362,25 @@ def test_the_unjustified_failure_says_how_to_justify_locally(
     gate.report(["some finding"], "base-sha", 1)
 
     assert str_needle in capsys.readouterr().out
+
+
+def test_the_ci_failure_leads_with_the_pr_body_line_not_the_env_var(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Under CI the advice names the PR-body line and says the env var is ignored.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Sets the CI marker and removes any trailer.
+    capsys : pytest.CaptureFixture[str]
+        Captures the report text.
+    """
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    monkeypatch.setenv("CI", "true")
+    gate.report(["some finding"], "base-sha", 1)
+
+    assert "TEST_CHANGE_OK is ignored under CI" in capsys.readouterr().out
 
 
 def test_ci_ignores_test_change_ok_end_to_end(monkeypatch: pytest.MonkeyPatch) -> None:
