@@ -783,8 +783,7 @@ def test_opt_out_only_on_the_pr_side_is_rejected(
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
 
-    assert cls_gate.main([]) == 1
-    assert "no reviewers" in capsys.readouterr().out
+    assert (cls_gate.main([]), "no reviewers" in capsys.readouterr().out) == (1, True)
 
 
 def test_opt_out_with_an_unreadable_base_fails_closed(
@@ -803,8 +802,7 @@ def test_opt_out_with_an_unreadable_base_fails_closed(
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
 
-    assert cls_gate.main([]) == 1
-    assert "no reviewers" in capsys.readouterr().out
+    assert (cls_gate.main([]), "no reviewers" in capsys.readouterr().out) == (1, True)
 
 
 def test_opt_out_declared_on_the_base_side_is_accepted(
@@ -823,8 +821,7 @@ def test_opt_out_declared_on_the_base_side_is_accepted(
     """
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "adopted: false\n")
 
-    assert cls_gate.main([]) == 0
-    assert "opted out" in capsys.readouterr().out
+    assert (cls_gate.main([]), "opted out" in capsys.readouterr().out) == (0, True)
 
 
 def test_missing_pyyaml_reports_the_parser_not_the_roster(
@@ -3926,5 +3923,24 @@ def test_a_malformed_roster_reports_a_verdict_not_a_traceback(
     cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
     (tmp_path / ".review-bots.yaml").write_text("adopted: [unclosed\n", encoding="utf-8")
 
-    assert cls_gate.main([]) == 1
-    assert capsys.readouterr().out
+    assert (cls_gate.main([]), bool(capsys.readouterr().out)) == (1, True)
+
+
+def test_an_unreadable_roster_reports_a_verdict_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A roster that cannot be read fails closed with a verdict.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Makes the roster read raise ``OSError``.
+    capsys : pytest.CaptureFixture[str]
+        Captures the verdict.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    monkeypatch.setattr(cls_gate, "roster_opted_out", Mock(side_effect=PermissionError("no")))
+
+    assert (cls_gate.main([]), bool(capsys.readouterr().out)) == (1, True)

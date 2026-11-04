@@ -2174,7 +2174,7 @@ def _roster_or_verdict(
                 f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out",
             )
         dict_roster = load_roster(path_cwd)
-    except (RuntimeError, yaml.YAMLError, UnicodeDecodeError) as err:
+    except (RuntimeError, yaml.YAMLError, OSError, UnicodeDecodeError) as err:
         return {}, _print_missing_roster(bool_json, str(err))
     if not dict_roster:
         return {}, _print_missing_roster(bool_json)

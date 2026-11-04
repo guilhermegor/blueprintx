@@ -673,7 +673,7 @@ Configuration files in this repository carry no comments, so the reasoning lives
   missing-review gate too, otherwise a workflow submitting a review with `GITHUB_TOKEN` would
   satisfy a gate meant to prove a real reviewer looked. A missing or misspelled `posts:`
   fails loudly, at least one `threads` member is required, and zero threads is judged against
-  a submitted review, never silence (see Decision records). Opt out with `adopted: false` in the file; a missing file fails the gate (#952).
+  a submitted review, never silence (see Decision records). Opt out only when the base branch also declares `adopted: false`; the first declaration needs an admin bypass or direct push (see [the FAQ](docs/faq.md)). A missing file fails the gate (#952).
 - **`Makefile` and `tasks.sh`.** `install` runs from a clone with no `.git` at the install
   path, so it stamps the clone's `git describe` version into the installed script, matching
   the package-manager jobs. The deprecated `dev-clean`, `dry-run` and `mkdocs_server` aliases
