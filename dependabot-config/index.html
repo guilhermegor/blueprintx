@@ -2292,6 +2292,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#assignee" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignee
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lint-stack" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2709,6 +2720,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#assignee" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignee
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lint-stack" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2787,6 +2809,14 @@ offline mode removes <code>.github/</code>, so it ships none there). The root re
   (90 is the schema maximum, range 1-90).</li>
 <li><code>github-actions</code>: <code>default-days: 7</code>; it does not support the <code>semver-*</code> keys.</li>
 </ul>
+<h2 id="assignee">Assignee<a class="headerlink" href="#assignee" title="Permanent link">&para;</a></h2>
+<p>Every ecosystem block carries a block-style <code>assignees:</code> list whose single item is
+<code>"${GITHUB_USERNAME}"</code>, so dependency PRs have an owner
+(the <code>assignee</code> PR-policy check skips bot PRs, so this is for triage, not for the gate). The
+scaffold scripts and <code>promote_offline_to_online.sh</code> substitute the resolved username right after
+copying the file. <code>resolve_github_username</code> always yields a value (it falls back to
+<code>DEFAULT_GITHUB_USERNAME</code>), so the output stays valid YAML; offline projects ship no <code>.github/</code>
+and so no <code>dependabot.yml</code>.</p>
 <h2 id="lint-stack">Lint stack<a class="headerlink" href="#lint-stack" title="Permanent link">&para;</a></h2>
 <p><code>eslint</code>, <code>@eslint/js</code>, <code>typescript-eslint</code> and <code>eslint-plugin-jest</code> share one <code>eslint</code> group in
 every npm block, so the lint stack moves as a unit. A lone <code>@eslint/js</code> major once broke
@@ -2794,7 +2824,18 @@ every npm block, so the lint stack moves as a unit. A lone <code>@eslint/js</cod
 <h2 id="gate">Gate<a class="headerlink" href="#gate" title="Permanent link">&para;</a></h2>
 <p><code>bin/ci/check_dependabot_shipped.sh --static</code> (pre-commit hook <code>dependabot-shipped</code>, CI job
 <code>dependabot-shipped</code>) fails when a skeleton script stops copying <code>dependabot.yml</code>, copies a
-file that does not exist, or the copied file sets no <code>cooldown</code>. There is no <code>--generated</code>
+file that does not exist, any block of the copied file lacks a <code>cooldown</code> or the
+<code>"${GITHUB_USERNAME}"</code> assignee item, or the script does not render it with
+<code>GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}'</code>. The inline prefix is
+required because several scripts never export <code>GITHUB_USERNAME</code>, and <code>envsubst</code> sees only
+exported variables. <code>promote_offline_to_online.sh</code> uses the same inline form, and the gate
+fails any line there that mentions <code>dependabot.yml</code> without it. The assignee list must hold
+exactly one item, the placeholder; any other item fails. Blocks are recognised by the
+two-space <code>- package-ecosystem:</code> line (the <code>cooldown</code> check shares this limit), so an
+oddly indented block is not seen. The copy line is matched as a single-line text pattern in
+exactly that spelling, so a reformatted equivalent (a <code>\</code> continuation, an <code>env</code> prefix, a
+double-quoted <code>envsubst</code> argument) is reported as "never copies"; rewrite it in the
+canonical form. There is no <code>--generated</code>
 mode: the default scaffold answers take the offline path, which removes <code>.github/</code>, so a
 generated tree would never contain the file.</p>
 
