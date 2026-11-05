@@ -83,4 +83,6 @@ scaffold_copy_readme_gate() {
     cp "$path_common/check_readme_structure.sh" "$path_project/bin/check_readme_structure.sh"
     cp "$path_common/lib/md_structure.sh" "$path_project/bin/lib/md_structure.sh"
     chmod +x "$path_project/bin/check_readme_structure.sh"
+    cp "$path_common/check_agents_md_pairs.sh" "$path_project/bin/check_agents_md_pairs.sh"
+    chmod +x "$path_project/bin/check_agents_md_pairs.sh"
 }
