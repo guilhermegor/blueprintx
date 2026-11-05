@@ -137,6 +137,10 @@ jobs:
         if: runner.os == 'Linux'
         run: poetry run python bin/check_gate_integrity.py
 
+      - name: Run Assertion Weakening Gate
+        if: runner.os == 'Linux'
+        run: poetry run python bin/check_assertion_weakening.py
+
       - name: Run Function Length Gate
         if: runner.os == 'Linux'
         run: poetry run python bin/check_function_length.py

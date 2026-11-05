@@ -188,6 +188,13 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: assertion-weakening
+        name: assertion weakening (a PR must not loosen a test without saying why)
+        entry: bash bin/poetry_exec.sh run python bin/check_assertion_weakening.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: check-complexity
         name: cyclomatic complexity (tests 1, src 2, bin 8)
         entry: bash bin/check_complexity.sh

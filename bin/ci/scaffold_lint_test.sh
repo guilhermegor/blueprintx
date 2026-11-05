@@ -154,6 +154,33 @@ echo "::endgroup::"
 git add -A
 git commit -q --no-verify -m "ci: scaffold baseline" || true
 
+git branch -M main
+str_clean_sha="$(git rev-parse HEAD)"
+mkdir -p tests/unit
+printf 'def test_probe():\n    assert 1 + 1 == 2\n' >tests/unit/test_probe.py
+git add tests/unit/test_probe.py
+git commit -q --no-verify -m "test: probe"
+git checkout -q -b assertion-probe
+printf 'def test_probe():\n    assert 1 + 1 in (2, 3)\n' >tests/unit/test_probe.py
+git add tests/unit/test_probe.py
+git commit -q --no-verify -m "test: weaken probe"
+str_aw_out="$(poetry run python bin/check_assertion_weakening.py 2>&1)" && int_aw_rc=0 || int_aw_rc=$?
+if [ "$int_aw_rc" -eq 0 ]; then
+    echo "ERROR: [$SKELETON] the assertion-weakening gate accepted == weakened to in:" >&2
+    echo "$str_aw_out" >&2
+    exit 1
+fi
+str_aw_hook="$(poetry run pre-commit run assertion-weakening --all-files 2>&1)" && int_aw_hook_rc=0 || int_aw_hook_rc=$?
+if [ "$int_aw_hook_rc" -eq 0 ]; then
+    echo "ERROR: [$SKELETON] the assertion-weakening hook did not fire:" >&2
+    echo "$str_aw_hook" >&2
+    exit 1
+fi
+git checkout -q main
+git branch -q -D assertion-probe
+git reset -q --hard "$str_clean_sha"
+echo "The project's assertion-weakening hook rejects == weakened to in."
+
 poetry run pre-commit run docs-gap --all-files
 python3 - <<'PY'
 s = open("mkdocs.yml").read()
