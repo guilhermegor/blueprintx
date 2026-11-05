@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 int_failures=0
+INT_PROMOTE_RENDERS=5
 
 fail() {
     echo "ERROR: $*" >&2
@@ -48,11 +49,14 @@ assignees_per_block() {
 }
 
 check_promote() {
-    local str_promote="$REPO_ROOT/bin/promote_offline_to_online.sh" str_bad
-    [ -f "$str_promote" ] || return 0
-    str_bad="$(grep -vE '^[[:space:]]*#' "$str_promote" | grep -E 'dependabot\.yml' \
-        | grep -vE "GITHUB_USERNAME=\"\\\$GITHUB_USERNAME\" envsubst '\\\$\{GITHUB_USERNAME\}' .*<" || true)"
+    local str_promote="$REPO_ROOT/bin/promote_offline_to_online.sh" str_lines str_bad int_good
+    [ -f "$str_promote" ] || { fail "promote_offline_to_online.sh is missing"; return; }
+    str_lines="$(grep -vE '^[[:space:]]*#' "$str_promote" | grep -E 'dependabot\.yml' || true)"
+    str_bad="$(grep -vE "GITHUB_USERNAME=\"\\\$GITHUB_USERNAME\" envsubst '\\\$\{GITHUB_USERNAME\}' .*<" <<<"$str_lines" || true)"
     [ -z "$str_bad" ] || fail "promote_offline_to_online.sh renders dependabot.yml without the inline owner: $str_bad"
+    int_good="$(grep -cE "GITHUB_USERNAME=\"\\\$GITHUB_USERNAME\" envsubst '\\\$\{GITHUB_USERNAME\}' .*<" <<<"$str_lines" || true)"
+    [ "$int_good" -ge "$INT_PROMOTE_RENDERS" ] \
+        || fail "promote_offline_to_online.sh renders dependabot.yml $int_good time(s), expected $INT_PROMOTE_RENDERS"
 }
 
 check_static() {

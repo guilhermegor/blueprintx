@@ -81,6 +81,21 @@ test_promote_dropped_inline_prefix_fails() {
     expect_gate "promote dropped inline owner" "$str_root" fail "promote_offline_to_online.sh renders"
 }
 
+test_promote_deleted_render_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i '0,/envsubst .*dependabot\.yml/{/envsubst .*dependabot\.yml/d}' \
+        "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote render deleted" "$str_root" fail "expected 5"
+}
+
+test_promote_all_renders_deleted_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i '/envsubst .*dependabot\.yml/d' "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "every promote render deleted" "$str_root" fail "renders dependabot.yml 0 time(s)"
+}
+
 test_second_assignee_fails() {
     local str_root
     str_root="$(make_copy)"
@@ -149,6 +164,8 @@ test_empty_assignee_fails
 test_hardcoded_assignee_fails
 test_promote_unrendered_fails
 test_promote_dropped_inline_prefix_fails
+test_promote_deleted_render_fails
+test_promote_all_renders_deleted_fails
 test_second_assignee_fails
 test_missing_cooldown_fails
 test_partial_cooldown_fails
