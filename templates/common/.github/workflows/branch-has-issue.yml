@@ -53,7 +53,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          ASSIGNEES=$(gh api "repos/$GH_REPO/issues/$PR_NUMBER" --jq '[.assignees[].login] | join(" ")') || { echo "::error::could not read PR assignees from the API (not a policy violation)"; exit 1; }
+          ASSIGNEES=$(gh api "repos/$GH_REPO/issues/$PR_NUMBER" --jq '[.assignees[].login] | join(" ")') || { echo "::error::could not read PR assignees from the API (not a policy violation)"; exit 2; }
           export ASSIGNEES
           bash bin/check_pr_policy.sh assignee
       - name: Require a linked issue
@@ -69,6 +69,6 @@ jobs:
         run: |
           CLOSING_COUNT=$(gh api graphql -f owner="${GH_REPO%/*}" -f name="${GH_REPO#*/}" -F number="$PR_NUMBER" \
             -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){closingIssuesReferences(first:1){totalCount}}}}' \
-            --jq .data.repository.pullRequest.closingIssuesReferences.totalCount) || { echo "::error::could not read closing issue references from the API (not a policy violation)"; exit 1; }
+            --jq .data.repository.pullRequest.closingIssuesReferences.totalCount) || { echo "::error::could not read closing issue references from the API (not a policy violation)"; exit 2; }
           export CLOSING_COUNT
           bash bin/check_pr_policy.sh linked-issue

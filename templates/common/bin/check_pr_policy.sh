@@ -55,30 +55,42 @@ linear_key_present() {
 }
 
 check_linked_issue() {
-	local str_branch="$1" str_title="$2" str_tracker="${3:-github}" int_closing="${4:-0}" str_num str_re="" str_out=""
+	local str_branch="$1" str_title="$2" str_tracker="${3:-github}" int_closing="${4:-0}" str_num str_re="" str_out="" str_err int_rc
 	[[ "$str_branch" =~ ^(dependabot|renovate)/ ]] && return 0
 	case "${str_tracker,,}" in
 		github)
 			[[ "$int_closing" =~ ^[0-9]+$ ]] && ((int_closing > 0)) && return 0
 			if [[ "$str_branch" =~ ^[a-z]+/([0-9]+)(-|$) ]]; then
 				str_num="${BASH_REMATCH[1]}"
-				str_out=$(gh issue view "$str_num" --json state,url --jq '.state + " " + .url' 2>&1) || {
-					[[ "$str_out" =~ (Could\ not\ resolve|not\ found|404) ]] || { echo "Could not read issue $str_num from the API (not a policy violation): $str_out" >&2; return 2; }
+				str_err=$(mktemp)
+				str_out=$(gh issue view "$str_num" --json state,url --jq '.state + " " + .url' 2>"$str_err") || {
+					grep -q 'Could not resolve to an' "$str_err" || { echo "Could not read issue $str_num from the API (not a policy violation): $(<"$str_err")" >&2; rm -f "$str_err"; return 2; }
 					str_out=
 				}
+				rm -f "$str_err"
 				[[ "$str_out" =~ ^OPEN\ .*/issues/ ]] && return 0
 			fi
 			echo "PR closes no issue and branch '$str_branch' resolves to no open issue." >&2
 			return 1
 			;;
-		linear) linear_key_present "$str_branch" "$str_title" && return 0 ;;
+		linear)
+			linear_key_present "$str_branch" "$str_title"
+			int_rc=$?
+			((int_rc == 0)) && return 0
+			((int_rc == 2)) && return 2
+			;;
 		regex)
 			str_re="${TRACKER_REGEX:-}"
 			[[ -n "$str_re" ]] || { echo "TRACKER=regex needs TRACKER_REGEX set." >&2; return 2; }
 			;;
 		*) echo "Unknown TRACKER '$str_tracker' (github|linear|regex)." >&2; return 2 ;;
 	esac
-	[[ -n "$str_re" && "$str_branch $str_title" =~ $str_re ]] && return 0
+	if [[ -n "$str_re" ]]; then
+		[[ "$str_branch $str_title" =~ $str_re ]]
+		int_rc=$?
+		((int_rc == 0)) && return 0
+		((int_rc == 2)) && { echo "TRACKER_REGEX is not a valid regular expression." >&2; return 2; }
+	fi
 	echo "No $str_tracker issue reference in branch or title." >&2
 	return 1
 }

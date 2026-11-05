@@ -59,7 +59,7 @@ expect "assignee present" pass check_assignee "octocat"
 expect "no assignee" fail check_assignee ""
 expect "whitespace-only assignee" fail check_assignee "  "
 
-gh() { case "$3" in 604) echo 'OPEN https://github.com/o/r/issues/604' ;; 605) echo 'OPEN https://github.com/o/r/pull/605' ;; 700) echo 'HTTP 503' >&2; return 1 ;; 701) echo 'Could not resolve to an Issue' >&2; return 1 ;; *) echo CLOSED ;; esac; }
+gh() { case "$3" in 604) echo 'OPEN https://github.com/o/r/issues/604' ;; 605) echo 'OPEN https://github.com/o/r/pull/605' ;; 700) echo 'HTTP 503' >&2; return 1 ;; 701) echo 'Could not resolve to an issue or pull request' >&2; return 1 ;; 702) echo 'HTTP 404: Not Found' >&2; return 1 ;; 703) echo 'warning: update available' >&2; echo 'OPEN https://github.com/o/r/issues/703' ;; *) echo CLOSED ;; esac; }
 expect "closing reference passes" pass check_linked_issue "feat/x" "feat: t" github 1
 expect "branch number resolving to open issue" pass check_linked_issue "feat/604-x" "feat: t" github 0
 expect "branch number resolving to an open PR is not an issue" fail check_linked_issue "feat/605-x" "feat: t" github 0
@@ -94,6 +94,13 @@ int_rc=0; check_linked_issue "feat/701-x" "feat: t" github 0 >/dev/null 2>&1 || 
 expect "gh issue not found is a violation (1)" pass test "$int_rc" -eq 1
 expect "team keys tolerate spaces" pass env 'LINEAR_TEAM_KEYS=ENG, OPS' bash -c 'source "$0"; check_linked_issue feat/ops-3-x "feat: t" linear 0' "$SCRIPT"
 expect "team keys with trailing comma are a config error" fail env 'LINEAR_TEAM_KEYS=ENG,' bash -c 'source "$0"; check_linked_issue feat/zz-3-x "feat: t" linear 0' "$SCRIPT"
+int_rc=0; check_linked_issue "feat/702-x" "feat: t" github 0 >/dev/null 2>&1 || int_rc=$?
+expect "gh 404 (no access) returns 2" pass test "$int_rc" -eq 2
+expect "gh stderr on success is not parsed" pass check_linked_issue "feat/703-x" "feat: t" github 0
+int_rc=0; env 'LINEAR_TEAM_KEYS=ENG,' bash -c 'source "$0"; check_linked_issue feat/zz-3-x "feat: t" linear 0' "$SCRIPT" >/dev/null 2>&1 || int_rc=$?
+expect "malformed LINEAR_TEAM_KEYS returns exactly 2" pass test "$int_rc" -eq 2
+int_rc=0; env 'TRACKER_REGEX=(' bash -c 'source "$0"; check_linked_issue feat/x "feat: t" regex 0' "$SCRIPT" >/dev/null 2>&1 || int_rc=$?
+expect "invalid TRACKER_REGEX returns exactly 2" pass test "$int_rc" -eq 2
 expect "unknown tracker is an error" fail check_linked_issue "feat/x" "feat: t" bogus 0
 unset -f gh
 
