@@ -1156,11 +1156,11 @@ def _notice_declares_review(
 def counts_as_review(dict_review: dict) -> bool:
     """Return whether a submitted review is a review of the code rather than a thread reply.
 
-    Only a ``COMMENTED`` review can be a bare thread reply: it counts when its body is
-    non-empty or it owns an inline comment whose ``replyTo`` is explicitly null. Any other
-    state (an approval, a change request) is a verdict and always counts.
+    An ``APPROVED`` or ``CHANGES_REQUESTED`` review is a verdict and always counts. Any other
+    state, a missing one included, counts when its body is non-empty or it owns an inline
+    comment whose ``replyTo`` is explicitly null.
     """
-    if dict_review.get("state") != "COMMENTED":
+    if dict_review.get("state") in {"APPROVED", "CHANGES_REQUESTED"}:
         return True
     return bool((dict_review.get("body") or "").strip()) or any(
         "replyTo" in dict_comment and dict_comment["replyTo"] is None
