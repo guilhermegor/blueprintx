@@ -299,6 +299,7 @@ lib_minimal_copy_github_assets() {
     local project_path="$1"
 
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/assertion_weakening.yaml" "$project_path/.github/workflows/assertion_weakening.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/publish-badge.yaml" "$project_path/.github/workflows/publish-badge.yaml"
     if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
         cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
