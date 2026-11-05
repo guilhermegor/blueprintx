@@ -53,7 +53,12 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:  # complexity-ok: loop 
     monkeypatch : pytest.MonkeyPatch
         Removes the CI markers, the hatch variable and the event path from the shell.
     """
-    for str_marker in (*gate.TUPLE_CI_MARKERS, "TEST_CHANGE_OK", "GITHUB_EVENT_PATH"):
+    for str_marker in (
+        gate.STR_CI_VAR,
+        *gate.TUPLE_PRESENCE_MARKERS,
+        "TEST_CHANGE_OK",
+        "GITHUB_EVENT_PATH",
+    ):
         monkeypatch.delenv(str_marker, raising=False)
 
 
@@ -418,7 +423,10 @@ def test_the_ci_failure_leads_with_the_pr_body_line_not_the_env_var(
     monkeypatch.setenv("CI", "true")
     gate.report(["some finding"], "base-sha", 1)
 
-    assert "TEST_CHANGE_OK is ignored under CI" in capsys.readouterr().out
+    str_out = capsys.readouterr().out
+
+    assert "TEST_CHANGE_OK is ignored under CI" in str_out
+    assert "git commit" not in str_out
 
 
 def test_ci_ignores_test_change_ok_end_to_end(monkeypatch: pytest.MonkeyPatch) -> None:

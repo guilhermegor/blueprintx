@@ -69,7 +69,8 @@ import sys
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-TUPLE_CI_MARKERS = ("CI", "GITHUB_ACTIONS")
+STR_CI_VAR = "CI"
+TUPLE_PRESENCE_MARKERS = ("GITHUB_ACTIONS",)
 TUPLE_FALSY_ENV = ("", "0", "false", "no")
 
 RE_JUSTIFICATION = re.compile(r"^\s*test-change-ok:\s*(\S.*)$", re.I | re.M)
@@ -230,8 +231,10 @@ def is_ci() -> bool:
         True when ``GITHUB_ACTIONS`` is set (a runner never sets it falsy) or ``CI`` is
         anything but ``""``, ``0``, ``false`` or ``no``.
     """
-    str_ci = os.environ.get("CI", "").strip().lower()
-    return "GITHUB_ACTIONS" in os.environ or str_ci not in TUPLE_FALSY_ENV
+    str_ci = os.environ.get(STR_CI_VAR, "").strip().lower()
+    return any(str_m in os.environ for str_m in TUPLE_PRESENCE_MARKERS) or (
+        str_ci not in TUPLE_FALSY_ENV
+    )
 
 
 def env_reason() -> str:
