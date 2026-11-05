@@ -9,7 +9,7 @@ lives here.
 
 ```
 .specs/
-├── AGENTS.md          # this file
+├── AGENTS.md          # this file (CLAUDE.md beside it is the Claude Code bridge)
 ├── features/
 │   └── <feature-name>/
 │       ├── design.md  # what and why — the feature spec (template below)
@@ -26,7 +26,7 @@ lives here.
 `bin/check_specs_structure.sh --root .` enforces every rule below; it runs in the
 `specs-structure` pre-commit hook and in CI. Nothing here is advisory except where marked.
 
-- Nothing lives directly under `.specs/` besides `AGENTS.md`, `features/`, `backlog/` and
+- Nothing lives directly under `.specs/` besides `AGENTS.md`, `CLAUDE.md`, `features/`, `backlog/` and
   `_lessons/`. A stray top-level note fails by name.
 - `<feature-name>` is kebab-case with at least one letter — not a date, not an issue number.
 - `features/` splits on **lifecycle, not change type**. A feature directory named after a
