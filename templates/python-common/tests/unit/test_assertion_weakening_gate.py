@@ -45,21 +45,19 @@ gate = _load("check_assertion_weakening")
 
 
 @pytest.fixture(autouse=True)
-def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:  # complexity-ok: loop over CI markers
-    """Start every test from a local shell with no ``TEST_CHANGE_OK`` and no CI marker.
+def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start every test from a local pre-commit shell with no ``TEST_CHANGE_OK`` and no CI marker.
 
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
         Removes the CI markers, the hatch variable and the event path from the shell.
     """
-    for str_marker in (
-        gate.STR_CI_VAR,
-        *gate.TUPLE_PRESENCE_MARKERS,
-        "TEST_CHANGE_OK",
-        "GITHUB_EVENT_PATH",
-    ):
-        monkeypatch.delenv(str_marker, raising=False)
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("TEST_CHANGE_OK", raising=False)
+    monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
+    monkeypatch.setenv("PRE_COMMIT", "1")
 
 
 def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) -> list[str]:

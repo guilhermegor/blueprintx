@@ -2245,3 +2245,19 @@ rest of the suite.
 - **A review carries forward across a merge of the base** (#698). The patch-id output is
   `<patch-id> <commit-id>`, and unpacking fails loudly on empty output instead of an
   `IndexError`. The `merge` of `main` into the branch conflicts by design.
+- **One CI verdict for the local-only escape hatches, and it fails closed** (#981).
+  `check_gate_integrity.py` (`GATE_CHANGE_OK`) and `check_assertion_weakening.py`
+  (`TEST_CHANGE_OK`) each carried their own idea of "running in CI": one treated any truthy
+  `CI` or `GITHUB_ACTIONS` as CI, the other counted `GITHUB_ACTIONS` by presence and `CI=false`
+  as local. Both are a denylist, and a denylist fails open for any runner it does not name:
+  Jenkins sets neither variable, so its job would have honoured the hatch. Both gates now call
+  `is_ci()` from `templates/python-common/bin/gate_env.py`. The alternative, "treat any
+  non-falsy `CI` as CI", was rejected because it still leaves Jenkins local. The rule is an
+  allowlist of local signals: the process is local only when `PRE_COMMIT` is set (pre-commit
+  exports it for every hook it runs, so a real commit always carries it) and `GITHUB_ACTIONS`
+  is absent and `CI` is falsy (`""`, `0`, `false`, `no`). Everything else, including a bare
+  shell and an unknown runner, is CI and ignores the hatch. Known limit: a runner that
+  itself invokes `pre-commit run` sets `PRE_COMMIT` and, if it exports no `CI`, is read as
+  local; the PR-body and trailer sources still apply there. Pinned in
+  `tests/unit/test_gate_integrity_gate.py` for `CI=false`, `CI=""`, `GITHUB_ACTIONS=true`, `JENKINS_URL`
+  and a bare environment.
