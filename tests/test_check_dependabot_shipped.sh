@@ -70,7 +70,7 @@ test_promote_unrendered_fails() {
     str_root="$(make_copy)"
     sed -i -E '0,/envsubst .*dependabot\.yml/s#envsubst [^<]*< ("[^"]*dependabot\.yml")#cp \1#' \
         "$str_root/bin/promote_offline_to_online.sh"
-    expect_gate "promote copies dependabot.yml raw" "$str_root" fail "promote_offline_to_online.sh renders"
+    expect_gate "promote copies dependabot.yml raw" "$str_root" fail "has a render without the inline owner"
 }
 
 test_promote_dropped_inline_prefix_fails() {
@@ -78,7 +78,24 @@ test_promote_dropped_inline_prefix_fails() {
     str_root="$(make_copy)"
     sed -i -E '0,/GITHUB_USERNAME="\$GITHUB_USERNAME" envsubst/s#GITHUB_USERNAME="\$GITHUB_USERNAME" (envsubst)#\1#' \
         "$str_root/bin/promote_offline_to_online.sh"
-    expect_gate "promote dropped inline owner" "$str_root" fail "promote_offline_to_online.sh renders"
+    expect_gate "promote dropped inline owner" "$str_root" fail "has a render without the inline owner"
+}
+
+test_promote_wrong_source_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E '0,/envsubst .*dependabot\.yml/s#< *"[^"]*dependabot\.yml"#< "$shared/.github/CODEOWNERS"#' \
+        "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote renders dependabot.yml from the wrong source" "$str_root" fail "dependabot.yml source"
+}
+
+test_promote_render_moved_between_functions_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    awk '/envsubst .*dependabot\.yml/ { int_seen++; if (int_seen == 1) next; if (int_seen == 2) { print; print; next } } 1' \
+        "$str_root/bin/promote_offline_to_online.sh" >"$str_root/out.sh"
+    mv "$str_root/out.sh" "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "one function renders twice, another not at all" "$str_root" fail "time(s), expected 1"
 }
 
 test_promote_deleted_render_fails() {
@@ -86,14 +103,14 @@ test_promote_deleted_render_fails() {
     str_root="$(make_copy)"
     sed -i '0,/envsubst .*dependabot\.yml/{/envsubst .*dependabot\.yml/d}' \
         "$str_root/bin/promote_offline_to_online.sh"
-    expect_gate "promote render deleted" "$str_root" fail "expected 5"
+    expect_gate "promote render deleted" "$str_root" fail "time(s), expected 1"
 }
 
 test_promote_all_renders_deleted_fails() {
     local str_root
     str_root="$(make_copy)"
     sed -i '/envsubst .*dependabot\.yml/d' "$str_root/bin/promote_offline_to_online.sh"
-    expect_gate "every promote render deleted" "$str_root" fail "renders dependabot.yml 0 time(s)"
+    expect_gate "every promote render deleted" "$str_root" fail "renders dependabot.yml 0 time(s), expected 1"
 }
 
 test_second_assignee_fails() {
@@ -164,6 +181,8 @@ test_empty_assignee_fails
 test_hardcoded_assignee_fails
 test_promote_unrendered_fails
 test_promote_dropped_inline_prefix_fails
+test_promote_wrong_source_fails
+test_promote_render_moved_between_functions_fails
 test_promote_deleted_render_fails
 test_promote_all_renders_deleted_fails
 test_second_assignee_fails

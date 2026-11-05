@@ -4,7 +4,6 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 int_failures=0
-INT_PROMOTE_RENDERS=5
 
 fail() {
     echo "ERROR: $*" >&2
@@ -49,14 +48,19 @@ assignees_per_block() {
 }
 
 check_promote() {
-    local str_promote="$REPO_ROOT/bin/promote_offline_to_online.sh" str_lines str_bad int_good
+    local str_promote="$REPO_ROOT/bin/promote_offline_to_online.sh" str_bad
     [ -f "$str_promote" ] || { fail "promote_offline_to_online.sh is missing"; return; }
-    str_lines="$(grep -vE '^[[:space:]]*#' "$str_promote" | grep -E 'dependabot\.yml' || true)"
-    str_bad="$(grep -vE "GITHUB_USERNAME=\"\\\$GITHUB_USERNAME\" envsubst '\\\$\{GITHUB_USERNAME\}' .*<" <<<"$str_lines" || true)"
-    [ -z "$str_bad" ] || fail "promote_offline_to_online.sh renders dependabot.yml without the inline owner: $str_bad"
-    int_good="$(grep -cE "GITHUB_USERNAME=\"\\\$GITHUB_USERNAME\" envsubst '\\\$\{GITHUB_USERNAME\}' .*<" <<<"$str_lines" || true)"
-    [ "$int_good" -ge "$INT_PROMOTE_RENDERS" ] \
-        || fail "promote_offline_to_online.sh renders dependabot.yml $int_good time(s), expected $INT_PROMOTE_RENDERS"
+    str_bad="$(grep -vE '^[[:space:]]*#' "$str_promote" | awk '
+        /^copy_online_assets_[a-z_]+\(\)/ { str_fn = $1; int_n[str_fn] += 0; next }
+        /^}/ { str_fn = ""; next }
+        /dependabot\.yml/ {
+            if (str_fn == "") { print "outside a copy_online_assets_* function: " $0; next }
+            if ($0 ~ /GITHUB_USERNAME="[$]GITHUB_USERNAME" envsubst [\047][$][{]GITHUB_USERNAME[}][\047] <[[:space:]]*"[^"]*dependabot[.]yml"/) int_n[str_fn]++
+            else print str_fn " has a render without the inline owner or the dependabot.yml source: " $0
+        }
+        END { for (k in int_n) if (int_n[k] != 1) print k " renders dependabot.yml " int_n[k] " time(s), expected 1" }
+    ')"
+    [ -z "$str_bad" ] || fail "promote_offline_to_online.sh renders: $str_bad"
 }
 
 check_static() {
