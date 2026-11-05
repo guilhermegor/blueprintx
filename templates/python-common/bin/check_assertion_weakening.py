@@ -53,7 +53,7 @@ line, with a non-empty reason, in the PR body (`GITHUB_EVENT_PATH`) or as a trai
 commit since the merge-base. The PR body is CI-only, and the commit being created cannot
 carry its own trailer at `pre-commit` time (earlier branch commits' trailers are read).
 Locally, set `TEST_CHANGE_OK='<reason>'` for the commit (blueprintx#941); it is ignored
-unless a local `pre-commit` signal is present (`gate_env.is_ci`, #981).
+unless the run is a local `pre-commit` with a terminal and no CI marker (`gate_env.is_ci`, #981).
 
 CI must check out with `fetch-depth: 0` — a shallow clone has no common ancestor to resolve.
 """

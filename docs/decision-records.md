@@ -2259,7 +2259,8 @@ rest of the suite.
   terminal (`/dev/tty` opens). The terminal check exists because a headless runner that itself
   invokes `pre-commit run` inherits `PRE_COMMIT` (review of #986): a developer committing from
   a shell has a terminal, Jenkins does not. Everything else, including a bare shell, an unknown
-  runner and a GUI or IDE commit, is CI and ignores the hatch; the PR-body and trailer
+  runner, a GUI or IDE commit and a headless agent commit (no `/dev/tty`), is CI and
+  ignores the hatch; the PR-body and trailer
   justifications remain available there. Known limit: a CI container allocated a pty
   (`docker run -t`) with `PRE_COMMIT` set reads as local. Pinned in
   `tests/unit/test_gate_integrity_gate.py` for `CI=false`, `CI=""`, `GITHUB_ACTIONS=true`, `JENKINS_URL`
