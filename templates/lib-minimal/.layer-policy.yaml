@@ -7,6 +7,7 @@ annotation_only:
     utils.tabular_reader.read_table / read_query (they enforce a FileContract + dtypes).
 
 src_prefix_depth: 2
+src_prefix_marker: _internal
 
 layers:
   __root__:
@@ -27,6 +28,9 @@ layers:
         guarded import so a tier without numpy still loads. Legitimate here precisely
         because utils/ IS the seam layer.
       opentelemetry: "OTLP log export, wrapped by utils.otel_logging (opt-in, blueprintx#438)"
+      pydantic: "serialisers that walk the config/schemas models; the models themselves live in config"
+    deny_class_bases:
+      BaseModel: "pydantic models are defined in config/schemas; utils only serialises them"
     deny_layers:
       config: >-
         The seam layer must not depend on the composition root that configures it. The other
@@ -35,6 +39,7 @@ layers:
 
   config:
     allow:
+      pydantic: "config/schemas is the one home of pydantic models; they stay private and are never exported"
       dotenv: "loads .env at startup; this is the layer that owns environment resolution"
       yaml: "parses inputs.yaml / outputs.yaml"
       psycopg: "PostgreSQL driver, imported lazily by the configured DB_BACKEND"

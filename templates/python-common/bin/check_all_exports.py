@@ -94,6 +94,167 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     return {str_name for str_name in set_names if not str_name.startswith("_")}
 
 
+def internal_exports(path_init: pathlib.Path, set_exported: set[str]) -> list[str]:
+    """Return one message per exported name imported from a module under ``_internal``.
+
+    The leading underscore is a promise that a path is not public API, and ``__all__`` must
+    not break it. A package that is itself inside ``_internal`` is out of scope.
+
+    Parameters
+    ----------
+    path_init : pathlib.Path
+        The package's ``__init__.py``.
+    set_exported : set of str
+        The names in its ``__all__``.
+
+    Returns
+    -------
+    list of str
+        Human-readable problems; empty when no exported name originates under ``_internal``.
+    """
+    if _inside_internal(path_init):
+        return []
+    list_problems: list[str] = []
+    for str_name in sorted(set_exported):
+        str_origin = _internal_origin(path_init, str_name, frozenset())
+        if str_origin is not None:
+            list_problems.append(
+                f"{path_init}: '{str_name}' in __all__ is defined under _internal "
+                f"({str_origin}) — the underscore marks it private, so it must not be "
+                f"part of the public surface"
+            )
+    return list_problems
+
+
+def _inside_internal(path_init: pathlib.Path) -> bool:
+    """Return whether the package sits inside an ``_internal`` package (checkout path ignored).
+
+    Parameters
+    ----------
+    path_init : pathlib.Path
+        The package's ``__init__.py``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a package directory above it, up to the top package, is ``_internal``.
+    """
+    path_dir = path_init.parent
+    while path_dir.name != "_internal":
+        if path_dir.parent == path_dir or not (path_dir.parent / "__init__.py").is_file():
+            return False
+        path_dir = path_dir.parent
+    return True
+
+
+def _internal_origin(
+    path_module: pathlib.Path, str_name: str, set_seen: frozenset[pathlib.Path]
+) -> str | None:
+    """Return the ``_internal`` module a module-level binding of ``str_name`` comes from.
+
+    Only bindings in the module namespace count, so an import inside a function body cannot
+    shadow a public name. A relative import of a sibling submodule is followed into that
+    sibling, so a name re-exported through a public module is traced to its definition.
+
+    Parameters
+    ----------
+    path_module : pathlib.Path
+        The module whose namespace is read.
+    str_name : str
+        The bound name to trace.
+    set_seen : frozenset of pathlib.Path
+        Modules already visited, so an import cycle terminates.
+
+    Returns
+    -------
+    str or None
+        The dotted ``_internal`` module, or ``None`` when the name does not originate there.
+    """
+    if path_module in set_seen:
+        return None
+    cls_tree = ast.parse(path_module.read_text(encoding="utf-8"))
+    for cls_node in cls_tree.body:
+        str_hit = _node_origin(path_module, cls_node, str_name, set_seen | {path_module})
+        if str_hit is not None:
+            return str_hit
+    return None
+
+
+def _node_origin(
+    path_module: pathlib.Path,
+    cls_node: ast.stmt,
+    str_name: str,
+    set_seen: frozenset[pathlib.Path],
+) -> str | None:
+    """Trace ``str_name`` through one top-level statement, or ``None`` when it does not bind it.
+
+    Parameters
+    ----------
+    path_module : pathlib.Path
+        The module containing the statement.
+    cls_node : ast.stmt
+        A top-level statement.
+    str_name : str
+        The bound name to trace.
+    set_seen : frozenset of pathlib.Path
+        Modules already visited.
+
+    Returns
+    -------
+    str or None
+        The dotted ``_internal`` module, or ``None``.
+    """
+    if isinstance(cls_node, ast.Import):
+        return next(
+            (
+                cls_alias.name
+                for cls_alias in cls_node.names
+                if cls_alias.asname == str_name and "_internal" in cls_alias.name.split(".")
+            ),
+            None,
+        )
+    if not isinstance(cls_node, ast.ImportFrom):
+        return None
+    for cls_alias in cls_node.names:
+        if (cls_alias.asname or cls_alias.name) == str_name:
+            return _from_import_origin(path_module, cls_node, cls_alias.name, set_seen)
+    return None
+
+
+def _from_import_origin(
+    path_module: pathlib.Path,
+    cls_node: ast.ImportFrom,
+    str_source_name: str,
+    set_seen: frozenset[pathlib.Path],
+) -> str | None:
+    """Trace one ``from … import`` binding to an ``_internal`` module, or ``None``.
+
+    Parameters
+    ----------
+    path_module : pathlib.Path
+        The module containing the import.
+    cls_node : ast.ImportFrom
+        The import statement.
+    str_source_name : str
+        The name as defined in the module it is imported from.
+    set_seen : frozenset of pathlib.Path
+        Modules already visited.
+
+    Returns
+    -------
+    str or None
+        The dotted ``_internal`` module, or ``None`` when the import does not lead there.
+    """
+    if "_internal" in (cls_node.module or "").split("."):
+        return cls_node.module
+    if cls_node.level != 1 or not cls_node.module:
+        return None
+    path_sibling = path_module.parent / f"{cls_node.module}.py"
+    if not path_sibling.is_file():
+        return None
+    return _internal_origin(path_sibling, str_source_name, set_seen)
+
+
 def check_package(path_init: pathlib.Path) -> list[str]:
     """Return one message per public name the package defines but does not export.
 
@@ -111,7 +272,7 @@ def check_package(path_init: pathlib.Path) -> list[str]:
     if list_exported is None:
         return []
     set_exported = set(list_exported)
-    list_problems: list[str] = []
+    list_problems: list[str] = internal_exports(path_init, set_exported)
     for path_module in sorted(path_init.parent.glob("*.py")):
         if path_module.name == "__init__.py":
             continue
