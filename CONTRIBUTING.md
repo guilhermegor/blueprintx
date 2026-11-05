@@ -2117,3 +2117,10 @@ and the matrix to every maintained cycle, and opens a PR. It fails closed (unrea
 malformed JSON or no maintained cycle changes nothing and exits 1) and never lowers the floor.
 Ruff does not follow `.python-version` and falls back to py39 on Poetry-only tiers, so
 `target-version` stays explicit and the gate compares it.
+
+The bump workflow keeps at most one PR open (`chore/951-python-floor-sync`) and leaves it
+untouched on later runs. Pushes made with the default `GITHUB_TOKEN` do not trigger other
+workflows, so set the `PYTHON_EOL_BUMP_TOKEN` secret (a PAT or GitHub App token) for the PR to
+get its CI runs, and enable "Allow GitHub Actions to create and approve pull requests".
+`.python-version` holds the floor, not the development interpreter, so pyenv and `setup-python`
+resolve it to the newest installed 3.11.x.

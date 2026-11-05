@@ -8,6 +8,8 @@ Usage: ``python bin/python_eol_bump.py [--check] [--root DIR] [--fixture FILE]``
 """
 
 import argparse
+import datetime
+import http.client
 import json
 import pathlib
 import re
@@ -19,7 +21,7 @@ STR_API = "https://endoflife.date/api/v1/products/python/"
 STR_VERSION_FILE = "templates/python-common/.python-version"
 STR_TESTS_YAML = "templates/python-common/.github/workflows/tests.yaml"
 
-RE_CYCLE = re.compile(r"^3\.(\d+)$")
+RE_CYCLE = re.compile(r"^3\.(\d+)(?:\.\d+)?$")
 
 LIST_RULES = [
     ("templates/*/pyproject.toml", r'(python = ">=)\d+\.\d+(,<4\.0")', "{floor}"),
@@ -57,13 +59,15 @@ def cycle_key(str_cycle: str) -> int:
     return int(RE_CYCLE.match(str_cycle).group(1))
 
 
-def derive(dict_payload: dict) -> tuple:
+def derive(dict_payload: dict, str_today: str = "9999-12-31") -> tuple:
     """Compute the floor and the matrix from an endoflife.date product payload.
 
     Parameters
     ----------
     dict_payload : dict
         Parsed ``/api/v1/products/python/`` response.
+    str_today : str
+        ISO date; a cycle whose ``releaseDate`` is later is a pre-release and is skipped.
 
     Returns
     -------
@@ -76,14 +80,20 @@ def derive(dict_payload: dict) -> tuple:
         When the payload is malformed or reports no maintained 3.x cycle.
     """
     try:
-        list_releases = dict_payload["result"]["releases"]
+        list_releases = [
+            dict_rel
+            for dict_rel in dict_payload["result"]["releases"]
+            if RE_CYCLE.match(str(dict_rel["name"]))
+        ]
+        if not all(isinstance(dict_rel["isMaintained"], bool) for dict_rel in list_releases):
+            raise ValueError("isMaintained is not a boolean on every Python 3 cycle")
         list_cycles = [
             str(dict_rel["name"])
             for dict_rel in list_releases
-            if dict_rel["isMaintained"] is True and RE_CYCLE.match(str(dict_rel["name"]))
+            if dict_rel["isMaintained"] and str(dict_rel.get("releaseDate", "")) <= str_today
         ]
-    except (KeyError, TypeError) as err:
-        raise ValueError(f"malformed endoflife.date payload: {err!r}") from err
+    except (KeyError, TypeError, AttributeError) as cls_err:
+        raise ValueError(f"malformed endoflife.date payload: {cls_err!r}") from cls_err
     if not list_cycles:
         raise ValueError("no maintained Python cycle in payload")
     list_matrix = sorted(list_cycles, key=cycle_key)
@@ -136,11 +146,16 @@ def sync(path_root: pathlib.Path, str_floor: str, list_matrix: list, bool_write:
     list_drift: list = []
     for str_glob, str_pattern, str_template in LIST_RULES:
         str_new = render(str_template, str_floor, list_matrix)
-        for path_file in sorted(path_root.glob(str_glob)):
+        list_files = sorted(path_root.glob(str_glob))
+        if not list_files:
+            raise ValueError(f"rule matched no file: {str_glob}")
+        for path_file in list_files:
             str_old = path_file.read_text(encoding="utf-8")
-            str_out = re.sub(
-                str_pattern, lambda m, s=str_new: m.group(1) + s + m.group(2), str_old
+            str_out, int_hits = re.subn(
+                str_pattern, lambda m, s=str_new: m.group(1) + s + m.group(2), str_old, count=1
             )
+            if int_hits == 0:
+                raise ValueError(f"{path_file.relative_to(path_root)}: no match for {str_pattern}")
             if str_out != str_old:
                 list_drift.append(str(path_file.relative_to(path_root)))
                 if bool_write:
@@ -169,8 +184,49 @@ def fetch(str_fixture: str) -> dict:
         return json.loads(cls_resp.read())
 
 
+def matrix_problem(str_floor: str, list_matrix: list) -> str:
+    """Return why a tests.yaml matrix is not a contiguous run from the floor, or ``""``.
+
+    Parameters
+    ----------
+    str_floor : str
+        Floor cycle.
+    list_matrix : list
+        Cycles read from ``tests.yaml``.
+
+    Returns
+    -------
+    str
+        A finding message, empty when the matrix is valid.
+    """
+    if not list_matrix:
+        return "tests.yaml has no python-version matrix"
+    int_last = cycle_key(list_matrix[-1])
+    list_expected = [f"3.{int_n}" for int_n in range(cycle_key(str_floor), int_last + 1)]
+    if list_matrix != list_expected:
+        return f"tests.yaml matrix {list_matrix} is not contiguous from {str_floor}"
+    return ""
+
+
+def read_floor(path_root: pathlib.Path) -> str:
+    """Read ``.python-version`` as a ``MAJOR.MINOR`` cycle.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Repository root.
+
+    Returns
+    -------
+    str
+        The floor, truncated to two components.
+    """
+    str_raw = (path_root / STR_VERSION_FILE).read_text(encoding="utf-8").strip()
+    return ".".join(str_raw.split(".")[:2])
+
+
 def run_check(path_root: pathlib.Path) -> int:
-    """Compare every derived place with ``.python-version`` and the tests matrix floor.
+    """Compare every derived place with ``.python-version`` and the tests matrix.
 
     Parameters
     ----------
@@ -180,18 +236,20 @@ def run_check(path_root: pathlib.Path) -> int:
     Returns
     -------
     int
-        0 when in sync, 1 on drift.
+        0 when in sync, 1 on drift or when a rule cannot be verified.
     """
-    str_floor = (path_root / STR_VERSION_FILE).read_text(encoding="utf-8").strip()
-    str_matrix = (path_root / STR_TESTS_YAML).read_text(encoding="utf-8")
-    re_found = re.search(r"python-version: \[([^\]]*)\]", str_matrix)
+    str_floor = read_floor(path_root)
+    str_yaml = (path_root / STR_TESTS_YAML).read_text(encoding="utf-8")
+    re_found = re.search(r"python-version: \[([^\]]*)\]", str_yaml)
     list_matrix = re.findall(r"\d+\.\d+", re_found.group(1)) if re_found else []
-    if not list_matrix or list_matrix[0] != str_floor:
-        print(f"tests.yaml matrix {list_matrix} does not start at the floor {str_floor}")
-        return 1
-    list_drift = sync(path_root, str_floor, list_matrix, bool_write=False)
-    for str_path in list_drift:
-        print(f"{str_path}: out of sync with .python-version ({str_floor})")
+    try:
+        str_problem = matrix_problem(str_floor, list_matrix)
+        list_drift = [str_problem] if str_problem else []
+        list_drift += sync(path_root, str_floor, list_matrix, bool_write=False)
+    except ValueError as cls_err:
+        list_drift = [f"cannot verify: {cls_err}"]
+    for str_item in list_drift:
+        print(f"drift ({str_floor}): {str_item}")
     return 1 if list_drift else 0
 
 
@@ -208,19 +266,17 @@ def run_bump(path_root: pathlib.Path, str_fixture: str) -> int:
     Returns
     -------
     int
-        0 on success (changed or not), 1 on any API or data failure.
+        0 on success (changed or not), 1 on any API, data or rule failure.
     """
     try:
-        str_floor, list_matrix = derive(fetch(str_fixture))
-    except (ValueError, OSError) as err:
-        print(f"fail closed, nothing changed: {err}")
+        str_floor, list_matrix = derive(fetch(str_fixture), datetime.date.today().isoformat())
+        if cycle_key(str_floor) < cycle_key(read_floor(path_root)):
+            raise ValueError(f"derived floor {str_floor} is below the current floor")
+        sync(path_root, str_floor, list_matrix, bool_write=False)
+    except (ValueError, OSError, http.client.HTTPException) as cls_err:
+        print(f"fail closed, nothing changed: {cls_err}")
         return 1
-    path_version = path_root / STR_VERSION_FILE
-    str_current = path_version.read_text(encoding="utf-8").strip()
-    if cycle_key(str_floor) < cycle_key(str_current):
-        print(f"derived floor {str_floor} is below current {str_current}; refusing to lower it")
-        return 1
-    path_version.write_text(str_floor + "\n", encoding="utf-8")
+    (path_root / STR_VERSION_FILE).write_text(str_floor + "\n", encoding="utf-8")
     list_drift = sync(path_root, str_floor, list_matrix, bool_write=True)
     print(f"floor {str_floor}, matrix {list_matrix}, changed {len(list_drift)} file(s)")
     return 0

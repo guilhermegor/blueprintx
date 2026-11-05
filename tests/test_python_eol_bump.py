@@ -49,6 +49,9 @@ def _copy_into(path_dst_root: Path, str_rel: str) -> None:
 @pytest.fixture
 def path_tree(tmp_path: Path) -> Path:
     list(map(lambda str_rel: _copy_into(tmp_path, str_rel), LIST_FILES))
+    list_base = ["3.11", "3.12", "3.13", "3.14", "3.15"]
+    mod_bump.sync(tmp_path, "3.11", list_base, True)
+    (tmp_path / mod_bump.STR_VERSION_FILE).write_text("3.11\n", encoding="utf-8")
     return tmp_path
 
 
@@ -121,3 +124,33 @@ def test_check_detects_drift(path_tree: Path) -> None:
     path_ruff = path_tree / "templates/python-common/ruff.toml"
     path_ruff.write_text(path_ruff.read_text().replace("py311", "py310"))
     assert mod_bump.run_check(path_tree) == 1
+
+
+def test_derive_non_boolean_flag_raises() -> None:
+    dict_bad = _payload(DICT_TODAY)
+    dict_bad["result"]["releases"][-2]["isMaintained"] = "true"
+    with pytest.raises(ValueError):
+        mod_bump.derive(dict_bad)
+
+
+def test_derive_skips_cycle_released_in_the_future() -> None:
+    dict_pre = _payload(DICT_TODAY)
+    dict_pre["result"]["releases"][0]["releaseDate"] = "2099-10-01"
+    assert mod_bump.derive(dict_pre, "2026-11-04")[1][-1] == "3.14"
+
+
+def test_check_fails_when_a_rule_matches_nothing(path_tree: Path) -> None:
+    path_toml = path_tree / "templates/lib-minimal/pyproject.toml"
+    path_toml.write_text(path_toml.read_text().replace(",<4.0", ",<5.0"))
+    assert mod_bump.run_check(path_tree) == 1
+
+
+def test_check_fails_on_matrix_gap(path_tree: Path) -> None:
+    path_yaml = path_tree / mod_bump.STR_TESTS_YAML
+    path_yaml.write_text(path_yaml.read_text().replace('"3.12", ', ""))
+    assert mod_bump.run_check(path_tree) == 1
+
+
+def test_check_accepts_full_version_in_floor_file(path_tree: Path) -> None:
+    (path_tree / mod_bump.STR_VERSION_FILE).write_text("3.11.4\n")
+    assert mod_bump.run_check(path_tree) == 0

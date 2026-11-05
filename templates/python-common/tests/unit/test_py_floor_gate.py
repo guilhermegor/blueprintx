@@ -44,7 +44,7 @@ def test_mypy_rejects_post_floor_stdlib_name(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         Disposable directory holding the fixture module and the mypy cache.
     """
-    path_fixture = tmp_path / "uses_utc.py"
+    path_fixture = tmp_path / "uses_batched.py"
     path_fixture.write_text("from itertools import batched\n\nprint(batched)\n", encoding="utf-8")
     str_stdout, _, _ = api.run(
         [

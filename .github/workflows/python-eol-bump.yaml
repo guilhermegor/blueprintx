@@ -9,32 +9,44 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  STR_BRANCH: chore/951-python-floor-sync
+
 jobs:
   bump:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.PYTHON_EOL_BUMP_TOKEN || github.token }}
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+
       - name: Derive floor and matrix from endoflife.date
         run: python bin/python_eol_bump.py
+
       - name: Open a pull request when anything changed
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PYTHON_EOL_BUMP_TOKEN || github.token }}
         run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "Python floor and matrix already current"
             exit 0
           fi
+          str_open="$(gh pr list --head "$STR_BRANCH" --state open --json number --jq '.[0].number')"
+          if [ -n "$str_open" ]; then
+            echo "Bump PR #${str_open} is still open; leaving it untouched"
+            exit 0
+          fi
           str_floor="$(tr -d '\n' < templates/python-common/.python-version)"
-          str_branch="chore/0-python-floor-${str_floor}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$str_branch"
+          git checkout -b "$STR_BRANCH"
           git commit -am "chore(templates)!: sync the Python floor to ${str_floor}"
-          git push --force origin "$str_branch"
-          gh pr create --base main --head "$str_branch" \
+          git push --force origin "$STR_BRANCH"
+          gh pr create --base main --head "$STR_BRANCH" \
             --title "chore(templates)!: sync the Python floor to ${str_floor}" \
             --body "Automated monthly sync from endoflife.date. Floor ${str_floor}."
