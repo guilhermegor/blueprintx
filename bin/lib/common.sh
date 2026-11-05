@@ -348,7 +348,7 @@ copy_repo_policy_workflows() {
     mkdir -p "$project_path/.github/workflows" "$project_path/bin"
     local str_wf
     for str_wf in close-linked-issues branch-has-issue pr-title-conventional \
-        pr-body-template pr-self-assign; do
+        pr-body-template; do
         cp "$common_root/.github/workflows/$str_wf.yml" "$project_path/.github/workflows/"
     done
     cp "$common_root/bin/close_linked_issues.sh" "$common_root/bin/check_pr_policy.sh" \

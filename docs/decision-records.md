@@ -169,7 +169,13 @@ test suite keep the contract; this section records the reasoning that lived besi
   arguments of `@pytest.mark.skipif(platform.skip, ...)`, contradicting the deliberate `skipif`
   exclusion (the walk returned `{'skip'}`). Minimum positional-arg count is 2 for
   `assertEqual(a, b)`. Dispatch is by basename or path shape, so each analyzer takes plain
-  `(old_text, new_text, shown_path)` and never reaches for git.
+  `(old_text, new_text, shown_path)` and never reaches for git. The `TEST_CHANGE_OK` env hatch
+  (#941) exists because a pre-commit run cannot read the trailer of the commit being created;
+  a `commit-msg`-stage hook could read it and keep the reason in history, but would move the
+  gate off the staged-diff stage the rest of the family shares. Like `GATE_CHANGE_OK` it is
+  ignored under CI; `GITHUB_ACTIONS` counts when set at all (a runner never sets it falsy),
+  while `CI` counts unless `""`, `0`, `false` or `no`, so a local `CI=false` does not disable it.
+  `GATE_CHANGE_OK` still uses a presence check; aligning it is tracked in #981. `is_ci()` is the one seam for both the verdict and the advice.
 - **`check_backlog_ledger.py`** (#123). The risk classes that require a ledger are kept narrow:
   docs, deps and tests-only branches are routine and a ledger for them would be noise nobody
   reads. The author is read from the event payload: once `GITHUB_EVENT_PATH` is set the payload
@@ -961,8 +967,8 @@ is shaped as it is; a generated project gets the behavior, not the history.
   so a workflow submitting a review with the ambient `GITHUB_TOKEN` cannot satisfy a gate that
   exists to say a real reviewer looked. A row that omits it or spells it otherwise fails loudly;
   at least one `posts: threads` member is required. Zero threads is judged against a submitted
-  review, never against silence (#208). Delete the file to opt out: the gate self-skips with a
-  message. See also the records at the top of this page.
+  review, never against silence (#208). A missing file fails the gate; opt out with `adopted: false` in the roster, which
+  counts only when the base branch declares it too (#952). See also the records at the top of this page.
 - **`.shellcheckrc`.** `severity=warning` is the level at which the scripts are clean while still
   catching real bugs (unquoted expansions, undefined variables, bad test syntax). SC1091 is
   disabled because `lib/common.sh` is resolved at run time, not lint time.
@@ -2239,3 +2245,18 @@ rest of the suite.
 - **A review carries forward across a merge of the base** (#698). The patch-id output is
   `<patch-id> <commit-id>`, and unpacking fails loudly on empty output instead of an
   `IndexError`. The `merge` of `main` into the branch conflicts by design.
+- **A thread reply is not a review of the head** (#978). A reviewer's answer to a thread is
+  stored as a `COMMENTED` review with an empty body, attributed to the commit the branch was on
+  when it was posted. `counts_as_review` admits a review only with a non-empty body or an
+  inline comment whose `replyTo` key is present and null, read from the `reviews` query (no
+  extra call per review). The exception is the verdict states: an `APPROVED` or
+  `CHANGES_REQUESTED` review always counts, even with an empty body, and any other state,
+  a missing one included, goes through the body and inline test (fails closed). A `DISMISSED`
+  review is one of those states: with an empty body and no inline root it no longer counts,
+  and one with a body or an inline root is still judged by the code downstream. Each review
+  reads its first 20 comments, with no `pageInfo`. A submitted review that mixes replies
+  and new roots, with 20 replies first, would be read as a reply and fail closed, never
+  open. A reply posted with a non-empty review body still counts, which is the residual
+  open case; the UI reply flow and CodeRabbit reply with an empty body. Body-only ladder reviews and inline-only CodeRabbit reviews still count. Measured
+  on issues 965 and 971: the only review entries on the head were replies, and the gate
+  exited 0.
