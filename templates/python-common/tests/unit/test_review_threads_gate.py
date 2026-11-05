@@ -2016,6 +2016,26 @@ def test_review_on_the_second_page_reaches_the_body_check(monkeypatch: pytest.Mo
     assert len(cls_gate._unanswered_bodies(dict_pr, [], _BODY_ROSTER)) == 1
 
 
+def test_an_inline_only_review_survives_the_fetch_path_and_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A raw GraphQL-shaped inline-only review keeps ``comments`` through ``fetch_pull_request``."""
+    cls_gate = _load_gate()
+    dict_raw = {
+        **_review("coderabbitai[bot]"),
+        "body": "",
+        "state": "COMMENTED",
+        "comments": {"nodes": [_INLINE_NODE]},
+    }
+    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: _pr_page([dict_raw], False))
+    dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+    str_problem = cls_gate.find_missing_review_problem(
+        dict_pr["reviews"]["nodes"], _ROSTER, "some-human", str_head_oid=_HEAD
+    )
+
+    assert str_problem is None
+
+
 _ANSWER_SHAPES = {
     "reply-to-review-id": ("Reply to review 5474743692: done.", "done."),
     "answer-to-review": ("Answer to review: done.", "done."),

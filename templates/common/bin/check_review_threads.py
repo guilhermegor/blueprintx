@@ -140,7 +140,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
         pageInfo { hasNextPage endCursor }
         nodes {
           author { login __typename } commit { oid } state body submittedAt
-          comments(first:100) { nodes { replyTo { id } } }
+          comments(first:20) { nodes { replyTo { id } } }
         }
       }
       commits(last:1) { nodes { commit { committedDate } } }

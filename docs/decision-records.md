@@ -2245,5 +2245,9 @@ rest of the suite.
   inline comment whose `replyTo` key is present and null, read from the `reviews` query (no
   extra call per review). The exception is the verdict states: an `APPROVED` or
   `CHANGES_REQUESTED` review always counts, even with an empty body, and any other state,
-  a missing one included, goes through the body and inline test (fails closed). Body-only ladder reviews and inline-only CodeRabbit reviews still count. Measured on
+  a missing one included, goes through the body and inline test (fails closed). `DISMISSED`
+  reviews are one of those other states; whether a dismissed review satisfies the gate is
+  decided downstream, not here. Each review reads its first 20 comments, enough because a
+  review is one reply or a batch of inline roots. Body-only ladder reviews and inline-only
+  CodeRabbit reviews still count. Measured on
   #965 and #971: the only review entries on the head were replies, and the gate exited 0.
