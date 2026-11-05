@@ -2242,6 +2242,8 @@ rest of the suite.
 - **A thread reply is not a review of the head** (#978). A reviewer's answer to a thread is
   stored as a `COMMENTED` review with an empty body, attributed to the commit the branch was on
   when it was posted. `counts_as_review` admits a review only with a non-empty body or an
-  inline comment whose `replyTo` is null, read from the `reviews` query (no extra call per
-  review). Body-only ladder reviews and inline-only CodeRabbit reviews still count. Measured on
+  inline comment whose `replyTo` key is present and null, read from the `reviews` query (no
+  extra call per review). The exception is the verdict states: an `APPROVED` or
+  `CHANGES_REQUESTED` review always counts, even with an empty body, and any other state,
+  a missing one included, goes through the body and inline test (fails closed). Body-only ladder reviews and inline-only CodeRabbit reviews still count. Measured on
   #965 and #971: the only review entries on the head were replies, and the gate exited 0.
