@@ -88,6 +88,22 @@ printf '    python-version: 3.9.1\n' >"$str_fx/templates/x/node_modules/p/.githu
 expect_gate "vendored node_modules workflows are not scanned" pass "$str_fx"
 
 str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    with: { python-version: "3.12", other: 1.2.3 }\n'
+expect_gate "flow map: later key with x.y.z is not a pin" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    run: echo "python-version: 3.12.8"\n'
+expect_gate "python-version inside a run string is not a key" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+mkdir -p "$str_fx/templates/x/.github/workflows/locked"
+chmod 000 "$str_fx/templates/x/.github/workflows/locked"
+if [ "$(id -u)" -ne 0 ]; then
+	expect_gate "unreadable subtree fails instead of a partial scan" fail "$str_fx"
+fi
+chmod 755 "$str_fx/templates/x/.github/workflows/locked"
+
+str_fx="$(make_fixture 3.12 3.12)"
 rm -rf "$str_fx/.github"
 expect_gate "missing root workflows dir fails instead of a partial scan" fail "$str_fx"
 
