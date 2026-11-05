@@ -75,9 +75,9 @@ fi
 for entry in "$SPECS_DIR"/*; do
 	name="$(basename "$entry")"
 	case "$name" in
-	CLAUDE.md | features | backlog | _lessons) ;;
+	CLAUDE.md | AGENTS.md | features | backlog | _lessons) ;;
 	*)
-		echo "ERROR: unexpected top-level entry .specs/$name (only CLAUDE.md, features/, backlog/, _lessons/ are allowed)" >&2
+		echo "ERROR: unexpected top-level entry .specs/$name (only CLAUDE.md, AGENTS.md, features/, backlog/, _lessons/ are allowed)" >&2
 		errors=$((errors + 1))
 		;;
 	esac

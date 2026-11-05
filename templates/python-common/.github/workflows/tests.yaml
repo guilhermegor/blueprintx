@@ -145,6 +145,10 @@ jobs:
         if: runner.os == 'Linux'
         run: bash bin/check_specs_structure.sh --root .
 
+      - name: Run AGENTS.md Pairing Gate
+        if: runner.os == 'Linux'
+        run: bash bin/check_agents_md_pairs.sh --root .
+
       - name: Run Required Checks Sync Gate
         if: runner.os == 'Linux'
         run: poetry run python bin/check_required_checks_sync.py --required-list bin/required-checks.txt
