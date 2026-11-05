@@ -218,3 +218,15 @@ def test_checkout_path_named_internal_does_not_disable_guard(tmp_path: Path) -> 
         "",
     )
     assert "_internal" in _sole(_load_gate().check_package(path_init))
+
+
+def test_internal_package_itself_is_out_of_scope(tmp_path: Path) -> None:
+    """The ``_internal`` package's own ``__init__`` may export its own names."""
+    path_dir = tmp_path / "pkg" / "_internal"
+    path_dir.mkdir(parents=True)
+    (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+    path_init = path_dir / "__init__.py"
+    path_init.write_text(
+        'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n', encoding="utf-8"
+    )
+    assert _load_gate().check_package(path_init) == []

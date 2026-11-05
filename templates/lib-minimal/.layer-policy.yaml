@@ -39,7 +39,7 @@ layers:
 
   config:
     allow:
-      pydantic: "config/schemas is the one home of pydantic models; the public surface imports them from here"
+      pydantic: "config/schemas is the one home of pydantic models; they stay private and are never exported"
       dotenv: "loads .env at startup; this is the layer that owns environment resolution"
       yaml: "parses inputs.yaml / outputs.yaml"
       psycopg: "PostgreSQL driver, imported lazily by the configured DB_BACKEND"

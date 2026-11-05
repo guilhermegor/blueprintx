@@ -140,11 +140,11 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
         ``True`` when a package directory above it, up to the top package, is ``_internal``.
     """
     path_dir = path_init.parent
-    while path_dir.parent != path_dir and (path_dir.parent / "__init__.py").is_file():
+    while path_dir.name != "_internal":
+        if path_dir.parent == path_dir or not (path_dir.parent / "__init__.py").is_file():
+            return False
         path_dir = path_dir.parent
-        if path_dir.name == "_internal":
-            return True
-    return False
+    return True
 
 
 def _internal_origin(
