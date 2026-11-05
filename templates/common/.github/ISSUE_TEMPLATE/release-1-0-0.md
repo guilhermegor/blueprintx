@@ -21,6 +21,7 @@ workflow refuses a 0.x to 1.0.0 jump while an open issue lacks the `post-1.0` la
 ## Checklist
 
 - [ ] **Queue empty:** every remaining issue is implemented, or labelled `post-1.0` by the owner, never silently dropped
+- [ ] **Example boilerplate removed:** the scaffold's placeholder module, its test, its re-export and every doc, example or smoke check that still shows it are deleted or replaced with real usage (the placeholder files are named in `AGENTS.md`)
 - [ ] **Docs audit against the code:** README, CONTRIBUTING, SECURITY, CHANGELOG, everything under `docs/` (minus historical ledgers), every `CLAUDE.md` and `AGENTS.md`, issue and PR templates, the docs-site nav and the public-API docstrings. Every count, path, import example and status mark is re-measured from the code, never incremented by hand
 - [ ] **Runnable examples:** each README and usage example runs, or is covered by a doctest or a test
 - [ ] **SECURITY.md** gains a supported-versions table for 1.x

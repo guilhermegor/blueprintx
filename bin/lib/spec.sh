@@ -138,8 +138,14 @@ _spec_kanban_visibility_choice() {
     esac
 }
 
+_spec_tier_asks_reviewers() {
+    case "$1" in
+        ventoy-usb | etcher-chromeos) return 1 ;;
+    esac
+}
+
 _spec_answer_create_repo() {
-    local file="$1" ans
+    local skeleton="$1" file="$2" ans
     [ "$(spec_yn "$file" git_remote n)" = y ] || return 0
     ans="$(spec_yn "$file" create_repo n)"
     echo "$ans"
@@ -150,7 +156,9 @@ _spec_answer_create_repo() {
     [ "$ans" = y ] && _spec_kanban_visibility_choice "$(spec_get "$file" kanban_visibility repo)"
     ans="$(spec_yn "$file" protect_branch n)"
     echo "$ans"
-    [ "$ans" = y ] && spec_yn "$file" human_reviewers n || true
+    [ "$ans" = y ] || return 0
+    _spec_tier_asks_reviewers "$skeleton" || return 0
+    spec_yn "$file" human_reviewers n
 }
 
 _spec_answer_logs() {
@@ -192,6 +200,7 @@ spec_stdin_for_skeleton() {
             _spec_answer_env_wise "$file"
             _spec_answer_review_bot "$file"
             _spec_answer_git_remote "$file"
+            _spec_answer_create_repo "$skeleton" "$file"
             ;;
         mvc-service-native-db | mvc-service-orm-db)
             _spec_answer_docker_compose "$file"
@@ -203,6 +212,7 @@ spec_stdin_for_skeleton() {
             _spec_answer_env_wise "$file"
             _spec_answer_review_bot "$file"
             _spec_answer_git_remote "$file"
+            _spec_answer_create_repo "$skeleton" "$file"
             ;;
         lib-minimal)
             _spec_answer_logs "$file"
@@ -211,23 +221,25 @@ spec_stdin_for_skeleton() {
             _spec_answer_publish_targets "$file"
             _spec_answer_review_bot "$file"
             _spec_answer_git_remote "$file"
+            _spec_answer_create_repo "$skeleton" "$file"
             ;;
         ts-lib)
             _spec_answer_review_bot "$file"
             _spec_answer_otel "$file"
             _spec_answer_git_remote "$file"
-            _spec_answer_create_repo "$file"
+            _spec_answer_create_repo "$skeleton" "$file"
             ;;
         ventoy-usb)
             _spec_answer_ventoy_options "$file"
             _spec_answer_review_bot "$file"
             _spec_answer_git_remote "$file"
-            _spec_answer_create_repo "$file"
+            _spec_answer_create_repo "$skeleton" "$file"
             ;;
         etcher-chromeos)
             _spec_answer_default_os "$file"
             _spec_answer_review_bot "$file"
             _spec_answer_git_remote "$file"
+            _spec_answer_create_repo "$skeleton" "$file"
             ;;
         *)
             return 1
@@ -244,19 +256,25 @@ _spec_key_map() {
                 data_dir:n data_dir_base:logs data_dir_dated:n \
                 webhook:n webhook_platform:teams otel:n \
                 email:n email_backend:outlook env_wise_config:n \
-                review_bot_roster:n git_remote:n)
+                review_bot_roster:n git_remote:n create_repo:n \
+                repo_visibility:private kanban:n kanban_visibility:repo \
+                protect_branch:n human_reviewers:n)
             ;;
         mvc-service-native-db | mvc-service-orm-db)
             keys=(docker_compose:n docker_db_backend:postgresql \
                 data_dir:n data_dir_base:logs data_dir_dated:n \
                 webhook:n webhook_platform:teams otel:n \
                 email:n email_backend:outlook pipeline_intent:n \
-                env_wise_config:n review_bot_roster:n git_remote:n)
+                env_wise_config:n review_bot_roster:n git_remote:n create_repo:n \
+                repo_visibility:private kanban:n kanban_visibility:repo \
+                protect_branch:n human_reviewers:n)
             ;;
         lib-minimal)
             keys=(logs:n otel:n docker_compose:n docker_db_backend:postgresql \
                 publish_pypi:y publish_test_pypi:y consume_private:n \
-                review_bot_roster:n git_remote:n)
+                review_bot_roster:n git_remote:n create_repo:n \
+                repo_visibility:private kanban:n kanban_visibility:repo \
+                protect_branch:n human_reviewers:n)
             ;;
         ts-lib)
             keys=(review_bot_roster:n otel:n git_remote:n create_repo:n \
@@ -269,7 +287,9 @@ _spec_key_map() {
                 kanban:n kanban_visibility:repo protect_branch:n)
             ;;
         etcher-chromeos)
-            keys=(default_os:chromeos-flex review_bot_roster:n git_remote:n)
+            keys=(default_os:chromeos-flex review_bot_roster:n git_remote:n create_repo:n \
+                repo_visibility:private kanban:n kanban_visibility:repo \
+                protect_branch:n)
             ;;
         *)
             echo "no named-key prompt map for '$skeleton' yet" >&2

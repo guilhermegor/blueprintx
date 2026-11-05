@@ -60,6 +60,7 @@ def review(str_login, str_type=None):
         "author": dict_author,
         "commit": {"oid": str_head},
         "state": "COMMENTED",
+        "body": "Reviewed.",
     }
 
 
@@ -144,8 +145,53 @@ run_case() {
     python3 - "$REPO_ROOT" "$str_roster" "$int_case" < <(harness_setup; harness_cases; harness_fetch; harness_list)
 }
 
+run_gate_in() {
+    (cd "$1" && unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE && GITHUB_REPOSITORY=o/r PR_NUMBER=1 python3 "$REPO_ROOT/templates/common/bin/check_review_threads.py")
+}
+
+check_roster_presence() {
+    local path_dir out status
+    path_dir="$(mktemp -d)"
+    trap 'rm -rf "$path_dir"; trap - RETURN' RETURN
+    mkdir -p "$path_dir/shim"
+    # shellcheck disable=SC2016
+    printf '#!/bin/sh\ncase "$*" in *.base.ref*) echo main; exit 0;; esac\nprintf "%%s" "$SHIM_GH_OUT"\n[ -n "$SHIM_GH_OUT" ]\n' >"$path_dir/shim/gh"
+    chmod +x "$path_dir/shim/gh"
+    local PATH="$path_dir/shim:$PATH"
+
+    status=0
+    out="$(run_gate_in "$path_dir" 2>&1)" || status=$?
+    if [ "$status" -ne 0 ] && [[ "$out" == *".review-bots.yaml"* && "$out" == *"templates/"* ]]; then
+        echo "ok: missing roster fails closed and names the file and its template"
+    else
+        echo "FAIL: missing roster must exit non-zero naming file and template (exit=$status: $out)" >&2
+        int_failures=$((int_failures + 1))
+    fi
+
+    printf 'adopted: false\n' >"$path_dir/.review-bots.yaml"
+    status=0
+    out="$(SHIM_GH_OUT=$'adopted: false\n' run_gate_in "$path_dir" 2>&1)" || status=$?
+    if [ "$status" -eq 0 ] && [[ "$out" == *"opted out"* ]]; then
+        echo "ok: explicit adopted: false opts out and passes"
+    else
+        echo "FAIL: adopted: false must pass with an opt-out message (exit=$status: $out)" >&2
+        int_failures=$((int_failures + 1))
+    fi
+
+    printf 'adopted: true\nreviewers: []\n' >"$path_dir/.review-bots.yaml"
+    status=0
+    out="$(run_gate_in "$path_dir" 2>&1)" || status=$?
+    if [ "$status" -ne 0 ]; then
+        echo "ok: adopted: true with an empty roster is still rejected"
+    else
+        echo "FAIL: adopted: true with no reviewers must not pass (out: $out)" >&2
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 main() {
     local str_roster int_case
+    check_roster_presence
     for str_roster in templates/python-common/.review-bots.yaml templates/ts-common/.github/.review-bots.yaml; do
         for int_case in "${!CASE_NAMES[@]}"; do
             if run_case "$str_roster" "$int_case"; then
