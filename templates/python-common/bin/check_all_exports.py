@@ -112,7 +112,7 @@ def internal_exports(path_init: pathlib.Path, set_exported: set[str]) -> list[st
     list of str
         Human-readable problems; empty when no exported name originates under ``_internal``.
     """
-    if "_internal" in path_init.parts:
+    if _inside_internal(path_init):
         return []
     list_problems: list[str] = []
     for str_name in sorted(set_exported):
@@ -124,6 +124,27 @@ def internal_exports(path_init: pathlib.Path, set_exported: set[str]) -> list[st
                 f"part of the public surface"
             )
     return list_problems
+
+
+def _inside_internal(path_init: pathlib.Path) -> bool:
+    """Return whether the package sits inside an ``_internal`` package (checkout path ignored).
+
+    Parameters
+    ----------
+    path_init : pathlib.Path
+        The package's ``__init__.py``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a package directory above it, up to the top package, is ``_internal``.
+    """
+    path_dir = path_init.parent
+    while path_dir.parent != path_dir and (path_dir.parent / "__init__.py").is_file():
+        path_dir = path_dir.parent
+        if path_dir.name == "_internal":
+            return True
+    return False
 
 
 def _internal_origin(

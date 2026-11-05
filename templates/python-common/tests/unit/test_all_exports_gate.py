@@ -207,3 +207,14 @@ def test_all_name_from_public_module_is_not_flagged(tmp_path: Path) -> None:
         tmp_path, 'from pkg.member import THING\n\n__all__ = ["THING"]\n', "THING = 1\n"
     )
     assert _load_gate().check_package(path_init) == []
+
+
+def test_checkout_path_named_internal_does_not_disable_guard(tmp_path: Path) -> None:
+    """A project checked out under a directory called ``_internal`` is still guarded."""
+    (tmp_path / "_internal" / "proj").mkdir(parents=True)
+    path_init = _package(
+        tmp_path / "_internal" / "proj",
+        'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n',
+        "",
+    )
+    assert "_internal" in _sole(_load_gate().check_package(path_init))

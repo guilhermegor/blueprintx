@@ -43,7 +43,7 @@ src/<project_name>/
             # schemas/     # (opt-in) Pydantic models mirroring an external standard, or the
                            #   library's own product — the ONLY home of pydantic
                            #   (check-layer-imports bans it at the package root);
-                           #   re-exported from the top-level __all__
+                           #   never re-exported: check-all-exports bans `_internal` names in __all__
 tests/
     unit/  integration/  performance/
 ```
