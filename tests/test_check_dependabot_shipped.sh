@@ -89,6 +89,14 @@ test_promote_wrong_source_fails() {
     expect_gate "promote renders dependabot.yml from the wrong source" "$str_root" fail "dependabot.yml source"
 }
 
+test_promote_wrong_destination_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E '0,/envsubst .*dependabot\.yml/s#> *"[^"]*dependabot\.yml"#> "$dest/dependabot.yml"#' \
+        "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote renders dependabot.yml to the wrong path" "$str_root" fail "dependabot.yml source"
+}
+
 test_promote_render_moved_between_functions_fails() {
     local str_root
     str_root="$(make_copy)"
@@ -182,6 +190,7 @@ test_hardcoded_assignee_fails
 test_promote_unrendered_fails
 test_promote_dropped_inline_prefix_fails
 test_promote_wrong_source_fails
+test_promote_wrong_destination_fails
 test_promote_render_moved_between_functions_fails
 test_promote_deleted_render_fails
 test_promote_all_renders_deleted_fails

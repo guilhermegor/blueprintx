@@ -55,7 +55,7 @@ check_promote() {
         /^}/ { str_fn = ""; next }
         /dependabot\.yml/ {
             if (str_fn == "") { print "outside a copy_online_assets_* function: " $0; next }
-            if ($0 ~ /GITHUB_USERNAME="[$]GITHUB_USERNAME" envsubst [\047][$][{]GITHUB_USERNAME[}][\047] <[[:space:]]*"[^"]*dependabot[.]yml"/) int_n[str_fn]++
+            if ($0 ~ /GITHUB_USERNAME="[$]GITHUB_USERNAME" envsubst [\047][$][{]GITHUB_USERNAME[}][\047] <[[:space:]]*"[^"]*dependabot[.]yml" *> *"[^"]*[.]github[/]dependabot[.]yml"/) int_n[str_fn]++
             else print str_fn " has a render without the inline owner or the dependabot.yml source: " $0
         }
         END { for (k in int_n) if (int_n[k] != 1) print k " renders dependabot.yml " int_n[k] " time(s), expected 1" }
