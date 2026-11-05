@@ -79,6 +79,15 @@ write_root_workflow "$str_fx" '    python-version: >-\n      3.11\n      3.12\n 
 expect_gate "block scalar of minors then a sibling key passes" pass "$str_fx"
 
 str_fx="$(make_fixture 3.12 3.12)"
+rm -f "$str_fx"/.github/workflows/* "$str_fx"/templates/x/.github/workflows/*
+expect_gate "zero workflow files fail instead of passing vacuously" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+mkdir -p "$str_fx/templates/x/node_modules/p/.github/workflows"
+printf '    python-version: 3.9.1\n' >"$str_fx/templates/x/node_modules/p/.github/workflows/v.yml"
+expect_gate "vendored node_modules workflows are not scanned" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
 rm -rf "$str_fx/.github"
 expect_gate "missing root workflows dir fails instead of a partial scan" fail "$str_fx"
 

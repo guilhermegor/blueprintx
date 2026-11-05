@@ -44,7 +44,8 @@ main() {
 	done
 	mapfile -d '' -t list_files < <(
 		find "$REPO_ROOT/.github/workflows" "$REPO_ROOT/templates" \
-			-path '*/.github/workflows/*' \( -name '*.yml' -o -name '*.yaml' \) -print0 2>/dev/null
+			-name node_modules -prune -o \
+			-path '*/.github/workflows/*' \( -name '*.yml' -o -name '*.yaml' \) -print0
 	)
 	if [ "${#list_files[@]}" -eq 0 ]; then
 		echo "No workflow files found under $REPO_ROOT; refusing to pass vacuously." >&2
