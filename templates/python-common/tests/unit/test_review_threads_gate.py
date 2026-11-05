@@ -3716,6 +3716,20 @@ def test_find_missing_review_problem_carries_only_a_review_newer_than_the_base_c
     assert (str_problem is None) is bool_carries
 
 
+def test_reviewed_before_base_change_ignores_a_reply_only_review_after_the_change() -> None:
+    """A thread reply posted after the base change must not make an older review look newer."""
+    cls_gate = _load_gate()
+    dict_reply = {
+        **_timed_review(_T_AFTER),
+        "body": "",
+        "comments": {"nodes": [{"replyTo": {"id": "thread-root"}}]},
+    }
+    dict_pr = _retargeted_pr([_T_CHANGE], [_timed_review(_T_BEFORE), dict_reply])
+    assert cls_gate._reviewed_before_base_change(
+        dict_pr, dict_pr["timelineItems"]["nodes"], "a" * 40, {"coderabbitai"}
+    )
+
+
 def test_query_asks_for_the_creation_time_of_both_retarget_events() -> None:
     """The carry-forward needs ``createdAt`` on the manual and the automatic event alike."""
     str_query = _load_gate()._QUERY
