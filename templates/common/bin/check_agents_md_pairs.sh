@@ -18,7 +18,7 @@ sibling_agents() {
 }
 
 check_file() {
-	local str_file="$1" str_agents str_line str_first str_seen=0
+	local str_file="$1" str_agents str_line str_first int_seen=0
 	str_agents="$(sibling_agents "$str_file")"
 	[ -f "$str_agents" ] || fail "$str_file has no sibling $(basename "$str_agents")"
 	[ ! -f "$str_agents" ] || [ -r "$str_agents" ] || fail "$str_file has an unreadable sibling $(basename "$str_agents")"
@@ -30,7 +30,7 @@ check_file() {
 	[ "$str_first" = "@AGENTS.md" ] || fail "$str_file does not start with @AGENTS.md"
 	while IFS= read -r str_line || [ -n "$str_line" ]; do
 		if [ "$str_line" = "$STR_MARKER" ] || [ "$str_line" = "$STR_MARKER_HTML" ]; then
-			str_seen=1
+			int_seen=1
 			break
 		fi
 		[ -z "$str_line" ] || [ "$str_line" = "@AGENTS.md" ] && continue
@@ -40,7 +40,7 @@ check_file() {
 		fi
 		fail "$str_file holds a non-import line above the marker: $str_line"
 	done <"$str_file"
-	[ "$str_seen" -eq 1 ] || fail "$str_file lacks the marker line"
+	[ "$int_seen" -eq 1 ] || fail "$str_file lacks the marker line"
 }
 
 discover() {

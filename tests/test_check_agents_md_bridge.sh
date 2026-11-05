@@ -98,4 +98,9 @@ printf '@AGENTS.md\n' >"$str_fx/templates/lib-minimal/docs/CLAUDE.md"
 expect_gate "leaf without the marker fails" fail "lacks the marker line" "$str_fx"
 rm -rf "$str_fx"
 
+str_fx="$(make_fixture)"
+rm "$str_fx/templates/lib-minimal/utils_AGENTS.md"
+expect_gate "prefixed leaf without its prefixed AGENTS.md fails" fail "has no sibling utils_AGENTS.md" "$str_fx"
+rm -rf "$str_fx"
+
 [ "$int_failures" -eq 0 ]

@@ -2106,8 +2106,8 @@ grouped by what they guard.
 ## CLAUDE.md and AGENTS.md pairing (blueprintx#273, #754, #973)
 
 `AGENTS.md` is the source and `CLAUDE.md` is a bridge, at the root of a skeleton and at every
-leaf directory. A leaf `CLAUDE.md` is the stub below, minus the `@PRINCIPLES.md` line, which
-stays root-only because the leaves inherit it through the root. Claude-Code-only lines go
+leaf directory. A leaf `CLAUDE.md` is the stub below. The root stub also imports `@PRINCIPLES.md`,
+which stays root-only because the leaves inherit it through the root. Claude-Code-only lines go
 below the marker.
 
 ```
