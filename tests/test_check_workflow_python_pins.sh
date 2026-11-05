@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$REPO_ROOT/bin/lib/common.sh"
@@ -118,6 +120,145 @@ expect_gate "missing root workflows dir fails instead of a partial scan" fail "$
 str_fx="$(make_fixture 3.12 3.12)"
 rm -rf "$str_fx/templates"
 expect_gate "missing templates dir fails instead of a partial scan" fail "$str_fx"
+
+git_track() {
+	git -C "$1" init -q
+	git -C "$1" add -A
+}
+
+str_fx="$(make_fixture 3.12 3.12)"
+git_track "$str_fx"
+mkdir -p "$str_fx/templates/y/.github/workflows"
+printf '    python-version: 3.12.8\n' >"$str_fx/templates/y/.github/workflows/new.yml"
+expect_gate "untracked but not ignored workflow with a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+git_track "$str_fx"
+mkdir -p "$str_fx/templates/x/.github/workflows/locked"
+chmod 000 "$str_fx/templates/x/.github/workflows/locked"
+if [ "$(id -u)" -ne 0 ]; then
+	expect_gate "unreadable subtree in a git work tree fails instead of a partial scan" fail "$str_fx"
+fi
+chmod 755 "$str_fx/templates/x/.github/workflows/locked"
+
+str_fx="$(make_fixture 3.12 3.12)"
+printf 'templates/y/\n' >"$str_fx/.gitignore"
+mkdir -p "$str_fx/templates/y/.github/workflows"
+printf '    python-version: 3.12.8\n' >"$str_fx/templates/y/.github/workflows/stale.yml"
+git_track "$str_fx"
+expect_gate "gitignored workflow is not scanned, matching CI" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'env:\n  PYTHON_VERSION: "3.12.8"\njobs:\n  a:\n    steps:\n      - with:\n          python-version: ${{ env.PYTHON_VERSION }}\n'
+expect_gate "indirect env.PYTHON_VERSION holding a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'env:\n  PYTHON_VERSION: "3.12"\njobs:\n  a:\n    steps:\n      - with:\n          python-version: ${{ env.PYTHON_VERSION }}\n'
+expect_gate "indirect env.PYTHON_VERSION holding a minor passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'jobs:\n  a:\n    strategy:\n      matrix:\n        py: ["3.11", "3.12.8"]\n    steps:\n      - with:\n          python-version: ${{ matrix.py }}\n'
+expect_gate "indirect matrix.py holding a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'jobs:\n  a:\n    strategy:\n      matrix:\n        include:\n          - py: 3.12.8\n    steps:\n      - with:\n          python-version: ${{ matrix.py }}\n'
+expect_gate "indirect matrix include entry with a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'jobs:\n  a:\n    strategy:\n      matrix:\n        py: ["3.11", "3.12"]\n    steps:\n      - with:\n          python-version: ${{ matrix.py }}\n'
+expect_gate "indirect matrix.py holding minors passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'on:\n  workflow_call:\n    inputs:\n      py:\n        type: string\n        default: "3.12.8"\njobs:\n  a:\n    steps:\n      - with:\n          python-version: ${{ inputs.py }}\n'
+expect_gate "indirect inputs.py default holding a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'on:\n  workflow_call:\n    inputs:\n      py:\n        type: string\n        default: "3.12"\njobs:\n  a:\n    steps:\n      - with:\n          python-version: ${{ inputs.py }}\n'
+expect_gate "indirect inputs.py default holding a minor passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: ${{ vars.PYTHON_VERSION }}\n'
+expect_gate "vars.* pin lives outside the repo and fails as unverifiable" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version-file: .python-version\n'
+expect_gate "python-version-file is unverifiable and fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: 3.10\n'
+expect_gate "unquoted 3.10 (YAML float 3.1) fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: [3.9, 3.10]\n'
+expect_gate "unquoted 3.10 in an inline list fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version:\n      - "3.9"\n      - 3.10\n'
+expect_gate "unquoted 3.10 in a block list fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: "3.10"\n'
+expect_gate "quoted 3.10 passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: |\n      3.10\n      3.12\n'
+expect_gate "3.10 inside a block scalar is a string and passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    "python-version": "3.12.8"\n'
+expect_gate "double-quoted key with a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" "    'python-version': 3.12.8\n"
+expect_gate "single-quoted key with a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    run: echo "a, python-version: 3.12.8"\n'
+expect_gate "python-version after a comma inside a run string passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: "3.11\n      3.12.8"\n'
+expect_gate "double-quoted continuation scalar with a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: 3.11\n      3.12.8\n'
+expect_gate "plain continuation scalar with a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: ["3.11",\n      "3.12.8"]\n'
+expect_gate "multi-line flow list with a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '      - python-version: "3.12"\n        run: pip install foo==1.2.3\n'
+expect_gate "list-item key then a deeper sibling key passes" pass "$str_fx"
+
+if grep -q 'mapfile' "$GATE"; then
+	print_status "error" "gate uses mapfile, which needs bash 4.4 for -d (bash 3.2 has none)"
+	int_failures=$((int_failures + 1))
+else
+	print_status "success" "gate avoids mapfile"
+fi
+
+if command -v busybox >/dev/null 2>&1; then
+	str_fx="$(make_fixture 3.12.8 3.12)"
+	str_got="pass"
+	PINS_AWK="busybox awk" PINS_REPO_ROOT="$str_fx" bash "$GATE" >/dev/null 2>&1 || str_got="fail"
+	if [ "$str_got" = "fail" ]; then
+		print_status "success" "gate flags a patch pin under busybox awk"
+	else
+		print_status "error" "gate missed a patch pin under busybox awk"
+		int_failures=$((int_failures + 1))
+	fi
+	str_fx="$(make_fixture 3.12 3.12)"
+	str_got="pass"
+	PINS_AWK="busybox awk" PINS_REPO_ROOT="$str_fx" bash "$GATE" >/dev/null 2>&1 || str_got="fail"
+	if [ "$str_got" = "pass" ]; then
+		print_status "success" "gate passes minors under busybox awk"
+	else
+		print_status "error" "gate rejected minors under busybox awk"
+		int_failures=$((int_failures + 1))
+	fi
+fi
 
 str_fx="$(make_fixture 3.12.8 3.12)"
 str_out="$(PINS_REPO_ROOT="$str_fx" bash "$GATE" 2>&1 || true)"
