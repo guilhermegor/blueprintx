@@ -41,8 +41,8 @@ src/<project_name>/
             contracts/     # FileContract declarations (one per input source)
             ports/         # private behavioural ABCs (hexagonal ports; ABCTypeCheckerMeta) — opt-in
             # schemas/     # (opt-in) Pydantic models mirroring an external standard, or the
-                           #   library's own product — the ONLY home of pydantic
-                           #   (check-layer-imports bans it at the package root);
+                           #   library's own product — the ONLY home of pydantic models
+                           #   (check-layer-imports allows pydantic only in config and utils);
                            #   never re-exported: check-all-exports bans `_internal` names in __all__
 tests/
     unit/  integration/  performance/
