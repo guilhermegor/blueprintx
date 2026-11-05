@@ -245,8 +245,9 @@ def env_reason() -> str:
     str
         The non-empty, stripped value of ``TEST_CHANGE_OK`` — the one escape hatch reachable
         at local ``pre-commit`` time (blueprintx#941), with the same intent as ``GATE_CHANGE_OK``
-        in ``check_gate_integrity.py`` (its CI detection differs, #981). ``""`` under CI, so a workflow ``env:`` line cannot
-        stand in for a justification a PR reviewer can read.
+        in ``check_gate_integrity.py`` (its CI detection differs, #981).
+        ``""`` under CI, so a workflow ``env:`` line cannot stand in for a justification a PR
+        reviewer can read.
     """
     if is_ci():
         return ""
