@@ -303,6 +303,14 @@ prompt_project_description() {
     echo "$PROJECT_DESCRIPTION"
 }
 
+expand_tilde() {
+    case "$1" in
+        \~) printf '%s\n' "$HOME" ;;
+        \~/*) printf '%s\n' "$HOME/${1#\~/}" ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
 prompt_project_root() {
     printf "${CYAN}Select directory${NC}\n" >&2
     printf "  1) Current directory ($PWD)\n" >&2
@@ -321,7 +329,7 @@ prompt_project_root() {
             if [ -z "$TARGET_DIR" ]; then
                 exit_error "Target directory cannot be empty."
             fi
-            TARGET_DIR="${TARGET_DIR/#\~/$HOME}"
+            TARGET_DIR="$(expand_tilde "$TARGET_DIR")"
             mkdir -p "$TARGET_DIR"
             echo "$TARGET_DIR"
             return 0
@@ -606,6 +614,26 @@ scaffold_from_spec() {
     rm -f "$path_answers"
 }
 
+resolve_spec_project_root() {
+    local str_raw_root str_resolved_root
+    str_raw_root="$(spec_get "$SPEC_FILE" project_root "")"
+    if [ -z "$str_raw_root" ]; then
+        PROJECT_ROOT="$PWD"
+        return 0
+    fi
+    PROJECT_ROOT="$(expand_tilde "$str_raw_root")"
+    str_resolved_root="$PROJECT_ROOT"
+    while :; do
+        case "$str_resolved_root" in
+            ?*/) str_resolved_root="${str_resolved_root%/}" ;;
+            ?*/.) str_resolved_root="${str_resolved_root%/.}" ;;
+            *) break ;;
+        esac
+    done
+    [ "${str_resolved_root##*/}" != "$PROJECT_NAME" ] \
+        || exit_error "--spec: 'project_root' ($PROJECT_ROOT) ends in the project name; it is the parent directory, not the project directory. Set it to the directory that will contain '$PROJECT_NAME'."
+}
+
 run_create_flow_from_spec() {
     PROJECT_NAME=$(spec_get "$SPEC_FILE" project_name)
     [ -n "$PROJECT_NAME" ] || exit_error "--spec: 'project_name' key is required."
@@ -653,7 +681,7 @@ run_create_flow_from_spec() {
     if [ "$DEV_MODE" -eq 1 ]; then
         select_dev_project_root
     else
-        PROJECT_ROOT=$(spec_get "$SPEC_FILE" project_root "$PWD")
+        resolve_spec_project_root
         mkdir -p "$PROJECT_ROOT"
     fi
 

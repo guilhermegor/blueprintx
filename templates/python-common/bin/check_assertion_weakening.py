@@ -50,7 +50,10 @@ further (ponytail: escape hatch below covers the rare false positive).
 
 THE ESCAPE HATCH mirrors `check_gate_integrity.py`'s convention: a `test-change-ok: <reason>`
 line, with a non-empty reason, in the PR body (`GITHUB_EVENT_PATH`) or as a trailer on any
-commit since the merge-base.
+commit since the merge-base. The PR body is CI-only, and the commit being created cannot
+carry its own trailer at `pre-commit` time (earlier branch commits' trailers are read).
+Locally, set `TEST_CHANGE_OK='<reason>'` for the commit (blueprintx#941); it is ignored
+when `GITHUB_ACTIONS` is set at all or `CI` is set to anything but `""`, `0`, `false` or `no`.
 
 CI must check out with `fetch-depth: 0` — a shallow clone has no common ancestor to resolve.
 """
@@ -65,6 +68,10 @@ import sys
 
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+STR_CI_VAR = "CI"
+TUPLE_PRESENCE_MARKERS = ("GITHUB_ACTIONS",)
+TUPLE_FALSY_ENV = ("", "0", "false", "no")
 
 RE_JUSTIFICATION = re.compile(r"^\s*test-change-ok:\s*(\S.*)$", re.I | re.M)
 RE_TEST_PATH = re.compile(r"(^|/)tests/.*test_[^/]+\.py$")
@@ -215,8 +222,40 @@ def pr_body_text() -> str:
     return str(dict_pr.get("body") or "")
 
 
+def is_ci() -> bool:
+    """Return whether the process runs under CI (I/O seam).
+
+    Returns
+    -------
+    bool
+        True when ``GITHUB_ACTIONS`` is set (a runner never sets it falsy) or ``CI`` is
+        anything but ``""``, ``0``, ``false`` or ``no``.
+    """
+    str_ci = os.environ.get(STR_CI_VAR, "").strip().lower()
+    return any(str_m in os.environ for str_m in TUPLE_PRESENCE_MARKERS) or (
+        str_ci not in TUPLE_FALSY_ENV
+    )
+
+
+def env_reason() -> str:
+    """Return the ``TEST_CHANGE_OK`` reason from the environment, or ``""`` (I/O seam).
+
+    Returns
+    -------
+    str
+        The non-empty, stripped value of ``TEST_CHANGE_OK`` — the one escape hatch reachable
+        at local ``pre-commit`` time (blueprintx#941), with the same intent as ``GATE_CHANGE_OK``
+        in ``check_gate_integrity.py`` (its CI detection differs, #981).
+        ``""`` under CI, so a workflow ``env:`` line cannot stand in for a justification a PR
+        reviewer can read.
+    """
+    if is_ci():
+        return ""
+    return os.environ.get("TEST_CHANGE_OK", "").strip()
+
+
 def justification_reason(str_base: str) -> str:
-    """Return the ``test-change-ok`` reason from the PR body or a commit trailer, or ``""``.
+    """Return the ``test-change-ok`` reason from the env, the PR body or a commit trailer.
 
     Parameters
     ----------
@@ -226,8 +265,13 @@ def justification_reason(str_base: str) -> str:
     Returns
     -------
     str
-        The non-empty reason text, or ``""`` when no valid justification is present.
+        The non-empty reason text, or ``""`` when no valid justification is present. The
+        ``TEST_CHANGE_OK`` environment variable is checked first: it needs neither a
+        finished commit nor a PR.
     """
+    str_env = env_reason()
+    if str_env:
+        return str_env
     str_trailers = _git(["log", f"{str_base}..HEAD", "--format=%B"])
     for str_text in (pr_body_text(), str_trailers):
         cls_match = RE_JUSTIFICATION.search(str_text)
@@ -981,6 +1025,28 @@ def collect_problems(list_changed: list, str_base: str) -> list:
     return list_problems
 
 
+def unjustified_advice() -> str:
+    """Return the fix to print for an unjustified finding, specific to where it runs.
+
+    Returns
+    -------
+    str
+        Under CI, only the PR-body / trailer line (``TEST_CHANGE_OK`` is ignored there).
+        Locally, the per-command env var, the warning against exporting it, and the fact
+        that CI still needs a line a reviewer can read.
+    """
+    str_line = "add a 'test-change-ok: <reason>' line to the PR body or a commit trailer."
+    if is_ci():
+        return f"To justify it, {str_line} TEST_CHANGE_OK is ignored under CI."
+    return (
+        "Locally, prefix this one commit: `TEST_CHANGE_OK='<reason>' git commit -m ...` "
+        "(never export it: one stale reason would cover every later finding). "
+        f"CI ignores the variable, so also {str_line} A bare marker with no reason fails. "
+        "One commit does both: `TEST_CHANGE_OK='<reason>' git commit -m ... "
+        "-m 'test-change-ok: <reason>'` (pre-commit reads the variable, CI the trailer)."
+    )
+
+
 def report(list_problems: list, str_base: str, int_changed_count: int) -> int:
     """Print findings and the verdict, resolving the justification escape hatch.
 
@@ -1011,9 +1077,8 @@ def report(list_problems: list, str_base: str, int_changed_count: int) -> int:
         return 0
 
     print(
-        f"\n❌ {len(list_problems)} assertion-weakening change(s) with no justification. Add a "
-        f"'test-change-ok: <reason>' line to the PR body or as a commit trailer — the reason "
-        f"is required, matching 'gate-change-ok: <reason>' elsewhere in this repo."
+        f"\n❌ {len(list_problems)} assertion-weakening change(s) with no justification. "
+        f"{unjustified_advice()}"
     )
     return 1
 
