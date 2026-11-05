@@ -19,7 +19,7 @@ def has_terminal() -> bool:
         (and so inherits ``PRE_COMMIT``) has none; a developer committing from a shell does.
     """
     try:
-        with open("/dev/tty"):
+        with open("/dev/tty", encoding="utf-8"):
             return True
     except OSError:
         return False
