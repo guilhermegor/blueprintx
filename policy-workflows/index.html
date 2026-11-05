@@ -2207,6 +2207,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#assignee-and-linked-issue-blueprintx937" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignee and linked issue (blueprintx#937)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2686,6 +2697,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#assignee-and-linked-issue-blueprintx937" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignee and linked issue (blueprintx#937)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2707,7 +2729,7 @@
 
 
 <h1 id="repo-policy-workflows">Repo policy workflows<a class="headerlink" href="#repo-policy-workflows" title="Permanent link">&para;</a></h1>
-<p>Scaffolded GitHub repos carry six server-side PR/issue policies in <code>.github/workflows/</code>
+<p>Scaffolded GitHub repos carry five server-side PR/issue policies in <code>.github/workflows/</code>
 (blueprintx#604). Local hooks only guard one machine; these run for every contributor.
 Offline scaffolds (no GitHub remote) do not receive them.</p>
 <table>
@@ -2724,7 +2746,7 @@ Offline scaffolds (no GitHub remote) do not receive them.</p>
 </tr>
 <tr>
 <td><code>branch-has-issue.yml</code></td>
-<td>Fails a PR whose head branch carries no issue number (<code>&lt;type&gt;/&lt;N&gt;-&lt;slug&gt;</code>). <code>release/</code>, <code>dependabot/</code> and <code>renovate/</code> branches are exempt.</td>
+<td>Assigns the author when a same-repo PR is opened (job <code>assign</code>), then fails a PR whose head branch carries no issue number (<code>&lt;type&gt;/&lt;N&gt;-&lt;slug&gt;</code>), that has no assignee, or that is linked to no real issue. <code>release/</code>, <code>dependabot/</code> and <code>renovate/</code> branches are exempt from the branch rule.</td>
 </tr>
 <tr>
 <td><code>pr-title-conventional.yml</code></td>
@@ -2733,10 +2755,6 @@ Offline scaffolds (no GitHub remote) do not receive them.</p>
 <tr>
 <td><code>pr-body-template.yml</code></td>
 <td>Fails a PR body missing a <code>##</code> section of <code>.github/PULL_REQUEST_TEMPLATE.md</code>.</td>
-</tr>
-<tr>
-<td><code>pr-self-assign.yml</code></td>
-<td>Assigns the author when a same-repo PR is opened.</td>
 </tr>
 <tr>
 <td><code>dependabot-auto-merge.yml</code></td>
@@ -2757,11 +2775,48 @@ user-owned Projects v2 board, so that stays in a local hook or behind a PAT secr
   <code>.github/PULL_REQUEST_TEMPLATE.md</code>) from the environment and exits 0 (pass), 1 (violation) or 2
   (bad usage). Sourcing it defines the functions without running them, which the tests use.</li>
 <li>A trailing <code>-&lt;N&gt;</code> in a branch name is not an issue number (<code>chore/bump-node-20</code> is a version).</li>
-<li><code>pr-self-assign.yml</code> skips fork PRs (read-only token) and needs only <code>pull-requests: write</code>.</li>
+<li>The <code>assign</code> job skips fork PRs and holds <code>pull-requests: write</code>; the <code>check</code> job, which <code>needs: assign</code>, stays read-only.</li>
+<li><code>assign</code> is idempotent: it runs on any event except <code>assigned</code>/<code>unassigned</code> while the PR has no assignee, so a cancelled <code>opened</code> run cannot leave the author unassigned.</li>
+<li><code>check</code> checks out <code>base.sha</code> with <code>persist-credentials: false</code>, so the token never reaches PR code. <code>Branch has issue / check</code> is not in any shipped <code>required-checks</code> list; a repo that required it by hand gets the new rules at once.</li>
+<li>A fork PR is not auto-assigned, so the assignee rule fails it until a maintainer assigns someone; the <code>assigned</code> trigger re-runs the check. This is intended.</li>
 <li>The new check names are deliberately absent from each tier's <code>bin/required-checks.txt</code>, which
   allows a name only after a real PR has emitted it. Add them once they have reported.</li>
 <li>Offline scaffolds drop <code>.github/</code> but keep <code>close_linked_issues.sh</code> and <code>check_pr_policy.sh</code> in <code>bin/</code>, and drop <code>dependabot_auto_merge.sh</code> (tracked in #727).</li>
 </ul>
+<h2 id="assignee-and-linked-issue-blueprintx937">Assignee and linked issue (blueprintx#937)<a class="headerlink" href="#assignee-and-linked-issue-blueprintx937" title="Permanent link">&para;</a></h2>
+<p><code>check_pr_policy.sh assignee</code> fails when <code>ASSIGNEES</code> is blank. <code>check_pr_policy.sh linked-issue</code> reads
+<code>BRANCH</code>, <code>TITLE</code>, <code>TRACKER</code> and <code>CLOSING_COUNT</code>; <code>dependabot/</code> and <code>renovate/</code> branches skip it, since a
+dependency bump has no issue behind it. <code>release/</code> keeps its branch-rule exemption only.</p>
+<table>
+<thead>
+<tr>
+<th><code>TRACKER</code></th>
+<th>Passes when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>github</code> (default)</td>
+<td><code>CLOSING_COUNT</code> (GraphQL <code>closingIssuesReferences</code>) is above 0, or the branch number resolves to an <code>OPEN</code> issue via <code>gh issue view</code>.</td>
+</tr>
+<tr>
+<td><code>linear</code></td>
+<td>A team key such as <code>ABC-123</code> appears in the branch or title (case-insensitive; a leading <code>&lt;user&gt;/</code> is ignored; acronyms such as <code>UTF-8</code>, <code>SHA-256</code> and <code>node-20</code> are not keys); Linear's GitHub integration links on that key. Set the repository variable <code>PR_LINEAR_TEAM_KEYS</code> (comma-separated, e.g. <code>ENG,OPS</code>) to accept only your team keys; without it any <code>word-N</code> token outside the acronym list passes, so set it.</td>
+</tr>
+<tr>
+<td><code>regex</code></td>
+<td><code>TRACKER_REGEX</code> matches the branch or title.</td>
+</tr>
+</tbody>
+</table>
+<p>In <code>github</code> mode the branch number must resolve to an issue, never a PR, and <code>closingIssuesReferences</code> is empty for stacked PRs (base is not the default branch), which then rely on the branch number. An API read failure (workflow step or <code>gh issue view</code>) fails with its own error message and exit 2, never as a policy violation; only gh's "Could not resolve to an issue" counts as not found, so a 404 from a token without access is an API error. A malformed <code>PR_LINEAR_TEAM_KEYS</code> or <code>PR_TRACKER_REGEX</code> is also exit 2. <code>release/</code> PRs need a linked issue in <code>github</code> mode. The script needs bash 4 (<code>${var,,}</code>). <code>PR_LINEAR_TEAM_KEYS</code> is trimmed and must be comma-separated alphanumeric keys. A push re-assigns the author if everyone was unassigned.</p>
+<p>The workflow reads the tracker from the repository variables <code>PR_TRACKER</code> and <code>PR_TRACKER_REGEX</code>. The
+script takes forge and tracker only from the environment, so a GitLab caller (out of scope here) is a new
+wrapper, not a rewrite.</p>
+<p>Self-assignment lives in the same workflow as the check, as a job the check <code>needs:</code>, because a separate <code>pr-self-assign.yml</code> raced the check on <code>opened</code> and its <code>GITHUB_TOKEN</code> assignment never re-triggers workflows. The check reads assignees live from the API and also runs on <code>assigned</code>/<code>unassigned</code>, so a manual change re-evaluates it.</p>
+<p>Bot PRs are skipped by the workflow job (<code>user.type == 'Bot'</code>) and so never hit the assignee rule here.
+Giving each tier's <code>dependabot.yml</code> an <code>assignees:</code> entry set to the repo owner at scaffold time is
+tracked as a follow-up: it needs the scaffold scripts, which this change does not touch.</p>
 
 
 
