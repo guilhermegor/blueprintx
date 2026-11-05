@@ -35,6 +35,7 @@
     "lint:fix": "eslint . --ext .ts --fix",
     "lint:css": "echo 'ts-lib ships no CSS — nothing to lint'",
     "lint:readme": "bash bin/check_readme_structure.sh README.md",
+    "lint:agents": "bash bin/check_agents_md_pairs.sh --root .",
     "test": "jest",
     "test:watch": "jest --watch",
     "prepublishOnly": "npm run build",
