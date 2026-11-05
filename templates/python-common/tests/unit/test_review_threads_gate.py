@@ -304,7 +304,7 @@ _INLINE_NODE = {"replyTo": None}
         "no-replyto-key",
         "empty-approval",
         "empty-changes",
-        "blank-state-reply",
+        "missing-state-reply",
         "body-only",
         "inline-only",
         "reply-plus-inline",
@@ -2019,7 +2019,7 @@ def test_review_on_the_second_page_reaches_the_body_check(monkeypatch: pytest.Mo
 def test_an_inline_only_review_survives_the_fetch_path_and_counts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A raw GraphQL-shaped inline-only review keeps ``comments`` through ``fetch_pull_request``."""
+    """A raw inline-only review keeps ``comments`` through ``fetch_pull_request``."""
     cls_gate = _load_gate()
     dict_raw = {
         **_review("coderabbitai[bot]"),
