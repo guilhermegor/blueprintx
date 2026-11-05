@@ -59,6 +59,7 @@ markdown_extensions:
 exclude_docs: |
   superpowers/
   CLAUDE.md
+  AGENTS.md
   blueprintx-lessons.md
   dotfiles-dev-lessons.md
   checkpoints.md

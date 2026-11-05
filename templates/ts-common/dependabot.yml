@@ -3,6 +3,8 @@ version: 2
 updates:
   - package-ecosystem: "npm"
     directory: "/"
+    assignees:
+      - "${GITHUB_USERNAME}"
     schedule:
       interval: "weekly"
     versioning-strategy: "increase-if-necessary"
@@ -34,6 +36,8 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    assignees:
+      - "${GITHUB_USERNAME}"
     schedule:
       interval: "weekly"
     cooldown:

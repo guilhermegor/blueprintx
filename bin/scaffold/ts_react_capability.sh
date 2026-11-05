@@ -59,15 +59,10 @@ done
 
 for layer in domain application infrastructure ui; do
     mkdir -p "$NEW_CAP_DIR/$layer"
-    cat > "$NEW_CAP_DIR/$layer/CLAUDE.md" <<EOF
-@../../_layers/$layer.md
-
-<!--
-  Capability-specific notes for this layer go below the @import.
-  The shared rules live in src/capabilities/_layers/$layer.md and are
-  inlined above. Anything written below applies only to this capability.
--->
-EOF
+    printf '@AGENTS.md\n@../../_layers/%s.md\n\nEdit AGENTS.md, not this file. Claude-Code-only lines go below this one.\n' \
+        "$layer" >"$NEW_CAP_DIR/$layer/CLAUDE.md"
+    printf '# %s layer\n\nShared rules: [`../../_layers/%s.md`](../../_layers/%s.md).\n\nCapability-specific notes for this layer go below.\n' \
+        "$layer" "$layer" "$layer" >"$NEW_CAP_DIR/$layer/AGENTS.md"
 done
 
 echo "✅ Capability '$CAPABILITY_NAME' created at:"
