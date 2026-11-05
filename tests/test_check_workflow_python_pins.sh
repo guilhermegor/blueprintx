@@ -22,8 +22,7 @@ expect_gate() {
 
 make_fixture() {
 	local str_root
-	str_root="$(mktemp -d)"
-	list_fixtures+=("$str_root")
+	str_root="$(mktemp -d -p "$str_tmp")"
 	mkdir -p "$str_root/templates/x/.github/workflows" "$str_root/.github/workflows"
 	printf '        python-version: ["%s"]\n' "$1" >"$str_root/templates/x/.github/workflows/r.yaml"
 	printf '          python-version: "%s"\n' "$2" >"$str_root/.github/workflows/c.yml"
@@ -34,8 +33,8 @@ write_root_workflow() {
 	printf '%b' "$2" >"$1/.github/workflows/c.yml"
 }
 
-list_fixtures=()
-trap 'rm -rf "${list_fixtures[@]}"' EXIT
+str_tmp="$(mktemp -d)"
+trap 'rm -rf "$str_tmp"' EXIT
 
 expect_gate "real tree passes" pass "$REPO_ROOT"
 
@@ -68,9 +67,12 @@ str_fx="$(make_fixture 3.12 3.12)"
 write_root_workflow "$str_fx" '    python-version: pypy3.10-7.3.12\n'
 expect_gate "pypy version string passes" pass "$str_fx"
 
-str_fx="$(mktemp -d)"
-list_fixtures+=("$str_fx")
+str_fx="$(mktemp -d -p "$str_tmp")"
 expect_gate "missing workflow dirs fail instead of passing vacuously" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+rm -rf "$str_fx/.github"
+expect_gate "missing root workflows dir fails instead of a partial scan" fail "$str_fx"
 
 str_fx="$(make_fixture 3.12.8 3.12)"
 str_out="$(PINS_REPO_ROOT="$str_fx" bash "$GATE" 2>&1 || true)"

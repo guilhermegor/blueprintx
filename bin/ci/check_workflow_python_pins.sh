@@ -27,6 +27,10 @@ function check(str_value) {
 main() {
 	local -a list_files=()
 	local str_hits
+	if [ ! -d "$REPO_ROOT/.github/workflows" ]; then
+		echo "Missing $REPO_ROOT/.github/workflows; refusing a partial scan." >&2
+		exit 1
+	fi
 	mapfile -d '' -t list_files < <(
 		find "$REPO_ROOT/.github/workflows" "$REPO_ROOT/templates" \
 			-path '*/.github/workflows/*' \( -name '*.yml' -o -name '*.yaml' \) -print0 2>/dev/null
