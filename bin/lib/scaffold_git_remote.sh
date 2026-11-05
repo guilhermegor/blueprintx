@@ -135,6 +135,7 @@ scaffold_create_github_repo() {
 		scaffold_set_origin_head "$str_project_path"
 		print_status "success" "Repository created and pushed via gh."
 		scaffold_kanban_setup
+		scaffold_open_release_issue "$str_project_path"
 		return 0
 	fi
 

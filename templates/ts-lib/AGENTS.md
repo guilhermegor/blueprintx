@@ -154,3 +154,8 @@ job sees the rewritten `package.json`; publishing the literal version stays the 
   configuration; do not reintroduce a stored token.
 - Do not pass `--provenance` to `npm stage publish` — trusted publishing generates
   provenance automatically, and the flag is redundant.
+
+## Placeholder files (remove before 1.0.0)
+
+The example boilerplate is `src/example.ts`, `src/example.test.ts` and the `greet` re-export in
+`src/index.ts`. Delete or replace them, and every doc or smoke check that still shows `greet`.
