@@ -14,6 +14,11 @@ from mypy import api
 
 _PATH_ROOT = Path(__file__).parents[2]
 _PATH_MYPY_INI = _PATH_ROOT / "mypy.ini"
+_DICT_FIRST_NAME_AFTER_FLOOR = {
+    "3.11": "from itertools import batched",
+    "3.12": "from typing import ReadOnly",
+    "3.13": "from copy import replace",
+}
 
 
 def _declared_floor() -> str:
@@ -37,15 +42,16 @@ def test_mypy_python_version_matches_declared_floor() -> None:
 
 
 def test_mypy_rejects_post_floor_stdlib_name(tmp_path: Path) -> None:
-    """An ``itertools.batched`` import (3.12+) must fail under the shipped ``mypy.ini``.
+    """A stdlib name added after the floor must fail under the shipped ``mypy.ini``.
 
     Parameters
     ----------
     tmp_path : pathlib.Path
         Disposable directory holding the fixture module and the mypy cache.
     """
-    path_fixture = tmp_path / "uses_batched.py"
-    path_fixture.write_text("from itertools import batched\n\nprint(batched)\n", encoding="utf-8")
+    path_fixture = tmp_path / "uses_post_floor_name.py"
+    str_import = _DICT_FIRST_NAME_AFTER_FLOOR[_declared_floor()]
+    path_fixture.write_text(f"{str_import}\n", encoding="utf-8")
     str_stdout, _, _ = api.run(
         [
             "--config-file",

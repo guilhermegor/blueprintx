@@ -42,7 +42,7 @@ jobs:
             echo "Python floor and matrix already current"
             exit 0
           fi
-          str_open="$(gh pr list --head "$STR_BRANCH" --state open --json number --jq '.[0].number')"
+          str_open="$(gh pr list --head "$STR_BRANCH" --state open --json number --jq '.[0].number // empty')"
           if [ -n "$str_open" ]; then
             echo "Bump PR #${str_open} is still open; leaving it untouched"
             exit 0
@@ -57,6 +57,6 @@ jobs:
           fi
           git checkout -b "$STR_BRANCH"
           git commit -am "$str_title"
-          git push origin "$STR_BRANCH"
+          git push --force origin "$STR_BRANCH"
           gh pr create --base main --head "$STR_BRANCH" --title "$str_title" \
             --body "Automated monthly sync from endoflife.date. Floor ${str_floor}."

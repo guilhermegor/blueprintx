@@ -152,8 +152,8 @@ def test_derive_non_boolean_flag_raises() -> None:
 
 def test_derive_skips_cycle_released_in_the_future() -> None:
     dict_pre = _payload(DICT_TODAY)
-    dict_pre["result"]["releases"][0]["releaseDate"] = "2099-10-01"
-    assert mod_bump.derive(dict_pre, "2026-11-04")[1][-1] == "3.14"
+    dict_pre["result"]["releases"][1]["releaseDate"] = "2099-10-01"
+    assert "3.14" not in mod_bump.derive(dict_pre, "2026-11-04")[1]
 
 
 def test_derive_null_release_date_raises() -> None:
