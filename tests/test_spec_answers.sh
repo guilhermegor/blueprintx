@@ -393,7 +393,7 @@ run_ts_lib_with_gh_stub() {
     STUB_STATE="$WORK_DIR/$str_name-state"
     mkdir -p "$STUB_STATE" "$WORK_DIR/$str_name-remote"
     git init -q --bare "$WORK_DIR/$str_name-remote/spec-probe.git"
-    file="$(SPEC_LANGUAGE=typescript write_spec "$str_name" ts-lib "project_root=$WORK_DIR/$str_name-root" "$@")"
+    file="$(SPEC_LANGUAGE="${E2E_LANGUAGE:-typescript}" write_spec "$str_name" "${E2E_SKELETON:-ts-lib}" "project_root=$WORK_DIR/$str_name-root" "$@")"
     make_gh_stub
     (cd "$WORK_DIR" && env TMPDIR="$WORK_DIR" PATH="$WORK_DIR/stubbin:$PATH" STUB_STATE="$STUB_STATE" \
         GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="url.$WORK_DIR/$str_name-remote/.insteadOf" \
@@ -431,6 +431,50 @@ test_create_repo_runs_gh_with_the_chosen_visibility_and_protection() {
     else
         fail "create_repo e2e" "calls=$str_calls priv-protection=$str_prot out=$(tail -c 300 "$WORK_DIR/e2e-priv.out")"
     fi
+}
+
+test_create_repo_and_kanban_reach_every_tier_sourcing_the_shared_remote_helpers() {
+    local str_tier str_name str_got str_calls str_lang
+    for str_tier in lib-minimal ddd-service-native-db mvc-service-native-db etcher-chromeos; do
+        str_name="tier-$str_tier"
+        str_lang=python
+        [ "$str_tier" != etcher-chromeos ] || str_lang=bash
+        E2E_SKELETON="$str_tier" E2E_LANGUAGE="$str_lang" run_ts_lib_with_gh_stub "$str_name" -- \
+            git_remote=y create_repo=y repo_visibility=private kanban=y protect_branch=n
+        str_calls="$WORK_DIR/$str_name-state/calls.log"
+        if [ "$INT_RUN_RC" -eq 0 ] && grep -q '^repo create ci-bot/spec-probe.*--private' "$str_calls" \
+            && grep -q '^project create' "$str_calls"; then
+            pass "$str_tier: create_repo=y kanban=y creates the repo and the board"
+        else
+            fail "$str_tier create_repo+kanban" "out=$(tail -c 300 "$WORK_DIR/$str_name.out")"
+        fi
+        E2E_SKELETON="$str_tier" E2E_LANGUAGE="$str_lang" run_ts_lib_with_gh_stub "$str_name-off" -- git_remote=y
+        str_got="$WORK_DIR/$str_name-off-state/calls.log"
+        if [ "$INT_RUN_RC" -eq 0 ] && [ -f "$str_got" ] && ! grep -qE '^(repo create|project create)' "$str_got"; then
+            pass "$str_tier: omitting the remote keys keeps today's behaviour (no repo, no board)"
+        else
+            fail "$str_tier default" "out=$(tail -c 300 "$WORK_DIR/$str_name-off.out")"
+        fi
+    done
+}
+
+test_protect_branch_yes_reaches_every_newly_mapped_tier() {
+    local str_tier str_name str_lang str_want str_prot
+    for str_tier in api-service-native-db mvc-service-orm-db etcher-chromeos ventoy-usb; do
+        str_name="prot-$str_tier"
+        str_lang=python
+        [ "$str_tier" != etcher-chromeos ] && [ "$str_tier" != ventoy-usb ] || str_lang=bash
+        str_want='"required_approving_review_count":1'
+        [ "$str_lang" = python ] || str_want='"required_approving_review_count":0'
+        E2E_SKELETON="$str_tier" E2E_LANGUAGE="$str_lang" run_ts_lib_with_gh_stub "$str_name" -- \
+            git_remote=y create_repo=y protect_branch=y human_reviewers=y
+        str_prot="$(tr -d '\n ' <"$WORK_DIR/$str_name-state/protection.json" 2>/dev/null)"
+        if [ "$INT_RUN_RC" -eq 0 ] && [[ "$str_prot" == *"$str_want"* ]]; then
+            pass "$str_tier: protect_branch=y stays in step with the prompts (approvals follow human_reviewers)"
+        else
+            fail "$str_tier protect_branch" "protection=$str_prot out=$(tail -c 300 "$WORK_DIR/$str_name.out")"
+        fi
+    done
 }
 
 test_create_repo_n_never_calls_gh_repo_create() {
@@ -505,10 +549,10 @@ test_etcher_chromeos_answer_stream_and_prompt_order() {
     str_got="$(sed -n '/^main() {/,/^}/p' "$REPO_ROOT/bin/scaffold/etcher_chromeos.sh" \
         | grep -E '^    (prompt_default_os|scaffold_prompt_review_bot_roster|prompt_git_remote_setup)( |$)' \
         | awk '{print $1}' | paste -sd' ' -)"
-    if [ "$str_def" = "chromeos-flex,n,n" ] && [ "$str_full" = "fydeos,y,y" ] \
+    if [ "$str_def" = "chromeos-flex,n,n" ] && [ "$str_full" = "fydeos,y,y,n" ] \
         && [[ "$str_bad" == *"'default_os' must be chromeos-flex or fydeos"* ]] \
         && [ "$str_got" = "prompt_default_os scaffold_prompt_review_bot_roster prompt_git_remote_setup" ]; then
-        pass "etcher-chromeos stream: default_os, roster, git_remote; bad default_os refused"
+        pass "etcher-chromeos stream: default_os, roster, git_remote, create_repo; bad default_os refused"
     else
         fail "etcher-chromeos stream" "default=$str_def full=$str_full bad=$str_bad main() asks: $str_got"
     fi
@@ -619,6 +663,86 @@ test_ventoy_usb_spec_reaches_the_generated_conf() {
     fi
 }
 
+test_project_root_tilde_expands_to_home() {
+    local file out int_rc str_home="$WORK_DIR/tilde-home"
+    mkdir -p "$str_home" "$WORK_DIR/tilde-cwd"
+    file="$(write_spec tilde-root lib-minimal "project_root=~/tilde-x")"
+    out="$(cd "$WORK_DIR/tilde-cwd" && HOME="$str_home" TMPDIR="$WORK_DIR" \
+        bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null)"
+    int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [ -d "$str_home/tilde-x/spec-probe" ] && [ ! -e "$WORK_DIR/tilde-cwd/~" ]; then
+        pass "a leading ~ in project_root expands to \$HOME and no literal '~' directory is made"
+    else
+        fail "project_root tilde" "rc=$int_rc, literal-tilde=$([ -e "$WORK_DIR/tilde-cwd/~" ] && echo yes || echo no): ${out: -300}"
+    fi
+}
+
+test_project_root_naming_the_project_is_refused() {
+    local file root out int_rc
+    root="$WORK_DIR/nested-root/spec-probe"
+    file="$(write_spec nested-root lib-minimal "project_root=$root")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'project_root'"*"parent directory"* && ! -e "$root" ]]; then
+        pass "a project_root whose last component is the project name is refused, naming the key"
+    else
+        fail "project_root is project dir" "rc=$int_rc, root exists or message missing: ${out: -300}"
+    fi
+}
+
+test_project_root_alternate_spellings_of_the_project_dir_are_refused() {
+    local file root out int_rc
+    root="$WORK_DIR/spelling-root/spec-probe"
+    mkdir -p "$root"
+    file="$(write_spec spelling-root lib-minimal "project_root=$root/./")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'project_root'"*"parent directory"* && ! -e "$root/spec-probe" ]]; then
+        pass "a project_root spelled with a trailing /./ is still refused when it is the project dir"
+    else
+        fail "project_root alternate spelling" "rc=$int_rc, nested dir exists or message missing: ${out: -300}"
+    fi
+}
+
+test_project_root_alternate_spellings_are_refused_when_the_dir_does_not_exist() {
+    local file root out int_rc
+    root="$WORK_DIR/spelling-missing/spec-probe"
+    file="$(write_spec spelling-missing lib-minimal "project_root=$root/.")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'project_root'"*"parent directory"* && ! -e "$root" ]]; then
+        pass "a trailing /. on a project_root that does not exist yet is refused too"
+    else
+        fail "project_root alternate spelling, missing dir" "rc=$int_rc, dir created or message missing: ${out: -300}"
+    fi
+}
+
+test_default_project_root_inside_a_dir_named_like_the_project_is_allowed() {
+    local file out int_rc cwd="$WORK_DIR/default-cwd/spec-probe"
+    mkdir -p "$cwd"
+    file="$(write_spec default-root lib-minimal)"
+    out="$(cd "$cwd" && TMPDIR="$WORK_DIR" bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null)"
+    int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [ -d "$cwd/spec-probe" ] && [[ "$out" != *"'project_root'"* ]]; then
+        pass "an unset project_root defaults to \$PWD without the project-name refusal, even inside a dir named like the project"
+    else
+        fail "default project_root" "rc=$int_rc: ${out: -300}"
+    fi
+}
+
+test_explicit_empty_project_root_defaults_to_pwd() {
+    local file out int_rc cwd="$WORK_DIR/empty-root-cwd"
+    mkdir -p "$cwd"
+    file="$(write_spec empty-root lib-minimal "project_root=")"
+    out="$(cd "$cwd" && TMPDIR="$WORK_DIR" bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null)"
+    int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [ -d "$cwd/spec-probe" ]; then
+        pass "an explicit empty project_root behaves as unset and scaffolds under \$PWD"
+    else
+        fail "empty project_root" "rc=$int_rc: ${out: -300}"
+    fi
+}
+
 test_an_undefined_test_name_fails_the_runner() {
     local file="$WORK_DIR/undefined-probe.sh" out int_rc
     { sed '/^main$/d' "${BASH_SOURCE[0]}"
@@ -677,6 +801,8 @@ main() {
     test_kanban_yes_keeps_branch_protection_aligned
     test_kanban_lookup_skip_keeps_branch_protection_aligned
     test_kanban_visibility_dry_run_and_bad_value
+    test_create_repo_and_kanban_reach_every_tier_sourcing_the_shared_remote_helpers
+    test_protect_branch_yes_reaches_every_newly_mapped_tier
     test_create_repo_n_never_calls_gh_repo_create
     test_create_repo_preflight_stops_before_any_file_is_written
     test_remote_key_validation_names_the_key
@@ -686,6 +812,12 @@ main() {
     test_validate_answers_reports_every_bad_key
     test_bad_yn_stops_before_anything_is_created
     test_unmapped_skeleton_is_refused_before_creating_anything
+    test_project_root_tilde_expands_to_home
+    test_project_root_naming_the_project_is_refused
+    test_project_root_alternate_spellings_of_the_project_dir_are_refused
+    test_project_root_alternate_spellings_are_refused_when_the_dir_does_not_exist
+    test_default_project_root_inside_a_dir_named_like_the_project_is_allowed
+    test_explicit_empty_project_root_defaults_to_pwd
     test_api_service_asks_the_same_prompts_as_the_ddd_tiers
     test_api_service_storage_answer_reaches_the_storage_prompt
     test_dev_clean_uses_a_temp_root_and_removes_it

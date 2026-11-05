@@ -158,3 +158,8 @@ summary: run `poe enable_pages` once afterwards.
 - Mirror the test folder hierarchy to match the package structure.
 - Drop `_internal/config/contracts` (and the pandas deps) if the library never reads
   tabular inputs.
+
+## Placeholder files (remove before 1.0.0)
+
+The example boilerplate is `main()` in `main.py`, its test in `tests/unit/test_main.py` and the `main` re-export in the package
+`__init__.py`. Delete or replace them, and every doc or example that still shows the greeting.
