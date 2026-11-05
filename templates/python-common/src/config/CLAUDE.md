@@ -162,7 +162,7 @@ bronze layer is self-describing and drift-detectable. This is enforced, not mere
   `cls_contract.output_columns` (= `tuple_required + PROVENANCE_COLUMNS`). They are **not** in
   `tuple_required` — that validates the *source* artifact, which never carries them.
 - **The gate** is `bin/check_provenance.py` (wired into both `.pre-commit-config.yaml` and
-  `.github/workflows/tests.yaml`, per the gate-parity rule): any `src/` module that **calls**
+  `.github/workflows/tests.yml`, per the gate-parity rule): any `src/` module that **calls**
   `read_table(` must also reference `stamp_provenance`, so a file/scrape read cannot ship without
   its traceability columns. It keys on the call form `read_table(` on purpose — `read_query`
   (a DB read from *your own* database) is **not** internet-ingestion and is out of scope, and a
@@ -283,7 +283,7 @@ The seam: `config/contract_oracles.yaml` is the registry (`source_key → {url, 
 **empty by default**); `bin/check_contract_drift.py` compares each shipped contract's columns
 against the live header and **always exits 0** (self-skips to success when the registry is empty —
 a check that never reports would block nothing, but this one is a *reporter*, not a gate); the
-`contract_drift.yaml` workflow runs it weekly (and on manual dispatch, **never** on PR/push) and
+`contract-drift.yml` workflow runs it weekly (and on manual dispatch, **never** on PR/push) and
 opens/updates one deduplicated issue when drift is found.
 
 ## Reader-authoring discipline (eight rules that are not enforceable by a gate)

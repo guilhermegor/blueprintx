@@ -36,7 +36,7 @@ the gitleaks slice of #305 has already landed:
   gitleaks is absent locally.
 - `templates/python-common/bin/check_secrets.sh` — the ONE implementation, invoking
   `gitleaks git "$STR_ROOT" --no-banner --redact -v`.
-- `templates/python-common/.gitleaks.toml` + `templates/python-common/.github/workflows/secret_scan.yaml`
+- `templates/python-common/.gitleaks.toml` + `templates/python-common/.github/workflows/secret-scan.yml`
   + `templates/python-common/.pre-commit-config.yaml` — the same wiring copied into every
   generated Python project.
 - GitGuardian (#155/#286) references are **gone** from every `.yml`/`.pre-commit-config.yaml`

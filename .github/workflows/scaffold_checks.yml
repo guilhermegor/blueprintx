@@ -280,6 +280,21 @@ jobs:
       - name: Should-fail regression tests for check_action_pins
         run: bash tests/test_check_actions_pins.sh
 
+  workflow-names:
+    name: Template workflow filenames
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check naming convention
+        run: bash bin/ci/check_workflow_names.sh
+
+      - name: Should-fail regression tests
+        run: bash tests/test_check_workflow_names.sh
+
   secret-scan:
     name: GitGuardian — secret scan
     runs-on: ubuntu-latest

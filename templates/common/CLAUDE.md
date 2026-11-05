@@ -150,6 +150,17 @@ Output files (exports, backups, model artifacts, reports): `name-like-this_YYYYM
 - Timestamp: `YYYYMMDD_HHMMSS` (uppercase, sortable)
 - Exception — joblib artifacts: `name-like-this_YYYYMMDD_HHMMSS_{sha256_prefix8}.joblib`
 
+## Workflow file naming (blueprintx#947)
+
+Every file under `templates/**/.github/workflows/` is kebab-case with the `.yml` extension
+(`review-threads.yml`). Enforced by `bin/ci/check_workflow_names.sh`.
+- Exempt: `release-pypi.yaml` and `release-test-pypi.yaml`. PyPI trusted publishers match the
+  exact filename, so renaming them breaks publishing in generated projects.
+- Why `.yml`: measured 2026-11-04 against 12 open PRs, `.yml` renames 1 file they touch
+  (`tests.yaml`, edited by #976, #984, #985); `.yaml` would rename 2 (`branch-has-issue.yml`,
+  `pr-self-assign.yml`, edited by #971). Total renames: 11 for `.yml`, 24 for `.yaml`.
+- Job `name:` values are unchanged, so required-check contexts do not move.
+
 ## Tooling (Python, copied from `templates/python-common/`)
 
 - **Ruff**: linter + formatter. Line-length 99, 4-space indent, double quotes, NumPy docstrings. Config: `ruff.toml`.

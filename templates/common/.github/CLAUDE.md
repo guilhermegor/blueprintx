@@ -102,7 +102,7 @@ this repo/workflow/environment. This is each registry's own recommended path.
 
 ## Gate parity — every gate in BOTH pre-commit and CI
 
-CI runs its gates as **explicit steps** in `tests.yaml`, not via `pre-commit run`, so adding a
+CI runs its gates as **explicit steps** in `tests.yml`, not via `pre-commit run`, so adding a
 hook to `.pre-commit-config.yaml` does **not** cover CI. Every lint/static/test gate must be
 wired into **both** files, in the same change — otherwise a `--no-verify` commit or an
 uninstalled hook slips straight past branch-protection CI (which runs the workflow, not local

@@ -463,8 +463,8 @@ def test_workflow_job_removed() -> None:
     """A job dropped from a workflow's jobs: block is a check silently switched off."""
     str_old = "jobs:\n  lint-shell:\n    runs-on: x\n  complexity:\n    runs-on: x\n"
     str_new = "jobs:\n  complexity:\n    runs-on: x\n"
-    list_problems = gate_integrity.workflow_problems(str_old, str_new, "tests.yaml")
-    assert list_problems == ["tests.yaml: workflow job 'lint-shell' removed"]
+    list_problems = gate_integrity.workflow_problems(str_old, str_new, "tests.yml")
+    assert list_problems == ["tests.yml: workflow job 'lint-shell' removed"]
 
 
 def test_required_status_check_removed() -> None:
@@ -509,9 +509,9 @@ def test_deletion_flags_a_watched_config_file() -> None:
 
 def test_deletion_flags_a_deleted_workflow() -> None:
     """Same weakening, workflow-shaped: deleting the file removes every job at once."""
-    list_changed = [("D", ".github/workflows/tests.yaml")]
+    list_changed = [("D", ".github/workflows/tests.yml")]
     assert gate_integrity.deletion_problems(list_changed) == [
-        ".github/workflows/tests.yaml: watched gate configuration deleted"
+        ".github/workflows/tests.yml: watched gate configuration deleted"
     ]
 
 

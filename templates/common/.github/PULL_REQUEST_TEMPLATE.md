@@ -58,7 +58,7 @@
     - File: `test_auth.py`  
     - Coverage: 95% (via `pytest --cov`).  
 - **Integration Tests**:  
-    - File: `tests.yaml`  
+    - File: `tests.yml`  
     - Status: `OK/NOK`.  
 
 **Not Applicable**:  

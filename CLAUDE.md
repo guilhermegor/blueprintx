@@ -115,7 +115,7 @@ seam is actually executed.
 
 **Run all six Python tiers with `make verify_tiers`** (`bin/ci/scaffold_lint_test_all.sh`; `JOBS=1` to
 serialise while debugging). It fans the tiers out in parallel — measured 477s of work in 103s wall
-clock — and CI needs none of it, because `tests.yaml` already runs one job per tier.
+clock — and CI needs none of it, because `tests.yml` already runs one job per tier.
 
 ⚠️ **Each worker gets its OWN COPY of `templates/` + `bin/`, and that is load-bearing rather than
 tidy.** "The tiers are independent" is the obvious assumption and it is false: `scaffold_lint_test.sh`

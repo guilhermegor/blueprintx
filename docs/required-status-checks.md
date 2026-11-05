@@ -49,15 +49,15 @@ Measured 2026-09-26 by reading `jobs.*.name` and `on:` in every
 
 | Emitted check name | Workflow | Trigger | Qualifies? |
 |---|---|---|---|
-| `Review threads answered` | `review_threads.yaml` | `pull_request` (+ `_review`, `_review_comment`), no filter | **yes** — seeded today |
-| `Classify and gate this PR` | `pr-gate.yaml` | `pull_request: types: [opened, synchronize, reopened, labeled, unlabeled]` | **yes** — not seeded |
-| `Run Automated Tests (<os>, py<version>)` ×15 | `tests.yaml` | `pull_request:` with a `branches:` filter | no — rule 2 (branch filter) and the names embed matrix values that drift |
-| `Ask CodeRabbit for a review` | `coderabbit_trigger.yaml` | `pull_request`, job `if: draft == false` | no — rule 3, never reports on a draft PR |
-| `Close linked issues of merged PRs` | `pr-reconcile.yaml` | `pull_request: types: [closed]` | no — rule 2, *never* reports on an open PR |
-| `GitGuardian — secret scan` | `secret_scan.yaml` | `pull_request` | no — rule 4, copied only when `GITGUARDIAN_API_KEY` was exported at scaffold time |
-| `Re-ask a rate-limited reviewer` | `review_retry.yaml` | `schedule`, `workflow_dispatch` | no — rule 2, not a PR event |
-| `Contract drift check` | `contract_drift.yaml` | `schedule`, `workflow_dispatch` | no — rule 2, not a PR event |
-| `build` | `docs.yaml` (`lib-minimal` only) | `push`, `pull_request` | no — rule 4, one tier out of six |
+| `Review threads answered` | `review-threads.yml` | `pull_request` (+ `_review`, `_review_comment`), no filter | **yes** — seeded today |
+| `Classify and gate this PR` | `pr-gate.yml` | `pull_request: types: [opened, synchronize, reopened, labeled, unlabeled]` | **yes** — not seeded |
+| `Run Automated Tests (<os>, py<version>)` ×15 | `tests.yml` | `pull_request:` with a `branches:` filter | no — rule 2 (branch filter) and the names embed matrix values that drift |
+| `Ask CodeRabbit for a review` | `coderabbit-trigger.yml` | `pull_request`, job `if: draft == false` | no — rule 3, never reports on a draft PR |
+| `Close linked issues of merged PRs` | `pr-reconcile.yml` | `pull_request: types: [closed]` | no — rule 2, *never* reports on an open PR |
+| `GitGuardian — secret scan` | `secret-scan.yml` | `pull_request` | no — rule 4, copied only when `GITGUARDIAN_API_KEY` was exported at scaffold time |
+| `Re-ask a rate-limited reviewer` | `review-retry.yml` | `schedule`, `workflow_dispatch` | no — rule 2, not a PR event |
+| `Contract drift check` | `contract-drift.yml` | `schedule`, `workflow_dispatch` | no — rule 2, not a PR event |
+| `build` | `docs.yml` (`lib-minimal` only) | `push`, `pull_request` | no — rule 4, one tier out of six |
 
 ### TypeScript tiers — `react-spa-webpack`, `ts-lib`
 
@@ -126,9 +126,9 @@ Three findings, in descending order of cost:
 
 The earlier pass on blueprintx#164 (`.specs/backlog/repo-rules-self-audit-164_20260904_062813.md`)
 reached "keep one entry" for the Python tiers by reasoning about
-`tests.yaml` alone. That conclusion survives for `tests.yaml` — with a second,
+`tests.yml` alone. That conclusion survives for `tests.yml` — with a second,
 stronger disqualifier it did not have (the `branches:` filter, not just matrix
-drift) — but it did not look at `pr-gate.yaml`, and it did not look outside
+drift) — but it did not look at `pr-gate.yml`, and it did not look outside
 Python at all.
 
 ## Keeping BlueprintX's own required checks in sync (blueprintx#535)

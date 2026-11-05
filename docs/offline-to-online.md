@@ -57,13 +57,13 @@ The 5 service tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service
 `mvc-service-orm-db`, `api-service-native-db`) share one manifest — transcribed from
 `copy_github_assets()`, identical across all five:
 
-- `.github/workflows/{tests,review_threads,coderabbit_trigger,review_retry,pr-gate,pr-reconcile,contract_drift,release,docs}.yaml`
-- `.github/workflows/secret_scan.yaml` only when `GITGUARDIAN_API_KEY` is exported (opt-in, as at scaffold time); the key is set as a repo secret after `gh repo create` and before the first push, so the first scan has its key. Setting it is best-effort like the ruleset: if it fails the repo is already created and pushed, so the script warns with the exact `gh secret set` command rather than aborting, and a re-run does nothing
+- `.github/workflows/{tests,review-threads,coderabbit-trigger,review-retry,pr-gate,pr-reconcile,contract-drift,release,docs}.yml`
+- `.github/workflows/secret-scan.yml` only when `GITGUARDIAN_API_KEY` is exported (opt-in, as at scaffold time); the key is set as a repo secret after `gh repo create` and before the first push, so the first scan has its key. Setting it is best-effort like the ruleset: if it fails the repo is already created and pushed, so the script warns with the exact `gh secret set` command rather than aborting, and a re-run does nothing
 - `.github/CODEOWNERS` (envsubst `GITHUB_USERNAME`, on every tier), `.github/CLAUDE.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/dependabot.yml`
 - `SECURITY.md` (envsubst `PROJECT_DISPLAY_NAME`, `REPOSITORY`)
 
 `lib-minimal` (from `lib_minimal_copy_github_assets()`) is the same shape minus
-`contract_drift`/`release`, plus `docs.yaml` from its own `templates/lib-minimal/.github/workflows/`,
+`contract_drift`/`release`, plus `docs.yml` from its own `templates/lib-minimal/.github/workflows/`,
 plus `release-pypi.yaml` / `release-test-pypi.yaml` gated by `--publish`.
 
 `react-spa-webpack` (from `ts_react_app.sh`) ships the `templates/ts-common/.github/workflows/`
@@ -76,7 +76,7 @@ either `deploy-spa.yml` or `deploy-vercel.yml` + `vercel.json`. No `SECURITY.md`
 (`release-npm.yml` rendered with `PROJECT_NAME`) plus the shared `CLAUDE.md`, `CODEOWNERS` and PR
 template. `bash-cli` (from `bash_cli.sh`) ships `ci.yml` and `release.yml` (rendered with
 `PROJECT_NAME`) plus the same three shared files. Neither ships `SECURITY.md`, `dependabot.yml` or
-`secret_scan.yaml`. Offline removal is the react one: git-diff trio, `git_diffs/` and, where a
+`secret-scan.yml`. Offline removal is the react one: git-diff trio, `git_diffs/` and, where a
 `package.json` exists, its `git:diff:*` scripts.
 
 ## The two "which one was it" gaps

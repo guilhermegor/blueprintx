@@ -3784,7 +3784,7 @@ _INT_SHORTEST_JOB_MINUTES = 10
 _LIST_WORKFLOWS = (
     ".github/workflows/review_threads.yml",
     "templates/ts-common/.github/workflows/review-threads.yml",
-    "templates/python-common/.github/workflows/review_threads.yaml",
+    "templates/python-common/.github/workflows/review-threads.yml",
 )
 
 

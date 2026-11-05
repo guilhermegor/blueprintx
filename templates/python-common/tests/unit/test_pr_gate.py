@@ -41,7 +41,7 @@ gate = _load_gate()
     [
         ("src/model/loader.py", "src"),
         ("tests/unit/test_x.py", "tests"),
-        (".github/workflows/tests.yaml", "ci"),
+        (".github/workflows/tests.yml", "ci"),
         ("bin/venv.sh", "ci"),
         ("poe_tasks.toml", "tests"),
         ("poe_tasks.lint.toml", "tests"),
