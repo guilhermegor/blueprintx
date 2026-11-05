@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+SCAFFOLD_RELEASE_ISSUE_TITLE="Cut 1.0.0"
+
 SCAFFOLD_KANBAN_STATUS_OPTIONS="Blocked|RED|Cannot start: a named blocker is unfinished
 Backlog|GREEN|This item hasn't been started
 Ready|BLUE|This is ready to be picked up
@@ -215,11 +217,9 @@ scaffold_open_release_issue() {
 	[ -f "$str_tpl" ] || return 0
 	command -v gh >/dev/null 2>&1 || return 0
 	str_slug="$(scaffold_repo_slug)"
-	str_manual="$(printf "awk 'NR==1&&/^---\$/{f=1;next} f&&/^---\$/{f=0;next} !f' %q | gh issue create --repo %q --title 'Cut 1.0.0' --label state:blocked --body-file -" "$str_tpl" "$str_slug")"
-	gh label create state:blocked --repo "$str_slug" --color D93F0B \
-		--description "Cannot start: see the Blocked by line" --force >/dev/null 2>&1 || true
+	str_manual="$(printf "awk 'NR==1&&/^---\$/{f=1;next} f&&/^---\$/{f=0;next} !f' %q | gh issue create --repo %q --title '${SCAFFOLD_RELEASE_ISSUE_TITLE}' --label state:blocked --body-file -" "$str_tpl" "$str_slug")"
 	str_existing="$(gh api --paginate "repos/${str_slug}/issues?state=all&per_page=100" \
-		--jq '.[] | select((has("pull_request") | not) and .title=="Cut 1.0.0") | .html_url' 2>/dev/null)" || {
+		--jq '.[] | select((has("pull_request") | not) and .title=="'"${SCAFFOLD_RELEASE_ISSUE_TITLE}"'") | .html_url' 2>/dev/null)" || {
 		print_status "warning" "Could not check for an existing Cut 1.0.0 issue on ${str_slug}; not creating one. Open it by hand: ${str_manual}"
 		return 0
 	}
@@ -229,8 +229,11 @@ scaffold_open_release_issue() {
 		return 0
 	fi
 	str_body="$(awk 'NR==1&&/^---$/{f=1;next} f&&/^---$/{f=0;next} !f' "$str_tpl")"
-	if str_url="$(gh issue create --repo "$str_slug" --title "Cut 1.0.0" --label state:blocked \
-		--body "$str_body" 2>/dev/null)"; then
+	str_url="$(gh issue create --repo "$str_slug" --title "$SCAFFOLD_RELEASE_ISSUE_TITLE" \
+		--label state:blocked --body "$str_body" 2>/dev/null)" ||
+		str_url="$(gh issue create --repo "$str_slug" --title "$SCAFFOLD_RELEASE_ISSUE_TITLE" \
+			--body "$str_body" 2>/dev/null)" || str_url=""
+	if [ -n "$str_url" ]; then
 		print_status "success" "Opened the Cut 1.0.0 issue: ${str_url}"
 		scaffold_release_issue_card "$str_slug" "$str_url"
 	else

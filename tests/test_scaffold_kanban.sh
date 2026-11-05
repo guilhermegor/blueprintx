@@ -51,6 +51,7 @@ case "$1 $2" in
     [ -z "${GH_ISSUE_EXISTS:-}" ] || echo "https://github.com/octo/widget/issues/9" ;;
 "issue create")
     [ -z "${GH_ISSUE_FAIL:-}" ] || exit 1
+    [[ -z "${GH_LABEL_FAIL:-}" || "$*" != *--label* ]] || exit 1
     echo "https://github.com/octo/widget/issues/1" ;;
 "project view") echo "PVT_1" ;;
 "project item-add") echo "PVTI_1" ;;
@@ -104,7 +105,7 @@ test_release_issue_opens_once_for_a_package_tier() {
     expect_log "release issue" "issue create --repo octo/widget --title Cut 1.0.0 --label state:blocked" present
     expect_log "release issue" "issue-template-guard: require" present
     expect_log "release issue" "name: Cut 1.0.0" absent
-    expect_log "release issue" "label create state:blocked --repo octo/widget" present
+    expect_log "release issue" "label create state:blocked --repo octo/widget" absent
     expect_log "release issue" "about: The blocked path" absent
     expect_log "release issue" 'title: "Cut 1.0.0"' absent
     expect_log "release issue" 'labels: ["state:blocked"]' absent
@@ -128,6 +129,13 @@ test_release_issue_failure_warns_and_exits_zero() {
     str_out="$(run_release_issue yes GH_ISSUE_FAIL=1)"
     expect_out "gh failure" "$str_out" "open it by hand"
     expect_out "gh failure" "$str_out" "rc=0"
+}
+
+test_release_issue_without_label_when_label_missing() {
+    local str_out
+    str_out="$(run_release_issue yes GH_LABEL_FAIL=1)"
+    expect_log "label missing" "issue create --repo octo/widget --title Cut 1.0.0 --body" present
+    expect_out "label missing" "$str_out" "Opened the Cut 1.0.0 issue"
 }
 
 test_release_issue_lookup_failure_never_creates() {
@@ -414,6 +422,7 @@ main() {
     test_release_issue_skipped_without_the_template
     test_release_issue_is_idempotent
     test_release_issue_failure_warns_and_exits_zero
+    test_release_issue_without_label_when_label_missing
     test_release_issue_lookup_failure_never_creates
     test_existing_release_issue_still_gets_its_card
     test_card_failure_warns_when_a_board_exists
