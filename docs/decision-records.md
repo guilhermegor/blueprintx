@@ -2254,8 +2254,9 @@ rest of the suite.
   a missing one included, goes through the body and inline test (fails closed). A `DISMISSED`
   review is one of those states: with an empty body and no inline root it no longer counts,
   and one with a body or an inline root is still judged by the code downstream. Each review
-  reads its first 20 comments, with no `pageInfo`. A pending human review that mixes replies
+  reads its first 20 comments, with no `pageInfo`. A submitted review that mixes replies
   and new roots, with 20 replies first, would be read as a reply and fail closed, never
-  open. Body-only ladder reviews and inline-only CodeRabbit reviews still count. Measured
+  open. A reply posted with a non-empty review body still counts, which is the residual
+  open case; the UI reply flow and CodeRabbit reply with an empty body. Body-only ladder reviews and inline-only CodeRabbit reviews still count. Measured
   on issues 965 and 971: the only review entries on the head were replies, and the gate
   exited 0.

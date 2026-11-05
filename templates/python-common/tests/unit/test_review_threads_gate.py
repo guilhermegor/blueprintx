@@ -293,6 +293,8 @@ _INLINE_NODE = {"replyTo": None}
         ({**_NO_BODY, "comments": {"nodes": [{}]}}, False),
         ({**_NO_BODY, "state": "APPROVED"}, True),
         ({**_NO_BODY, "state": "CHANGES_REQUESTED"}, True),
+        ({**_NO_BODY, "state": "DISMISSED"}, False),
+        ({"body": "", "state": "COMMENTED"}, False),
         ({"comments": {"nodes": [_REPLY_NODE]}, "body": ""}, False),
         ({**_NO_BODY, "body": "Findings: none."}, True),
         ({**_NO_BODY, "comments": {"nodes": [_INLINE_NODE]}}, True),
@@ -305,6 +307,8 @@ _INLINE_NODE = {"replyTo": None}
         "no-replyto-key",
         "empty-approval",
         "empty-changes",
+        "dismissed-empty",
+        "no-comments-key",
         "missing-state-reply",
         "body-only",
         "inline-only",
@@ -322,6 +326,11 @@ def test_a_head_review_counts_only_with_a_body_or_a_non_reply_comment(
     )
 
     assert (str_problem is None) is bool_satisfies
+
+
+def test_the_review_query_asks_for_the_reply_marker() -> None:
+    """The reply filter reads ``replyTo``; the query text must still request it."""
+    assert "comments(first:20) { nodes { replyTo { id } } }" in _load_gate()._QUERY
 
 
 def test_a_pr_nobody_reviewed_fails() -> None:
