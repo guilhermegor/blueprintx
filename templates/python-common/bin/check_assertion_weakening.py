@@ -53,7 +53,7 @@ line, with a non-empty reason, in the PR body (`GITHUB_EVENT_PATH`) or as a trai
 commit since the merge-base. The PR body is CI-only, and the commit being created cannot
 carry its own trailer at `pre-commit` time (earlier branch commits' trailers are read).
 Locally, set `TEST_CHANGE_OK='<reason>'` for the commit (blueprintx#941); it is ignored
-when `GITHUB_ACTIONS` is set at all or `CI` is set to a truthy value.
+when `GITHUB_ACTIONS` is set at all or `CI` is set to anything but `""`, `0`, `false` or `no`.
 
 CI must check out with `fetch-depth: 0` — a shallow clone has no common ancestor to resolve.
 """
@@ -244,8 +244,8 @@ def env_reason() -> str:
     -------
     str
         The non-empty, stripped value of ``TEST_CHANGE_OK`` — the one escape hatch reachable
-        at local ``pre-commit`` time (blueprintx#941), mirroring ``GATE_CHANGE_OK`` in
-        ``check_gate_integrity.py``. ``""`` under CI, so a workflow ``env:`` line cannot
+        at local ``pre-commit`` time (blueprintx#941), with the same intent as ``GATE_CHANGE_OK``
+        in ``check_gate_integrity.py`` (its CI detection differs, #981). ``""`` under CI, so a workflow ``env:`` line cannot
         stand in for a justification a PR reviewer can read.
     """
     if is_ci():
