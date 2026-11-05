@@ -74,6 +74,10 @@ str_fx="$(make_fixture 3.12 3.12)"
 rm -rf "$str_fx/.github"
 expect_gate "missing root workflows dir fails instead of a partial scan" fail "$str_fx"
 
+str_fx="$(make_fixture 3.12 3.12)"
+rm -rf "$str_fx/templates"
+expect_gate "missing templates dir fails instead of a partial scan" fail "$str_fx"
+
 str_fx="$(make_fixture 3.12.8 3.12)"
 str_out="$(PINS_REPO_ROOT="$str_fx" bash "$GATE" 2>&1 || true)"
 case "$str_out" in
