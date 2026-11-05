@@ -193,9 +193,9 @@ scaffold_release_issue_card() {
 	[ -n "$str_number" ] || return 0
 	str_pid="$(gh project view "$str_number" --owner "$str_owner" --format json --jq '.id' 2>/dev/null)" || str_pid=""
 	str_field="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
-		--jq '.fields[] | select(.name=="Status") | .id' 2>/dev/null | head -n1)"
+		--jq '.fields[] | select(.name=="Status") | .id' 2>/dev/null | head -n1)" || str_field=""
 	str_opt="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
-		--jq '.fields[] | select(.name=="Status") | .options[]? | select(.name=="Blocked") | .id' 2>/dev/null | head -n1)"
+		--jq '.fields[] | select(.name=="Status") | .options[]? | select(.name=="Blocked") | .id' 2>/dev/null | head -n1)" || str_opt=""
 	if [ -n "$str_pid" ] && [ -n "$str_field" ] && [ -n "$str_opt" ]; then
 		str_item="$(gh project item-add "$str_number" --owner "$str_owner" --url "$str_url" \
 			--format json --jq '.id' 2>/dev/null)" || str_item=""
@@ -212,7 +212,7 @@ scaffold_release_issue_card() {
 }
 
 scaffold_open_release_issue() {
-	local str_path="$1" str_slug str_tpl str_body str_url str_manual str_existing
+	local str_path="$1" str_slug str_tpl str_body str_url str_manual str_existing str_err
 	str_tpl="${str_path}/.github/ISSUE_TEMPLATE/release-1-0-0.md"
 	[ -f "$str_tpl" ] || return 0
 	command -v gh >/dev/null 2>&1 || return 0
@@ -229,10 +229,16 @@ scaffold_open_release_issue() {
 		return 0
 	fi
 	str_body="$(awk 'NR==1&&/^---$/{f=1;next} f&&/^---$/{f=0;next} !f' "$str_tpl")"
+	str_err="$(mktemp)"
 	str_url="$(gh issue create --repo "$str_slug" --title "$SCAFFOLD_RELEASE_ISSUE_TITLE" \
-		--label state:blocked --body "$str_body" 2>/dev/null)" ||
+		--label state:blocked --body "$str_body" 2>"$str_err")" || str_url=""
+	if [ -z "$str_url" ] && grep -qi 'label' "$str_err"; then
 		str_url="$(gh issue create --repo "$str_slug" --title "$SCAFFOLD_RELEASE_ISSUE_TITLE" \
-			--body "$str_body" 2>/dev/null)" || str_url=""
+			--body "$str_body" 2>"$str_err")" || str_url=""
+		[ -z "$str_url" ] || print_status "warning" "Opened without the state:blocked label; add it by hand"
+	fi
+	[ -z "$str_url" ] && [ -s "$str_err" ] && print_status "warning" "gh said: $(head -n1 "$str_err")"
+	rm -f "$str_err"
 	if [ -n "$str_url" ]; then
 		print_status "success" "Opened the Cut 1.0.0 issue: ${str_url}"
 		scaffold_release_issue_card "$str_slug" "$str_url"

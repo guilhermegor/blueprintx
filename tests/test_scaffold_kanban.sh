@@ -51,7 +51,7 @@ case "$1 $2" in
     [ -z "${GH_ISSUE_EXISTS:-}" ] || echo "https://github.com/octo/widget/issues/9" ;;
 "issue create")
     [ -z "${GH_ISSUE_FAIL:-}" ] || exit 1
-    [[ -z "${GH_LABEL_FAIL:-}" || "$*" != *--label* ]] || exit 1
+    [[ -z "${GH_LABEL_FAIL:-}" || "$*" != *--label* ]] || { echo "could not add label" >&2; exit 1; }
     echo "https://github.com/octo/widget/issues/1" ;;
 "project view") echo "PVT_1" ;;
 "project item-add") echo "PVTI_1" ;;
@@ -135,7 +135,7 @@ test_release_issue_without_label_when_label_missing() {
     local str_out
     str_out="$(run_release_issue yes GH_LABEL_FAIL=1)"
     expect_log "label missing" "issue create --repo octo/widget --title Cut 1.0.0 --body" present
-    expect_out "label missing" "$str_out" "Opened the Cut 1.0.0 issue"
+    expect_out "label missing" "$str_out" "Opened without the state:blocked label"
 }
 
 test_release_issue_lookup_failure_never_creates() {
