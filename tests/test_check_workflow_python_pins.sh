@@ -104,6 +104,14 @@ fi
 chmod 755 "$str_fx/templates/x/.github/workflows/locked"
 
 str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: ["3.11", "3.12.8"]\n'
+expect_gate "inline matrix with a later patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: ["3.11", "3.12"]\n'
+expect_gate "inline matrix of minors passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
 rm -rf "$str_fx/.github"
 expect_gate "missing root workflows dir fails instead of a partial scan" fail "$str_fx"
 

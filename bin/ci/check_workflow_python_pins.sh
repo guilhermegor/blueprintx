@@ -24,7 +24,11 @@ FNR == 1 { in_list = 0; in_block = 0 }
 		int_indent = RLENGTH
 		if (str_rest ~ /^[[:space:]]*[|>][-+]?[[:space:]]*$/) in_block = 1
 		else if (str_rest ~ /^[[:space:]]*$/) in_list = 1
-		else { sub(/[,}].*$/, "", str_rest); check(str_rest) }
+		else {
+			if (str_rest ~ /^[[:space:]]*\[/) sub(/\].*$/, "", str_rest)
+			else sub(/[,}].*$/, "", str_rest)
+			check(str_rest)
+		}
 	}
 }
 function check(str_value) {
@@ -46,7 +50,7 @@ main() {
 	str_found="$(mktemp)"
 	find "$REPO_ROOT/.github/workflows" "$REPO_ROOT/templates" \
 		-name node_modules -prune -o \
-		-path '*/.github/workflows/*' \( -name '*.yml' -o -name '*.yaml' \) -print0 >"$str_found"
+		-path '*/.github/workflows/*' \( -name '*.yml' -o -name '*.yaml' \) -print0 >"$str_found" || { rm -f "$str_found"; exit 1; }
 	mapfile -d '' -t list_files <"$str_found"
 	rm -f "$str_found"
 	if [ "${#list_files[@]}" -eq 0 ]; then
