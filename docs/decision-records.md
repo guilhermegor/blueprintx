@@ -169,7 +169,13 @@ test suite keep the contract; this section records the reasoning that lived besi
   arguments of `@pytest.mark.skipif(platform.skip, ...)`, contradicting the deliberate `skipif`
   exclusion (the walk returned `{'skip'}`). Minimum positional-arg count is 2 for
   `assertEqual(a, b)`. Dispatch is by basename or path shape, so each analyzer takes plain
-  `(old_text, new_text, shown_path)` and never reaches for git.
+  `(old_text, new_text, shown_path)` and never reaches for git. The `TEST_CHANGE_OK` env hatch
+  (#941) exists because a pre-commit run cannot read the trailer of the commit being created;
+  a `commit-msg`-stage hook could read it and keep the reason in history, but would move the
+  gate off the staged-diff stage the rest of the family shares. Like `GATE_CHANGE_OK` it is
+  ignored under CI; `GITHUB_ACTIONS` counts when set at all (a runner never sets it falsy),
+  while `CI` counts unless `""`, `0`, `false` or `no`, so a local `CI=false` does not disable it.
+  `GATE_CHANGE_OK` still uses a presence check; aligning it is tracked in #981. `is_ci()` is the one seam for both the verdict and the advice.
 - **`check_backlog_ledger.py`** (#123). The risk classes that require a ledger are kept narrow:
   docs, deps and tests-only branches are routine and a ledger for them would be noise nobody
   reads. The author is read from the event payload: once `GITHUB_EVENT_PATH` is set the payload
