@@ -869,6 +869,9 @@ jobs:
           pip install pytest==9.2.0
           python -m pytest tests/test_python_eol_bump.py -q
 
+      - name: Workflow python-version minor-only pins (blueprintx#945)
+        run: bash bin/ci/check_workflow_python_pins.sh && bash tests/test_check_workflow_python_pins.sh
+
   makefile-pairing:
     name: Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)
     runs-on: ubuntu-latest

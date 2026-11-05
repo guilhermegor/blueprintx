@@ -2245,3 +2245,18 @@ rest of the suite.
 - **A review carries forward across a merge of the base** (#698). The patch-id output is
   `<patch-id> <commit-id>`, and unpacking fails loudly on empty output instead of an
   `IndexError`. The `merge` of `main` into the branch conflicts by design.
+- **A thread reply is not a review of the head** (#978). A reviewer's answer to a thread is
+  stored as a `COMMENTED` review with an empty body, attributed to the commit the branch was on
+  when it was posted. `counts_as_review` admits a review only with a non-empty body or an
+  inline comment whose `replyTo` key is present and null, read from the `reviews` query (no
+  extra call per review). The exception is the verdict states: an `APPROVED` or
+  `CHANGES_REQUESTED` review always counts, even with an empty body, and any other state,
+  a missing one included, goes through the body and inline test (fails closed). A `DISMISSED`
+  review is one of those states: with an empty body and no inline root it no longer counts,
+  and one with a body or an inline root is still judged by the code downstream. Each review
+  reads its first 20 comments, with no `pageInfo`. A submitted review that mixes replies
+  and new roots, with 20 replies first, would be read as a reply and fail closed, never
+  open. A reply posted with a non-empty review body still counts, which is the residual
+  open case; the UI reply flow and CodeRabbit reply with an empty body. Body-only ladder reviews and inline-only CodeRabbit reviews still count. Measured
+  on issues 965 and 971: the only review entries on the head were replies, and the gate
+  exited 0.

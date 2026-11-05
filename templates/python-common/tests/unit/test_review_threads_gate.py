@@ -254,6 +254,7 @@ def _review(str_login: str, str_oid: str = _HEAD) -> dict:
     return {
         "author": {"login": str_login, "__typename": "Bot"},
         "commit": {"oid": str_oid},
+        "body": "Reviewed.",
     }
 
 
@@ -276,6 +277,60 @@ def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:
         An issue comment shaped like the GraphQL response.
     """
     return {"author": {"login": str_login}, "body": str_body, "createdAt": str_created}
+
+
+_NO_BODY = {"body": "", "state": "COMMENTED"}
+_REPLY_NODE = {"replyTo": {"id": "thread-root"}}
+_INLINE_NODE = {"replyTo": None}
+
+
+@pytest.mark.parametrize(
+    ("dict_shape", "bool_satisfies"),
+    [
+        ({**_NO_BODY, "comments": {"nodes": [_REPLY_NODE]}}, False),
+        ({**_NO_BODY, "comments": {"nodes": []}}, False),
+        ({**_NO_BODY, "body": "   ", "comments": {"nodes": [_REPLY_NODE]}}, False),
+        ({**_NO_BODY, "comments": {"nodes": [{}]}}, False),
+        ({**_NO_BODY, "state": "APPROVED"}, True),
+        ({**_NO_BODY, "state": "CHANGES_REQUESTED"}, True),
+        ({**_NO_BODY, "state": "DISMISSED"}, False),
+        ({"body": "", "state": "COMMENTED"}, False),
+        ({"comments": {"nodes": [_REPLY_NODE]}, "body": ""}, False),
+        ({**_NO_BODY, "body": "Findings: none."}, True),
+        ({**_NO_BODY, "comments": {"nodes": [_INLINE_NODE]}}, True),
+        ({**_NO_BODY, "comments": {"nodes": [_REPLY_NODE, _INLINE_NODE]}}, True),
+    ],
+    ids=[
+        "reply-only",
+        "empty",
+        "blank-body",
+        "no-replyto-key",
+        "empty-approval",
+        "empty-changes",
+        "dismissed-empty",
+        "no-comments-key",
+        "missing-state-reply",
+        "body-only",
+        "inline-only",
+        "reply-plus-inline",
+    ],
+)
+def test_a_head_review_counts_only_with_a_body_or_a_non_reply_comment(
+    dict_shape: dict, bool_satisfies: bool
+) -> None:
+    """A thread reply is not a review of the head; a body or an inline comment is."""
+    cls_gate = _load_gate()
+    list_reviews = [{**_review("coderabbitai[bot]"), **dict_shape}]
+    str_problem = cls_gate.find_missing_review_problem(
+        list_reviews, _ROSTER, "some-human", str_head_oid=_HEAD
+    )
+
+    assert (str_problem is None) is bool_satisfies
+
+
+def test_the_review_query_asks_for_the_reply_marker() -> None:
+    """The reply filter reads ``replyTo``; the query text must still request it."""
+    assert "comments(first:20) { nodes { replyTo { id } } }" in _load_gate()._QUERY
 
 
 def test_a_pr_nobody_reviewed_fails() -> None:
@@ -2187,6 +2242,26 @@ def test_review_on_the_second_page_reaches_the_body_check(monkeypatch: pytest.Mo
     monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: list_pages.pop(0))
     dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
     assert len(cls_gate._unanswered_bodies(dict_pr, [], _BODY_ROSTER)) == 1
+
+
+def test_an_inline_only_review_survives_the_fetch_path_and_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A raw inline-only review keeps ``comments`` through ``fetch_pull_request``."""
+    cls_gate = _load_gate()
+    dict_raw = {
+        **_review("coderabbitai[bot]"),
+        "body": "",
+        "state": "COMMENTED",
+        "comments": {"nodes": [_INLINE_NODE]},
+    }
+    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: _pr_page([dict_raw], False))
+    dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+    str_problem = cls_gate.find_missing_review_problem(
+        dict_pr["reviews"]["nodes"], _ROSTER, "some-human", str_head_oid=_HEAD
+    )
+
+    assert str_problem is None
 
 
 _ANSWER_SHAPES = {

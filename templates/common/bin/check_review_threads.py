@@ -140,7 +140,10 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
         states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]
       ) {
         pageInfo { hasNextPage endCursor }
-        nodes { author { login __typename } commit { oid } state body submittedAt }
+        nodes {
+          author { login __typename } commit { oid } state body submittedAt
+          comments(first:20) { nodes { replyTo { id } } }
+        }
       }
       commits(last:1) { nodes { commit { committedDate } } }
       allCommits: commits(first:100) {
@@ -1154,6 +1157,21 @@ def _notice_declares_review(
     )
 
 
+def counts_as_review(dict_review: dict) -> bool:
+    """Return whether a submitted review is a review of the code rather than a thread reply.
+
+    An ``APPROVED`` or ``CHANGES_REQUESTED`` review is a verdict and always counts. Any other
+    state, a missing one included, counts when its body is non-empty or it owns an inline
+    comment whose ``replyTo`` is explicitly null.
+    """
+    if dict_review.get("state") in {"APPROVED", "CHANGES_REQUESTED"}:
+        return True
+    return bool((dict_review.get("body") or "").strip()) or any(
+        "replyTo" in dict_comment and dict_comment["replyTo"] is None
+        for dict_comment in (dict_review.get("comments") or {}).get("nodes") or []
+    )
+
+
 def check_missing_review(  # noqa: PLR0913
     list_reviews: list[dict],
     set_reviewers: set[str],
@@ -1208,6 +1226,7 @@ def check_missing_review(  # noqa: PLR0913
     if normalise_login(str_pr_author) in set_roster:
         return None, ""
 
+    list_reviews = [d for d in list_reviews if counts_as_review(d)]
     if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
         return None, ""
 
