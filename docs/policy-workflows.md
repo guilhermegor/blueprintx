@@ -44,7 +44,7 @@ dependency bump has no issue behind it. `release/` keeps its branch-rule exempti
 | `TRACKER` | Passes when |
 |-----------|-------------|
 | `github` (default) | `CLOSING_COUNT` (GraphQL `closingIssuesReferences`) is above 0, or the branch number resolves to an `OPEN` issue via `gh issue view`. |
-| `linear` | A team key such as `ABC-123` appears in the branch or title (case-insensitive; a leading `<user>/` is ignored; acronyms such as `UTF-8`, `SHA-256` and `node-20` are not keys); Linear's GitHub integration links on that key. Use `regex` with your team key for a stricter match. |
+| `linear` | A team key such as `ABC-123` appears in the branch or title (case-insensitive; a leading `<user>/` is ignored; acronyms such as `UTF-8`, `SHA-256` and `node-20` are not keys); Linear's GitHub integration links on that key. Set the repository variable `PR_LINEAR_TEAM_KEYS` (comma-separated, e.g. `ENG,OPS`) to accept only your team keys; without it any `word-N` token outside the acronym list passes, so set it. The branch number must resolve to an issue, never a PR. `closingIssuesReferences` is empty for stacked PRs (base is not the default branch), which then rely on the branch number. An API read failure fails the step as an error, never as a policy violation. The script needs bash 4 (`${var,,}`). |
 | `regex` | `TRACKER_REGEX` matches the branch or title. |
 
 The workflow reads the tracker from the repository variables `PR_TRACKER` and `PR_TRACKER_REGEX`. The

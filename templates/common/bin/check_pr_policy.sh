@@ -40,7 +40,12 @@ check_assignee() {
 }
 
 linear_key_present() {
-	local str_text="${1#*/} $2" str_key
+	local str_text="${1#*/} $2" str_key str_keys="${LINEAR_TEAM_KEYS:-}"
+	if [[ -n "$str_keys" ]]; then
+		str_keys="${str_keys,,}"
+		[[ "${str_text,,}" =~ (^|[^[:alnum:]])(${str_keys//,/|})-[0-9]+ ]]
+		return
+	fi
 	while read -r str_key; do
 		[[ "${str_key,,}" =~ ^(utf|sha|iso|pep|es|http|node|py|rfc|md|ipv)$ ]] || return 0
 	done < <(grep -oiE '(^|[^[:alnum:]])[a-z][a-z0-9]*-[0-9]+' <<<"$str_text" | sed -E 's/^[^[:alnum:]]//; s/-[0-9]+$//')
@@ -52,10 +57,10 @@ check_linked_issue() {
 	[[ "$str_branch" =~ ^(dependabot|renovate)/ ]] && return 0
 	case "${str_tracker,,}" in
 		github)
-			((int_closing > 0)) && return 0
+			[[ "$int_closing" =~ ^[0-9]+$ ]] && ((int_closing > 0)) && return 0
 			if [[ "$str_branch" =~ ^[a-z]+/([0-9]+)(-|$) ]]; then
 				str_num="${BASH_REMATCH[1]}"
-				[[ "$(gh issue view "$str_num" --json state --jq .state 2>/dev/null)" == "OPEN" ]] && return 0
+				[[ "$(gh issue view "$str_num" --json state,url --jq '.state + " " + .url' 2>/dev/null)" =~ ^OPEN\ .*/issues/ ]] && return 0
 			fi
 			echo "PR closes no issue and branch '$str_branch' resolves to no open issue." >&2
 			return 1
