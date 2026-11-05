@@ -219,13 +219,15 @@ scaffold_open_release_issue() {
 	str_slug="$(scaffold_repo_slug)"
 	str_manual="$(printf "awk 'NR==1&&/^---\$/{f=1;next} f&&/^---\$/{f=0;next} !f' %q | gh issue create --repo %q --title '${SCAFFOLD_RELEASE_ISSUE_TITLE}' --label state:blocked --body-file -" "$str_tpl" "$str_slug")"
 	str_existing="$(gh api --paginate "repos/${str_slug}/issues?state=all&per_page=100" \
-		--jq '.[] | select((has("pull_request") | not) and .title=="'"${SCAFFOLD_RELEASE_ISSUE_TITLE}"'") | .html_url' 2>/dev/null)" || {
+		--jq '.[] | select((has("pull_request") | not) and .title=="'"${SCAFFOLD_RELEASE_ISSUE_TITLE}"'") | "\(.state) \(.html_url)"' 2>/dev/null)" || {
 		print_status "warning" "Could not check for an existing Cut 1.0.0 issue on ${str_slug}; not creating one. Open it by hand: ${str_manual}"
 		return 0
 	}
 	if [ -n "$str_existing" ]; then
 		print_status "info" "A 'Cut 1.0.0' issue already exists on ${str_slug} - skipping"
-		scaffold_release_issue_card "$str_slug" "$(head -n1 <<<"$str_existing")"
+		case "$str_existing" in
+		open\ *) scaffold_release_issue_card "$str_slug" "$(head -n1 <<<"${str_existing#open }")" ;;
+		esac
 		return 0
 	fi
 	str_body="$(awk 'NR==1&&/^---$/{f=1;next} f&&/^---$/{f=0;next} !f' "$str_tpl")"

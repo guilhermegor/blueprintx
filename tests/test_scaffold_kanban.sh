@@ -48,7 +48,7 @@ case "$1 $2" in
 "api graphql") cat >>"$GH_LOG.stdin" ;;
 "api --paginate")
     [ -z "${GH_LOOKUP_FAIL:-}" ] || exit 1
-    [ -z "${GH_ISSUE_EXISTS:-}" ] || echo "https://github.com/octo/widget/issues/9" ;;
+    [ -z "${GH_ISSUE_EXISTS:-}" ] || echo "${GH_ISSUE_STATE:-open} https://github.com/octo/widget/issues/9" ;;
 "issue create")
     [ -z "${GH_ISSUE_FAIL:-}" ] || exit 1
     [[ -z "${GH_LABEL_FAIL:-}" || "$*" != *--label* ]] || { echo "could not add label" >&2; exit 1; }
@@ -151,6 +151,13 @@ test_existing_release_issue_still_gets_its_card() {
         'GH_STATUS_OPTIONS=PVTSSO_b|Blocked' >/dev/null
     expect_log "existing card" "issue create" absent
     expect_log "existing card" "project item-add 7 --owner octo --url https://github.com/octo/widget/issues/9" present
+}
+
+test_closed_release_issue_is_not_re_carded() {
+    run_release_issue yes GH_ISSUE_EXISTS=1 GH_ISSUE_STATE=closed \
+        'GH_PROJECTS={"projects":[{"title":"widget kanban","number":7}]}' 'GH_STATUS_OPTIONS=PVTSSO_b|Blocked' >/dev/null
+    expect_log "closed issue" "project item-add" absent
+    expect_log "closed issue" "issue create" absent
 }
 
 test_card_failure_warns_when_a_board_exists() {
@@ -423,6 +430,7 @@ main() {
     test_release_issue_is_idempotent
     test_release_issue_failure_warns_and_exits_zero
     test_release_issue_without_label_when_label_missing
+    test_closed_release_issue_is_not_re_carded
     test_release_issue_lookup_failure_never_creates
     test_existing_release_issue_still_gets_its_card
     test_card_failure_warns_when_a_board_exists
