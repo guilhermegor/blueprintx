@@ -10,6 +10,7 @@ Every shape here was measured on a real PR (blueprintx#170), including the one t
 the gate: 14 threads all reading ``isResolved: true`` while 11 held no author reply at all.
 """
 
+from collections.abc import Callable
 import functools
 import importlib.util
 import json
@@ -686,11 +687,11 @@ def test_deleting_the_roster_is_not_a_silent_opt_out(
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
 
-    with pytest.raises(RuntimeError, match="disables this gate"):
+    with pytest.raises(RuntimeError, match="does not opt out"):
         cls_gate.load_roster(tmp_path)
 
 
-def test_a_roster_never_adopted_is_still_a_silent_no_op(
+def test_a_roster_absent_on_the_default_branch_is_not_a_deletion(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The positive control for the test above — and the reason it needs one.
@@ -711,6 +712,224 @@ def test_a_roster_never_adopted_is_still_a_silent_no_op(
     monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: False)
 
     assert cls_gate.load_roster(tmp_path) == {}
+
+
+def test_a_deleted_roster_reports_a_json_verdict_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A roster deleted in the PR yields the ``--json`` missing_roster verdict.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir standing in for a checkout with no roster.
+    monkeypatch : pytest.MonkeyPatch
+        Stubs the default-branch probe and the PR environment.
+    capsys : pytest.CaptureFixture[str]
+        Captures the printed verdict.
+    """
+    cls_gate = _load_gate()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    monkeypatch.setattr(cls_gate, "_roster_exists_on_default_branch", lambda _p: True)
+
+    cls_gate.main(["--json"])
+
+    assert '"reason": "missing_roster"' in capsys.readouterr().out
+
+
+def _serve_base(str_base_roster: str | None, list_args: list[str]) -> str | None:
+    """Answer the base-ref lookup with ``main`` and every roster read with ``str_base_roster``."""
+    return {".base.ref": "main"}.get(list_args[-1], str_base_roster)
+
+
+def _opt_out_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, str_base_roster: str | None
+) -> ModuleType:
+    """Stage a PR checkout whose roster opts out, with a stubbed base-branch roster.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir used as the working directory.
+    monkeypatch : pytest.MonkeyPatch
+        Sets the gate environment and stubs the REST read of the base roster.
+    str_base_roster : str or None
+        Text the stubbed base read returns; ``None`` simulates an unreadable base.
+
+    Returns
+    -------
+    types.ModuleType
+        The loaded gate module.
+    """
+    cls_gate = _load_gate()
+    (tmp_path / ".review-bots.yaml").write_text("adopted: false\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    monkeypatch.setattr(cls_gate, "_gh_api_text", functools.partial(_serve_base, str_base_roster))
+    return cls_gate
+
+
+def test_opt_out_only_on_the_pr_side_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A PR cannot opt itself out: the base roster must declare it too (blueprintx#952).
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Supplies a base roster that does not opt out.
+    capsys : pytest.CaptureFixture[str]
+        Captures the failing verdict.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
+
+    assert (cls_gate.main([]), "opt-out is refused" in capsys.readouterr().out) == (1, True)
+
+
+def test_opt_out_with_an_unreadable_base_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When the base roster cannot be read, the PR-side opt-out is not honoured.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Makes the base read fail.
+    capsys : pytest.CaptureFixture[str]
+        Captures the failing verdict.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+
+    assert (cls_gate.main([]), "opt-out is refused" in capsys.readouterr().out) == (1, True)
+
+
+def test_opt_out_declared_on_the_base_side_is_accepted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An opt-out present on both the PR and the base branch skips the gate.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Supplies a base roster that opts out.
+    capsys : pytest.CaptureFixture[str]
+        Captures the skip message.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "adopted: false\n")
+
+    assert (cls_gate.main([]), "opted out" in capsys.readouterr().out) == (0, True)
+
+
+def _serve_dot_github_only(str_text: str, list_args: list[str]) -> str | None:
+    """Answer a contents call for the ``.github/`` roster only; 404 (``""``) the rest."""
+    str_dot_github = "repos/o/r/contents/.github/.review-bots.yaml?ref=main"
+    return {".base.ref": "main", str_dot_github: str_text}.get(list_args[-1], "")
+
+
+def _github_dir_only(str_text: str) -> Callable[[list[str]], str | None]:
+    """Return a ``gh api`` stub that serves ``str_text`` solely for the ``.github/`` roster."""
+    return functools.partial(_serve_dot_github_only, str_text)
+
+
+def test_base_opt_out_declared_only_under_dot_github_is_honoured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A TypeScript base keeps its roster at ``.github/``; its opt-out must count (#969)."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "_gh_api_text", _github_dir_only("adopted: false\n"))
+
+    assert cls_gate.base_opted_out("o/r", "1") is True
+
+
+def test_base_roster_at_the_root_wins_over_dot_github(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The root roster is read first, so a root without an opt-out is not overridden."""
+    cls_gate = _load_gate()
+    dict_answers = {
+        ".base.ref": "main",
+        "repos/o/r/contents/.review-bots.yaml?ref=main": "reviewers: []\n",
+        "repos/o/r/contents/.github/.review-bots.yaml?ref=main": "adopted: false\n",
+    }
+    monkeypatch.setattr(
+        cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
+    )
+
+    assert cls_gate.base_opted_out("o/r", "1") is False
+
+
+def test_a_root_read_error_does_not_fall_through_to_dot_github(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a 404 on the root roster moves on; a 5xx/timeout (``None``) fails closed (#955)."""
+    cls_gate = _load_gate()
+    dict_answers = {"repos/o/r/contents/.github/.review-bots.yaml?ref=main": "adopted: false\n"}
+    dict_answers[".base.ref"] = "main"
+    monkeypatch.setattr(
+        cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
+    )
+
+    assert cls_gate.base_opted_out("o/r", "1") is False
+
+
+def test_gh_api_text_reads_a_404_as_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A confirmed 404 is ``""`` so the caller can tell absence from a failed read."""
+    cls_done = subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)\n")
+    monkeypatch.setattr(subprocess, "run", Mock(return_value=cls_done))
+
+    assert _load_gate()._gh_api_text(["x"]) == ""
+
+
+def test_gh_api_text_fails_closed_on_a_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hung ``gh api`` call returns ``None`` instead of hanging the gate."""
+    monkeypatch.setattr(subprocess, "run", Mock(side_effect=subprocess.TimeoutExpired("gh", 20)))
+
+    assert _load_gate()._gh_api_text(["x"]) is None
+
+
+def test_a_refused_opt_out_reports_its_own_json_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A present roster whose opt-out the base does not back is not ``missing_roster``."""
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
+
+    cls_gate.main(["--json"])
+
+    assert '"reason": "opt_out_refused"' in capsys.readouterr().out
+
+
+def test_missing_pyyaml_reports_the_parser_not_the_roster(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Without PyYAML the failure names the parser and does not blame the roster file.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir used as the working directory.
+    monkeypatch : pytest.MonkeyPatch
+        Removes the parser and sets the gate environment.
+    capsys : pytest.CaptureFixture[str]
+        Captures the failure message.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    monkeypatch.setattr(cls_gate, "yaml", None)
+
+    int_status = cls_gate.main([])
+    str_out = capsys.readouterr().out
+
+    assert (int_status, "pip install pyyaml" in str_out, "Copy it" not in str_out) == (
+        1,
+        True,
+        True,
+    )
 
 
 _LIST_OPEN_BUT_ANSWERED = [
@@ -3768,3 +3987,109 @@ def test_dependabot_pushed_head_fails_closed_on_a_timeout(monkeypatch: pytest.Mo
     cls_hang = Mock(side_effect=subprocess.TimeoutExpired("gh", 20))
     monkeypatch.setattr(subprocess, "run", cls_hang)
     assert not _load_gate().dependabot_pushed_head("o/r", "abc")
+
+
+def test_a_malformed_roster_reports_a_verdict_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A roster that is not valid YAML fails closed with a verdict.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the broken PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Stubs the base read and the environment.
+    capsys : pytest.CaptureFixture[str]
+        Captures the verdict.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    (tmp_path / ".review-bots.yaml").write_text("adopted: [unclosed\n", encoding="utf-8")
+
+    assert (cls_gate.main([]), bool(capsys.readouterr().out)) == (1, True)
+
+
+def test_a_malformed_roster_has_its_own_json_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A present but unparsable roster is ``malformed_roster``, never ``missing_roster``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the broken PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Stubs the base read and the environment.
+    capsys : pytest.CaptureFixture[str]
+        Captures the verdict.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    (tmp_path / ".review-bots.yaml").write_text("adopted: [unclosed\n", encoding="utf-8")
+    cls_gate.main(["--json"])
+
+    assert '"reason": "malformed_roster"' in capsys.readouterr().out
+
+
+def test_an_unreadable_roster_reports_a_verdict_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A roster that cannot be read fails closed with a verdict.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway dir holding the PR-side roster.
+    monkeypatch : pytest.MonkeyPatch
+        Makes the roster read raise ``OSError``.
+    capsys : pytest.CaptureFixture[str]
+        Captures the verdict.
+    """
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    monkeypatch.setattr(cls_gate, "roster_opted_out", Mock(side_effect=PermissionError("no")))
+
+    assert (cls_gate.main([]), bool(capsys.readouterr().out)) == (1, True)
+
+
+def test_a_rerun_with_a_stale_base_ref_env_cannot_bypass_the_base_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The base comes from the API, so a re-run's stale ``GITHUB_BASE_REF`` is ignored (#955)."""
+    cls_gate = _load_gate()
+    monkeypatch.setenv("GITHUB_BASE_REF", "adopted-branch")
+    dict_answers = {
+        ".base.ref": "main",
+        "repos/o/r/contents/.review-bots.yaml?ref=adopted-branch": "adopted: false\n",
+        "repos/o/r/contents/.review-bots.yaml?ref=main": "reviewers: []\n",
+    }
+    monkeypatch.setattr(
+        cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
+    )
+
+    assert cls_gate.base_opted_out("o/r", "1") is False
+
+
+def test_an_invalid_yaml_date_in_the_base_roster_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``ValueError`` from the parser is a failed read, not a traceback (#955)."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(
+        cls_gate, "_gh_api_text", functools.partial(_serve_base, "d: 2024-13-45\n")
+    )
+
+    assert cls_gate.base_opted_out("o/r", "1") is False
+
+
+def test_a_roster_with_no_threads_member_reports_a_json_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A roster nobody can satisfy is a ``--json`` verdict, not a traceback (#955)."""
+    cls_gate = _load_gate()
+    (tmp_path / ".review-bots.yaml").write_text(
+        "reviewers:\n  - login: a\n    posts: status\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+
+    assert (cls_gate.main(["--json"]), '"status": "fail"' in capsys.readouterr().out) == (1, True)

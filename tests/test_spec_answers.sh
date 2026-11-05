@@ -619,6 +619,86 @@ test_ventoy_usb_spec_reaches_the_generated_conf() {
     fi
 }
 
+test_project_root_tilde_expands_to_home() {
+    local file out int_rc str_home="$WORK_DIR/tilde-home"
+    mkdir -p "$str_home" "$WORK_DIR/tilde-cwd"
+    file="$(write_spec tilde-root lib-minimal "project_root=~/tilde-x")"
+    out="$(cd "$WORK_DIR/tilde-cwd" && HOME="$str_home" TMPDIR="$WORK_DIR" \
+        bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null)"
+    int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [ -d "$str_home/tilde-x/spec-probe" ] && [ ! -e "$WORK_DIR/tilde-cwd/~" ]; then
+        pass "a leading ~ in project_root expands to \$HOME and no literal '~' directory is made"
+    else
+        fail "project_root tilde" "rc=$int_rc, literal-tilde=$([ -e "$WORK_DIR/tilde-cwd/~" ] && echo yes || echo no): ${out: -300}"
+    fi
+}
+
+test_project_root_naming_the_project_is_refused() {
+    local file root out int_rc
+    root="$WORK_DIR/nested-root/spec-probe"
+    file="$(write_spec nested-root lib-minimal "project_root=$root")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'project_root'"*"parent directory"* && ! -e "$root" ]]; then
+        pass "a project_root whose last component is the project name is refused, naming the key"
+    else
+        fail "project_root is project dir" "rc=$int_rc, root exists or message missing: ${out: -300}"
+    fi
+}
+
+test_project_root_alternate_spellings_of_the_project_dir_are_refused() {
+    local file root out int_rc
+    root="$WORK_DIR/spelling-root/spec-probe"
+    mkdir -p "$root"
+    file="$(write_spec spelling-root lib-minimal "project_root=$root/./")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'project_root'"*"parent directory"* && ! -e "$root/spec-probe" ]]; then
+        pass "a project_root spelled with a trailing /./ is still refused when it is the project dir"
+    else
+        fail "project_root alternate spelling" "rc=$int_rc, nested dir exists or message missing: ${out: -300}"
+    fi
+}
+
+test_project_root_alternate_spellings_are_refused_when_the_dir_does_not_exist() {
+    local file root out int_rc
+    root="$WORK_DIR/spelling-missing/spec-probe"
+    file="$(write_spec spelling-missing lib-minimal "project_root=$root/.")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'project_root'"*"parent directory"* && ! -e "$root" ]]; then
+        pass "a trailing /. on a project_root that does not exist yet is refused too"
+    else
+        fail "project_root alternate spelling, missing dir" "rc=$int_rc, dir created or message missing: ${out: -300}"
+    fi
+}
+
+test_default_project_root_inside_a_dir_named_like_the_project_is_allowed() {
+    local file out int_rc cwd="$WORK_DIR/default-cwd/spec-probe"
+    mkdir -p "$cwd"
+    file="$(write_spec default-root lib-minimal)"
+    out="$(cd "$cwd" && TMPDIR="$WORK_DIR" bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null)"
+    int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [ -d "$cwd/spec-probe" ] && [[ "$out" != *"'project_root'"* ]]; then
+        pass "an unset project_root defaults to \$PWD without the project-name refusal, even inside a dir named like the project"
+    else
+        fail "default project_root" "rc=$int_rc: ${out: -300}"
+    fi
+}
+
+test_explicit_empty_project_root_defaults_to_pwd() {
+    local file out int_rc cwd="$WORK_DIR/empty-root-cwd"
+    mkdir -p "$cwd"
+    file="$(write_spec empty-root lib-minimal "project_root=")"
+    out="$(cd "$cwd" && TMPDIR="$WORK_DIR" bash "$REPO_ROOT/bin/blueprintx.sh" new --spec "$file" 2>&1 </dev/null)"
+    int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [ -d "$cwd/spec-probe" ]; then
+        pass "an explicit empty project_root behaves as unset and scaffolds under \$PWD"
+    else
+        fail "empty project_root" "rc=$int_rc: ${out: -300}"
+    fi
+}
+
 test_an_undefined_test_name_fails_the_runner() {
     local file="$WORK_DIR/undefined-probe.sh" out int_rc
     { sed '/^main$/d' "${BASH_SOURCE[0]}"
@@ -686,6 +766,12 @@ main() {
     test_validate_answers_reports_every_bad_key
     test_bad_yn_stops_before_anything_is_created
     test_unmapped_skeleton_is_refused_before_creating_anything
+    test_project_root_tilde_expands_to_home
+    test_project_root_naming_the_project_is_refused
+    test_project_root_alternate_spellings_of_the_project_dir_are_refused
+    test_project_root_alternate_spellings_are_refused_when_the_dir_does_not_exist
+    test_default_project_root_inside_a_dir_named_like_the_project_is_allowed
+    test_explicit_empty_project_root_defaults_to_pwd
     test_api_service_asks_the_same_prompts_as_the_ddd_tiers
     test_api_service_storage_answer_reaches_the_storage_prompt
     test_dev_clean_uses_a_temp_root_and_removes_it

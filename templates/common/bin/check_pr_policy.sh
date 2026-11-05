@@ -42,6 +42,8 @@ check_assignee() {
 linear_key_present() {
 	local str_text="${1#*/} $2" str_key str_keys="${LINEAR_TEAM_KEYS:-}"
 	if [[ -n "$str_keys" ]]; then
+		str_keys="${str_keys//[[:space:]]/}"
+		[[ "$str_keys" =~ ^[A-Za-z][A-Za-z0-9]*(,[A-Za-z][A-Za-z0-9]*)*$ ]] || { echo "LINEAR_TEAM_KEYS must be comma-separated alphanumeric keys." >&2; return 2; }
 		str_keys="${str_keys,,}"
 		[[ "${str_text,,}" =~ (^|[^[:alnum:]])(${str_keys//,/|})-[0-9]+ ]]
 		return
@@ -53,14 +55,18 @@ linear_key_present() {
 }
 
 check_linked_issue() {
-	local str_branch="$1" str_title="$2" str_tracker="${3:-github}" int_closing="${4:-0}" str_num str_re=
+	local str_branch="$1" str_title="$2" str_tracker="${3:-github}" int_closing="${4:-0}" str_num str_re="" str_out=""
 	[[ "$str_branch" =~ ^(dependabot|renovate)/ ]] && return 0
 	case "${str_tracker,,}" in
 		github)
 			[[ "$int_closing" =~ ^[0-9]+$ ]] && ((int_closing > 0)) && return 0
 			if [[ "$str_branch" =~ ^[a-z]+/([0-9]+)(-|$) ]]; then
 				str_num="${BASH_REMATCH[1]}"
-				[[ "$(gh issue view "$str_num" --json state,url --jq '.state + " " + .url' 2>/dev/null)" =~ ^OPEN\ .*/issues/ ]] && return 0
+				str_out=$(gh issue view "$str_num" --json state,url --jq '.state + " " + .url' 2>&1) || {
+					[[ "$str_out" =~ (Could\ not\ resolve|not\ found|404) ]] || { echo "Could not read issue $str_num from the API (not a policy violation): $str_out" >&2; return 2; }
+					str_out=
+				}
+				[[ "$str_out" =~ ^OPEN\ .*/issues/ ]] && return 0
 			fi
 			echo "PR closes no issue and branch '$str_branch' resolves to no open issue." >&2
 			return 1
