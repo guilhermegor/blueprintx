@@ -866,7 +866,7 @@ jobs:
       - name: Python floor drift gate (blueprintx#951)
         run: |
           python bin/python_eol_bump.py --check
-          pip install pytest
+          pip install pytest==9.2.0
           python -m pytest tests/test_python_eol_bump.py -q
 
   makefile-pairing:

@@ -21,7 +21,9 @@ STR_API = "https://endoflife.date/api/v1/products/python/"
 STR_VERSION_FILE = "templates/python-common/.python-version"
 STR_TESTS_YAML = "templates/python-common/.github/workflows/tests.yaml"
 
-RE_CYCLE = re.compile(r"^3\.(\d+)(?:\.\d+)?$")
+INT_MATRIX_DELAY_DAYS = 180
+
+RE_CYCLE = re.compile(r"^3\.(\d+)$")
 
 LIST_RULES = [
     ("templates/*/pyproject.toml", r'(python = ">=)\d+\.\d+(,<4\.0")', "{floor}"),
@@ -56,7 +58,30 @@ def cycle_key(str_cycle: str) -> int:
     int
         The minor number.
     """
-    return int(RE_CYCLE.match(str_cycle).group(1))
+    re_match = RE_CYCLE.match(str_cycle)
+    if re_match is None:
+        raise ValueError(f"not a 3.N cycle: {str_cycle!r}")
+    return int(re_match.group(1))
+
+
+def settled(dict_rel: dict, str_today: str) -> bool:
+    """Tell whether a release is old enough to enter the matrix.
+
+    Parameters
+    ----------
+    dict_rel : dict
+        One release record with a string ``releaseDate``.
+    str_today : str
+        ISO date.
+
+    Returns
+    -------
+    bool
+        True once ``INT_MATRIX_DELAY_DAYS`` have passed since the release.
+    """
+    dt_release = datetime.date.fromisoformat(dict_rel["releaseDate"])
+    dt_today = datetime.date.fromisoformat(str_today)
+    return dt_release + datetime.timedelta(days=INT_MATRIX_DELAY_DAYS) <= dt_today
 
 
 def derive(dict_payload: dict, str_today: str = "9999-12-31") -> tuple:
@@ -87,10 +112,12 @@ def derive(dict_payload: dict, str_today: str = "9999-12-31") -> tuple:
         ]
         if not all(isinstance(dict_rel["isMaintained"], bool) for dict_rel in list_releases):
             raise ValueError("isMaintained is not a boolean on every Python 3 cycle")
+        if not all(isinstance(dict_rel["releaseDate"], str) for dict_rel in list_releases):
+            raise ValueError("releaseDate is not a string on every Python 3 cycle")
         list_cycles = [
             str(dict_rel["name"])
             for dict_rel in list_releases
-            if dict_rel["isMaintained"] and str(dict_rel.get("releaseDate", "")) <= str_today
+            if dict_rel["isMaintained"] and settled(dict_rel, str_today)
         ]
     except (KeyError, TypeError, AttributeError) as cls_err:
         raise ValueError(f"malformed endoflife.date payload: {cls_err!r}") from cls_err
@@ -178,7 +205,10 @@ def fetch(str_fixture: str) -> dict:
     """
     if str_fixture:
         return json.loads(pathlib.Path(str_fixture).read_text(encoding="utf-8"))
-    with urllib.request.urlopen(STR_API, timeout=30) as cls_resp:  # noqa: S310
+    cls_request = urllib.request.Request(  # noqa: S310
+        STR_API, headers={"User-Agent": "blueprintx-python-eol-bump"}
+    )
+    with urllib.request.urlopen(cls_request, timeout=30) as cls_resp:  # noqa: S310
         if cls_resp.status != 200:
             raise ValueError(f"endoflife.date returned HTTP {cls_resp.status}")
         return json.loads(cls_resp.read())
@@ -238,23 +268,24 @@ def run_check(path_root: pathlib.Path) -> int:
     int
         0 when in sync, 1 on drift or when a rule cannot be verified.
     """
-    str_floor = read_floor(path_root)
-    str_yaml = (path_root / STR_TESTS_YAML).read_text(encoding="utf-8")
-    re_found = re.search(r"python-version: \[([^\]]*)\]", str_yaml)
-    list_matrix = re.findall(r"\d+\.\d+", re_found.group(1)) if re_found else []
     try:
+        str_floor = read_floor(path_root)
+        str_yaml = (path_root / STR_TESTS_YAML).read_text(encoding="utf-8")
+        re_found = re.search(r"python-version: \[([^\]]*)\]", str_yaml)
+        list_matrix = re.findall(r"\d+\.\d+", re_found.group(1)) if re_found else []
         str_problem = matrix_problem(str_floor, list_matrix)
         list_drift = [str_problem] if str_problem else []
         list_drift += sync(path_root, str_floor, list_matrix, bool_write=False)
-    except ValueError as cls_err:
-        list_drift = [f"cannot verify: {cls_err}"]
+    except (ValueError, OSError) as cls_err:
+        print(f"drift gate cannot verify: {cls_err}")
+        return 1
     for str_item in list_drift:
         print(f"drift ({str_floor}): {str_item}")
     return 1 if list_drift else 0
 
 
-def run_bump(path_root: pathlib.Path, str_fixture: str) -> int:
-    """Derive from the API and rewrite the templates, never lowering a maintained floor.
+def run_bump(path_root: pathlib.Path, str_fixture: str, str_today: str = "") -> int:
+    """Derive from the API and rewrite the templates, never lowering the floor.
 
     Parameters
     ----------
@@ -262,6 +293,8 @@ def run_bump(path_root: pathlib.Path, str_fixture: str) -> int:
         Repository root.
     str_fixture : str
         Fixture path, or empty to call the API.
+    str_today : str
+        ISO date for the settling delay; empty means today.
 
     Returns
     -------
@@ -269,9 +302,13 @@ def run_bump(path_root: pathlib.Path, str_fixture: str) -> int:
         0 on success (changed or not), 1 on any API, data or rule failure.
     """
     try:
-        str_floor, list_matrix = derive(fetch(str_fixture), datetime.date.today().isoformat())
-        if cycle_key(str_floor) < cycle_key(read_floor(path_root)):
-            raise ValueError(f"derived floor {str_floor} is below the current floor")
+        str_derived, list_derived = derive(
+            fetch(str_fixture), str_today or datetime.date.today().isoformat()
+        )
+        str_floor = max(str_derived, read_floor(path_root), key=cycle_key)
+        list_matrix = [str_c for str_c in list_derived if cycle_key(str_c) >= cycle_key(str_floor)]
+        if not list_matrix:
+            raise ValueError(f"no settled cycle at or above the floor {str_floor}")
         sync(path_root, str_floor, list_matrix, bool_write=False)
     except (ValueError, OSError, http.client.HTTPException) as cls_err:
         print(f"fail closed, nothing changed: {cls_err}")

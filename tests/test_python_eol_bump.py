@@ -18,13 +18,19 @@ def _payload(dict_maintained: dict) -> dict:
     return {
         "result": {
             "releases": [
-                {"name": str_name, "isMaintained": bool_m}
+                {
+                    "name": str_name,
+                    "isMaintained": bool_m,
+                    "releaseDate": DICT_DATES.get(str_name, "2020-01-01"),
+                }
                 for str_name, bool_m in dict_maintained.items()
             ]
         }
     }
 
 
+STR_LATE = "2028-01-01"
+DICT_DATES = {"3.15": "2026-10-01", "3.16": "2027-04-01"}
 DICT_TODAY = {"3.15": True, "3.14": True, "3.13": True, "3.12": True, "3.11": True, "3.10": False}
 
 
@@ -62,10 +68,14 @@ def _write_fixture(path_dir: Path, dict_payload: dict) -> str:
 
 
 def test_derive_floor_is_lowest_maintained_cycle() -> None:
-    assert mod_bump.derive(_payload(DICT_TODAY)) == (
+    assert mod_bump.derive(_payload(DICT_TODAY), "2027-06-01") == (
         "3.11",
         ["3.11", "3.12", "3.13", "3.14", "3.15"],
     )
+
+
+def test_derive_holds_a_new_cycle_until_the_delay_passes() -> None:
+    assert mod_bump.derive(_payload(DICT_TODAY), "2026-11-04")[1][-1] == "3.14"
 
 
 def test_derive_empty_payload_raises() -> None:
@@ -80,14 +90,14 @@ def test_derive_malformed_payload_raises() -> None:
 
 def test_bump_no_change_when_in_sync(path_tree: Path, tmp_path: Path) -> None:
     str_fixture = _write_fixture(tmp_path, _payload(DICT_TODAY))
-    assert mod_bump.run_bump(path_tree, str_fixture) == 0
+    assert mod_bump.run_bump(path_tree, str_fixture, STR_LATE) == 0
     assert mod_bump.run_check(path_tree) == 0
 
 
 def test_bump_raises_floor_when_cycle_reaches_eol(path_tree: Path, tmp_path: Path) -> None:
     dict_next = {**DICT_TODAY, "3.11": False, "3.16": True}
     str_fixture = _write_fixture(tmp_path, _payload(dict_next))
-    assert mod_bump.run_bump(path_tree, str_fixture) == 0
+    assert mod_bump.run_bump(path_tree, str_fixture, STR_LATE) == 0
     assert (path_tree / mod_bump.STR_VERSION_FILE).read_text().strip() == "3.12"
     str_yaml = (path_tree / mod_bump.STR_TESTS_YAML).read_text()
     assert '["3.12", "3.13", "3.14", "3.15", "3.16"]' in str_yaml
@@ -102,22 +112,29 @@ def test_bump_raises_floor_when_cycle_reaches_eol(path_tree: Path, tmp_path: Pat
 
 def test_bump_new_release_extends_matrix(path_tree: Path, tmp_path: Path) -> None:
     str_fixture = _write_fixture(tmp_path, _payload({**DICT_TODAY, "3.16": True}))
-    assert mod_bump.run_bump(path_tree, str_fixture) == 0
+    assert mod_bump.run_bump(path_tree, str_fixture, STR_LATE) == 0
     assert '"3.15", "3.16"]' in (path_tree / mod_bump.STR_TESTS_YAML).read_text()
 
 
 def test_bump_malformed_data_changes_nothing_and_fails(path_tree: Path, tmp_path: Path) -> None:
     str_fixture = _write_fixture(tmp_path, {"result": {}})
     str_before = (path_tree / mod_bump.STR_TESTS_YAML).read_text()
-    assert mod_bump.run_bump(path_tree, str_fixture) == 1
+    assert mod_bump.run_bump(path_tree, str_fixture, STR_LATE) == 1
     assert (path_tree / mod_bump.STR_TESTS_YAML).read_text() == str_before
 
 
-def test_bump_refuses_to_lower_floor(path_tree: Path, tmp_path: Path) -> None:
-    (path_tree / mod_bump.STR_VERSION_FILE).write_text("3.13\n")
-    str_fixture = _write_fixture(tmp_path, _payload(DICT_TODAY))
-    assert mod_bump.run_bump(path_tree, str_fixture) == 1
-    assert (path_tree / mod_bump.STR_VERSION_FILE).read_text().strip() == "3.13"
+def test_bump_keeps_a_deliberately_higher_floor_and_still_extends_matrix(
+    path_tree: Path, tmp_path: Path
+) -> None:
+    path_version = path_tree / mod_bump.STR_VERSION_FILE
+    path_version.write_text("3.13\n")
+    str_fixture = _write_fixture(tmp_path, _payload({**DICT_TODAY, "3.16": True}))
+    assert mod_bump.run_bump(path_tree, str_fixture, STR_LATE) == 0
+    assert path_version.read_text().strip() == "3.13"
+    assert '["3.13", "3.14", "3.15", "3.16"]' in (
+        path_tree / mod_bump.STR_TESTS_YAML
+    ).read_text()
+    assert mod_bump.run_check(path_tree) == 0
 
 
 def test_check_detects_drift(path_tree: Path) -> None:
@@ -139,6 +156,13 @@ def test_derive_skips_cycle_released_in_the_future() -> None:
     assert mod_bump.derive(dict_pre, "2026-11-04")[1][-1] == "3.14"
 
 
+def test_derive_null_release_date_raises() -> None:
+    dict_bad = _payload(DICT_TODAY)
+    dict_bad["result"]["releases"][1]["releaseDate"] = None
+    with pytest.raises(ValueError):
+        mod_bump.derive(dict_bad)
+
+
 def test_check_fails_when_a_rule_matches_nothing(path_tree: Path) -> None:
     path_toml = path_tree / "templates/lib-minimal/pyproject.toml"
     path_toml.write_text(path_toml.read_text().replace(",<4.0", ",<5.0"))
@@ -154,3 +178,13 @@ def test_check_fails_on_matrix_gap(path_tree: Path) -> None:
 def test_check_accepts_full_version_in_floor_file(path_tree: Path) -> None:
     (path_tree / mod_bump.STR_VERSION_FILE).write_text("3.11.4\n")
     assert mod_bump.run_check(path_tree) == 0
+
+
+def test_check_reports_a_malformed_floor_file_instead_of_crashing(path_tree: Path) -> None:
+    (path_tree / mod_bump.STR_VERSION_FILE).write_text("3\n")
+    assert mod_bump.run_check(path_tree) == 1
+
+
+def test_check_reports_a_missing_floor_file_instead_of_crashing(path_tree: Path) -> None:
+    (path_tree / mod_bump.STR_VERSION_FILE).unlink()
+    assert mod_bump.run_check(path_tree) == 1

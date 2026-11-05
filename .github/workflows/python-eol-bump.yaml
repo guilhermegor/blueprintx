@@ -12,6 +12,10 @@ permissions:
 env:
   STR_BRANCH: chore/951-python-floor-sync
 
+concurrency:
+  group: python-eol-bump
+  cancel-in-progress: false
+
 jobs:
   bump:
     runs-on: ubuntu-latest
@@ -26,7 +30,9 @@ jobs:
           python-version: "3.12"
 
       - name: Derive floor and matrix from endoflife.date
-        run: python bin/python_eol_bump.py
+        run: |
+          cp templates/python-common/.python-version "$RUNNER_TEMP/floor-before"
+          python bin/python_eol_bump.py
 
       - name: Open a pull request when anything changed
         env:
@@ -44,9 +50,13 @@ jobs:
           str_floor="$(tr -d '\n' < templates/python-common/.python-version)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$str_floor" = "$(tr -d '\n' < "$RUNNER_TEMP/floor-before")" ]; then
+            str_title="chore(templates): update the Python CI matrix"
+          else
+            str_title="chore(templates)!: raise the Python floor to ${str_floor}"
+          fi
           git checkout -b "$STR_BRANCH"
-          git commit -am "chore(templates)!: sync the Python floor to ${str_floor}"
-          git push --force origin "$STR_BRANCH"
-          gh pr create --base main --head "$STR_BRANCH" \
-            --title "chore(templates)!: sync the Python floor to ${str_floor}" \
+          git commit -am "$str_title"
+          git push origin "$STR_BRANCH"
+          gh pr create --base main --head "$STR_BRANCH" --title "$str_title" \
             --body "Automated monthly sync from endoflife.date. Floor ${str_floor}."
