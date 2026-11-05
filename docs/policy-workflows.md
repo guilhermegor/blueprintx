@@ -28,6 +28,8 @@ user-owned Projects v2 board, so that stays in a local hook or behind a PAT secr
   (bad usage). Sourcing it defines the functions without running them, which the tests use.
 - A trailing `-<N>` in a branch name is not an issue number (`chore/bump-node-20` is a version).
 - The `assign` job skips fork PRs and holds `pull-requests: write`; the `check` job, which `needs: assign`, stays read-only.
+- `assign` is idempotent: it runs on any event except `assigned`/`unassigned` while the PR has no assignee, so a cancelled `opened` run cannot leave the author unassigned.
+- `check` checks out `base.sha` with `persist-credentials: false`, so the token never reaches PR code. `Branch has issue / check` is not in any shipped `required-checks` list; a repo that required it by hand gets the new rules at once.
 - A fork PR is not auto-assigned, so the assignee rule fails it until a maintainer assigns someone; the `assigned` trigger re-runs the check. This is intended.
 - The new check names are deliberately absent from each tier's `bin/required-checks.txt`, which
   allows a name only after a real PR has emitted it. Add them once they have reported.
@@ -42,7 +44,7 @@ dependency bump has no issue behind it. `release/` keeps its branch-rule exempti
 | `TRACKER` | Passes when |
 |-----------|-------------|
 | `github` (default) | `CLOSING_COUNT` (GraphQL `closingIssuesReferences`) is above 0, or the branch number resolves to an `OPEN` issue via `gh issue view`. |
-| `linear` | A team key such as `ABC-123` appears in the branch or title (case-insensitive); Linear's GitHub integration links on that key. |
+| `linear` | A team key such as `ABC-123` appears in the branch or title (case-insensitive; a leading `<user>/` is ignored; acronyms such as `UTF-8`, `SHA-256` and `node-20` are not keys); Linear's GitHub integration links on that key. Use `regex` with your team key for a stricter match. |
 | `regex` | `TRACKER_REGEX` matches the branch or title. |
 
 The workflow reads the tracker from the repository variables `PR_TRACKER` and `PR_TRACKER_REGEX`. The

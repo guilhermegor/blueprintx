@@ -39,10 +39,18 @@ check_assignee() {
 	return 1
 }
 
+linear_key_present() {
+	local str_text="${1#*/} $2" str_key
+	while read -r str_key; do
+		[[ "${str_key,,}" =~ ^(utf|sha|iso|pep|es|http|node|py|rfc|md|ipv)$ ]] || return 0
+	done < <(grep -oiE '(^|[^[:alnum:]])[a-z][a-z0-9]*-[0-9]+' <<<"$str_text" | sed -E 's/^[^[:alnum:]]//; s/-[0-9]+$//')
+	return 1
+}
+
 check_linked_issue() {
-	local str_branch="$1" str_title="$2" str_tracker="${3:-github}" int_closing="${4:-0}" str_num str_re
+	local str_branch="$1" str_title="$2" str_tracker="${3:-github}" int_closing="${4:-0}" str_num str_re=
 	[[ "$str_branch" =~ ^(dependabot|renovate)/ ]] && return 0
-	case "$str_tracker" in
+	case "${str_tracker,,}" in
 		github)
 			((int_closing > 0)) && return 0
 			if [[ "$str_branch" =~ ^[a-z]+/([0-9]+)(-|$) ]]; then
@@ -52,11 +60,7 @@ check_linked_issue() {
 			echo "PR closes no issue and branch '$str_branch' resolves to no open issue." >&2
 			return 1
 			;;
-		linear)
-			[[ "$str_branch" =~ ^[a-z]+/[a-z][a-z0-9]+-[0-9]+(-|$) ]] && return 0
-			str_re='(^|[^A-Za-z0-9])[A-Z][A-Z0-9]+-[0-9]+'
-			str_branch=
-			;;
+		linear) linear_key_present "$str_branch" "$str_title" && return 0 ;;
 		regex)
 			str_re="${TRACKER_REGEX:-}"
 			[[ -n "$str_re" ]] || { echo "TRACKER=regex needs TRACKER_REGEX set." >&2; return 2; }
