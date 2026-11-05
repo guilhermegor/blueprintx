@@ -28,6 +28,7 @@ user-owned Projects v2 board, so that stays in a local hook or behind a PAT secr
   (bad usage). Sourcing it defines the functions without running them, which the tests use.
 - A trailing `-<N>` in a branch name is not an issue number (`chore/bump-node-20` is a version).
 - The `assign` job skips fork PRs and holds `pull-requests: write`; the `check` job, which `needs: assign`, stays read-only.
+- A fork PR is not auto-assigned, so the assignee rule fails it until a maintainer assigns someone; the `assigned` trigger re-runs the check. This is intended.
 - The new check names are deliberately absent from each tier's `bin/required-checks.txt`, which
   allows a name only after a real PR has emitted it. Add them once they have reported.
 - Offline scaffolds drop `.github/` but keep `close_linked_issues.sh` and `check_pr_policy.sh` in `bin/`, and drop `dependabot_auto_merge.sh` (tracked in #727).

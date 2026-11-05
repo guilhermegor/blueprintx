@@ -71,6 +71,11 @@ expect "linear key in title" pass check_linked_issue "feat/x" "feat: ABC-123 t" 
 expect "linear without key" fail check_linked_issue "feat/x" "feat: t" linear 0
 expect "custom regex match" pass env TRACKER_REGEX='JIRA-[0-9]+' bash -c 'source "$0"; check_linked_issue feat/x "feat: JIRA-7 t" regex 0' "$REPO_ROOT/templates/common/bin/check_pr_policy.sh"
 expect "custom regex miss" fail env TRACKER_REGEX='JIRA-[0-9]+' bash -c 'source "$0"; check_linked_issue feat/x "feat: t" regex 0' "$REPO_ROOT/templates/common/bin/check_pr_policy.sh"
+expect "linear rejects node-20 version bump branch" fail check_linked_issue "chore/bump-node-20" "chore: bump node" linear 0
+expect "linear rejects lowercase token in title" fail check_linked_issue "feat/x" "feat: py-3 support" linear 0
+expect "linear uppercase key after boundary in title" pass check_linked_issue "feat/x" "feat(ENG-12): t" linear 0
+expect "regex mode without TRACKER_REGEX is an error" fail env -u TRACKER_REGEX bash -c 'source "$0"; check_linked_issue feat/x "feat: t" regex 0' "$REPO_ROOT/templates/common/bin/check_pr_policy.sh"
+expect "release branch still needs a linked issue" fail check_linked_issue "release/1.2.0" "chore: release" github 0
 expect "unknown tracker is an error" fail check_linked_issue "feat/x" "feat: t" bogus 0
 unset -f gh
 

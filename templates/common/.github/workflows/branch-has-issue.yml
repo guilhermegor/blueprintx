@@ -9,6 +9,10 @@ permissions:
   issues: read
   pull-requests: read
 
+concurrency:
+  group: branch-has-issue-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   assign:
     runs-on: ubuntu-latest
@@ -29,7 +33,7 @@ jobs:
         run: gh api -X POST "repos/$GH_REPO/issues/$PR/assignees" -f "assignees[]=$AUTHOR"
   check:
     needs: assign
-    if: github.event.pull_request.user.type != 'Bot'
+    if: ${{ !cancelled() && github.event.pull_request.user.type != 'Bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -47,7 +51,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          ASSIGNEES=$(gh api "repos/$GH_REPO/issues/$PR_NUMBER" --jq '[.assignees[].login] | join(" ")') || ASSIGNEES=
+          ASSIGNEES=$(gh api "repos/$GH_REPO/issues/$PR_NUMBER" --jq '[.assignees[].login] | join(" ")') || { echo "::warning::could not read PR assignees from the API"; ASSIGNEES=; }
           export ASSIGNEES
           bash bin/check_pr_policy.sh assignee
       - name: Require a linked issue
@@ -60,8 +64,8 @@ jobs:
           TRACKER_REGEX: ${{ vars.PR_TRACKER_REGEX }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          CLOSING_COUNT=$(gh api graphql -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -F number="$PR_NUMBER" \
+          CLOSING_COUNT=$(gh api graphql -f owner="${GH_REPO%/*}" -f name="${GH_REPO#*/}" -F number="$PR_NUMBER" \
             -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){closingIssuesReferences(first:1){totalCount}}}}' \
-            --jq .data.repository.pullRequest.closingIssuesReferences.totalCount) || CLOSING_COUNT=0
+            --jq .data.repository.pullRequest.closingIssuesReferences.totalCount) || { echo "::warning::could not read closing issue references from the API"; CLOSING_COUNT=0; }
           export CLOSING_COUNT
           bash bin/check_pr_policy.sh linked-issue

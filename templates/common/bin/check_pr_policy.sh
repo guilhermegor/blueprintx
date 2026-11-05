@@ -52,8 +52,15 @@ check_linked_issue() {
 			echo "PR closes no issue and branch '$str_branch' resolves to no open issue." >&2
 			return 1
 			;;
-		linear) str_re='[A-Za-z][A-Za-z0-9]+-[0-9]+' ;;
-		regex) str_re="${TRACKER_REGEX:-}" ;;
+		linear)
+			[[ "$str_branch" =~ ^[a-z]+/[a-z][a-z0-9]+-[0-9]+(-|$) ]] && return 0
+			str_re='(^|[^A-Za-z0-9])[A-Z][A-Z0-9]+-[0-9]+'
+			str_branch=
+			;;
+		regex)
+			str_re="${TRACKER_REGEX:-}"
+			[[ -n "$str_re" ]] || { echo "TRACKER=regex needs TRACKER_REGEX set." >&2; return 2; }
+			;;
 		*) echo "Unknown TRACKER '$str_tracker' (github|linear|regex)." >&2; return 2 ;;
 	esac
 	[[ -n "$str_re" && "$str_branch $str_title" =~ $str_re ]] && return 0
