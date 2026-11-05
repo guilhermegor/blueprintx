@@ -2255,9 +2255,12 @@ rest of the suite.
   non-falsy `CI` as CI", was rejected because it still leaves Jenkins local. The rule is an
   allowlist of local signals: the process is local only when `PRE_COMMIT` is set (pre-commit
   exports it for every hook it runs, so a real commit always carries it) and `GITHUB_ACTIONS`
-  is absent and `CI` is falsy (`""`, `0`, `false`, `no`). Everything else, including a bare
-  shell and an unknown runner, is CI and ignores the hatch. Known limit: a runner that
-  itself invokes `pre-commit run` sets `PRE_COMMIT` and, if it exports no `CI`, is read as
-  local; the PR-body and trailer sources still apply there. Pinned in
+  is absent and `CI` is falsy (`""`, `0`, `false`, `no`), and the process has a controlling
+  terminal (`/dev/tty` opens). The terminal check exists because a headless runner that itself
+  invokes `pre-commit run` inherits `PRE_COMMIT` (review of #986): a developer committing from
+  a shell has a terminal, Jenkins does not. Everything else, including a bare shell, an unknown
+  runner and a GUI or IDE commit, is CI and ignores the hatch; the PR-body and trailer
+  justifications remain available there. Known limit: a CI container allocated a pty
+  (`docker run -t`) with `PRE_COMMIT` set reads as local. Pinned in
   `tests/unit/test_gate_integrity_gate.py` for `CI=false`, `CI=""`, `GITHUB_ACTIONS=true`, `JENKINS_URL`
   and a bare environment.

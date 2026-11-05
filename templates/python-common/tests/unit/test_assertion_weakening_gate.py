@@ -58,6 +58,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TEST_CHANGE_OK", raising=False)
     monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
     monkeypatch.setenv("PRE_COMMIT", "1")
+    monkeypatch.setattr(sys.modules["gate_env"], "has_terminal", lambda: True)
 
 
 def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) -> list[str]:

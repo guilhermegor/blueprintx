@@ -63,7 +63,7 @@ def _load(str_name: str) -> ModuleType:
 
 
 gate = _load("check_gate_integrity")
-gate_env = _load("gate_env")
+gate_env = sys.modules["gate_env"]
 
 
 def _local_shell(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,6 +77,7 @@ def _local_shell(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.setenv("PRE_COMMIT", "1")
+    monkeypatch.setattr(gate_env, "has_terminal", lambda: True)
 
 
 def test_env_reason_is_blank_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -505,6 +506,7 @@ def _bare_shell(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.delenv("JENKINS_URL", raising=False)
     monkeypatch.delenv("PRE_COMMIT", raising=False)
+    monkeypatch.setattr(gate_env, "has_terminal", lambda: True)
 
 
 def test_gate_env_local_pre_commit_shell_is_not_ci(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -553,5 +555,15 @@ def test_gate_env_unknown_runner_is_ci(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_gate_env_bare_environment_is_ci(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no evidence either way the verdict fails closed."""
     _bare_shell(monkeypatch)
+
+    assert gate_env.is_ci() is True
+
+
+def test_gate_env_headless_runner_with_pre_commit_is_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Jenkins invoking ``pre-commit`` inherits ``PRE_COMMIT`` but has no terminal."""
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("PRE_COMMIT", "1")
+    monkeypatch.setenv("JENKINS_URL", "https://jenkins.example")
+    monkeypatch.setattr(gate_env, "has_terminal", lambda: False)
 
     assert gate_env.is_ci() is True
