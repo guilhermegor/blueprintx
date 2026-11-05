@@ -44,6 +44,24 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_assertion_weakening")
 
 
+@pytest.fixture(autouse=True)
+def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:  # complexity-ok: loop over CI markers
+    """Start every test from a local shell with no ``TEST_CHANGE_OK`` and no CI marker.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Removes the CI markers, the hatch variable and the event path from the shell.
+    """
+    for str_marker in (
+        gate.STR_CI_VAR,
+        *gate.TUPLE_PRESENCE_MARKERS,
+        "TEST_CHANGE_OK",
+        "GITHUB_EVENT_PATH",
+    ):
+        monkeypatch.delenv(str_marker, raising=False)
+
+
 def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) -> list[str]:
     """Run the file-level comparator over two versions of one test file's source.
 
@@ -287,6 +305,135 @@ def test_the_report_fails_a_flagged_diff_with_no_justification(
 def test_a_bare_marker_with_no_reason_does_not_justify(monkeypatch: pytest.MonkeyPatch) -> None:
     """The reason is REQUIRED, matching ``gate-change-ok:``'s convention."""
     monkeypatch.setattr(gate, "_git", lambda _args: "test-change-ok:\n")
+
+    assert gate.report(["some finding"], "base-sha", 1) == 1
+
+
+def test_env_reason_returns_the_stripped_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``TEST_CHANGE_OK`` is the one hatch reachable at commit time (blueprintx#941)."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "  fixing the pinned truncation value  ")
+
+    assert gate.env_reason() == "fixing the pinned truncation value"
+
+
+def test_env_reason_rejects_whitespace_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A blank reason must not satisfy the hatch."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "   ")
+
+    assert gate.env_reason() == ""
+
+
+@pytest.mark.parametrize("str_marker", ["CI", "GITHUB_ACTIONS"])
+def test_env_reason_is_ignored_under_ci(monkeypatch: pytest.MonkeyPatch, str_marker: str) -> None:
+    """A workflow ``env:`` line cannot stand in for a justification a reviewer can read."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "set by a workflow")
+    monkeypatch.setenv(str_marker, "true")
+
+    assert gate.env_reason() == ""
+
+
+@pytest.mark.parametrize("str_value", ["false", "0", "no", "FALSE", ""])
+def test_a_falsy_ci_value_is_not_ci(monkeypatch: pytest.MonkeyPatch, str_value: str) -> None:
+    """``CI=false`` in a developer shell must not disable the local hatch."""
+    monkeypatch.setenv("CI", str_value)
+    monkeypatch.setenv("TEST_CHANGE_OK", "local reason")
+
+    assert gate.env_reason() == "local reason"
+
+
+@pytest.mark.parametrize("str_value", ["false", "0", ""])
+def test_a_falsy_github_actions_value_is_still_ci(
+    monkeypatch: pytest.MonkeyPatch, str_value: str
+) -> None:
+    """Presence alone means CI: a runner never sets ``GITHUB_ACTIONS`` falsy."""
+    monkeypatch.setenv("GITHUB_ACTIONS", str_value)
+    monkeypatch.setenv("TEST_CHANGE_OK", "a reason")
+
+    assert gate.env_reason() == ""
+
+
+def test_the_env_reason_wins_over_a_trailer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With both sources valid, the env string is the one returned."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "from env")
+    monkeypatch.setattr(gate, "_git", lambda _args: "test-change-ok: from a trailer\n")
+
+    assert gate.justification_reason("base-sha") == "from env"
+
+
+def test_a_blank_env_var_falls_back_to_a_trailer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A blank env var falls through to a valid trailer rather than blocking it."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "   ")
+    monkeypatch.setattr(gate, "_git", lambda _args: "test-change-ok: from a trailer\n")
+
+    assert gate.report(["some finding"], "base-sha", 1) == 0
+
+
+def test_the_report_passes_a_flagged_diff_with_the_env_justification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """THE SHOULD-PASS WITNESS: no finished commit and no PR, yet the report clears."""
+    monkeypatch.setenv("TEST_CHANGE_OK", "fixing the ROUND_DOWN bug this test pins")
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+
+    assert gate.report(["some finding"], "base-sha", 1) == 0
+
+
+@pytest.mark.parametrize(
+    "str_needle",
+    [
+        "TEST_CHANGE_OK='<reason>' git commit",
+        "CI ignores the variable, so also add a 'test-change-ok: <reason>' line",
+    ],
+)
+def test_the_unjustified_failure_says_how_to_justify_locally(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], str_needle: str
+) -> None:
+    """The error names the env var for a local commit and says the trailer is CI-only.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces the git runner so no trailer is found.
+    capsys : pytest.CaptureFixture[str]
+        Captures the report text.
+    str_needle : str
+        The exact phrase the error must carry.
+    """
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    gate.report(["some finding"], "base-sha", 1)
+
+    assert str_needle in capsys.readouterr().out
+
+
+def test_the_ci_failure_leads_with_the_pr_body_line_not_the_env_var(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Under CI the advice names the PR-body line and says the env var is ignored.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Sets the CI marker and removes any trailer.
+    capsys : pytest.CaptureFixture[str]
+        Captures the report text.
+    """
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    monkeypatch.setenv("CI", "true")
+    gate.report(["some finding"], "base-sha", 1)
+
+    str_out = capsys.readouterr().out
+
+    assert "TEST_CHANGE_OK is ignored under CI" in str_out
+    assert "git commit" not in str_out
+
+
+def test_ci_ignores_test_change_ok_end_to_end(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Under CI the env hatch cannot justify a finding: ``report`` still fails."""
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("TEST_CHANGE_OK", "a reason")
 
     assert gate.report(["some finding"], "base-sha", 1) == 1
 

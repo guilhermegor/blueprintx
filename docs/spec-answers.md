@@ -51,7 +51,7 @@ Answer `bin/blueprintx.sh`'s own prompts (before any scaffold script runs):
 |---|---|---|---|
 | `project_name` | yes | — | Project/folder name. Same validation as the interactive prompt. |
 | `project_description` | no | empty | One-line description. |
-| `project_root` | no | `$PWD` | Parent directory the project is created under. |
+| `project_root` | no | `$PWD` | Parent directory the project is created under, not the project directory itself. A leading `~` or `~/` expands to `$HOME`, as in the interactive prompt; no other expansion is done. A `project_root` you set whose last component equals `project_name` (also when spelled with a trailing `/` or `/.`, whether or not the directory exists; the check is on the path as written, symlinks are not followed and `.`/`..` components are not resolved) stops the run before anything is created, naming the key; this check is `--spec` only and does not run under `--dev`, which replaces `project_root` with a temp directory, and the unset `$PWD` default is never refused. An explicit empty `project_root=` behaves as unset. There is no override key: a parent that shares the project's name must be avoided. |
 | `language` | yes | — | Must match a discovered `templates/*/skeleton.meta` `language=`. |
 | `skeleton` | yes | — | Must name a directory under `templates/` with a `skeleton.meta`. |
 | `license` | no | `MIT` | One of the choices `prompt_license` offers. |
@@ -111,7 +111,7 @@ the stored answers.
 | `protect_branch` | `n` | `y` protects `main`. Read only when `create_repo=y`. |
 | `human_reviewers` | `n` | `y` requires one approving review. Read only when `protect_branch=y`. |
 
-The remote block (`create_repo` onward) is shared by every Python tier and `etcher-chromeos`, and is described in full under `ts-lib`. It was once mapped for `ts-lib` and `ventoy-usb` only, which made an unattended scaffold answer the create-repo prompt with its default `n`: no repo, no board, nothing red (blueprintx#940). Omitting the keys keeps that behavior.
+The remote block (`create_repo` onward) is shared by every Python tier and `etcher-chromeos`, and is described in full under `ts-lib`. It was once mapped for `ts-lib` and `ventoy-usb` only, which made an unattended scaffold answer the create-repo prompt with its default `n`: no repo, no board, nothing red (blueprintx#940). Omitting the keys keeps that behavior. `ventoy-usb` and `etcher-chromeos` never ask `human_reviewers` (their branch protection uses zero required approvals), so neither stream emits it; before blueprintx#940 `ventoy-usb` emitted an extra answer that the next prompt consumed. A regression test runs `protect_branch=y` through a Python, an etcher and a ventoy tier.
 
 ### MVC tiers (`mvc-service-native-db`, `mvc-service-orm-db`)
 
