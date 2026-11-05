@@ -419,7 +419,7 @@ copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yml" "$project_path/.github/workflows/pr-reconcile.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/contract-drift.yml" "$project_path/.github/workflows/contract-drift.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/release.yml" "$project_path/.github/workflows/release.yml"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yaml" "$project_path/.github/workflows/docs.yml"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yml" "$project_path/.github/workflows/docs.yml"
     envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \

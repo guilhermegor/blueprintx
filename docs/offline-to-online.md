@@ -63,7 +63,7 @@ The 5 service tiers (`ddd-service-native-db`, `ddd-service-orm-db`, `mvc-service
 - `SECURITY.md` (envsubst `PROJECT_DISPLAY_NAME`, `REPOSITORY`)
 
 `lib-minimal` (from `lib_minimal_copy_github_assets()`) is the same shape minus
-`contract_drift`/`release`, plus `docs.yml` from its own `templates/lib-minimal/.github/workflows/`,
+`contract-drift`/`release`, plus `docs.yml` from its own `templates/lib-minimal/.github/workflows/`,
 plus `release-pypi.yaml` / `release-test-pypi.yaml` gated by `--publish`.
 
 `react-spa-webpack` (from `ts_react_app.sh`) ships the `templates/ts-common/.github/workflows/`

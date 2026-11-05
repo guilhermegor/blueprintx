@@ -208,7 +208,7 @@ copy_online_assets_service_tier() {
     for wf in tests review-threads coderabbit-trigger review-retry pr-gate pr-reconcile contract-drift release; do
         cp "$common/.github/workflows/$wf.yml" "$dest/.github/workflows/$wf.yml"
     done
-    cp "$shared/docs_version/docs.yaml" "$dest/.github/workflows/docs.yml"
+    cp "$shared/docs_version/docs.yml" "$dest/.github/workflows/docs.yml"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' <"$shared/SECURITY.md" >"$dest/SECURITY.md"
     cp "$common/.github/dependabot.yml" "$dest/.github/dependabot.yml"

@@ -145,6 +145,20 @@ it needs a bash-style `source`, not a strict dotenv parser. `SNAPCRAFT_STORE_CRE
 the file written by `snapcraft export-login credentials.txt`; the publish step fails without
 it rather than exiting 0.
 
+## Template workflow file names (#947)
+
+Every file under `templates/**/.github/workflows/` is kebab-case with `.yml`; the gate is
+`bin/ci/check_workflow_names.sh` (pre-commit hook and `scaffold_checks.yml` job
+`workflow-names`, with `tests/test_check_workflow_names.sh`). It is root-repo-only. The
+exemption is exact: `templates/lib-minimal/.github/workflows/release-pypi.yaml` and
+`release-test-pypi.yaml`, because PyPI trusted publishers match the filename.
+
+`.yml` won over `.yaml` on a measurement of 2026-11-04 against 12 open PRs: `.yml` renames 11
+files, 1 of them touched by open PRs (`tests.yaml`; #976, #984, #985); `.yaml` renames 24, 2 of
+them touched (`branch-has-issue.yml`, `pr-self-assign.yml`; #971). Job `name:` values did not
+change, so required-check contexts did not move. The shared source `templates/common/docs_version/`
+`docs.yml` sits outside `.github/workflows/` and is covered by review, not by the gate.
+
 ## Cross-Language Quality Parity
 
 BlueprintX scaffolds more than one language (Python and TypeScript/JS today), and a quality
@@ -1349,7 +1363,7 @@ either layout (blueprintx#360). A few modules stub the metaclass shape instead o
   Markdown trailing whitespace because it can be a hard line break. `.gitattributes` forces LF
   on shell scripts so a CRLF checkout does not fail with `bash\r`, and collapses generated
   files in diffs (see `docs/graphite-config.md`).
-- **`docs_version/docs.yaml`** builds MkDocs with `--strict` on every push and PR and does not
+- **`docs_version/docs.yml`** builds MkDocs with `--strict` on every push and PR and does not
   deploy: the release workflow deploys with `mike` after the tag, so the site only reflects
   shipped versions. Pages is set once to deploy from `gh-pages` (`poe enable_pages`). The build
   fetches full history so `cz changelog` sees the tags, and the changelog is never committed by

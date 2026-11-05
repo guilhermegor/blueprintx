@@ -10,8 +10,9 @@ int_checked=0
 while IFS= read -r str_file; do
     int_checked=$((int_checked + 1))
     str_base="$(basename "$str_file")"
-    case "$str_base" in
-        release-pypi.yaml | release-test-pypi.yaml) continue ;;
+    case "$str_file" in
+        */templates/lib-minimal/.github/workflows/release-pypi.yaml | \
+            */templates/lib-minimal/.github/workflows/release-test-pypi.yaml) continue ;;
     esac
     if ! [[ "$str_base" =~ ^[a-z0-9]+(-[a-z0-9]+)*\.yml$ ]]; then
         echo "ERROR: ${str_file#"$str_root"/}: template workflow names must be kebab-case with .yml" >&2

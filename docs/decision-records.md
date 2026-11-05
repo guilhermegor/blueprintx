@@ -1733,7 +1733,7 @@ is shaped as it is.
   (`win_amd64`, `manylinux2014_x86_64`); unset, pip downloads for the build machine. The trap
   expands `dir_tmp` immediately: single-quoted it would hit an unbound variable under `set -u`
   after the function returned, leaking the directory and exiting non-zero.
-- **`pr_reconcile.sh`** (#255) is the mechanism extracted from the `pr-reconcile.yml` inline
+- **`pr_reconcile.sh`** (#255) is the mechanism extracted from the `pr-reconcile.yaml` inline
   `run:` block so every workflow that ships it invokes one implementation, like
   `check_review_threads.py` and `rerun_stale_gate_runs.sh`. Inputs: `GH_TOKEN` and `GH_REPO`
   (required), `EVENT_PR` (one PR, the fast path) and `SWEEP_LIMIT` (default 30, the scheduled
@@ -1865,7 +1865,7 @@ repository. They were moved out of the workflow files, which now carry no prose.
   branch behind `main` can fail or wrongly pass on an old gate. `gh pr update-branch` moves
   the head commit and can supersede a clean review, so the workflow only reports. Its
   schedule is coarse: a `*/10` schedule fired 6 times in 21 hours on this repository.
-- **`pr-reconcile.yml` (#255).** A PR merged by native auto-merge armed with `github.token`
+- **`pr-reconcile.yaml` (#255).** A PR merged by native auto-merge armed with `github.token`
   leaves the linked issue open and the branch undeleted, while a manual merge of the same PR
   closes it. The `pull_request: [closed]` path is an optimisation; the `schedule` path is the
   backstop and the fix, because scheduled events are exempt from the "no new workflow runs"

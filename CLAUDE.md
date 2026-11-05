@@ -164,6 +164,10 @@ project (`poe_tasks.toml` replaced them there since #236) — so the script live
 `bin/check_makefile_pairing.sh`, not `templates/python-common/bin/`, and never ships as part
 of a scaffold.
 
+The **template workflow-name gate** (`bin/ci/check_workflow_names.sh`, pre-commit hook and CI job
+`workflow-names`) fails a `templates/**/.github/workflows/` file that is not kebab-case `.yml`, bar
+the two exempt PyPI files; rationale and counts in `CONTRIBUTING.md` (#947).
+
 The **PR file-count ceiling** (`bin/ci/check_pr_file_count.py`, pre-commit hook
 `pr-file-count`, the `pr-file-count` CI job) fails a branch above **90 cumulative changed
 files** — 10 below the vendor cap where CodeRabbit hard-refuses to review at all
