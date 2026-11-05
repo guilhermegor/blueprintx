@@ -71,6 +71,14 @@ str_fx="$(mktemp -d -p "$str_tmp")"
 expect_gate "missing workflow dirs fail instead of passing vacuously" fail "$str_fx"
 
 str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: |\n      3.11\n      3.12.8\n'
+expect_gate "block scalar with patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" '    python-version: >-\n      3.11\n      3.12\n    run: pip install foo==1.2.3\n'
+expect_gate "block scalar of minors then a sibling key passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
 rm -rf "$str_fx/.github"
 expect_gate "missing root workflows dir fails instead of a partial scan" fail "$str_fx"
 

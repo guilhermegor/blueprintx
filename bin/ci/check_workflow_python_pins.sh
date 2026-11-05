@@ -5,17 +5,25 @@ set -euo pipefail
 REPO_ROOT="${PINS_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 AWK_SCAN='
-FNR == 1 { in_list = 0 }
+FNR == 1 { in_list = 0; in_block = 0 }
 {
 	str_line = $0
 	sub(/(^|[[:space:]])#.*$/, "", str_line)
+	if (in_block) {
+		match(str_line, /^[[:space:]]*/)
+		if (str_line ~ /^[[:space:]]*$/ || RLENGTH > int_indent) { check(str_line); next }
+		in_block = 0
+	}
 	if (in_list) {
 		if (str_line ~ /^[[:space:]]*(-|$)/) { check(str_line); next }
 		in_list = 0
 	}
 	if (match(str_line, /python-version:/)) {
 		str_rest = substr(str_line, RSTART + RLENGTH)
-		if (str_rest ~ /^[[:space:]]*$/) in_list = 1
+		match(str_line, /^[[:space:]]*/)
+		int_indent = RLENGTH
+		if (str_rest ~ /^[[:space:]]*[|>][-+]?[[:space:]]*$/) in_block = 1
+		else if (str_rest ~ /^[[:space:]]*$/) in_list = 1
 		else check(str_rest)
 	}
 }
