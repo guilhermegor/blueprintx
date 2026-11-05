@@ -60,6 +60,7 @@ def review(str_login, str_type=None):
         "author": dict_author,
         "commit": {"oid": str_head},
         "state": "COMMENTED",
+        "body": "Reviewed.",
     }
 
 
