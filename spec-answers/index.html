@@ -3161,10 +3161,41 @@ the stored answers.</p>
 <tr>
 <td><code>git_remote</code></td>
 <td><code>n</code></td>
-<td><code>y</code> only adds <code>origin</code> here, answering the one remote prompt; creating the repo is mapped for <code>ts-lib</code> only (see below), so leave <code>n</code> for unattended/CI runs.</td>
+<td><code>y</code> adds <code>origin</code> and answers the remote prompt. Leave <code>n</code> for unattended runs that should not touch GitHub.</td>
+</tr>
+<tr>
+<td><code>create_repo</code></td>
+<td><code>n</code></td>
+<td><code>y</code> creates the repo on GitHub and pushes. Needs <code>git_remote=y</code>; same preflight as <code>ts-lib</code>.</td>
+</tr>
+<tr>
+<td><code>repo_visibility</code></td>
+<td><code>private</code></td>
+<td><code>public</code> or <code>private</code>. Read only when <code>create_repo=y</code>.</td>
+</tr>
+<tr>
+<td><code>kanban</code></td>
+<td><code>n</code></td>
+<td><code>y</code> also creates the linked GitHub Project. Read only when <code>create_repo=y</code>.</td>
+</tr>
+<tr>
+<td><code>kanban_visibility</code></td>
+<td><code>repo</code></td>
+<td><code>repo</code>, <code>public</code> or <code>private</code>. Read only when <code>kanban=y</code>.</td>
+</tr>
+<tr>
+<td><code>protect_branch</code></td>
+<td><code>n</code></td>
+<td><code>y</code> protects <code>main</code>. Read only when <code>create_repo=y</code>.</td>
+</tr>
+<tr>
+<td><code>human_reviewers</code></td>
+<td><code>n</code></td>
+<td><code>y</code> requires one approving review. Read only when <code>protect_branch=y</code>.</td>
 </tr>
 </tbody>
 </table>
+<p>The remote block (<code>create_repo</code> onward) is shared by every Python tier and <code>etcher-chromeos</code>, and is described in full under <code>ts-lib</code>. It was once mapped for <code>ts-lib</code> and <code>ventoy-usb</code> only, which made an unattended scaffold answer the create-repo prompt with its default <code>n</code>: no repo, no board, nothing red (blueprintx#940). Omitting the keys keeps that behavior. <code>ventoy-usb</code> and <code>etcher-chromeos</code> never ask <code>human_reviewers</code> (their branch protection uses zero required approvals), so neither stream emits it; before blueprintx#940 <code>ventoy-usb</code> emitted an extra answer that the next prompt consumed. A regression test runs <code>protect_branch=y</code> through a Python, an etcher and a ventoy tier.</p>
 <h3 id="mvc-tiers-mvc-service-native-db-mvc-service-orm-db">MVC tiers (<code>mvc-service-native-db</code>, <code>mvc-service-orm-db</code>)<a class="headerlink" href="#mvc-tiers-mvc-service-native-db-mvc-service-orm-db" title="Permanent link">&para;</a></h3>
 <p>Same as the DDD tiers, <strong>minus <code>storage</code></strong> (MVC has no schema-less storage prompt), <strong>plus</strong>:</p>
 <table>
@@ -3231,7 +3262,7 @@ the stored answers.</p>
 <tr>
 <td><code>git_remote</code></td>
 <td><code>n</code></td>
-<td>Same as the service tiers.</td>
+<td>Same as the service tiers, including the <code>create_repo</code> block above.</td>
 </tr>
 </tbody>
 </table>
@@ -3410,7 +3441,12 @@ the git remote prompt.</p>
 <tr>
 <td><code>git_remote</code></td>
 <td><code>n</code></td>
-<td><code>y</code> adds <code>origin</code>. Creating the repo is not mapped for this tier.</td>
+<td><code>y</code> adds <code>origin</code>.</td>
+</tr>
+<tr>
+<td><code>create_repo</code>, <code>repo_visibility</code>, <code>kanban</code>, <code>kanban_visibility</code>, <code>protect_branch</code></td>
+<td>as <code>ts-lib</code></td>
+<td>Same keys and defaults. This tier does not ask <code>human_reviewers</code>.</td>
 </tr>
 </tbody>
 </table>
