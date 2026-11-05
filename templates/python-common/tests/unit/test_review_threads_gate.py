@@ -278,7 +278,7 @@ def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:
     return {"author": {"login": str_login}, "body": str_body, "createdAt": str_created}
 
 
-_NO_BODY = {"body": ""}
+_NO_BODY = {"body": "", "state": "COMMENTED"}
 _REPLY_NODE = {"replyTo": {"id": "thread-root"}}
 _INLINE_NODE = {"replyTo": None}
 
@@ -288,11 +288,25 @@ _INLINE_NODE = {"replyTo": None}
     [
         ({**_NO_BODY, "comments": {"nodes": [_REPLY_NODE]}}, False),
         ({**_NO_BODY, "comments": {"nodes": []}}, False),
+        ({**_NO_BODY, "body": "   ", "comments": {"nodes": [_REPLY_NODE]}}, False),
+        ({**_NO_BODY, "comments": {"nodes": [{}]}}, False),
+        ({**_NO_BODY, "state": "APPROVED"}, True),
+        ({**_NO_BODY, "state": "CHANGES_REQUESTED"}, True),
         ({"body": "Findings: none."}, True),
         ({**_NO_BODY, "comments": {"nodes": [_INLINE_NODE]}}, True),
         ({**_NO_BODY, "comments": {"nodes": [_REPLY_NODE, _INLINE_NODE]}}, True),
     ],
-    ids=["reply-only", "empty", "body-only", "inline-only", "reply-plus-inline"],
+    ids=[
+        "reply-only",
+        "empty",
+        "blank-body",
+        "no-replyto-key",
+        "empty-approval",
+        "empty-changes",
+        "body-only",
+        "inline-only",
+        "reply-plus-inline",
+    ],
 )
 def test_a_head_review_counts_only_with_a_body_or_a_non_reply_comment(
     dict_shape: dict, bool_satisfies: bool
