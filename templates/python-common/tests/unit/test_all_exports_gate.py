@@ -169,7 +169,7 @@ def test_all_name_defined_under_internal_is_flagged(tmp_path: Path) -> None:
         'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n',
         "",
     )
-    assert "_internal" in _sole(_load_gate().check_package(path_init))
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
 
 
 def test_all_module_alias_of_internal_import_is_flagged(tmp_path: Path) -> None:
@@ -179,7 +179,7 @@ def test_all_module_alias_of_internal_import_is_flagged(tmp_path: Path) -> None:
         'import pkg._internal.config.schemas as schemas\n\n__all__ = ["schemas"]\n',
         "",
     )
-    assert "_internal" in _sole(_load_gate().check_package(path_init))
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
 
 
 def test_all_name_reexported_through_public_sibling_is_flagged(tmp_path: Path) -> None:
@@ -189,7 +189,7 @@ def test_all_name_reexported_through_public_sibling_is_flagged(tmp_path: Path) -
         'from .member import Doc\n\n__all__ = ["Doc"]\n',
         "from pkg._internal.config.schemas import Doc\n",
     )
-    assert "_internal" in _sole(_load_gate().check_package(path_init))
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
 
 
 def test_function_local_internal_import_does_not_flag_public_name(tmp_path: Path) -> None:
@@ -219,7 +219,7 @@ def test_checkout_path_named_internal_does_not_disable_guard(tmp_path: Path) -> 
         'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n',
         "",
     )
-    assert "_internal" in _sole(_load_gate().check_package(path_init))
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
 
 
 def test_internal_package_itself_is_out_of_scope(tmp_path: Path) -> None:
@@ -311,7 +311,10 @@ _STR_FROM_MEMBER = "from .member import Doc\n" + _STR_EXPORT_DOC
         ),
         pytest.param(
             _STR_FROM_MEMBER,
-            {"member.py": "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n" + _STR_LEAK},
+            {
+                "member.py": "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    "
+                + _STR_LEAK
+            },
             id="followed-file-type-checking",
         ),
         pytest.param(
@@ -323,6 +326,13 @@ _STR_FROM_MEMBER = "from .member import Doc\n" + _STR_EXPORT_DOC
             "try:\n    " + _STR_LEAK + "except ImportError:\n    Doc = None\n" + _STR_EXPORT_DOC,
             {},
             id="init-level-try",
+        ),
+        pytest.param(
+            "import contextlib\n\nwith contextlib.suppress(ImportError):\n    "
+            + _STR_LEAK
+            + _STR_EXPORT_DOC,
+            {},
+            id="init-level-with",
         ),
         pytest.param(
             "from pkg._internal.config.schemas import *\n" + _STR_EXPORT_DOC,
@@ -341,13 +351,33 @@ def test_internal_leak_is_traced_through_every_import_shape(
 ) -> None:
     """Every spelling of an ``_internal`` import that reaches ``__all__`` is a finding."""
     path_init = _tree(tmp_path, str_init, dict_files)
-    assert "_internal" in _sole(_load_gate().check_package(path_init))
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
 
 
 def test_star_import_of_a_public_module_is_not_flagged(tmp_path: Path) -> None:
     """``from .member import *`` is clean when ``member`` defines the name itself."""
     path_init = _tree(
         tmp_path, "from .member import *\n" + _STR_EXPORT_DOC, {"member.py": "Doc = 1\n"}
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+@pytest.mark.parametrize(
+    "str_import",
+    [
+        pytest.param("from .member import Doc\n", id="relative"),
+        pytest.param("from vendor import Doc\n", id="third-party"),
+        pytest.param("import vendor.Doc as Doc\n", id="aliased-module"),
+    ],
+)
+def test_star_import_is_not_a_fallback_for_an_explicitly_imported_name(
+    tmp_path: Path, str_import: str
+) -> None:
+    """A name some statement binds explicitly is never attributed to a later ``_internal`` star."""
+    path_init = _tree(
+        tmp_path,
+        str_import + "from pkg._internal.config.schemas import *\n" + _STR_EXPORT_DOC,
+        {"member.py": "Doc = 1\n"},
     )
     assert _load_gate().check_package(path_init) == []
 

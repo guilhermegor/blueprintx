@@ -32,7 +32,7 @@ import sys
 
 _SRC = pathlib.Path("src")
 _EXCLUDED_PARTS = frozenset({"typing", "__pycache__", "example_feature"})
-_BLOCK_STATEMENTS = (ast.If, ast.Try, ast.TryStar)
+_BLOCK_STATEMENTS = (ast.If, ast.Try, ast.TryStar, ast.With, ast.AsyncWith)
 
 
 class _UnparseableError(Exception):
@@ -67,10 +67,10 @@ def _parse(path_module: pathlib.Path) -> ast.Module:
 
 
 def _module_statements(list_body: list[ast.stmt]) -> Iterator[ast.stmt]:
-    """Yield the statements bound at module level, descending into ``if``/``try`` blocks.
+    """Yield the statements bound at module level, descending into ``if``/``try``/``with`` blocks.
 
-    A guarded import (``try:``, ``if TYPE_CHECKING:``, ``if sys.version_info``) still binds a
-    module-level name; function and class bodies do not, so they are not entered.
+    A guarded import (``try:``, ``if TYPE_CHECKING:``, ``if sys.version_info``, ``with suppress``)
+    still binds a module-level name; function and class bodies do not, so they are not entered.
 
     Parameters
     ----------
@@ -278,7 +278,7 @@ def _internal_origin(
         str_hit = _node_origin(path_module, cls_node, str_name, set_next)
         if str_hit is not None:
             return str_hit
-    if str_name in _definitions(list_nodes):
+    if str_name in _definitions(list_nodes) | _imported_names(list_nodes):
         return None
     return next(
         (
@@ -291,6 +291,28 @@ def _internal_origin(
         ),
         None,
     )
+
+
+def _imported_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
+    """Return every name the given statements bind by a non-star import.
+
+    Parameters
+    ----------
+    list_nodes : iterable of ast.stmt
+        Statements to read.
+
+    Returns
+    -------
+    set of str
+        The local names bound by ``import`` and ``from … import`` (``*`` excluded).
+    """
+    return {
+        cls_alias.asname or cls_alias.name.split(".")[0]
+        for cls_node in list_nodes
+        if isinstance(cls_node, ast.Import | ast.ImportFrom)
+        for cls_alias in cls_node.names
+        if cls_alias.name != "*"
+    }
 
 
 def _node_origin(
