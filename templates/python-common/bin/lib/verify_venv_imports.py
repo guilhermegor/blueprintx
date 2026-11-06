@@ -36,7 +36,7 @@ def requirement_name(str_line: str) -> str | None:
     Parameters
     ----------
     str_line : str
-        A requirement line, e.g. ``"httpx[http2]>=0.27 ; python_version >= '3.10'"``.
+        A requirement line, e.g. ``"httpx[http2]>=0.27 ; python_version >= '3.11'"``.
 
     Returns
     -------

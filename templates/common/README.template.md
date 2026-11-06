@@ -4,7 +4,7 @@
 <p align="center"><img src="https://raw.githubusercontent.com/${GITHUB_USERNAME}/${PROJECT_NAME}/main/assets/logo.png" width="200" alt="${PROJECT_DISPLAY_NAME} logo"></p>
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 <!-- only: library -->
 [![PyPI](https://img.shields.io/pypi/v/${PROJECT_NAME}.svg)](https://pypi.org/project/${PROJECT_NAME}/)
 <!-- /only -->

@@ -881,6 +881,12 @@ jobs:
       - name: CLAUDE.md bridge and leaf pairing gate (blueprintx#754)
         run: bash bin/ci/check_agents_md_bridge.sh && bash tests/test_check_agents_md_bridge.sh
 
+      - name: Python floor drift gate (blueprintx#951)
+        run: |
+          python bin/python_eol_bump.py --check
+          pip install pytest==9.2.0
+          python -m pytest tests/test_python_eol_bump.py -q
+
       - name: Workflow python-version minor-only pins (blueprintx#945)
         run: bash bin/ci/check_workflow_python_pins.sh && bash tests/test_check_workflow_python_pins.sh
 
