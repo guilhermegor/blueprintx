@@ -383,6 +383,7 @@ case "$1 $2" in
     "project create") echo 7 ;;
     "project field-list") case "$*" in *options*) ;; *) echo PVTSSF_status ;; esac ;;
     "repo create") touch "$STUB_STATE/created" ;;
+    "api graphql") case "$*" in *--input*) cat >/dev/null ;; esac ;;
     "api -X") case "$*" in *rulesets*) cat >"$STUB_STATE/protection.json" ;; esac ;;
 esac
 exit 0
