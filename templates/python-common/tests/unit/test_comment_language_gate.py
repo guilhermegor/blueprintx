@@ -283,7 +283,7 @@ def test_audit_covers_every_supported_extension_anywhere_in_the_tree() -> None:
     list_required = [
         gate.PATH_ROOT / ".pre-commit-config.yaml",
         gate.PATH_ROOT / "mypy.ini",
-        gate.PATH_ROOT / ".github/workflows/tests.yaml",
+        gate.PATH_ROOT / ".github/workflows/tests.yml",
         gate.PATH_ROOT / "optional/typing/validate.py",
     ]
     list_missing = [

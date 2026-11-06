@@ -121,7 +121,7 @@ means the same thing in every tier. It declares no `fail_under`, which this chan
 ## Wired on both sides
 
 Pre-commit hook `coverage-floor` and the CI step "Run Coverage Floor Gate" in
-`.github/workflows/tests.yaml` both run `bin/check_coverage_floor.py` — one implementation,
+`.github/workflows/tests.yml` both run `bin/check_coverage_floor.py` — one implementation,
 both surfaces, the same rule every `check_*.py` gate in this repo follows.
 
 ## Out of scope: the publisher-index half of #149
