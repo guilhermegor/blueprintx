@@ -20,4 +20,8 @@ from config.schemas._fields import CnpjStr, CpfStr
 from config.schemas.example_source import ExampleSchema
 
 
-__all__ = ["CnpjStr", "CpfStr", "ExampleSchema"]
+__all__ = [
+    "CnpjStr",
+    "CpfStr",
+    "ExampleSchema",
+]

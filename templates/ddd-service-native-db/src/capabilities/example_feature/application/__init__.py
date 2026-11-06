@@ -9,10 +9,10 @@ from .use_cases import CreateNote, ListNotes
 
 
 __all__ = [
-    "CreateNote",
-    "ListNotes",
     "create_note",
+    "CreateNote",
     "list_notes",
+    "ListNotes",
     "note_from_create_dto",
     "note_to_response_dto",
 ]

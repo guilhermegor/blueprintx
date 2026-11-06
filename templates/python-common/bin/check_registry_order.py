@@ -135,7 +135,7 @@ def main() -> int:
     """
     list_found = [
         (path_init, list_elts)
-        for path_init in sorted(_SRC.glob("*/__init__.py"))
+        for path_init in sorted(_SRC.rglob("__init__.py"))
         if (list_elts := all_elements(path_init)) is not None
     ]
     if not list_found:

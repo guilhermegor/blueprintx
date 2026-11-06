@@ -10,4 +10,6 @@ composition root (src/app/api.py), never the container itself. See .layer-policy
 from .routers import build_example_feature_router
 
 
-__all__ = ["build_example_feature_router"]
+__all__ = [
+    "build_example_feature_router",
+]
