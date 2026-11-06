@@ -27,6 +27,11 @@ run_create() {
                 echo "create $*" >>"$LOG"
                 case "$*" in *--source*|*--remote*) return 1 ;; esac
                 case "$*" in *--push*) git -C "$PROJECT_PATH" push -q -u origin main ;; esac ;;
+            "api graphql") case "$*" in *--input*) cat >/dev/null ;; esac ;;
+            "api user") echo octo ;;
+            "api rate_limit") echo "5000 9999999999" ;;
+            "api -X") ;;
+            "api repos/"*) echo true ;;
             "secret set")
                 cat >/dev/null
                 echo "secret pushed=$(git -C "$BARE" rev-parse --verify -q refs/heads/main >/dev/null && echo yes || echo no)" >>"$LOG" ;;
@@ -93,6 +98,9 @@ test_fallback_sets_secret_before_the_push() {
         gh() {
             case "$1 $2" in
             "repo create") return 1 ;;
+            "api graphql") case "$*" in *--input*) cat >/dev/null ;; esac ;;
+            "api user") echo octo ;;
+            "api rate_limit") echo "5000 9999999999" ;;
             "secret set")
                 cat >/dev/null
                 echo "secret pushed=$(git -C "$BARE" rev-parse --verify -q refs/heads/main >/dev/null && echo yes || echo no)" >>"$LOG" ;;
