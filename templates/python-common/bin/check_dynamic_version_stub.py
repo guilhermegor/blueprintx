@@ -9,9 +9,6 @@ Conditional by construction: a project without dynamic versioning enabled (the s
 whose ``cz bump`` / ``release.yml`` write a real static version, and offline-mode libraries)
 is a no-op and exits 0.
 
-``pyproject.toml`` is read line by line rather than through ``tomllib``: the templates target
-Python 3.10, which has no ``tomllib``, and ``tomli`` is not a direct dependency.
-
 Usage: ``python bin/check_dynamic_version_stub.py [--root DIR]``
 """
 
