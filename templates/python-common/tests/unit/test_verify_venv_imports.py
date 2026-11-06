@@ -44,7 +44,7 @@ MODULE = _load()
 @pytest.mark.parametrize(
     ("str_line", "str_name"),
     [
-        ("httpx[http2]>=0.27 ; python_version >= '3.10'", "httpx"),
+        ("httpx[http2]>=0.27 ; python_version >= '3.11'", "httpx"),
         ("pytest  # dev group", "pytest"),
     ],
     ids=["extras-and-marker", "trailing-comment"],
