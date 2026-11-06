@@ -16,7 +16,7 @@ must not be re-asked into looking healthy, and one whose reviewer merely *review
 is not a rate-limit case either.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 import importlib.util
 from pathlib import Path
 from types import ModuleType
@@ -71,7 +71,7 @@ def _find_gate_path() -> Path:
     )
 
 
-_DT_NOW = datetime(2026, 8, 24, 23, 55, 0, tzinfo=timezone.utc)
+_DT_NOW = datetime(2026, 8, 24, 23, 55, 0, tzinfo=UTC)
 
 
 def _comment(str_login: str, str_body: str, int_min_ago: int = 0, str_type: str = "Bot") -> dict:
