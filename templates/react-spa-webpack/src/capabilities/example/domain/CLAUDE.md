@@ -1,7 +1,4 @@
+@AGENTS.md
 @../../_layers/domain.md
 
-<!--
-  Capability-specific notes for this layer go below the @import.
-  The shared rules live in src/capabilities/_layers/domain.md and are
-  inlined above. Anything written below applies only to this capability.
--->
+Edit AGENTS.md, not this file. Claude-Code-only lines go below this one.

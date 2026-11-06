@@ -3,6 +3,8 @@ version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
+    assignees:
+      - "${GITHUB_USERNAME}"
     schedule:
       interval: "weekly"
     cooldown:

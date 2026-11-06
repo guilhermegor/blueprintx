@@ -687,6 +687,69 @@ def _report_absent_policy(int_modules: int) -> int:
     return 1
 
 
+def _under_prefix_marker(tuple_parts: tuple, dict_policy: dict) -> bool:
+    """Return whether a path's last stripped prefix component is the policy's marker.
+
+    With ``src_prefix_depth: 2`` the layer is read after ``<pkg>/_internal/``; a file such as
+    ``src/pkg/schemas/config/doc.py`` has the same remainder without that marker, and must not
+    borrow the ``config`` layer's allowances.
+
+    Parameters
+    ----------
+    tuple_parts : tuple of str
+        The file's path components below ``src/``, filename last.
+    dict_policy : dict
+        The parsed policy.
+
+    Returns
+    -------
+    bool
+        ``True`` when no marker is configured or the component at the prefix boundary matches.
+    """
+    str_marker = dict_policy.get("src_prefix_marker")
+    int_prefix = int(dict_policy.get("src_prefix_depth", 0))
+    if not str_marker or int_prefix < 1:
+        return True
+    return len(tuple_parts) >= int_prefix and tuple_parts[int_prefix - 1] == str_marker
+
+
+def class_base_problems(path_file: pathlib.Path, str_layer: str, dict_policy: dict) -> list[str]:
+    """Return one problem per class defined in a layer that lists its base in ``deny_class_bases``.
+
+    An import allowance says a layer may USE a vendor; it cannot say the layer may not DEFINE
+    that vendor's types. ``deny_class_bases`` maps a base-class name to the reason a layer must
+    not subclass it.
+
+    Parameters
+    ----------
+    path_file : pathlib.Path
+        The module to check.
+    str_layer : str
+        The layer the file belongs to.
+    dict_policy : dict
+        The parsed policy.
+
+    Returns
+    -------
+    list of str
+        Human-readable problems; empty when the layer declares no such rule or none is broken.
+    """
+    dict_denied = ((dict_policy.get("layers") or {}).get(str_layer) or {}).get(
+        "deny_class_bases"
+    ) or {}
+    if not dict_denied:
+        return []
+    cls_tree = ast.parse(path_file.read_text(encoding="utf-8"))
+    return [
+        f"{path_file}:{cls_node.lineno}: class {cls_node.name} subclasses {str_base} in layer "
+        f"'{str_layer}' — {dict_denied[str_base]}"
+        for cls_node in ast.walk(cls_tree)
+        if isinstance(cls_node, ast.ClassDef)
+        for str_base in (ast.unparse(cls_base).split(".")[-1] for cls_base in cls_node.bases)
+        if str_base in dict_denied
+    ]
+
+
 def main() -> int:
     """Check every module under ``src/`` against the layer policy.
 
@@ -721,9 +784,12 @@ def main() -> int:
     for path_file in list_modules:
         tuple_rel = path_file.relative_to(path_src).parts[int_prefix:]
         str_layer = resolve_layer(tuple_rel, dict_policy)
+        if not _under_prefix_marker(path_file.relative_to(path_src).parts, dict_policy):
+            str_layer = _ROOT_LAYER
         list_all.extend(
             find_file_problems(path_file, str_layer, dict_policy, set_first_party, tuple_rel[:-1])
         )
+        list_all.extend(class_base_problems(path_file, str_layer, dict_policy))
 
     for str_problem in list_all:
         print(f"❌ {str_problem}")

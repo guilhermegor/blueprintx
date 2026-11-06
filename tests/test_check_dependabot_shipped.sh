@@ -25,6 +25,109 @@ expect_gate() {
     fi
 }
 
+test_missing_assignees_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i '/assignees:/,+1d' "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "template without assignees" "$str_root" fail "needs the \${GITHUB_USERNAME} assignee"
+}
+
+test_dropped_substitution_fails() {
+    local str_script str_root
+    for str_script in ts_lib ts_react_app bash_cli python_lib_minimal; do
+        str_root="$(make_copy)"
+        sed -i -E 's#^(\s*)(GITHUB_USERNAME="[^"]*" )?envsubst .* < ("[^"]*dependabot\.yml") .*#\1cp \3 "\$project_path/.github/dependabot.yml"#' "$str_root/bin/scaffold/$str_script.sh"
+        expect_gate "dropped substitution, $str_script" "$str_root" fail "$str_script.sh never copies"
+    done
+}
+
+test_dropped_inline_prefix_fails() {
+    local str_script str_root
+    for str_script in ts_lib ts_react_app bash_cli; do
+        str_root="$(make_copy)"
+        sed -i -E 's#^(\s*)GITHUB_USERNAME="\$GITHUB_USERNAME" (envsubst .*dependabot\.yml)#\1\2#' \
+            "$str_root/bin/scaffold/$str_script.sh"
+        expect_gate "dropped inline prefix, $str_script" "$str_root" fail "$str_script.sh never copies"
+    done
+}
+
+test_empty_assignee_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E 's#^(      - )"\$\{GITHUB_USERNAME\}"#\1""#' "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "empty assignee value" "$str_root" fail "needs the \${GITHUB_USERNAME} assignee"
+}
+
+test_hardcoded_assignee_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E 's#^(      - )"\$\{GITHUB_USERNAME\}"#\1"someone"#' "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "hard-coded assignee" "$str_root" fail "needs the \${GITHUB_USERNAME} assignee"
+}
+
+test_promote_unrendered_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E '0,/envsubst .*dependabot\.yml/s#envsubst [^<]*< ("[^"]*dependabot\.yml")#cp \1#' \
+        "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote copies dependabot.yml raw" "$str_root" fail "has a render without the inline owner"
+}
+
+test_promote_dropped_inline_prefix_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E '0,/GITHUB_USERNAME="\$GITHUB_USERNAME" envsubst/s#GITHUB_USERNAME="\$GITHUB_USERNAME" (envsubst)#\1#' \
+        "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote dropped inline owner" "$str_root" fail "has a render without the inline owner"
+}
+
+test_promote_wrong_source_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E '0,/envsubst .*dependabot\.yml/s#< *"[^"]*dependabot\.yml"#< "$shared/.github/CODEOWNERS"#' \
+        "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote renders dependabot.yml from the wrong source" "$str_root" fail "dependabot.yml source"
+}
+
+test_promote_wrong_destination_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E '0,/envsubst .*dependabot\.yml/s#> *"[^"]*dependabot\.yml"#> "$dest/dependabot.yml"#' \
+        "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote renders dependabot.yml to the wrong path" "$str_root" fail "dependabot.yml source"
+}
+
+test_promote_render_moved_between_functions_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    awk '/envsubst .*dependabot\.yml/ { int_seen++; if (int_seen == 1) next; if (int_seen == 2) { print; print; next } } 1' \
+        "$str_root/bin/promote_offline_to_online.sh" >"$str_root/out.sh"
+    mv "$str_root/out.sh" "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "one function renders twice, another not at all" "$str_root" fail "time(s), expected 1"
+}
+
+test_promote_deleted_render_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i '0,/envsubst .*dependabot\.yml/{/envsubst .*dependabot\.yml/d}' \
+        "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "promote render deleted" "$str_root" fail "time(s), expected 1"
+}
+
+test_promote_all_renders_deleted_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i '/envsubst .*dependabot\.yml/d' "$str_root/bin/promote_offline_to_online.sh"
+    expect_gate "every promote render deleted" "$str_root" fail "renders dependabot.yml 0 time(s), expected 1"
+}
+
+test_second_assignee_fails() {
+    local str_root
+    str_root="$(make_copy)"
+    sed -i -E 's#^(      - "\$\{GITHUB_USERNAME\}")#\1\n      - "someone"#' "$str_root/templates/ts-common/dependabot.yml"
+    expect_gate "second hard-coded assignee" "$str_root" fail "needs the \${GITHUB_USERNAME} assignee"
+}
+
 test_real_tree_passes() {
     expect_gate "real tree" "$(make_copy)" pass "OK:"
 }
@@ -78,7 +181,20 @@ test_missing_source_fails() {
 }
 
 test_real_tree_passes
+test_missing_assignees_fails
+test_dropped_substitution_fails
 test_dropped_copy_line_fails
+test_dropped_inline_prefix_fails
+test_empty_assignee_fails
+test_hardcoded_assignee_fails
+test_promote_unrendered_fails
+test_promote_dropped_inline_prefix_fails
+test_promote_wrong_source_fails
+test_promote_wrong_destination_fails
+test_promote_render_moved_between_functions_fails
+test_promote_deleted_render_fails
+test_promote_all_renders_deleted_fails
+test_second_assignee_fails
 test_missing_cooldown_fails
 test_partial_cooldown_fails
 test_unparseable_file_fails

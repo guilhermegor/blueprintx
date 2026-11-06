@@ -62,6 +62,26 @@ check_bridge() {
 	return "$int_fail"
 }
 
+check_leaves() {
+	local -a arr_leaves=()
+	local str_file str_found
+	str_found="$(find "$REPO_ROOT/templates" -mindepth 2 -type f \( -name 'CLAUDE.md' -o -name '*_CLAUDE.md' \) \
+		! -path "$REPO_ROOT/templates/common/CLAUDE.md" | sort)" || {
+		echo "check_leaves: find over templates/ failed; refusing a partial scan" >&2
+		return 1
+	}
+	while IFS= read -r str_file; do
+		[ -n "$str_file" ] || continue
+		[ "$(basename "$str_file")" = "CLAUDE.md" ] && [ -f "$(dirname "$str_file")/skeleton.meta" ] && continue
+		arr_leaves+=("$str_file")
+	done <<<"$str_found"
+	[ "${#arr_leaves[@]}" -gt 0 ] || {
+		echo "check_leaves: no leaf CLAUDE.md found under templates/; the gate checked nothing" >&2
+		return 1
+	}
+	bash "$REPO_ROOT/templates/common/bin/check_agents_md_pairs.sh" "${arr_leaves[@]}"
+}
+
 main() {
 	local str_meta str_dir int_fail=0 int_count=0
 	for str_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
@@ -78,6 +98,7 @@ main() {
 		echo "no skeleton ships a CLAUDE.md bridge; the gate checked nothing" >&2
 		int_fail=1
 	fi
+	check_leaves || int_fail=1
 	if [ "$int_fail" -ne 0 ]; then
 		exit 1
 	fi
