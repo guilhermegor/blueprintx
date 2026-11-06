@@ -439,6 +439,19 @@ required context has no job behind it, or when a job that runs on every PR is ne
 nor listed in `bin/ci/required_checks_policy.txt` with a one-line reason. Adding a PR job means
 requiring it or allowlisting it in the same PR. Details: `docs/required-status-checks.md`.
 
+### Workflow `python-version` pins are minor-level — blueprintx#945
+
+`bin/ci/check_workflow_python_pins.sh` fails a workflow whose `python-version` carries a patch
+pin, a dropped-zero float (`3.10`), a `python-version-file`, or an expression it cannot resolve
+inside the repository. `tests/test_check_workflow_python_pins.sh` is the should-fail witness.
+
+`PINS_AWK` selects the awk binary the gate runs (default `awk`). It is test-only: the suite sets
+it to `busybox awk` to prove the scanner stays POSIX-portable. Do not set it in CI or hooks.
+
+Known limits: a caller's `with:` input is resolved only within the same file as the reusable
+workflow that declares it, and stderr triage of the git file listing is a pattern list
+(`could not|denied|unable|cannot`, or any line not starting `warning:`), not a proof.
+
 ### GitHub Actions are pinned by commit SHA — blueprintx#369
 
 Every remote action reference in a workflow — first-party `actions/*` included — is pinned to
