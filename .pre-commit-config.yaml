@@ -65,11 +65,11 @@ repos:
         files: ^(templates/.*(pyproject\.toml|\.python-version|ruff\.toml|mypy\.ini|requirements\.txt|README.*\.md|tests\.yaml)|bin/python_eol_bump\.py)$
 
       - id: agents-md-bridge
-        name: CLAUDE.md bridge gate (blueprintx#754)
+        name: CLAUDE.md bridge and leaf pairing gate (blueprintx#754)
         entry: bash -c 'bash bin/ci/check_agents_md_bridge.sh && bash tests/test_check_agents_md_bridge.sh'
         language: system
         pass_filenames: false
-        files: ^(templates/[^/]+/[^/]+\.(md|meta)|templates/common/.*|bin/(scaffold|lib)/.*\.sh|bin/ci/check_agents_md_bridge\.sh|tests/test_check_agents_md_bridge\.sh)$
+        files: ^(templates/.*(CLAUDE|AGENTS)\.md|templates/[^/]+/[^/]+\.(md|meta)|templates/common/.*|bin/(scaffold|lib)/.*\.sh|bin/ci/check_agents_md_bridge\.sh|tests/test_check_agents_md_bridge\.sh)$
 
       - id: workflow-python-pins
         name: workflow python-version minor-only pins (blueprintx#945)
