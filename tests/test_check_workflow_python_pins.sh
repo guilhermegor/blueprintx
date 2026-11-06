@@ -277,6 +277,10 @@ write_root_workflow "$str_fx" 'jobs:\n  a:\n    steps:\n      - run: echo "OTHER
 expect_gate "unrelated GITHUB_ENV write passes" pass "$str_fx"
 
 str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'jobs:\n  a:\n    steps:\n      - run: echo "NEWPY=1" >> "$GITHUB_ENV"\n      - with:\n          python-version: ${{ env.PY }}\n'
+expect_gate "GITHUB_ENV write of a longer name ending in the tracked one passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
 write_root_workflow "$str_fx" 'on:\n  workflow_dispatch:\n    inputs:\n      py:\n        type: choice\n        options:\n          - "3.12.8"\njobs:\n  a:\n    steps:\n      - with:\n          python-version: ${{ inputs.py }}\n'
 expect_gate "inputs options holding a patch pin fails" fail "$str_fx"
 
@@ -329,7 +333,8 @@ esac
 str_fx="$(make_fixture 3.12 3.12)"
 git_track "$str_fx"
 mkdir -p "$str_tmp/shim"
-printf '#!/bin/bash\necho "warning: benign" >&2\nexec /usr/bin/git "$@"\n' >"$str_tmp/shim/git"
+str_real_git="$(command -v git)"
+printf '#!/bin/bash\necho "warning: benign" >&2\nexec "%s" "$@"\n' "$str_real_git" >"$str_tmp/shim/git"
 chmod +x "$str_tmp/shim/git"
 str_got="pass"
 PATH="$str_tmp/shim:$PATH" PINS_REPO_ROOT="$str_fx" bash "$GATE" >/dev/null 2>&1 || str_got="fail"
@@ -342,12 +347,17 @@ fi
 
 str_fx="$(make_fixture 3.12.8 3.12)"
 git_track "$str_fx"
+mkdir -p "$str_tmp/envshim"
+printf '#!/bin/bash\nprintf "%%s|%%s\\n" "$3" "$(env | grep -c "^GIT_")" >>"%s/envlog"\nexec "%s" "$@"\n' "$str_tmp" "$str_real_git" >"$str_tmp/envshim/git"
+chmod +x "$str_tmp/envshim/git"
+rm -f "$str_tmp/envlog"
 str_got="pass"
-GIT_COMMON_DIR=/nonexistent GIT_OBJECT_DIRECTORY=/nonexistent GIT_CEILING_DIRECTORIES=/ PINS_REPO_ROOT="$str_fx" bash "$GATE" >/dev/null 2>&1 || str_got="fail"
-if [ "$str_got" = "fail" ]; then
-	print_status "success" "ambient GIT_* variables do not hide a patch pin"
+str_out="$(PATH="$str_tmp/envshim:$PATH" GIT_COMMON_DIR=/nonexistent GIT_OBJECT_DIRECTORY=/nonexistent GIT_CEILING_DIRECTORIES=/ PINS_REPO_ROOT="$str_fx" bash "$GATE" 2>&1)" || str_got="fail"
+str_log="$(cat "$str_tmp/envlog" 2>/dev/null || true)"
+if [ "$str_got" = "fail" ] && [[ "$str_out" == *"[patch pin]"* ]] && [[ "$str_log" == *"rev-parse|0"* ]] && [[ "$str_log" == *"ls-files|0"* ]] && [[ "$str_log" != *"|1"* ]] && [[ "$str_log" != *"|2"* ]] && [[ "$str_log" != *"|3"* ]]; then
+	print_status "success" "git sees no GIT_* variables for rev-parse and ls-files"
 else
-	print_status "error" "ambient GIT_* variables hid a patch pin"
+	print_status "error" "git received GIT_* variables or was not used: $str_log"
 	int_failures=$((int_failures + 1))
 fi
 

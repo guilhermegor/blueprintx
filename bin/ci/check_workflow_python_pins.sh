@@ -80,7 +80,7 @@ FNR == 1 { in_list = 0; in_block = 0; in_decl = 0; in_opts = 0; bool_fl = 0; int
 	}
 	if (str_line ~ /GITHUB_ENV/ && ("env" in arr_names)) {
 		int_n = split(arr_names["env"], arr_en, "|")
-		for (int_e = 2; int_e <= int_n; int_e++) if (index(str_line, arr_en[int_e] "=")) { report("python-version fed through GITHUB_ENV cannot be verified"); break }
+		for (int_e = 2; int_e <= int_n; int_e++) if (match(str_line, "(^|[^A-Za-z0-9_])" arr_en[int_e] "=")) { report("python-version fed through GITHUB_ENV cannot be verified"); break }
 	}
 	if (in_block) {
 		if (str_line ~ /^[[:space:]]*$/ || int_lead > int_indent) {
