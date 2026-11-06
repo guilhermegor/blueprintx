@@ -3733,7 +3733,7 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   numpy 2.5 or newer, whose <code>.pyi</code> files use PEP 695 <code>type</code> statements, and <code>python_version =
   3.10</code> fails on <code>numpy/__init__.pyi</code> in every tier that imports pandas. Capping numpy would
   move the break to the next dependency that adopts PEP 695. The floor is enforced where it is
-  sound: the CI 3.10 matrix leg runs mypy on 3.10, and ruff's <code>target-version = py310</code> catches
+  sound: the CI 3.11 matrix leg runs mypy on 3.11, and ruff's <code>target-version = py311</code> catches
   too-new syntax in our own code.</li>
 <li><strong><code>ignore_missing_imports = False</code></strong> (#376). A global <code>True</code> cannot tell "pandas ships no
   stubs" from "this first-party module does not exist in this layout", so a typo'd <code>utils.x</code>
@@ -3774,7 +3774,7 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
 </ul>
 <h3 id="rufftoml"><code>ruff.toml</code><a class="headerlink" href="#rufftoml" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>target-version</code></strong> is the floor of <code>requires-python</code> (<code>&gt;=3.10</code>); bump it in lockstep with
+<li><strong><code>target-version</code></strong> is the floor of <code>requires-python</code> (<code>&gt;=3.11</code>); bump it in lockstep with
   <code>pyproject.toml</code>.</li>
 <li><strong><code>exclude</code>.</strong> <code>src/chassis</code> and <code>src/capabilities/example_feature</code> were excluded until #203,
   mirroring #190's mypy fix. They ship verbatim into every DDD project, so a defect or a style
