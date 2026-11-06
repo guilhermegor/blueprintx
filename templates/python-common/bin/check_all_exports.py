@@ -382,6 +382,8 @@ def _from_import_origin(
     """
     if "_internal" in (cls_node.module or "").split("."):
         return cls_node.module
+    if not cls_node.module and str_source_name == "_internal":
+        return str_source_name
     path_target = _import_target(path_module, cls_node)
     if path_target is None:
         return None

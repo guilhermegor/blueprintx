@@ -335,6 +335,16 @@ _STR_FROM_MEMBER = "from .member import Doc\n" + _STR_EXPORT_DOC
             id="init-level-with",
         ),
         pytest.param(
+            "from . import _internal as Doc\n" + _STR_EXPORT_DOC,
+            {"_internal/__init__.py": ""},
+            id="bare-relative-internal-package",
+        ),
+        pytest.param(
+            "from .member import Doc\n" + _STR_EXPORT_DOC,
+            {"member.py": "from . import _internal as Doc\n", "_internal/__init__.py": ""},
+            id="bare-relative-internal-package-via-sibling",
+        ),
+        pytest.param(
             "from pkg._internal.config.schemas import *\n" + _STR_EXPORT_DOC,
             {},
             id="star-import-from-internal",
