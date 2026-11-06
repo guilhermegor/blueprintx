@@ -366,7 +366,11 @@ echo "$*" >>"$STUB_STATE/calls.log"
 case "$1 $2" in
     "auth status") [ "${STUB_AUTH:-ok}" = ok ] || exit 1 ;;
     "api user") echo ci-bot ;;
+    "api rate_limit") echo "5000 9999999999" ;;
+    "api repos/"*) echo true ;;
+    "api users/"*) echo User ;;
     "repo view")
+        case "$*" in *isPrivate*) echo false; exit 0 ;; esac
         case "$*" in *--json*) echo ci-bot/spec-probe; exit 0 ;; esac
         [ "${STUB_REPO_EXISTS:-0}" = 1 ] || [ -e "$STUB_STATE/created" ] && exit 0
         [ "${STUB_VIEW_ERROR:-0}" = 1 ] && { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
@@ -376,6 +380,8 @@ case "$1 $2" in
         [ "${STUB_PROJECT:-none}" = fail ] && exit 1
         [ "${STUB_PROJECT:-none}" = exists ] && echo 7
         exit 0 ;;
+    "project create") echo 7 ;;
+    "project field-list") case "$*" in *options*) ;; *) echo PVTSSF_status ;; esac ;;
     "repo create") touch "$STUB_STATE/created" ;;
     "api -X") case "$*" in *rulesets*) cat >"$STUB_STATE/protection.json" ;; esac ;;
 esac
@@ -575,7 +581,13 @@ test_kanban_lookup_skip_keeps_branch_protection_aligned() {
         str_name="e2e-kanban-$str_mode"
         STUB_PROJECT="$str_mode" run_ts_lib_with_gh_stub "$str_name" -- git_remote=y create_repo=y \
             repo_visibility=public kanban=y kanban_visibility=private protect_branch=y human_reviewers=n
-        if [ -e "$WORK_DIR/$str_name-state/protection.json" ]; then
+        if [ "$str_mode" = fail ]; then
+            if [ ! -e "$WORK_DIR/$str_name-state/protection.json" ] && grep -q 'GitHub step failed: list kanban boards' "$WORK_DIR/$str_name.out"; then
+                pass "kanban lookup (fail): a failed board lookup stops the scaffold before protection (blueprintx#998)"
+            else
+                fail "kanban lookup fail" "out=$(tail -c 300 "$WORK_DIR/$str_name.out")"
+            fi
+        elif [ -e "$WORK_DIR/$str_name-state/protection.json" ]; then
             pass "kanban lookup ($str_mode): the visibility answer is consumed, so protection is still sent"
         else
             fail "kanban lookup $str_mode" "out=$(tail -c 300 "$WORK_DIR/$str_name.out")"

@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=bin/lib/gh_preflight.sh
+source "$SCRIPT_DIR/lib/gh_preflight.sh"
 # shellcheck source=bin/lib/scaffold_repo_settings.sh
 source "$SCRIPT_DIR/lib/scaffold_repo_settings.sh"
 
@@ -193,7 +195,7 @@ detect_state() {
 }
 
 resolve_identity() {
-    [ -n "$GITHUB_USERNAME" ] || GITHUB_USERNAME="$(gh api user --jq .login || true)"
+    [ -n "$GITHUB_USERNAME" ] || GITHUB_USERNAME="$(gh_read "read the GitHub login (gh api user)" gh api user --jq .login)" || exit 1
     [ -n "$GITHUB_USERNAME" ] || exit_error "Could not resolve a GitHub username; pass --github-user explicitly."
     PROJECT_NAME="$(basename "$(cd "$PROJECT_PATH" && pwd)")"
     PROJECT_DISPLAY_NAME="$(echo "$PROJECT_NAME" | tr '_-' '  ' | awk '{for (i = 1; i <= NF; i++) $i = toupper(substr($i, 1, 1)) substr($i, 2); print}')"

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# shellcheck source=bin/lib/gh_preflight.sh
+source "$(dirname "${BASH_SOURCE[0]}")/gh_preflight.sh"
 # shellcheck source=bin/lib/scaffold_kanban.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_kanban.sh"
 # shellcheck source=bin/lib/scaffold_comment_budget.sh
@@ -116,6 +118,8 @@ scaffold_create_github_repo() {
 		;;
 	esac
 
+	gh_preflight
+
 	prompt_read str_vis_choice "Visibility [1] Public (default)  [2] Private: "
 	str_vis_flag="--public"
 	[ "$str_vis_choice" = "2" ] && str_vis_flag="--private"
@@ -131,7 +135,8 @@ scaffold_create_github_repo() {
 			print_status "info" "Fix the error above, then run: git push -u origin HEAD:main"
 			return 0
 		fi
-		gh repo edit "$str_slug" --default-branch main "${list_homepage[@]}" >/dev/null 2>&1 || true
+		gh_run "set the default branch of ${str_slug}" gh repo edit "$str_slug" \
+			--default-branch main "${list_homepage[@]}"
 		scaffold_set_origin_head "$str_project_path"
 		print_status "success" "Repository created and pushed via gh."
 		scaffold_kanban_setup

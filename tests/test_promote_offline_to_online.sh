@@ -259,6 +259,8 @@ test_secret_is_set_before_the_push() {
             if [ "$1 $2" = "repo create" ]; then
                 echo "create $*" >>"$LOG"
                 git -C "$PROJECT_PATH" remote add origin "$BARE"
+            elif [ "$1" = api ]; then
+                echo true
             else
                 cat >/dev/null
                 echo "secret pushed=$(git -C "$BARE" rev-parse --verify -q refs/heads/main >/dev/null && echo yes || echo no)" >>"$LOG"
