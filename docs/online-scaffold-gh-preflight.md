@@ -38,7 +38,7 @@ happened after the repo was created, finish the remaining steps by hand or use
 ## The GraphQL budget
 
 `SCAFFOLD_GH_GRAPHQL_BUDGET` (100) is a conservative upper bound, not a live
-measurement. `SCAFFOLD_GH_GRAPHQL_SITES` (14) counts the `gh project`,
+measurement. `SCAFFOLD_GH_GRAPHQL_SITES` (15) counts the `gh project`,
 `gh repo view` and `gh api graphql` call sites in the scaffold libraries;
 `tests/test_scaffold_gh_preflight.sh` fails when a call site is added without
 updating it, which is the prompt to re-check the budget.

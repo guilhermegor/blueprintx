@@ -37,6 +37,7 @@ case "$1 $2" in
 "repo create") echo "created" ;;
 "project list") echo "${GH_PROJECT_NUMBER:-}" ;;
 "project create") echo 7 ;;
+"project field-list") case "$*" in *".fields[].name"* | *options*) ;; *) echo PVTSSF_status ;; esac ;;
 esac
 exit 0
 STUB
@@ -168,6 +169,15 @@ test_a_rerun_completes_without_duplicates() {
     [ "$int_rc" -eq 0 ] || fail "rerun: second run stopped: $str_out"
     expect_not_called "rerun" "project create"
     expect_said "rerun" "already exists (#7)"
+    grep -qF -- "project link 7" "$WORK_DIR/gh.log" || fail "rerun: a partial board was never re-linked"
+    grep -qF -- "project field-create 7" "$WORK_DIR/gh.log" || fail "rerun: the missing fields were never created"
+}
+
+test_a_stop_after_the_repo_exists_does_not_advise_a_plain_rerun() {
+    run_fn '' "SCAFFOLD_CREATED_REPO=octo/widget" "GH_LABEL_ERR=boom" scaffold_create_house_labels octo/widget
+    expect_stop "created repo"
+    expect_said "created repo" "octo/widget already exists on GitHub"
+    expect_not_said "created repo" "half-created online project is never acceptable. Re-run"
 }
 
 test_graphql_call_sites_match_the_measured_count() {
@@ -214,6 +224,7 @@ main() {
     test_board_url_never_guesses_the_owner_kind
     test_a_mid_run_label_failure_stops
     test_a_rerun_completes_without_duplicates
+    test_a_stop_after_the_repo_exists_does_not_advise_a_plain_rerun
     test_stop_message_prints_the_real_rerun_command
     test_no_scaffold_swallows_a_failed_gh_user_read
     test_graphql_call_sites_match_the_measured_count

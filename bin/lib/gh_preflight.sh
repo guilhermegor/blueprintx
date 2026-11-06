@@ -1,7 +1,7 @@
 #!/bin/bash
 
 : "${SCAFFOLD_GH_GRAPHQL_BUDGET:=100}"
-: "${SCAFFOLD_GH_GRAPHQL_SITES:=14}"
+: "${SCAFFOLD_GH_GRAPHQL_SITES:=15}"
 : "${SCAFFOLD_RERUN_CMD:=the same blueprintx command}"
 
 gh_classify_failure() {
@@ -23,7 +23,7 @@ gh_wait_message() {
 	fi
 	str_epoch="${GH_RESET_EPOCH:-}"
 	[ -n "$str_epoch" ] ||
-		str_epoch="$(gh api rate_limit --jq '.resources.graphql.reset' 2>/dev/null)" || str_epoch=""
+		str_epoch="$(gh api rate_limit --jq '([(.resources.core, .resources.graphql) | select(.remaining == 0) | .reset] | max) // .resources.graphql.reset' 2>/dev/null)" || str_epoch=""
 	if [[ "$str_epoch" =~ ^[0-9]+$ ]]; then
 		int_now="$(date +%s)"
 		int_mins=$(((str_epoch - int_now + 59) / 60))
@@ -44,7 +44,11 @@ gh_stop_online() {
 	network) print_status "error" "Cause: network. Fix: check the connection to api.github.com, then retry." ;;
 	*) print_status "error" "Cause: unexpected gh failure: $(head -n1 <<<"${str_text:-no output from gh}")" ;;
 	esac
-	print_status "error" "Stopping: a half-created online project is never acceptable. Re-run ${SCAFFOLD_RERUN_CMD} once fixed."
+	if [ -n "${SCAFFOLD_CREATED_REPO:-}" ]; then
+		print_status "error" "Stopping: ${SCAFFOLD_CREATED_REPO} already exists on GitHub, so re-running would fail at repo creation. Finish the remaining steps by hand, or delete it ('gh repo delete ${SCAFFOLD_CREATED_REPO}') and re-run ${SCAFFOLD_RERUN_CMD}."
+	else
+		print_status "error" "Stopping: a half-created online project is never acceptable. Re-run ${SCAFFOLD_RERUN_CMD} once fixed."
+	fi
 	exit 1
 }
 

@@ -125,8 +125,9 @@ scaffold_create_github_repo() {
 	[ "$str_vis_choice" = "2" ] && str_vis_flag="--private"
 	[ -n "$SCAFFOLD_REPO_HOMEPAGE" ] && list_homepage=(--homepage "$SCAFFOLD_REPO_HOMEPAGE")
 
-	if gh repo create "$str_slug" "${list_homepage[@]}" \
+	if gh repo create "$str_slug" ${list_homepage[@]+"${list_homepage[@]}"} \
 		--description "$PROJECT_DESCRIPTION" "$str_vis_flag"; then
+		SCAFFOLD_CREATED_REPO="$str_slug"
 		scaffold_enable_delete_branch_on_merge "$str_slug"
 		scaffold_set_secret_scan_key
 		if ! git -C "$str_project_path" push -u origin HEAD:main; then
@@ -136,7 +137,7 @@ scaffold_create_github_repo() {
 			return 0
 		fi
 		gh_run "set the default branch of ${str_slug}" gh repo edit "$str_slug" \
-			--default-branch main "${list_homepage[@]}"
+			--default-branch main ${list_homepage[@]+"${list_homepage[@]}"}
 		scaffold_set_origin_head "$str_project_path"
 		print_status "success" "Repository created and pushed via gh."
 		scaffold_kanban_setup

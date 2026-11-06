@@ -97,13 +97,16 @@ scaffold_kanban_status_options() {
 }
 
 scaffold_kanban_fields() {
-	local str_owner="$1" str_number="$2" str_name str_type str_opts
+	local str_owner="$1" str_number="$2" str_name str_type str_opts str_have
 	local -a list_opts
+	str_have="$(gh_read "read the fields of board ${str_number}" gh project field-list "$str_number" \
+		--owner "$str_owner" --format json --jq '.fields[].name')" || exit 1
 	while IFS='|' read -r str_name str_type str_opts; do
+		grep -qxF -- "$str_name" <<<"$str_have" && continue
 		list_opts=()
 		[ -z "$str_opts" ] || list_opts=(--single-select-options "$str_opts")
 		gh_run "create project field '${str_name}'" gh project field-create "$str_number" \
-			--owner "$str_owner" --name "$str_name" --data-type "$str_type" "${list_opts[@]}"
+			--owner "$str_owner" --name "$str_name" --data-type "$str_type" ${list_opts[@]+"${list_opts[@]}"}
 	done <<<"Priority|SINGLE_SELECT|P0,P1,P2
 Size|SINGLE_SELECT|XS,S,M,L,XL
 Estimate|NUMBER|
@@ -124,6 +127,16 @@ scaffold_kanban_url() {
 	printf 'https://github.com/%s/%s/projects/%s' "$str_path" "$str_owner" "$str_number"
 }
 
+scaffold_kanban_finish() {
+	local str_slug="$1" str_owner="$2" str_number="$3" str_vis="$4"
+	gh_run "set the board's visibility to ${str_vis}" gh project edit "$str_number" \
+		--owner "$str_owner" --visibility "$str_vis"
+	gh_run "link the board to ${str_slug}" gh project link "$str_number" \
+		--owner "$str_owner" --repo "$str_slug"
+	scaffold_kanban_status_options "$str_owner" "$str_number"
+	scaffold_kanban_fields "$str_owner" "$str_number"
+}
+
 scaffold_kanban_create() {
 	local str_slug="$1" str_owner="$2" str_title="$3" str_vis="$4" str_number str_err str_url
 	str_url="$(scaffold_kanban_url "$str_owner" "next")" || exit 1
@@ -134,12 +147,7 @@ scaffold_kanban_create() {
 	}
 	rm -f "$str_err"
 	str_url="${str_url%/next}/${str_number}"
-	gh_run "set the board's visibility to ${str_vis}" gh project edit "$str_number" \
-		--owner "$str_owner" --visibility "$str_vis"
-	gh_run "link the board to ${str_slug}" gh project link "$str_number" \
-		--owner "$str_owner" --repo "$str_slug"
-	scaffold_kanban_status_options "$str_owner" "$str_number"
-	scaffold_kanban_fields "$str_owner" "$str_number"
+	scaffold_kanban_finish "$str_slug" "$str_owner" "$str_number" "$str_vis"
 	print_status "success" "Created '${str_title}' (${str_vis}), linked to ${str_slug}"
 	print_status "info" "No public API for views or built-in workflows — enable auto-add and item-closed -> Done at: ${str_url}/workflows"
 }
@@ -174,7 +182,8 @@ scaffold_kanban_setup() {
 	fi
 	[ "$int_rc" -eq 0 ] || exit 1
 	if [ -n "$str_found" ]; then
-		print_status "info" "'${str_title}' already exists (#${str_found}) — skipping"
+		print_status "info" "'${str_title}' already exists (#${str_found}) — completing any missing parts"
+		scaffold_kanban_finish "$str_slug" "$str_owner" "$str_found" "$str_vis"
 		return 0
 	fi
 

@@ -433,6 +433,9 @@ jobs:
       - name: Run the kanban should-fail suite (blueprintx#592)
         run: bash tests/test_scaffold_kanban.sh
 
+      - name: Run the gh preflight and fail-closed suite (blueprintx#998)
+        run: bash tests/test_scaffold_gh_preflight.sh
+
       - name: Run the scaffold git-remote should-fail suite (blueprintx#732)
         run: bash tests/test_scaffold_git_remote.sh
 
