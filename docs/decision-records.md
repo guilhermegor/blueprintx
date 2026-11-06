@@ -2290,3 +2290,14 @@ rest of the suite.
   reply posted after a base change cannot make a carried-forward review look newer than
   that change. Known fail-open, not closed: a reply whose parent comment was deleted reads
   `replyTo: null`, is taken for a root comment, and counts as a review.
+
+## The 1.0.0 release gate and open pull requests (`templates/common/bin/check_release_gate.py`, #996)
+
+The gate counts open issues only. A pull request reaches it through the REST issues endpoint
+carrying a `pull_request` key, and `blocking()` drops those items. Failing on open PRs would let
+a standing Dependabot PR or a `post-1.0` feature branch block every release, and the gate has no
+label with which to exempt a PR, so the smaller blast radius is to keep the gate on issues and
+put "every open PR merged, closed, or deferred past 1.0" on the Cut 1.0.0 checklist, where the
+owner judges each one. `tests/test_check_release_gate.sh` pins the decision with a case in which
+a lone unlabelled PR passes the gate. The generated project's `docs/releasing-1-0-0.md` states
+the decision without naming that suite, because a generated project does not ship it.

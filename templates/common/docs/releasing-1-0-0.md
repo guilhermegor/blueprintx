@@ -34,8 +34,7 @@ it lists the open issues and fails while any lacks the `post-1.0` label, naming 
   `post-1.0` feature branch block every release, and the gate has no label to exempt a PR
   with. The smaller blast radius is to keep the gate on issues and put "every open PR
   merged, closed, or deferred past 1.0" on the **Cut 1.0.0** checklist, where the owner
-  judges each PR. BlueprintX's own test
-  suite pins that a lone open PR passes the gate.
+  judges each PR.
 - The issues are read through the GitHub REST API with the workflow token, read-only.
 - If the API cannot be read, the gate fails closed: it blocks the release rather than guess.
 - Every other bump, such as 0.4.0 to 0.5.0 or 1.0.0 to 1.0.1, is untouched.
