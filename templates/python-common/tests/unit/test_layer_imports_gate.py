@@ -358,6 +358,134 @@ def test_pydantic_model_in_internal_config_passes(tmp_path: Path) -> None:
     assert "OK" in _output_at(_run_main(tmp_path), 0)
 
 
+_DICT_BASE_POLICY = {
+    "layers": {
+        "utils": {
+            "deny_class_bases": {
+                "BaseModel": "models live in config/schemas",
+                "RootModel": "models live in config/schemas",
+            }
+        }
+    }
+}
+
+
+def _class_base_problems(tmp_path: Path, str_source: str) -> list[str]:
+    """Run ``class_base_problems`` over one synthetic ``utils`` module.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    str_source : str
+        The module source to check.
+
+    Returns
+    -------
+    list of str
+        The problems the gate reported.
+    """
+    path_file = tmp_path / "probe.py"
+    path_file.write_text(str_source, encoding="utf-8")
+    return _load_gate().class_base_problems(path_file, "utils", _DICT_BASE_POLICY)
+
+
+@pytest.mark.parametrize(
+    "str_source",
+    [
+        pytest.param(
+            "from pydantic import BaseModel as Model\n\n\nclass Doc(Model):\n    pass\n",
+            id="alias-import",
+        ),
+        pytest.param(
+            "import pydantic\n\n\nclass Doc(pydantic.BaseModel):\n    pass\n",
+            id="dotted-attribute",
+        ),
+        pytest.param(
+            "import pydantic as pd\n\n\nclass Doc(pd.BaseModel):\n    pass\n",
+            id="aliased-module",
+        ),
+        pytest.param(
+            "from pydantic import RootModel\n\n\nclass Doc(RootModel[int]):\n    pass\n",
+            id="root-model-subscript",
+        ),
+        pytest.param(
+            "def build() -> None:\n    from pydantic import BaseModel\n\n"
+            "    class Doc(BaseModel):\n        pass\n",
+            id="deferred-import",
+        ),
+    ],
+)
+def test_denied_base_is_resolved_through_the_import_table(tmp_path: Path, str_source: str) -> None:
+    """Aliases, dotted access, ``RootModel`` and subscripted bases all reach the rule."""
+    assert "subclasses" in _sole(_class_base_problems(tmp_path, str_source))
+
+
+@pytest.mark.parametrize(
+    "str_source",
+    [
+        pytest.param(
+            "class BaseModel:\n    pass\n\n\nclass Doc(BaseModel):\n    pass\n", id="local"
+        ),
+        pytest.param(
+            "from .base import BaseModel\n\n\nclass Doc(BaseModel):\n    pass\n", id="relative"
+        ),
+        pytest.param(
+            "from pydantic import BaseModel as Model\n\n\nclass BaseModel:\n    pass\n\n\n"
+            "class Doc(BaseModel):\n    pass\n",
+            id="local-class-shadows-the-alias",
+        ),
+    ],
+)
+def test_unrelated_class_named_like_a_denied_base_is_not_flagged(
+    tmp_path: Path, str_source: str
+) -> None:
+    """A class that merely shares the name, and is not imported, is not the vendor's type."""
+    assert _class_base_problems(tmp_path, str_source) == []
+
+
+def test_a_dotted_deny_key_matches_the_full_path_only(tmp_path: Path) -> None:
+    """``pydantic.BaseModel`` as a key spares another library's ``BaseModel``."""
+    path_file = tmp_path / "probe.py"
+    path_file.write_text(
+        "from other import BaseModel\n\n\nclass Doc(BaseModel):\n    pass\n", encoding="utf-8"
+    )
+    dict_policy = {"layers": {"utils": {"deny_class_bases": {"pydantic.BaseModel": "why"}}}}
+    assert _load_gate().class_base_problems(path_file, "utils", dict_policy) == []
+
+
+def test_a_dotted_deny_key_matches_an_aliased_import(tmp_path: Path) -> None:
+    """The dotted key is compared after the alias is resolved."""
+    path_file = tmp_path / "probe.py"
+    path_file.write_text(
+        "from pydantic import BaseModel as Model\n\n\nclass Doc(Model):\n    pass\n",
+        encoding="utf-8",
+    )
+    dict_policy = {"layers": {"utils": {"deny_class_bases": {"pydantic.BaseModel": "why"}}}}
+    assert "subclasses" in _sole(_load_gate().class_base_problems(path_file, "utils", dict_policy))
+
+
+def test_prefix_marker_without_prefix_depth_is_a_policy_error(tmp_path: Path) -> None:
+    """A marker with no depth is ignored by the resolver, so it must fail loudly instead."""
+    (tmp_path / "src" / "pkg").mkdir(parents=True)
+    (tmp_path / "src" / "pkg" / "mod.py").write_text("import os\n", encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        "src_prefix_marker: _internal\n" + _STR_MINIMAL_POLICY, encoding="utf-8"
+    )
+    assert "src_prefix_depth" in _output_at(_run_main(tmp_path), 1)
+
+
+def test_prefix_marker_with_a_zero_depth_is_a_policy_error(tmp_path: Path) -> None:
+    """An explicit ``src_prefix_depth: 0`` strips nothing, so the marker is just as dead."""
+    (tmp_path / "src" / "pkg").mkdir(parents=True)
+    (tmp_path / "src" / "pkg" / "mod.py").write_text("import os\n", encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        "src_prefix_marker: _internal\nsrc_prefix_depth: 0\n" + _STR_MINIMAL_POLICY,
+        encoding="utf-8",
+    )
+    assert "src_prefix_depth" in _output_at(_run_main(tmp_path), 1)
+
+
 def _seed_project(path_root: Path, str_module: str = "import os\n") -> None:
     """Build a minimal project tree holding one module under ``src/model/``.
 
