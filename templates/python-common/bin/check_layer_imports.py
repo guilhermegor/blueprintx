@@ -99,12 +99,35 @@ def load_policy(path_root: pathlib.Path) -> dict | None:
     path_policy = path_root / _POLICY_FILE
     if yaml is None or not path_policy.is_file():
         return None
-    return (
+    dict_policy = (
         yaml.load(  # noqa: S506 — SafeLoader-derived; it only ADDS a duplicate-key check
             path_policy.read_text(encoding="utf-8"), Loader=_StrictLoader
         )
         or None
     )
+    if dict_policy and dict_policy.get("src_prefix_marker") and _prefix_depth(dict_policy) < 1:
+        raise ValueError(
+            f"{_POLICY_FILE}: 'src_prefix_marker' is set without a 'src_prefix_depth' of at "
+            f"least 1 — the marker is only read after that many components are stripped, so "
+            f"it would be ignored in silence."
+        )
+    return dict_policy
+
+
+def _prefix_depth(dict_policy: dict) -> int:
+    """Return the policy's ``src_prefix_depth`` as an int, ``0`` when absent.
+
+    Parameters
+    ----------
+    dict_policy : dict
+        The parsed policy.
+
+    Returns
+    -------
+    int
+        The number of leading components below ``src/`` that precede the layer.
+    """
+    return int(dict_policy.get("src_prefix_depth") or 0)
 
 
 def first_party_roots(path_src: pathlib.Path, dict_policy: dict) -> set[str]:
@@ -740,14 +763,89 @@ def class_base_problems(path_file: pathlib.Path, str_layer: str, dict_policy: di
     if not dict_denied:
         return []
     cls_tree = ast.parse(path_file.read_text(encoding="utf-8"))
+    dict_table = import_table(cls_tree)
     return [
         f"{path_file}:{cls_node.lineno}: class {cls_node.name} subclasses {str_base} in layer "
         f"'{str_layer}' — {dict_denied[str_base]}"
         for cls_node in ast.walk(cls_tree)
         if isinstance(cls_node, ast.ClassDef)
-        for str_base in (ast.unparse(cls_base).split(".")[-1] for cls_base in cls_node.bases)
-        if str_base in dict_denied
+        for cls_base in cls_node.bases
+        for str_base in [denied_base_key(cls_base, dict_table, dict_denied)]
+        if str_base is not None
     ]
+
+
+def import_table(cls_tree: ast.Module) -> dict[str, str]:
+    """Map every locally bound import name to the dotted path it stands for.
+
+    Relative imports and ``import *`` are left out: the first is first-party by construction
+    and the second binds names nobody can enumerate. A class defined in the file is never in
+    the table, which is what keeps it from being mistaken for the vendor's type of that name.
+
+    Parameters
+    ----------
+    cls_tree : ast.Module
+        The parsed module.
+
+    Returns
+    -------
+    dict of str to str
+        Local name to fully qualified dotted path.
+    """
+    dict_table: dict[str, str] = {}
+    for cls_node in ast.walk(cls_tree):
+        if isinstance(cls_node, ast.Import):
+            for cls_alias in cls_node.names:
+                str_bound = cls_alias.asname or cls_alias.name.split(".")[0]
+                dict_table[str_bound] = cls_alias.name if cls_alias.asname else str_bound
+        elif isinstance(cls_node, ast.ImportFrom) and cls_node.module and not cls_node.level:
+            for cls_alias in cls_node.names:
+                dict_table[cls_alias.asname or cls_alias.name] = (
+                    f"{cls_node.module}.{cls_alias.name}"
+                )
+    return dict_table
+
+
+def denied_base_key(
+    cls_base: ast.expr, dict_table: dict[str, str], dict_denied: dict
+) -> str | None:
+    """Return the ``deny_class_bases`` key a class base resolves to, or ``None``.
+
+    The base is unwrapped from any subscript (``RootModel[int]``), turned into a dotted name
+    and resolved through the import table. A bare key (``BaseModel``) matches the last segment
+    of the resolved path; a dotted key (``pydantic.BaseModel``) must equal it.
+
+    Parameters
+    ----------
+    cls_base : ast.expr
+        One entry of a class definition's bases.
+    dict_table : dict of str to str
+        The file's import table.
+    dict_denied : dict
+        The layer's ``deny_class_bases`` map.
+
+    Returns
+    -------
+    str or None
+        The matching key, or ``None`` when the base is not an imported denied type.
+    """
+    while isinstance(cls_base, ast.Subscript):
+        cls_base = cls_base.value
+    list_parts = ast.unparse(cls_base).split(".")
+    if not all(str_part.isidentifier() for str_part in list_parts):
+        return None
+    if list_parts[0] not in dict_table:
+        return None
+    str_qualified = ".".join([dict_table[list_parts[0]], *list_parts[1:]])
+    str_last = str_qualified.rsplit(".", maxsplit=1)[-1]
+    return next(
+        (
+            str_key
+            for str_key in dict_denied
+            if str_key == str_qualified or ("." not in str_key and str_key == str_last)
+        ),
+        None,
+    )
 
 
 def main() -> int:
