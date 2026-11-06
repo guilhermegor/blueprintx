@@ -450,3 +450,65 @@ def test_public_and_internal_star_imports_do_not_flag_the_public_names(tmp_path:
         },
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+_STR_STAR_INTERNAL = "from .public import *\nfrom ._internal.config import *\n"
+
+
+def test_nested_star_import_inside_internal_is_still_charged(tmp_path: Path) -> None:
+    """A name an ``_internal`` module re-exports through its own star import still leaks."""
+    path_init = _tree(
+        tmp_path,
+        _STR_STAR_INTERNAL + '__all__ = ["Pub", "Priv"]\n',
+        {
+            "public.py": "class Pub:\n    pass\n",
+            "_internal/__init__.py": "",
+            "_internal/config.py": "from .deeper import *\n",
+            "_internal/deeper.py": "class Priv:\n    pass\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_internal_all_limits_what_its_star_import_is_charged(tmp_path: Path) -> None:
+    """A name outside the ``_internal`` module's own ``__all__`` is not its star import's."""
+    path_init = _tree(
+        tmp_path,
+        _STR_STAR_INTERNAL + '__all__ = ["Pub"]\n',
+        {
+            "public.py": "class Pub:\n    pass\n",
+            "_internal/__init__.py": "",
+            "_internal/config.py": '__all__ = ["Other"]\n\n\nclass Other:\n    pass\n',
+        },
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_broken_internal_star_target_is_a_finding_not_a_traceback(tmp_path: Path) -> None:
+    """A syntax error in the ``_internal`` star target is reported by file name."""
+    path_init = _tree(
+        tmp_path,
+        _STR_STAR_INTERNAL + _STR_EXPORT_DOC,
+        {
+            "public.py": "Doc = 1\n",
+            "_internal/__init__.py": "",
+            "_internal/config.py": "def (:\n",
+        },
+    )
+    assert "config.py: could not parse" in _sole(_load_gate().check_package(path_init))
+
+
+def test_third_party_internal_package_is_not_charged(tmp_path: Path) -> None:
+    """``from otherlib import _internal`` is not this package's ``_internal``."""
+    path_init = _tree(tmp_path, "from otherlib import _internal as Doc\n" + _STR_EXPORT_DOC, {})
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_relative_internal_package_keeps_its_leading_dot(tmp_path: Path) -> None:
+    """The finding names ``.sub._internal``, the path as written."""
+    path_init = _tree(
+        tmp_path,
+        "from .sub import _internal as Doc\n" + _STR_EXPORT_DOC,
+        {"sub/__init__.py": "", "sub/_internal/__init__.py": ""},
+    )
+    assert "(.sub._internal)" in _sole(_load_gate().check_package(path_init))

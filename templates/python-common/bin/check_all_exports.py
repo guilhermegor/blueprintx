@@ -321,12 +321,53 @@ def _star_origin(
     str or None
         The dotted ``_internal`` module, or ``None``.
     """
+    if "_internal" not in (cls_node.module or "").split("."):
+        return _from_import_origin(path_module, cls_node, str_name, set_seen)
     path_target = _import_target(path_module, cls_node)
-    if "_internal" in (cls_node.module or "").split(".") and path_target is not None:
-        list_nodes = list(_module_statements(_parse(path_target).body))
-        if str_name not in _definitions(list_nodes) | _imported_names(list_nodes):
-            return None
+    if path_target is not None and not _star_provides(path_target, str_name, frozenset()):
+        return None
     return _from_import_origin(path_module, cls_node, str_name, set_seen)
+
+
+def _star_provides(
+    path_module: pathlib.Path, str_name: str, set_seen: frozenset[pathlib.Path]
+) -> bool:
+    """Return whether ``from <module> import *`` would bind ``str_name``.
+
+    The module's own ``__all__`` limits what a star import brings in, and a name it only
+    re-exports through a star import of its own counts. A nested star import that cannot be
+    resolved is assumed to provide the name, so the check fails closed.
+
+    Parameters
+    ----------
+    path_module : pathlib.Path
+        The module being star-imported.
+    str_name : str
+        The name to look for.
+    set_seen : frozenset of pathlib.Path
+        Modules already visited, so an import cycle terminates.
+
+    Returns
+    -------
+    bool
+        ``True`` when the name may come from this module.
+    """
+    if path_module in set_seen:
+        return False
+    list_nodes = list(_module_statements(_parse(path_module).body))
+    list_exported = declared_all(path_module)
+    if list_exported is not None and str_name not in list_exported:
+        return False
+    if str_name in _definitions(list_nodes) | _imported_names(list_nodes):
+        return True
+    set_next = set_seen | {path_module}
+    return any(
+        (path_target := _import_target(path_module, cls_node)) is None
+        or _star_provides(path_target, str_name, set_next)
+        for cls_node in list_nodes
+        if isinstance(cls_node, ast.ImportFrom)
+        and any(cls_alias.name == "*" for cls_alias in cls_node.names)
+    )
 
 
 def _imported_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
@@ -419,11 +460,37 @@ def _from_import_origin(
     if "_internal" in (cls_node.module or "").split("."):
         return cls_node.module
     if str_source_name == "_internal":
-        return f"{cls_node.module}._internal" if cls_node.module else str_source_name
+        return _internal_package_origin(path_module, cls_node)
     path_target = _import_target(path_module, cls_node)
     if path_target is None:
         return None
     return _internal_origin(path_target, str_source_name, set_seen)
+
+
+def _internal_package_origin(path_module: pathlib.Path, cls_node: ast.ImportFrom) -> str | None:
+    """Return the dotted ``_internal`` package a ``from … import _internal`` names, or ``None``.
+
+    The bare relative form (``from . import _internal``) is always first-party. With a module
+    named, the import counts only when that module resolves inside this package's tree, so
+    ``from pydantic import _internal`` is not charged.
+
+    Parameters
+    ----------
+    path_module : pathlib.Path
+        The module containing the import.
+    cls_node : ast.ImportFrom
+        The import statement.
+
+    Returns
+    -------
+    str or None
+        The dotted path, with its leading dots for a relative import.
+    """
+    if not cls_node.module:
+        return "_internal"
+    if _import_target(path_module, cls_node) is None:
+        return None
+    return f"{'.' * cls_node.level}{cls_node.module}._internal"
 
 
 def _import_target(path_module: pathlib.Path, cls_node: ast.ImportFrom) -> pathlib.Path | None:
