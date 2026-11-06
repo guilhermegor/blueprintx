@@ -521,8 +521,10 @@ def _is_provable_without_patch(dict_file: dict) -> bool:
     """
     str_status = dict_file.get("status")
     str_sha = dict_file.get("sha")
-    return dict_file.get("changes") == 0 and bool(str_sha) and (
-        str_status == "renamed" or (str_status == "added" and str_sha == _STR_EMPTY_BLOB_SHA)
+    return (
+        dict_file.get("changes") == 0
+        and bool(str_sha)
+        and (str_status == "renamed" or (str_status == "added" and str_sha == _STR_EMPTY_BLOB_SHA))
     )
 
 
