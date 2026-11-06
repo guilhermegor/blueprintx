@@ -61,7 +61,7 @@ flag and keep the full-history scan.
 
 ## Why GitGuardian is opt-in
 
-`secret_scan.yaml` reads `${{ secrets.GITGUARDIAN_API_KEY }}`, and GitHub
+`secret-scan.yml` reads `${{ secrets.GITGUARDIAN_API_KEY }}`, and GitHub
 resolves that secret **in the repository where the workflow runs**. A key
 set on `guilhermegor/blueprintx` never reaches a freshly scaffolded project
 — so shipping the workflow unconditionally meant a brand-new project failed
@@ -84,13 +84,13 @@ make new
 When you answer **yes** to "Add remote origin and (optionally) create the
 GitHub repo now?", the scaffold:
 
-1. copies `.github/workflows/secret_scan.yaml` into the new project (only
+1. copies `.github/workflows/secret-scan.yml` into the new project (only
    because the variable is set — see `copy_github_assets` in each
    `bin/scaffold/python_*.sh`), and
 2. propagates the key to the new repository's secrets for you
    (`scaffold_set_secret_scan_key` in `bin/lib/scaffold_git_remote.sh`),
    the same moment `GH_PAT_REVIEW_TRIGGER` is propagated for
-   `coderabbit_trigger.yaml`.
+   `coderabbit-trigger.yml`.
 
 Decline, or never export the variable, and the project simply never
 receives the workflow — no dead job, nothing failing on the first PR.
@@ -105,7 +105,7 @@ tier's `.env.example` (that file is seeded into the generated project's own
 `.env` and covers **application runtime** configuration — database
 credentials, feature flags — never CI-time secrets); the precedent for a
 repo secret like this one is a documented note beside the workflow that needs it,
-which is what this page and the `secret_scan.yaml` record in
+which is what this page and the `secret-scan.yml` record in
 [Decision records](decision-records.md) follow.
 
 ## Opting in after the fact
@@ -120,7 +120,7 @@ gh secret set GITGUARDIAN_API_KEY --repo <owner>/<repo>
 prompt over `--body '<your key>'`: an argument is visible to any other process on the
 host for the life of the call, and it lands in your shell history besides.
 
-then copy `templates/python-common/.github/workflows/secret_scan.yaml` from
+then copy `templates/python-common/.github/workflows/secret-scan.yml` from
 a BlueprintX checkout into the project's own `.github/workflows/`.
 
 ## The fail-loud contract, once shipped
@@ -132,12 +132,12 @@ A missing or bad key still fails **loudly**, never silently:
 - A Dependabot-authored PR is the one deliberate, reported exception
   (blueprintx#457): GitHub gives it a separate secret store this repo's key
   never reaches, so the job prints a `::warning::` naming the reason and
-  skips — `gitleaks` (`tests.yaml`) already scans the same range
+  skips — `gitleaks` (`tests.yml`) already scans the same range
   unconditionally, so nothing goes unscanned.
 
 ## Offline scaffolds never receive it
 
 A scaffold run that declines a GitHub remote (`apply_offline_mode`) strips
-every GitHub-only workflow, `secret_scan.yaml` included — there is no
+every GitHub-only workflow, `secret-scan.yml` included — there is no
 Actions runner to execute it there. `bin/ci/scaffold_lint_test.sh` asserts
 this for every tier.

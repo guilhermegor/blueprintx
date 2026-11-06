@@ -115,7 +115,7 @@ seam is actually executed.
 
 **Run all six Python tiers with `make verify_tiers`** (`bin/ci/scaffold_lint_test_all.sh`; `JOBS=1` to
 serialise while debugging). It fans the tiers out in parallel — measured 477s of work in 103s wall
-clock — and CI needs none of it, because `tests.yaml` already runs one job per tier.
+clock — and CI needs none of it, because `tests.yml` already runs one job per tier.
 
 ⚠️ **Each worker gets its OWN COPY of `templates/` + `bin/`, and that is load-bearing rather than
 tidy.** "The tiers are independent" is the obvious assumption and it is false: `scaffold_lint_test.sh`
@@ -163,6 +163,10 @@ This pair is **root-repo-only**: unlike the rest of the gate family, `Makefile` 
 project (`poe_tasks.toml` replaced them there since #236) — so the script lives at
 `bin/check_makefile_pairing.sh`, not `templates/python-common/bin/`, and never ships as part
 of a scaffold.
+
+The **template workflow-name gate** (`bin/ci/check_workflow_names.sh`, pre-commit hook and CI job
+`workflow-names`) fails a `templates/**/.github/workflows/` file that is not kebab-case `.yml`, bar
+the two exempt PyPI files; rationale and counts in `CONTRIBUTING.md` (#947).
 
 The **PR file-count ceiling** (`bin/ci/check_pr_file_count.py`, pre-commit hook
 `pr-file-count`, the `pr-file-count` CI job) fails a branch above **90 cumulative changed

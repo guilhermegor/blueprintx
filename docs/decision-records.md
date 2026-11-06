@@ -33,9 +33,9 @@ generated repo.
 > SUBMITTED REVIEW, not against silence. A reviewer that ran and found nothing still passes;
 > one that never ran fails.
 
-## `review_threads.yaml` — a required check that reports is safe to require (#173)
+## `review-threads.yml` — a required check that reports is safe to require (#173)
 
-Applies to `templates/python-common/.github/workflows/review_threads.yaml` — shipped
+Applies to `templates/python-common/.github/workflows/review-threads.yml` — shipped
 into every generated project, so its pointer names `blueprintx#173` directly rather
 than a doc path meaningless outside this repo. The live file keeps the load-bearing
 half (why the job is safe as a required check and why `bin/enable_repo_rules.sh`
@@ -51,9 +51,9 @@ carries the same block (dated text: "SUPERSEDED 2026-08-17 (#173, PR #185)") plu
 two more below, and is held by PRs #491/#492 as of this writing. Follow-up once
 those land.
 
-## `review_threads.yaml` — the resolve half must also catch outdated threads (#196)
+## `review-threads.yml` — the resolve half must also catch outdated threads (#196)
 
-Applies to `templates/python-common/.github/workflows/review_threads.yaml`. The
+Applies to `templates/python-common/.github/workflows/review-threads.yml`. The
 "split as it stood" bullet list a few lines below the live comment already states
 the current three-layer split in full, so the narrative here is pure changelog.
 
@@ -74,9 +74,9 @@ story, told from the ruleset side — held by the #129 dispatch claim), and
 `templates/common/bin/check_review_threads.py` (held by PR #424). Follow-up
 once those land.
 
-## `review_threads.yaml` — no `concurrency:` block, ever (#216)
+## `review-threads.yml` — no `concurrency:` block, ever (#216)
 
-Applies to `templates/python-common/.github/workflows/review_threads.yaml`. The
+Applies to `templates/python-common/.github/workflows/review-threads.yml`. The
 full reasoning is already restated in the "NO `concurrency:` BLOCK, DELIBERATELY"
 comment further down the same file — this block was a preview of that one,
 so nothing but the changelog framing is lost by trimming it.
@@ -607,10 +607,10 @@ that lived beside the constants and the data.
   (`gh api repos/:owner/:repo/commits/<pr-head-sha>/check-runs --jq '.check_runs[].name' | sort -u`).
   A name nothing emits blocks every PR forever, since GitHub cannot tell "has not reported yet"
   from "will never report". Deleting a line is always safe; adding an unverified one is not.
-- `Review threads answered` is the `review_threads.yaml` job: `on: pull_request` with no filter,
+- `Review threads answered` is the `review-threads.yml` job: `on: pull_request` with no filter,
   so it reports from the moment a PR opens, and it fails both when a thread is unanswered and when
   no reviewer ran at all.
-- `Classify and gate this PR` is the `pr-gate.yaml` job: `on: pull_request` with
+- `Classify and gate this PR` is the `pr-gate.yml` job: `on: pull_request` with
   `types: [opened, synchronize, reopened, labeled, unlabeled]`, and its job-level
   `if: github.event_name == 'pull_request'` is true for every one of those. Without this line the
   gate classifies and fails while nothing stops the merge (#564).
@@ -891,7 +891,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
   `scaffold_lint_test.sh` asserts the file lands. Consumers: `poe bump_version`, `poe changelog`,
   the `commitizen` and commit-msg hooks, and the docs build. `version_provider = "poetry"` reads
   `[tool.poetry]` by project root, not by where the config lives. Services keep the version in
-  `pyproject.toml`, tagged by `cz bump` (offline) or `release.yaml` (online); the library tier
+  `pyproject.toml`, tagged by `cz bump` (offline) or `release.yml` (online); the library tier
   takes it from the git tag via poetry-dynamic-versioning. Either way `cz changelog` groups by tag.
 - **`docker-compose.otel-collector.yml`.** Ports are bound to `127.0.0.1`, not published on every
   interface. The OTLP receivers are unauthenticated and the file is copied into every project that
@@ -1165,7 +1165,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
   `pyproject.toml`, regenerate `CHANGELOG.md`, commit `bump: X.Y.Z` and create the tag. It
   passes `--no-verify` because that single-line message cannot satisfy gitlint's body rule and
   the format and test hooks are irrelevant to a version bump; run it on a feature branch. It is
-  offline-tier only: the online scaffold strips it, since releases come from `release.yaml`.
+  offline-tier only: the online scaffold strips it, since releases come from `release.yml`.
   `changelog` previews locally; the published site regenerates it in the docs workflow and CI
   never commits it.
 - **The HTML coverage task covers the whole tree.** Never narrow it to `--cov=<module>`, which
@@ -1398,7 +1398,7 @@ is shaped as it is.
 - **`enable_pages.sh`.** Two models, auto-detected from `mkdocs.yml`. With `provider: mike` the
   release workflow deploys to `gh-pages`, so Pages serves from that branch, flipped only once the
   branch exists (the first `mike deploy` creates it) so the live site never points at an empty
-  branch. Without mike, `docs.yaml` deploys through `actions/deploy-pages`, so the source is
+  branch. Without mike, `docs.yml` deploys through `actions/deploy-pages`, so the source is
   "GitHub Actions" (`build_type=workflow`). The two models are mutually exclusive.
 - **`enable_security.sh`.** The Settings checkboxes are not reproducible and are forgotten on a
   fork. Three plain `PUT`s (204): vulnerability alerts, then automated security fixes (which
@@ -1409,7 +1409,7 @@ is shaped as it is.
   security fixes are for vulnerabilities, `.github/dependabot.yml` for ordinary version updates.
   GitHub detects a root `SECURITY.md` by itself. GitGuardian (#155) was evaluated for this role
   and deferred: the native toggles are free and need no third-party app on public repos;
-  reconsider for private repos or an offline pre-commit scanner. `secret_scan.yaml` is a
+  reconsider for private repos or an offline pre-commit scanner. `secret-scan.yml` is a
   separate, opt-in decision made at scaffold time (#287), not here: `poe init` runs against an
   already-created repo, the wrong phase to gate a file's shipping. A self-audit of BlueprintX
   (#164, 2026-09-04) found no divergence; the script has no `verify` mode.
@@ -1437,11 +1437,11 @@ is shaped as it is.
       never reports blocks every PR forever. Do not guess names: they must match check-run
       names exactly (matrix values included); take them from a real PR with
       `gh api repos/:owner/:repo/commits/<sha>/check-runs --jq '.check_runs[].name' | sort -u`.
-      The seeded entry is the `review_threads.yaml` job name, correct by construction and
+      The seeded entry is the `review-threads.yml` job name, correct by construction and
       reporting on every PR from the moment it opens. A name qualifies only if it is a literal
       `jobs.<id>.name:` of a workflow the project ships, its `on: pull_request` has no
       `types:`/`branches:`/`paths:` filter, no job-level `if:` can skip it, and the workflow is
-      shipped; `tests.yaml` fails the second rule and `coderabbit_trigger.yaml` the third. The
+      shipped; `tests.yml` fails the second rule and `coderabbit-trigger.yml` the third. The
       list is data (`bin/required-checks.txt`, per template family, #164/#564), compared verbatim
       (stray space never matches). An empty list means CI runs on every PR and blocks nothing:
       measured on BlueprintX 2026-08-16, a PR merged with 32 of 47 checks passed.
@@ -1991,11 +1991,11 @@ repository. They were moved out of the workflow files, which now carry no prose.
 ## Generated-project workflows (`templates/python-common/.github`)
 
 The workflows and `dependabot.yml` a Python scaffold ships carry no prose. Where a file is the
-twin of a root workflow, the reasoning above applies unchanged (`review_threads.yaml`,
-`coderabbit_trigger.yaml`, `review_retry.yaml`, `pr-reconcile.yaml`, `secret_scan.yaml`).
+twin of a root workflow, the reasoning above applies unchanged (`review-threads.yml`,
+`coderabbit-trigger.yml`, `review-retry.yml`, `pr-reconcile.yml`, `secret-scan.yml`).
 This section records what is specific to the generated copies.
 
-### `tests.yaml`
+### `tests.yml`
 
 - **No `outputs:` on `workflow_call`.** It once declared `ready_for_release` as
   `${{ jobs.test.result == 'success' }}`. Only `jobs.<id>.outputs.<name>` is in scope there,
@@ -2059,7 +2059,7 @@ This section records what is specific to the generated copies.
 
 ### Other generated workflows
 
-- **`pr-gate.yaml`.** It triggers on `pull_request` only, never `workflow_run`, which fires
+- **`pr-gate.yml`.** It triggers on `pull_request` only, never `workflow_run`, which fires
   only from the default branch's copy and so cannot run on the PR that introduces the gate.
   The gate polls the checks in-run instead. `labeled` and `unlabeled` are included so
   `do-not-merge` takes effect at once. A pull_request-driven gate never re-evaluates an
@@ -2067,7 +2067,7 @@ This section records what is specific to the generated copies.
   (or `@dependabot rebase`) to re-decide every open PR. A new push cancels the previous
   polling run so two gates do not race on one sticky comment. Event data reaches the script
   through `env:` only.
-- **`release.yaml`.** A service is deployed, not published, so there is no PyPI step. The
+- **`release.yml`.** A service is deployed, not published, so there is no PyPI step. The
   version input is free text and is validated before `git tag`, the irreversible half. The
   versioned-docs job runs only after the tag is cut, so the site never advertises a version
   that failed to ship. `mike` deploys `X.Y` under the `latest` alias; a prerelease suffix
@@ -2075,29 +2075,29 @@ This section records what is specific to the generated copies.
   and 1.4.7 share an entry. `CHANGELOG.md` is regenerated by `cz` for that build and not
   committed back to protected `main`. GitHub Pages must serve from `gh-pages`
   (`poe enable_pages`).
-- **`contract_drift.yaml`.** A weekly, non-gating reporter on `schedule` and manual dispatch,
+- **`contract-drift.yml`.** A weekly, non-gating reporter on `schedule` and manual dispatch,
   never `pull_request` or `push`, so it cannot gate a PR or a release. It opens or updates
   one deduplicated issue and never fails the run; it is inert until a source is added to
   `src/config/contract_oracles.yaml`. Dedupe is on the `contract-drift` label and a hidden
   body marker, since the label alone can be removed by hand and a job that files an issue per
   run gets switched off. The report goes in as `--body-file` so source-derived text cannot
   inject into a shell command.
-- **`review_threads.yaml`.** `actions: write` is for the stale-run cleanup only. Set
+- **`review-threads.yml`.** `actions: write` is for the stale-run cleanup only. Set
   `REVIEW_THREADS_REQUIRE_RESOLVED` to `0` for a reply-only contract; the shipped value is `1`.
   `bin/enable_repo_rules.sh` seeds `REQUIRED_CHECKS` with this job's `name:`.
-- **`coderabbit_trigger.yaml`.** The scaffolder sets `GH_PAT_REVIEW_TRIGGER` when it is exported
+- **`coderabbit-trigger.yml`.** The scaffolder sets `GH_PAT_REVIEW_TRIGGER` when it is exported
   at scaffold time and prints the command otherwise. Scope the PAT to all repositories if you
   scaffold often, since a per-repository PAT is edited for every new project. It ships with
   the review-thread gate: without the gate this workflow is a nicety, without the workflow
   the gate blocks every PR.
-- **`secret_scan.yaml`.** It is opt-in (#287): copied only when `GITGUARDIAN_API_KEY` is set at
+- **`secret-scan.yml`.** It is opt-in (#287): copied only when `GITGUARDIAN_API_KEY` is set at
   scaffold time, the same presence check that propagates the key to the new repo's secrets.
   It is not in `REQUIRED_CHECKS`, since a required check that never reports blocks every PR.
   An absent key fails loud, never skips: ggshield exits 3, distinct from a clean exit 0.
-- **`review_retry.yaml`.** GitHub disables a scheduled workflow after 60 days of repository
+- **`review-retry.yml`.** GitHub disables a scheduled workflow after 60 days of repository
   inactivity without announcing it. If rate-limited PRs stop being re-asked, check that the
   workflow is still enabled before looking for a bug in the script.
-- **`pr-reconcile.yaml`.** Cards in a Projects "closed to Done" automation key on the issue
+- **`pr-reconcile.yml`.** Cards in a Projects "closed to Done" automation key on the issue
   closing, so a missed close leaves them in "In review" while the code has shipped, and the
   problem grows with auto-merge adoption. The workflow calls `bin/pr_reconcile.sh`, the one
   implementation shared with the root workflow. On the event path it reconciles that PR; on

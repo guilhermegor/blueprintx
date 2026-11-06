@@ -22,7 +22,7 @@ project/
   assets/
   data/
   docs/
-  .github/workflows/tests.yaml
+  .github/workflows/tests.yml
   .env
   pyproject.toml
   README.md
@@ -87,7 +87,7 @@ def test_main(capsys: pytest.CaptureFixture[str]) -> None:
 | **Ruff** | Linter + formatter | `ruff.toml` — line-length 99, 4-space indent, double quotes, NumPy docstrings |
 | **pre-commit** | Git hooks | `.pre-commit-config.yaml` — ruff, pydocstyle, codespell, commitizen, gitlint, unit + integration tests, coverage badge |
 | **pytest** | Test runner | `pytest.ini` — `poe unit_tests` runs `pytest tests/unit/`; tests are pytest-style functions with fixtures |
-| **GitHub Actions** | CI | `.github/workflows/tests.yaml` — runs linting and tests on every push |
+| **GitHub Actions** | CI | `.github/workflows/tests.yml` — runs linting and tests on every push |
 | **`poe_tasks.toml` + `bin/`** | Dev automation | `poe venv`, `poe update_venv`, `poe run`, plus the linting and test tasks. Bare `poe` lists them all. Bootstrap is `bash bin/venv.sh` — poe is a dev dependency, so it lives inside the venv it would have to create |
 
 ---

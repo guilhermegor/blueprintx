@@ -136,7 +136,7 @@ PEP 440 pre/post/dev suffix (`1.2.3`, `1.2.3rc1`, `1.2.3-rc.1`, `1.2.3.post1`). 
 means retyping it, not deleting a pushed tag.
 
 **Docs are versioned via [mike](https://github.com/jimporter/mike)** and served from the
-`gh-pages` branch — `docs.yaml` is a strict *build check only* and never deploys. Pages must be
+`gh-pages` branch — `docs.yml` is a strict *build check only* and never deploys. Pages must be
 set to "Deploy from a branch → gh-pages" via `poe enable_pages`, which waits until the first
 release creates that branch. See `docs/contributing.md`.
 

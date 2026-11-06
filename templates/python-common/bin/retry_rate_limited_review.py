@@ -30,7 +30,7 @@ positive costs one redundant request; it can never pass a gate or merge anything
 this file is allowed to become an input to a verdict — that is what #259 forbids.
 
 ⚠️ IT NEEDS THE USER PAT, NOT ``GITHUB_TOKEN`` — same measurement as
-``.github/workflows/coderabbit_trigger.yaml``. CodeRabbit IGNORES bot-authored comments: a
+``.github/workflows/coderabbit-trigger.yml``. CodeRabbit IGNORES bot-authored comments: a
 comment posted with ``GITHUB_TOKEN`` is authored by ``github-actions[bot]`` and is silently
 dropped. Only a user PAT produces a comment the reviewer answers.
 

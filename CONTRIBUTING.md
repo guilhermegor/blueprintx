@@ -145,6 +145,20 @@ it needs a bash-style `source`, not a strict dotenv parser. `SNAPCRAFT_STORE_CRE
 the file written by `snapcraft export-login credentials.txt`; the publish step fails without
 it rather than exiting 0.
 
+## Template workflow file names (#947)
+
+Every file under `templates/**/.github/workflows/` is kebab-case with `.yml`; the gate is
+`bin/ci/check_workflow_names.sh` (pre-commit hook and `scaffold_checks.yml` job
+`workflow-names`, with `tests/test_check_workflow_names.sh`). It is root-repo-only. The
+exemption is exact: `templates/lib-minimal/.github/workflows/release-pypi.yaml` and
+`release-test-pypi.yaml`, because PyPI trusted publishers match the filename.
+
+`.yml` won over `.yaml` on a measurement of 2026-11-04 against 12 open PRs: `.yml` renames 11
+files, 1 of them touched by open PRs (`tests.yaml`; #976, #984, #985); `.yaml` renames 24, 2 of
+them touched (`branch-has-issue.yml`, `pr-self-assign.yml`; #971). Job `name:` values did not
+change, so required-check contexts did not move. The shared source `templates/common/docs_version/`
+`docs.yml` sits outside `.github/workflows/` and is covered by review, not by the gate.
+
 ## Cross-Language Quality Parity
 
 BlueprintX scaffolds more than one language (Python and TypeScript/JS today), and a quality
@@ -441,7 +455,7 @@ a short SHA, or a SHA without the version comment all fail naming the file and l
 
 Why the SHA and not the tag: a tag is a movable pointer. If `v4` moves — by compromise or a
 maintainer force-push — the workflow runs different code with no diff in the repo and no
-signal anywhere. The sharpest case is `secret_scan.yaml`, which runs `checkout` before
+signal anywhere. The sharpest case is `secret-scan.yml`, which runs `checkout` before
 `gitleaks`: a moved tag rewrites the workspace before the scanner reads it. `actions/*` is
 not exempt, because `actions/cache@v3` — a version GitHub stopped running — already sat in
 three tiers until `check_actions.sh`'s first run found it: the org being trusted is not the
@@ -912,14 +926,14 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   explicit-priority source block; Poetry's `priority = "explicit"` stops Poetry falling back
   to that source for other packages. Pip ignores `tool.poetry.source`, so pip installs from a
   private index must use `--index-url`, never `--extra-index-url`. The generic service
-  `release.yaml` does not apply and is stripped defensively, reported only when something was
+  `release.yml` does not apply and is stripped defensively, reported only when something was
   removed. Release workflows are rendered with `envsubst` restricted to `PACKAGE_NAME` and
   `OWNER`, so GitHub's `${{ }}` and `$SHELL_VARS` in `run:` blocks survive.
 - **Own copy step.** It is not the service tiers' shared copy: it renders a different
   `pyproject` (Trove classifier from the license choice, `library.mk`) and installs the GitHub
   assets inline. Online, `pyproject.toml` becomes a `0.0.0` stub with `poetry-dynamic-versioning`
   so the version comes from the tag, `make bump_version` is removed, and homepage,
-  documentation and `[tool.poetry.urls]` point at the Pages URL that `docs.yaml` deploys to; the
+  documentation and `[tool.poetry.urls]` point at the Pages URL that `docs.yml` deploys to; the
   repository Website field is set to the same URL. The versioning and docs rewrites run after
   the first pushed commit, so they are committed and pushed to leave a clean tree (`--no-verify`
   bypasses the test and coverage hooks). Docker Compose is offered for libraries whose
@@ -1349,7 +1363,7 @@ either layout (blueprintx#360). A few modules stub the metaclass shape instead o
   Markdown trailing whitespace because it can be a hard line break. `.gitattributes` forces LF
   on shell scripts so a CRLF checkout does not fail with `bash\r`, and collapses generated
   files in diffs (see `docs/graphite-config.md`).
-- **`docs_version/docs.yaml`** builds MkDocs with `--strict` on every push and PR and does not
+- **`docs_version/docs.yml`** builds MkDocs with `--strict` on every push and PR and does not
   deploy: the release workflow deploys with `mike` after the tag, so the site only reflects
   shipped versions. Pages is set once to deploy from `gh-pages` (`poe enable_pages`). The build
   fetches full history so `cz changelog` sees the tags, and the changelog is never committed by
@@ -1512,7 +1526,7 @@ single-sources the root file.
   nominal `isinstance` check rejects. The DB-schema tests key their expectations by dialect
   because the atomic construct really differs per backend (the table in `python-common/CLAUDE.md`
   is the source).
-- **Workflows (`lib-minimal`).** `docs.yaml` builds with `--strict` on every push and PR and does
+- **Workflows (`lib-minimal`).** `docs.yml` builds with `--strict` on every push and PR and does
   not deploy; `release-pypi.yaml` deploys versioned docs with `mike` only after a successful
   publish, and a prerelease must not move `latest`. The release workflow runs the full test suite
   as a hard gate. The version input is validated before any tag exists, and it accepts exactly the
@@ -1680,7 +1694,7 @@ grouped by what they guard.
   newline that 401s like an expired token. The GitGuardian key is piped on stdin, never
   `--body` (process arguments are readable by any same-host process, CWE-200) and never a
   redirect (the newline hazard); `printf '%s'` avoids both. That variable also *is* the
-  opt-in signal for `secret_scan.yaml`, so a failed propagation unsets it at that single
+  opt-in signal for `secret-scan.yml`, so a failed propagation unsets it at that single
   boundary: otherwise the workflow ships to a repo with no secret and `ggshield` exits 3.
 
   Same reasoning as the PAT function, applied to the
@@ -1942,7 +1956,7 @@ grouped by what they guard.
   copy only when the destination stays inside the project and keeps the source name (#569).
   Workflows are the second copy list with this defect, and worse: a job no scaffold copies is
   a gate that does not exist in any generated project, and nothing reports a workflow never
-  installed. It was found when adding `review_threads.yaml` showed the `cp` list would not
+  installed. It was found when adding `review-threads.yml` showed the `cp` list would not
   carry it. Workflow exclusions: a library publishes through its own release-pypi and
   release-test-pypi pair, and contract drift describes an ingested external file, which a
   library registers none of. lib-minimal ships its own `config_CLAUDE.md` and
@@ -2018,7 +2032,7 @@ grouped by what they guard.
   only the paths the script itself writes; anything else is the user's work. The original
   PyPI or deploy choice is not recorded offline, so the flags decide (default `none`).
   CODEOWNERS is the one file every tier writes, so it decides "online" for
-  `react-spa-webpack --deploy-target none`. `secret_scan.yaml` is opt-in on
+  `react-spa-webpack --deploy-target none`. `secret-scan.yml` is opt-in on
   `GITGUARDIAN_API_KEY`; the repo is created without `--push` so the key exists before the push
   that triggers the workflows (otherwise the first run is red). The key goes on stdin. The
   restored `no-commit-to-branch` hook is the only one skipped for the promotion commit.
@@ -2030,7 +2044,7 @@ grouped by what they guard.
   (no network). An already-online project is a clean no-op, while an origin without the
   GitHub assets is ambiguous and refused. `bin/lib/common.sh` is left alone, since it is not
   offline-only. The TypeScript and Bash tiers ship no `SECURITY.md`, `dependabot.yml` or
-  `secret_scan.yaml`, so nothing of those comes back. An offline project commits on `main` by
+  `secret-scan.yml`, so nothing of those comes back. An offline project commits on `main` by
   design, which is why only `no-commit-to-branch` is skipped for the promotion commit.
   The ruleset step runs the project's own `bin/enable_repo_rules.sh` (the `pr-quality-gate`
   ruleset), then `enable_repo_rules.sh verify`. It never aborts the promotion, since the
@@ -2087,7 +2101,7 @@ grouped by what they guard.
   runs one job per tier in CI. It uses a status file per worker, since `xargs -P` collapses
   statuses (123) and cannot say which tier; a worker that wrote none died and counts as
   failed. Tiers are discovered from `skeleton.meta` with `language=python`, never a list, and
-  zero discovery fails. CI does not need it (`tests.yaml` runs one job per tier). Flags:
+  zero discovery fails. CI does not need it (`tests.yml` runs one job per tier). Flags:
   `--jobs N`; `--jobs 1` serialises for debugging.
 
   A worker reads only `templates/` and `bin/`, because

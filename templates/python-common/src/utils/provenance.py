@@ -25,7 +25,7 @@ use the nullable ``string`` dtype, consistent with the dtypes lesson; ``updated_
 normalises at the warehouse load boundary, never here and never via a per-reader flag.
 
 Enforcement: ``bin/check_provenance.py`` (wired into both ``.pre-commit-config.yaml`` and
-``.github/workflows/tests.yaml``) asserts that every ``src/`` module referencing ``read_table``
+``.github/workflows/tests.yml``) asserts that every ``src/`` module referencing ``read_table``
 also references ``stamp_provenance`` — so a contract-checked read cannot ship without a stamp.
 """
 
