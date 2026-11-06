@@ -286,11 +286,47 @@ def _internal_origin(
             for cls_node in list_nodes
             if isinstance(cls_node, ast.ImportFrom)
             and any(cls_alias.name == "*" for cls_alias in cls_node.names)
-            for str_hit in [_from_import_origin(path_module, cls_node, str_name, set_next)]
+            for str_hit in [_star_origin(path_module, cls_node, str_name, set_next)]
             if str_hit is not None
         ),
         None,
     )
+
+
+def _star_origin(
+    path_module: pathlib.Path,
+    cls_node: ast.ImportFrom,
+    str_name: str,
+    set_seen: frozenset[pathlib.Path],
+) -> str | None:
+    """Trace ``str_name`` through one ``*`` import, attributing it only to a module that has it.
+
+    A star import from an ``_internal`` module leaks only the names that module actually binds,
+    so a public name supplied by a sibling star import is not charged to it. When the
+    ``_internal`` file cannot be resolved the name is attributed to it, as before.
+
+    Parameters
+    ----------
+    path_module : pathlib.Path
+        The module containing the import.
+    cls_node : ast.ImportFrom
+        The ``from … import *`` statement.
+    str_name : str
+        The bound name to trace.
+    set_seen : frozenset of pathlib.Path
+        Modules already visited.
+
+    Returns
+    -------
+    str or None
+        The dotted ``_internal`` module, or ``None``.
+    """
+    path_target = _import_target(path_module, cls_node)
+    if "_internal" in (cls_node.module or "").split(".") and path_target is not None:
+        list_nodes = list(_module_statements(_parse(path_target).body))
+        if str_name not in _definitions(list_nodes) | _imported_names(list_nodes):
+            return None
+    return _from_import_origin(path_module, cls_node, str_name, set_seen)
 
 
 def _imported_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
@@ -382,8 +418,8 @@ def _from_import_origin(
     """
     if "_internal" in (cls_node.module or "").split("."):
         return cls_node.module
-    if not cls_node.module and str_source_name == "_internal":
-        return str_source_name
+    if str_source_name == "_internal":
+        return f"{cls_node.module}._internal" if cls_node.module else str_source_name
     path_target = _import_target(path_module, cls_node)
     if path_target is None:
         return None

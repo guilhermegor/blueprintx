@@ -354,6 +354,16 @@ _STR_FROM_MEMBER = "from .member import Doc\n" + _STR_EXPORT_DOC
             {"member.py": _STR_LEAK},
             id="star-import-through-sibling",
         ),
+        pytest.param(
+            "from pkg import _internal as Doc\n" + _STR_EXPORT_DOC,
+            {"_internal/__init__.py": ""},
+            id="absolute-internal-package",
+        ),
+        pytest.param(
+            "from .member import Doc\n" + _STR_EXPORT_DOC,
+            {"member.py": "from pkg import _internal as Doc\n", "_internal/__init__.py": ""},
+            id="absolute-internal-package-via-sibling",
+        ),
     ],
 )
 def test_internal_leak_is_traced_through_every_import_shape(
@@ -426,3 +436,17 @@ def test_followed_file_with_a_syntax_error_is_reported_not_raised(tmp_path: Path
     """A broken sibling is a finding naming that file, not a traceback."""
     path_init = _tree(tmp_path, _STR_FROM_MEMBER, {"member.py": "def (:\n"})
     assert "member.py: could not parse" in _sole(_load_gate().check_package(path_init))
+
+
+def test_public_and_internal_star_imports_do_not_flag_the_public_names(tmp_path: Path) -> None:
+    """A public star import next to an ``_internal`` one keeps its names; only internal ones leak."""
+    path_init = _tree(
+        tmp_path,
+        "from .public import *\nfrom ._internal.config import *\n" + '__all__ = ["Pub", "Priv"]\n',
+        {
+            "public.py": "class Pub:\n    pass\n",
+            "_internal/__init__.py": "",
+            "_internal/config.py": "class Priv:\n    pass\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
