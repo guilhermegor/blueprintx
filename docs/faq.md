@@ -276,10 +276,12 @@ Still superseded, so a new review is needed: a merge that resolves a conflict, a
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
 closed: a missing commit, an API error, a malformed response (`files` not a list, an entry
 that is not an object, a non-JSON body), a binary or oversized file with no patch text, or a
-full 300-file list is read as "not covered". A pure rename (status `renamed`, zero changes) has
-no patch text by nature and is fingerprinted by its two names and its blob `sha`, so it carries
-forward. The `sha` is required: a binary file also reports zero changes, and only its blob
-proves the content. The compare API returns at most
+full 300-file list is read as "not covered". A file entry with no patch text, zero changes and a
+blob `sha` is fingerprinted by its names and that `sha`, whatever its status, so it carries
+forward. That covers a pure rename (status `renamed`) and an added empty file such as a
+`py.typed` or `.gitkeep` (status `added`, empty-blob `sha` `e69de29b…`). The `sha` is required: a
+binary file also reports zero changes, and only its blob proves the content. A patchless entry
+without a `sha`, or with changes above zero, still counts as "not covered". The compare API returns at most
 300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
 off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
 

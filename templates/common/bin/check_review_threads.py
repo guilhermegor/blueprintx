@@ -505,17 +505,14 @@ _TUPLE_FINGERPRINT_ERRORS = (
 )
 
 
-def _is_pure_rename(dict_file: dict) -> bool:
-    """Return whether a file entry is a rename with no patch text AND a blob ``sha`` to hash.
+def _is_provable_without_patch(dict_file: dict) -> bool:
+    """Return whether a patchless file entry has zero changes AND a blob ``sha`` to hash.
 
-    The API reports ``changes == 0`` for a binary file too, so the blob ``sha`` is what proves
-    the content; without it the entry is not trusted.
+    That covers a pure rename and an added empty file, whatever the ``status``. The API reports
+    ``changes == 0`` for a binary file too, so the blob ``sha`` is what proves the content;
+    without it the entry is not trusted.
     """
-    return (
-        dict_file.get("status") == "renamed"
-        and dict_file.get("changes") == 0
-        and bool(dict_file.get("sha"))
-    )
+    return dict_file.get("changes") == 0 and bool(dict_file.get("sha"))
 
 
 _TUPLE_PATCH_PREFIXES = ("+", "-")
@@ -541,13 +538,13 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     ------
     ValueError
         If the list is malformed, empty, possibly truncated, or a file carries no patch text
-            (a pure rename has none and is hashed by its names).
+            (a pure rename or an added empty file has none and is hashed by its blob ``sha``).
     """
     if not isinstance(list_files, list) or not all(isinstance(d, dict) for d in list_files):
         raise ValueError("patch unavailable: the file list is malformed")
     if not list_files or len(list_files) >= _INT_COMPARE_FILES:
         raise ValueError(f"patch unavailable: {len(list_files)} file(s) in the comparison")
-    if any(d.get("patch") is None and not _is_pure_rename(d) for d in list_files):
+    if any(d.get("patch") is None and not _is_provable_without_patch(d) for d in list_files):
         raise ValueError("patch unavailable: a file has no patch text (binary or too large)")
     try:
         list_parts = [

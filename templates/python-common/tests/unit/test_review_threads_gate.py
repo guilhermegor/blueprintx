@@ -3857,6 +3857,47 @@ def test_patch_fingerprint_renamed_with_changes_but_no_patch_raises() -> None:
         cls_gate.patch_fingerprint([dict_big])
 
 
+_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+
+
+def test_patch_fingerprint_added_empty_file_is_fingerprinted() -> None:
+    """An added empty file has no patch text, but its blob ``sha`` proves the content."""
+    cls_gate = _load_gate()
+    dict_empty = {
+        "filename": "py.typed",
+        "status": "added",
+        "changes": 0,
+        "sha": _STR_EMPTY_BLOB_SHA,
+    }
+    assert len(cls_gate.patch_fingerprint([dict_empty])) == 64
+
+
+def test_patch_fingerprint_added_files_with_different_blobs_differ() -> None:
+    """Two patchless added files whose ``sha`` differs must not share a fingerprint."""
+    cls_gate = _load_gate()
+    dict_added = {"filename": "py.typed", "status": "added", "changes": 0}
+    assert cls_gate.patch_fingerprint(
+        [{**dict_added, "sha": _STR_EMPTY_BLOB_SHA}]
+    ) != cls_gate.patch_fingerprint([{**dict_added, "sha": "1"}])
+
+
+@pytest.mark.parametrize(
+    "dict_entry",
+    [
+        {"filename": "py.typed", "status": "added", "changes": 0},
+        {"filename": "py.typed", "status": "added", "changes": 0, "sha": ""},
+        {"filename": "big.txt", "status": "added", "changes": 9, "sha": "1"},
+        {"filename": "big.txt", "status": "modified", "changes": 9, "sha": "1"},
+        {"filename": "big.txt", "status": "modified", "sha": "1"},
+    ],
+)
+def test_patch_fingerprint_patchless_entry_without_proof_raises(dict_entry: dict) -> None:
+    """No ``sha``, or ``changes`` above zero, means the content is unproven whatever the status."""
+    cls_gate = _load_gate()
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_entry])
+
+
 def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> None:
     """The carrying commit is a return value, not an out-parameter."""
     cls_gate = _load_gate()
