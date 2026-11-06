@@ -179,7 +179,7 @@ def sync(path_root: pathlib.Path, str_floor: str, list_matrix: list, bool_write:
         for path_file in list_files:
             str_old = path_file.read_text(encoding="utf-8")
             str_out, int_hits = re.subn(
-                str_pattern, lambda m, s=str_new: m.group(1) + s + m.group(2), str_old, count=1
+                str_pattern, lambda m, s=str_new: m.group(1) + s + m.group(2), str_old
             )
             if int_hits == 0:
                 raise ValueError(f"{path_file.relative_to(path_root)}: no match for {str_pattern}")
@@ -313,7 +313,8 @@ def run_bump(path_root: pathlib.Path, str_fixture: str, str_today: str = "") -> 
     except (ValueError, OSError, http.client.HTTPException) as cls_err:
         print(f"fail closed, nothing changed: {cls_err}")
         return 1
-    (path_root / STR_VERSION_FILE).write_text(str_floor + "\n", encoding="utf-8")
+    if str_floor != read_floor(path_root):
+        (path_root / STR_VERSION_FILE).write_text(str_floor + "\n", encoding="utf-8")
     list_drift = sync(path_root, str_floor, list_matrix, bool_write=True)
     print(f"floor {str_floor}, matrix {list_matrix}, changed {len(list_drift)} file(s)")
     return 0

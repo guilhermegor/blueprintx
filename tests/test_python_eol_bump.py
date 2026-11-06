@@ -188,3 +188,28 @@ def test_check_reports_a_malformed_floor_file_instead_of_crashing(path_tree: Pat
 def test_check_reports_a_missing_floor_file_instead_of_crashing(path_tree: Path) -> None:
     (path_tree / mod_bump.STR_VERSION_FILE).unlink()
     assert mod_bump.run_check(path_tree) == 1
+
+
+def test_bump_moves_every_requirements_marker(path_tree: Path, tmp_path: Path) -> None:
+    dict_next = {**DICT_TODAY, "3.11": False, "3.16": True}
+    str_fixture = _write_fixture(tmp_path, _payload(dict_next))
+    assert mod_bump.run_bump(path_tree, str_fixture, STR_LATE) == 0
+    str_req = (path_tree / "templates/python-common/requirements.txt").read_text()
+    assert str_req.count('python_full_version >= "3.12"') == 3
+    assert "3.11" not in str_req
+
+
+def test_check_detects_drift_in_a_later_requirements_marker(path_tree: Path) -> None:
+    path_req = path_tree / "templates/python-common/requirements.txt"
+    list_lines = path_req.read_text().splitlines()
+    list_lines[-1] = list_lines[-1].replace("3.11", "3.10")
+    path_req.write_text("\n".join(list_lines) + "\n")
+    assert mod_bump.run_check(path_tree) == 1
+
+
+def test_bump_leaves_a_patch_pinned_floor_file_untouched(path_tree: Path, tmp_path: Path) -> None:
+    path_version = path_tree / mod_bump.STR_VERSION_FILE
+    path_version.write_text("3.11.4\n")
+    str_fixture = _write_fixture(tmp_path, _payload(DICT_TODAY))
+    assert mod_bump.run_bump(path_tree, str_fixture, STR_LATE) == 0
+    assert path_version.read_text() == "3.11.4\n"
