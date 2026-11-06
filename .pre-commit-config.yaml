@@ -62,7 +62,7 @@ repos:
         entry: python3 bin/python_eol_bump.py --check
         language: system
         pass_filenames: false
-        files: ^(templates/.*(pyproject\.toml|\.python-version|ruff\.toml|mypy\.ini|requirements\.txt|README.*\.md|tests\.yaml)|bin/python_eol_bump\.py)$
+        files: ^(templates/.*(pyproject\.toml|\.python-version|ruff\.toml|mypy\.ini|requirements\.txt|README.*\.md|tests\.yml)|bin/python_eol_bump\.py)$
 
       - id: agents-md-bridge
         name: CLAUDE.md bridge and leaf pairing gate (blueprintx#754)
