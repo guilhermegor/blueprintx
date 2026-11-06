@@ -63,18 +63,21 @@ def _load(str_name: str) -> ModuleType:
 
 
 gate = _load("check_gate_integrity")
+gate_env = sys.modules["gate_env"]
 
 
-def _local_shell(monkeypatch: pytest.MonkeyPatch) -> None:  # complexity-ok: clears N markers
-    """Clear the CI markers so the GATE_CHANGE_OK hatch is live (it is local-only).
+def _local_shell(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Simulate a local pre-commit run so the GATE_CHANGE_OK hatch is live (it is local-only).
 
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
         The fixture whose ``delenv`` is applied to every marker.
     """
-    for str_marker in gate.TUPLE_CI_MARKERS:
-        monkeypatch.delenv(str_marker, raising=False)
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setenv("PRE_COMMIT", "1")
+    monkeypatch.setattr(gate_env, "has_terminal", lambda: True)
 
 
 def test_env_reason_is_blank_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -495,3 +498,72 @@ def test_merge_heads_is_empty_when_no_merge_is_in_progress(
     monkeypatch.chdir(tmp_path)
 
     assert gate.merge_heads() == []
+
+
+def _bare_shell(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove every CI, runner and local signal from the environment."""
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("JENKINS_URL", raising=False)
+    monkeypatch.delenv("PRE_COMMIT", raising=False)
+    monkeypatch.setattr(gate_env, "has_terminal", lambda: True)
+
+
+def test_gate_env_local_pre_commit_shell_is_not_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A pre-commit run with no CI marker is the one place the hatch is live."""
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("PRE_COMMIT", "1")
+
+    assert gate_env.is_ci() is False
+
+
+def test_gate_env_ci_false_in_a_local_shell_is_not_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``CI=false`` is a developer's shell, not a runner."""
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("PRE_COMMIT", "1")
+    monkeypatch.setenv("CI", "false")
+
+    assert gate_env.is_ci() is False
+
+
+def test_gate_env_empty_ci_in_a_local_shell_is_not_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``CI=""`` is falsy, so it must not disable the local hatch."""
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("PRE_COMMIT", "1")
+    monkeypatch.setenv("CI", "")
+
+    assert gate_env.is_ci() is False
+
+
+def test_gate_env_github_actions_is_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GitHub Actions wins even when a local signal is also present."""
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("PRE_COMMIT", "1")
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+    assert gate_env.is_ci() is True
+
+
+def test_gate_env_unknown_runner_is_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Jenkins sets neither ``CI`` nor ``GITHUB_ACTIONS``; no local signal means CI."""
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("JENKINS_URL", "https://jenkins.example")
+
+    assert gate_env.is_ci() is True
+
+
+def test_gate_env_bare_environment_is_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With no evidence either way the verdict fails closed."""
+    _bare_shell(monkeypatch)
+
+    assert gate_env.is_ci() is True
+
+
+def test_gate_env_headless_runner_with_pre_commit_is_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Jenkins invoking ``pre-commit`` inherits ``PRE_COMMIT`` but has no terminal."""
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("PRE_COMMIT", "1")
+    monkeypatch.setenv("JENKINS_URL", "https://jenkins.example")
+    monkeypatch.setattr(gate_env, "has_terminal", lambda: False)
+
+    assert gate_env.is_ci() is True
