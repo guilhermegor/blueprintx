@@ -40,7 +40,7 @@ project/
   tests/{unit,integration,performance}/
   bin/                   # shell helpers called by the Makefile
   data/ · assets/ · docs/
-  .github/workflows/tests.yaml
+  .github/workflows/tests.yml
   .env · pyproject.toml · ruff.toml · pytest.ini · .pre-commit-config.yaml
 ```
 

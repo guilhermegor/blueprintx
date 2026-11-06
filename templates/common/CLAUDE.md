@@ -150,6 +150,13 @@ Output files (exports, backups, model artifacts, reports): `name-like-this_YYYYM
 - Timestamp: `YYYYMMDD_HHMMSS` (uppercase, sortable)
 - Exception — joblib artifacts: `name-like-this_YYYYMMDD_HHMMSS_{sha256_prefix8}.joblib`
 
+## Workflow file naming (blueprintx#947)
+
+Workflow files are kebab-case with the `.yml` extension (`review-threads.yml`).
+- Exempt: `release-pypi.yaml` and `release-test-pypi.yaml`. PyPI trusted publishers match the
+  exact filename, so renaming them breaks publishing.
+- BlueprintX's own gate and the measured choice of `.yml` over `.yaml` are in its `CONTRIBUTING.md`.
+
 ## Tooling (Python, copied from `templates/python-common/`)
 
 - **Ruff**: linter + formatter. Line-length 99, 4-space indent, double quotes, NumPy docstrings. Config: `ruff.toml`.

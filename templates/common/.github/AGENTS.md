@@ -6,7 +6,7 @@ Guidance for Claude Code and contributors working in this project's `.github/`.
 
 The base scaffold ships **event-driven** CI — workflows triggered by `push` and
 `pull_request`. The Python service tiers add a few scheduled workflows
-(`contract_drift.yaml`, `pr-reconcile.yaml`, `review_retry.yaml`), each with its
+(`contract-drift.yml`, `pr-reconcile.yml`, `review-retry.yml`), each with its
 reason in its own file; nothing else runs on a clock. That is deliberate: a scheduled
 job runs whether or not anyone needs it, costs runner minutes, and can fail
 silently long after the person who added it has moved on.
@@ -104,7 +104,7 @@ this repo/workflow/environment. This is each registry's own recommended path.
 
 ## Gate parity — every gate in BOTH pre-commit and CI
 
-CI runs its gates as **explicit steps** in `tests.yaml`, not via `pre-commit run`, so adding a
+CI runs its gates as **explicit steps** in `tests.yml`, not via `pre-commit run`, so adding a
 hook to `.pre-commit-config.yaml` does **not** cover CI. Every lint/static/test gate must be
 wired into **both** files, in the same change — otherwise a `--no-verify` commit or an
 uninstalled hook slips straight past branch-protection CI (which runs the workflow, not local
