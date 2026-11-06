@@ -26,7 +26,8 @@ The approach below was measured in `guilhermegor/layouts-cvm#55` and adopted her
 `bin/check_registry_order.py` (pre-commit `check-registry-order`, `poe lint`, the CI workflow)
 fails when:
 
-- a package `__all__` is not sorted (names starting with `__` first, then case-insensitive A-Z);
+- the top-level package `__all__` (`src/<package>/__init__.py`, the registry parallel PRs share;
+  nested packages are out of scope) is not sorted (names starting with `__` first, then case-insensitive A-Z);
 - an `__all__` holds more than one entry on a line;
 - a README or `docs/` Markdown file, outside fenced code, states a number next to a countable noun
   (`18 modules`, `5 endpoints`, ...). Derive the number or reword to "every module in the table".

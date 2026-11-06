@@ -280,6 +280,6 @@ docs/deps/tests-only branches need none.
 ### Registering a new module
 
 Add the import to `src/<package>/__init__.py` and the name to `__all__`, each in sorted position
-and one entry per line. Never write a count ("12 modules") in the README or docs. Two parallel PRs
+and one entry per line. Never write a number next to a countable noun in the README or docs. Two parallel PRs
 then touch different lines and merge cleanly; `bin/check_registry_order.py` (part of `poe lint`)
 enforces the order and the absence of counts.
