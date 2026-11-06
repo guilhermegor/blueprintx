@@ -282,6 +282,7 @@ def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:
 _NO_BODY = {"body": "", "state": "COMMENTED"}
 _REPLY_NODE = {"replyTo": {"id": "thread-root"}}
 _INLINE_NODE = {"replyTo": None}
+_ORPHANED_REPLY_NODE = {"replyTo": None}
 
 
 @pytest.mark.parametrize(
@@ -299,6 +300,8 @@ _INLINE_NODE = {"replyTo": None}
         ({**_NO_BODY, "body": "Findings: none."}, True),
         ({**_NO_BODY, "comments": {"nodes": [_INLINE_NODE]}}, True),
         ({**_NO_BODY, "comments": {"nodes": [_REPLY_NODE, _INLINE_NODE]}}, True),
+        ({**_NO_BODY, "body": "Thanks.", "comments": {"nodes": [_REPLY_NODE]}}, True),
+        ({**_NO_BODY, "comments": {"nodes": [_ORPHANED_REPLY_NODE]}}, True),
     ],
     ids=[
         "reply-only",
@@ -313,6 +316,8 @@ _INLINE_NODE = {"replyTo": None}
         "body-only",
         "inline-only",
         "reply-plus-inline",
+        "reply-with-body-counts",
+        "orphaned-reply-accepted-fail-open",
     ],
 )
 def test_a_head_review_counts_only_with_a_body_or_a_non_reply_comment(
@@ -3855,6 +3860,61 @@ def test_patch_fingerprint_renamed_with_changes_but_no_patch_raises() -> None:
     }
     with pytest.raises(ValueError, match="no patch text"):
         cls_gate.patch_fingerprint([dict_big])
+
+
+_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+
+
+def test_patch_fingerprint_added_empty_file_is_fingerprinted() -> None:
+    """An added empty file has no patch text, but its blob ``sha`` proves the content."""
+    cls_gate = _load_gate()
+    dict_empty = {
+        "filename": "py.typed",
+        "status": "added",
+        "changes": 0,
+        "sha": _STR_EMPTY_BLOB_SHA,
+    }
+    assert len(cls_gate.patch_fingerprint([dict_empty])) == 64
+
+
+def test_patch_fingerprint_added_empty_files_at_different_names_differ() -> None:
+    """Two added empty files at different paths must not share a fingerprint."""
+    cls_gate = _load_gate()
+    dict_added = {"status": "added", "changes": 0, "sha": _STR_EMPTY_BLOB_SHA}
+    assert cls_gate.patch_fingerprint(
+        [{**dict_added, "filename": "py.typed"}]
+    ) != cls_gate.patch_fingerprint([{**dict_added, "filename": ".gitkeep"}])
+
+
+@pytest.mark.parametrize(
+    "dict_entry",
+    [
+        {"filename": "logo.png", "status": "added", "changes": 0, "sha": "1"},
+        {"filename": "py.typed", "status": "added", "changes": 0},
+        {"filename": "py.typed", "status": "added", "changes": 0, "sha": ""},
+        {"filename": "big.txt", "status": "added", "changes": 9, "sha": "1"},
+        {"filename": "big.txt", "status": "modified", "changes": 9, "sha": "1"},
+        {"filename": "big.txt", "status": "modified", "sha": "1"},
+    ],
+)
+def test_patch_fingerprint_patchless_entry_without_proof_raises(dict_entry: dict) -> None:
+    """No ``sha``, or ``changes`` above zero, means the content is unproven whatever the status."""
+    cls_gate = _load_gate()
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_entry])
+
+
+def test_patch_fingerprint_modified_mode_only_entry_raises() -> None:
+    """A mode-only change leaves the blob ``sha`` alone, so the ``sha`` cannot prove the mode."""
+    cls_gate = _load_gate()
+    dict_mode_only = {
+        "filename": "run.sh",
+        "status": "modified",
+        "changes": 0,
+        "sha": _STR_EMPTY_BLOB_SHA,
+    }
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_mode_only])
 
 
 def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> None:
