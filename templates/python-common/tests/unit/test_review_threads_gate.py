@@ -3843,9 +3843,9 @@ def test_patch_fingerprint_added_empty_file_differs_from_renamed_to_same_name() 
     """Status is hashed: an added empty b is not a renamed a to b."""
     cls_gate = _load_gate()
     dict_empty = {"filename": "b", "changes": 0, "sha": _STR_EMPTY_BLOB_SHA}
-    assert cls_gate.patch_fingerprint(
-        [{**dict_empty, "status": "added"}]
-    ) != cls_gate.patch_fingerprint([{**dict_empty, "status": "renamed", "previous_filename": "a"}])
+    dict_added = {**dict_empty, "status": "added"}
+    dict_renamed = {**dict_empty, "status": "renamed", "previous_filename": "a"}
+    assert cls_gate.patch_fingerprint([dict_added]) != cls_gate.patch_fingerprint([dict_renamed])
 
 
 def test_patch_fingerprint_empty_rename_with_same_blob_matches() -> None:
