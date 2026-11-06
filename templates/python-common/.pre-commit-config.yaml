@@ -146,6 +146,13 @@ repos:
         files: ^\.specs/|^bin/check_specs_structure\.sh$
         pass_filenames: false
 
+      - id: agents-md-pairs
+        name: every CLAUDE.md has an AGENTS.md pair
+        entry: bash bin/check_agents_md_pairs.sh --root .
+        language: system
+        files: (^|/)(CLAUDE|AGENTS)\.md$|^bin/check_agents_md_pairs\.sh$
+        pass_filenames: false
+
       - id: readme-structure
         name: README structure (plain headings, slug sections, Authors links)
         entry: bash bin/check_readme_structure.sh README.md

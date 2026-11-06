@@ -75,6 +75,7 @@ scaffold_copy_shared_tests() {
 
 	mkdir -p "$str_project_path/tests/unit"
 	cp "$COMMON_TEMPLATE_ROOT/tests/CLAUDE.md" "$str_project_path/tests/CLAUDE.md"
+	cp "$COMMON_TEMPLATE_ROOT/tests/AGENTS.md" "$str_project_path/tests/AGENTS.md"
 	cp "$COMMON_TEMPLATE_ROOT/tests/conftest.py" "$str_project_path/tests/conftest.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pr_gate.py" \
 		"$str_project_path/tests/unit/test_pr_gate.py"
@@ -207,7 +208,9 @@ scaffold_copy_leaf_docs() {
 	mkdir -p "$str_project_path/src/config/contracts" "$str_project_path/src/utils"
 	cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/CLAUDE.md" \
 		"$str_project_path/src/config/contracts/CLAUDE.md"
+	cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/AGENTS.md" "$str_project_path/src/config/contracts/AGENTS.md"
 	cp "$COMMON_TEMPLATE_ROOT/src/utils/CLAUDE.md" "$str_project_path/src/utils/CLAUDE.md"
+	cp "$COMMON_TEMPLATE_ROOT/src/utils/AGENTS.md" "$str_project_path/src/utils/AGENTS.md"
 }
 
 scaffold_copy_agents_md() {

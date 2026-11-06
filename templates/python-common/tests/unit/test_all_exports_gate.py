@@ -158,3 +158,75 @@ def test_the_shipped_contracts_package_passes_the_gate() -> None:
     teaches its first reader to skip it.
     """
     assert _load_gate().check_package(_PATH_CONTRACTS_INIT) == []
+
+
+def test_all_name_defined_under_internal_is_flagged(tmp_path: Path) -> None:
+    """Re-exporting an ``_internal`` name through ``__all__`` breaks the underscore's promise."""
+    path_init = _package(
+        tmp_path,
+        'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n',
+        "",
+    )
+    assert "_internal" in _sole(_load_gate().check_package(path_init))
+
+
+def test_all_module_alias_of_internal_import_is_flagged(tmp_path: Path) -> None:
+    """``import pkg._internal.x as schemas`` bound into ``__all__`` exposes an internal module."""
+    path_init = _package(
+        tmp_path,
+        'import pkg._internal.config.schemas as schemas\n\n__all__ = ["schemas"]\n',
+        "",
+    )
+    assert "_internal" in _sole(_load_gate().check_package(path_init))
+
+
+def test_all_name_reexported_through_public_sibling_is_flagged(tmp_path: Path) -> None:
+    """A name a public sibling took from ``_internal`` is still defined there."""
+    path_init = _package(
+        tmp_path,
+        'from .member import Doc\n\n__all__ = ["Doc"]\n',
+        "from pkg._internal.config.schemas import Doc\n",
+    )
+    assert "_internal" in _sole(_load_gate().check_package(path_init))
+
+
+def test_function_local_internal_import_does_not_flag_public_name(tmp_path: Path) -> None:
+    """An ``_internal`` import inside a function cannot shadow a public module-level name."""
+    path_init = _package(
+        tmp_path,
+        'from pkg.member import run\n\n__all__ = ["run"]\n\n\n'
+        "def helper() -> None:\n    from pkg._internal.x import run\n",
+        "def run() -> None:\n    return None\n",
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_all_name_from_public_module_is_not_flagged(tmp_path: Path) -> None:
+    """A name imported from a public sibling is untouched by the ``_internal`` guard."""
+    path_init = _package(
+        tmp_path, 'from pkg.member import THING\n\n__all__ = ["THING"]\n', "THING = 1\n"
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_checkout_path_named_internal_does_not_disable_guard(tmp_path: Path) -> None:
+    """A project checked out under a directory called ``_internal`` is still guarded."""
+    (tmp_path / "_internal" / "proj").mkdir(parents=True)
+    path_init = _package(
+        tmp_path / "_internal" / "proj",
+        'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n',
+        "",
+    )
+    assert "_internal" in _sole(_load_gate().check_package(path_init))
+
+
+def test_internal_package_itself_is_out_of_scope(tmp_path: Path) -> None:
+    """The ``_internal`` package's own ``__init__`` may export its own names."""
+    path_dir = tmp_path / "pkg" / "_internal"
+    path_dir.mkdir(parents=True)
+    (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+    path_init = path_dir / "__init__.py"
+    path_init.write_text(
+        'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n', encoding="utf-8"
+    )
+    assert _load_gate().check_package(path_init) == []
