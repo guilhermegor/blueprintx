@@ -5056,7 +5056,12 @@ rest of the suite.</p>
   exited 0. The base-change comparison (<code>_review_times</code>, #989) applies the same filter, so a
   reply posted after a base change cannot make a carried-forward review look newer than
   that change. Known fail-open, not closed: a reply whose parent comment was deleted reads
-  <code>replyTo: null</code>, is taken for a root comment, and counts as a review.</li>
+  <code>replyTo: null</code>, is taken for a root comment, and counts as a review. Tracked in #994 and
+  accepted as a fail-open: the <code>reviews</code> query exposes no field that separates an orphaned
+  reply from a root comment (<code>replyTo</code> is the only marker the gate reads), and no real
+  API response with a deleted parent was available to measure a candidate such as
+  <code>originalPosition</code> or <code>outdated</code> against. Both the orphaned-reply case and the
+  non-empty-body reply case are pinned in <code>tests/unit/test_review_threads_gate.py</code>.</li>
 </ul>
 
 
