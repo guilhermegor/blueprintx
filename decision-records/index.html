@@ -3977,6 +3977,13 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   because it checks a delta: a hook, rule or exclude that was removed without a
   <code>gate-change-ok: &lt;reason&gt;</code> is a violation (#309). The same script BlueprintX runs over
   itself.</li>
+<li><code>assertion-weakening</code>: wired in pre-commit (<code>language: system</code>, <code>always_run</code>, so the
+  caller's environment reaches it, including the <code>TEST_CHANGE_OK</code> hatch) and as its own
+  <code>assertion_weakening.yaml</code> workflow (not a step of the matrix <code>test</code> job, whose check
+  names are unstable and whose trigger is branch-filtered, so it could never be a
+  required check). It checks out with <code>fetch-depth: 0</code> so the merge-base resolves.
+  It sat unreferenced until #983, which left the gate and its hatch inert. Proven by a
+  should-fail witness in <code>bin/ci/scaffold_lint_test.sh</code> (<code>==</code> weakened to <code>in</code>).</li>
 <li><code>check-all-exports</code>: a package declaring <code>__all__</code> must name every public member of its
   submodules. The usual introspective test discovers the family through <code>__all__</code>, so it
   cannot see a missing member; this walks the files.</li>
