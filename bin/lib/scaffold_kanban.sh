@@ -127,6 +127,22 @@ scaffold_kanban_url() {
 	printf 'https://github.com/%s/%s/projects/%s' "$str_path" "$str_owner" "$str_number"
 }
 
+scaffold_kanban_workflows() {
+	local str_owner="$1" str_number="$2" str_rows str_name str_on str_off=""
+	str_rows="$(gh api graphql -f o="$str_owner" -F n="$str_number" \
+		-f query='query($o:String!,$n:Int!){repositoryOwner(login:$o){... on ProjectV2Owner{projectV2(number:$n){workflows(first:20){nodes{name enabled}}}}}}' \
+		--jq '.data.repositoryOwner.projectV2.workflows.nodes[] | "\(.enabled)|\(.name)"' 2>/dev/null)" || str_rows=""
+	if [ -z "$str_rows" ]; then
+		print_status "info" "Could not read the board workflows; enable 'Item closed' and 'Pull request merged' (cards move to Done) at the board's Workflows page"
+		return 0
+	fi
+	for str_name in "Item closed" "Pull request merged"; do
+		str_on="$(grep -F "|${str_name}" <<<"$str_rows" | head -n1)"
+		[ "${str_on%%|*}" = "true" ] || str_off+="'${str_name}' is off. "
+	done
+	[ -z "$str_off" ] || print_status "warning" "${str_off}Cards will not move to Done; enable them at the board's Workflows page"
+}
+
 scaffold_kanban_finish() {
 	local str_slug="$1" str_owner="$2" str_number="$3" str_vis="$4"
 	gh_run "set the board's visibility to ${str_vis}" gh project edit "$str_number" \
@@ -135,6 +151,7 @@ scaffold_kanban_finish() {
 		--owner "$str_owner" --repo "$str_slug"
 	scaffold_kanban_status_options "$str_owner" "$str_number"
 	scaffold_kanban_fields "$str_owner" "$str_number"
+	scaffold_kanban_workflows "$str_owner" "$str_number"
 }
 
 scaffold_kanban_create() {

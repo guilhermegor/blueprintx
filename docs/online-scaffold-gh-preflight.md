@@ -38,15 +38,32 @@ happened after the repo was created, finish the remaining steps by hand or use
 
 ## The GraphQL budget
 
-`SCAFFOLD_GH_GRAPHQL_BUDGET` (100) is a conservative upper bound, not a live
-measurement. `SCAFFOLD_GH_GRAPHQL_SITES` (15) counts the `gh project`,
-`gh repo view` and `gh api graphql` call sites in the scaffold libraries;
-`tests/test_scaffold_gh_preflight.sh` fails when a call site is added without
-updating it, which is the prompt to re-check the budget.
+`SCAFFOLD_GH_GRAPHQL_MEASURED` (17) is the number of GraphQL-backed `gh` calls
+(`gh project ...`, `gh repo view`, `gh api graphql`) a fresh kanban setup makes.
+`tests/test_scaffold_gh_preflight.sh` counts them against a stubbed `gh` and
+fails when the number changes, which is the prompt to re-set the budget.
+
+`SCAFFOLD_GH_GRAPHQL_BUDGET` (60) is that count plus the preflight call and
+`gh repo create` (19), times 3, the most GraphQL queries one `gh` command sends
+(owner lookup, object lookup, mutation). The count is measured by call; the
+multiplier is a bound, not a live measurement: no throwaway account was
+available, so confirm it with `gh api rate_limit` before and after a real run.
+
+`SCAFFOLD_GH_GRAPHQL_SITES` (16) counts the call sites in the scaffold
+libraries; the same test fails when one is added without updating it.
+
+## Board workflows
+
+After the fields are created, `scaffold_kanban_workflows` reads the board's
+built-in workflows through GraphQL (`ProjectV2.workflows`, which exposes
+`enabled`). It warns when "Item closed" or "Pull request merged" is off, since
+moving cards to Done relies on both. It never stops the scaffold: if the read
+fails, it prints the one-line instruction to enable both by hand. Workflows
+cannot be enabled through the API.
 
 ## Not covered yet
 
 The `delete_branch_on_merge` setting, the `Cut 1.0.0` release issue and its board card keep their warn-and-print-the-
-manual-command fallback, and the built-in board workflows are not read. Two boards with the same title still warn and
+manual-command fallback. Two boards with the same title still warn and
 continue without a board, and the `project` token scope is not checked before
 the repo is created.

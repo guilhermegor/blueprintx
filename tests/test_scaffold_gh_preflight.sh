@@ -19,7 +19,8 @@ make_stub() {
 printf '%s\n' "$*" >>"$GH_LOG"
 case "$1 $2" in
 "api graphql")
-    [ -z "${GH_GRAPHQL_ERR:-}" ] || { echo "$GH_GRAPHQL_ERR" >&2; exit 1; } ;;
+    [ -z "${GH_GRAPHQL_ERR:-}" ] || { echo "$GH_GRAPHQL_ERR" >&2; exit 1; }
+    case "$*" in *workflows*) printf '%b' "${GH_WORKFLOWS-true|Item closed\\ntrue|Pull request merged\\n}" ;; esac ;;
 "api user")
     [ -z "${GH_USER_ERR:-}" ] || { echo "$GH_USER_ERR" >&2; exit 1; }
     echo "${GH_LOGIN-octo}" ;;
@@ -180,6 +181,36 @@ test_a_stop_after_the_repo_exists_does_not_advise_a_plain_rerun() {
     expect_not_said "created repo" "half-created online project is never acceptable. Re-run"
 }
 
+test_board_workflows_warn_when_item_closed_is_off() {
+    run_fn '' "GH_WORKFLOWS=false|Item closed\\ntrue|Pull request merged" scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows off: must warn, not stop: $str_out"
+    expect_said "workflows off" "'Item closed' is off"
+    expect_not_said "workflows off" "'Pull request merged' is off"
+}
+
+test_board_workflows_silent_when_both_are_on() {
+    run_fn '' scaffold_kanban_workflows octo 7
+    expect_not_said "workflows on" "is off"
+}
+
+test_board_workflows_print_the_instruction_when_unreadable() {
+    run_fn '' "GH_GRAPHQL_ERR=boom" scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows unreadable: must not stop: $str_out"
+    expect_said "workflows unreadable" "enable 'Item closed' and 'Pull request merged'"
+}
+
+test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
+    local int_calls
+    run_fn 'y\n\n' "GH_PROJECT_NUMBER=" scaffold_kanban_setup
+    [ "$int_rc" -eq 0 ] || fail "budget: scaffold stopped: $str_out"
+    int_calls="$(grep -cE '^(project|repo view|api graphql)' "$WORK_DIR/gh.log")"
+    # shellcheck source=bin/lib/gh_preflight.sh
+    source "$REPO_ROOT/bin/lib/gh_preflight.sh"
+    [ "$int_calls" -eq "$SCAFFOLD_GH_GRAPHQL_MEASURED" ] ||
+        fail "a fresh scaffold makes ${int_calls} GraphQL-backed gh calls, SCAFFOLD_GH_GRAPHQL_MEASURED is ${SCAFFOLD_GH_GRAPHQL_MEASURED}"
+    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge "$int_calls" ] || fail "budget below the measured call count"
+}
+
 test_graphql_call_sites_match_the_measured_count() {
     local int_sites
     int_sites="$(cat "$REPO_ROOT"/bin/lib/scaffold_kanban.sh "$REPO_ROOT"/bin/lib/scaffold_git_remote.sh \
@@ -227,6 +258,10 @@ main() {
     test_a_stop_after_the_repo_exists_does_not_advise_a_plain_rerun
     test_stop_message_prints_the_real_rerun_command
     test_no_scaffold_swallows_a_failed_gh_user_read
+    test_board_workflows_warn_when_item_closed_is_off
+    test_board_workflows_silent_when_both_are_on
+    test_board_workflows_print_the_instruction_when_unreadable
+    test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget
     test_graphql_call_sites_match_the_measured_count
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
