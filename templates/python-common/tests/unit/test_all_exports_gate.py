@@ -439,7 +439,7 @@ def test_followed_file_with_a_syntax_error_is_reported_not_raised(tmp_path: Path
 
 
 def test_public_and_internal_star_imports_do_not_flag_the_public_names(tmp_path: Path) -> None:
-    """A public star import next to an ``_internal`` one keeps its names; only internal ones leak."""
+    """A public star import beside an ``_internal`` one keeps its names."""
     path_init = _tree(
         tmp_path,
         "from .public import *\nfrom ._internal.config import *\n" + '__all__ = ["Pub", "Priv"]\n',
