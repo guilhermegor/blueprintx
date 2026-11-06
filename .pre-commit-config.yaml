@@ -308,6 +308,13 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/(scaffold_kanban|common)\.sh|bin/lib/scaffold_git_remote\.sh|tests/test_scaffold_kanban\.sh)$
 
+      - id: scaffold-gh-preflight-tests
+        name: scaffold gh preflight and fail-closed should-fail tests (blueprintx#998)
+        entry: bash tests/test_scaffold_gh_preflight.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/(gh_preflight|scaffold_kanban|scaffold_git_remote|scaffold_repo_settings)\.sh|bin/blueprintx\.sh|bin/promote_offline_to_online\.sh|bin/scaffold/[^/]+\.sh|tests/test_scaffold_gh_preflight\.sh)$
+
       - id: scaffold-git-remote-tests
         name: scaffold git-remote secret-before-push should-fail tests (blueprintx#732)
         entry: bash tests/test_scaffold_git_remote.sh

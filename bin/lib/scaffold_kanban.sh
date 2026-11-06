@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# shellcheck source=bin/lib/gh_preflight.sh
+source "$(dirname "${BASH_SOURCE[0]}")/gh_preflight.sh"
+
 SCAFFOLD_RELEASE_ISSUE_TITLE="Cut 1.0.0"
 
 SCAFFOLD_KANBAN_STATUS_OPTIONS="Blocked|RED|Cannot start: a named blocker is unfinished
@@ -20,26 +23,13 @@ do-not-merge|B60205|Hold: must not be merged yet
 state:blocked|D93F0B|Cannot start: see the Blocked by line
 post-1.0|C5DEF5|Deferred past the 1.0.0 release"
 
-scaffold_kanban_scope_hint() {
-	if grep -qiE 'scope|403|insufficient|read:project' <<<"$1"; then
-		print_status "warning" "The gh token lacks the 'project' scope — run: gh auth refresh -s project" >&2
-	else
-		print_status "warning" "Could not create the kanban board: $1" >&2
-	fi
-}
-
 scaffold_create_house_labels() {
-	local str_slug="$1" str_name str_colour str_desc str_line int_failed=0
+	local str_slug="$1" str_name str_colour str_desc
 	while IFS='|' read -r str_name str_colour str_desc; do
-		gh label create "$str_name" --repo "$str_slug" --color "$str_colour" \
-			--description "$str_desc" --force >/dev/null 2>&1 ||
-			{ int_failed=$((int_failed + 1)); str_line="$str_name"; }
+		gh_run "house label '${str_name}' on ${str_slug}" gh label create "$str_name" \
+			--repo "$str_slug" --color "$str_colour" --description "$str_desc" --force
 	done <<<"$SCAFFOLD_HOUSE_LABELS"
-	if [ "$int_failed" -eq 0 ]; then
-		print_status "success" "House labels created on ${str_slug}"
-	else
-		print_status "warning" "${int_failed} house label(s) could not be created on ${str_slug} (last: ${str_line})"
-	fi
+	print_status "success" "House labels created on ${str_slug}"
 }
 
 scaffold_kanban_visibility() {
@@ -49,8 +39,13 @@ scaffold_kanban_visibility() {
 	2) printf 'PUBLIC' ;;
 	3) printf 'PRIVATE' ;;
 	*)
-		str_private="$(gh repo view "$str_slug" --json isPrivate --jq '.isPrivate' 2>/dev/null)" || str_private=""
-		[ "$str_private" = "true" ] && printf 'PRIVATE' || printf 'PUBLIC'
+		str_private="$(gh_read "read the visibility of ${str_slug}" gh repo view "$str_slug" \
+			--json isPrivate --jq '.isPrivate')" || exit 1
+		case "$str_private" in
+		true) printf 'PRIVATE' ;;
+		false) printf 'PUBLIC' ;;
+		*) gh_stop_online "read the visibility of ${str_slug}" "unexpected answer '${str_private}'" ;;
+		esac
 		;;
 	esac
 }
@@ -62,9 +57,7 @@ scaffold_kanban_find() {
 	str_err="$(mktemp)"
 	str_numbers="$(gh project list --owner "$str_owner" --format json \
 		--jq ".projects[] | select(.title==\"${str_title}\") | .number" 2>"$str_err")" || {
-		scaffold_kanban_scope_hint "$(cat "$str_err")"
-		rm -f "$str_err"
-		return 1
+		gh_stop_online "list kanban boards of ${str_owner}" "$(cat "$str_err")"
 	}
 	rm -f "$str_err"
 	int_count="$(grep -c . <<<"$str_numbers" || true)"
@@ -81,12 +74,14 @@ scaffold_kanban_option_id() {
 }
 
 scaffold_kanban_status_options() {
-	local str_owner="$1" str_number="$2" str_field str_existing str_json str_name str_colour str_desc str_id str_idjson str_sep=""
+	local str_owner="$1" str_number="$2" str_field str_existing str_json str_name str_colour str_desc str_id str_idjson str_sep="" str_err
+	str_err="$(mktemp)"
 	str_field="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
-		--jq '.fields[] | select(.name=="Status") | .id' 2>/dev/null | head -n1)"
-	[ -n "$str_field" ] || return 1
+		--jq '.fields[] | select(.name=="Status") | .id' 2>"$str_err" | head -n1)"
+	[ -n "$str_field" ] || gh_stop_online "read the Status field of board #${str_number}" "$(cat "$str_err")"
 	str_existing="$(gh project field-list "$str_number" --owner "$str_owner" --format json \
-		--jq '.fields[] | select(.name=="Status") | .options[]? | "\(.id)|\(.name)"' 2>/dev/null)" || return 1
+		--jq '.fields[] | select(.name=="Status") | .options[]? | "\(.id)|\(.name)"' 2>"$str_err")" ||
+		gh_stop_online "read the Status options of board #${str_number}" "$(cat "$str_err")"
 	while IFS='|' read -r str_name str_colour str_desc; do
 		str_id="$(scaffold_kanban_option_id "$str_existing" "$str_name")"
 		str_idjson=""
@@ -95,20 +90,23 @@ scaffold_kanban_status_options() {
 		str_sep=","
 	done <<<"$SCAFFOLD_KANBAN_STATUS_OPTIONS"
 	printf '{"query":"mutation($f:ID!,$o:[ProjectV2SingleSelectFieldOptionInput!]!){updateProjectV2Field(input:{fieldId:$f,singleSelectOptions:$o}){clientMutationId}}","variables":{"f":"%s","o":[%s]}}' \
-		"$str_field" "$str_json" | gh api graphql --input - >/dev/null 2>&1
+		"$str_field" "$str_json" | gh api graphql --input - >/dev/null 2>"$str_err" || {
+		gh_stop_online "set the Status options" "$(cat "$str_err")"
+	}
+	rm -f "$str_err"
 }
 
 scaffold_kanban_fields() {
-	local str_owner="$1" str_number="$2" int_failed=0 str_spec str_name str_type str_opts
+	local str_owner="$1" str_number="$2" str_name str_type str_opts str_have
+	local -a list_opts
+	str_have="$(gh_read "read the fields of board ${str_number}" gh project field-list "$str_number" \
+		--owner "$str_owner" --format json --jq '.fields[].name')" || exit 1
 	while IFS='|' read -r str_name str_type str_opts; do
-		if [ -n "$str_opts" ]; then
-			gh project field-create "$str_number" --owner "$str_owner" --name "$str_name" \
-				--data-type "$str_type" --single-select-options "$str_opts" >/dev/null 2>&1 ||
-				{ int_failed=1; str_spec="$str_name"; }
-		else
-			gh project field-create "$str_number" --owner "$str_owner" --name "$str_name" \
-				--data-type "$str_type" >/dev/null 2>&1 || { int_failed=1; str_spec="$str_name"; }
-		fi
+		grep -qxF -- "$str_name" <<<"$str_have" && continue
+		list_opts=()
+		[ -z "$str_opts" ] || list_opts=(--single-select-options "$str_opts")
+		gh_run "create project field '${str_name}'" gh project field-create "$str_number" \
+			--owner "$str_owner" --name "$str_name" --data-type "$str_type" ${list_opts[@]+"${list_opts[@]}"}
 	done <<<"Priority|SINGLE_SELECT|P0,P1,P2
 Size|SINGLE_SELECT|XS,S,M,L,XL
 Estimate|NUMBER|
@@ -116,35 +114,42 @@ Start date|DATE|
 Target date|DATE|
 Points|NUMBER|
 Blocker|SINGLE_SELECT|Internal,External,Decision"
-	[ "$int_failed" -eq 0 ] || print_status "warning" "A project field could not be created (last failure: ${str_spec})"
 }
 
 scaffold_kanban_url() {
-	local str_owner="$1" str_number="$2" str_kind str_path="users"
-	str_kind="$(gh api "users/${str_owner}" --jq '.type' 2>/dev/null)" || str_kind=""
-	[ "$str_kind" = "Organization" ] && str_path="orgs"
+	local str_owner="$1" str_number="$2" str_kind str_path
+	str_kind="$(gh_read "read the account type of ${str_owner}" gh api "users/${str_owner}" --jq '.type')" || exit 1
+	case "$str_kind" in
+	Organization) str_path="orgs" ;;
+	User) str_path="users" ;;
+	*) gh_stop_online "read the account type of ${str_owner}" "unexpected answer '${str_kind}'" ;;
+	esac
 	printf 'https://github.com/%s/%s/projects/%s' "$str_path" "$str_owner" "$str_number"
 }
 
+scaffold_kanban_finish() {
+	local str_slug="$1" str_owner="$2" str_number="$3" str_vis="$4"
+	gh_run "set the board's visibility to ${str_vis}" gh project edit "$str_number" \
+		--owner "$str_owner" --visibility "$str_vis"
+	gh_run "link the board to ${str_slug}" gh project link "$str_number" \
+		--owner "$str_owner" --repo "$str_slug"
+	scaffold_kanban_status_options "$str_owner" "$str_number"
+	scaffold_kanban_fields "$str_owner" "$str_number"
+}
+
 scaffold_kanban_create() {
-	local str_slug="$1" str_owner="$2" str_title="$3" str_vis="$4" str_number str_err
+	local str_slug="$1" str_owner="$2" str_title="$3" str_vis="$4" str_number str_err str_url
+	str_url="$(scaffold_kanban_url "$str_owner" "next")" || exit 1
 	str_err="$(mktemp)"
 	str_number="$(gh project create --owner "$str_owner" --title "$str_title" --format json \
 		--jq '.number' 2>"$str_err")" || {
-		scaffold_kanban_scope_hint "$(cat "$str_err")"
-		rm -f "$str_err"
-		return 1
+		gh_stop_online "create the kanban board" "$(cat "$str_err")"
 	}
 	rm -f "$str_err"
-	gh project edit "$str_number" --owner "$str_owner" --visibility "$str_vis" >/dev/null 2>&1 ||
-		print_status "warning" "Could not set the board's visibility to ${str_vis}"
-	gh project link "$str_number" --owner "$str_owner" --repo "$str_slug" >/dev/null 2>&1 ||
-		print_status "warning" "Could not link the board to ${str_slug}"
-	scaffold_kanban_status_options "$str_owner" "$str_number" ||
-		print_status "warning" "Could not set the Status options (Blocked / Backlog / Ready / In progress / In review / Done)"
-	scaffold_kanban_fields "$str_owner" "$str_number"
+	str_url="${str_url%/next}/${str_number}"
+	scaffold_kanban_finish "$str_slug" "$str_owner" "$str_number" "$str_vis"
 	print_status "success" "Created '${str_title}' (${str_vis}), linked to ${str_slug}"
-	print_status "info" "No public API for views or built-in workflows — enable auto-add and item-closed -> Done at: $(scaffold_kanban_url "$str_owner" "$str_number")/workflows"
+	print_status "info" "No public API for views or built-in workflows — enable auto-add and item-closed -> Done at: ${str_url}/workflows"
 }
 
 scaffold_kanban_setup() {
@@ -169,19 +174,20 @@ scaffold_kanban_setup() {
 		;;
 	esac
 
-	str_vis="$(scaffold_kanban_visibility "$str_slug")"
+	str_vis="$(scaffold_kanban_visibility "$str_slug")" || exit 1
 	str_found="$(scaffold_kanban_find "$str_owner" "$str_title")" || int_rc=$?
 	if [ "$int_rc" -eq 2 ]; then
 		print_status "warning" "More than one '${str_title}' project exists — not guessing which; resolve it by hand"
 		return 0
 	fi
-	[ "$int_rc" -eq 0 ] || return 0
+	[ "$int_rc" -eq 0 ] || exit 1
 	if [ -n "$str_found" ]; then
-		print_status "info" "'${str_title}' already exists (#${str_found}) — skipping"
+		print_status "info" "'${str_title}' already exists (#${str_found}) — completing any missing parts"
+		scaffold_kanban_finish "$str_slug" "$str_owner" "$str_found" "$str_vis"
 		return 0
 	fi
 
-	scaffold_kanban_create "$str_slug" "$str_owner" "$str_title" "$str_vis" || true
+	scaffold_kanban_create "$str_slug" "$str_owner" "$str_title" "$str_vis"
 	return 0
 }
 
