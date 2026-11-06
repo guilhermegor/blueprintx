@@ -1240,6 +1240,13 @@ is shaped as it is; a generated project gets the behavior, not the history.
       because it checks a delta: a hook, rule or exclude that was removed without a
       `gate-change-ok: <reason>` is a violation (#309). The same script BlueprintX runs over
       itself.
+    - `assertion-weakening`: wired in pre-commit (`language: system`, `always_run`, so the
+      caller's environment reaches it, including the `TEST_CHANGE_OK` hatch) and as its own
+      `assertion_weakening.yaml` workflow (not a step of the matrix `test` job, whose check
+      names are unstable and whose trigger is branch-filtered, so it could never be a
+      required check). It checks out with `fetch-depth: 0` so the merge-base resolves.
+      It sat unreferenced until #983, which left the gate and its hatch inert. Proven by a
+      should-fail witness in `bin/ci/scaffold_lint_test.sh` (`==` weakened to `in`).
     - `check-all-exports`: a package declaring `__all__` must name every public member of its
       submodules. The usual introspective test discovers the family through `__all__`, so it
       cannot see a missing member; this walks the files.
@@ -2279,4 +2286,7 @@ rest of the suite.
   open. A reply posted with a non-empty review body still counts, which is the residual
   open case; the UI reply flow and CodeRabbit reply with an empty body. Body-only ladder reviews and inline-only CodeRabbit reviews still count. Measured
   on issues 965 and 971: the only review entries on the head were replies, and the gate
-  exited 0.
+  exited 0. The base-change comparison (`_review_times`, #989) applies the same filter, so a
+  reply posted after a base change cannot make a carried-forward review look newer than
+  that change. Known fail-open, not closed: a reply whose parent comment was deleted reads
+  `replyTo: null`, is taken for a root comment, and counts as a review.

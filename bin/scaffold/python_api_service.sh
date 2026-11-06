@@ -182,6 +182,7 @@ copy_mkdocs_templates() {
     cp "$COMMON_TEMPLATE_ROOT/docs/.docs-skeleton.yaml" "$project_path/docs/.docs-skeleton.yaml"
     cp "$BLUEPRINTX_ROOT/templates/api-service-native-db/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
+    cp "$BLUEPRINTX_ROOT/templates/api-service-native-db/docs/AGENTS.md" "$project_path/docs/AGENTS.md"
 
 
     print_status "success" "MkDocs templates copied"
@@ -325,6 +326,7 @@ copy_global_config() {
     cp "$COMMON_TEMPLATE_ROOT/src/config/contract_oracles.yaml" "$project_path/src/config/contract_oracles.yaml"
     cp "$COMMON_TEMPLATE_ROOT/src/config/env_config.py" "$project_path/src/config/env_config.py"
     cp "$COMMON_TEMPLATE_ROOT/src/config/CLAUDE.md" "$project_path/src/config/CLAUDE.md"
+    cp "$COMMON_TEMPLATE_ROOT/src/config/AGENTS.md" "$project_path/src/config/AGENTS.md"
     mkdir -p "$project_path/src/config/contracts"
     cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/__init__.py" "$project_path/src/config/contracts/__init__.py"
     cp "$COMMON_TEMPLATE_ROOT/src/config/contracts/example_source.py" "$project_path/src/config/contracts/example_source.py"
@@ -440,6 +442,7 @@ copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/assertion_weakening.yaml" "$project_path/.github/workflows/assertion_weakening.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/publish-badge.yaml" "$project_path/.github/workflows/publish-badge.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
@@ -454,8 +457,9 @@ copy_github_assets() {
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
         < "$SHARED_TEMPLATE_ROOT/SECURITY.md" > "$project_path/SECURITY.md"
-    cp "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" "$project_path/.github/dependabot.yml"
+    GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" > "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
+    cp "$SHARED_TEMPLATE_ROOT/.github/AGENTS.md" "$project_path/.github/AGENTS.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/PULL_REQUEST_TEMPLATE.md" "$project_path/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$project_path/.github/ISSUE_TEMPLATE" && cp "$SHARED_TEMPLATE_ROOT/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$project_path/.github/ISSUE_TEMPLATE/feature_or_fix.md"
     copy_repo_policy_workflows "$project_path"
