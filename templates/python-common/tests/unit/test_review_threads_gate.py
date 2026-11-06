@@ -3830,6 +3830,24 @@ def test_patch_fingerprint_empty_renames_at_different_names_differ() -> None:
     ) != cls_gate.patch_fingerprint([{**dict_rename, "filename": "c", "previous_filename": "a"}])
 
 
+def test_patch_fingerprint_empty_renames_from_different_sources_differ() -> None:
+    """The source name is hashed: a to b and z to b are different renames."""
+    cls_gate = _load_gate()
+    dict_rename = {"filename": "b", "status": "renamed", "changes": 0, "sha": _STR_EMPTY_BLOB_SHA}
+    assert cls_gate.patch_fingerprint(
+        [{**dict_rename, "previous_filename": "a"}]
+    ) != cls_gate.patch_fingerprint([{**dict_rename, "previous_filename": "z"}])
+
+
+def test_patch_fingerprint_added_empty_file_differs_from_renamed_to_same_name() -> None:
+    """Status is hashed: an added empty b is not a renamed a to b."""
+    cls_gate = _load_gate()
+    dict_empty = {"filename": "b", "changes": 0, "sha": _STR_EMPTY_BLOB_SHA}
+    assert cls_gate.patch_fingerprint(
+        [{**dict_empty, "status": "added"}]
+    ) != cls_gate.patch_fingerprint([{**dict_empty, "status": "renamed", "previous_filename": "a"}])
+
+
 def test_patch_fingerprint_empty_rename_with_same_blob_matches() -> None:
     """The same empty-file rename at two commits is the same fingerprint."""
     cls_gate = _load_gate()
@@ -3843,8 +3861,7 @@ def test_patch_fingerprint_empty_rename_with_same_blob_matches() -> None:
     assert cls_gate.patch_fingerprint([dict_rename]) == cls_gate.patch_fingerprint([dict_rename])
 
 
-@pytest.mark.parametrize("str_sha", ["1", "2"])
-def test_patch_fingerprint_renamed_nonempty_blob_raises(str_sha: str) -> None:
+def test_patch_fingerprint_renamed_nonempty_blob_raises() -> None:
     """A rename plus an exec-bit flip keeps the blob ``sha``, so a non-empty rename is unproven."""
     cls_gate = _load_gate()
     dict_rename = {
@@ -3852,7 +3869,7 @@ def test_patch_fingerprint_renamed_nonempty_blob_raises(str_sha: str) -> None:
         "previous_filename": "a",
         "status": "renamed",
         "changes": 0,
-        "sha": str_sha,
+        "sha": "3b18e512dba79e4c8300dd08aeb37f8e728b8dad",
     }
     with pytest.raises(ValueError, match="no patch text"):
         cls_gate.patch_fingerprint([dict_rename])
