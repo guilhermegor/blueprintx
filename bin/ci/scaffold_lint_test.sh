@@ -213,4 +213,11 @@ echo "::group::poe integration_tests"
 bash bin/poe_exec.sh integration_tests || [ $? -eq 5 ]
 echo "::endgroup::"
 
+if [ "$SKELETON" = "lib-minimal" ]; then
+    echo "::group::built wheel carries py.typed"
+    poetry build -f wheel --no-interaction --no-ansi
+    unzip -l dist/*.whl | grep -q 'py.typed' || { echo "ERROR: py.typed missing from wheel" >&2; exit 1; }
+    echo "::endgroup::"
+fi
+
 echo "OK: $SKELETON scaffolds clean, lints clean, and unit + integration tests pass."
