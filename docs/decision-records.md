@@ -2259,4 +2259,7 @@ rest of the suite.
   open. A reply posted with a non-empty review body still counts, which is the residual
   open case; the UI reply flow and CodeRabbit reply with an empty body. Body-only ladder reviews and inline-only CodeRabbit reviews still count. Measured
   on issues 965 and 971: the only review entries on the head were replies, and the gate
-  exited 0.
+  exited 0. The base-change comparison (`_review_times`, #989) applies the same filter, so a
+  reply posted after a base change cannot make a carried-forward review look newer than
+  that change. Known fail-open, not closed: a reply whose parent comment was deleted reads
+  `replyTo: null`, is taken for a root comment, and counts as a review.
