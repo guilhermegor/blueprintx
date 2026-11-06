@@ -509,22 +509,23 @@ _STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
 
 def _is_provable_without_patch(dict_file: dict) -> bool:
-    """Return whether a patchless entry is a pure rename or an added empty file.
+    """Return whether a patchless entry is an added or renamed empty file.
 
-    Both need ``changes == 0`` and a blob ``sha`` to hash. The API reports ``changes == 0`` for
+    Both need ``changes == 0`` and the empty-blob ``sha``. The API reports ``changes == 0`` for
     a binary file too, so the ``sha`` is what proves the content; without it the entry is not
     trusted. The compare API carries no file mode, so a ``sha`` cannot prove the mode bits. An
-    ``added`` entry therefore qualifies only with the empty-blob ``sha``: an exec bit on an empty
-    file runs nothing, so mode cannot matter there, and any other patchless ``added`` entry (a
-    binary) raises. A ``modified`` entry never qualifies, since a mode-only change keeps its
-    blob ``sha``. A rename keeps its earlier rule and shares the mode gap.
+    ``added`` or ``renamed`` entry therefore qualifies only with the empty-blob ``sha``: an exec
+    bit on an empty file runs nothing, so mode cannot matter there, and any other patchless
+    entry (a binary, or a rename plus a mode flip) raises. A ``modified`` or ``removed`` entry
+    never qualifies.
     """
     str_status = dict_file.get("status")
     str_sha = dict_file.get("sha")
     return (
         dict_file.get("changes") == 0
         and bool(str_sha)
-        and (str_status == "renamed" or (str_status == "added" and str_sha == _STR_EMPTY_BLOB_SHA))
+        and str_status in ("added", "renamed")
+        and str_sha == _STR_EMPTY_BLOB_SHA
     )
 
 
@@ -551,7 +552,7 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     ------
     ValueError
         If the list is malformed, empty, possibly truncated, or a file carries no patch text
-            (a pure rename or an added empty file has none and is hashed by its blob ``sha``).
+            (an added or renamed empty file has none and is hashed by its blob ``sha``).
     """
     if not isinstance(list_files, list) or not all(isinstance(d, dict) for d in list_files):
         raise ValueError("patch unavailable: the file list is malformed")
