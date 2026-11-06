@@ -45,7 +45,8 @@ fails when the number changes, which is the prompt to re-set the budget.
 
 `SCAFFOLD_GH_GRAPHQL_BUDGET` (60) is that count plus the preflight call and
 `gh repo create` (19), times 3, the most GraphQL queries one `gh` command sends
-(owner lookup, object lookup, mutation). The count is measured by call; the
+(owner lookup, object lookup, mutation): 57. The last 3 are headroom for one
+retried command, which brings it to 60. The count is measured by call; the
 multiplier is a bound, not a live measurement: no throwaway account was
 available, so confirm it with `gh api rate_limit` before and after a real run.
 
