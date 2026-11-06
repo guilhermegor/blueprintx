@@ -6,7 +6,7 @@ that placeholder contradicts the tag and the package index (filings-rfb#30: stub
 ``1.0.0`` while ``v1.0.1`` and ``v1.0.2`` shipped from tags).
 
 Conditional by construction: a project without dynamic versioning enabled (the service tiers,
-whose ``cz bump`` / ``release.yaml`` write a real static version, and offline-mode libraries)
+whose ``cz bump`` / ``release.yml`` write a real static version, and offline-mode libraries)
 is a no-op and exits 0.
 
 ``pyproject.toml`` is read line by line rather than through ``tomllib``: the templates target
