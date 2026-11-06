@@ -106,6 +106,13 @@ repos:
         pass_filenames: false
         files: (^|/)\.github/workflows/.*\.(yml|yaml)$
 
+      - id: workflow-names
+        name: template workflow filenames (kebab-case .yml, blueprintx#947)
+        entry: bash -c 'bash bin/ci/check_workflow_names.sh && bash tests/test_check_workflow_names.sh'
+        language: system
+        pass_filenames: false
+        files: ^(templates/.*\.github/workflows/|bin/ci/check_workflow_names\.sh|tests/test_check_workflow_names\.sh)
+
       - id: docs-gap
         name: docs gap (published pages registered in mkdocs nav + docs/CLAUDE.md index, blueprintx#340)
         entry: python templates/python-common/bin/check_docs_gap.py --root .
@@ -377,6 +384,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(bin/ci/check_docs_boundary\.sh|tests/test_check_docs_boundary\.sh)$
+
+      - id: registry-order-tests
+        name: registry order gate and two-branch merge proof (blueprintx#959)
+        entry: bash tests/test_check_registry_order.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/python-common/bin/check_registry_order\.py|templates/lib-minimal/rendered/package__init__\.py\.tmpl|tests/test_check_registry_order\.sh)$
 
       - id: test-git-env
         name: tests clear inherited GIT_* env before spawning git (blueprintx#901)

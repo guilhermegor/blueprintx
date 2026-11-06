@@ -280,6 +280,21 @@ jobs:
       - name: Should-fail regression tests for check_action_pins
         run: bash tests/test_check_actions_pins.sh
 
+  workflow-names:
+    name: Template workflow filenames
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check naming convention
+        run: bash bin/ci/check_workflow_names.sh
+
+      - name: Should-fail regression tests
+        run: bash tests/test_check_workflow_names.sh
+
   secret-scan:
     name: GitGuardian — secret scan
     runs-on: ubuntu-latest
@@ -483,6 +498,9 @@ jobs:
 
       - name: Should-fail regression tests for the gate
         run: bash tests/test_check_test_git_env.sh
+
+      - name: Two branches adding a module merge clean and pass the gate (blueprintx#959)
+        run: bash tests/test_check_registry_order.sh
 
   readme-structure:
     name: README structure gate — plain headings, slug sections, Authors links

@@ -4,7 +4,7 @@ Docs rot **structurally** before they rot factually: a canonical page is deleted
 never reaches ``mkdocs.yml`` ``nav:`` (MkDocs still *builds* it — it just vanishes from
 navigation, which is how a page silently goes missing), or a page family drifts apart heading by
 heading. This gate catches all three mechanically, and is wired into both
-``.pre-commit-config.yaml`` and ``.github/workflows/tests.yaml`` (gate parity).
+``.pre-commit-config.yaml`` and ``.github/workflows/tests.yml`` (gate parity).
 
 It enforces the **invariant, never the prose**:
 

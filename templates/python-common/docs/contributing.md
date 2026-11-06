@@ -171,7 +171,7 @@ Dependabot alerts and security updates. Ordinary version bumps are separate — 
 
 ## Automated PR flow (the quality gate)
 
-Every PR is classified by `bin/pr_gate.py` (workflow `pr-gate.yaml`), which labels it, posts one
+Every PR is classified by `bin/pr_gate.py` (workflow `pr-gate.yml`), which labels it, posts one
 sticky comment with a per-axis status table, and hands the **safe classes** to GitHub's native
 auto-merge. Two rules are the whole design:
 
@@ -206,7 +206,7 @@ got under the old rules until some new event touches it. That is not a bug; the 
 ran again. So after merging a policy change, run the backfill:
 
 ```bash
-gh workflow run pr-gate.yaml -f backfill=true   # re-evaluates every open PR
+gh workflow run pr-gate.yml -f backfill=true   # re-evaluates every open PR
 # for a Dependabot PR, `gh pr comment <n> --body "@dependabot rebase"` also works
 ```
 
@@ -214,7 +214,7 @@ gh workflow run pr-gate.yaml -f backfill=true   # re-evaluates every open PR
 
 A PR merged by **native auto-merge** (a bot action) does **not** close its linked issue and does
 **not** delete its branch, even with `delete_branch_on_merge` on — bot-performed actions are
-deliberately inert to prevent automation recursion. `pr-reconcile.yaml` fixes both: it closes the
+deliberately inert to prevent automation recursion. `pr-reconcile.yml` fixes both: it closes the
 `Closes #N` issues and deletes the head branch of merged PRs. Its **scheduled daily run is the
 actual fix** — scheduled events are exempt from the "no new workflow runs" suppression that also
 swallows the fast `pull_request: [closed]` path for a bot merge. Latency is up to one day; that is
