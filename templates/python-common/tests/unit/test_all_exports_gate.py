@@ -6,7 +6,9 @@ distinctions a blunter rule would flatten: a package **without** ``__all__`` is 
 and a name a submodule merely **imported** is not a name it defines.
 """
 
+from functools import partial
 import importlib.util
+from itertools import starmap
 from pathlib import Path
 from types import ModuleType
 
@@ -167,7 +169,7 @@ def test_all_name_defined_under_internal_is_flagged(tmp_path: Path) -> None:
         'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n',
         "",
     )
-    assert "_internal" in _sole(_load_gate().check_package(path_init))
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
 
 
 def test_all_module_alias_of_internal_import_is_flagged(tmp_path: Path) -> None:
@@ -177,7 +179,7 @@ def test_all_module_alias_of_internal_import_is_flagged(tmp_path: Path) -> None:
         'import pkg._internal.config.schemas as schemas\n\n__all__ = ["schemas"]\n',
         "",
     )
-    assert "_internal" in _sole(_load_gate().check_package(path_init))
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
 
 
 def test_all_name_reexported_through_public_sibling_is_flagged(tmp_path: Path) -> None:
@@ -187,7 +189,7 @@ def test_all_name_reexported_through_public_sibling_is_flagged(tmp_path: Path) -
         'from .member import Doc\n\n__all__ = ["Doc"]\n',
         "from pkg._internal.config.schemas import Doc\n",
     )
-    assert "_internal" in _sole(_load_gate().check_package(path_init))
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
 
 
 def test_function_local_internal_import_does_not_flag_public_name(tmp_path: Path) -> None:
@@ -217,7 +219,7 @@ def test_checkout_path_named_internal_does_not_disable_guard(tmp_path: Path) -> 
         'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n',
         "",
     )
-    assert "_internal" in _sole(_load_gate().check_package(path_init))
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
 
 
 def test_internal_package_itself_is_out_of_scope(tmp_path: Path) -> None:
@@ -230,3 +232,197 @@ def test_internal_package_itself_is_out_of_scope(tmp_path: Path) -> None:
         'from pkg._internal.config.schemas import Doc\n\n__all__ = ["Doc"]\n', encoding="utf-8"
     )
     assert _load_gate().check_package(path_init) == []
+
+
+def _tree(tmp_path: Path, str_init: str, dict_files: dict[str, str]) -> Path:
+    """Write ``pkg/__init__.py`` plus arbitrary files below ``pkg`` and return the init.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Directory to build in.
+    str_init : str
+        Source of ``pkg/__init__.py``.
+    dict_files : dict[str, str]
+        Path below ``pkg`` mapped to its source.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the written ``__init__.py``.
+    """
+    path_pkg = tmp_path / "pkg"
+    path_pkg.mkdir(exist_ok=True)
+    path_init = path_pkg / "__init__.py"
+    path_init.write_text(str_init, encoding="utf-8")
+    tuple(starmap(partial(_write, path_pkg), dict_files.items()))
+    return path_init
+
+
+def _write(path_base: Path, str_rel: str, str_source: str) -> None:
+    """Write one file below a base directory, creating its parents.
+
+    Parameters
+    ----------
+    path_base : pathlib.Path
+        Directory the relative path is resolved against.
+    str_rel : str
+        Path of the file below the base.
+    str_source : str
+        File content.
+    """
+    path_file = path_base / str_rel
+    path_file.parent.mkdir(parents=True, exist_ok=True)
+    path_file.write_text(str_source, encoding="utf-8")
+
+
+_STR_LEAK = "from pkg._internal.config.schemas import Doc\n"
+_STR_EXPORT_DOC = '__all__ = ["Doc"]\n'
+_STR_FROM_MEMBER = "from .member import Doc\n" + _STR_EXPORT_DOC
+
+
+@pytest.mark.parametrize(
+    ("str_init", "dict_files"),
+    [
+        pytest.param(
+            "from pkg.member import Doc\n" + _STR_EXPORT_DOC,
+            {"member.py": _STR_LEAK},
+            id="absolute-sibling",
+        ),
+        pytest.param(
+            "from .a.b import Doc\n" + _STR_EXPORT_DOC,
+            {"a/__init__.py": "", "a/b.py": _STR_LEAK},
+            id="dotted-relative",
+        ),
+        pytest.param(
+            "from pkg.a.b import Doc\n" + _STR_EXPORT_DOC,
+            {"a/__init__.py": "", "a/b.py": _STR_LEAK},
+            id="dotted-absolute",
+        ),
+        pytest.param(
+            _STR_FROM_MEMBER,
+            {"member/__init__.py": _STR_LEAK},
+            id="sibling-package",
+        ),
+        pytest.param(
+            _STR_FROM_MEMBER,
+            {"member.py": "try:\n    " + _STR_LEAK + "except ImportError:\n    Doc = None\n"},
+            id="followed-file-try",
+        ),
+        pytest.param(
+            _STR_FROM_MEMBER,
+            {
+                "member.py": "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    "
+                + _STR_LEAK
+            },
+            id="followed-file-type-checking",
+        ),
+        pytest.param(
+            _STR_FROM_MEMBER,
+            {"member.py": "import sys\n\nif sys.version_info >= (3, 11):\n    " + _STR_LEAK},
+            id="followed-file-version-check",
+        ),
+        pytest.param(
+            "try:\n    " + _STR_LEAK + "except ImportError:\n    Doc = None\n" + _STR_EXPORT_DOC,
+            {},
+            id="init-level-try",
+        ),
+        pytest.param(
+            "import contextlib\n\nwith contextlib.suppress(ImportError):\n    "
+            + _STR_LEAK
+            + _STR_EXPORT_DOC,
+            {},
+            id="init-level-with",
+        ),
+        pytest.param(
+            "from . import _internal as Doc\n" + _STR_EXPORT_DOC,
+            {"_internal/__init__.py": ""},
+            id="bare-relative-internal-package",
+        ),
+        pytest.param(
+            "from .member import Doc\n" + _STR_EXPORT_DOC,
+            {"member.py": "from . import _internal as Doc\n", "_internal/__init__.py": ""},
+            id="bare-relative-internal-package-via-sibling",
+        ),
+        pytest.param(
+            "from pkg._internal.config.schemas import *\n" + _STR_EXPORT_DOC,
+            {},
+            id="star-import-from-internal",
+        ),
+        pytest.param(
+            "from .member import *\n" + _STR_EXPORT_DOC,
+            {"member.py": _STR_LEAK},
+            id="star-import-through-sibling",
+        ),
+    ],
+)
+def test_internal_leak_is_traced_through_every_import_shape(
+    tmp_path: Path, str_init: str, dict_files: dict[str, str]
+) -> None:
+    """Every spelling of an ``_internal`` import that reaches ``__all__`` is a finding."""
+    path_init = _tree(tmp_path, str_init, dict_files)
+    assert "is defined under _internal" in _sole(_load_gate().check_package(path_init))
+
+
+def test_star_import_of_a_public_module_is_not_flagged(tmp_path: Path) -> None:
+    """``from .member import *`` is clean when ``member`` defines the name itself."""
+    path_init = _tree(
+        tmp_path, "from .member import *\n" + _STR_EXPORT_DOC, {"member.py": "Doc = 1\n"}
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+@pytest.mark.parametrize(
+    "str_import",
+    [
+        pytest.param("from .member import Doc\n", id="relative"),
+        pytest.param("from vendor import Doc\n", id="third-party"),
+        pytest.param("import vendor.Doc as Doc\n", id="aliased-module"),
+    ],
+)
+def test_star_import_is_not_a_fallback_for_an_explicitly_imported_name(
+    tmp_path: Path, str_import: str
+) -> None:
+    """A name some statement binds explicitly is never attributed to a later ``_internal`` star."""
+    path_init = _tree(
+        tmp_path,
+        str_import + "from pkg._internal.config.schemas import *\n" + _STR_EXPORT_DOC,
+        {"member.py": "Doc = 1\n"},
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_star_import_shadowed_by_a_local_definition_is_not_flagged(tmp_path: Path) -> None:
+    """A name the module defines itself is not the star import's name."""
+    path_init = _tree(
+        tmp_path,
+        "from .member import *\n" + _STR_EXPORT_DOC,
+        {"member.py": "from pkg._internal.config.schemas import *\n\n\nclass Doc:\n    pass\n"},
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_absolute_import_cycle_terminates_without_a_finding(tmp_path: Path) -> None:
+    """Two siblings importing each other through absolute paths do not loop."""
+    path_init = _tree(
+        tmp_path,
+        "from pkg.a import Doc\n" + _STR_EXPORT_DOC,
+        {"a.py": "from pkg.b import Doc\n", "b.py": "from pkg.a import Doc\n"},
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_absolute_import_of_another_top_package_is_not_followed(tmp_path: Path) -> None:
+    """``from other.member import Doc`` never resolves into this package's tree."""
+    path_init = _tree(
+        tmp_path,
+        "from other.member import Doc\n" + _STR_EXPORT_DOC,
+        {"member.py": _STR_LEAK},
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_followed_file_with_a_syntax_error_is_reported_not_raised(tmp_path: Path) -> None:
+    """A broken sibling is a finding naming that file, not a traceback."""
+    path_init = _tree(tmp_path, _STR_FROM_MEMBER, {"member.py": "def (:\n"})
+    assert "member.py: could not parse" in _sole(_load_gate().check_package(path_init))
