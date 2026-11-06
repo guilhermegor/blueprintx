@@ -2130,6 +2130,35 @@ grouped by what they guard.
   cannot comply must obtain a commercial licence from the copyright holder. SPDX ids map to
   GitHub Licenses API keys in display order.
 
+### Python floor (`bin/python_eol_bump.py`, #951)
+
+`templates/python-common/.python-version` holds the supported floor (a `MAJOR.MINOR` cycle) and
+is the single source of truth. The `python` constraint of every `templates/*/pyproject.toml`,
+the `tests.yml` matrix, ruff's `target-version`, `mypy.ini`, the `requirements.txt` markers
+and the README badges are derived from it. `python bin/python_eol_bump.py --check` (pre-commit
+hook `python-floor-drift`, `scaffold_checks.yml`) fails when any of them disagrees.
+
+The monthly `python-eol-bump.yaml` workflow runs the script without `--check`: it reads
+`https://endoflife.date/api/v1/products/python/`, sets the floor to the lowest maintained cycle
+and the matrix to every maintained cycle, and opens a PR. It fails closed (unreachable API,
+malformed JSON or no maintained cycle changes nothing and exits 1) and never lowers the floor.
+Ruff does not follow `.python-version` and falls back to py39 on Poetry-only tiers, so
+`target-version` stays explicit and the gate compares it.
+
+The bump workflow keeps at most one PR open (`chore/951-python-floor-sync`) and leaves it
+untouched on later runs. Pushes made with the default `GITHUB_TOKEN` do not trigger other
+workflows, so set the `PYTHON_EOL_BUMP_TOKEN` secret (a PAT or GitHub App token) for the PR to
+get its CI runs, and enable "Allow GitHub Actions to create and approve pull requests".
+`.python-version` holds the floor, not the development interpreter, so pyenv and `setup-python`
+resolve it to the newest available 3.11.x (pyenv: the newest installed one).
+
+A new CPython cycle enters the matrix only `INT_MATRIX_DELAY_DAYS` (180) days after its
+`releaseDate`. Measured on PyPI on 2026-11-04, a month after 3.15 GA, `pyyaml` (a dependency
+of every tier), `pyodbc` and `pydantic-core` publish no cp315 wheels, so a 3.15 leg would build
+them from source on three operating systems. If the deliberate floor is higher than the
+derived one, the bump keeps the floor and still extends the matrix; if it is lower, the floor
+is raised.
+
 ## CLAUDE.md and AGENTS.md pairing (blueprintx#273, #754, #973)
 
 `AGENTS.md` is the source and `CLAUDE.md` is a bridge, at the root of a skeleton and at every
