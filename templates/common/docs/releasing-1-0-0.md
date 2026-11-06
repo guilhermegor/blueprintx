@@ -15,8 +15,8 @@ backlog is done, and the docs describe the code that actually ships.
    the owner (the scaffold creates the label; otherwise `gh label create post-1.0`), so it is deferred on the record rather than dropped.
 3. Work the issue's checklist: the docs audit, runnable examples, the 1.x supported-versions
    table in `SECURITY.md`, the public-API freeze (audit the exported names; removing one after
-   1.0 is a 2.0), a `## 1.0.0` CHANGELOG section stating the API guarantee, and no open pull
-   requests, then the rehearsal and publish. Python projects also flip the classifier to
+   1.0 is a 2.0), a `## 1.0.0` CHANGELOG section stating the API guarantee, and every open
+   pull request merged, closed, or explicitly deferred past 1.0 by the owner, then the rehearsal and publish. Python projects also flip the classifier to
    `Development Status :: 5 - Production/Stable`, check that `requires-python` (Poetry's `python` constraint) and one Python
    classifier per version of the `tests.yaml` matrix agree, and confirm `py.typed` is in the
    built wheel.
@@ -32,8 +32,9 @@ it lists the open issues and fails while any lacks the `post-1.0` label, naming 
 - Pull requests are not counted, and neither is the **Cut 1.0.0** issue itself. This is a
   decision, not an omission: failing on open PRs would let a standing Dependabot PR or a
   `post-1.0` feature branch block every release, and the gate has no label to exempt a PR
-  with. The smaller blast radius is to keep the gate on issues and put "no open PRs at cut
-  time" on the **Cut 1.0.0** checklist, where the owner judges each PR. BlueprintX's own test
+  with. The smaller blast radius is to keep the gate on issues and put "every open PR
+  merged, closed, or deferred past 1.0" on the **Cut 1.0.0** checklist, where the owner
+  judges each PR. BlueprintX's own test
   suite pins that a lone open PR passes the gate.
 - The issues are read through the GitHub REST API with the workflow token, read-only.
 - If the API cannot be read, the gate fails closed: it blocks the release rather than guess.

@@ -30,7 +30,7 @@ workflow refuses a 0.x to 1.0.0 jump while an open issue lacks the `post-1.0` la
 - [ ] **Public API frozen:** audit the exported names (Python: `__all__`; TypeScript: the package entry point exports) and remove deprecated or experimental names now; removing anything after 1.0 is a 2.0
 - [ ] **Python projects, typed marker:** `py.typed` is present in the built wheel (`unzip -l dist/*.whl | grep py.typed`)
 - [ ] **CHANGELOG 1.0.0:** a `## 1.0.0` section states the API guarantee, not only the generated commit list
-- [ ] **No open PRs at cut time:** merge or close each one (the release gate counts issues only, see `docs/releasing-1-0-0.md`)
+- [ ] **No open PRs at cut time:** each open PR is merged, closed, or explicitly deferred past 1.0 by the owner (the release gate counts issues only, see `docs/releasing-1-0-0.md`)
 - [ ] **Release:** rehearsal, then publish, then install-verify (Test PyPI then PyPI; npm `--dry-run` then publish), with the tag present and the release not a draft
 - [ ] **Post-release:** switch the documented version policy from 0.x rules to full semver
 - [ ] **Projects using mike for docs, alias:** the mike `latest` alias of the docs site points at 1.0
