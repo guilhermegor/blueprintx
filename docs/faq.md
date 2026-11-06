@@ -276,13 +276,16 @@ Still superseded, so a new review is needed: a merge that resolves a conflict, a
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
 closed: a missing commit, an API error, a malformed response (`files` not a list, an entry
 that is not an object, a non-JSON body), a binary or oversized file with no patch text, or a
-full 300-file list is read as "not covered". A file entry with status `added` or `renamed`, no patch
-text, zero changes and a blob `sha` is fingerprinted by its names and that `sha`, so it carries
-forward. That covers a pure rename (status `renamed`) and an added empty file such as a
-`py.typed` or `.gitkeep` (status `added`, empty-blob `sha` `e69de29b…`). The `sha` is required: a
-binary file also reports zero changes, and only its blob proves the content. A patchless entry
-without a `sha`, with changes above zero, or with any other status (a `modified` mode-only change keeps
-its blob `sha`, so the `sha` does not prove the mode bits) still counts as "not covered". The compare API returns at most
+full 300-file list is read as "not covered". Two patchless entries are fingerprinted by their
+names and blob `sha`, so they carry forward: a pure rename (status `renamed`, zero changes, a
+`sha`) and an added empty file such as a `py.typed` or `.gitkeep` (status `added`, zero changes,
+and exactly the empty-blob `sha` `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`). The `sha` is
+required: a binary file also reports zero changes, and only its blob proves the content. The
+compare API carries no file mode, so a `sha` cannot prove the mode bits. That is why an `added`
+entry needs the empty blob specifically: an exec bit on an empty file runs nothing, so its mode
+cannot matter, while any other patchless `added` entry (a binary) still counts as "not covered".
+So does a patchless entry without a `sha`, with changes above zero, or a `modified` one (a
+mode-only change keeps its blob `sha`). A rename shares the mode gap and is kept as it was. The compare API returns at most
 300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
 off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
 

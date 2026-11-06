@@ -505,21 +505,24 @@ _TUPLE_FINGERPRINT_ERRORS = (
 )
 
 
-_SET_PATCHLESS_PROVABLE_STATUSES = frozenset({"added", "renamed"})
+_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
 
 def _is_provable_without_patch(dict_file: dict) -> bool:
-    """Return whether a patchless entry is an added or renamed file with no changes and a ``sha``.
+    """Return whether a patchless entry is a pure rename or an added empty file.
 
-    That covers a pure rename and an added empty file. The API reports ``changes == 0`` for a
-    binary file too, so the blob ``sha`` is what proves the content; without it the entry is
-    not trusted. A ``modified`` entry never qualifies: a mode-only change leaves the blob
-    ``sha`` unchanged, so the ``sha`` does not prove the mode bits.
+    Both need ``changes == 0`` and a blob ``sha`` to hash. The API reports ``changes == 0`` for
+    a binary file too, so the ``sha`` is what proves the content; without it the entry is not
+    trusted. The compare API carries no file mode, so a ``sha`` cannot prove the mode bits. An
+    ``added`` entry therefore qualifies only with the empty-blob ``sha``: an exec bit on an empty
+    file runs nothing, so mode cannot matter there, and any other patchless ``added`` entry (a
+    binary) raises. A ``modified`` entry never qualifies, since a mode-only change keeps its
+    blob ``sha``. A rename keeps its earlier rule and shares the mode gap.
     """
-    return (
-        dict_file.get("status") in _SET_PATCHLESS_PROVABLE_STATUSES
-        and dict_file.get("changes") == 0
-        and bool(dict_file.get("sha"))
+    str_status = dict_file.get("status")
+    str_sha = dict_file.get("sha")
+    return dict_file.get("changes") == 0 and bool(str_sha) and (
+        str_status == "renamed" or (str_status == "added" and str_sha == _STR_EMPTY_BLOB_SHA)
     )
 
 

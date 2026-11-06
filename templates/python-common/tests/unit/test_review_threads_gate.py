@@ -3877,18 +3877,19 @@ def test_patch_fingerprint_added_empty_file_is_fingerprinted() -> None:
     assert len(cls_gate.patch_fingerprint([dict_empty])) == 64
 
 
-def test_patch_fingerprint_added_files_with_different_blobs_differ() -> None:
-    """Two patchless added files whose ``sha`` differs must not share a fingerprint."""
+def test_patch_fingerprint_added_empty_files_at_different_names_differ() -> None:
+    """Two added empty files at different paths must not share a fingerprint."""
     cls_gate = _load_gate()
-    dict_added = {"filename": "py.typed", "status": "added", "changes": 0}
+    dict_added = {"status": "added", "changes": 0, "sha": _STR_EMPTY_BLOB_SHA}
     assert cls_gate.patch_fingerprint(
-        [{**dict_added, "sha": _STR_EMPTY_BLOB_SHA}]
-    ) != cls_gate.patch_fingerprint([{**dict_added, "sha": "1"}])
+        [{**dict_added, "filename": "py.typed"}]
+    ) != cls_gate.patch_fingerprint([{**dict_added, "filename": ".gitkeep"}])
 
 
 @pytest.mark.parametrize(
     "dict_entry",
     [
+        {"filename": "logo.png", "status": "added", "changes": 0, "sha": "1"},
         {"filename": "py.typed", "status": "added", "changes": 0},
         {"filename": "py.typed", "status": "added", "changes": 0, "sha": ""},
         {"filename": "big.txt", "status": "added", "changes": 9, "sha": "1"},
