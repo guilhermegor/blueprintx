@@ -505,16 +505,26 @@ _TUPLE_FINGERPRINT_ERRORS = (
 )
 
 
-def _is_pure_rename(dict_file: dict) -> bool:
-    """Return whether a file entry is a rename with no patch text AND a blob ``sha`` to hash.
+_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
-    The API reports ``changes == 0`` for a binary file too, so the blob ``sha`` is what proves
-    the content; without it the entry is not trusted.
+
+def _is_provable_without_patch(dict_file: dict) -> bool:
+    """Return whether a patchless entry is a pure rename or an added empty file.
+
+    Both need ``changes == 0`` and a blob ``sha`` to hash. The API reports ``changes == 0`` for
+    a binary file too, so the ``sha`` is what proves the content; without it the entry is not
+    trusted. The compare API carries no file mode, so a ``sha`` cannot prove the mode bits. An
+    ``added`` entry therefore qualifies only with the empty-blob ``sha``: an exec bit on an empty
+    file runs nothing, so mode cannot matter there, and any other patchless ``added`` entry (a
+    binary) raises. A ``modified`` entry never qualifies, since a mode-only change keeps its
+    blob ``sha``. A rename keeps its earlier rule and shares the mode gap.
     """
+    str_status = dict_file.get("status")
+    str_sha = dict_file.get("sha")
     return (
-        dict_file.get("status") == "renamed"
-        and dict_file.get("changes") == 0
-        and bool(dict_file.get("sha"))
+        dict_file.get("changes") == 0
+        and bool(str_sha)
+        and (str_status == "renamed" or (str_status == "added" and str_sha == _STR_EMPTY_BLOB_SHA))
     )
 
 
@@ -541,13 +551,13 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     ------
     ValueError
         If the list is malformed, empty, possibly truncated, or a file carries no patch text
-            (a pure rename has none and is hashed by its names).
+            (a pure rename or an added empty file has none and is hashed by its blob ``sha``).
     """
     if not isinstance(list_files, list) or not all(isinstance(d, dict) for d in list_files):
         raise ValueError("patch unavailable: the file list is malformed")
     if not list_files or len(list_files) >= _INT_COMPARE_FILES:
         raise ValueError(f"patch unavailable: {len(list_files)} file(s) in the comparison")
-    if any(d.get("patch") is None and not _is_pure_rename(d) for d in list_files):
+    if any(d.get("patch") is None and not _is_provable_without_patch(d) for d in list_files):
         raise ValueError("patch unavailable: a file has no patch text (binary or too large)")
     try:
         list_parts = [
