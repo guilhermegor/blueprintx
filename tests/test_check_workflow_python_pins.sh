@@ -173,6 +173,18 @@ write_root_workflow "$str_fx" 'jobs:\n  a:\n    strategy:\n      matrix:\n      
 expect_gate "indirect name matching an unrelated with: key passes" pass "$str_fx"
 
 str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'jobs:\n  a:\n    strategy:\n      matrix:\n        version: ["1.2.3"]\n    steps:\n      - with:\n          python-version: ${{ inputs.version }}\n'
+expect_gate "inputs name does not pool onto an unrelated matrix key" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'env: { PYTHON_VERSION: "3.12.8" }\njobs:\n  a:\n    steps:\n      - with:\n          python-version: ${{ env.PYTHON_VERSION }}\n'
+expect_gate "flow-style env holding a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'jobs:\n  a:\n    strategy:\n      matrix: { py: ["3.12.8"] }\n    steps:\n      - with:\n          python-version: ${{ matrix.py }}\n'
+expect_gate "flow-style matrix holding a patch pin fails" fail "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
 write_root_workflow "$str_fx" 'on:\n  workflow_call:\n    inputs:\n      py:\n        type: string\n        default: "3.12.8"\njobs:\n  a:\n    steps:\n      - with:\n          python-version: ${{ inputs.py }}\n'
 expect_gate "indirect inputs.py default holding a patch pin fails" fail "$str_fx"
 

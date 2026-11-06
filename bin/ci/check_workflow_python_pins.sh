@@ -32,8 +32,11 @@ FNR == NR {
 		str_rest = substr(str_line, RSTART + RLENGTH)
 		while (match(str_rest, /\$\{\{[[:space:]]*(env|matrix|inputs)\.[A-Za-z0-9_-]+/)) {
 			str_name = substr(str_rest, RSTART, RLENGTH)
+			str_space = str_name
+			sub(/^\$\{\{[[:space:]]*/, "", str_space)
+			sub(/\..*/, "", str_space)
 			sub(/.*\./, "", str_name)
-			str_names = str_names "|" str_name
+			arr_names[str_space] = arr_names[str_space] "|" str_name
 			str_rest = substr(str_rest, RSTART + RLENGTH)
 		}
 	}
@@ -63,8 +66,11 @@ FNR == 1 { in_list = 0; in_block = 0; in_decl = 0 }
 		else if (str_line ~ /^[[:space:]]*default[[:space:]]*:/) check(substr(str_line, index(str_line, ":") + 1), 1)
 	}
 	if (find_key(str_line, "python-version-file")) report("python-version-file cannot be verified; use python-version")
+	str_space = str_parent
+	if (str_space == "include") str_space = "matrix"
+	if (match(str_line, /(matrix|env|inputs)"?[[:space:]]*:[[:space:]]*[{\[]/)) { str_space = substr(str_line, RSTART, RLENGTH); sub(/[^a-z].*/, "", str_space) }
 	bool_hit = find_key(str_line, "python-version")
-	if (!bool_hit && str_names != "" && str_parent ~ /^(matrix|include|env|inputs)$/) bool_hit = find_key(str_line, substr(str_names, 2))
+	if (!bool_hit && (str_space in arr_names)) bool_hit = find_key(str_line, substr(arr_names[str_space], 2))
 	if (bool_hit) {
 		str_rest = substr(str_line, RSTART + RLENGTH)
 		if (str_rest ~ /\$\{\{[[:space:]]*vars\./) report("vars.* is resolved outside the repository and cannot be verified")
