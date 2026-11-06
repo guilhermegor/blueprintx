@@ -180,6 +180,11 @@ test_graphql_call_sites_match_the_measured_count() {
         fail "GraphQL call sites are ${int_sites}, SCAFFOLD_GH_GRAPHQL_SITES is ${SCAFFOLD_GH_GRAPHQL_SITES}: re-check SCAFFOLD_GH_GRAPHQL_BUDGET and update both (docs/online-scaffold-gh-preflight.md)"
 }
 
+test_no_scaffold_swallows_a_failed_gh_user_read() {
+    ! grep -nE 'gh api user[^|]*\|\| *true' "$REPO_ROOT"/bin/scaffold/*.sh "$REPO_ROOT"/bin/promote_offline_to_online.sh ||
+        fail "a scaffold still swallows a failed 'gh api user' read with '|| true'"
+}
+
 main() {
     make_stub
     test_preflight_rate_limit_prints_the_reset_time
@@ -195,6 +200,7 @@ main() {
     test_board_url_never_guesses_the_owner_kind
     test_a_mid_run_label_failure_stops
     test_a_rerun_completes_without_duplicates
+    test_no_scaffold_swallows_a_failed_gh_user_read
     test_graphql_call_sites_match_the_measured_count
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
