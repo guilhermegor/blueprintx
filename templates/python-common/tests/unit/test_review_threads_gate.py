@@ -3818,26 +3818,57 @@ def test_review_covers_head_malformed_files_body_fails_closed(
     assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
 
 
-def test_patch_fingerprint_pure_renames_of_different_blobs_differ() -> None:
-    """A binary rename also reports ``changes == 0``, so the blob ``sha`` must be hashed."""
+_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+
+
+def test_patch_fingerprint_empty_renames_at_different_names_differ() -> None:
+    """A renamed empty file is fingerprinted by its names, so two renames must differ."""
     cls_gate = _load_gate()
-    dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}
-    assert cls_gate.patch_fingerprint([{**dict_rename, "sha": "1"}]) != cls_gate.patch_fingerprint(
-        [{**dict_rename, "sha": "2"}]
-    )
+    dict_rename = {"status": "renamed", "changes": 0, "sha": _STR_EMPTY_BLOB_SHA}
+    assert cls_gate.patch_fingerprint(
+        [{**dict_rename, "filename": "b", "previous_filename": "a"}]
+    ) != cls_gate.patch_fingerprint([{**dict_rename, "filename": "c", "previous_filename": "a"}])
 
 
-def test_patch_fingerprint_pure_rename_with_same_blob_matches() -> None:
-    """The same rename of the same blob at two commits is the same fingerprint."""
+def test_patch_fingerprint_empty_rename_with_same_blob_matches() -> None:
+    """The same empty-file rename at two commits is the same fingerprint."""
     cls_gate = _load_gate()
     dict_rename = {
         "filename": "b",
         "previous_filename": "a",
         "status": "renamed",
         "changes": 0,
-        "sha": "1",
+        "sha": _STR_EMPTY_BLOB_SHA,
     }
     assert cls_gate.patch_fingerprint([dict_rename]) == cls_gate.patch_fingerprint([dict_rename])
+
+
+@pytest.mark.parametrize("str_sha", ["1", "2"])
+def test_patch_fingerprint_renamed_nonempty_blob_raises(str_sha: str) -> None:
+    """A rename plus an exec-bit flip keeps the blob ``sha``, so a non-empty rename is unproven."""
+    cls_gate = _load_gate()
+    dict_rename = {
+        "filename": "b",
+        "previous_filename": "a",
+        "status": "renamed",
+        "changes": 0,
+        "sha": str_sha,
+    }
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_rename])
+
+
+def test_patch_fingerprint_removed_empty_blob_entry_raises() -> None:
+    """A patchless ``removed`` entry never qualifies, even with the empty-blob ``sha``."""
+    cls_gate = _load_gate()
+    dict_removed = {
+        "filename": "py.typed",
+        "status": "removed",
+        "changes": 0,
+        "sha": _STR_EMPTY_BLOB_SHA,
+    }
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_removed])
 
 
 def test_patch_fingerprint_pure_rename_without_blob_sha_raises() -> None:
@@ -3860,9 +3891,6 @@ def test_patch_fingerprint_renamed_with_changes_but_no_patch_raises() -> None:
     }
     with pytest.raises(ValueError, match="no patch text"):
         cls_gate.patch_fingerprint([dict_big])
-
-
-_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
 
 def test_patch_fingerprint_added_empty_file_is_fingerprinted() -> None:
