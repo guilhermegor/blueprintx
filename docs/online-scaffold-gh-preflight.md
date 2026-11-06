@@ -30,8 +30,9 @@ guessing.
 ## Retrying
 
 Re-run the same command once the wait has passed. House labels use `--force`,
-and an existing `<project> kanban` board is detected and skipped, so a re-run
-does not duplicate them. `gh repo create` is not idempotent: if the stop
+and an existing `<project> kanban` board is completed, not duplicated: a re-run
+re-applies its visibility, link and Status options and creates only the missing
+fields. `gh repo create` is not idempotent: if the stop
 happened after the repo was created, finish the remaining steps by hand or use
 [Offline to Online](offline-to-online.md).
 
@@ -46,4 +47,6 @@ updating it, which is the prompt to re-check the budget.
 ## Not covered yet
 
 The `delete_branch_on_merge` setting, the `Cut 1.0.0` release issue and its board card keep their warn-and-print-the-
-manual-command fallback, and the built-in board workflows are not read.
+manual-command fallback, and the built-in board workflows are not read. Two boards with the same title still warn and
+continue without a board, and the `project` token scope is not checked before
+the repo is created.

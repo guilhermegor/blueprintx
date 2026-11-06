@@ -8,7 +8,7 @@ gh_classify_failure() {
 	local str_text="$1"
 	case "$str_text" in
 	*[Rr]ate\ limit* | *RATE_LIMIT* | *[Ss]econdary\ rate* | *[Aa]buse* | *[Rr]etry-[Aa]fter*) printf 'rate' ;;
-	*"HTTP 401"* | *"HTTP 403"* | *[Aa]uthentication* | *[Bb]ad\ credentials* | *scope* | *"gh auth"* | *"authentication token"*) printf 'auth' ;;
+	*"HTTP 401"* | *"HTTP 403"* | *[Aa]uthentication* | *[Bb]ad\ credentials* | *[Ss]cope* | *INSUFFICIENT_SCOPES* | *"gh auth"* | *"authentication token"*) printf 'auth' ;;
 	*"resolve host"* | *"no such host"* | *[Cc]onnection* | *[Tt]imeout* | *timed\ out* | *dial\ tcp* | *network* | *EOF*) printf 'network' ;;
 	*) printf 'other' ;;
 	esac
