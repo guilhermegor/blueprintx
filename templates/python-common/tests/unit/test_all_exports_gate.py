@@ -243,7 +243,7 @@ def _tree(tmp_path: Path, str_init: str, dict_files: dict[str, str]) -> Path:
         Directory to build in.
     str_init : str
         Source of ``pkg/__init__.py``.
-    dict_files : dict of str to str
+    dict_files : dict[str, str]
         Path below ``pkg`` mapped to its source.
 
     Returns
@@ -311,7 +311,7 @@ _STR_FROM_MEMBER = "from .member import Doc\n" + _STR_EXPORT_DOC
         ),
         pytest.param(
             _STR_FROM_MEMBER,
-            {"member.py": "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    " + _STR_LEAK},
+            {"member.py": "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n" + _STR_LEAK},
             id="followed-file-type-checking",
         ),
         pytest.param(
