@@ -51,8 +51,8 @@ _EXCLUSION_TABLE_NAMES = {
 
 DICT_WORKFLOWS_EXPECTED_ABSENT = {
     "python_lib_minimal.sh": {
-        "release.yaml": "lib-minimal ships its own release-pypi workflows",
-        "contract_drift.yaml": "lib-minimal ships no contract oracle registry",
+        "release.yml": "lib-minimal ships its own release-pypi workflows",
+        "contract-drift.yml": "lib-minimal ships no contract oracle registry",
     },
 }
 
@@ -176,7 +176,7 @@ def shared_workflow_names() -> set:
     Returns
     -------
     set of str
-        Filenames like ``tests.yaml`` under ``templates/python-common/.github/workflows/``.
+        Filenames like ``tests.yml`` under ``templates/python-common/.github/workflows/``.
     """
     return {path_file.name for path_file in _SHARED_WORKFLOWS.glob("*.y*ml")}
 

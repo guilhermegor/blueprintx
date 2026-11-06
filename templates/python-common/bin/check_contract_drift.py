@@ -11,7 +11,7 @@ down" and "our contract is wrong" are indistinguishable as a failed check, and a
 a gating path has silently skipped a release before. So this always exits 0 — it is a *reporter*,
 not a gate. It **self-skips to success** when `config/contract_oracles.yaml` lists no sources.
 
-Run online only (it is wired into the scheduled `contract_drift.yaml` workflow, never into PR/push
+Run online only (it is wired into the scheduled `contract-drift.yml` workflow, never into PR/push
 CI). Reads the registry, re-fetches each source's header through the one `http_downloader` seam,
 writes a Markdown report to ``contract_drift_report.md`` (empty when there is no drift), and prints
 a summary.
