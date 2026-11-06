@@ -21,13 +21,13 @@ check "scaffold copies py.typed into the package" \
 	grep -qF 'templates/lib-minimal/py.typed" "$project_path/src/$PROJECT_PKG_NAME/py.typed"' "$SCAFFOLD"
 check "template py.typed is an empty file" test -f "$REPO_ROOT/templates/lib-minimal/py.typed" -a ! -s "$REPO_ROOT/templates/lib-minimal/py.typed"
 
-TESTS_YAML="$REPO_ROOT/templates/python-common/.github/workflows/tests.yaml"
+TESTS_YAML="$REPO_ROOT/templates/python-common/.github/workflows/tests.yml"
 str_matrix="$(grep -m1 'python-version: \[' "$TESTS_YAML" | grep -oE '3\.[0-9]+' | sort -V | tr '\n' ' ')"
 str_classifiers="$(grep -oE 'Programming Language :: Python :: 3\.[0-9]+' "$PYPROJECT" | grep -oE '3\.[0-9]+' | sort -V | tr '\n' ' ')"
 str_floor="$(grep -m1 '^python = ' "$PYPROJECT" | grep -oE '3\.[0-9]+' | head -1)"
 
-check "tests.yaml matrix was read" test -n "$str_matrix"
-check "classifiers match the tests.yaml matrix ($str_matrix)" test "$str_classifiers" = "$str_matrix"
+check "tests.yml matrix was read" test -n "$str_matrix"
+check "classifiers match the tests.yml matrix ($str_matrix)" test "$str_classifiers" = "$str_matrix"
 check "requires-python floor ($str_floor) equals the lowest matrix version" test "$str_floor" = "${str_matrix%% *}"
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }

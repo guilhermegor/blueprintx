@@ -15,10 +15,10 @@ backlog is done, and the docs describe the code that actually ships.
    the owner (the scaffold creates the label; otherwise `gh label create post-1.0`), so it is deferred on the record rather than dropped.
 3. Work the issue's checklist: the docs audit, runnable examples, the 1.x supported-versions
    table in `SECURITY.md`, the public-API freeze (audit the exported names; removing one after
-   1.0 is a 2.0), a `## 1.0.0` CHANGELOG section stating the API guarantee, and every open
+   1.0 is a 2.0), the 1.x API guarantee stated in the 1.0.0 release notes and the README (`CHANGELOG.md` is regenerated, so it cannot hold it), and every open
    pull request merged, closed, or explicitly deferred past 1.0 by the owner, then the rehearsal and publish. Python projects also flip the classifier to
    `Development Status :: 5 - Production/Stable`, check that `requires-python` (Poetry's `python` constraint) and one Python
-   classifier per version of the `tests.yaml` matrix agree, and confirm `py.typed` is in the
+   classifier per version of the `tests.yml` matrix agree, and confirm `py.typed` is in the
    built wheel.
 4. After the release, switch the documented version policy to full semver and, for a project
    that deploys docs with mike, confirm the `latest` alias moved to 1.0.

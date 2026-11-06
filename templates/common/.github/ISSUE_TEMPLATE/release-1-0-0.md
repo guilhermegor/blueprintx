@@ -26,10 +26,10 @@ workflow refuses a 0.x to 1.0.0 jump while an open issue lacks the `post-1.0` la
 - [ ] **Runnable examples:** each README and usage example runs, or is covered by a doctest or a test
 - [ ] **SECURITY.md** gains a supported-versions table for 1.x
 - [ ] **Python projects, Development Status:** the classifier is flipped to `Development Status :: 5 - Production/Stable`
-- [ ] **Python projects, metadata:** `requires-python` (Poetry's `python` constraint) and one `Programming Language :: Python :: 3.X` classifier per version in the `tests.yaml` matrix agree with each other
+- [ ] **Python projects, metadata:** `requires-python` (Poetry's `python` constraint) and one `Programming Language :: Python :: 3.X` classifier per version in the `tests.yml` matrix agree with each other
 - [ ] **Public API frozen:** audit the exported names (Python: `__all__`; TypeScript: the package entry point exports) and remove deprecated or experimental names now; removing anything after 1.0 is a 2.0
 - [ ] **Python projects, typed marker:** `py.typed` is present in the built wheel (`unzip -l dist/*.whl | grep py.typed`)
-- [ ] **CHANGELOG 1.0.0:** a `## 1.0.0` section states the API guarantee, not only the generated commit list
+- [ ] **API guarantee 1.0.0:** the 1.x API guarantee is stated in the 1.0.0 GitHub Release notes and the README, not in `CHANGELOG.md`, which `cz changelog` regenerates from the commit history on every docs build
 - [ ] **No open PRs at cut time:** each open PR is merged, closed, or explicitly deferred past 1.0 by the owner (the release gate counts issues only, see `docs/releasing-1-0-0.md`)
 - [ ] **Release:** rehearsal, then publish, then install-verify (Test PyPI then PyPI; npm `--dry-run` then publish), with the tag present and the release not a draft
 - [ ] **Post-release:** switch the documented version policy from 0.x rules to full semver
