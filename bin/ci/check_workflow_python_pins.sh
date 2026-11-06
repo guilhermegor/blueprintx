@@ -44,6 +44,12 @@ FNR == 1 { in_list = 0; in_block = 0; in_decl = 0 }
 	str_line = strip_comment($0)
 	match(str_line, /^[[:space:]]*/)
 	int_lead = RLENGTH
+	str_parent = ""
+	for (int_i = int_lead - 1; int_i >= 0; int_i--) if (int_i in arr_key) { str_parent = arr_key[int_i]; break }
+	if (str_line !~ /^[[:space:]]*$/) {
+		for (int_i in arr_key) if (int_i + 0 >= int_lead) delete arr_key[int_i]
+		if (match(str_line, /^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*$/)) { str_k = str_line; gsub(/[[:space:]:]/, "", str_k); arr_key[int_lead] = str_k }
+	}
 	if (in_block) {
 		if (str_line ~ /^[[:space:]]*$/ || int_lead > int_indent) { check(str_line, 0); next }
 		in_block = 0
@@ -57,7 +63,9 @@ FNR == 1 { in_list = 0; in_block = 0; in_decl = 0 }
 		else if (str_line ~ /^[[:space:]]*default[[:space:]]*:/) check(substr(str_line, index(str_line, ":") + 1), 1)
 	}
 	if (find_key(str_line, "python-version-file")) report("python-version-file cannot be verified; use python-version")
-	if (find_key(str_line, "python-version" str_names)) {
+	bool_hit = find_key(str_line, "python-version")
+	if (!bool_hit && str_names != "" && str_parent ~ /^(matrix|include|env|inputs)$/) bool_hit = find_key(str_line, substr(str_names, 2))
+	if (bool_hit) {
 		str_rest = substr(str_line, RSTART + RLENGTH)
 		if (str_rest ~ /\$\{\{[[:space:]]*vars\./) report("vars.* is resolved outside the repository and cannot be verified")
 		if (bool_flow) {
@@ -144,7 +152,7 @@ main() {
 		[ -z "$str_out" ] || str_hits="${str_hits}${str_hits:+$'\n'}${str_out}"
 	done
 	if [ -n "$str_hits" ]; then
-		echo "python-version must be a quoted minor-level pin (e.g. \"3.12\", \"3.10\"):" >&2
+		echo "python-version must be a literal minor-level pin (no patch, no dropped-zero float, no file or vars.* indirection):" >&2
 		printf '%s\n' "$str_hits" | sed 's/^/    /' >&2
 		exit 1
 	fi

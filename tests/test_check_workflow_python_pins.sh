@@ -169,6 +169,10 @@ write_root_workflow "$str_fx" 'jobs:\n  a:\n    strategy:\n      matrix:\n      
 expect_gate "indirect matrix.py holding minors passes" pass "$str_fx"
 
 str_fx="$(make_fixture 3.12 3.12)"
+write_root_workflow "$str_fx" 'jobs:\n  a:\n    strategy:\n      matrix:\n        version: ["3.12"]\n    steps:\n      - uses: astral-sh/setup-uv@v5\n        with:\n          version: "0.5.11"\n      - with:\n          python-version: ${{ matrix.version }}\n'
+expect_gate "indirect name matching an unrelated with: key passes" pass "$str_fx"
+
+str_fx="$(make_fixture 3.12 3.12)"
 write_root_workflow "$str_fx" 'on:\n  workflow_call:\n    inputs:\n      py:\n        type: string\n        default: "3.12.8"\njobs:\n  a:\n    steps:\n      - with:\n          python-version: ${{ inputs.py }}\n'
 expect_gate "indirect inputs.py default holding a patch pin fails" fail "$str_fx"
 
