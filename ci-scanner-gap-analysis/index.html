@@ -2993,7 +2993,7 @@ the gitleaks slice of #305 has already landed:</p>
   gitleaks is absent locally.</li>
 <li><code>templates/python-common/bin/check_secrets.sh</code> — the ONE implementation, invoking
   <code>gitleaks git "$STR_ROOT" --no-banner --redact -v</code>.</li>
-<li><code>templates/python-common/.gitleaks.toml</code> + <code>templates/python-common/.github/workflows/secret_scan.yaml</code></li>
+<li><code>templates/python-common/.gitleaks.toml</code> + <code>templates/python-common/.github/workflows/secret-scan.yml</code></li>
 <li><code>templates/python-common/.pre-commit-config.yaml</code> — the same wiring copied into every
   generated Python project.</li>
 <li>GitGuardian (#155/#286) references are <strong>gone</strong> from every <code>.yml</code>/<code>.pre-commit-config.yaml</code>

@@ -2407,10 +2407,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#review_threadsyaml-a-required-check-that-reports-is-safe-to-require-173" class="md-nav__link">
+  <a href="#review-threadsyml-a-required-check-that-reports-is-safe-to-require-173" class="md-nav__link">
     <span class="md-ellipsis">
       
-        review_threads.yaml — a required check that reports is safe to require (#173)
+        review-threads.yml — a required check that reports is safe to require (#173)
       
     </span>
   </a>
@@ -2418,10 +2418,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#review_threadsyaml-the-resolve-half-must-also-catch-outdated-threads-196" class="md-nav__link">
+  <a href="#review-threadsyml-the-resolve-half-must-also-catch-outdated-threads-196" class="md-nav__link">
     <span class="md-ellipsis">
       
-        review_threads.yaml — the resolve half must also catch outdated threads (#196)
+        review-threads.yml — the resolve half must also catch outdated threads (#196)
       
     </span>
   </a>
@@ -2709,10 +2709,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#review_threadsyaml-a-required-check-that-reports-is-safe-to-require-173" class="md-nav__link">
+  <a href="#review-threadsyml-a-required-check-that-reports-is-safe-to-require-173" class="md-nav__link">
     <span class="md-ellipsis">
       
-        review_threads.yaml — a required check that reports is safe to require (#173)
+        review-threads.yml — a required check that reports is safe to require (#173)
       
     </span>
   </a>
@@ -2720,10 +2720,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#review_threadsyaml-the-resolve-half-must-also-catch-outdated-threads-196" class="md-nav__link">
+  <a href="#review-threadsyml-the-resolve-half-must-also-catch-outdated-threads-196" class="md-nav__link">
     <span class="md-ellipsis">
       
-        review_threads.yaml — the resolve half must also catch outdated threads (#196)
+        review-threads.yml — the resolve half must also catch outdated threads (#196)
       
     </span>
   </a>
@@ -2780,8 +2780,8 @@ and #213 merged unreviewed with every check green. Zero threads is now judged ag
 SUBMITTED REVIEW, not against silence. A reviewer that ran and found nothing still passes;
 one that never ran fails.</p>
 </blockquote>
-<h2 id="review_threadsyaml-a-required-check-that-reports-is-safe-to-require-173"><code>review_threads.yaml</code> — a required check that reports is safe to require (#173)<a class="headerlink" href="#review_threadsyaml-a-required-check-that-reports-is-safe-to-require-173" title="Permanent link">&para;</a></h2>
-<p>Applies to <code>templates/python-common/.github/workflows/review_threads.yaml</code> — shipped
+<h2 id="review-threadsyml-a-required-check-that-reports-is-safe-to-require-173"><code>review-threads.yml</code> — a required check that reports is safe to require (#173)<a class="headerlink" href="#review-threadsyml-a-required-check-that-reports-is-safe-to-require-173" title="Permanent link">&para;</a></h2>
+<p>Applies to <code>templates/python-common/.github/workflows/review-threads.yml</code> — shipped
 into every generated project, so its pointer names <code>blueprintx#173</code> directly rather
 than a doc path meaningless outside this repo. The live file keeps the load-bearing
 half (why the job is safe as a required check and why <code>bin/enable_repo_rules.sh</code>
@@ -2796,8 +2796,8 @@ and blocked nothing. Measured upstream: a PR merged with 32 of 47 checks passed.
 carries the same block (dated text: "SUPERSEDED 2026-08-17 (#173, PR #185)") plus
 two more below, and is held by PRs #491/#492 as of this writing. Follow-up once
 those land.</p>
-<h2 id="review_threadsyaml-the-resolve-half-must-also-catch-outdated-threads-196"><code>review_threads.yaml</code> — the resolve half must also catch outdated threads (#196)<a class="headerlink" href="#review_threadsyaml-the-resolve-half-must-also-catch-outdated-threads-196" title="Permanent link">&para;</a></h2>
-<p>Applies to <code>templates/python-common/.github/workflows/review_threads.yaml</code>. The
+<h2 id="review-threadsyml-the-resolve-half-must-also-catch-outdated-threads-196"><code>review-threads.yml</code> — the resolve half must also catch outdated threads (#196)<a class="headerlink" href="#review-threadsyml-the-resolve-half-must-also-catch-outdated-threads-196" title="Permanent link">&para;</a></h2>
+<p>Applies to <code>templates/python-common/.github/workflows/review-threads.yml</code>. The
 "split as it stood" bullet list a few lines below the live comment already states
 the current three-layer split in full, so the narrative here is pure changelog.</p>
 <blockquote>
@@ -2816,8 +2816,8 @@ nobody could re-evaluate was also the half nobody was checking.</p>
 <p>story, told from the ruleset side — held by the #129 dispatch claim), and
 <code>templates/common/bin/check_review_threads.py</code> (held by PR #424). Follow-up
 once those land.</p>
-<h2 id="review_threadsyaml-no-concurrency-block-ever-216"><code>review_threads.yaml</code> — no <code>concurrency:</code> block, ever (#216)<a class="headerlink" href="#review_threadsyaml-no-concurrency-block-ever-216" title="Permanent link">&para;</a></h2>
-<p>Applies to <code>templates/python-common/.github/workflows/review_threads.yaml</code>. The
+<h2 id="review-threadsyml-no-concurrency-block-ever-216"><code>review-threads.yml</code> — no <code>concurrency:</code> block, ever (#216)<a class="headerlink" href="#review-threadsyml-no-concurrency-block-ever-216" title="Permanent link">&para;</a></h2>
+<p>Applies to <code>templates/python-common/.github/workflows/review-threads.yml</code>. The
 full reasoning is already restated in the "NO <code>concurrency:</code> BLOCK, DELIBERATELY"
 comment further down the same file — this block was a preview of that one,
 so nothing but the changelog framing is lost by trimming it.</p>
@@ -3343,10 +3343,10 @@ that lived beside the constants and the data.</p>
   (<code>gh api repos/:owner/:repo/commits/&lt;pr-head-sha&gt;/check-runs --jq '.check_runs[].name' | sort -u</code>).
   A name nothing emits blocks every PR forever, since GitHub cannot tell "has not reported yet"
   from "will never report". Deleting a line is always safe; adding an unverified one is not.</li>
-<li><code>Review threads answered</code> is the <code>review_threads.yaml</code> job: <code>on: pull_request</code> with no filter,
+<li><code>Review threads answered</code> is the <code>review-threads.yml</code> job: <code>on: pull_request</code> with no filter,
   so it reports from the moment a PR opens, and it fails both when a thread is unanswered and when
   no reviewer ran at all.</li>
-<li><code>Classify and gate this PR</code> is the <code>pr-gate.yaml</code> job: <code>on: pull_request</code> with
+<li><code>Classify and gate this PR</code> is the <code>pr-gate.yml</code> job: <code>on: pull_request</code> with
   <code>types: [opened, synchronize, reopened, labeled, unlabeled]</code>, and its job-level
   <code>if: github.event_name == 'pull_request'</code> is true for every one of those. Without this line the
   gate classifies and fails while nothing stops the merge (#564).</li>
@@ -3624,7 +3624,7 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   <code>scaffold_lint_test.sh</code> asserts the file lands. Consumers: <code>poe bump_version</code>, <code>poe changelog</code>,
   the <code>commitizen</code> and commit-msg hooks, and the docs build. <code>version_provider = "poetry"</code> reads
   <code>[tool.poetry]</code> by project root, not by where the config lives. Services keep the version in
-  <code>pyproject.toml</code>, tagged by <code>cz bump</code> (offline) or <code>release.yaml</code> (online); the library tier
+  <code>pyproject.toml</code>, tagged by <code>cz bump</code> (offline) or <code>release.yml</code> (online); the library tier
   takes it from the git tag via poetry-dynamic-versioning. Either way <code>cz changelog</code> groups by tag.</li>
 <li><strong><code>docker-compose.otel-collector.yml</code>.</strong> Ports are bound to <code>127.0.0.1</code>, not published on every
   interface. The OTLP receivers are unauthenticated and the file is copied into every project that
@@ -3902,7 +3902,7 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   <code>pyproject.toml</code>, regenerate <code>CHANGELOG.md</code>, commit <code>bump: X.Y.Z</code> and create the tag. It
   passes <code>--no-verify</code> because that single-line message cannot satisfy gitlint's body rule and
   the format and test hooks are irrelevant to a version bump; run it on a feature branch. It is
-  offline-tier only: the online scaffold strips it, since releases come from <code>release.yaml</code>.
+  offline-tier only: the online scaffold strips it, since releases come from <code>release.yml</code>.
   <code>changelog</code> previews locally; the published site regenerates it in the docs workflow and CI
   never commits it.</li>
 <li><strong>The HTML coverage task covers the whole tree.</strong> Never narrow it to <code>--cov=&lt;module&gt;</code>, which
@@ -4135,7 +4135,7 @@ is shaped as it is.</p>
 <li><strong><code>enable_pages.sh</code>.</strong> Two models, auto-detected from <code>mkdocs.yml</code>. With <code>provider: mike</code> the
   release workflow deploys to <code>gh-pages</code>, so Pages serves from that branch, flipped only once the
   branch exists (the first <code>mike deploy</code> creates it) so the live site never points at an empty
-  branch. Without mike, <code>docs.yaml</code> deploys through <code>actions/deploy-pages</code>, so the source is
+  branch. Without mike, <code>docs.yml</code> deploys through <code>actions/deploy-pages</code>, so the source is
   "GitHub Actions" (<code>build_type=workflow</code>). The two models are mutually exclusive.</li>
 <li><strong><code>enable_security.sh</code>.</strong> The Settings checkboxes are not reproducible and are forgotten on a
   fork. Three plain <code>PUT</code>s (204): vulnerability alerts, then automated security fixes (which
@@ -4146,7 +4146,7 @@ is shaped as it is.</p>
   security fixes are for vulnerabilities, <code>.github/dependabot.yml</code> for ordinary version updates.
   GitHub detects a root <code>SECURITY.md</code> by itself. GitGuardian (#155) was evaluated for this role
   and deferred: the native toggles are free and need no third-party app on public repos;
-  reconsider for private repos or an offline pre-commit scanner. <code>secret_scan.yaml</code> is a
+  reconsider for private repos or an offline pre-commit scanner. <code>secret-scan.yml</code> is a
   separate, opt-in decision made at scaffold time (#287), not here: <code>poe init</code> runs against an
   already-created repo, the wrong phase to gate a file's shipping. A self-audit of BlueprintX
   (#164, 2026-09-04) found no divergence; the script has no <code>verify</code> mode.</li>
@@ -4174,11 +4174,11 @@ is shaped as it is.</p>
   never reports blocks every PR forever. Do not guess names: they must match check-run
   names exactly (matrix values included); take them from a real PR with
   <code>gh api repos/:owner/:repo/commits/&lt;sha&gt;/check-runs --jq '.check_runs[].name' | sort -u</code>.
-  The seeded entry is the <code>review_threads.yaml</code> job name, correct by construction and
+  The seeded entry is the <code>review-threads.yml</code> job name, correct by construction and
   reporting on every PR from the moment it opens. A name qualifies only if it is a literal
   <code>jobs.&lt;id&gt;.name:</code> of a workflow the project ships, its <code>on: pull_request</code> has no
   <code>types:</code>/<code>branches:</code>/<code>paths:</code> filter, no job-level <code>if:</code> can skip it, and the workflow is
-  shipped; <code>tests.yaml</code> fails the second rule and <code>coderabbit_trigger.yaml</code> the third. The
+  shipped; <code>tests.yml</code> fails the second rule and <code>coderabbit-trigger.yml</code> the third. The
   list is data (<code>bin/required-checks.txt</code>, per template family, #164/#564), compared verbatim
   (stray space never matches). An empty list means CI runs on every PR and blocks nothing:
   measured on BlueprintX 2026-08-16, a PR merged with 32 of 47 checks passed.</li>
@@ -4729,10 +4729,10 @@ repository. They were moved out of the workflow files, which now carry no prose.
 </ul>
 <h2 id="generated-project-workflows-templatespython-commongithub">Generated-project workflows (<code>templates/python-common/.github</code>)<a class="headerlink" href="#generated-project-workflows-templatespython-commongithub" title="Permanent link">&para;</a></h2>
 <p>The workflows and <code>dependabot.yml</code> a Python scaffold ships carry no prose. Where a file is the
-twin of a root workflow, the reasoning above applies unchanged (<code>review_threads.yaml</code>,
-<code>coderabbit_trigger.yaml</code>, <code>review_retry.yaml</code>, <code>pr-reconcile.yaml</code>, <code>secret_scan.yaml</code>).
+twin of a root workflow, the reasoning above applies unchanged (<code>review-threads.yml</code>,
+<code>coderabbit-trigger.yml</code>, <code>review-retry.yml</code>, <code>pr-reconcile.yml</code>, <code>secret-scan.yml</code>).
 This section records what is specific to the generated copies.</p>
-<h3 id="testsyaml"><code>tests.yaml</code><a class="headerlink" href="#testsyaml" title="Permanent link">&para;</a></h3>
+<h3 id="testsyml"><code>tests.yml</code><a class="headerlink" href="#testsyml" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>No <code>outputs:</code> on <code>workflow_call</code>.</strong> It once declared <code>ready_for_release</code> as
   <code>${{ jobs.test.result == 'success' }}</code>. Only <code>jobs.&lt;id&gt;.outputs.&lt;name&gt;</code> is in scope there,
@@ -4798,7 +4798,7 @@ This section records what is specific to the generated copies.</p>
 </ul>
 <h3 id="other-generated-workflows">Other generated workflows<a class="headerlink" href="#other-generated-workflows" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>pr-gate.yaml</code>.</strong> It triggers on <code>pull_request</code> only, never <code>workflow_run</code>, which fires
+<li><strong><code>pr-gate.yml</code>.</strong> It triggers on <code>pull_request</code> only, never <code>workflow_run</code>, which fires
   only from the default branch's copy and so cannot run on the PR that introduces the gate.
   The gate polls the checks in-run instead. <code>labeled</code> and <code>unlabeled</code> are included so
   <code>do-not-merge</code> takes effect at once. A pull_request-driven gate never re-evaluates an
@@ -4806,7 +4806,7 @@ This section records what is specific to the generated copies.</p>
   (or <code>@dependabot rebase</code>) to re-decide every open PR. A new push cancels the previous
   polling run so two gates do not race on one sticky comment. Event data reaches the script
   through <code>env:</code> only.</li>
-<li><strong><code>release.yaml</code>.</strong> A service is deployed, not published, so there is no PyPI step. The
+<li><strong><code>release.yml</code>.</strong> A service is deployed, not published, so there is no PyPI step. The
   version input is free text and is validated before <code>git tag</code>, the irreversible half. The
   versioned-docs job runs only after the tag is cut, so the site never advertises a version
   that failed to ship. <code>mike</code> deploys <code>X.Y</code> under the <code>latest</code> alias; a prerelease suffix
@@ -4814,29 +4814,29 @@ This section records what is specific to the generated copies.</p>
   and 1.4.7 share an entry. <code>CHANGELOG.md</code> is regenerated by <code>cz</code> for that build and not
   committed back to protected <code>main</code>. GitHub Pages must serve from <code>gh-pages</code>
   (<code>poe enable_pages</code>).</li>
-<li><strong><code>contract_drift.yaml</code>.</strong> A weekly, non-gating reporter on <code>schedule</code> and manual dispatch,
+<li><strong><code>contract-drift.yml</code>.</strong> A weekly, non-gating reporter on <code>schedule</code> and manual dispatch,
   never <code>pull_request</code> or <code>push</code>, so it cannot gate a PR or a release. It opens or updates
   one deduplicated issue and never fails the run; it is inert until a source is added to
   <code>src/config/contract_oracles.yaml</code>. Dedupe is on the <code>contract-drift</code> label and a hidden
   body marker, since the label alone can be removed by hand and a job that files an issue per
   run gets switched off. The report goes in as <code>--body-file</code> so source-derived text cannot
   inject into a shell command.</li>
-<li><strong><code>review_threads.yaml</code>.</strong> <code>actions: write</code> is for the stale-run cleanup only. Set
+<li><strong><code>review-threads.yml</code>.</strong> <code>actions: write</code> is for the stale-run cleanup only. Set
   <code>REVIEW_THREADS_REQUIRE_RESOLVED</code> to <code>0</code> for a reply-only contract; the shipped value is <code>1</code>.
   <code>bin/enable_repo_rules.sh</code> seeds <code>REQUIRED_CHECKS</code> with this job's <code>name:</code>.</li>
-<li><strong><code>coderabbit_trigger.yaml</code>.</strong> The scaffolder sets <code>GH_PAT_REVIEW_TRIGGER</code> when it is exported
+<li><strong><code>coderabbit-trigger.yml</code>.</strong> The scaffolder sets <code>GH_PAT_REVIEW_TRIGGER</code> when it is exported
   at scaffold time and prints the command otherwise. Scope the PAT to all repositories if you
   scaffold often, since a per-repository PAT is edited for every new project. It ships with
   the review-thread gate: without the gate this workflow is a nicety, without the workflow
   the gate blocks every PR.</li>
-<li><strong><code>secret_scan.yaml</code>.</strong> It is opt-in (#287): copied only when <code>GITGUARDIAN_API_KEY</code> is set at
+<li><strong><code>secret-scan.yml</code>.</strong> It is opt-in (#287): copied only when <code>GITGUARDIAN_API_KEY</code> is set at
   scaffold time, the same presence check that propagates the key to the new repo's secrets.
   It is not in <code>REQUIRED_CHECKS</code>, since a required check that never reports blocks every PR.
   An absent key fails loud, never skips: ggshield exits 3, distinct from a clean exit 0.</li>
-<li><strong><code>review_retry.yaml</code>.</strong> GitHub disables a scheduled workflow after 60 days of repository
+<li><strong><code>review-retry.yml</code>.</strong> GitHub disables a scheduled workflow after 60 days of repository
   inactivity without announcing it. If rate-limited PRs stop being re-asked, check that the
   workflow is still enabled before looking for a bug in the script.</li>
-<li><strong><code>pr-reconcile.yaml</code>.</strong> Cards in a Projects "closed to Done" automation key on the issue
+<li><strong><code>pr-reconcile.yml</code>.</strong> Cards in a Projects "closed to Done" automation key on the issue
   closing, so a missed close leaves them in "In review" while the code has shipped, and the
   problem grows with auto-merge adoption. The workflow calls <code>bin/pr_reconcile.sh</code>, the one
   implementation shared with the root workflow. On the event path it reconciles that PR; on

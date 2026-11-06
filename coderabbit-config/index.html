@@ -2784,7 +2784,7 @@ changes added since the last review on every push. When <code>true</code>, it re
 reviews on a repository with fewer than 10 stars, and that threshold is not configurable from
 <code>.coderabbit.yaml</code>. Until a repository crosses it, the key has no effect.</p>
 <h2 id="it-is-not-the-quota-driver">It is not the quota driver<a class="headerlink" href="#it-is-not-the-quota-driver" title="Permanent link">&para;</a></h2>
-<p>Online Python projects ship <code>coderabbit_trigger.yaml</code>, which posts an explicit review request
+<p>Online Python projects ship <code>coderabbit-trigger.yml</code>, which posts an explicit review request
 on <code>opened</code>, <code>reopened</code>, and <code>ready_for_review</code>, regardless of this file. It no longer fires on
 <code>synchronize</code>; another review is requested deliberately with <code>@coderabbitai full review</code>.</p>
 <p>Before <code>synchronize</code> was removed, measurements on 2026-08-30 across 71 PRs updated in the prior

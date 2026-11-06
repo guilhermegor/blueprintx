@@ -2975,7 +2975,7 @@ Note that <code>poe unit_tests</code> does not pass <code>--cov</code>; the floo
 means the same thing in every tier. It declares no <code>fail_under</code>, which this change leaves as is.</p>
 <h2 id="wired-on-both-sides">Wired on both sides<a class="headerlink" href="#wired-on-both-sides" title="Permanent link">&para;</a></h2>
 <p>Pre-commit hook <code>coverage-floor</code> and the CI step "Run Coverage Floor Gate" in
-<code>.github/workflows/tests.yaml</code> both run <code>bin/check_coverage_floor.py</code> — one implementation,
+<code>.github/workflows/tests.yml</code> both run <code>bin/check_coverage_floor.py</code> — one implementation,
 both surfaces, the same rule every <code>check_*.py</code> gate in this repo follows.</p>
 <h2 id="out-of-scope-the-publisher-index-half-of-149">Out of scope: the publisher-index half of #149<a class="headerlink" href="#out-of-scope-the-publisher-index-half-of-149" title="Permanent link">&para;</a></h2>
 <p>Issue #149 bundles a second, unrelated lesson: auditing a backlog seeded from a proxy (an

@@ -2922,55 +2922,55 @@ reported yet" from "this check will never report."</p>
 <tbody>
 <tr>
 <td><code>Review threads answered</code></td>
-<td><code>review_threads.yaml</code></td>
+<td><code>review-threads.yml</code></td>
 <td><code>pull_request</code> (+ <code>_review</code>, <code>_review_comment</code>), no filter</td>
 <td><strong>yes</strong> — seeded today</td>
 </tr>
 <tr>
 <td><code>Classify and gate this PR</code></td>
-<td><code>pr-gate.yaml</code></td>
+<td><code>pr-gate.yml</code></td>
 <td><code>pull_request: types: [opened, synchronize, reopened, labeled, unlabeled]</code></td>
 <td><strong>yes</strong> — not seeded</td>
 </tr>
 <tr>
 <td><code>Run Automated Tests (&lt;os&gt;, py&lt;version&gt;)</code> ×15</td>
-<td><code>tests.yaml</code></td>
+<td><code>tests.yml</code></td>
 <td><code>pull_request:</code> with a <code>branches:</code> filter</td>
 <td>no — rule 2 (branch filter) and the names embed matrix values that drift</td>
 </tr>
 <tr>
 <td><code>Ask CodeRabbit for a review</code></td>
-<td><code>coderabbit_trigger.yaml</code></td>
+<td><code>coderabbit-trigger.yml</code></td>
 <td><code>pull_request</code>, job <code>if: draft == false</code></td>
 <td>no — rule 3, never reports on a draft PR</td>
 </tr>
 <tr>
 <td><code>Close linked issues of merged PRs</code></td>
-<td><code>pr-reconcile.yaml</code></td>
+<td><code>pr-reconcile.yml</code></td>
 <td><code>pull_request: types: [closed]</code></td>
 <td>no — rule 2, <em>never</em> reports on an open PR</td>
 </tr>
 <tr>
 <td><code>GitGuardian — secret scan</code></td>
-<td><code>secret_scan.yaml</code></td>
+<td><code>secret-scan.yml</code></td>
 <td><code>pull_request</code></td>
 <td>no — rule 4, copied only when <code>GITGUARDIAN_API_KEY</code> was exported at scaffold time</td>
 </tr>
 <tr>
 <td><code>Re-ask a rate-limited reviewer</code></td>
-<td><code>review_retry.yaml</code></td>
+<td><code>review-retry.yml</code></td>
 <td><code>schedule</code>, <code>workflow_dispatch</code></td>
 <td>no — rule 2, not a PR event</td>
 </tr>
 <tr>
 <td><code>Contract drift check</code></td>
-<td><code>contract_drift.yaml</code></td>
+<td><code>contract-drift.yml</code></td>
 <td><code>schedule</code>, <code>workflow_dispatch</code></td>
 <td>no — rule 2, not a PR event</td>
 </tr>
 <tr>
 <td><code>build</code></td>
-<td><code>docs.yaml</code> (<code>lib-minimal</code> only)</td>
+<td><code>docs.yml</code> (<code>lib-minimal</code> only)</td>
 <td><code>push</code>, <code>pull_request</code></td>
 <td>no — rule 4, one tier out of six</td>
 </tr>
@@ -3101,9 +3101,9 @@ tier has in common does not exist there.</p>
 </ol>
 <p>The earlier pass on blueprintx#164 (<code>.specs/backlog/repo-rules-self-audit-164_20260904_062813.md</code>)
 reached "keep one entry" for the Python tiers by reasoning about
-<code>tests.yaml</code> alone. That conclusion survives for <code>tests.yaml</code> — with a second,
+<code>tests.yml</code> alone. That conclusion survives for <code>tests.yml</code> — with a second,
 stronger disqualifier it did not have (the <code>branches:</code> filter, not just matrix
-drift) — but it did not look at <code>pr-gate.yaml</code>, and it did not look outside
+drift) — but it did not look at <code>pr-gate.yml</code>, and it did not look outside
 Python at all.</p>
 <h2 id="keeping-blueprintxs-own-required-checks-in-sync-blueprintx535">Keeping BlueprintX's own required checks in sync (blueprintx#535)<a class="headerlink" href="#keeping-blueprintxs-own-required-checks-in-sync-blueprintx535" title="Permanent link">&para;</a></h2>
 <p>The tiers above are about generated projects. For this repo, <code>main</code> is protected in two

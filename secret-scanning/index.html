@@ -2952,7 +2952,7 @@ and rescanning the whole history on every commit cost minutes on a mature
 repo (blueprintx#759). CI and <code>poe lint</code> run the same script without the
 flag and keep the full-history scan.</p>
 <h2 id="why-gitguardian-is-opt-in">Why GitGuardian is opt-in<a class="headerlink" href="#why-gitguardian-is-opt-in" title="Permanent link">&para;</a></h2>
-<p><code>secret_scan.yaml</code> reads <code>${{ secrets.GITGUARDIAN_API_KEY }}</code>, and GitHub
+<p><code>secret-scan.yml</code> reads <code>${{ secrets.GITGUARDIAN_API_KEY }}</code>, and GitHub
 resolves that secret <strong>in the repository where the workflow runs</strong>. A key
 set on <code>guilhermegor/blueprintx</code> never reaches a freshly scaffolded project
 — so shipping the workflow unconditionally meant a brand-new project failed
@@ -2970,13 +2970,13 @@ available to propagate.</p>
 <p>When you answer <strong>yes</strong> to "Add remote origin and (optionally) create the
 GitHub repo now?", the scaffold:</p>
 <ol>
-<li>copies <code>.github/workflows/secret_scan.yaml</code> into the new project (only
+<li>copies <code>.github/workflows/secret-scan.yml</code> into the new project (only
    because the variable is set — see <code>copy_github_assets</code> in each
    <code>bin/scaffold/python_*.sh</code>), and</li>
 <li>propagates the key to the new repository's secrets for you
    (<code>scaffold_set_secret_scan_key</code> in <code>bin/lib/scaffold_git_remote.sh</code>),
    the same moment <code>GH_PAT_REVIEW_TRIGGER</code> is propagated for
-   <code>coderabbit_trigger.yaml</code>.</li>
+   <code>coderabbit-trigger.yml</code>.</li>
 </ol>
 <p>Decline, or never export the variable, and the project simply never
 receives the workflow — no dead job, nothing failing on the first PR.</p>
@@ -2989,7 +2989,7 @@ tier's <code>.env.example</code> (that file is seeded into the generated project
 <code>.env</code> and covers <strong>application runtime</strong> configuration — database
 credentials, feature flags — never CI-time secrets); the precedent for a
 repo secret like this one is a documented note beside the workflow that needs it,
-which is what this page and the <code>secret_scan.yaml</code> record in
+which is what this page and the <code>secret-scan.yml</code> record in
 <a href="../decision-records/">Decision records</a> follow.</p>
 <h2 id="opting-in-after-the-fact">Opting in after the fact<a class="headerlink" href="#opting-in-after-the-fact" title="Permanent link">&para;</a></h2>
 <p>Scaffolded without the key and want GitGuardian anyway?</p>
@@ -2998,7 +2998,7 @@ which is what this page and the <code>secret_scan.yaml</code> record in
 <p><code>gh</code> prompts for the value when neither <code>--body</code> nor stdin supplies one. Prefer that
 prompt over <code>--body '&lt;your key&gt;'</code>: an argument is visible to any other process on the
 host for the life of the call, and it lands in your shell history besides.</p>
-<p>then copy <code>templates/python-common/.github/workflows/secret_scan.yaml</code> from
+<p>then copy <code>templates/python-common/.github/workflows/secret-scan.yml</code> from
 a BlueprintX checkout into the project's own <code>.github/workflows/</code>.</p>
 <h2 id="the-fail-loud-contract-once-shipped">The fail-loud contract, once shipped<a class="headerlink" href="#the-fail-loud-contract-once-shipped" title="Permanent link">&para;</a></h2>
 <p>A missing or bad key still fails <strong>loudly</strong>, never silently:</p>
@@ -3008,12 +3008,12 @@ a BlueprintX checkout into the project's own <code>.github/workflows/</code>.</p
 <li>A Dependabot-authored PR is the one deliberate, reported exception
   (blueprintx#457): GitHub gives it a separate secret store this repo's key
   never reaches, so the job prints a <code>::warning::</code> naming the reason and
-  skips — <code>gitleaks</code> (<code>tests.yaml</code>) already scans the same range
+  skips — <code>gitleaks</code> (<code>tests.yml</code>) already scans the same range
   unconditionally, so nothing goes unscanned.</li>
 </ul>
 <h2 id="offline-scaffolds-never-receive-it">Offline scaffolds never receive it<a class="headerlink" href="#offline-scaffolds-never-receive-it" title="Permanent link">&para;</a></h2>
 <p>A scaffold run that declines a GitHub remote (<code>apply_offline_mode</code>) strips
-every GitHub-only workflow, <code>secret_scan.yaml</code> included — there is no
+every GitHub-only workflow, <code>secret-scan.yml</code> included — there is no
 Actions runner to execute it there. <code>bin/ci/scaffold_lint_test.sh</code> asserts
 this for every tier.</p>
 
