@@ -179,7 +179,7 @@ show_hex_service() {
         docs/
         .github/
             workflows/
-                tests.yaml
+                tests.yml
             CODEOWNERS
             PULL_REQUEST_TEMPLATE.md
         .env
@@ -234,7 +234,7 @@ show_orm_service() {
         docs/
         .github/
             workflows/
-                tests.yaml
+                tests.yml
             CODEOWNERS
             PULL_REQUEST_TEMPLATE.md
         .env
@@ -272,7 +272,7 @@ show_lib_minimal() {
             index.md
         .github/
             workflows/
-                tests.yaml
+                tests.yml
             CODEOWNERS
             PULL_REQUEST_TEMPLATE.md
         pyproject.toml

@@ -73,7 +73,7 @@ done
 
 for str_file in templates/python-common/.pre-commit-config.yaml templates/bash-cli/.pre-commit-config.yaml \
     templates/etcher-chromeos/.pre-commit-config.yaml templates/ts-common/.husky/pre-commit \
-    templates/python-common/.github/workflows/tests.yaml templates/bash-cli/.github/workflows/ci.yml \
+    templates/python-common/.github/workflows/tests.yml templates/bash-cli/.github/workflows/ci.yml \
     templates/etcher-chromeos/.github/workflows/ci.yml templates/ts-common/.github/workflows/lint.yml; do
     check "$str_file requires the baseline" 1 "$(grep -c 'check_comment_budget.py.*--require-baseline' "$REPO_ROOT/$str_file")"
 done

@@ -96,7 +96,7 @@ if [ -n "$str_leaked" ]; then
 fi
 echo "No interpreter/tool caches leaked into the generated project."
 
-for str_online_only in coderabbit_trigger.yaml review_threads.yaml review_retry.yaml secret_scan.yaml; do
+for str_online_only in coderabbit-trigger.yml review-threads.yml review-retry.yml secret-scan.yml; do
     if [ -e "$PROJECT_PATH/.github/workflows/$str_online_only" ]; then
         echo "ERROR: offline scaffold shipped the GitHub-only $str_online_only" >&2
         exit 1
