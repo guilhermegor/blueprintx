@@ -52,7 +52,8 @@ def all_elements(path_init: pathlib.Path) -> list[ast.Constant] | None:
     for cls_node in cls_tree.body:
         if not isinstance(cls_node, ast.Assign):
             continue
-        if any(isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_node.targets):
+        list_ids = [cls_t.id for cls_t in cls_node.targets if isinstance(cls_t, ast.Name)]
+        if "__all__" in list_ids:
             if not isinstance(cls_node.value, ast.List | ast.Tuple):
                 return []
             return [cls_e for cls_e in cls_node.value.elts if isinstance(cls_e, ast.Constant)]
@@ -140,10 +141,11 @@ def main() -> int:
     if not list_found:
         print("check_registry_order: found ZERO __all__ lists under src/", file=sys.stderr)
         return 1
-    list_problems = [
-        str_p for path_init, list_elts in list_found for str_p in order_problems(path_init, list_elts)
-    ]
-    list_problems += [str_p for path_doc in doc_files() for str_p in count_problems(path_doc)]
+    list_problems: list[str] = []
+    for path_init, list_elts in list_found:
+        list_problems += order_problems(path_init, list_elts)
+    for path_doc in doc_files():
+        list_problems += count_problems(path_doc)
     for str_problem in list_problems:
         print(f"❌ {str_problem}", file=sys.stderr)
     if list_problems:
