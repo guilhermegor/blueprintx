@@ -25,12 +25,12 @@ workflow refuses a 0.x to 1.0.0 jump while an open issue lacks the `post-1.0` la
 - [ ] **Docs audit against the code:** README, CONTRIBUTING, SECURITY, CHANGELOG, everything under `docs/` (minus historical ledgers), every `CLAUDE.md` and `AGENTS.md`, issue and PR templates, the docs-site nav and the public-API docstrings. Every count, path, import example and status mark is re-measured from the code, never incremented by hand
 - [ ] **Runnable examples:** each README and usage example runs, or is covered by a doctest or a test
 - [ ] **SECURITY.md** gains a supported-versions table for 1.x
-- [ ] **Development Status:** the classifier is flipped to `Development Status :: 5 - Production/Stable`
-- [ ] **Python metadata:** `requires-python` and one `Programming Language :: Python :: 3.X` classifier per version in the `tests.yaml` matrix agree with each other
-- [ ] **Public API frozen:** audit `__all__` and remove deprecated or experimental names now; removing anything after 1.0 is a 2.0
-- [ ] **Typed marker:** `py.typed` is present in the built wheel (`unzip -l dist/*.whl | grep py.typed`)
+- [ ] **Python projects, Development Status:** the classifier is flipped to `Development Status :: 5 - Production/Stable`
+- [ ] **Python projects, metadata:** `requires-python` and one `Programming Language :: Python :: 3.X` classifier per version in the `tests.yaml` matrix agree with each other
+- [ ] **Public API frozen:** audit the exported names (Python: `__all__`; TypeScript: the package entry point exports) and remove deprecated or experimental names now; removing anything after 1.0 is a 2.0
+- [ ] **Python projects, typed marker:** `py.typed` is present in the built wheel (`unzip -l dist/*.whl | grep py.typed`)
 - [ ] **CHANGELOG 1.0.0:** a `## 1.0.0` section states the API guarantee, not only the generated commit list
 - [ ] **No open PRs at cut time:** merge or close each one (the release gate counts issues only, see `docs/releasing-1-0-0.md`)
 - [ ] **Release:** rehearsal, then publish, then install-verify (Test PyPI then PyPI; npm `--dry-run` then publish), with the tag present and the release not a draft
 - [ ] **Post-release:** switch the documented version policy from 0.x rules to full semver
-- [ ] **Docs alias:** the mike `latest` alias of the docs site points at 1.0
+- [ ] **Projects using mike for docs, alias:** the mike `latest` alias of the docs site points at 1.0

@@ -14,13 +14,14 @@ backlog is done, and the docs describe the code that actually ships.
 2. Implement the backlog. An issue that will not make 1.0.0 gets the `post-1.0` label, set by
    the owner (the scaffold creates the label; otherwise `gh label create post-1.0`), so it is deferred on the record rather than dropped.
 3. Work the issue's checklist: the docs audit, runnable examples, the 1.x supported-versions
-   table in `SECURITY.md`, the package metadata (`Development Status :: 5 - Production/Stable`,
-   `requires-python` and one Python classifier per version of the `tests.yaml` matrix), the
-   public-API freeze (audit `__all__`; removing a name after 1.0 is a 2.0), `py.typed` in the
-   built wheel, a `## 1.0.0` CHANGELOG section stating the API guarantee, and no open pull
-   requests, then the rehearsal and publish.
-4. After the release, switch the documented version policy to full semver and confirm the mike
-   `latest` docs alias moved to 1.0.
+   table in `SECURITY.md`, the public-API freeze (audit the exported names; removing one after
+   1.0 is a 2.0), a `## 1.0.0` CHANGELOG section stating the API guarantee, and no open pull
+   requests, then the rehearsal and publish. Python projects also flip the classifier to
+   `Development Status :: 5 - Production/Stable`, check that `requires-python` and one Python
+   classifier per version of the `tests.yaml` matrix agree, and confirm `py.typed` is in the
+   built wheel.
+4. After the release, switch the documented version policy to full semver and, for a project
+   that deploys docs with mike, confirm the `latest` alias moved to 1.0.
 
 ## The release gate
 
@@ -32,8 +33,8 @@ it lists the open issues and fails while any lacks the `post-1.0` label, naming 
   decision, not an omission: failing on open PRs would let a standing Dependabot PR or a
   `post-1.0` feature branch block every release, and the gate has no label to exempt a PR
   with. The smaller blast radius is to keep the gate on issues and put "no open PRs at cut
-  time" on the **Cut 1.0.0** checklist, where the owner judges each PR. The test suite pins
-  that a lone open PR passes the gate.
+  time" on the **Cut 1.0.0** checklist, where the owner judges each PR. BlueprintX's own test
+  suite pins that a lone open PR passes the gate.
 - The issues are read through the GitHub REST API with the workflow token, read-only.
 - If the API cannot be read, the gate fails closed: it blocks the release rather than guess.
 - Every other bump, such as 0.4.0 to 0.5.0 or 1.0.0 to 1.0.1, is untouched.

@@ -216,7 +216,10 @@ echo "::endgroup::"
 if [ "$SKELETON" = "lib-minimal" ]; then
     echo "::group::built wheel carries py.typed"
     poetry build -f wheel --no-interaction --no-ansi
-    unzip -l dist/*.whl | grep -q 'py.typed' || { echo "ERROR: py.typed missing from wheel" >&2; exit 1; }
+    list_wheels=(dist/*.whl)
+    [ "${#list_wheels[@]}" -eq 1 ] || { echo "ERROR: expected one wheel, found ${#list_wheels[@]}" >&2; exit 1; }
+    unzip -Z1 "${list_wheels[0]}" | grep -qFx "${PROJECT_NAME//-/_}/py.typed" \
+        || { echo "ERROR: ${PROJECT_NAME//-/_}/py.typed missing from wheel" >&2; exit 1; }
     echo "::endgroup::"
 fi
 
