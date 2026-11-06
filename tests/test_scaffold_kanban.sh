@@ -255,9 +255,9 @@ test_existing_status_option_ids_are_preserved() {
 
 test_a_failed_option_lookup_never_sends_the_mutation() {
     local str_out
-    str_out="$(run_setup '\n\n' GH_OPTIONS_FAIL=1)"
+    str_out="$(run_setup '\n\n' GH_OPTIONS_FAIL=1)" || true
     expect_log "lookup failure" '"name":"Backlog"' absent
-    expect_out "lookup failure" "$str_out" "Could not set the Status options"
+    expect_out "lookup failure" "$str_out" "GitHub step failed: read the Status options"
 }
 
 test_visibility_follows_the_answer_and_the_repo() {
@@ -283,19 +283,19 @@ test_an_ambiguous_board_is_never_guessed() {
     expect_out "ambiguous boards" "$str_out" "More than one 'widget kanban' project exists"
 }
 
-test_a_missing_scope_prints_the_fix_and_carries_on() {
+test_a_missing_scope_prints_the_fix_and_stops() {
     local str_out
-    str_out="$(run_setup '\n\n' GH_SCOPE_FAIL=1)" || {
-        print_status "error" "a failed board must not fail the scaffold"
+    if str_out="$(run_setup '\n\n' GH_SCOPE_FAIL=1)"; then
+        print_status "error" "a failed board must stop the scaffold"
         int_failures=$((int_failures + 1))
-    }
+    fi
     expect_out "missing scope" "$str_out" "gh auth refresh -s project"
     expect_log "missing scope" "project link" absent
 }
 
 test_a_failed_project_list_still_prints_the_scope_fix() {
     local str_out
-    str_out="$(run_setup '\n\n' GH_LIST_FAIL=1)"
+    str_out="$(run_setup '\n\n' GH_LIST_FAIL=1)" || true
     expect_out "list failure" "$str_out" "gh auth refresh -s project"
     expect_log "list failure" "project create" absent
 }
@@ -421,7 +421,7 @@ main() {
     test_visibility_follows_the_answer_and_the_repo
     test_an_existing_board_is_skipped_not_duplicated
     test_an_ambiguous_board_is_never_guessed
-    test_a_missing_scope_prints_the_fix_and_carries_on
+    test_a_missing_scope_prints_the_fix_and_stops
     test_a_failed_project_list_still_prints_the_scope_fix
     test_stderr_noise_on_success_never_corrupts_values
     test_empty_stdin_means_no_board
