@@ -3,6 +3,7 @@
 : "${SCAFFOLD_GH_GRAPHQL_BUDGET:=100}"
 : "${SCAFFOLD_GH_GRAPHQL_SITES:=15}"
 : "${SCAFFOLD_RERUN_CMD:=the same blueprintx command}"
+: "${SCAFFOLD_GH_REQUIRED_SCOPES:=repo project}"
 
 gh_classify_failure() {
 	local str_text="$1"
@@ -44,6 +45,10 @@ gh_stop_online() {
 	network) print_status "error" "Cause: network. Fix: check the connection to api.github.com, then retry." ;;
 	*) print_status "error" "Cause: unexpected gh failure: $(head -n1 <<<"${str_text:-no output from gh}")" ;;
 	esac
+	gh_stop_footer
+}
+
+gh_stop_footer() {
 	if [ -n "${SCAFFOLD_CREATED_REPO:-}" ]; then
 		print_status "error" "Stopping: ${SCAFFOLD_CREATED_REPO} already exists on GitHub, so re-running would fail at repo creation. Finish the remaining steps by hand, or delete it ('gh repo delete ${SCAFFOLD_CREATED_REPO}') and re-run ${SCAFFOLD_RERUN_CMD}."
 	else
@@ -73,6 +78,37 @@ gh_read() {
 	printf '%s' "$str_out"
 }
 
+gh_missing_scopes() {
+	local str_have="$1" str_scope str_missing=""
+	for str_scope in $SCAFFOLD_GH_REQUIRED_SCOPES; do
+		case ", ${str_have}," in
+		*", ${str_scope},"*) ;;
+		*) str_missing+="${str_missing:+ }${str_scope}" ;;
+		esac
+	done
+	printf '%s' "$str_missing"
+}
+
+gh_check_scopes() {
+	local str_err str_head str_have str_missing str_scope
+	str_err="$(mktemp)"
+	str_head="$(gh api -i user 2>"$str_err")" ||
+		gh_stop_online "preflight: token scopes (gh api -i user)" "$(cat "$str_err")"
+	rm -f "$str_err"
+	if ! grep -qi '^x-oauth-scopes:' <<<"$str_head"; then
+		print_status "info" "Token scopes are not reported (fine-grained or app token): not verified"
+		return 0
+	fi
+	str_have="$(sed -n 's/^[Xx]-[Oo][Aa]uth-[Ss]copes: *//p' <<<"$str_head" | tr -d '\r')"
+	str_missing="$(gh_missing_scopes "$str_have")"
+	[ -z "$str_missing" ] && return 0
+	print_status "error" "GitHub step failed: preflight: token scopes (have: ${str_have:-none})"
+	for str_scope in $str_missing; do
+		print_status "error" "Cause: the token lacks the '${str_scope}' scope. Fix: run 'gh auth refresh -s ${str_scope}'."
+	done
+	gh_stop_footer
+}
+
 gh_preflight() {
 	local str_err str_login str_rl int_left
 	str_err="$(mktemp)"
@@ -81,6 +117,7 @@ gh_preflight() {
 	str_login="$(gh api user -q .login 2>"$str_err")" ||
 		gh_stop_online "preflight: REST API (gh api user)" "$(cat "$str_err")"
 	[ -n "$str_login" ] || gh_stop_online "preflight: gh api user returned a blank login" "authentication"
+	gh_check_scopes
 	str_rl="$(gh api rate_limit --jq '.resources.graphql | "\(.remaining) \(.reset)"' 2>"$str_err")" ||
 		gh_stop_online "preflight: gh api rate_limit" "$(cat "$str_err")"
 	rm -f "$str_err"

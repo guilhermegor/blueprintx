@@ -61,8 +61,19 @@ scaffold_kanban_find() {
 	}
 	rm -f "$str_err"
 	int_count="$(grep -c . <<<"$str_numbers" || true)"
-	[ "$int_count" -le 1 ] || return 2
 	printf '%s' "$str_numbers"
+	[ "$int_count" -le 1 ] || return 2
+}
+
+scaffold_kanban_stop_duplicates() {
+	local str_owner="$1" str_title="$2" str_numbers="$3" str_base str_number str_urls=""
+	str_base="$(scaffold_kanban_url "$str_owner" "next")" || exit 1
+	for str_number in $str_numbers; do
+		str_urls+="${str_urls:+ and }${str_base%/next}/${str_number}"
+	done
+	print_status "error" "GitHub step failed: more than one '${str_title}' project exists: ${str_urls}"
+	print_status "error" "Cause: not guessing which board to use. Fix: delete or rename all but one, then retry."
+	gh_stop_footer
 }
 
 scaffold_kanban_option_id() {
@@ -177,8 +188,7 @@ scaffold_kanban_setup() {
 	str_vis="$(scaffold_kanban_visibility "$str_slug")" || exit 1
 	str_found="$(scaffold_kanban_find "$str_owner" "$str_title")" || int_rc=$?
 	if [ "$int_rc" -eq 2 ]; then
-		print_status "warning" "More than one '${str_title}' project exists — not guessing which; resolve it by hand"
-		return 0
+		scaffold_kanban_stop_duplicates "$str_owner" "$str_title" "$str_found"
 	fi
 	[ "$int_rc" -eq 0 ] || exit 1
 	if [ -n "$str_found" ]; then

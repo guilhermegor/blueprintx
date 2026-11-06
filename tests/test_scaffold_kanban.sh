@@ -278,9 +278,15 @@ test_an_existing_board_is_skipped_not_duplicated() {
 
 test_an_ambiguous_board_is_never_guessed() {
     local str_out
-    str_out="$(run_setup '\n' 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":4},{"title":"widget kanban","number":9}]}')"
+    if str_out="$(run_setup '\n' 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":4},{"title":"widget kanban","number":9}]}')"; then
+        print_status "error" "duplicate boards must stop the scaffold"
+        int_failures=$((int_failures + 1))
+    fi
     expect_log "ambiguous boards" "project create" absent
-    expect_out "ambiguous boards" "$str_out" "More than one 'widget kanban' project exists"
+    expect_log "ambiguous boards" "project link" absent
+    expect_out "ambiguous boards" "$str_out" "more than one 'widget kanban' project exists"
+    expect_out "ambiguous boards" "$str_out" "https://github.com/users/octo/projects/4"
+    expect_out "ambiguous boards" "$str_out" "https://github.com/users/octo/projects/9"
 }
 
 test_a_missing_scope_prints_the_fix_and_stops() {

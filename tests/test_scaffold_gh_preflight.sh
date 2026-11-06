@@ -20,6 +20,8 @@ printf '%s\n' "$*" >>"$GH_LOG"
 case "$1 $2" in
 "api graphql")
     [ -z "${GH_GRAPHQL_ERR:-}" ] || { echo "$GH_GRAPHQL_ERR" >&2; exit 1; } ;;
+"api -i")
+    [ "${GH_SCOPES_HEADER:-on}" = off ] || printf 'HTTP/2.0 200 OK\r\nX-Oauth-Scopes: %s\r\n\r\n{}\n' "${GH_SCOPES-repo, project, read:org}" ;;
 "api user")
     [ -z "${GH_USER_ERR:-}" ] || { echo "$GH_USER_ERR" >&2; exit 1; }
     echo "${GH_LOGIN-octo}" ;;
@@ -135,6 +137,41 @@ test_preflight_passes_on_a_healthy_gh() {
     expect_said "healthy" "gh preflight passed"
 }
 
+test_preflight_stops_when_the_project_scope_is_missing() {
+    run_fn '' "GH_SCOPES=repo, read:org" gh_preflight
+    expect_stop "project scope"
+    expect_said "project scope" "lacks the 'project' scope"
+    expect_said "project scope" "gh auth refresh -s project"
+    expect_not_said "project scope" "gh auth refresh -s repo"
+    expect_not_said "project scope" "gh preflight passed"
+}
+
+test_preflight_names_every_missing_scope() {
+    run_fn '' "GH_SCOPES=" gh_preflight
+    expect_stop "no scopes"
+    expect_said "no scopes" "gh auth refresh -s repo"
+    expect_said "no scopes" "gh auth refresh -s project"
+}
+
+test_preflight_does_not_match_a_scope_by_substring() {
+    run_fn '' "GH_SCOPES=repo, read:project" gh_preflight
+    expect_stop "read:project only"
+    expect_said "read:project only" "gh auth refresh -s project"
+}
+
+test_preflight_skips_the_scope_check_when_none_are_reported() {
+    run_fn '' "GH_SCOPES_HEADER=off" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "no header: preflight stopped: $str_out"
+    expect_said "no header" "not verified"
+}
+
+test_create_repo_never_runs_without_the_project_scope() {
+    run_fn 'y\n1\n' "GH_SCOPES=repo" scaffold_create_github_repo "$WORK_DIR"
+    expect_stop "create repo scope"
+    expect_said "create repo scope" "gh auth refresh -s project"
+    expect_not_called "create repo scope" "repo create"
+}
+
 test_create_repo_never_runs_when_the_preflight_fails() {
     run_fn 'y\n1\n' "GH_GRAPHQL_ERR=API rate limit exceeded" scaffold_create_github_repo "$WORK_DIR"
     expect_stop "create repo"
@@ -219,6 +256,11 @@ main() {
     test_preflight_stops_when_the_budget_is_too_low
     test_preflight_stops_on_a_blank_login
     test_preflight_passes_on_a_healthy_gh
+    test_preflight_stops_when_the_project_scope_is_missing
+    test_preflight_names_every_missing_scope
+    test_preflight_does_not_match_a_scope_by_substring
+    test_preflight_skips_the_scope_check_when_none_are_reported
+    test_create_repo_never_runs_without_the_project_scope
     test_create_repo_never_runs_when_the_preflight_fails
     test_visibility_never_defaults_to_public_on_a_failed_read
     test_board_url_never_guesses_the_owner_kind
