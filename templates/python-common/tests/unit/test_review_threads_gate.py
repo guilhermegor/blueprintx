@@ -282,6 +282,7 @@ def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:
 _NO_BODY = {"body": "", "state": "COMMENTED"}
 _REPLY_NODE = {"replyTo": {"id": "thread-root"}}
 _INLINE_NODE = {"replyTo": None}
+_ORPHANED_REPLY_NODE = {"replyTo": None}
 
 
 @pytest.mark.parametrize(
@@ -299,6 +300,8 @@ _INLINE_NODE = {"replyTo": None}
         ({**_NO_BODY, "body": "Findings: none."}, True),
         ({**_NO_BODY, "comments": {"nodes": [_INLINE_NODE]}}, True),
         ({**_NO_BODY, "comments": {"nodes": [_REPLY_NODE, _INLINE_NODE]}}, True),
+        ({**_NO_BODY, "body": "Thanks.", "comments": {"nodes": [_REPLY_NODE]}}, True),
+        ({**_NO_BODY, "comments": {"nodes": [_ORPHANED_REPLY_NODE]}}, True),
     ],
     ids=[
         "reply-only",
@@ -313,6 +316,8 @@ _INLINE_NODE = {"replyTo": None}
         "body-only",
         "inline-only",
         "reply-plus-inline",
+        "reply-with-body-counts",
+        "orphaned-reply-accepted-fail-open",
     ],
 )
 def test_a_head_review_counts_only_with_a_body_or_a_non_reply_comment(
