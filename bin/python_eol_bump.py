@@ -19,7 +19,7 @@ import urllib.request
 
 STR_API = "https://endoflife.date/api/v1/products/python/"
 STR_VERSION_FILE = "templates/python-common/.python-version"
-STR_TESTS_YAML = "templates/python-common/.github/workflows/tests.yaml"
+STR_TESTS_YAML = "templates/python-common/.github/workflows/tests.yml"
 
 INT_MATRIX_DELAY_DAYS = 180
 
@@ -215,14 +215,14 @@ def fetch(str_fixture: str) -> dict:
 
 
 def matrix_problem(str_floor: str, list_matrix: list) -> str:
-    """Return why a tests.yaml matrix is not a contiguous run from the floor, or ``""``.
+    """Return why a tests.yml matrix is not a contiguous run from the floor, or ``""``.
 
     Parameters
     ----------
     str_floor : str
         Floor cycle.
     list_matrix : list
-        Cycles read from ``tests.yaml``.
+        Cycles read from ``tests.yml``.
 
     Returns
     -------
@@ -230,11 +230,11 @@ def matrix_problem(str_floor: str, list_matrix: list) -> str:
         A finding message, empty when the matrix is valid.
     """
     if not list_matrix:
-        return "tests.yaml has no python-version matrix"
+        return "tests.yml has no python-version matrix"
     int_last = cycle_key(list_matrix[-1])
     list_expected = [f"3.{int_n}" for int_n in range(cycle_key(str_floor), int_last + 1)]
     if list_matrix != list_expected:
-        return f"tests.yaml matrix {list_matrix} is not contiguous from {str_floor}"
+        return f"tests.yml matrix {list_matrix} is not contiguous from {str_floor}"
     return ""
 
 

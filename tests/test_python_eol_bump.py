@@ -40,7 +40,7 @@ LIST_FILES = [
     "templates/python-common/mypy.ini",
     "templates/python-common/requirements.txt",
     "templates/python-common/README.md",
-    "templates/python-common/.github/workflows/tests.yaml",
+    "templates/python-common/.github/workflows/tests.yml",
     "templates/common/README.template.md",
     "templates/lib-minimal/pyproject.toml",
 ]

@@ -2121,7 +2121,7 @@ grouped by what they guard.
 
 `templates/python-common/.python-version` holds the supported floor (a `MAJOR.MINOR` cycle) and
 is the single source of truth. The `python` constraint of every `templates/*/pyproject.toml`,
-the `tests.yaml` matrix, ruff's `target-version`, `mypy.ini`, the `requirements.txt` markers
+the `tests.yml` matrix, ruff's `target-version`, `mypy.ini`, the `requirements.txt` markers
 and the README badges are derived from it. `python bin/python_eol_bump.py --check` (pre-commit
 hook `python-floor-drift`, `scaffold_checks.yml`) fails when any of them disagrees.
 
