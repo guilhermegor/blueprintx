@@ -3391,10 +3391,16 @@ automatically, so a review from before that retarget needs a fresh one.</p>
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
 closed: a missing commit, an API error, a malformed response (<code>files</code> not a list, an entry
 that is not an object, a non-JSON body), a binary or oversized file with no patch text, or a
-full 300-file list is read as "not covered". A pure rename (status <code>renamed</code>, zero changes) has
-no patch text by nature and is fingerprinted by its two names and its blob <code>sha</code>, so it carries
-forward. The <code>sha</code> is required: a binary file also reports zero changes, and only its blob
-proves the content. The compare API returns at most
+full 300-file list is read as "not covered". Two patchless entries are fingerprinted by their
+names and blob <code>sha</code>, so they carry forward: a pure rename (status <code>renamed</code>, zero changes, a
+<code>sha</code>) and an added empty file such as a <code>py.typed</code> or <code>.gitkeep</code> (status <code>added</code>, zero changes,
+and exactly the empty-blob <code>sha</code> <code>e69de29bb2d1d6434b8b29ae775ad8c2e48c5391</code>). The <code>sha</code> is
+required: a binary file also reports zero changes, and only its blob proves the content. The
+compare API carries no file mode, so a <code>sha</code> cannot prove the mode bits. That is why an <code>added</code>
+entry needs the empty blob specifically: an exec bit on an empty file runs nothing, so its mode
+cannot matter, while any other patchless <code>added</code> entry (a binary) still counts as "not covered".
+So does a patchless entry without a <code>sha</code>, with changes above zero, or a <code>modified</code> one (a
+mode-only change keeps its blob <code>sha</code>). A rename shares the mode gap and is kept as it was. The compare API returns at most
 300 files whatever <code>per_page</code> says (it pages commits, not files), so a list that long may be cut
 off. The gate asks for <code>per_page=1</code> to keep the commit list, which it does not use, small.</p>
 <h2 id="why-does-every-scaffold-have-to-ship-the-hosted-reviewer-config">Why does every scaffold have to ship the hosted-reviewer config?<a class="headerlink" href="#why-does-every-scaffold-have-to-ship-the-hosted-reviewer-config" title="Permanent link">&para;</a></h2>
