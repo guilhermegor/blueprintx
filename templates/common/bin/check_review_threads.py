@@ -505,14 +505,22 @@ _TUPLE_FINGERPRINT_ERRORS = (
 )
 
 
-def _is_provable_without_patch(dict_file: dict) -> bool:
-    """Return whether a patchless file entry has zero changes AND a blob ``sha`` to hash.
+_SET_PATCHLESS_PROVABLE_STATUSES = frozenset({"added", "renamed"})
 
-    That covers a pure rename and an added empty file, whatever the ``status``. The API reports
-    ``changes == 0`` for a binary file too, so the blob ``sha`` is what proves the content;
-    without it the entry is not trusted.
+
+def _is_provable_without_patch(dict_file: dict) -> bool:
+    """Return whether a patchless entry is an added or renamed file with no changes and a ``sha``.
+
+    That covers a pure rename and an added empty file. The API reports ``changes == 0`` for a
+    binary file too, so the blob ``sha`` is what proves the content; without it the entry is
+    not trusted. A ``modified`` entry never qualifies: a mode-only change leaves the blob
+    ``sha`` unchanged, so the ``sha`` does not prove the mode bits.
     """
-    return dict_file.get("changes") == 0 and bool(dict_file.get("sha"))
+    return (
+        dict_file.get("status") in _SET_PATCHLESS_PROVABLE_STATUSES
+        and dict_file.get("changes") == 0
+        and bool(dict_file.get("sha"))
+    )
 
 
 _TUPLE_PATCH_PREFIXES = ("+", "-")

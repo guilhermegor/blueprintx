@@ -3903,6 +3903,19 @@ def test_patch_fingerprint_patchless_entry_without_proof_raises(dict_entry: dict
         cls_gate.patch_fingerprint([dict_entry])
 
 
+def test_patch_fingerprint_modified_mode_only_entry_raises() -> None:
+    """A mode-only change leaves the blob ``sha`` alone, so the ``sha`` cannot prove the mode."""
+    cls_gate = _load_gate()
+    dict_mode_only = {
+        "filename": "run.sh",
+        "status": "modified",
+        "changes": 0,
+        "sha": _STR_EMPTY_BLOB_SHA,
+    }
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_mode_only])
+
+
 def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> None:
     """The carrying commit is a return value, not an out-parameter."""
     cls_gate = _load_gate()
