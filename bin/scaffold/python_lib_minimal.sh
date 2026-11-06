@@ -54,7 +54,7 @@ resolve_github_username() {
 
     if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
         local gh_user
-        gh_user=$(gh api user -q .login 2>/dev/null || true)
+        gh_user=$(gh_read "read the GitHub login (gh api user)" gh api user -q .login) || exit 1
         if [ -n "$gh_user" ]; then
             GITHUB_USERNAME="$gh_user"
             print_status "config" "GitHub username (gh): $GITHUB_USERNAME"

@@ -40,7 +40,7 @@ test_ts_lib_patches_delete_branch_on_merge() {
         scaffold_kanban_setup() { :; }
         gh() {
             echo "$*" >>"$GH_LOG"
-            case "$*" in "api repos/o/r --jq"*) echo true ;; esac
+            case "$*" in "api repos/o/r --jq"*) echo true ;; "api user"*) echo o ;; "api rate_limit"*) echo "5000 9999999999" ;; esac
             return 0
         }
         scaffold_create_github_repo "$3"
@@ -57,7 +57,7 @@ test_failed_patch_only_warns() {
         source "$1"
         GITHUB_USERNAME=o; PROJECT_NAME=r; PROJECT_DESCRIPTION=d
         scaffold_kanban_setup() { :; }
-        gh() { case "$1 $2" in "api -X") return 1 ;; esac; return 0; }
+        gh() { case "$1 $2" in "api -X") return 1 ;; "api user") echo o ;; "api rate_limit") echo "5000 9999999999" ;; esac; return 0; }
         scaffold_create_github_repo "$2"
     ' _ "$(load_copy ts_lib)" "$proj" >"$WORK_DIR/fail.out" 2>&1
     rc=$?
