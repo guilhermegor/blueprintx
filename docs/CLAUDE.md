@@ -33,6 +33,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `readme-layout.md` | Utility page | The README layout gate: slug-marked sections, archetypes, plain headings, Authors links, `LINKEDIN_URL` resolution, and where the gate runs (blueprintx#867) |
 | `readme-standard.md` | Utility page | Adopting the README gate in a repository BlueprintX did not scaffold: the two files to vendor, the hook and CI step, re-sync, and the filings-rfb worked example (blueprintx#887) |
 | `offline-to-online.md` | Utility page | Promoting an offline scaffold to online with `bin/promote_offline_to_online.sh` — per-tier manifests, flags, preconditions, idempotency (blueprintx#382) |
+| `online-scaffold-gh-preflight.md` | Utility page | The gh preflight before any online change, its cause-and-wait stop message, fail-closed safety reads, mid-run stops, and the GraphQL budget constants (blueprintx#998) |
 | `prompt-defaults.md` | Utility page | The non-terminal stdin guard on scaffold prompts, the helpers, and the per-prompt default table (blueprintx#539) |
 | `template-drift.md` | Utility page | The drift doctor and the provenance stamp it reads, plus the promote-script mirror notes (blueprintx#109) |
 | `quality-rules.md` | Utility page | The machine-readable quality-rule registry (`quality-rules.yaml`) and the gate that keeps it honest — one entry per rule, with the intent each ceiling encodes (blueprintx#432) |

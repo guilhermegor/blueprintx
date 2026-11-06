@@ -14,6 +14,7 @@ nav:
       - Spec Answers: spec-answers.md
       - Prompt Defaults: prompt-defaults.md
       - Offline to Online: offline-to-online.md
+      - Online Preflight: online-scaffold-gh-preflight.md
       - Offline Wheelhouse: offline-wheelhouse.md
       - Troubleshooting: troubleshooting.md
       - FAQ: faq.md
