@@ -181,6 +181,7 @@ require_resumable_tree() {
 require_gh_ready() {
     command -v gh >/dev/null 2>&1 || exit_error "gh CLI not found — required to create the repo and apply branch protection."
     gh auth status >/dev/null 2>&1 || exit_error "gh is not authenticated — run 'gh auth login' first."
+    gh_preflight
 }
 
 detect_state() {

@@ -553,18 +553,19 @@ create_project() {
         exit_error "Scaffold script not found: $scaffold_script"
     fi
 
-    export_rerun_cmd "$scaffold_script" "$project_root" "$project_name" "$project_description"
+    export_rerun_cmd "$scaffold_script" "$project_root" "$project_name" "$project_description" "$license_choice" "$docs_locale"
     LICENSE_CHOICE="$license_choice" DOCS_LOCALE="$docs_locale" \
         bash "$scaffold_script" "$project_root" "$project_name" "$project_description"
 }
 
 export_rerun_cmd() {
     local scaffold_script="$1" project_root="$2" project_name="$3" project_description="$4"
+    local license_choice="${5:-$LICENSE_CHOICE}" docs_locale="${6:-$DOCS_LOCALE}"
     if [ -n "$SPEC_FILE" ]; then
         SCAFFOLD_RERUN_CMD="$(printf 'bash %q new --spec %q' "$BLUEPRINTX_ROOT/bin/blueprintx.sh" "$(realpath "$SPEC_FILE")")"
     else
         SCAFFOLD_RERUN_CMD="$(printf 'LICENSE_CHOICE=%q DOCS_LOCALE=%q bash %q %q %q %q' \
-            "$LICENSE_CHOICE" "$DOCS_LOCALE" "$scaffold_script" "$project_root" "$project_name" "$project_description")"
+            "$license_choice" "$docs_locale" "$scaffold_script" "$project_root" "$project_name" "$project_description")"
     fi
     export SCAFFOLD_RERUN_CMD
 }

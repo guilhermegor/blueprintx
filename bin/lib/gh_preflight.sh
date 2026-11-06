@@ -8,8 +8,8 @@ gh_classify_failure() {
 	local str_text="$1"
 	case "$str_text" in
 	*[Rr]ate\ limit* | *RATE_LIMIT* | *[Ss]econdary\ rate* | *[Aa]buse* | *[Rr]etry-[Aa]fter*) printf 'rate' ;;
-	*401* | *403* | *[Aa]uthentication* | *[Bb]ad\ credentials* | *scope* | *"gh auth"* | *token*) printf 'auth' ;;
-	*resolve* | *[Cc]onnection* | *[Tt]imeout* | *timed\ out* | *dial\ tcp* | *network* | *EOF*) printf 'network' ;;
+	*"HTTP 401"* | *"HTTP 403"* | *[Aa]uthentication* | *[Bb]ad\ credentials* | *scope* | *"gh auth"* | *"authentication token"*) printf 'auth' ;;
+	*"resolve host"* | *"no such host"* | *[Cc]onnection* | *[Tt]imeout* | *timed\ out* | *dial\ tcp* | *network* | *EOF*) printf 'network' ;;
 	*) printf 'other' ;;
 	esac
 }
@@ -28,7 +28,7 @@ gh_wait_message() {
 		int_now="$(date +%s)"
 		int_mins=$(((str_epoch - int_now + 59) / 60))
 		[ "$int_mins" -ge 1 ] || int_mins=1
-		printf 'retry in %s min, after %s' "$int_mins" "$(date -u -d "@${str_epoch}" +%H:%MZ)"
+		printf 'retry in %s min, after %s' "$int_mins" "$({ date -u -d "@${str_epoch}" +%H:%MZ || date -u -r "${str_epoch}" +%H:%MZ; } 2>/dev/null)"
 		return 0
 	fi
 	printf 'unknown, retry later'
@@ -42,7 +42,7 @@ gh_stop_online() {
 	rate) print_status "error" "Cause: GitHub rate limit. When to retry: $(gh_wait_message "$str_text")." ;;
 	auth) print_status "error" "Cause: authentication. Fix: run 'gh auth login' (or 'gh auth refresh -s project'), then retry." ;;
 	network) print_status "error" "Cause: network. Fix: check the connection to api.github.com, then retry." ;;
-	*) print_status "error" "Cause: unexpected gh failure: $(head -n1 <<<"$str_text")" ;;
+	*) print_status "error" "Cause: unexpected gh failure: $(head -n1 <<<"${str_text:-no output from gh}")" ;;
 	esac
 	print_status "error" "Stopping: a half-created online project is never acceptable. Re-run ${SCAFFOLD_RERUN_CMD} once fixed."
 	exit 1
@@ -53,7 +53,7 @@ gh_run() {
 	shift
 	str_err="$(mktemp)"
 	"$@" >/dev/null 2>"$str_err" || {
-		gh_stop_online "$str_step" "$(cat "$str_err")"
+		gh_stop_online "$str_step" "$(cat "$str_err"; rm -f "$str_err")"
 	}
 	rm -f "$str_err"
 }
@@ -63,7 +63,7 @@ gh_read() {
 	shift
 	str_err="$(mktemp)"
 	str_out="$("$@" 2>"$str_err")" || {
-		gh_stop_online "$str_step" "$(cat "$str_err")"
+		gh_stop_online "$str_step" "$(cat "$str_err"; rm -f "$str_err")"
 	}
 	rm -f "$str_err"
 	printf '%s' "$str_out"
