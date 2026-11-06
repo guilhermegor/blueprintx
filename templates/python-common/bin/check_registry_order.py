@@ -1,6 +1,6 @@
 """Keep the shared registries merge-friendly: sorted ``__all__``, one name per line, no counts.
 
-Rationale and the measurement behind it: ``docs/conflict-free-registries.md``.
+Rationale and the measurement behind it: ``docs/conflict-free-registries.md`` in BlueprintX.
 """
 
 import ast
@@ -35,8 +35,25 @@ def sort_key(str_name: str) -> tuple[bool, str]:
     return (not str_name.startswith("__"), str_name.lower())
 
 
-def all_elements(path_init: pathlib.Path) -> list[ast.Constant] | None:
-    """Return the string nodes of a module's ``__all__``, or ``None`` when it has none.
+def binds_all(cls_node: ast.Assign | ast.AnnAssign | ast.AugAssign) -> bool:
+    """Return whether an assignment statement targets ``__all__``.
+
+    Parameters
+    ----------
+    cls_node : ast.Assign or ast.AnnAssign or ast.AugAssign
+        The statement to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``__all__`` is one of its targets.
+    """
+    list_targets = cls_node.targets if isinstance(cls_node, ast.Assign) else [cls_node.target]
+    return any(isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in list_targets)
+
+
+def all_value(path_init: pathlib.Path) -> ast.expr | None:
+    """Return the expression bound to a module's ``__all__``, or ``None`` when it has none.
 
     Parameters
     ----------
@@ -45,42 +62,51 @@ def all_elements(path_init: pathlib.Path) -> list[ast.Constant] | None:
 
     Returns
     -------
-    list of ast.Constant or None
-        The entries in source order.
+    ast.expr or None
+        The bound value; a ``None`` constant for a ``+=`` or repeated binding, which
+        ``order_problems`` rejects as unreadable.
     """
     cls_tree = ast.parse(path_init.read_text(encoding="utf-8"))
-    for cls_node in cls_tree.body:
-        if not isinstance(cls_node, ast.Assign):
-            continue
-        list_ids = [cls_t.id for cls_t in cls_node.targets if isinstance(cls_t, ast.Name)]
-        if "__all__" in list_ids:
-            if not isinstance(cls_node.value, ast.List | ast.Tuple):
-                return []
-            return [cls_e for cls_e in cls_node.value.elts if isinstance(cls_e, ast.Constant)]
-    return None
+    list_nodes = [
+        cls_node
+        for cls_node in ast.walk(cls_tree)
+        if isinstance(cls_node, ast.Assign | ast.AnnAssign | ast.AugAssign)
+        and binds_all(cls_node)
+    ]
+    if not list_nodes:
+        return None
+    if len(list_nodes) > 1 or isinstance(list_nodes[0], ast.AugAssign):
+        return ast.Constant(None)
+    return list_nodes[0].value or ast.Constant(None)
 
 
-def order_problems(path_init: pathlib.Path, list_elts: list[ast.Constant]) -> list[str]:
+def order_problems(path_init: pathlib.Path, cls_value: ast.expr) -> list[str]:
     """Return one message per ordering or layout defect in an ``__all__``.
 
     Parameters
     ----------
     path_init : pathlib.Path
         The ``__init__.py`` the list belongs to.
-    list_elts : list of ast.Constant
-        Its entries in source order.
+    cls_value : ast.expr
+        The expression bound to ``__all__``.
 
     Returns
     -------
     list of str
         Human-readable problems; empty when sorted and one entry per line.
     """
+    if not isinstance(cls_value, ast.List | ast.Tuple) or not all(
+        isinstance(cls_e, ast.Constant) and isinstance(cls_e.value, str)
+        for cls_e in cls_value.elts
+    ):
+        return [f"{path_init}: __all__ must be one literal list of strings"]
     list_problems: list[str] = []
-    list_names = [cls_e.value for cls_e in list_elts]
+    list_names = [cls_e.value for cls_e in cls_value.elts]
     if list_names != sorted(list_names, key=sort_key):
         list_problems.append(f"{path_init}: __all__ is not sorted (dunders first, then A-Z)")
-    list_lines = [cls_e.lineno for cls_e in list_elts]
-    if len(set(list_lines)) != len(list_lines):
+    list_lines = [cls_e.lineno for cls_e in cls_value.elts]
+    set_brackets = {cls_value.lineno, cls_value.end_lineno}
+    if len(set(list_lines)) != len(list_lines) or set_brackets & set(list_lines):
         list_problems.append(f"{path_init}: __all__ must hold exactly one entry per line")
     return list_problems
 
@@ -134,16 +160,16 @@ def main() -> int:
         ``0`` when every registry is canonical and no count is stored, ``1`` otherwise.
     """
     list_found = [
-        (path_init, list_elts)
+        (path_init, cls_value)
         for path_init in sorted(_SRC.rglob("__init__.py"))
-        if (list_elts := all_elements(path_init)) is not None
+        if (cls_value := all_value(path_init)) is not None
     ]
     if not list_found:
         print("check_registry_order: found ZERO __all__ lists under src/", file=sys.stderr)
         return 1
     list_problems: list[str] = []
-    for path_init, list_elts in list_found:
-        list_problems += order_problems(path_init, list_elts)
+    for path_init, cls_value in list_found:
+        list_problems += order_problems(path_init, cls_value)
     for path_doc in doc_files():
         list_problems += count_problems(path_doc)
     for str_problem in list_problems:

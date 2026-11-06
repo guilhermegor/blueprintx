@@ -26,9 +26,11 @@ The approach below was measured in `guilhermegor/layouts-cvm#55` and adopted her
 `bin/check_registry_order.py` (pre-commit `check-registry-order`, `poe lint`, the CI workflow)
 fails when:
 
-- the top-level package `__all__` (`src/<package>/__init__.py`, the registry parallel PRs share;
-  nested packages are out of scope) is not sorted (names starting with `__` first, then case-insensitive A-Z);
-- an `__all__` holds more than one entry on a line;
+- an `__all__` in any `__init__.py` under `src/`, nested packages included, is not sorted (names
+  starting with `__` first, then case-insensitive A-Z);
+- an `__all__` is not one literal list of strings (`+`, `+=`, `sorted(...)`, a star or a second
+  binding), because the gate cannot read it;
+- an `__all__` holds more than one entry on a line, or an entry on a bracket line;
 - a README or `docs/` Markdown file, outside fenced code, states a number next to a countable noun
   (`18 modules`, `5 endpoints`, ...). Derive the number or reword to "every module in the table".
 
@@ -49,11 +51,13 @@ line.
 
 `tests/test_check_registry_order.sh` builds two branches from one base, each adding a module,
 merges them with no conflict, and runs the gate on the result. Negative controls cover an
-unsorted list, a one-line list, a stored count and a missing `__all__`.
+unsorted list, a one-line list, an entry on a bracket line, an unreadable `__all__`, a stored count
+and a missing `__all__`.
 
 ## TypeScript library
 
-`templates/ts-lib` has no growing registry. `src/index.ts` is already a barrel with one export
-statement per line, and the Docusaurus sidebar is a fixed list of the template's own pages
-(`index`, `usage`, `examples`, `faq`, ...) that does not grow per module. There is no count in its
-docs. No change was needed.
+`src/index.ts` in `templates/ts-lib` is the same shape: a barrel with one export statement per line
+that grows with each module. It is not sorted or gated yet, so parallel PRs appending at the end
+still conflict; blueprintx#1015 tracks that. The Docusaurus sidebar is a fixed list of the
+template's own pages (`index`, `usage`, `examples`, `faq`, ...) that does not grow per module, and
+there is no count in its docs.

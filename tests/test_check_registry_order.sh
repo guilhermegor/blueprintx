@@ -58,7 +58,7 @@ expect() {
 }
 
 test_two_branches_merge_clean_and_pass() {
-    local str_root str_got="clean"
+    local str_root str_got="clean" str_name
     str_root="$(make_repo)"
     git -C "$str_root" checkout -q -b a
     add_module "$str_root" alpha __version__
@@ -72,6 +72,13 @@ test_two_branches_merge_clean_and_pass() {
         rm -rf "$str_root"
         return
     fi
+    for str_name in alpha zeta; do
+        if ! grep -q "^from .$str_name import $str_name\$" "$str_root/src/pkg/__init__.py" \
+            || ! grep -q "^    \"$str_name\",\$" "$str_root/src/pkg/__init__.py"; then
+            print_status "error" "merge lost the import or the __all__ entry of $str_name"
+            int_failures=$((int_failures + 1))
+        fi
+    done
     expect "merged registry passes the gate" pass "$str_root" "no stored counts"
 }
 
@@ -115,6 +122,33 @@ test_count_in_code_fence_passes() {
     str_root="$(make_repo)"
     printf '```\n18 modules\n```\n' >> "$str_root/README.md"
     expect "count inside a fence" pass "$str_root"
+}
+
+expect_init() {
+    local str_desc="$1" str_body="$2" str_needle="$3" str_root
+    str_root="$(make_repo)"
+    printf '%b' "$str_body" > "$str_root/src/pkg/__init__.py"
+    expect "$str_desc" fail "$str_root" "$str_needle"
+}
+
+test_unreadable_all_forms_fail() {
+    local str_literal="must be one literal list"
+    expect_init "dynamic __all__" '__all__ = ["a"] + ["b"]\n' "$str_literal"
+    expect_init "augmented __all__" '__all__ = [\n    "a",\n]\n__all__ += ["b"]\n' "$str_literal"
+    expect_init "starred entry" '__all__ = [\n    *other,\n]\n' "$str_literal"
+    expect_init "non-string entry" '__all__ = [\n    1,\n]\n' "$str_literal"
+}
+
+test_annotated_and_nested_all_are_checked() {
+    expect_init "annotated __all__" '__all__: list[str] = [\n    "b",\n    "a",\n]\n' "not sorted"
+    expect_init "nested __all__" 'if True:\n    __all__ = [\n        "b",\n        "a",\n    ]\n' "not sorted"
+}
+
+test_entry_sharing_a_bracket_line_fails() {
+    local str_layout="one entry per line"
+    expect_init "single entry on the bracket line" '__all__ = ["one"]\n' "$str_layout"
+    expect_init "entry on the opening bracket" '__all__ = ["a",\n    "b",\n]\n' "$str_layout"
+    expect_init "entry on the closing bracket" '__all__ = [\n    "a",\n    "b"]\n' "$str_layout"
 }
 
 test_no_all_anywhere_fails() {
