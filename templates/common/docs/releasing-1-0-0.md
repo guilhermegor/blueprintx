@@ -17,7 +17,7 @@ backlog is done, and the docs describe the code that actually ships.
    table in `SECURITY.md`, the public-API freeze (audit the exported names; removing one after
    1.0 is a 2.0), a `## 1.0.0` CHANGELOG section stating the API guarantee, and no open pull
    requests, then the rehearsal and publish. Python projects also flip the classifier to
-   `Development Status :: 5 - Production/Stable`, check that `requires-python` and one Python
+   `Development Status :: 5 - Production/Stable`, check that `requires-python` (Poetry's `python` constraint) and one Python
    classifier per version of the `tests.yaml` matrix agree, and confirm `py.typed` is in the
    built wheel.
 4. After the release, switch the documented version policy to full semver and, for a project

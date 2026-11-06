@@ -216,10 +216,15 @@ echo "::endgroup::"
 if [ "$SKELETON" = "lib-minimal" ]; then
     echo "::group::built wheel carries py.typed"
     poetry build -f wheel --no-interaction --no-ansi
+    # shellcheck source=bin/lib/common.sh
+    source "$REPO_ROOT/bin/lib/common.sh"
+    str_member="$(to_import_package_name "$PROJECT_NAME")/py.typed"
     list_wheels=(dist/*.whl)
-    [ "${#list_wheels[@]}" -eq 1 ] || { echo "ERROR: expected one wheel, found ${#list_wheels[@]}" >&2; exit 1; }
-    unzip -Z1 "${list_wheels[0]}" | grep -qFx "${PROJECT_NAME//-/_}/py.typed" \
-        || { echo "ERROR: ${PROJECT_NAME//-/_}/py.typed missing from wheel" >&2; exit 1; }
+    [ "${#list_wheels[@]}" -eq 1 ] && [ -f "${list_wheels[0]}" ] \
+        || { echo "ERROR: expected exactly one built wheel in dist/" >&2; exit 1; }
+    python3 -c 'import sys, zipfile; sys.exit(sys.argv[2] not in zipfile.ZipFile(sys.argv[1]).namelist())' \
+        "${list_wheels[0]}" "$str_member" \
+        || { echo "ERROR: $str_member missing from wheel" >&2; exit 1; }
     echo "::endgroup::"
 fi
 
