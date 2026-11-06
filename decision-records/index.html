@@ -4991,6 +4991,26 @@ rest of the suite.</p>
 <li><strong>A review carries forward across a merge of the base</strong> (#698). The patch-id output is
   <code>&lt;patch-id&gt; &lt;commit-id&gt;</code>, and unpacking fails loudly on empty output instead of an
   <code>IndexError</code>. The <code>merge</code> of <code>main</code> into the branch conflicts by design.</li>
+<li><strong>One CI verdict for the local-only escape hatches, and it fails closed</strong> (#981).
+  <code>check_gate_integrity.py</code> (<code>GATE_CHANGE_OK</code>) and <code>check_assertion_weakening.py</code>
+  (<code>TEST_CHANGE_OK</code>) each carried their own idea of "running in CI": one treated any truthy
+  <code>CI</code> or <code>GITHUB_ACTIONS</code> as CI, the other counted <code>GITHUB_ACTIONS</code> by presence and <code>CI=false</code>
+  as local. Both are a denylist, and a denylist fails open for any runner it does not name:
+  Jenkins sets neither variable, so its job would have honoured the hatch. Both gates now call
+  <code>is_ci()</code> from <code>templates/python-common/bin/gate_env.py</code>. The alternative, "treat any
+  non-falsy <code>CI</code> as CI", was rejected because it still leaves Jenkins local. The rule is an
+  allowlist of local signals: the process is local only when <code>PRE_COMMIT</code> is set (pre-commit
+  exports it for every hook it runs, so a real commit always carries it) and <code>GITHUB_ACTIONS</code>
+  is absent and <code>CI</code> is falsy (<code>""</code>, <code>0</code>, <code>false</code>, <code>no</code>), and the process has a controlling
+  terminal (<code>/dev/tty</code> opens). The terminal check exists because a headless runner that itself
+  invokes <code>pre-commit run</code> inherits <code>PRE_COMMIT</code> (review of #986): a developer committing from
+  a shell has a terminal, Jenkins does not. Everything else, including a bare shell, an unknown
+  runner, a GUI or IDE commit and a headless agent commit (no <code>/dev/tty</code>), is CI and
+  ignores the hatch; the PR-body and trailer
+  justifications remain available there. Known limit: a CI container allocated a pty
+  (<code>docker run -t</code>) with <code>PRE_COMMIT</code> set reads as local. Pinned in
+  <code>tests/unit/test_gate_integrity_gate.py</code> for <code>CI=false</code>, <code>CI=""</code>, <code>GITHUB_ACTIONS=true</code>, <code>JENKINS_URL</code>
+  and a bare environment.</li>
 <li><strong>A thread reply is not a review of the head</strong> (#978). A reviewer's answer to a thread is
   stored as a <code>COMMENTED</code> review with an empty body, attributed to the commit the branch was on
   when it was posted. <code>counts_as_review</code> admits a review only with a non-empty body or an
