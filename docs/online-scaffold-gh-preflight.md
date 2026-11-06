@@ -17,12 +17,20 @@ guessing.
    (`repo project`): `repo` for the repository, labels, issues and secrets,
    `project` for `gh project`. A missing scope stops the run before
    `gh repo create`, names the scope, and prints `gh auth refresh -s <scope>`
-   (one line per missing scope). Scopes are matched whole, so `read:project`
-   does not satisfy `project`. A fine-grained or app token reports no
-   `X-Oauth-Scopes` header; the preflight then says the scopes are "not
-   verified" and continues, because there is nothing to compare. The `workflow`
-   scope is not required: it matters only when `git push` runs over HTTPS with
-   the gh token, not for any `gh` call.
+   (one line per missing scope). The header name is matched case-insensitively
+   and the list is compared with all whitespace removed. Scopes are matched
+   whole, so `read:project` does not satisfy `project`. `repo` is required even
+   for a public repository, so a token with only `public_repo` is stopped.
+   A fine-grained or app token reports no `X-Oauth-Scopes` header; the
+   preflight then says the scopes are "not verified" and continues, because
+   there is nothing to compare.
+   The `workflow` scope depends on how the first push authenticates. The
+   scaffold adds the remote as `git@github.com:<slug>.git`, so its push uses
+   SSH and does not need it. `bin/promote_offline_to_online.sh` runs
+   `gh repo create --source=.`, which follows the `git_protocol` gh setting;
+   over HTTPS, GitHub rejects a push that adds `.github/workflows/*` without
+   `workflow`, so the promoter adds `workflow` to the required scopes unless
+   `gh config get git_protocol` is `ssh`.
 2. **Cause and wait.** The stop message names the cause and when to retry:
     - rate limit: the reset time as a duration and an absolute time, for
       example `retry in 14 min, after 00:34Z`; a secondary limit uses the
@@ -36,9 +44,11 @@ guessing.
 4. **Duplicate board titles stop.** Two boards titled `<project> kanban` stop
    the scaffold and print both board URLs. The scaffold never guesses which one
    to use and never finishes with no board linked. Delete or rename all but
-   one, then re-run. The repository already exists at that point, so the stop
-   message carries the same "already exists on GitHub" advice as any mid-run
-   stop.
+   one, then re-run. The check runs right after the preflight, before
+   `gh repo create`, so a duplicate leaves nothing half-created; it runs even
+   if you would later decline the board, because the title is the project's
+   own. The same check runs again when the board is set up, and a stop at that
+   point carries the "already exists on GitHub" advice of any mid-run stop.
 5. **Mid-run failures stop too.** A house label, board edit, link, Status
    option, project field, or default-branch edit
    failure after the preflight stops with the same message instead of a

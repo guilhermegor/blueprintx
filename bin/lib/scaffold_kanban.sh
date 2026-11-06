@@ -67,13 +67,22 @@ scaffold_kanban_find() {
 
 scaffold_kanban_stop_duplicates() {
 	local str_owner="$1" str_title="$2" str_numbers="$3" str_base str_number str_urls=""
-	str_base="$(scaffold_kanban_url "$str_owner" "next")" || exit 1
+	str_base="$(scaffold_kanban_base_url "$str_owner")" || exit 1
 	for str_number in $str_numbers; do
-		str_urls+="${str_urls:+ and }${str_base%/next}/${str_number}"
+		str_urls+="${str_urls:+ and }${str_base}/${str_number}"
 	done
 	print_status "error" "GitHub step failed: more than one '${str_title}' project exists: ${str_urls}"
 	print_status "error" "Cause: not guessing which board to use. Fix: delete or rename all but one, then retry."
 	gh_stop_footer
+}
+
+scaffold_kanban_check_duplicates() {
+	local str_slug="$1" str_owner str_title str_numbers int_rc=0
+	str_owner="${str_slug%%/*}"
+	str_title="${PROJECT_NAME} kanban"
+	str_numbers="$(scaffold_kanban_find "$str_owner" "$str_title")" || int_rc=$?
+	[ "$int_rc" -ne 2 ] || scaffold_kanban_stop_duplicates "$str_owner" "$str_title" "$str_numbers"
+	[ "$int_rc" -eq 0 ] || exit 1
 }
 
 scaffold_kanban_option_id() {
@@ -127,15 +136,21 @@ Points|NUMBER|
 Blocker|SINGLE_SELECT|Internal,External,Decision"
 }
 
-scaffold_kanban_url() {
-	local str_owner="$1" str_number="$2" str_kind str_path
+scaffold_kanban_base_url() {
+	local str_owner="$1" str_kind str_path
 	str_kind="$(gh_read "read the account type of ${str_owner}" gh api "users/${str_owner}" --jq '.type')" || exit 1
 	case "$str_kind" in
 	Organization) str_path="orgs" ;;
 	User) str_path="users" ;;
 	*) gh_stop_online "read the account type of ${str_owner}" "unexpected answer '${str_kind}'" ;;
 	esac
-	printf 'https://github.com/%s/%s/projects/%s' "$str_path" "$str_owner" "$str_number"
+	printf 'https://github.com/%s/%s/projects' "$str_path" "$str_owner"
+}
+
+scaffold_kanban_url() {
+	local str_base
+	str_base="$(scaffold_kanban_base_url "$1")" || exit 1
+	printf '%s/%s' "$str_base" "$2"
 }
 
 scaffold_kanban_finish() {

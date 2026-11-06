@@ -79,10 +79,10 @@ gh_read() {
 }
 
 gh_missing_scopes() {
-	local str_have="$1" str_scope str_missing=""
+	local str_have="${1//[[:space:]]/}" str_scope str_missing=""
 	for str_scope in $SCAFFOLD_GH_REQUIRED_SCOPES; do
-		case ", ${str_have}," in
-		*", ${str_scope},"*) ;;
+		case ",${str_have}," in
+		*",${str_scope},"*) ;;
 		*) str_missing+="${str_missing:+ }${str_scope}" ;;
 		esac
 	done
@@ -90,16 +90,18 @@ gh_missing_scopes() {
 }
 
 gh_check_scopes() {
-	local str_err str_head str_have str_missing str_scope
+	local str_err str_head str_line str_have str_missing str_scope
 	str_err="$(mktemp)"
-	str_head="$(gh api -i user 2>"$str_err")" ||
-		gh_stop_online "preflight: token scopes (gh api -i user)" "$(cat "$str_err")"
+	str_head="$(gh api -i user 2>"$str_err")" || {
+		gh_stop_online "preflight: token scopes (gh api -i user)" "$(cat "$str_err"; rm -f "$str_err")"
+	}
 	rm -f "$str_err"
-	if ! grep -qi '^x-oauth-scopes:' <<<"$str_head"; then
+	str_line="$(grep -i -m1 '^x-oauth-scopes:' <<<"$str_head")" || str_line=""
+	if [ -z "$str_line" ]; then
 		print_status "info" "Token scopes are not reported (fine-grained or app token): not verified"
 		return 0
 	fi
-	str_have="$(sed -n 's/^[Xx]-[Oo][Aa]uth-[Ss]copes: *//p' <<<"$str_head" | tr -d '\r')"
+	str_have="$(tr -d '\r[:space:]' <<<"${str_line#*:}")"
 	str_missing="$(gh_missing_scopes "$str_have")"
 	[ -z "$str_missing" ] && return 0
 	print_status "error" "GitHub step failed: preflight: token scopes (have: ${str_have:-none})"
@@ -107,6 +109,11 @@ gh_check_scopes() {
 		print_status "error" "Cause: the token lacks the '${str_scope}' scope. Fix: run 'gh auth refresh -s ${str_scope}'."
 	done
 	gh_stop_footer
+}
+
+gh_require_workflow_for_https() {
+	[ "$(gh config get git_protocol 2>/dev/null)" = ssh ] ||
+		SCAFFOLD_GH_REQUIRED_SCOPES+=" workflow"
 }
 
 gh_preflight() {

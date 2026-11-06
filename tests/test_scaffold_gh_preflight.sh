@@ -21,7 +21,8 @@ case "$1 $2" in
 "api graphql")
     [ -z "${GH_GRAPHQL_ERR:-}" ] || { echo "$GH_GRAPHQL_ERR" >&2; exit 1; } ;;
 "api -i")
-    [ "${GH_SCOPES_HEADER:-on}" = off ] || printf 'HTTP/2.0 200 OK\r\nX-Oauth-Scopes: %s\r\n\r\n{}\n' "${GH_SCOPES-repo, project, read:org}" ;;
+    [ "${GH_SCOPES_HEADER:-on}" = off ] || printf 'HTTP/2.0 200 OK\r\n%s: %s\r\n\r\n{}\n' "${GH_SCOPES_NAME:-X-Oauth-Scopes}" "${GH_SCOPES-repo, project, read:org}" ;;
+"config get") echo "${GH_PROTOCOL:-https}" ;;
 "api user")
     [ -z "${GH_USER_ERR:-}" ] || { echo "$GH_USER_ERR" >&2; exit 1; }
     echo "${GH_LOGIN-octo}" ;;
@@ -172,6 +173,39 @@ test_create_repo_never_runs_without_the_project_scope() {
     expect_not_called "create repo scope" "repo create"
 }
 
+test_preflight_reads_the_scopes_header_in_any_casing() {
+    run_fn '' "GH_SCOPES_NAME=X-OAUTH-SCOPES" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "upper-case header: preflight stopped: $str_out"
+    run_fn '' "GH_SCOPES_NAME=x-oauth-scopes" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "lower-case header: preflight stopped: $str_out"
+}
+
+test_preflight_tolerates_any_spacing_in_the_scope_list() {
+    run_fn '' "GH_SCOPES=repo,project" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "no spaces: preflight stopped: $str_out"
+    run_fn '' "GH_SCOPES= repo ,  project ," gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "odd spaces: preflight stopped: $str_out"
+}
+
+test_an_https_promotion_requires_the_workflow_scope() {
+    local str_cmd='source "$1/bin/lib/common.sh"; source "$1/bin/lib/gh_preflight.sh"; gh_require_workflow_for_https; gh_preflight'
+    run_fn '' "GH_SCOPES=repo, project" bash -c "$str_cmd" _ "$REPO_ROOT"
+    expect_stop "https promote"
+    expect_said "https promote" "gh auth refresh -s workflow"
+    run_fn '' "GH_SCOPES=repo, project" "GH_PROTOCOL=ssh" bash -c "$str_cmd" _ "$REPO_ROOT"
+    [ "$int_rc" -eq 0 ] || fail "ssh promote: preflight stopped: $str_out"
+    grep -q 'gh_require_workflow_for_https' "$REPO_ROOT/bin/promote_offline_to_online.sh" ||
+        fail "the promoter never asks for the workflow scope"
+}
+
+test_create_repo_never_runs_when_two_boards_share_the_title() {
+    run_fn 'y\n1\n' "GH_PROJECT_NUMBER=$(printf '4\n9')" scaffold_create_github_repo "$WORK_DIR"
+    expect_stop "early duplicates"
+    expect_said "early duplicates" "https://github.com/users/octo/projects/4"
+    expect_said "early duplicates" "https://github.com/users/octo/projects/9"
+    expect_not_called "early duplicates" "repo create"
+}
+
 test_create_repo_never_runs_when_the_preflight_fails() {
     run_fn 'y\n1\n' "GH_GRAPHQL_ERR=API rate limit exceeded" scaffold_create_github_repo "$WORK_DIR"
     expect_stop "create repo"
@@ -261,6 +295,10 @@ main() {
     test_preflight_does_not_match_a_scope_by_substring
     test_preflight_skips_the_scope_check_when_none_are_reported
     test_create_repo_never_runs_without_the_project_scope
+    test_preflight_reads_the_scopes_header_in_any_casing
+    test_preflight_tolerates_any_spacing_in_the_scope_list
+    test_an_https_promotion_requires_the_workflow_scope
+    test_create_repo_never_runs_when_two_boards_share_the_title
     test_create_repo_never_runs_when_the_preflight_fails
     test_visibility_never_defaults_to_public_on_a_failed_read
     test_board_url_never_guesses_the_owner_kind
