@@ -553,8 +553,20 @@ create_project() {
         exit_error "Scaffold script not found: $scaffold_script"
     fi
 
+    export_rerun_cmd "$scaffold_script" "$project_root" "$project_name" "$project_description"
     LICENSE_CHOICE="$license_choice" DOCS_LOCALE="$docs_locale" \
         bash "$scaffold_script" "$project_root" "$project_name" "$project_description"
+}
+
+export_rerun_cmd() {
+    local scaffold_script="$1" project_root="$2" project_name="$3" project_description="$4"
+    if [ -n "$SPEC_FILE" ]; then
+        SCAFFOLD_RERUN_CMD="$(printf 'bash %q new --spec %q' "$BLUEPRINTX_ROOT/bin/blueprintx.sh" "$(realpath "$SPEC_FILE")")"
+    else
+        SCAFFOLD_RERUN_CMD="$(printf 'LICENSE_CHOICE=%q DOCS_LOCALE=%q bash %q %q %q %q' \
+            "$LICENSE_CHOICE" "$DOCS_LOCALE" "$scaffold_script" "$project_root" "$project_name" "$project_description")"
+    fi
+    export SCAFFOLD_RERUN_CMD
 }
 
 validate_spec_answers() {
@@ -601,6 +613,7 @@ scaffold_from_spec() {
     scaffold_script="$BLUEPRINTX_ROOT/$scaffold_rel"
     [ -f "$scaffold_script" ] || exit_error "Scaffold script not found: $scaffold_script"
 
+    export_rerun_cmd "$scaffold_script" "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION"
     local path_answers
     path_answers="$(mktemp)"
     spec_stdin_for_skeleton "$SKELETON_CHOICE" "$SPEC_FILE" >"$path_answers" || {

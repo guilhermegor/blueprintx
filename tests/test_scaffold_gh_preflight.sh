@@ -185,6 +185,20 @@ test_no_scaffold_swallows_a_failed_gh_user_read() {
         fail "a scaffold still swallows a failed 'gh api user' read with '|| true'"
 }
 
+test_stop_message_prints_the_real_rerun_command() {
+    local str_spec="$WORK_DIR/my project.spec"
+    printf 'project_name=widget\n' >"$str_spec"
+    run_fn '' "GH_GRAPHQL_ERR=API rate limit exceeded" "SPEC_FILE=$str_spec" "BLUEPRINTX_ROOT=$REPO_ROOT" \
+        bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/gh_preflight.sh"; eval "$(sed -n "/^export_rerun_cmd()/,/^}/p" "$1/bin/blueprintx.sh")"; export_rerun_cmd s r n d; gh_preflight' _ "$REPO_ROOT"
+    expect_stop "rerun"
+    expect_said "rerun" "Re-run bash $REPO_ROOT/bin/blueprintx.sh new --spec"
+    expect_said "rerun" "my\\ project.spec"
+    expect_not_said "rerun" "the same blueprintx command"
+    run_fn '' "GH_GRAPHQL_ERR=API rate limit exceeded" "SPEC_FILE=" "BLUEPRINTX_ROOT=$REPO_ROOT" "LICENSE_CHOICE=MIT" "DOCS_LOCALE=en" \
+        bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/gh_preflight.sh"; eval "$(sed -n "/^export_rerun_cmd()/,/^}/p" "$1/bin/blueprintx.sh")"; export_rerun_cmd /x/s.sh /p widget "a b"; gh_preflight' _ "$REPO_ROOT"
+    expect_said "rerun interactive" "LICENSE_CHOICE=MIT DOCS_LOCALE=en bash /x/s.sh /p widget a\\ b"
+}
+
 main() {
     make_stub
     test_preflight_rate_limit_prints_the_reset_time
@@ -200,6 +214,7 @@ main() {
     test_board_url_never_guesses_the_owner_kind
     test_a_mid_run_label_failure_stops
     test_a_rerun_completes_without_duplicates
+    test_stop_message_prints_the_real_rerun_command
     test_no_scaffold_swallows_a_failed_gh_user_read
     test_graphql_call_sites_match_the_measured_count
     if [ "$int_failures" -gt 0 ]; then
