@@ -132,7 +132,7 @@ test_the_roster_choice_decides_whether_its_file_is_listed() {
 test_lib_minimal_list_copies_ignores_the_callers_gitguardian_key() {
 	local str_out
 	str_out="$(GITGUARDIAN_API_KEY=x bash "$REPO_ROOT/bin/scaffold/python_lib_minimal.sh" --list-copies --tier lib-minimal --roster true)"
-	expect_gate_silent "an exported GitGuardian key does not add secret_scan.yaml" "secret_scan.yaml" "$str_out"
+	expect_gate_silent "an exported GitGuardian key does not add secret-scan.yml" "secret-scan.yml" "$str_out"
 }
 
 test_a_complete_project_is_clean_and_a_missing_file_is_named() {

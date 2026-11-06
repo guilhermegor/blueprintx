@@ -207,10 +207,10 @@ copy_online_assets_service_tier() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
     local dest="$PROJECT_PATH" wf
     mkdir -p "$dest/.github/workflows"
-    for wf in tests review_threads coderabbit_trigger review_retry pr-gate pr-reconcile contract_drift release; do
-        cp "$common/.github/workflows/$wf.yaml" "$dest/.github/workflows/$wf.yaml"
+    for wf in tests review-threads coderabbit-trigger review-retry pr-gate pr-reconcile contract-drift release; do
+        cp "$common/.github/workflows/$wf.yml" "$dest/.github/workflows/$wf.yml"
     done
-    cp "$shared/docs_version/docs.yaml" "$dest/.github/workflows/docs.yaml"
+    cp "$shared/docs_version/docs.yml" "$dest/.github/workflows/docs.yml"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' <"$shared/SECURITY.md" >"$dest/SECURITY.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$common/.github/dependabot.yml" > "$dest/.github/dependabot.yml"
@@ -224,8 +224,8 @@ copy_online_assets_lib_minimal() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
     local skeleton="$BLUEPRINTX_ROOT/templates/lib-minimal" dest="$PROJECT_PATH" wf
     mkdir -p "$dest/.github/workflows"
-    for wf in tests review_threads coderabbit_trigger review_retry pr-gate pr-reconcile; do
-        cp "$common/.github/workflows/$wf.yaml" "$dest/.github/workflows/$wf.yaml"
+    for wf in tests review-threads coderabbit-trigger review-retry pr-gate pr-reconcile; do
+        cp "$common/.github/workflows/$wf.yml" "$dest/.github/workflows/$wf.yml"
     done
     case "$PUBLISH_TARGET" in
         pypi | both) envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' <"$skeleton/.github/workflows/release-pypi.yaml" >"$dest/.github/workflows/release-pypi.yaml" ;;
@@ -233,7 +233,7 @@ copy_online_assets_lib_minimal() {
     case "$PUBLISH_TARGET" in
         test-pypi | both) envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' <"$skeleton/.github/workflows/release-test-pypi.yaml" >"$dest/.github/workflows/release-test-pypi.yaml" ;;
     esac
-    cp "$skeleton/.github/workflows/docs.yaml" "$dest/.github/workflows/docs.yaml"
+    cp "$skeleton/.github/workflows/docs.yml" "$dest/.github/workflows/docs.yml"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' <"$shared/SECURITY.md" >"$dest/SECURITY.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$common/.github/dependabot.yml" > "$dest/.github/dependabot.yml"
@@ -300,8 +300,8 @@ copy_shared_github_overlay() {
 copy_secret_scan_if_keyed() {
     case "$TIER" in react-spa-webpack | ts-lib | bash-cli) return 0 ;; esac
     [ -n "${GITGUARDIAN_API_KEY:-}" ] || return 0
-    cp "$BLUEPRINTX_ROOT/templates/python-common/.github/workflows/secret_scan.yaml" \
-        "$PROJECT_PATH/.github/workflows/secret_scan.yaml"
+    cp "$BLUEPRINTX_ROOT/templates/python-common/.github/workflows/secret-scan.yml" \
+        "$PROJECT_PATH/.github/workflows/secret-scan.yml"
 }
 
 copy_online_assets() {
@@ -510,11 +510,11 @@ push_initial_commit() {
 }
 
 set_secret_scan_key() {
-    [ -f "$PROJECT_PATH/.github/workflows/secret_scan.yaml" ] || return 0
+    [ -f "$PROJECT_PATH/.github/workflows/secret-scan.yml" ] || return 0
     [ -n "${GITGUARDIAN_API_KEY:-}" ] || return 0
     printf '%s' "$GITGUARDIAN_API_KEY" | gh secret set GITGUARDIAN_API_KEY --repo "$REPOSITORY" >/dev/null 2>&1 \
         && print_status "success" "GitGuardian secret-scan key set on $REPOSITORY" \
-        || print_status "warning" "Could not set GITGUARDIAN_API_KEY on $REPOSITORY — secret_scan.yaml will fail until you run: gh secret set GITGUARDIAN_API_KEY --repo $REPOSITORY (or delete the workflow)"
+        || print_status "warning" "Could not set GITGUARDIAN_API_KEY on $REPOSITORY — secret-scan.yml will fail until you run: gh secret set GITGUARDIAN_API_KEY --repo $REPOSITORY (or delete the workflow)"
 }
 
 apply_branch_protection() {

@@ -114,7 +114,7 @@ test_already_online_is_a_noop() {
     dir="$(make_git_repo "already-online")"
     git -C "$dir" remote add origin "https://github.com/example/does-not-exist.git"
     mkdir -p "$dir/.github/workflows"
-    echo "name: tests" >"$dir/.github/workflows/tests.yaml"
+    echo "name: tests" >"$dir/.github/workflows/tests.yml"
     git -C "$dir" add -A
     git -C "$dir" commit -q -m "chore: seed github assets"
     git -C "$dir" update-ref refs/remotes/origin/main HEAD
@@ -135,7 +135,7 @@ test_origin_never_pushed_is_not_online() {
     dir="$(make_git_repo "never-pushed")"
     git -C "$dir" remote add origin "https://github.com/example/does-not-exist.git"
     mkdir -p "$dir/.github/workflows"
-    echo "name: tests" >"$dir/.github/workflows/tests.yaml"
+    echo "name: tests" >"$dir/.github/workflows/tests.yml"
     git -C "$dir" add -A
     git -C "$dir" commit -q -m "chore: seed github assets"
     expect_refuses_with "origin + workflows but no pushed ref is refused, not 'already online'" "nothing was ever pushed" "$dir" --tier lib-minimal
@@ -247,7 +247,7 @@ test_secret_is_set_before_the_push() {
     bare="$WORK_DIR/secret-order.git"
     git init -q --bare "$bare"
     mkdir -p "$dir/.github/workflows"
-    echo "name: s" >"$dir/.github/workflows/secret_scan.yaml"
+    echo "name: s" >"$dir/.github/workflows/secret-scan.yml"
     git -C "$dir" add -A
     git -C "$dir" commit -q -m "chore: seed"
     log="$WORK_DIR/secret-order.log"

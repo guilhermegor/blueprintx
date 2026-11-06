@@ -17,7 +17,7 @@ reviews on a repository with fewer than 10 stars, and that threshold is not conf
 
 ## It is not the quota driver
 
-Online Python projects ship `coderabbit_trigger.yaml`, which posts an explicit review request
+Online Python projects ship `coderabbit-trigger.yml`, which posts an explicit review request
 on `opened`, `reopened`, and `ready_for_review`, regardless of this file. It no longer fires on
 `synchronize`; another review is requested deliberately with `@coderabbitai full review`.
 

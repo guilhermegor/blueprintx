@@ -404,20 +404,20 @@ PYBLOCK
 copy_github_assets() {
     local project_path="$1"
     mkdir -p "$project_path/.github/workflows"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yaml" "$project_path/.github/workflows/tests.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/assertion_weakening.yaml" "$project_path/.github/workflows/assertion_weakening.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/publish-badge.yaml" "$project_path/.github/workflows/publish-badge.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/tests.yml" "$project_path/.github/workflows/tests.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/assertion-weakening.yml" "$project_path/.github/workflows/assertion-weakening.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/publish-badge.yml" "$project_path/.github/workflows/publish-badge.yml"
     if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
-        cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret_scan.yaml" "$project_path/.github/workflows/secret_scan.yaml"
+        cp "$COMMON_TEMPLATE_ROOT/.github/workflows/secret-scan.yml" "$project_path/.github/workflows/secret-scan.yml"
     fi
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_threads.yaml" "$project_path/.github/workflows/review_threads.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/coderabbit_trigger.yaml" "$project_path/.github/workflows/coderabbit_trigger.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review_retry.yaml" "$project_path/.github/workflows/review_retry.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yaml" "$project_path/.github/workflows/pr-gate.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yaml" "$project_path/.github/workflows/pr-reconcile.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/contract_drift.yaml" "$project_path/.github/workflows/contract_drift.yaml"
-    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/release.yaml" "$project_path/.github/workflows/release.yaml"
-    cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yaml" "$project_path/.github/workflows/docs.yaml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review-threads.yml" "$project_path/.github/workflows/review-threads.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/coderabbit-trigger.yml" "$project_path/.github/workflows/coderabbit-trigger.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review-retry.yml" "$project_path/.github/workflows/review-retry.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yml" "$project_path/.github/workflows/pr-gate.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yml" "$project_path/.github/workflows/pr-reconcile.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/contract-drift.yml" "$project_path/.github/workflows/contract-drift.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/release.yml" "$project_path/.github/workflows/release.yml"
+    cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yml" "$project_path/.github/workflows/docs.yml"
     envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \

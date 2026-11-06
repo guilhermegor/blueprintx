@@ -23,7 +23,7 @@ good_readme_head() {
 
 <p align="center"><img src="docs/assets/logo.png" alt="acme-dates logo" width="160"></p>
 
-![CI](https://github.com/guilhermegor/acme-dates/actions/workflows/tests.yaml/badge.svg)
+![CI](https://github.com/guilhermegor/acme-dates/actions/workflows/tests.yml/badge.svg)
 
 <!-- slug: overview -->
 ## Overview
