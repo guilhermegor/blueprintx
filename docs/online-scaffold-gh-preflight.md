@@ -29,8 +29,16 @@ guessing.
    SSH and does not need it. `bin/promote_offline_to_online.sh` runs
    `gh repo create --source=.`, which follows the `git_protocol` gh setting;
    over HTTPS, GitHub rejects a push that adds `.github/workflows/*` without
-   `workflow`, so the promoter adds `workflow` to the required scopes unless
-   `gh config get git_protocol` is `ssh`.
+   `workflow`, so the promoter requires `repo` and `workflow` unless
+   `gh config get git_protocol -h github.com` is `ssh` (the per-host value gh
+   itself uses). The promoter never sets up a board, so it does not require
+   `project`.
+   `project` is required by the scaffold even if you later decline the board:
+   the board prompt comes after `gh repo create`, and a token that cannot
+   create it would otherwise fail after the repository exists. To opt out, set
+   `SCAFFOLD_GH_REQUIRED_SCOPES` to the scopes you accept, for example
+   `SCAFFOLD_GH_REQUIRED_SCOPES=repo`, or to an empty value to skip the scope
+   check entirely.
 2. **Cause and wait.** The stop message names the cause and when to retry:
     - rate limit: the reset time as a duration and an absolute time, for
       example `retry in 14 min, after 00:34Z`; a secondary limit uses the

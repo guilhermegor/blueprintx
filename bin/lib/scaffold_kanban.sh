@@ -76,10 +76,14 @@ scaffold_kanban_stop_duplicates() {
 	gh_stop_footer
 }
 
+scaffold_kanban_title() {
+	printf '%s kanban' "$PROJECT_NAME"
+}
+
 scaffold_kanban_check_duplicates() {
 	local str_slug="$1" str_owner str_title str_numbers int_rc=0
 	str_owner="${str_slug%%/*}"
-	str_title="${PROJECT_NAME} kanban"
+	str_title="$(scaffold_kanban_title)"
 	str_numbers="$(scaffold_kanban_find "$str_owner" "$str_title")" || int_rc=$?
 	[ "$int_rc" -ne 2 ] || scaffold_kanban_stop_duplicates "$str_owner" "$str_title" "$str_numbers"
 	[ "$int_rc" -eq 0 ] || exit 1
@@ -182,7 +186,7 @@ scaffold_kanban_setup() {
 	local str_slug str_owner str_title str_answer str_vis str_found int_rc=0
 	str_slug="$(scaffold_repo_slug)"
 	str_owner="${str_slug%%/*}"
-	str_title="${PROJECT_NAME} kanban"
+	str_title="$(scaffold_kanban_title)"
 	command -v gh >/dev/null 2>&1 || return 0
 
 	scaffold_create_house_labels "$str_slug"
@@ -219,7 +223,7 @@ scaffold_kanban_setup() {
 scaffold_release_issue_card() {
 	local str_slug="$1" str_url="$2" str_owner str_title str_number str_pid str_item str_field str_opt
 	str_owner="${str_slug%%/*}"
-	str_title="${PROJECT_NAME} kanban"
+	str_title="$(scaffold_kanban_title)"
 	str_number="$(scaffold_kanban_find "$str_owner" "$str_title" 2>/dev/null)" || return 0
 	[ -n "$str_number" ] || return 0
 	str_pid="$(gh project view "$str_number" --owner "$str_owner" --format json --jq '.id' 2>/dev/null)" || str_pid=""

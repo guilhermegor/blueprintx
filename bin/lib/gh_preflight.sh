@@ -3,7 +3,7 @@
 : "${SCAFFOLD_GH_GRAPHQL_BUDGET:=100}"
 : "${SCAFFOLD_GH_GRAPHQL_SITES:=15}"
 : "${SCAFFOLD_RERUN_CMD:=the same blueprintx command}"
-: "${SCAFFOLD_GH_REQUIRED_SCOPES:=repo project}"
+: "${SCAFFOLD_GH_REQUIRED_SCOPES=repo project}"
 
 gh_classify_failure() {
 	local str_text="$1"
@@ -112,7 +112,7 @@ gh_check_scopes() {
 }
 
 gh_require_workflow_for_https() {
-	[ "$(gh config get git_protocol 2>/dev/null)" = ssh ] ||
+	[ "$(gh config get git_protocol -h github.com 2>/dev/null)" = ssh ] ||
 		SCAFFOLD_GH_REQUIRED_SCOPES+=" workflow"
 }
 

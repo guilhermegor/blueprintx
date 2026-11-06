@@ -22,7 +22,7 @@ case "$1 $2" in
     [ -z "${GH_GRAPHQL_ERR:-}" ] || { echo "$GH_GRAPHQL_ERR" >&2; exit 1; } ;;
 "api -i")
     [ "${GH_SCOPES_HEADER:-on}" = off ] || printf 'HTTP/2.0 200 OK\r\n%s: %s\r\n\r\n{}\n' "${GH_SCOPES_NAME:-X-Oauth-Scopes}" "${GH_SCOPES-repo, project, read:org}" ;;
-"config get") echo "${GH_PROTOCOL:-https}" ;;
+"config get") case "$*" in *"-h github.com"*) echo "${GH_HOST_PROTOCOL:-${GH_PROTOCOL:-https}}" ;; *) echo "${GH_PROTOCOL:-https}" ;; esac ;;
 "api user")
     [ -z "${GH_USER_ERR:-}" ] || { echo "$GH_USER_ERR" >&2; exit 1; }
     echo "${GH_LOGIN-octo}" ;;
@@ -194,8 +194,43 @@ test_an_https_promotion_requires_the_workflow_scope() {
     expect_said "https promote" "gh auth refresh -s workflow"
     run_fn '' "GH_SCOPES=repo, project" "GH_PROTOCOL=ssh" bash -c "$str_cmd" _ "$REPO_ROOT"
     [ "$int_rc" -eq 0 ] || fail "ssh promote: preflight stopped: $str_out"
-    grep -q 'gh_require_workflow_for_https' "$REPO_ROOT/bin/promote_offline_to_online.sh" ||
-        fail "the promoter never asks for the workflow scope"
+    run_fn '' "GH_SCOPES=repo, project" "GH_PROTOCOL=https" "GH_HOST_PROTOCOL=ssh" bash -c "$str_cmd" _ "$REPO_ROOT"
+    [ "$int_rc" -eq 0 ] || fail "per-host ssh: preflight stopped on the global https value: $str_out"
+}
+
+run_promoter_gate() {
+    run_fn '' "GH_SCOPES=$1" bash -c '
+        source "$1/bin/promote_offline_to_online.sh"
+        gh() {
+            case "$1 $2" in
+            "auth status") return 0 ;;
+            "config get") echo https ;;
+            "api -i") printf "HTTP/2 200\r\nX-Oauth-Scopes: %s\r\n\r\n{}\n" "$GH_SCOPES" ;;
+            "api rate_limit") echo "5000 9999999999" ;;
+            "api user") echo octo ;;
+            esac
+        }
+        require_gh_ready' _ "$REPO_ROOT"
+}
+
+test_the_promoter_needs_repo_and_workflow_but_not_project() {
+    run_promoter_gate "repo, workflow"
+    [ "$int_rc" -eq 0 ] || fail "promoter: stopped though it holds repo and workflow: $str_out"
+    run_promoter_gate "repo"
+    expect_stop "promoter without workflow"
+    expect_said "promoter without workflow" "gh auth refresh -s workflow"
+    expect_not_said "promoter without workflow" "gh auth refresh -s project"
+}
+
+test_an_empty_required_scope_list_opts_out_of_the_check() {
+    run_fn '' "SCAFFOLD_GH_REQUIRED_SCOPES=" "GH_SCOPES=" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "opt-out: preflight still stopped: $str_out"
+}
+
+test_the_board_title_has_one_definition() {
+    local int_defs
+    int_defs="$(grep -cE '(%s|\}) kanban' "$REPO_ROOT/bin/lib/scaffold_kanban.sh")"
+    [ "$int_defs" -eq 1 ] || fail "the '<project> kanban' title is built in ${int_defs} places, not one helper"
 }
 
 test_create_repo_never_runs_when_two_boards_share_the_title() {
@@ -298,6 +333,9 @@ main() {
     test_preflight_reads_the_scopes_header_in_any_casing
     test_preflight_tolerates_any_spacing_in_the_scope_list
     test_an_https_promotion_requires_the_workflow_scope
+    test_the_promoter_needs_repo_and_workflow_but_not_project
+    test_an_empty_required_scope_list_opts_out_of_the_check
+    test_the_board_title_has_one_definition
     test_create_repo_never_runs_when_two_boards_share_the_title
     test_create_repo_never_runs_when_the_preflight_fails
     test_visibility_never_defaults_to_public_on_a_failed_read
