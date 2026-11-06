@@ -2000,14 +2000,15 @@ def _review_times(
 ) -> list[datetime.datetime]:
     """Return the submission times of the live roster reviews written against ``str_oid``.
 
-    Dismissed reviews are skipped, as :func:`reviewed_commits` skips them; ``None`` for the
-    roster keeps every author.
+    Dismissed reviews and thread replies are skipped, as :func:`reviewed_commits` and
+    :func:`counts_as_review` skip them; ``None`` for the roster keeps every author.
     """
     return [
         _parse_time(dict_review.get("submittedAt") or "")
         for dict_review in dict_pr.get("reviews", {}).get("nodes", [])
         if (dict_review.get("commit") or {}).get("oid") == str_oid
         and dict_review.get("state") != "DISMISSED"
+        and counts_as_review(dict_review)
         and (
             set_roster is None
             or normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster

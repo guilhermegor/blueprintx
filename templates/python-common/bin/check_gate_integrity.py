@@ -126,6 +126,11 @@ import subprocess
 import sys
 
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from gate_env import is_ci  # noqa: E402
+
+
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 RE_JUSTIFICATION = re.compile(r"^\s*gate-change-ok:\s*(\S.*)$", re.I | re.M)
@@ -1136,9 +1141,6 @@ def pr_body_text() -> str:
     return str(dict_pr.get("body") or "")
 
 
-TUPLE_CI_MARKERS = ("CI", "GITHUB_ACTIONS")
-
-
 def env_reason() -> str:
     """Return the ``GATE_CHANGE_OK`` reason from the environment, or ``""`` (I/O seam).
 
@@ -1152,7 +1154,7 @@ def env_reason() -> str:
         ``""`` under CI: the hatch is LOCAL-ONLY, so a workflow ``env:`` line or a repo
         variable cannot stand in for a justification a PR reviewer can actually read.
     """
-    if any(os.environ.get(str_marker) for str_marker in TUPLE_CI_MARKERS):
+    if is_ci():
         return ""
     return os.environ.get("GATE_CHANGE_OK", "").strip()
 
