@@ -1240,6 +1240,13 @@ is shaped as it is; a generated project gets the behavior, not the history.
       because it checks a delta: a hook, rule or exclude that was removed without a
       `gate-change-ok: <reason>` is a violation (#309). The same script BlueprintX runs over
       itself.
+    - `assertion-weakening`: wired in pre-commit (`language: system`, `always_run`, so the
+      caller's environment reaches it, including the `TEST_CHANGE_OK` hatch) and as its own
+      `assertion_weakening.yaml` workflow (not a step of the matrix `test` job, whose check
+      names are unstable and whose trigger is branch-filtered, so it could never be a
+      required check). It checks out with `fetch-depth: 0` so the merge-base resolves.
+      It sat unreferenced until #983, which left the gate and its hatch inert. Proven by a
+      should-fail witness in `bin/ci/scaffold_lint_test.sh` (`==` weakened to `in`).
     - `check-all-exports`: a package declaring `__all__` must name every public member of its
       submodules. The usual introspective test discovers the family through `__all__`, so it
       cannot see a missing member; this walks the files.
@@ -2245,6 +2252,26 @@ rest of the suite.
 - **A review carries forward across a merge of the base** (#698). The patch-id output is
   `<patch-id> <commit-id>`, and unpacking fails loudly on empty output instead of an
   `IndexError`. The `merge` of `main` into the branch conflicts by design.
+- **One CI verdict for the local-only escape hatches, and it fails closed** (#981).
+  `check_gate_integrity.py` (`GATE_CHANGE_OK`) and `check_assertion_weakening.py`
+  (`TEST_CHANGE_OK`) each carried their own idea of "running in CI": one treated any truthy
+  `CI` or `GITHUB_ACTIONS` as CI, the other counted `GITHUB_ACTIONS` by presence and `CI=false`
+  as local. Both are a denylist, and a denylist fails open for any runner it does not name:
+  Jenkins sets neither variable, so its job would have honoured the hatch. Both gates now call
+  `is_ci()` from `templates/python-common/bin/gate_env.py`. The alternative, "treat any
+  non-falsy `CI` as CI", was rejected because it still leaves Jenkins local. The rule is an
+  allowlist of local signals: the process is local only when `PRE_COMMIT` is set (pre-commit
+  exports it for every hook it runs, so a real commit always carries it) and `GITHUB_ACTIONS`
+  is absent and `CI` is falsy (`""`, `0`, `false`, `no`), and the process has a controlling
+  terminal (`/dev/tty` opens). The terminal check exists because a headless runner that itself
+  invokes `pre-commit run` inherits `PRE_COMMIT` (review of #986): a developer committing from
+  a shell has a terminal, Jenkins does not. Everything else, including a bare shell, an unknown
+  runner, a GUI or IDE commit and a headless agent commit (no `/dev/tty`), is CI and
+  ignores the hatch; the PR-body and trailer
+  justifications remain available there. Known limit: a CI container allocated a pty
+  (`docker run -t`) with `PRE_COMMIT` set reads as local. Pinned in
+  `tests/unit/test_gate_integrity_gate.py` for `CI=false`, `CI=""`, `GITHUB_ACTIONS=true`, `JENKINS_URL`
+  and a bare environment.
 - **A thread reply is not a review of the head** (#978). A reviewer's answer to a thread is
   stored as a `COMMENTED` review with an empty body, attributed to the commit the branch was on
   when it was posted. `counts_as_review` admits a review only with a non-empty body or an
