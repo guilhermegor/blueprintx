@@ -17,7 +17,7 @@ check() {
 	int_failures=$((int_failures + 1))
 }
 
-for str_guard in 'merged == false' 'head.repo.full_name == github.repository' \
+for str_guard in 'pull-requests: read' 'merged == false' 'head.repo.full_name == github.repository' \
 	'head.ref != github.event.repository.default_branch' \
 	'head.ref != github.event.pull_request.base.ref'; do
 	grep -qF "$str_guard" "$str_wf"
@@ -38,6 +38,8 @@ case "$*" in
 			500) echo "boom (HTTP 500)" >&2; exit 1 ;;
 			*) exit 0 ;;
 		esac ;;
+	*"/git/refs/heads/"*)
+		echo "plural refs endpoint used: it returns prefix matches (HTTP 200)" >&2; exit 1 ;;
 	*"/pulls?"*)
 		case "$*" in *"&base="*) str_n="$STUB_PULLS_BASE" ;; *) str_n="$STUB_PULLS_HEAD" ;; esac
 		[[ "$str_n" == err ]] && { echo "boom (HTTP 500)" >&2; exit 1; }
@@ -86,6 +88,9 @@ check "a long-lived name is never deleted" "$(deleted && echo 1 || echo 0)"
 in_summary "short-lived"
 check "a skipped name says why in the summary" "$?"
 
+BRANCH="develop" run_script
+check "a skipped name makes no gh call at all" "$([[ -z "$str_log" ]] && echo 0 || echo 1)"
+
 BRANCH="release/2026" run_script
 check "release/<number> is never deleted" "$(deleted && echo 1 || echo 0)"
 
@@ -103,14 +108,21 @@ in_summary "protected"
 check "a protected skip says why in the summary" "$?"
 
 STUB_PROTECTED=500 run_script
+in_summary "unreadable"
+check "an unreadable protection state says so in the summary" "$?"
 check "an unreadable protection state fails closed" "$(deleted && echo 1 || echo 0)"
 check "an unreadable protection state does not fail the job" "$((int_status != 0))"
 
 STUB_TIP=zzz run_script
+in_summary "is not the PR"
+check "a moved tip says why in the summary" "$?"
 check "a branch whose tip moved is kept" "$(deleted && echo 1 || echo 0)"
 
 STUB_TIP=404 run_script
 check "an already-deleted ref is a green no-op" "$(deleted && echo 1 || echo $((int_status != 0)))"
+
+STUB_TIP=404 run_script
+check "an already-deleted ref with a prefix sibling stays a green no-op (singular ref endpoint)" "$((int_status != 0))"
 
 STUB_DELETE=422 run_script
 check "a 422 'Reference does not exist' on delete is already gone, green" "$((int_status != 0))"
@@ -134,6 +146,11 @@ STUB_PULLS_BASE=1 run_script
 check "a branch that is the base of another open PR is never deleted" "$(deleted && echo 1 || echo 0)"
 in_summary "their base"
 check "the open-PR base skip says why in the summary" "$?"
+
+STUB_PULLS_BASE=abc run_script
+check "a non-numeric open-PR reply fails closed" "$(deleted && echo 1 || echo 0)"
+in_summary "unexpected reply"
+check "a non-numeric open-PR reply says so in the summary" "$?"
 
 STUB_PULLS_HEAD=1 run_script
 check "a branch that is the head of another open PR is never deleted" "$(deleted && echo 1 || echo 0)"

@@ -55,7 +55,7 @@ used_by_open_pr() {
 
 delete_ref() {
 	local str_url="repos/${GH_REPO}/git/refs/heads/${BRANCH}" str_tip
-	if ! api "$str_url" --jq .object.sha; then
+	if ! api "repos/${GH_REPO}/git/ref/heads/${BRANCH}" --jq .object.sha; then
 		[[ "${STR_ERR}${STR_OUT}" == *"HTTP 404"* ]] && { note "Branch \`${BRANCH}\` of PR #${PR} is already deleted; nothing to do."; return 0; }
 		echo "$STR_ERR" >&2
 		return 1

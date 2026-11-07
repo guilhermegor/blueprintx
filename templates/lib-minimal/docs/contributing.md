@@ -285,14 +285,18 @@ summary:
   would be closed by the deletion); an unreadable answer counts as "in use";
 - GitHub reports it as not protected, and an unreadable protection state counts as protected;
 - its name uses only letters, digits and `._/-`, and its tip is still the PR head when read just
-  before the delete (the refs API has no compare-and-delete, so a push in that gap is covered only
-  by the restore path below).
+  before the delete.
+
+The checks and the delete are separate API calls and the refs API has no compare-and-delete, so a
+push, or a PR opened from or against the branch, in that gap is covered only by the restore path
+below.
 
 Nothing is lost: the job summary names the deleted ref and its sha, and the PR page offers
 **Restore branch** (or, from a clone that holds the commit, `git push origin <sha>:refs/heads/<branch>`).
 A PR whose branch was deleted can only be reopened after **Restore branch**. A ruleset refusal is
-reported as "kept" (green); any other unexpected API error fails the job. The workflow file itself
-is read from the PR, which a same-repo writer can already edit by pushing.
+reported as "kept" (green); any other unexpected API error fails the job. The workflow file is read
+from the PR's merge ref, so a same-repo writer can run code with `contents: write` by editing it;
+that adds no privilege, since they can already push.
 
 ### The work-ledger gate
 
