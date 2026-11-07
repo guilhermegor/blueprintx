@@ -742,7 +742,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         + "class A:\n    def f(self):\n        def inner(self):\n"
         + "            setattr(self, 'Priv', 1)\n        inner(me)\nA().f()\n",
         _STR_SELF_MODULE
-        + "class A:\n    @staticmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\nA.f(me)\n",
+        + "class A:\n    @staticmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n"
+        + "A.f(me)\n",
         "def f(x=(Priv := 1)):\n    pass\n",
         "def d(v):\n    return lambda f: f\n\n\n@d(Priv := 1)\ndef g():\n    pass\n",
         "class B((Priv := 1).__class__):\n    pass\n",

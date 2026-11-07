@@ -245,6 +245,7 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
     return True
 
 
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
 _SET_DYNAMIC_WRITERS = frozenset(
     {
         "globals",
@@ -334,7 +335,29 @@ def _extends_all(list_nodes: list[ast.stmt]) -> bool:
         and isinstance(cls_sub.ctx, ast.Store)
         for cls_sub in list_subs
     )
-    return int_stores > 1 or any(_all_is_opaque(cls_sub) for cls_sub in list_subs)
+    return int_stores > 1 or any(
+        _all_is_opaque(cls_sub) or _all_is_deleted(cls_sub) for cls_sub in list_subs
+    )
+
+
+def _all_is_deleted(cls_sub: ast.AST) -> bool:
+    """Return whether a node is ``__all__`` being deleted, which makes a star import export all.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node under a module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for the ``__all__`` in ``del __all__``.
+    """
+    return (
+        isinstance(cls_sub, ast.Name)
+        and cls_sub.id == "__all__"
+        and isinstance(cls_sub.ctx, ast.Del)
+    )
 
 
 def _all_is_opaque(cls_sub: ast.AST) -> bool:
@@ -379,10 +402,35 @@ def _scope_nodes(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
     while list_stack:
         cls_cur = list_stack.pop()
         yield cls_cur
-        if not isinstance(
-            cls_cur, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda
-        ):
+        if isinstance(cls_cur, _SCOPES):
+            list_stack.extend(_header_nodes(cls_cur))
+        else:
             list_stack.extend(ast.iter_child_nodes(cls_cur))
+
+
+def _header_nodes(cls_scope: ast.stmt | ast.Lambda) -> list[ast.AST]:
+    """Return the parts of a def, class or lambda that run in the enclosing scope.
+
+    Decorators, defaults and class bases are evaluated where the statement sits, so a walrus
+    there binds a name in that scope even though the body does not.
+
+    Parameters
+    ----------
+    cls_scope : ast.FunctionDef or ast.AsyncFunctionDef or ast.ClassDef or ast.Lambda
+        The nested scope.
+
+    Returns
+    -------
+    list of ast.AST
+        The expressions evaluated outside its body.
+    """
+    if isinstance(cls_scope, ast.ClassDef):
+        return [*cls_scope.decorator_list, *cls_scope.bases, *cls_scope.keywords]
+    cls_args = cls_scope.args
+    list_found: list[ast.AST] = [*cls_args.defaults, *filter(None, cls_args.kw_defaults)]
+    if isinstance(cls_scope, ast.Lambda):
+        return list_found
+    return [*cls_scope.decorator_list, *list_found]
 
 
 def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
@@ -406,26 +454,109 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
         ``True`` when a dynamic writer is named outside that exemption.
     """
     set_exempt = {
+        int_id for cls_fn in _methods(list_nodes) for int_id in _own_parameter_writes(cls_fn)
+    }
+    return any(
+        _names_writer(cls_sub) and id(cls_sub) not in set_exempt
+        for cls_node in list_nodes
+        for cls_sub in ast.walk(cls_node)
+    )
+
+
+def _names_writer(cls_sub: ast.AST) -> bool:
+    """Return whether a node names a dynamic writer, including through an import alias.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node.
+
+    Returns
+    -------
+    bool
+        ``True`` for a bare or attribute writer name, or ``from x import <writer> as y``.
+    """
+    if isinstance(cls_sub, ast.Name):
+        return cls_sub.id in _SET_DYNAMIC_WRITERS
+    if isinstance(cls_sub, ast.Attribute):
+        return cls_sub.attr in _SET_DYNAMIC_WRITERS
+    return isinstance(cls_sub, ast.ImportFrom) and any(
+        cls_alias.name in _SET_DYNAMIC_WRITERS for cls_alias in cls_sub.names
+    )
+
+
+def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
+    """Return the ids of ``setattr``/``vars`` names that act on this method's own ``self``/``cls``.
+
+    A ``staticmethod`` has no bound first parameter, a rebound ``self`` is no longer the
+    instance, and a nested def or lambda has a parameter of its own, so none of those exempt.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        A method with at least one positional parameter.
+
+    Returns
+    -------
+    set of int
+        ``id()`` of each exempt ``Name`` node; empty when the method gets no exemption.
+    """
+    str_param = cls_fn.args.args[0].arg
+    if str_param not in {"self", "cls"} or _is_static(cls_fn) or _rebinds(cls_fn, str_param):
+        return set()
+    return {
         id(cls_call.func)
-        for cls_fn in _methods(list_nodes)
-        for cls_stmt in cls_fn.body
-        for cls_call in ast.walk(cls_stmt)
+        for cls_call in _scope_nodes(cls_fn.body)
         if isinstance(cls_call, ast.Call)
         and isinstance(cls_call.func, ast.Name)
         and cls_call.func.id in {"setattr", "vars"}
         and cls_call.args
         and isinstance(cls_call.args[0], ast.Name)
-        and cls_call.args[0].id == cls_fn.args.args[0].arg
-        and cls_call.args[0].id in {"self", "cls"}
+        and cls_call.args[0].id == str_param
     }
+
+
+def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Return whether a def is decorated with ``staticmethod``, bare or as an attribute.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        The def.
+
+    Returns
+    -------
+    bool
+        ``True`` when a decorator is named ``staticmethod``.
+    """
     return any(
-        (
-            (isinstance(cls_sub, ast.Name) and cls_sub.id in _SET_DYNAMIC_WRITERS)
-            or (isinstance(cls_sub, ast.Attribute) and cls_sub.attr in _SET_DYNAMIC_WRITERS)
-        )
-        and id(cls_sub) not in set_exempt
-        for cls_node in list_nodes
-        for cls_sub in ast.walk(cls_node)
+        "staticmethod" in {getattr(cls_dec, "id", None), getattr(cls_dec, "attr", None)}
+        for cls_dec in cls_fn.decorator_list
+    )
+
+
+def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> bool:
+    """Return whether the name is assigned or deleted anywhere under the def.
+
+    Nested scopes are included, which can only over-charge.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        The def.
+    str_param : str
+        Its first parameter name.
+
+    Returns
+    -------
+    bool
+        ``True`` when a ``Name`` of that id is stored or deleted.
+    """
+    return any(
+        isinstance(cls_sub, ast.Name)
+        and cls_sub.id == str_param
+        and not isinstance(cls_sub.ctx, ast.Load)
+        for cls_sub in ast.walk(cls_fn)
     )
 
 
