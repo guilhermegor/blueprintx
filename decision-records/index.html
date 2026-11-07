@@ -5063,6 +5063,15 @@ rest of the suite.</p>
   <code>originalPosition</code> or <code>outdated</code> against. Both the orphaned-reply case and the
   non-empty-body reply case are pinned in <code>tests/unit/test_review_threads_gate.py</code>.</li>
 </ul>
+<h2 id="the-100-release-gate-and-open-pull-requests-templatescommonbincheck_release_gatepy-996">The 1.0.0 release gate and open pull requests (<code>templates/common/bin/check_release_gate.py</code>, #996)<a class="headerlink" href="#the-100-release-gate-and-open-pull-requests-templatescommonbincheck_release_gatepy-996" title="Permanent link">&para;</a></h2>
+<p>The gate counts open issues only. A pull request reaches it through the REST issues endpoint
+carrying a <code>pull_request</code> key, and <code>blocking()</code> drops those items. Failing on open PRs would let
+a standing Dependabot PR or a <code>post-1.0</code> feature branch block every release, and the gate has no
+label with which to exempt a PR, so the smaller blast radius is to keep the gate on issues and
+put "every open PR merged, closed, or deferred past 1.0" on the Cut 1.0.0 checklist, where the
+owner judges each one. <code>tests/test_check_release_gate.sh</code> pins the decision with a case in which
+a lone unlabelled PR passes the gate. The generated project's <code>docs/releasing-1-0-0.md</code> states
+the decision without naming that suite, because a generated project does not ship it.</p>
 
 
 
