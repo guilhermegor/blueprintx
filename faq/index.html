@@ -3420,17 +3420,24 @@ and a force-push that rewrites the code, because each changes the fingerprint. T
 closed: a missing commit, an API error, a malformed response (<code>files</code> not a list, an entry
 that is not an object, a non-JSON body), a binary or oversized file with no patch text, or a
 full 300-file list is read as "not covered". Two patchless entries are fingerprinted by their
-names and blob <code>sha</code>, so they carry forward: a pure rename (status <code>renamed</code>, zero changes, a
-<code>sha</code>) and an added empty file such as a <code>py.typed</code> or <code>.gitkeep</code> (status <code>added</code>, zero changes,
-and exactly the empty-blob <code>sha</code> <code>e69de29bb2d1d6434b8b29ae775ad8c2e48c5391</code>). The <code>sha</code> is
-required: a binary file also reports zero changes, and only its blob proves the content. The
-compare API carries no file mode, so a <code>sha</code> cannot prove the mode bits. That is why an <code>added</code>
-entry needs the empty blob specifically: an exec bit on an empty file runs nothing, so its mode
-cannot matter, while any other patchless <code>added</code> entry (a binary) still counts as "not covered".
-So does a patchless entry without a <code>sha</code>, with changes above zero, or a <code>modified</code> one (a
-mode-only change keeps its blob <code>sha</code>). A rename shares the mode gap and is kept as it was. The compare API returns at most
-300 files whatever <code>per_page</code> says (it pages commits, not files), so a list that long may be cut
-off. The gate asks for <code>per_page=1</code> to keep the commit list, which it does not use, small.</p>
+names and blob <code>sha</code>, so they carry forward:
+an added empty file such as a <code>py.typed</code> or <code>.gitkeep</code> (status <code>added</code>, zero changes, exactly
+the empty-blob <code>sha</code> <code>e69de29bb2d1d6434b8b29ae775ad8c2e48c5391</code>) and a pure rename (status
+<code>renamed</code>, zero changes, any <code>sha</code>, which pins the content at the reviewed head; the
+source blob at the merge base is hashed too, so a rename whose source changed in the base is
+not carried). A binary file also
+reports zero changes, so an <code>added</code> entry needs the empty blob. Any other patchless entry, one
+without a <code>sha</code>, with changes above zero, or a <code>modified</code> or <code>removed</code> one, counts as "not
+covered".</p>
+<p>The compare payload and the patch text carry no file mode, so the gate also reads the real
+modes from the git tree API (the merge base and the reviewed commit) and hashes them for every
+entry, which makes an exec-bit flip, with or without an edit or a rename, break the
+carry-forward. If a tree read fails, is truncated, or lacks a path, the gate fails closed and
+the review is not carried. A repository so large that GitHub truncates its recursive tree
+therefore never carries a review forward.</p>
+<p>The compare API returns at most 300 files whatever <code>per_page</code> says (it pages commits, not
+files), so a list that long may be cut off. The gate asks for <code>per_page=1</code> to keep the commit list,
+which it does not use, small.</p>
 <h2 id="why-does-every-scaffold-have-to-ship-the-hosted-reviewer-config">Why does every scaffold have to ship the hosted-reviewer config?<a class="headerlink" href="#why-does-every-scaffold-have-to-ship-the-hosted-reviewer-config" title="Permanent link">&para;</a></h2>
 <p>Every generated project must ship the configuration for the hosted reviewers (CodeRabbit,
 Greptile and Graphite); today only Graphite's is listed. Left as a copy list maintained by hand in nine scaffold scripts, that
