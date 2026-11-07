@@ -56,7 +56,7 @@ case "$1 $2" in
 "project view") echo "PVT_1" ;;
 "project item-add") echo "PVTI_1" ;;
 "repo view") echo "${GH_REPO_PRIVATE:-false}" ;;
-"api users/"*) echo "User" ;;
+"api users/"*) echo "${GH_OWNER_KIND:-User}" ;;
 esac
 exit 0
 STUB
@@ -278,9 +278,25 @@ test_an_existing_board_is_skipped_not_duplicated() {
 
 test_an_ambiguous_board_is_never_guessed() {
     local str_out
-    str_out="$(run_setup '\n' 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":4},{"title":"widget kanban","number":9}]}')"
+    if str_out="$(run_setup '\n' 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":4},{"title":"widget kanban","number":9}]}')"; then
+        print_status "error" "duplicate boards must stop the scaffold"
+        int_failures=$((int_failures + 1))
+    fi
     expect_log "ambiguous boards" "project create" absent
-    expect_out "ambiguous boards" "$str_out" "More than one 'widget kanban' project exists"
+    expect_log "ambiguous boards" "project link" absent
+    expect_out "ambiguous boards" "$str_out" "more than one 'widget kanban' project exists"
+    expect_out "ambiguous boards" "$str_out" "https://github.com/users/octo/projects/4"
+    expect_out "ambiguous boards" "$str_out" "https://github.com/users/octo/projects/9"
+}
+
+test_duplicate_boards_of_an_org_print_org_urls_and_the_repo_advice() {
+    local str_out
+    if str_out="$(run_setup '\n' GH_OWNER_KIND=Organization SCAFFOLD_CREATED_REPO=octo/widget 'GH_PROJECTS={"projects":[{"title":"widget kanban","number":4},{"title":"widget kanban","number":9}]}')"; then
+        print_status "error" "duplicate boards must stop the scaffold"
+        int_failures=$((int_failures + 1))
+    fi
+    expect_out "org duplicates" "$str_out" "https://github.com/orgs/octo/projects/4 and https://github.com/orgs/octo/projects/9"
+    expect_out "org duplicates" "$str_out" "octo/widget already exists on GitHub"
 }
 
 test_a_missing_scope_prints_the_fix_and_stops() {
@@ -421,6 +437,7 @@ main() {
     test_visibility_follows_the_answer_and_the_repo
     test_an_existing_board_is_skipped_not_duplicated
     test_an_ambiguous_board_is_never_guessed
+    test_duplicate_boards_of_an_org_print_org_urls_and_the_repo_advice
     test_a_missing_scope_prints_the_fix_and_stops
     test_a_failed_project_list_still_prints_the_scope_fix
     test_stderr_noise_on_success_never_corrupts_values

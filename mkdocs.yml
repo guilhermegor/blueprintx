@@ -46,6 +46,7 @@ nav:
   - Quality Gates:
       - Quality Rules: quality-rules.md
       - Coverage Floor: coverage-floor.md
+      - Conflict-Free Registries: conflict-free-registries.md
       - Complexity Ceilings Measured: complexity-ceilings-measured.md
       - Lockfile Sync: lockfile-sync.md
       - Docs Boundary Gate: docs-boundary-gate.md

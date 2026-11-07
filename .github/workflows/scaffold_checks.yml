@@ -502,6 +502,9 @@ jobs:
       - name: Should-fail regression tests for the gate
         run: bash tests/test_check_test_git_env.sh
 
+      - name: Two branches adding a module merge clean and pass the gate (blueprintx#959)
+        run: bash tests/test_check_registry_order.sh
+
   readme-structure:
     name: README structure gate — plain headings, slug sections, Authors links
     runs-on: ubuntu-latest
@@ -561,6 +564,12 @@ jobs:
 
       - name: 1.0.0 release gate should-fail cases
         run: bash tests/test_check_release_gate.sh
+
+      - name: lib-minimal ships py.typed and per-version classifiers
+        run: bash tests/test_lib_minimal_py_typed.sh
+
+      - name: lib-minimal docs cite only poe tasks the scaffold defines (blueprintx#1020)
+        run: bash tests/test_lib_minimal_docs_poe_tasks.sh
 
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json

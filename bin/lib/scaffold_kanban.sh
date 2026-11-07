@@ -61,8 +61,32 @@ scaffold_kanban_find() {
 	}
 	rm -f "$str_err"
 	int_count="$(grep -c . <<<"$str_numbers" || true)"
-	[ "$int_count" -le 1 ] || return 2
 	printf '%s' "$str_numbers"
+	[ "$int_count" -le 1 ] || return 2
+}
+
+scaffold_kanban_stop_duplicates() {
+	local str_owner="$1" str_title="$2" str_numbers="$3" str_base str_number str_urls=""
+	str_base="$(scaffold_kanban_base_url "$str_owner")" || exit 1
+	for str_number in $str_numbers; do
+		str_urls+="${str_urls:+ and }${str_base}/${str_number}"
+	done
+	print_status "error" "GitHub step failed: more than one '${str_title}' project exists: ${str_urls}"
+	print_status "error" "Cause: not guessing which board to use. Fix: delete or rename all but one, then retry."
+	gh_stop_footer
+}
+
+scaffold_kanban_title() {
+	printf '%s kanban' "$PROJECT_NAME"
+}
+
+scaffold_kanban_check_duplicates() {
+	local str_slug="$1" str_owner str_title str_numbers int_rc=0
+	str_owner="${str_slug%%/*}"
+	str_title="$(scaffold_kanban_title)"
+	str_numbers="$(scaffold_kanban_find "$str_owner" "$str_title")" || int_rc=$?
+	[ "$int_rc" -ne 2 ] || scaffold_kanban_stop_duplicates "$str_owner" "$str_title" "$str_numbers"
+	[ "$int_rc" -eq 0 ] || exit 1
 }
 
 scaffold_kanban_option_id() {
@@ -116,15 +140,49 @@ Points|NUMBER|
 Blocker|SINGLE_SELECT|Internal,External,Decision"
 }
 
-scaffold_kanban_url() {
-	local str_owner="$1" str_number="$2" str_kind str_path
+scaffold_kanban_base_url() {
+	local str_owner="$1" str_kind str_path
 	str_kind="$(gh_read "read the account type of ${str_owner}" gh api "users/${str_owner}" --jq '.type')" || exit 1
 	case "$str_kind" in
 	Organization) str_path="orgs" ;;
 	User) str_path="users" ;;
 	*) gh_stop_online "read the account type of ${str_owner}" "unexpected answer '${str_kind}'" ;;
 	esac
-	printf 'https://github.com/%s/%s/projects/%s' "$str_path" "$str_owner" "$str_number"
+	printf 'https://github.com/%s/%s/projects' "$str_path" "$str_owner"
+}
+
+scaffold_kanban_url() {
+	local str_base
+	str_base="$(scaffold_kanban_base_url "$1")" || exit 1
+	printf '%s/%s' "$str_base" "$2"
+}
+
+scaffold_kanban_workflows() {
+	local str_owner="$1" str_number="$2" str_rows str_err str_name str_effect str_off="" str_missing="" int_rc=0
+	str_err="$(mktemp 2>/dev/null)" || str_err=/dev/null
+	str_rows="$(gh api graphql -f o="$str_owner" -F n="$str_number" \
+		-f query='query($o:String!,$n:Int!){repositoryOwner(login:$o){... on ProjectV2Owner{projectV2(number:$n){workflows(first:20){nodes{name enabled}}}}}}' \
+		--jq '.data.repositoryOwner.projectV2.workflows.nodes[] | "\(.enabled)|\(.name)"' 2>"$str_err")" || int_rc=$?
+	if [ "$int_rc" -ne 0 ]; then
+		print_status "warning" "Could not read the board workflows (cause: $(gh_classify_failure "$(cat "$str_err")")); enable 'Item closed' and 'Pull request merged' (cards move to Done) at the board's Workflows page"
+		[ "$str_err" = /dev/null ] || rm -f "$str_err"
+		return 0
+	fi
+	[ "$str_err" = /dev/null ] || rm -f "$str_err"
+	for str_name in "Item closed" "Pull request merged"; do
+		str_effect="closed issues"
+		[ "$str_name" != "Pull request merged" ] || str_effect="merged pull requests"
+		if grep -qFx "true|${str_name}" <<<"$str_rows"; then
+			continue
+		fi
+		if grep -qFx "false|${str_name}" <<<"$str_rows"; then
+			str_off+="'${str_name}' is off, so ${str_effect} will not move to Done. "
+		else
+			str_missing+="'${str_name}' was not found under that name. "
+		fi
+	done
+	[ -z "$str_off" ] || print_status "warning" "${str_off}Enable them at the board's Workflows page"
+	[ -z "$str_missing" ] || print_status "warning" "${str_missing}Check the board's Workflows page; a renamed workflow still needs to be enabled"
 }
 
 scaffold_kanban_finish() {
@@ -135,6 +193,7 @@ scaffold_kanban_finish() {
 		--owner "$str_owner" --repo "$str_slug"
 	scaffold_kanban_status_options "$str_owner" "$str_number"
 	scaffold_kanban_fields "$str_owner" "$str_number"
+	scaffold_kanban_workflows "$str_owner" "$str_number"
 }
 
 scaffold_kanban_create() {
@@ -156,7 +215,7 @@ scaffold_kanban_setup() {
 	local str_slug str_owner str_title str_answer str_vis str_found int_rc=0
 	str_slug="$(scaffold_repo_slug)"
 	str_owner="${str_slug%%/*}"
-	str_title="${PROJECT_NAME} kanban"
+	str_title="$(scaffold_kanban_title)"
 	command -v gh >/dev/null 2>&1 || return 0
 
 	scaffold_create_house_labels "$str_slug"
@@ -177,8 +236,7 @@ scaffold_kanban_setup() {
 	str_vis="$(scaffold_kanban_visibility "$str_slug")" || exit 1
 	str_found="$(scaffold_kanban_find "$str_owner" "$str_title")" || int_rc=$?
 	if [ "$int_rc" -eq 2 ]; then
-		print_status "warning" "More than one '${str_title}' project exists — not guessing which; resolve it by hand"
-		return 0
+		scaffold_kanban_stop_duplicates "$str_owner" "$str_title" "$str_found"
 	fi
 	[ "$int_rc" -eq 0 ] || exit 1
 	if [ -n "$str_found" ]; then
@@ -194,7 +252,7 @@ scaffold_kanban_setup() {
 scaffold_release_issue_card() {
 	local str_slug="$1" str_url="$2" str_owner str_title str_number str_pid str_item str_field str_opt
 	str_owner="${str_slug%%/*}"
-	str_title="${PROJECT_NAME} kanban"
+	str_title="$(scaffold_kanban_title)"
 	str_number="$(scaffold_kanban_find "$str_owner" "$str_title" 2>/dev/null)" || return 0
 	[ -n "$str_number" ] || return 0
 	str_pid="$(gh project view "$str_number" --owner "$str_owner" --format json --jq '.id' 2>/dev/null)" || str_pid=""
