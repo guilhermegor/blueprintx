@@ -26,16 +26,24 @@ PROJECT_PATH="$WORK_DIR/ci-scaffold"
 source "$REPO_ROOT/bin/lib/no_background_git.sh"
 spec_stdin_for_skeleton "$SKELETON" "" |
 	BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot LINKEDIN_URL=https://www.linkedin.com/in/ci-bot \
-		bash "$REPO_ROOT/$str_scaffold_rel" "$WORK_DIR" ci-scaffold "explicit any probe" "0.0.1" >/dev/null 2>&1
+		bash "$REPO_ROOT/$str_scaffold_rel" "$WORK_DIR" ci-scaffold "explicit any probe" "0.0.1" >"$WORK_DIR/scaffold.log" 2>&1 ||
+	{ cat "$WORK_DIR/scaffold.log"; echo "FAIL: scaffold exited non-zero"; exit 1; }
 cd "$PROJECT_PATH" || exit 1
-poetry install --with dev --no-interaction --no-ansi >/dev/null 2>&1
+poetry install --with dev --no-interaction --no-ansi >"$WORK_DIR/install.log" 2>&1 ||
+	{ cat "$WORK_DIR/install.log"; echo "FAIL: poetry install exited non-zero"; exit 1; }
 
 run_mypy() {
 	(cd "$PROJECT_PATH/src" && poetry run mypy --config-file ../mypy.ini . 2>&1)
 }
 
 check "mypy.ini sets disallow_any_explicit = True" grep -qx 'disallow_any_explicit = True' mypy.ini
-check "the freshly generated tree passes mypy" run_mypy
+if str_clean_out="$(run_mypy)"; then
+	echo "ok: the freshly generated tree passes mypy"
+else
+	echo "FAIL: the freshly generated tree passes mypy"
+	echo "$str_clean_out"
+	int_failures=$((int_failures + 1))
+fi
 
 str_pkg_dir="$(find "$PROJECT_PATH/src" -mindepth 1 -maxdepth 1 -type d -name 'ci_scaffold' | head -n 1)"
 str_plant_dir="${str_pkg_dir:-$PROJECT_PATH/src}"

@@ -86,10 +86,11 @@ class ReconcilePipeline(metaclass=TypeChecker):
             self.cls_logger, self.dict_context, self.cls_email_handler, self.cls_webhook
         )
         dict_baseline = self._read_baseline()
+        baseline_rows = dict_baseline.get("rows_read", 0)
         dict_summary: dict[str, object] = {
             "intent": "reconcile",
             "baseline_found": bool(dict_baseline),
-            "baseline_rows": int(str(dict_baseline.get("rows_read", 0))),
+            "baseline_rows": int(baseline_rows) if isinstance(baseline_rows, int | float) else 0,
         }
         pipeline_common.write_summary(self.cls_logger, self.path_json, dict_summary)
         pipeline_common.log_elapsed(self.cls_logger, time() - float_start)

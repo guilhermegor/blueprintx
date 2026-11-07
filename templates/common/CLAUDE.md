@@ -189,7 +189,8 @@ a `ParamSpec` or a `Protocol`. Exemptions are `[mypy-<module>]` sections with
 `disallow_any_explicit = False`, mirroring the `ANN401` `per-file-ignores`: the typing engine
 (inspects values of any type), the DB-API handles (`utils/tabular_reader.py`, `utils/frames.py`,
 `config/connection_db.py`, `model/example_entity.py`, the controller pipelines and the native DB
-handlers' `_connect`; no shared driver type) and `SanityCheck` (any joblib payload). Bash is out of
+handler modules, module-wide and not only `_connect`; no shared driver type; the controller
+pipeline exemption is shared by every tier though only mvc-native still uses `Any` there) and `SanityCheck` (any joblib payload). Bash is out of
 scope: it has no static types. Probe: `tests/test_explicit_any_refused_py.sh`.
 
 The shared `utils/` helpers (`dtypes`, `br_identifiers`, `decimals`, `loggers`, `text`,
