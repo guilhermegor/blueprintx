@@ -280,6 +280,9 @@ jobs:
       - name: Should-fail regression tests for check_action_pins
         run: bash tests/test_check_actions_pins.sh
 
+      - name: Should-fail regression tests for check_logo_sync
+        run: bash tests/test_check_logo_sync.sh
+
   workflow-names:
     name: Template workflow filenames
     runs-on: ubuntu-latest
