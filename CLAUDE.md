@@ -213,7 +213,7 @@ validated before the tag is pushed: `MAJOR.MINOR.PATCH`, optionally followed by 
 from the tag, one layer down):
 - **From a git checkout** → `git describe --tags` (a clone always reports the latest tag; nothing
   to bump).
-- **From a packaged install** (Homebrew/Chocolatey/Snap/apt) or **`make install`** → no `.git`, so
+- **From a packaged install** (Homebrew/Chocolatey/apt) or **`make install`** → no `.git`, so
   it reads the `BLUEPRINTX_VERSION` literal that the install path **stamps from the tag** (the
   `install` recipe seds it; each `release_*.yml` stamps it into its artifact).
 

@@ -363,7 +363,7 @@ the same protection from the autouse `isolate_git_environment` fixture in
 
 ## Which install methods are supported?
 
-Homebrew, Chocolatey, Snap, apt, and `make install` from a clone — see the project README.
+Homebrew, Chocolatey, apt, and `make install` from a clone — see the project README.
 
 ## Why does the coverage badge 404 before the first push to main?
 
