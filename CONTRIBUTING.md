@@ -96,7 +96,8 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 This repo's own Actions secrets (`gh secret list --repo guilhermegor/blueprintx`) are set by
 hand with `gh secret set <NAME> --repo guilhermegor/blueprintx`. The real values live only in
 GitHub Secrets; no local file holds them. The table below is the record of each secret's
-consumer and minimum scope.
+consumer and minimum scope. A root `.env` left over from the old flow still holds real values:
+delete it (`shred -u .env`).
 
 | Secret | Consumer(s) | Minimum scope |
 |---|---|---|
@@ -116,10 +117,10 @@ consumer and minimum scope.
    multi-line value must go through stdin, never the prompt. For `APT_GPG_PRIVATE_KEY`, pipe
    the armored block from a private file outside the work tree (`mktemp` creates it mode 600
    under `/tmp`, so a stray `git add -A` cannot stage it). The chain refuses to upload an
-   empty export (a wrong key id) and removes the file even when `gh` fails:
-   `f=$(mktemp) && trap 'shred -u "$f" 2>/dev/null || rm -f "$f"' EXIT && gpg --export-secret-keys --armor <key-id> > "$f" && [ -s "$f" ] && gh secret set APT_GPG_PRIVATE_KEY --repo guilhermegor/blueprintx < "$f"`.
-   Run it in a subshell, `( … )`, so the `EXIT` trap fires when the chain ends, not when your
-   terminal closes.
+   empty export (a wrong key id) and removes the file even when `gh` fails. The subshell makes
+   the `EXIT` trap fire when the chain ends, not when your terminal closes; `shred` is
+   best-effort on tmpfs or journaling filesystems:
+   `( f=$(mktemp) && trap 'shred -u "$f" 2>/dev/null || rm -f "$f"' EXIT && gpg --export-secret-keys --armor <key-id> > "$f" && { [ -s "$f" ] || { echo "export empty, nothing uploaded" >&2; exit 1; }; } && gh secret set APT_GPG_PRIVATE_KEY --repo guilhermegor/blueprintx < "$f" )`.
    Skip `APT_GPG_PASSPHRASE` when the key has none (the workflow treats it as optional); when
    rotating from a key that had one to a key that has none, also run
    `gh secret delete APT_GPG_PASSPHRASE --repo guilhermegor/blueprintx`, so the old value is
