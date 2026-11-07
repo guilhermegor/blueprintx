@@ -73,9 +73,8 @@ That shell entrypoint is the second and last interface in this project. Everythi
 
 ## Run
 
-```bash
-poe run             # runs the service entry point (src/.../main.py)
-```
+Service tiers start from the entry point under `src/` (`main.py`); the README names the exact
+command. A library has nothing to run.
 
 ## Common tasks
 

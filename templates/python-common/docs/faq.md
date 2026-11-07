@@ -9,7 +9,7 @@ entries as they come up.
 
 ## How do I run it locally?
 
-`poe init` then `poe run` (or `poe init` / `poe run`). See [Usage](usage.md).
+`poe init`, then start it the way the README describes. See [Usage](usage.md).
 
 ## How do I add or update a dependency?
 
