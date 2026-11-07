@@ -13,13 +13,13 @@ readme_logo() {
 }
 
 index_logo() {
-	grep -oE '<img[^>]*src="[^"]+"' "$ROOT/docs/index.md" 2>/dev/null |
-		head -n 1 | sed -E 's#.*src="([^"]+)"#docs/\1#' || true
+	grep -m 1 -E '^#[[:space:]].*<img' "$ROOT/docs/index.md" 2>/dev/null |
+		grep -oE '<img[^>]*src="[^"]+"' | head -n 1 | sed -E 's#.*src="([^"]+)"#docs/\1#' || true
 }
 
 theme_logo() {
 	local str_key="$1"
-	sed -nE "s#^[[:space:]]+${str_key}:[[:space:]]*([^[:space:]]+)[[:space:]]*\$#docs/\1#p" \
+	sed -nE "s#^[[:space:]]+${str_key}:[[:space:]]*[\"']?([^\"'[:space:]]+)[\"']?[[:space:]]*\$#docs/\1#p" \
 		"$ROOT/mkdocs.yml" 2>/dev/null | head -n 1 || true
 }
 

@@ -50,4 +50,14 @@ make_project "$WORK_DIR/noref"
 printf '# no image\n' >"$WORK_DIR/noref/README.md"
 expect "missing README reference fails" 1 "$WORK_DIR/noref"
 
+make_project "$WORK_DIR/badge"
+printf 'logo-bytes' >"$WORK_DIR/badge/docs/assets/badge.png"
+printf 'emblem' >"$WORK_DIR/badge/docs/assets/hero.png"
+printf '<img src="assets/badge.png">\n# Proj <img src="assets/hero.png" align="right">\n' >"$WORK_DIR/badge/docs/index.md"
+expect "replaced heading logo fails behind an earlier image" 1 "$WORK_DIR/badge"
+
+make_project "$WORK_DIR/quoted"
+printf 'theme:\n  logo: "assets/logo.png"\n  favicon: '"'"'assets/logo.png'"'"'\n' >"$WORK_DIR/quoted/mkdocs.yml"
+expect "quoted mkdocs paths pass" 0 "$WORK_DIR/quoted"
+
 exit "$int_failures"
