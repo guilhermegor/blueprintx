@@ -102,6 +102,7 @@ create_python_files() {
         < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/package__init__.py.tmpl" \
         > "$project_path/src/$PROJECT_PKG_NAME/__init__.py"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/main.py" "$project_path/src/$PROJECT_PKG_NAME/main.py"
+    cp "$BLUEPRINTX_ROOT/templates/lib-minimal/py.typed" "$project_path/src/$PROJECT_PKG_NAME/py.typed"
 
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"

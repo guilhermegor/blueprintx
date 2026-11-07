@@ -3,4 +3,7 @@
 from .entities import BaseEntity, Record
 
 
-__all__ = ["BaseEntity", "Record"]
+__all__ = [
+    "BaseEntity",
+    "Record",
+]
