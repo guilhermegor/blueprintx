@@ -281,13 +281,18 @@ summary:
 - the branch is short-lived, matching `<type>/<N>-<slug>` (the pattern `bin/check_pr_policy.sh`
   enforces), so `develop`, `release/*`, `dependabot/*` and `renovate/*` are never touched;
 - it is not the default branch and not the PR's own base branch;
+- no other open PR uses it as its base or its head (a stacked PR or a second PR from the same head
+  would be closed by the deletion); an unreadable answer counts as "in use";
 - GitHub reports it as not protected, and an unreadable protection state counts as protected;
 - its name uses only letters, digits and `._/-`, and its tip is still the PR head when read just
   before the delete (the refs API has no compare-and-delete, so a push in that gap is covered only
   by the restore path below).
 
 Nothing is lost: the job summary names the deleted ref and its sha, and the PR page offers
-**Restore branch** (or `git push origin <sha>:refs/heads/<branch>`).
+**Restore branch** (or, from a clone that holds the commit, `git push origin <sha>:refs/heads/<branch>`).
+A PR whose branch was deleted can only be reopened after **Restore branch**. A ruleset refusal is
+reported as "kept" (green); any other unexpected API error fails the job. The workflow file itself
+is read from the PR, which a same-repo writer can already edit by pushing.
 
 ### The work-ledger gate
 

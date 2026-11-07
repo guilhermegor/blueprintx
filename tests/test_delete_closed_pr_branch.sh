@@ -33,10 +33,15 @@ case "$*" in
 	*"-X DELETE"*)
 		case "$STUB_DELETE" in
 			422) echo "Reference does not exist (HTTP 422)" >&2; exit 1 ;;
+			other422) echo "Validation Failed (HTTP 422)" >&2; exit 1 ;;
 			ruleset) echo "Repository rule violations found (HTTP 422)" >&2; exit 1 ;;
 			500) echo "boom (HTTP 500)" >&2; exit 1 ;;
 			*) exit 0 ;;
 		esac ;;
+	*"/pulls?"*)
+		case "$*" in *"&base="*) str_n="$STUB_PULLS_BASE" ;; *) str_n="$STUB_PULLS_HEAD" ;; esac
+		[[ "$str_n" == err ]] && { echo "boom (HTTP 500)" >&2; exit 1; }
+		echo "$str_n" ;;
 	*"/branches/"*)
 		case "$STUB_PROTECTED" in
 			true | false) echo "$STUB_PROTECTED" ;;
@@ -46,7 +51,8 @@ case "$*" in
 	*)
 		case "$STUB_TIP" in
 			404) echo "Not Found (HTTP 404)" >&2; exit 1 ;;
-			*) echo "$STUB_TIP" ;;
+			*) [[ -n "${STUB_NOISE:-}" ]] && echo "gh: a new release is available" >&2
+				echo "$STUB_TIP" ;;
 		esac ;;
 esac
 STUB
@@ -58,6 +64,7 @@ run_script() {
 	: >"$str_bin/summary"
 	PATH="$str_bin:$PATH" STUB_LOG="$STUB_LOG" GITHUB_STEP_SUMMARY="$str_bin/summary" \
 		STUB_PROTECTED="${STUB_PROTECTED:-false}" STUB_TIP="${STUB_TIP:-abc}" STUB_DELETE="${STUB_DELETE:-ok}" \
+		STUB_PULLS_BASE="${STUB_PULLS_BASE:-0}" STUB_PULLS_HEAD="${STUB_PULLS_HEAD:-0}" STUB_NOISE="${STUB_NOISE:-}" \
 		BRANCH="${BRANCH:-fix/12-x}" BASE_REF="${BASE_REF:-main}" HEAD_SHA="abc" PR="7" GH_REPO="o/r" \
 		bash "$SCRIPT" >/dev/null 2>&1
 	int_status=$?
@@ -106,7 +113,7 @@ STUB_TIP=404 run_script
 check "an already-deleted ref is a green no-op" "$(deleted && echo 1 || echo $((int_status != 0)))"
 
 STUB_DELETE=422 run_script
-check "a 422 on delete is success" "$((int_status != 0))"
+check "a 422 'Reference does not exist' on delete is already gone, green" "$((int_status != 0))"
 
 STUB_DELETE=ruleset run_script
 check "a ruleset refusal is not reported as already gone" "$(in_summary 'already gone' && echo 1 || echo 0)"
@@ -119,6 +126,28 @@ check "a name unsafe in an API path is never deleted" "$(deleted && echo 1 || ec
 STUB_PROTECTED=404 run_script
 deleted
 check "a 404 protection read proceeds to the tip check and deletes" "$?"
+
+STUB_DELETE=other422 run_script
+check "an unrecognised 422 on delete fails the job" "$((int_status == 0))"
+
+STUB_PULLS_BASE=1 run_script
+check "a branch that is the base of another open PR is never deleted" "$(deleted && echo 1 || echo 0)"
+in_summary "their base"
+check "the open-PR base skip says why in the summary" "$?"
+
+STUB_PULLS_HEAD=1 run_script
+check "a branch that is the head of another open PR is never deleted" "$(deleted && echo 1 || echo 0)"
+
+STUB_PULLS_BASE=err run_script
+check "an unreadable open-PR base query fails closed" "$(deleted && echo 1 || echo 0)"
+check "an unreadable open-PR base query does not fail the job" "$((int_status != 0))"
+
+STUB_PULLS_HEAD=err run_script
+check "an unreadable open-PR head query fails closed" "$(deleted && echo 1 || echo 0)"
+
+STUB_NOISE=1 run_script
+deleted
+check "gh stderr noise on success does not stop the deletion" "$?"
 
 STUB_DELETE=500 run_script
 check "a 500 on delete fails the job" "$((int_status == 0))"
