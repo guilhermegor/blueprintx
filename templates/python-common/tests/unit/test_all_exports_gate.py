@@ -470,6 +470,19 @@ def test_nested_star_import_inside_internal_is_still_charged(tmp_path: Path) -> 
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
 
 
+def test_unresolvable_nested_star_inside_internal_fails_closed(tmp_path: Path) -> None:
+    """A nested star import nobody can read is assumed to provide the name."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": "from otherlib import *\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
 def test_internal_all_limits_what_its_star_import_is_charged(tmp_path: Path) -> None:
     """A name outside the ``_internal`` module's own ``__all__`` is not its star import's."""
     path_init = _tree(
