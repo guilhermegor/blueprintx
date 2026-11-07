@@ -96,8 +96,8 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 This repo's own Actions secrets (`gh secret list --repo guilhermegor/blueprintx`) are set by
 hand with `gh secret set <NAME> --repo guilhermegor/blueprintx`. The real values live only in
 GitHub Secrets; no local file holds them. The table below is the record of each secret's
-consumer and minimum scope. A root `.env` left over from the old flow still holds real values:
-delete it (`shred -u .env`).
+consumer and minimum scope. If you still have a root `.env` from the old flow, it holds real
+values: delete it with `shred -u .env`.
 
 | Secret | Consumer(s) | Minimum scope |
 |---|---|---|
