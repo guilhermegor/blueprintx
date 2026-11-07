@@ -32,7 +32,7 @@ _INTENT_ALIASES: dict[str, str] = {
     "reconciliacao": "reconcile",
 }
 
-_INTENT_BUILDERS: dict[str, Callable[..., Pipeline]] = {
+_INTENT_BUILDERS: dict[str, type[SendPipeline] | type[ReconcilePipeline]] = {
     "send": SendPipeline,
     "reconcile": ReconcilePipeline,
 }
