@@ -191,7 +191,7 @@ a `ParamSpec` or a `Protocol`. Exemptions are `[mypy-<module>]` sections with
 `config/connection_db.py`, `model/example_entity.py`, the controller pipelines and the native DB
 handler modules, module-wide and not only `_connect`; no shared driver type; the controller
 pipeline exemption is shared by every tier though only mvc-native still uses `Any` there) and `SanityCheck` (any joblib payload). Bash is out of
-scope: it has no static types. Probe: `tests/test_explicit_any_refused_py.sh`.
+scope: it has no static types.
 
 The shared `utils/` helpers (`dtypes`, `br_identifiers`, `decimals`, `loggers`, `text`,
 `paths`, `signatures`, `dates`, …) carry the runtime checker too — every function is
