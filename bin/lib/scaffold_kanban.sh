@@ -128,17 +128,26 @@ scaffold_kanban_url() {
 }
 
 scaffold_kanban_workflows() {
-	local str_owner="$1" str_number="$2" str_rows str_name str_on str_off=""
+	local str_owner="$1" str_number="$2" str_rows str_err str_name str_off=""
+	str_err="$(mktemp)"
 	str_rows="$(gh api graphql -f o="$str_owner" -F n="$str_number" \
 		-f query='query($o:String!,$n:Int!){repositoryOwner(login:$o){... on ProjectV2Owner{projectV2(number:$n){workflows(first:20){nodes{name enabled}}}}}}' \
-		--jq '.data.repositoryOwner.projectV2.workflows.nodes[] | "\(.enabled)|\(.name)"' 2>/dev/null)" || str_rows=""
+		--jq '.data.repositoryOwner.projectV2.workflows.nodes[] | "\(.enabled)|\(.name)"' 2>"$str_err")" || str_rows=""
 	if [ -z "$str_rows" ]; then
-		print_status "info" "Could not read the board workflows; enable 'Item closed' and 'Pull request merged' (cards move to Done) at the board's Workflows page"
+		print_status "info" "Could not read the board workflows (cause: $(gh_classify_failure "$(cat "$str_err")")); enable 'Item closed' and 'Pull request merged' (cards move to Done) at the board's Workflows page"
+		rm -f "$str_err"
 		return 0
 	fi
+	rm -f "$str_err"
 	for str_name in "Item closed" "Pull request merged"; do
-		str_on="$(grep -F "|${str_name}" <<<"$str_rows" | head -n1)"
-		[ "${str_on%%|*}" = "true" ] || str_off+="'${str_name}' is off. "
+		if grep -qFx "true|${str_name}" <<<"$str_rows"; then
+			continue
+		fi
+		if grep -qFx "false|${str_name}" <<<"$str_rows"; then
+			str_off+="'${str_name}' is off. "
+		else
+			str_off+="'${str_name}' was not found under that name. "
+		fi
 	done
 	[ -z "$str_off" ] || print_status "warning" "${str_off}Cards will not move to Done; enable them at the board's Workflows page"
 }

@@ -43,12 +43,15 @@ happened after the repo was created, finish the remaining steps by hand or use
 `tests/test_scaffold_gh_preflight.sh` counts them against a stubbed `gh` and
 fails when the number changes, which is the prompt to re-set the budget.
 
-`SCAFFOLD_GH_GRAPHQL_BUDGET` (60) is that count plus the preflight call and
-`gh repo create` (19), times 3, the most GraphQL queries one `gh` command sends
-(owner lookup, object lookup, mutation): 57. The last 3 are headroom for one
-retried command, which brings it to 60. The count is measured by call; the
-multiplier is a bound, not a live measurement: no throwaway account was
-available, so confirm it with `gh api rate_limit` before and after a real run.
+`SCAFFOLD_GH_GRAPHQL_BUDGET` (100) stays the conservative bound it was. The
+count above plus the preflight call and `gh repo create` is 19; times 3, the
+most GraphQL queries one `gh` command is assumed to send (owner lookup, object
+lookup, mutation), plus 3 for one retried command, gives 60. That multiplier
+has not been measured: `gh project` subcommands can send more than 3 queries
+(owner fallback, paginated `field-list`), and a fresh-board run is only one of
+the branches. The budget is therefore not lowered to 60 until `gh api
+rate_limit` has been read before and after a real run on a throwaway account.
+The test only requires the budget to stay at or above that computed 60.
 
 `SCAFFOLD_GH_GRAPHQL_SITES` (16) counts the call sites in the scaffold
 libraries; the same test fails when one is added without updating it.
@@ -58,9 +61,12 @@ libraries; the same test fails when one is added without updating it.
 After the fields are created, `scaffold_kanban_workflows` reads the board's
 built-in workflows through GraphQL (`ProjectV2.workflows`, which exposes
 `enabled`). It warns when "Item closed" or "Pull request merged" is off, since
-moving cards to Done relies on both. It never stops the scaffold: if the read
-fails, it prints the one-line instruction to enable both by hand. Workflows
-cannot be enabled through the API.
+moving cards to Done relies on both, and says "not found under that name"
+when a workflow is absent from the answer. It never stops the scaffold, and
+it is the one read here that does not go through `gh_read`: the step is
+advisory, so a failure prints the one-line instruction to enable both by hand,
+with the cause from `gh_classify_failure` (rate, auth, network or other).
+Workflows cannot be enabled through the API.
 
 ## Not covered yet
 

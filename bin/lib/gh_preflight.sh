@@ -1,6 +1,6 @@
 #!/bin/bash
 
-: "${SCAFFOLD_GH_GRAPHQL_BUDGET:=60}"
+: "${SCAFFOLD_GH_GRAPHQL_BUDGET:=100}"
 : "${SCAFFOLD_GH_GRAPHQL_SITES:=16}"
 : "${SCAFFOLD_GH_GRAPHQL_MEASURED:=17}"
 : "${SCAFFOLD_RERUN_CMD:=the same blueprintx command}"
