@@ -153,7 +153,7 @@ repos:
         entry: bash tests/test_check_logo_sync.sh
         language: system
         pass_filenames: false
-        files: ^(templates/python-common/bin/check_logo_sync\.sh|tests/test_check_logo_sync\.sh)$
+        files: ^(templates/python-common/bin/(check_logo_sync\.sh|lib/common\.sh)|tests/test_check_logo_sync\.sh)$
 
       - id: function-length
         name: function length (60 lines, docstring excluded)
