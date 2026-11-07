@@ -352,8 +352,8 @@ test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
     source "$REPO_ROOT/bin/lib/gh_preflight.sh"
     [ "$int_calls" -eq "$SCAFFOLD_GH_GRAPHQL_MEASURED" ] ||
         fail "a fresh scaffold makes ${int_calls} GraphQL-backed gh calls, SCAFFOLD_GH_GRAPHQL_MEASURED is ${SCAFFOLD_GH_GRAPHQL_MEASURED}"
-    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge $((SCAFFOLD_GH_GRAPHQL_REQUESTS * 2)) ] ||
-        fail "SCAFFOLD_GH_GRAPHQL_BUDGET ${SCAFFOLD_GH_GRAPHQL_BUDGET} is below 2 * SCAFFOLD_GH_GRAPHQL_REQUESTS (${SCAFFOLD_GH_GRAPHQL_REQUESTS})"
+    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge $((SCAFFOLD_GH_GRAPHQL_POINTS * 2)) ] ||
+        fail "SCAFFOLD_GH_GRAPHQL_BUDGET ${SCAFFOLD_GH_GRAPHQL_BUDGET} is below 2 * SCAFFOLD_GH_GRAPHQL_POINTS (${SCAFFOLD_GH_GRAPHQL_POINTS})"
 }
 
 test_graphql_call_sites_match_the_measured_count() {
