@@ -2811,7 +2811,34 @@ guessing.</p>
    (<code>bin/lib/gh_preflight.sh</code>) calls GraphQL (<code>{viewer{login}}</code>), REST
    (<code>gh api user</code>) and <code>gh api rate_limit</code>. A failed call, a blank login, or
    fewer GraphQL calls left than <code>SCAFFOLD_GH_GRAPHQL_BUDGET</code> stops the run
-   before anything is created.</li>
+   before anything is created.
+   The same preflight reads the token scopes (<code>gh api -i user</code>, header
+   <code>X-Oauth-Scopes</code>) and requires every scope in <code>SCAFFOLD_GH_REQUIRED_SCOPES</code>
+   (<code>repo project</code>): <code>repo</code> for the repository, labels, issues and secrets,
+   <code>project</code> for <code>gh project</code>. A missing scope stops the run before
+   <code>gh repo create</code>, names the scope, and prints <code>gh auth refresh -s &lt;scope&gt;</code>
+   (one line per missing scope). The header name is matched case-insensitively
+   and the list is compared with all whitespace removed. Scopes are matched
+   whole, so <code>read:project</code> does not satisfy <code>project</code>. <code>repo</code> is required even
+   for a public repository, so a token with only <code>public_repo</code> is stopped.
+   A fine-grained or app token reports no <code>X-Oauth-Scopes</code> header; the
+   preflight then says the scopes are "not verified" and continues, because
+   there is nothing to compare.
+   The <code>workflow</code> scope depends on how the first push authenticates. The
+   scaffold adds the remote as <code>git@github.com:&lt;slug&gt;.git</code>, so its push uses
+   SSH and does not need it. <code>bin/promote_offline_to_online.sh</code> runs
+   <code>gh repo create --source=.</code>, which follows the <code>git_protocol</code> gh setting;
+   over HTTPS, GitHub rejects a push that adds <code>.github/workflows/*</code> without
+   <code>workflow</code>, so the promoter requires <code>repo</code> and <code>workflow</code> unless
+   <code>gh config get git_protocol -h github.com</code> is <code>ssh</code> (the per-host value gh
+   itself uses). The promoter never sets up a board, so it does not require
+   <code>project</code>.
+   <code>project</code> is required by the scaffold even if you later decline the board:
+   the board prompt comes after <code>gh repo create</code>, and a token that cannot
+   create it would otherwise fail after the repository exists. To opt out, set
+   <code>SCAFFOLD_GH_REQUIRED_SCOPES</code> to the scopes you accept, for example
+   <code>SCAFFOLD_GH_REQUIRED_SCOPES=repo</code>, or to an empty value to skip the scope
+   check entirely.</li>
 <li><strong>Cause and wait.</strong> The stop message names the cause and when to retry:<ul>
 <li>rate limit: the reset time as a duration and an absolute time, for
   example <code>retry in 14 min, after 00:34Z</code>; a secondary limit uses the
@@ -2824,6 +2851,14 @@ guessing.</p>
    owner kind (user or organization) or the GitHub login stops the scaffold.
    The default board visibility ("same as repo") is never <code>PUBLIC</code> after a
    failed read.</li>
+<li><strong>Duplicate board titles stop.</strong> Two boards titled <code>&lt;project&gt; kanban</code> stop
+   the scaffold and print both board URLs. The scaffold never guesses which one
+   to use and never finishes with no board linked. Delete or rename all but
+   one, then re-run. The check runs right after the preflight, before
+   <code>gh repo create</code>, so a duplicate leaves nothing half-created; it runs even
+   if you would later decline the board, because the title is the project's
+   own. The same check runs again when the board is set up, and a stop at that
+   point carries the "already exists on GitHub" advice of any mid-run stop.</li>
 <li><strong>Mid-run failures stop too.</strong> A house label, board edit, link, Status
    option, project field, or default-branch edit
    failure after the preflight stops with the same message instead of a
@@ -2844,9 +2879,7 @@ measurement. <code>SCAFFOLD_GH_GRAPHQL_SITES</code> (15) counts the <code>gh pro
 updating it, which is the prompt to re-check the budget.</p>
 <h2 id="not-covered-yet">Not covered yet<a class="headerlink" href="#not-covered-yet" title="Permanent link">&para;</a></h2>
 <p>The <code>delete_branch_on_merge</code> setting, the <code>Cut 1.0.0</code> release issue and its board card keep their warn-and-print-the-
-manual-command fallback, and the built-in board workflows are not read. Two boards with the same title still warn and
-continue without a board, and the <code>project</code> token scope is not checked before
-the repo is created.</p>
+manual-command fallback, and the built-in board workflows are not read.</p>
 
 
 
