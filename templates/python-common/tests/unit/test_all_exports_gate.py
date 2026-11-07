@@ -611,6 +611,12 @@ def test_internal_all_changed_after_assignment_is_not_trusted(
         ('__all__ = ["Other"]\ndef _i():\n    globals()["__all__"].append("Priv")\n', True),
         ("import sys\nsetattr(sys.modules[__name__], 'Priv', 1)\n", True),
         ("def f():\n    setattr(sys.modules[__name__], 'Priv', 1)\n", True),
+        ("(lambda self: setattr(self, 'Priv', 1))(sys.modules[__name__])\n", True),
+        ("def f(cls=sys.modules[__name__]):\n    setattr(cls, 'Priv', 1)\nf()\n", True),
+        ("eval('globals().update(Priv=1)')\n", True),
+        ("import builtins\nbuiltins.exec('Priv = 1')\n", True),
+        ("import sys\nsys.modules[__name__].Priv = 1\n", True),
+        ("import os\nif os.environ.get('X'):\n    globals()['Priv'] = 1\n", True),
         ('class A:\n    def __init__(self):\n        setattr(self, "Priv", 1)\n', False),
         ("class A:\n    def d(self):\n        return vars(self)\n", False),
     ],
@@ -625,6 +631,12 @@ def test_internal_all_changed_after_assignment_is_not_trusted(
         "all-append-in-def",
         "setattr-sys-modules",
         "setattr-sys-modules-in-def",
+        "lambda-self",
+        "def-cls-default",
+        "eval",
+        "builtins-attr",
+        "sys-modules-store",
+        "dynamic-in-if",
         "setattr-self",
         "vars-self",
     ],
@@ -639,6 +651,16 @@ def test_dynamic_write_anywhere_is_charged_except_on_self(
         {"_internal/__init__.py": "", "_internal/config.py": str_config},
     )
     assert bool(_load_gate().check_package(path_init)) is bool_charged
+
+
+def test_opaque_all_provides_a_name_that_is_not_visibly_bound(tmp_path: Path) -> None:
+    """An ``__all__`` the gate cannot read provides every name, bound or not."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": '__all__ = ["Priv"] + []\n'},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
 
 
 def test_internal_all_built_from_a_non_literal_is_not_trusted(tmp_path: Path) -> None:

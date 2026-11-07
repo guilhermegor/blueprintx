@@ -245,7 +245,21 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
     return True
 
 
-_SET_DYNAMIC_WRITERS = frozenset({"globals", "locals", "vars", "setattr", "exec"})
+_SET_DYNAMIC_WRITERS = frozenset(
+    {
+        "globals",
+        "locals",
+        "vars",
+        "setattr",
+        "exec",
+        "eval",
+        "__import__",
+        "modules",
+        "f_globals",
+        "_getframe",
+        "currentframe",
+    }
+)
 
 
 def _internal_origin(
@@ -376,8 +390,10 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
 
     The whole tree is read, nested scopes, defaults and decorators included, because a function
     called at import time writes the module namespace as surely as a module-level statement.
-    The one exemption is ``setattr(self, ...)`` or ``vars(self)`` (``cls`` likewise) inside a
-    nested scope's body, which acts on an instance or class, never on the module.
+    A writer name counts as a bare name or as an attribute (``builtins.exec``, ``sys.modules``).
+    The one exemption is ``setattr(x, ...)`` or ``vars(x)`` inside a method body, where ``x`` is
+    that method's own first parameter: a caller can still pass a module there, so a lambda or a
+    plain function never qualifies.
 
     Parameters
     ----------
@@ -387,31 +403,34 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
     Returns
     -------
     bool
-        ``True`` when ``globals``, ``locals``, ``vars``, ``setattr`` or ``exec`` is named
-        outside that exemption.
+        ``True`` when a dynamic writer is named outside that exemption.
     """
     set_exempt = {
         id(cls_call.func)
-        for cls_scope in _nested_scope_bodies(list_nodes)
-        for cls_call in ast.walk(cls_scope)
+        for cls_fn in _methods(list_nodes)
+        for cls_stmt in cls_fn.body
+        for cls_call in ast.walk(cls_stmt)
         if isinstance(cls_call, ast.Call)
         and isinstance(cls_call.func, ast.Name)
         and cls_call.func.id in {"setattr", "vars"}
         and cls_call.args
         and isinstance(cls_call.args[0], ast.Name)
+        and cls_call.args[0].id == cls_fn.args.args[0].arg
         and cls_call.args[0].id in {"self", "cls"}
     }
     return any(
-        isinstance(cls_sub, ast.Name)
-        and cls_sub.id in _SET_DYNAMIC_WRITERS
+        (
+            (isinstance(cls_sub, ast.Name) and cls_sub.id in _SET_DYNAMIC_WRITERS)
+            or (isinstance(cls_sub, ast.Attribute) and cls_sub.attr in _SET_DYNAMIC_WRITERS)
+        )
         and id(cls_sub) not in set_exempt
         for cls_node in list_nodes
         for cls_sub in ast.walk(cls_node)
     )
 
 
-def _nested_scope_bodies(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
-    """Yield the body of every def, class and lambda, leaving out defaults and decorators.
+def _methods(list_nodes: list[ast.stmt]) -> Iterator[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Yield every def that sits directly in a class body and takes a first parameter.
 
     Parameters
     ----------
@@ -420,15 +439,18 @@ def _nested_scope_bodies(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
 
     Yields
     ------
-    ast.AST
-        One statement of a def or class body, or the expression of a lambda.
+    ast.FunctionDef or ast.AsyncFunctionDef
+        Each method with at least one positional parameter.
     """
     for cls_node in list_nodes:
-        for cls_sub in ast.walk(cls_node):
-            if isinstance(cls_sub, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-                yield from cls_sub.body
-            elif isinstance(cls_sub, ast.Lambda):
-                yield cls_sub.body
+        for cls_cls in ast.walk(cls_node):
+            if isinstance(cls_cls, ast.ClassDef):
+                yield from (
+                    cls_fn
+                    for cls_fn in cls_cls.body
+                    if isinstance(cls_fn, ast.FunctionDef | ast.AsyncFunctionDef)
+                    and cls_fn.args.args
+                )
 
 
 def _pattern_names(cls_sub: ast.AST) -> set[str]:
@@ -551,7 +573,9 @@ def _star_provides(
     list_exported = declared_all(path_module)
     if _binds_dynamically(list_nodes):
         return True
-    if list_exported is not None and not _extends_all(list_nodes):
+    if _extends_all(list_nodes):
+        return True
+    if list_exported is not None:
         return str_name in list_exported
     if str_name in _bound_names(list_nodes) | _imported_names(list_nodes):
         return True
