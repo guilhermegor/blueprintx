@@ -37,7 +37,7 @@ issue-template-guard: require "**Blocked by:**" if-label state:blocked
      dispatched in parallel?" a query instead of a guess.
 
      `*` matches across `/`, so `docs/*` and `docs/**` are equivalent — use whichever reads
-     clearer.
+     clearer. A trailing `/` (`docs/`) also means "everything under it".
 -->
 
 ```surface
