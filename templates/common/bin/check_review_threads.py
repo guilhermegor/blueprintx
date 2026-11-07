@@ -513,7 +513,7 @@ def _is_provable_without_patch(dict_file: dict) -> bool:
 
     Both need ``changes == 0``. An ``added`` entry also needs the empty-blob ``sha``: the API
     reports ``changes == 0`` for a binary too, so only the blob proves its content. A
-    ``renamed`` entry needs any non-empty ``sha``, which proves the content is unchanged;
+    ``renamed`` entry needs any non-empty ``sha``, which pins the content at the reviewed head;
     the file modes on both sides are hashed separately by :func:`fetch_patch_fingerprint`,
     so a rename plus an exec-bit flip changes the digest. Any other patchless entry raises.
     """

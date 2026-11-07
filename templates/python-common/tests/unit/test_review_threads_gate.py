@@ -4036,6 +4036,17 @@ def test_patch_fingerprint_renamed_nonempty_blob_is_fingerprinted() -> None:
     assert len(cls_gate.patch_fingerprint([dict_rename])) == 64
 
 
+def test_patch_fingerprint_renames_of_different_blobs_differ() -> None:
+    """The blob ``sha`` is hashed: the same rename onto different content is not the same."""
+    cls_gate = _load_gate()
+    dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}
+    assert cls_gate.patch_fingerprint(
+        [{**dict_rename, "sha": "3b18e512dba79e4c8300dd08aeb37f8e728b8dad"}]
+    ) != cls_gate.patch_fingerprint(
+        [{**dict_rename, "sha": "9daeafb9864cf43055ae93beb0afd6c7d144bfa4"}]
+    )
+
+
 def test_patch_fingerprint_added_nonempty_blob_raises() -> None:
     """A patchless ``added`` entry other than the empty blob (a binary) is unproven."""
     cls_gate = _load_gate()
