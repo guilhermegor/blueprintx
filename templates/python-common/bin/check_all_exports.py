@@ -294,10 +294,11 @@ def _internal_origin(
 
 
 def _extends_all(list_nodes: list[ast.stmt]) -> bool:
-    """Return whether a module grows ``__all__`` after its first assignment.
+    """Return whether ``__all__`` is anything but one literal list the gate can read.
 
-    ``declared_all`` reads only the first assignment, so a module that also uses ``+=``,
-    ``.extend`` or ``.append`` has an ``__all__`` the gate cannot trust to exclude a name.
+    ``declared_all`` reads only the first assignment, and only its string literals, so a second
+    assignment, ``+=``, ``.extend``, ``.append``, a subscript write, or a non-literal value
+    leaves an ``__all__`` the gate cannot trust to exclude a name.
 
     Parameters
     ----------
@@ -307,22 +308,93 @@ def _extends_all(list_nodes: list[ast.stmt]) -> bool:
     Returns
     -------
     bool
-        ``True`` when ``__all__`` is mutated after assignment.
+        ``True`` when ``__all__`` is not a single literal list of strings.
+    """
+    list_subs = [cls_sub for cls_node in list_nodes for cls_sub in ast.walk(cls_node)]
+    int_stores = sum(
+        isinstance(cls_sub, ast.Name)
+        and cls_sub.id == "__all__"
+        and isinstance(cls_sub.ctx, ast.Store)
+        for cls_sub in list_subs
+    )
+    return int_stores > 1 or any(_all_is_opaque(cls_sub) for cls_sub in list_subs)
+
+
+def _all_is_opaque(cls_sub: ast.AST) -> bool:
+    """Return whether one node reaches into ``__all__`` or assigns it a non-literal value.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node under a module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``__all__.x``, ``__all__[...]``, or ``__all__ = <not a string list>``.
+    """
+    if isinstance(cls_sub, ast.Attribute | ast.Subscript):
+        return isinstance(cls_sub.value, ast.Name) and cls_sub.value.id == "__all__"
+    if not isinstance(cls_sub, ast.Assign):
+        return False
+    if not any(isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_sub.targets):
+        return False
+    return not isinstance(cls_sub.value, ast.List | ast.Tuple) or any(
+        not (isinstance(cls_elt, ast.Constant) and isinstance(cls_elt.value, str))
+        for cls_elt in cls_sub.value.elts
+    )
+
+
+def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
+    """Return whether the statements write the module namespace by a route the AST cannot list.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``globals()``, ``vars()`` or ``setattr`` appears.
     """
     return any(
-        (
-            isinstance(cls_sub, ast.AugAssign)
-            and isinstance(cls_sub.target, ast.Name)
-            and cls_sub.target.id == "__all__"
-        )
-        or (
-            isinstance(cls_sub, ast.Attribute)
-            and isinstance(cls_sub.value, ast.Name)
-            and cls_sub.value.id == "__all__"
-        )
+        isinstance(cls_sub, ast.Name) and cls_sub.id in {"globals", "vars", "setattr"}
         for cls_node in list_nodes
         for cls_sub in ast.walk(cls_node)
     )
+
+
+def _bound_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
+    """Return every name the statements bind outside a nested def, class or lambda.
+
+    Wider than ``_definitions``: loop and ``with`` targets, tuple unpacking, walrus and
+    ``except ... as`` also count, and names bound inside comprehensions are included, which can
+    only over-charge, never miss a leak.
+
+    Parameters
+    ----------
+    list_nodes : iterable of ast.stmt
+        Statements to read.
+
+    Returns
+    -------
+    set of str
+        The bound names, private ones included.
+    """
+    set_names = _definitions(list_nodes)
+    list_stack: list[ast.AST] = list(list_nodes)
+    while list_stack:
+        cls_cur = list_stack.pop()
+        if isinstance(cls_cur, ast.Name) and isinstance(cls_cur.ctx, ast.Store):
+            set_names.add(cls_cur.id)
+        if isinstance(cls_cur, ast.ExceptHandler) and cls_cur.name:
+            set_names.add(cls_cur.name)
+        if not isinstance(
+            cls_cur, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda
+        ):
+            list_stack.extend(ast.iter_child_nodes(cls_cur))
+    return set_names
 
 
 def _star_origin(
@@ -368,7 +440,8 @@ def _star_provides(
 
     The module's own ``__all__`` limits what a star import brings in, and a name it only
     re-exports through a star import of its own counts. A nested star import that cannot be
-    resolved is assumed to provide the name, so the check fails closed.
+    resolved, a dynamic namespace write, or an ``__all__`` the gate cannot read as one literal
+    list is assumed to provide the name, so the check fails closed.
 
     Parameters
     ----------
@@ -390,7 +463,9 @@ def _star_provides(
     list_exported = declared_all(path_module)
     if list_exported is not None and not _extends_all(list_nodes):
         return str_name in list_exported
-    if str_name in _definitions(list_nodes) | _imported_names(list_nodes):
+    if _binds_dynamically(list_nodes):
+        return True
+    if str_name in _bound_names(list_nodes) | _imported_names(list_nodes):
         return True
     set_next = set_seen | {path_module}
     return any(

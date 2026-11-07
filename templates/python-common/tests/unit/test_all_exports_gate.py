@@ -438,11 +438,14 @@ def test_followed_file_with_a_syntax_error_is_reported_not_raised(tmp_path: Path
     assert "member.py: could not parse" in _sole(_load_gate().check_package(path_init))
 
 
+_STR_STAR_INTERNAL = "from .public import *\nfrom ._internal.config import *\n"
+
+
 def test_public_and_internal_star_imports_do_not_flag_the_public_names(tmp_path: Path) -> None:
     """A public star import beside an ``_internal`` one keeps its names."""
     path_init = _tree(
         tmp_path,
-        "from .public import *\nfrom ._internal.config import *\n" + '__all__ = ["Pub", "Priv"]\n',
+        _STR_STAR_INTERNAL + '__all__ = ["Pub", "Priv"]\n',
         {
             "public.py": "class Pub:\n    pass\n",
             "_internal/__init__.py": "",
@@ -450,9 +453,6 @@ def test_public_and_internal_star_imports_do_not_flag_the_public_names(tmp_path:
         },
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
-
-
-_STR_STAR_INTERNAL = "from .public import *\nfrom ._internal.config import *\n"
 
 
 def test_nested_star_import_inside_internal_is_still_charged(tmp_path: Path) -> None:
@@ -526,6 +526,77 @@ def test_internal_all_extended_after_assignment_is_not_trusted(tmp_path: Path) -
                 "class Priv:\n    pass\n"
             ),
         },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_config",
+    [
+        "for Priv in range(1):\n    pass\n",
+        "with open('x') as Priv:\n    pass\n",
+        "Other, Priv = 1, 2\n",
+        "(Priv := 1)\n",
+        "try:\n    pass\nexcept ValueError as Priv:\n    pass\n",
+        "globals()['Priv'] = 1\n",
+    ],
+    ids=["for", "with", "unpack", "walrus", "except", "globals"],
+)
+def test_binding_form_without_all_is_still_charged(tmp_path: Path, str_config: str) -> None:
+    """With no ``__all__``, any form that binds the name in an ``_internal`` target leaks it."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_tail",
+    [
+        '__all__ = __all__ + ["Priv"]\n',
+        '__all__ = ["Other"]\n',
+        '__all__.append("Priv")\n',
+        '__all__.extend(["Priv"])\n',
+        '__all__[:] = ["Priv"]\n',
+    ],
+    ids=["concat", "reassign", "append", "extend", "subscript"],
+)
+def test_internal_all_changed_after_assignment_is_not_trusted(
+    tmp_path: Path, str_tail: str
+) -> None:
+    """Any later write to ``__all__`` means its first assignment cannot exclude a name."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": '__all__ = ["Other"]\n' + str_tail + "Priv = Other = 1\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_internal_all_built_from_a_non_literal_is_not_trusted(tmp_path: Path) -> None:
+    """``__all__ = [*other]`` hides names from the literal reader, so it excludes nothing."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": '__all__ = [*["Priv"]]\nPriv = 1\n',
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_missing_internal_star_target_is_still_charged(tmp_path: Path) -> None:
+    """A star import from an ``_internal`` file that does not exist is attributed to it."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.missing import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": ""},
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
 
