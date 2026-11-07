@@ -454,5 +454,7 @@ repos:
         entry: bash bin/test_urls_docstrings.sh
         language: system
         types:
-          - file
+          - python
         verbose: true
+        stages:
+          - manual

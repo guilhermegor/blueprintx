@@ -2619,3 +2619,50 @@ def test_ensure_env_with_an_example_still_seeds_the_env_file(tmp_path: Path) -> 
     )
 
     assert (tmp_path / ".env").read_text(encoding="utf-8") == "KEY=value\n"
+
+
+def _stub_curl_returning_404(path_dir: Path) -> Path:
+    """Write a ``curl`` stub that logs its arguments and answers 404.
+
+    Parameters
+    ----------
+    path_dir : pathlib.Path
+        Directory that becomes the head of ``PATH``.
+
+    Returns
+    -------
+    pathlib.Path
+        The log file the stub appends every argument line to.
+    """
+    path_log = path_dir / "curl_calls.log"
+    path_stub = path_dir / "curl"
+    path_stub.write_text(
+        f'#!/bin/bash\nprintf \'%s\\n\' "$@" >> "{path_log}"\nprintf 404\n', encoding="utf-8"
+    )
+    path_stub.chmod(0o755)
+    return path_log
+
+
+def test_check_urls_scans_every_filename_passed_not_only_the_first(tmp_path: Path) -> None:
+    """A URL living only in the second file must still be probed and fail the run.
+
+    Before blueprintx#1045 the first filename became the ``find`` root, so a commit staging
+    two files scanned only the first. The probe is a stub: no network is touched.
+    """
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    path_log = _stub_curl_returning_404(path_bin)
+    (tmp_path / "first.py").write_text('"""No links here."""\n', encoding="utf-8")
+    (tmp_path / "second.py").write_text(f'"""See {_URL_404} for details."""\n', encoding="utf-8")
+
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, str(_bin_script("test_urls_docstrings.sh")), "first.py", "second.py"],
+        cwd=tmp_path,
+        env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
+    assert _URL_404 in path_log.read_text(encoding="utf-8")

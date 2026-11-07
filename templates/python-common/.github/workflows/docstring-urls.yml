@@ -1,0 +1,51 @@
+name: Docstring URLs
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  urls:
+    name: Docstring URL check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Scan Docstring URLs
+        run: bash bin/test_urls_docstrings.sh . > docstring_urls_report.txt 2>&1 || true
+
+      - name: Open or Update Tracking Issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! grep -qE 'URL (issue|problem)|Failed to access URL' docstring_urls_report.txt; then
+            echo "No dead docstring URLs."
+            exit 0
+          fi
+          gh label create docstring-urls --color fbca04 \
+            --description "A docstring URL no longer resolves" --force || true
+          marker='<!-- docstring-urls-tracker -->'
+          {
+            printf '%s\n\nDead docstring URLs (status, file, line):\n\n```\n' "$marker"
+            grep -E 'URL (issue|problem)|Failed to access URL' docstring_urls_report.txt
+            printf '```\n'
+          } > docstring_urls_body.md
+          existing=$(gh issue list --label docstring-urls --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file docstring_urls_body.md || true
+          else
+            gh issue create --title "Dead docstring URLs" \
+              --label docstring-urls --body-file docstring_urls_body.md || true
+          fi
+          exit 0
