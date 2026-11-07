@@ -811,6 +811,7 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "class A:\n    @classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
         "from builtins import print as p\np('Priv')\n",
         "from mypkg import modules\n",
+        "from .sys import modules\n",
         "class A:\n    def f(self):\n        def g(x=setattr(self, 'Priv', 1)):\n"
         + "            pass\n",
         "class A:\n    def f(self):\n        @setattr(self, 'Priv', 1)\n        def g():\n"
@@ -821,6 +822,7 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "classmethod-cls",
         "unrelated-builtins-alias",
         "writer-name-from-first-party-module",
+        "writer-name-from-relative-sys-module",
         "own-self-in-nested-default",
         "own-self-in-nested-decorator",
     ],
@@ -853,7 +855,7 @@ def test_type_alias_rebinding_self_is_charged(tmp_path: Path) -> None:
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
 
 
-@pytest.mark.skipif(sys.version_info >= (3, 14), reason="3.14 rejects a walrus in an annotation")
+@pytest.mark.skipif(sys.version_info >= (3, 12), reason="3.12 and later reject it")
 @pytest.mark.parametrize(
     "str_config",
     ["def f(x: (Priv := 1)):\n    pass\n", "def f() -> (Priv := 1):\n    pass\n"],

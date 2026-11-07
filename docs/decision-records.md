@@ -180,13 +180,17 @@ test suite keep the contract; this section records the reasoning that lived besi
     but not inside a nested def or lambda body. An `__all__` that is not one literal list of
     strings (second assignment, `+=`, `.append`, `.extend`, subscript write, `[*x]`, `del __all__`)
     is assumed to provide the name. A loop, `with`, unpacking, walrus (in a default, decorator or
-    class base or annotation too; a walrus in an annotation is a syntax error on 3.14 only), `match` capture, `except ... as` or a function's `global` counts as binding.
+    class base or annotation too), `match` capture, `except ... as` or a function's `global` counts as
+    binding. A walrus in an annotation is legal only on Python 3.10 and 3.11; 3.12 and later
+    reject it, and `from __future__ import annotations` does not make it legal.
 
     *Remaining limits* (an AST-only reader): a name rebound by assignment (`Doc = _internal_doc`),
     a class built by `create_model(...)`, a `pydantic.dataclasses` decorator, an import through
     `importlib` / `__getattr__`, a method called through its class with another object
     (`A.f(me)`), a `staticmethod` spelled other than as a plain decorator (`f = staticmethod(f)`,
-    `sm = staticmethod`, `@wrapper(staticmethod)`), and an absolute import of another top-level package.
+    `sm = staticmethod`, `@wrapper(staticmethod)`), a writer reached through a string constant (`getattr(builtins, "exec")(...)`,
+    `getattr(sys, "modules")`, `__builtins__["exec"]`), and an absolute import of another top-level
+    package.
 - **`check_assertion_weakening.py`** (#289, #324, #590). Comparison operators weaker than `==`
   include the `in` example and `>=`; `Gt` and `Lt` are excluded because swapping equality for a
   strict inequality still excludes the old value, so it stays out of the decidable core. The

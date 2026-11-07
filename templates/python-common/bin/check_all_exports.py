@@ -500,6 +500,7 @@ def _names_writer(cls_sub: ast.AST) -> bool:
         return cls_sub.attr in _SET_DYNAMIC_WRITERS
     return (
         isinstance(cls_sub, ast.ImportFrom)
+        and cls_sub.level == 0
         and cls_sub.module in _SET_WRITER_MODULES
         and any(cls_alias.name in _SET_DYNAMIC_WRITERS for cls_alias in cls_sub.names)
     )
