@@ -19,8 +19,10 @@ _RE_COUNT = re.compile(
 )
 
 
-def sort_key(str_name: str) -> tuple[bool, str]:
+def sort_key(str_name: str) -> tuple[bool, str, str]:
     """Return the canonical ordering key: dunders first, then case-insensitive name.
+
+    The exact name is the final tiebreaker so that ``Foo`` and ``foo`` have one order.
 
     Parameters
     ----------
@@ -29,10 +31,10 @@ def sort_key(str_name: str) -> tuple[bool, str]:
 
     Returns
     -------
-    tuple of (bool, str)
+    tuple of (bool, str, str)
         The key shared by every registry list.
     """
-    return (not str_name.startswith("__"), str_name.lower())
+    return (not str_name.startswith("__"), str_name.lower(), str_name)
 
 
 def binds_all(cls_node: ast.Assign | ast.AnnAssign | ast.AugAssign) -> bool:
@@ -56,6 +58,46 @@ def binds_all(cls_node: ast.Assign | ast.AnnAssign | ast.AugAssign) -> bool:
     )
 
 
+def mutates_all(cls_node: ast.AST) -> bool:
+    """Return whether a node is a method call on ``__all__`` such as ``.append`` or ``.sort``.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        Any node of the module tree.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``__all__.<method>(...)``, which changes the list without rebinding it.
+    """
+    return (
+        isinstance(cls_node, ast.Call)
+        and isinstance(cls_node.func, ast.Attribute)
+        and isinstance(cls_node.func.value, ast.Name)
+        and cls_node.func.value.id == "__all__"
+    )
+
+
+def is_plain_binding(cls_node: ast.Assign | ast.AnnAssign | ast.AugAssign) -> bool:
+    """Return whether the statement binds ``__all__`` by name alone, with no ``+=`` or unpacking.
+
+    Parameters
+    ----------
+    cls_node : ast.Assign or ast.AnnAssign or ast.AugAssign
+        A statement for which ``binds_all`` is true.
+
+    Returns
+    -------
+    bool
+        ``False`` for ``+=`` and for a tuple or list target, whose right-hand side is not the list.
+    """
+    if isinstance(cls_node, ast.AugAssign):
+        return False
+    list_targets = cls_node.targets if isinstance(cls_node, ast.Assign) else [cls_node.target]
+    return all(isinstance(cls_t, ast.Name) for cls_t in list_targets)
+
+
 def all_value(path_init: pathlib.Path) -> ast.expr | None:
     """Return the expression bound to a module's ``__all__``, or ``None`` when it has none.
 
@@ -76,9 +118,10 @@ def all_value(path_init: pathlib.Path) -> ast.expr | None:
         for cls_node in ast.walk(cls_tree)
         if isinstance(cls_node, ast.Assign | ast.AnnAssign | ast.AugAssign) and binds_all(cls_node)
     ]
-    if not list_nodes:
+    list_mutations = [cls_node for cls_node in ast.walk(cls_tree) if mutates_all(cls_node)]
+    if not list_nodes and not list_mutations:
         return None
-    if len(list_nodes) > 1 or isinstance(list_nodes[0], ast.AugAssign):
+    if list_mutations or len(list_nodes) > 1 or not is_plain_binding(list_nodes[0]):
         return ast.Constant(None)
     return list_nodes[0].value or ast.Constant(None)
 

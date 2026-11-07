@@ -137,11 +137,15 @@ test_unreadable_all_forms_fail() {
     expect_init "augmented __all__" '__all__ = [\n    "a",\n]\n__all__ += ["b"]\n' "$str_literal"
     expect_init "starred entry" '__all__ = [\n    *other,\n]\n' "$str_literal"
     expect_init "tuple-unpacked __all__" '__all__, other = ["a"], 1\n' "$str_literal"
+    expect_init "tuple-unpacked literal tuple" '__all__, other = (\n    "a",\n    "b",\n)\n' "$str_literal"
+    expect_init "appended __all__" '__all__ = [\n    "a",\n]\n__all__.append("b")\n' "$str_literal"
+    expect_init "extended __all__" '__all__ = [\n    "a",\n]\n__all__.extend(["b"])\n' "$str_literal"
     expect_init "non-string entry" '__all__ = [\n    1,\n]\n' "$str_literal"
 }
 
 test_annotated_and_nested_all_are_checked() {
     expect_init "annotated __all__" '__all__: list[str] = [\n    "b",\n    "a",\n]\n' "not sorted"
+    expect_init "case-only tie" '__all__ = [\n    "foo",\n    "Foo",\n]\n' "not sorted"
     expect_init "nested __all__" 'if True:\n    __all__ = [\n        "b",\n        "a",\n    ]\n' "not sorted"
 }
 
