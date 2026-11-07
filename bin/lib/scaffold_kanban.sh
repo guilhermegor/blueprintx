@@ -157,6 +157,34 @@ scaffold_kanban_url() {
 	printf '%s/%s' "$str_base" "$2"
 }
 
+scaffold_kanban_workflows() {
+	local str_owner="$1" str_number="$2" str_rows str_err str_name str_effect str_off="" str_missing="" int_rc=0
+	str_err="$(mktemp 2>/dev/null)" || str_err=/dev/null
+	str_rows="$(gh api graphql -f o="$str_owner" -F n="$str_number" \
+		-f query='query($o:String!,$n:Int!){repositoryOwner(login:$o){... on ProjectV2Owner{projectV2(number:$n){workflows(first:20){nodes{name enabled}}}}}}' \
+		--jq '.data.repositoryOwner.projectV2.workflows.nodes[] | "\(.enabled)|\(.name)"' 2>"$str_err")" || int_rc=$?
+	if [ "$int_rc" -ne 0 ]; then
+		print_status "warning" "Could not read the board workflows (cause: $(gh_classify_failure "$(cat "$str_err")")); enable 'Item closed' and 'Pull request merged' (cards move to Done) at the board's Workflows page"
+		[ "$str_err" = /dev/null ] || rm -f "$str_err"
+		return 0
+	fi
+	[ "$str_err" = /dev/null ] || rm -f "$str_err"
+	for str_name in "Item closed" "Pull request merged"; do
+		str_effect="closed issues"
+		[ "$str_name" != "Pull request merged" ] || str_effect="merged pull requests"
+		if grep -qFx "true|${str_name}" <<<"$str_rows"; then
+			continue
+		fi
+		if grep -qFx "false|${str_name}" <<<"$str_rows"; then
+			str_off+="'${str_name}' is off, so ${str_effect} will not move to Done. "
+		else
+			str_missing+="'${str_name}' was not found under that name. "
+		fi
+	done
+	[ -z "$str_off" ] || print_status "warning" "${str_off}Enable them at the board's Workflows page"
+	[ -z "$str_missing" ] || print_status "warning" "${str_missing}Check the board's Workflows page; a renamed workflow still needs to be enabled"
+}
+
 scaffold_kanban_finish() {
 	local str_slug="$1" str_owner="$2" str_number="$3" str_vis="$4"
 	gh_run "set the board's visibility to ${str_vis}" gh project edit "$str_number" \
@@ -165,6 +193,7 @@ scaffold_kanban_finish() {
 		--owner "$str_owner" --repo "$str_slug"
 	scaffold_kanban_status_options "$str_owner" "$str_number"
 	scaffold_kanban_fields "$str_owner" "$str_number"
+	scaffold_kanban_workflows "$str_owner" "$str_number"
 }
 
 scaffold_kanban_create() {
