@@ -7,6 +7,7 @@ Offline scaffolds (no GitHub remote) do not receive them.
 | Workflow | Rule |
 |----------|------|
 | `close-linked-issues.yml` | On a merged same-repo PR into the default branch, closes the issues named by the branch (`<type>/<N>-<slug>`) or by `Closes/Fixes/Resolves #N`. |
+| `delete-closed-pr-branch.yml` | On a same-repo PR closed **without merge**, deletes its head branch (`delete_branch_on_merge` never fires there). Skips forks, the default branch, an already-deleted ref and a branch whose tip is not the PR head; the job summary records the ref and sha for a restore. |
 | `branch-has-issue.yml` | Assigns the author when a same-repo PR is opened (job `assign`), then fails a PR whose head branch carries no issue number (`<type>/<N>-<slug>`), that has no assignee, or that is linked to no real issue. `release/`, `dependabot/` and `renovate/` branches are exempt from the branch rule. |
 | `pr-title-conventional.yml` | Fails a PR title that is not a Conventional Commit; squash merges use it as the commit subject. |
 | `pr-body-template.yml` | Fails a PR body missing a `## ` section of `.github/PULL_REQUEST_TEMPLATE.md`. |
