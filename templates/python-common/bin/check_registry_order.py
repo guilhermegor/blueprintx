@@ -70,8 +70,7 @@ def all_value(path_init: pathlib.Path) -> ast.expr | None:
     list_nodes = [
         cls_node
         for cls_node in ast.walk(cls_tree)
-        if isinstance(cls_node, ast.Assign | ast.AnnAssign | ast.AugAssign)
-        and binds_all(cls_node)
+        if isinstance(cls_node, ast.Assign | ast.AnnAssign | ast.AugAssign) and binds_all(cls_node)
     ]
     if not list_nodes:
         return None
