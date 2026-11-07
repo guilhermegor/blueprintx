@@ -763,8 +763,9 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "g = lambda x=(Priv := 1): x\n",
         "class B(metaclass=(Priv := type)):\n    pass\n",
         "async def f(x=(Priv := 1)):\n    pass\n",
-        "def f(x: (Priv := 1)):\n    pass\n",
-        "def f() -> (Priv := 1):\n    pass\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        type self = int\n        setattr(self, 'Priv', 1)\n"
+        + "A().f()\n",
         _STR_SELF_MODULE
         + "class A:\n    @builtins.staticmethod\n    def f(cls):\n"
         + "        setattr(cls, 'Priv', 1)\nA.f(me)\n",
@@ -787,8 +788,7 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "walrus-lambda-default",
         "walrus-class-keyword",
         "walrus-async-default",
-        "walrus-param-annotation",
-        "walrus-return-annotation",
+        "type-alias-self",
         "staticmethod-attribute",
         "walrus-decorator",
         "walrus-class-base",
@@ -805,3 +805,34 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         {"_internal/__init__.py": "", "_internal/config.py": str_config},
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_config",
+    [
+        "class A:\n    def f(self):\n        self.x = 1\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
+        "from builtins import print as p\np('Priv')\n",
+        "class A:\n    def f(self):\n        def g(x=setattr(self, 'Priv', 1)):\n"
+        + "            pass\n",
+        "class A:\n    def f(self):\n        @setattr(self, 'Priv', 1)\n        def g():\n"
+        + "            pass\n",
+    ],
+    ids=[
+        "attribute-store-on-self",
+        "classmethod-cls",
+        "unrelated-builtins-alias",
+        "own-self-in-nested-default",
+        "own-self-in-nested-decorator",
+    ],
+)
+def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
+    tmp_path: Path, str_config: str
+) -> None:
+    """A method writing its own ``self``/``cls``, or a harmless builtin alias, stays clean."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert _load_gate().check_package(path_init) == []

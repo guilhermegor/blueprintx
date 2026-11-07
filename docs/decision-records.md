@@ -159,6 +159,35 @@ test suite keep the contract; this section records the reasoning that lived besi
 - **`check_all_exports.py`.** `__all__` may be a list or a tuple; accepting only a list made a
   complete tuple read as empty and every public member as missing, a gate that fails loudest on
   correct code. Vendored and generated trees are skipped.
+
+  *`_internal` tracer* (#950, #993): follows a name through relative and absolute first-party
+  imports (dotted paths and `member/__init__.py` included), through imports under a module-level
+  `try:` / `with` / `if`, through `from x import *`, and through `from . import _internal` and
+  `from pkg import _internal as Doc`. A `from ._internal... import *` is charged only the names
+  that file provides (its definitions, imports and nested star imports, limited by its
+  `__all__`). The star form is a fallback, used only when nothing in the module binds the name.
+  A followed file that is not valid Python is reported as a finding naming it; invalid UTF-8 or a
+  broken `__init__.py` still fails with a traceback.
+
+  *Dynamic bindings* (#1011, #1024): a name is assumed provided when the file names a writer
+  (`globals`, `locals`, `vars`, `setattr`, `exec`, `eval`, `__import__`, `modules`, `f_globals`,
+  `_getframe`, `currentframe`), as a bare name, an attribute (`builtins.exec`) or an import alias
+  (`from builtins import exec as run`), anywhere in the tree. The one exemption is
+  `setattr(self|cls, ...)` / `vars(self|cls)` on the first parameter of a method that is not a
+  `staticmethod` and never rebinds that name (assignment, `del`, `import ... as`, `match`
+  capture, `except ... as`, `type`, or a nested `def`/`class` of that name). The call may sit in
+  the method body or in a nested def's decorator or default, which run in the method's scope,
+  but not inside a nested def or lambda body. An `__all__` that is not one literal list of
+  strings (second assignment, `+=`, `.append`, `.extend`, subscript write, `[*x]`, `del __all__`)
+  is assumed to provide the name. A loop, `with`, unpacking, walrus (in a default, decorator or
+  class base too), `match` capture, `except ... as` or a function's `global` counts as binding.
+
+  *Remaining limits* (an AST-only reader): a name rebound by assignment (`Doc = _internal_doc`),
+  a class built by `create_model(...)`, a `pydantic.dataclasses` decorator, an import through
+  `importlib` / `__getattr__`, a method called through its class with another object
+  (`A.f(me)`), a `staticmethod` spelled other than as a plain decorator (`f = staticmethod(f)`,
+  `sm = staticmethod`, `@wrapper(staticmethod)`), a walrus in a parameter or return annotation
+  (a syntax error on Python 3.14), and an absolute import of another top-level package.
 - **`check_assertion_weakening.py`** (#289, #324, #590). Comparison operators weaker than `==`
   include the `in` example and `>=`; `Gt` and `Lt` are excluded because swapping equality for a
   strict inequality still excludes the old value, so it stays out of the decidable core. The

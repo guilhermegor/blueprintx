@@ -413,7 +413,7 @@ def _header_nodes(
 ) -> list[ast.AST]:
     """Return the parts of a def, class or lambda that run in the enclosing scope.
 
-    Decorators, defaults, annotations and class bases are evaluated where the statement sits, so
+    Decorators, defaults and class bases are evaluated where the statement sits, so
     a walrus there binds a name in that scope even though the body does not.
 
     Parameters
@@ -432,22 +432,7 @@ def _header_nodes(
     list_found: list[ast.AST] = [*cls_args.defaults, *filter(None, cls_args.kw_defaults)]
     if isinstance(cls_scope, ast.Lambda):
         return list_found
-    list_annots = [
-        cls_arg.annotation
-        for cls_arg in [
-            *cls_args.posonlyargs,
-            *cls_args.args,
-            *cls_args.kwonlyargs,
-            *filter(None, [cls_args.vararg, cls_args.kwarg]),
-        ]
-        if cls_arg.annotation
-    ]
-    return [
-        *cls_scope.decorator_list,
-        *list_found,
-        *list_annots,
-        *filter(None, [cls_scope.returns]),
-    ]
+    return [*cls_scope.decorator_list, *list_found]
 
 
 def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
