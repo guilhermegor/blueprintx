@@ -619,6 +619,8 @@ def test_internal_all_changed_after_assignment_is_not_trusted(
         ("import os\nif os.environ.get('X'):\n    globals()['Priv'] = 1\n", True),
         ('class A:\n    def __init__(self):\n        setattr(self, "Priv", 1)\n', False),
         ("class A:\n    def d(self):\n        return vars(self)\n", False),
+        ("class A:\n    async def d(self):\n        setattr(self, 'Priv', 1)\n", False),
+        ("def f():\n    (Priv := 1)\n    return lambda: (Priv := 2)\n", False),
     ],
     ids=[
         "module",
@@ -639,6 +641,8 @@ def test_internal_all_changed_after_assignment_is_not_trusted(
         "dynamic-in-if",
         "setattr-self",
         "vars-self",
+        "async-setattr-self",
+        "walrus-in-body",
     ],
 )
 def test_dynamic_write_anywhere_is_charged_except_on_self(
@@ -744,7 +748,26 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         _STR_SELF_MODULE
         + "class A:\n    @staticmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n"
         + "A.f(me)\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        import pkg._internal.config as self\n"
+        + "        setattr(self, 'Priv', 1)\nA().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        match me:\n            case self:\n"
+        + "                setattr(self, 'Priv', 1)\nA().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        try:\n            pass\n"
+        + "        except Exception as self:\n            pass\n        setattr(self, 'Priv', 1)\n"
+        + "A().f()\n",
         "def f(x=(Priv := 1)):\n    pass\n",
+        "def f(*, x=(Priv := 1)):\n    pass\n",
+        "g = lambda x=(Priv := 1): x\n",
+        "class B(metaclass=(Priv := type)):\n    pass\n",
+        "async def f(x=(Priv := 1)):\n    pass\n",
+        "def f(x: (Priv := 1)):\n    pass\n",
+        "def f() -> (Priv := 1):\n    pass\n",
+        _STR_SELF_MODULE
+        + "class A:\n    @builtins.staticmethod\n    def f(cls):\n"
+        + "        setattr(cls, 'Priv', 1)\nA.f(me)\n",
         "def d(v):\n    return lambda f: f\n\n\n@d(Priv := 1)\ndef g():\n    pass\n",
         "class B((Priv := 1).__class__):\n    pass\n",
         "__all__ = ['Other']\ndel __all__\nPriv = 1\n",
@@ -756,7 +779,17 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "self-reassigned",
         "nested-def-self",
         "staticmethod-cls",
+        "import-as-self",
+        "match-capture-self",
+        "except-as-self",
         "walrus-default",
+        "walrus-kwonly-default",
+        "walrus-lambda-default",
+        "walrus-class-keyword",
+        "walrus-async-default",
+        "walrus-param-annotation",
+        "walrus-return-annotation",
+        "staticmethod-attribute",
         "walrus-decorator",
         "walrus-class-base",
         "del-all",

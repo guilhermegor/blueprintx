@@ -245,7 +245,7 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
     return True
 
 
-_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+_TUPLE_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
 _SET_DYNAMIC_WRITERS = frozenset(
     {
         "globals",
@@ -402,17 +402,19 @@ def _scope_nodes(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
     while list_stack:
         cls_cur = list_stack.pop()
         yield cls_cur
-        if isinstance(cls_cur, _SCOPES):
+        if isinstance(cls_cur, _TUPLE_SCOPES):
             list_stack.extend(_header_nodes(cls_cur))
         else:
             list_stack.extend(ast.iter_child_nodes(cls_cur))
 
 
-def _header_nodes(cls_scope: ast.stmt | ast.Lambda) -> list[ast.AST]:
+def _header_nodes(
+    cls_scope: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda,
+) -> list[ast.AST]:
     """Return the parts of a def, class or lambda that run in the enclosing scope.
 
-    Decorators, defaults and class bases are evaluated where the statement sits, so a walrus
-    there binds a name in that scope even though the body does not.
+    Decorators, defaults, annotations and class bases are evaluated where the statement sits, so
+    a walrus there binds a name in that scope even though the body does not.
 
     Parameters
     ----------
@@ -430,7 +432,22 @@ def _header_nodes(cls_scope: ast.stmt | ast.Lambda) -> list[ast.AST]:
     list_found: list[ast.AST] = [*cls_args.defaults, *filter(None, cls_args.kw_defaults)]
     if isinstance(cls_scope, ast.Lambda):
         return list_found
-    return [*cls_scope.decorator_list, *list_found]
+    list_annots = [
+        cls_arg.annotation
+        for cls_arg in [
+            *cls_args.posonlyargs,
+            *cls_args.args,
+            *cls_args.kwonlyargs,
+            *filter(None, [cls_args.vararg, cls_args.kwarg]),
+        ]
+        if cls_arg.annotation
+    ]
+    return [
+        *cls_scope.decorator_list,
+        *list_found,
+        *list_annots,
+        *filter(None, [cls_scope.returns]),
+    ]
 
 
 def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
@@ -536,9 +553,11 @@ def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 
 
 def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> bool:
-    """Return whether the name is assigned or deleted anywhere under the def.
+    """Return whether the name is bound or deleted by any statement under the def.
 
-    Nested scopes are included, which can only over-charge.
+    A store or delete, an ``import ... as``, a ``match`` capture, an ``except ... as`` and a
+    nested ``def`` or ``class`` of that name all count. Nested scopes are included, which can
+    only over-charge.
 
     Parameters
     ----------
@@ -550,14 +569,35 @@ def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> 
     Returns
     -------
     bool
-        ``True`` when a ``Name`` of that id is stored or deleted.
+        ``True`` when a binding of that name is found.
     """
     return any(
-        isinstance(cls_sub, ast.Name)
-        and cls_sub.id == str_param
-        and not isinstance(cls_sub.ctx, ast.Load)
+        _bound_name(cls_sub) == str_param
+        and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
         for cls_sub in ast.walk(cls_fn)
     )
+
+
+def _bound_name(cls_node: ast.AST) -> str | None:
+    """Return the name a node binds or mentions, whichever node shape carries it.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        Any node.
+
+    Returns
+    -------
+    str or None
+        The identifier, the first component of a dotted ``import`` or ``None``.
+    """
+    if isinstance(cls_node, ast.Name):
+        return cls_node.id
+    if isinstance(cls_node, ast.alias):
+        return cls_node.asname or cls_node.name.split(".")[0]
+    if isinstance(cls_node, ast.MatchMapping):
+        return cls_node.rest
+    return getattr(cls_node, "name", None)
 
 
 def _methods(list_nodes: list[ast.stmt]) -> Iterator[ast.FunctionDef | ast.AsyncFunctionDef]:
