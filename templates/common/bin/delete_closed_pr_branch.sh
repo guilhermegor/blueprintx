@@ -11,7 +11,8 @@ note() {
 }
 
 skip_reason() {
-	local str_head="$1" str_base="$2"
+	local str_head="$1" str_base="$2" str_default="$3"
+	[[ "$str_head" == "$str_default" ]] && { echo "it is the default branch"; return 0; }
 	[[ "$str_head" == "$str_base" ]] && { echo "it is the PR's base branch"; return 0; }
 	[[ "$str_head" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "its name has characters that cannot be sent safely in an API path"; return 0; }
 	is_short_lived_branch "$str_head" && return 0
@@ -85,7 +86,7 @@ delete_ref() {
 
 main() {
 	local str_why
-	str_why=$(skip_reason "$BRANCH" "$BASE_REF")
+	str_why=$(skip_reason "$BRANCH" "$BASE_REF" "$DEFAULT_BRANCH")
 	[[ -n "$str_why" ]] && { note "Kept \`${BRANCH}\` of PR #${PR}: ${str_why}."; return 0; }
 	str_why=$(is_protected)
 	[[ -n "$str_why" ]] && { note "Kept \`${BRANCH}\` of PR #${PR}: ${str_why}."; return 0; }

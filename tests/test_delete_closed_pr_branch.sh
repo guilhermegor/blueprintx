@@ -19,7 +19,10 @@ check() {
 
 for str_guard in 'pull-requests: read' 'merged == false' 'head.repo.full_name == github.repository' \
 	'head.ref != github.event.repository.default_branch' \
-	'head.ref != github.event.pull_request.base.ref'; do
+	'head.ref != github.event.pull_request.base.ref' \
+	'ref: ${{ github.event.repository.default_branch }}' 'persist-credentials: false' \
+	'DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}' \
+	'group: delete-closed-pr-branch-${{ github.repository }}-${{ github.event.pull_request.head.repo.full_name }}-${{ github.event.pull_request.head.ref }}'; do
 	grep -qF "$str_guard" "$str_wf"
 	check "workflow guard present: $str_guard" "$?"
 done
@@ -67,7 +70,7 @@ run_script() {
 	PATH="$str_bin:$PATH" STUB_LOG="$STUB_LOG" GITHUB_STEP_SUMMARY="$str_bin/summary" \
 		STUB_PROTECTED="${STUB_PROTECTED:-false}" STUB_TIP="${STUB_TIP:-abc}" STUB_DELETE="${STUB_DELETE:-ok}" \
 		STUB_PULLS_BASE="${STUB_PULLS_BASE:-0}" STUB_PULLS_HEAD="${STUB_PULLS_HEAD:-0}" STUB_NOISE="${STUB_NOISE:-}" \
-		BRANCH="${BRANCH:-fix/12-x}" BASE_REF="${BASE_REF:-main}" HEAD_SHA="abc" PR="7" GH_REPO="o/r" \
+		BRANCH="${BRANCH:-fix/12-x}" BASE_REF="${BASE_REF:-main}" DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}" HEAD_SHA="abc" PR="7" GH_REPO="o/r" \
 		bash "$SCRIPT" >/dev/null 2>&1
 	int_status=$?
 	str_log=$(<"$STUB_LOG")
@@ -102,6 +105,12 @@ check "the PR's own base ref is never deleted" "$(deleted && echo 1 || echo 0)"
 in_summary "base branch"
 check "a base-ref skip says why in the summary" "$?"
 
+BRANCH="fix/12-x" DEFAULT_BRANCH="fix/12-x" run_script
+check "the default branch as head is never deleted" "$(deleted && echo 1 || echo 0)"
+in_summary "default branch"
+check "a default-branch skip says why in the summary" "$?"
+check "a default-branch skip makes no gh call at all" "$([[ -z "$str_log" ]] && echo 0 || echo 1)"
+
 STUB_PROTECTED=true run_script
 check "a protected branch is never deleted" "$(deleted && echo 1 || echo 0)"
 in_summary "protected"
@@ -123,8 +132,11 @@ check "an already-deleted ref is a green no-op" "$(deleted && echo 1 || echo $((
 
 STUB_DELETE=422 run_script
 check "a 422 'Reference does not exist' on delete is already gone, green" "$((int_status != 0))"
+in_summary "was already gone"
+check "a 422 'Reference does not exist' writes the already-gone summary line" "$?"
 
 STUB_DELETE=ruleset run_script
+check "a ruleset refusal does not fail the job" "$((int_status != 0))"
 check "a ruleset refusal is not reported as already gone" "$(in_summary 'already gone' && echo 1 || echo 0)"
 in_summary "refused the deletion"
 check "a ruleset refusal is named in the summary" "$?"
