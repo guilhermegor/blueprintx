@@ -2900,8 +2900,9 @@ unsorted list, a one-line list, an entry on a bracket line, an unreadable <code>
 and a missing <code>__all__</code>.</p>
 <h2 id="typescript-library">TypeScript library<a class="headerlink" href="#typescript-library" title="Permanent link">&para;</a></h2>
 <p><code>src/index.ts</code> in <code>templates/ts-lib</code> is the same shape: a barrel with one export statement per line
-that grows with each module. It is not sorted or gated yet, so parallel PRs appending at the end
-still conflict; blueprintx#1015 tracks that. The Docusaurus sidebar is a fixed list of the
+that grows with each module. The generated project's ESLint config enforces
+<code>perfectionist/sort-exports</code> on that file, so parallel PRs add lines at different positions instead
+of both appending at the end. The Docusaurus sidebar is a fixed list of the
 template's own pages (<code>index</code>, <code>usage</code>, <code>examples</code>, <code>faq</code>, ...) that does not grow per module, and
 there is no count in its docs.</p>
 
