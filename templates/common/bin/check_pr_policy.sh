@@ -3,12 +3,17 @@
 set -uo pipefail
 
 EXEMPT_BRANCHES='^(release|dependabot|renovate)/'
+ISSUE_BRANCH='^[a-z]+/[0-9]+(-|$)'
 CC_TYPES='feat|fix|chore|test|docs|refactor|perf|build|ci|style|revert'
+
+is_short_lived_branch() {
+	[[ ! "$1" =~ $EXEMPT_BRANCHES ]] && [[ "$1" =~ $ISSUE_BRANCH ]]
+}
 
 check_branch() {
 	local str_branch="$1"
 	[[ "$str_branch" =~ $EXEMPT_BRANCHES ]] && return 0
-	[[ "$str_branch" =~ ^[a-z]+/[0-9]+(-|$) ]] && return 0
+	[[ "$str_branch" =~ $ISSUE_BRANCH ]] && return 0
 	echo "Branch '$str_branch' carries no issue number (<type>/<N>-<slug>)." >&2
 	return 1
 }
