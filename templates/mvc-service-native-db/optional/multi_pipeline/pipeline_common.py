@@ -14,7 +14,7 @@ from collections.abc import Callable
 import json
 from logging import Logger
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
@@ -68,7 +68,7 @@ class Pipeline(Protocol, metaclass=ProtocolTypeCheckerMeta):
     per-intent orchestrator shares one constructor signature and this method.
     """
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> dict[str, object]:
         """Execute the pipeline and return its run summary."""
         ...
 
@@ -76,7 +76,7 @@ class Pipeline(Protocol, metaclass=ProtocolTypeCheckerMeta):
 @type_checker
 def log_context(
     cls_logger: Logger | None,
-    dict_context: dict[str, Any],
+    dict_context: dict[str, object],
     cls_email_handler: EmailHandler | None,
     cls_webhook: WebhookNotifier | None,
 ) -> None:
@@ -138,7 +138,7 @@ def render_report(
 
 @type_checker
 def write_summary(
-    cls_logger: Logger | None, path_json: Path, dict_summary: dict[str, Any]
+    cls_logger: Logger | None, path_json: Path, dict_summary: dict[str, object]
 ) -> None:
     """Write the JSON run summary.
 

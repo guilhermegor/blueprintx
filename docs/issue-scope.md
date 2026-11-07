@@ -26,7 +26,13 @@ docs/issue-scope.md
 
 One path or glob per line. A path matches an entry either exactly, or via shell-style
 wildcards (`fnmatch`) — `*` already spans `/`, so `docs/*` and `docs/**` match the same set;
-either spelling is accepted for readability. Lines starting with `#` are comments.
+either spelling is accepted for readability. A bare directory with a trailing `/`
+(`templates/python-common/`) is read as `templates/python-common/**`: it covers every file
+beneath it, and a literal directory does not cover a sibling that merely shares its prefix
+(`templates/python-common-extra/`); a wildcard directory (`templates/*-common/`) follows the
+`*`-spans-`/` rule above.
+Before this was handled, a bare directory entry matched nothing, so every file under it was
+reported as outside the surface (blueprintx#1031). Lines starting with `#` are comments.
 
 **Why not the label.** A label needs a second artifact to mean anything: a taxonomy file
 mapping each `scope:*` value to the paths it actually names, kept in sync with the milestone

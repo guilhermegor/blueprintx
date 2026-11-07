@@ -3223,16 +3223,52 @@ def test_patch_fingerprint_field_boundaries_are_unambiguous() -> None:
     assert cls_gate.patch_fingerprint([dict_plain]) != cls_gate.patch_fingerprint([dict_crafted])
 
 
+_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+
+
+def _ok(dict_body: dict) -> Mock:
+    """Return a successful ``gh api`` result carrying ``dict_body`` as JSON."""
+    return Mock(returncode=0, stdout=json.dumps(dict_body))
+
+
+def _tree(dict_modes: dict, str_sha: str = "s1") -> Mock:
+    """Return the ``gh api`` result for a complete git tree holding ``dict_modes``."""
+    list_tree = [
+        {"path": k, "mode": v, "type": "blob", "sha": str_sha} for k, v in dict_modes.items()
+    ]
+    return _ok({"tree": list_tree, "truncated": False})
+
+
+def _gh_router(
+    list_files: list,
+    cls_head_tree: Mock,
+    cls_base_tree: Mock,
+    str_base: str = "base",
+    str_head: str = "head",
+) -> Mock:
+    """Stand in for ``subprocess.run``: serve the compare, then each commit's git tree."""
+    dict_by_path = {
+        f"repos/o/r/compare/{str_base}...{str_head}?per_page=1": _ok(
+            {"files": list_files, "merge_base_commit": {"sha": "mb"}}
+        ),
+        f"repos/o/r/git/trees/{str_head}?recursive=1": cls_head_tree,
+        "repos/o/r/git/trees/mb?recursive=1": cls_base_tree,
+    }
+    return Mock(side_effect=lambda list_cmd, **_kwargs: dict_by_path[list_cmd[2]])
+
+
 def test_fetch_patch_fingerprint_compares_against_the_pinned_base_sha(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Both compares name the base by the SHA read once, never by a movable branch name."""
     cls_gate = _load_gate()
-    json_body = '{"files": [{"filename": "a", "status": "modified", "patch": "x"}]}'
-    fn_run = Mock(return_value=Mock(returncode=0, stdout=json_body))
+    list_files = [{"filename": "a", "status": "modified", "patch": "x"}]
+    fn_run = _gh_router(
+        list_files, _tree({"a": "100644"}), _tree({"a": "100644"}), "basesha", "headsha"
+    )
     monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
     cls_gate.fetch_patch_fingerprint("o", "r", "basesha", "headsha")
-    assert fn_run.call_args[0][0][2].startswith("repos/o/r/compare/basesha...headsha")
+    assert fn_run.call_args_list[0][0][0][2].startswith("repos/o/r/compare/basesha...headsha")
 
 
 def test_fetch_patch_fingerprint_unknown_base_sha_fails_closed() -> None:
@@ -3459,11 +3495,167 @@ def test_fetch_patch_fingerprint_bounds_the_compare_call(
 ) -> None:
     """The compare call carries a timeout, so a hung ``gh`` cannot stall the job."""
     cls_gate = _load_gate()
-    json_body = '{"files": [{"filename": "a", "status": "modified", "patch": "x"}]}'
-    fn_run = Mock(return_value=Mock(returncode=0, stdout=json_body))
+    list_files = [{"filename": "a", "status": "modified", "patch": "x"}]
+    fn_run = _gh_router(list_files, _tree({"a": "100644"}), _tree({"a": "100644"}))
     monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
     cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
-    assert fn_run.call_args.kwargs["timeout"] > 0
+    assert all(c.kwargs["timeout"] > 0 for c in fn_run.call_args_list)
+
+
+def _digest(
+    monkeypatch: pytest.MonkeyPatch,
+    list_files: list,
+    cls_head_tree: Mock,
+    cls_base_tree: Mock,
+) -> str:
+    """Fingerprint ``list_files`` with the given head and base git trees."""
+    cls_gate = _load_gate()
+    fn_run = _gh_router(list_files, cls_head_tree, cls_base_tree)
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    return cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+
+
+_LIST_EMPTY_RENAME = [
+    {
+        "filename": "b",
+        "previous_filename": "a",
+        "status": "renamed",
+        "changes": 0,
+        "sha": _STR_EMPTY_BLOB_SHA,
+    }
+]
+_LIST_EDITED = [{"filename": "a", "status": "modified", "patch": "@@ -1 +1 @@\n-x\n+y"}]
+
+
+def test_fetch_patch_fingerprint_exec_bit_flip_on_a_rename_changes_the_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rename plus an exec-bit flip keeps the blob ``sha``, so only the tree mode shows it."""
+    cls_base = _tree({"a": "100644"})
+    str_plain = _digest(monkeypatch, _LIST_EMPTY_RENAME, _tree({"b": "100644"}), cls_base)
+    str_flipped = _digest(monkeypatch, _LIST_EMPTY_RENAME, _tree({"b": "100755"}), cls_base)
+    assert str_plain != str_flipped
+
+
+def test_fetch_patch_fingerprint_exec_bit_flip_on_a_patched_file_changes_the_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The patch text has no mode lines, so an edit plus a flip needs the tree mode too."""
+    cls_base = _tree({"a": "100644"})
+    str_plain = _digest(monkeypatch, _LIST_EDITED, _tree({"a": "100644"}), cls_base)
+    str_flipped = _digest(monkeypatch, _LIST_EDITED, _tree({"a": "100755"}), cls_base)
+    assert str_plain != str_flipped
+
+
+def test_fetch_patch_fingerprint_truncated_tree_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A truncated tree is a partial mode map, so it must raise rather than pass."""
+    cls_truncated = _ok({"tree": [], "truncated": True})
+    with pytest.raises(ValueError, match="truncated"):
+        _digest(monkeypatch, _LIST_EDITED, cls_truncated, _tree({"a": "100644"}))
+
+
+def test_fetch_patch_fingerprint_failed_tree_read_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the tree call fails the gate says "not covered", never a pass."""
+    cls_failed = Mock(returncode=1, stdout="", stderr="boom")
+    with pytest.raises(RuntimeError, match="gh api failed"):
+        _digest(monkeypatch, _LIST_EDITED, _tree({"a": "100644"}), cls_failed)
+
+
+def test_fetch_patch_fingerprint_missing_tree_path_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A path absent from the tree has no provable mode, so the entry is not trusted."""
+    with pytest.raises(ValueError, match="no tree mode"):
+        _digest(monkeypatch, _LIST_EDITED, _tree({}), _tree({"a": "100644"}))
+
+
+_LIST_ADDED = [{"filename": "n", "status": "added", "patch": "@@ -0,0 +1 @@\n+x"}]
+_LIST_REMOVED = [{"filename": "gone", "status": "removed", "patch": "@@ -1 +0,0 @@\n-x"}]
+
+
+def test_fetch_patch_fingerprint_added_file_needs_only_the_head_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An added file has no base side, so the base tree need not list it."""
+    assert len(_digest(monkeypatch, _LIST_ADDED, _tree({"n": "100644"}), _tree({}))) == 64
+
+
+def test_fetch_patch_fingerprint_removed_file_needs_only_the_base_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A removed file has no head side, so the head tree need not list it."""
+    assert len(_digest(monkeypatch, _LIST_REMOVED, _tree({}), _tree({"gone": "100644"}))) == 64
+
+
+def test_fetch_patch_fingerprint_rename_source_missing_from_base_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rename whose source is absent from the base tree has no provable previous mode."""
+    with pytest.raises(ValueError, match="no tree mode"):
+        _digest(monkeypatch, _LIST_EMPTY_RENAME, _tree({"b": "100644"}), _tree({}))
+
+
+def test_fetch_patch_fingerprint_base_side_mode_flip_changes_the_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A different mode at the merge base is a different fingerprint."""
+    cls_head = _tree({"a": "100644"})
+    str_plain = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}))
+    str_flipped = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100755"}))
+    assert str_plain != str_flipped
+
+
+def test_fetch_patch_fingerprint_renamed_source_blob_moving_in_base_changes_the_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A patchless rename hashes the source blob too, so a moved base is a new fingerprint."""
+    cls_head = _tree({"b": "100644"})
+    str_one = _digest(monkeypatch, _LIST_EMPTY_RENAME, cls_head, _tree({"a": "100644"}, "s1"))
+    str_two = _digest(monkeypatch, _LIST_EMPTY_RENAME, cls_head, _tree({"a": "100644"}, "s2"))
+    assert str_one != str_two
+
+
+def test_fetch_patch_fingerprint_patched_file_ignores_the_base_blob(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A patched file keeps carrying forward when main edits its base: only the patch counts."""
+    cls_head = _tree({"a": "100644"})
+    str_one = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}, "s1"))
+    str_two = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}, "s2"))
+    assert str_one == str_two
+
+
+def test_fetch_patch_fingerprint_tree_entry_that_is_not_an_object_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A skipped tree entry would make the mode map partial, so it raises where it is read."""
+    cls_bad = _ok({"tree": ["oops"], "truncated": False})
+    with pytest.raises(ValueError, match="malformed"):
+        _digest(monkeypatch, _LIST_EDITED, cls_bad, _tree({"a": "100644"}))
+
+
+def test_fetch_patch_fingerprint_missing_merge_base_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A compare response without a merge base cannot name the base tree."""
+    cls_gate = _load_gate()
+    cls_body = _ok({"files": _LIST_EDITED, "merge_base_commit": "oops"})
+    monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_body))
+    with pytest.raises(ValueError, match="merge base"):
+        cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+
+
+def test_fetch_patch_fingerprint_tree_entry_without_a_path_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tree entry carrying a mode but no path is malformed, not a crash."""
+    cls_bad = _ok({"tree": [{"mode": "100644"}], "truncated": False})
+    with pytest.raises(ValueError, match="malformed"):
+        _digest(monkeypatch, _LIST_EDITED, cls_bad, _tree({"a": "100644"}))
 
 
 def test_reviewed_commits_dismissed_review_is_not_revived() -> None:
@@ -3818,29 +4010,92 @@ def test_review_covers_head_malformed_files_body_fails_closed(
     assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
 
 
-def test_patch_fingerprint_pure_renames_of_different_blobs_differ() -> None:
-    """A binary rename also reports ``changes == 0``, so the blob ``sha`` must be hashed."""
+def test_patch_fingerprint_empty_renames_at_different_names_differ() -> None:
+    """A renamed empty file is fingerprinted by its names, so two renames must differ."""
     cls_gate = _load_gate()
-    dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}
-    assert cls_gate.patch_fingerprint([{**dict_rename, "sha": "1"}]) != cls_gate.patch_fingerprint(
-        [{**dict_rename, "sha": "2"}]
-    )
+    dict_rename = {"status": "renamed", "changes": 0, "sha": _STR_EMPTY_BLOB_SHA}
+    assert cls_gate.patch_fingerprint(
+        [{**dict_rename, "filename": "b", "previous_filename": "a"}]
+    ) != cls_gate.patch_fingerprint([{**dict_rename, "filename": "c", "previous_filename": "a"}])
 
 
-def test_patch_fingerprint_pure_rename_with_same_blob_matches() -> None:
-    """The same rename of the same blob at two commits is the same fingerprint."""
+def test_patch_fingerprint_empty_renames_from_different_sources_differ() -> None:
+    """The source name is hashed: a to b and z to b are different renames."""
+    cls_gate = _load_gate()
+    dict_rename = {"filename": "b", "status": "renamed", "changes": 0, "sha": _STR_EMPTY_BLOB_SHA}
+    assert cls_gate.patch_fingerprint(
+        [{**dict_rename, "previous_filename": "a"}]
+    ) != cls_gate.patch_fingerprint([{**dict_rename, "previous_filename": "z"}])
+
+
+def test_patch_fingerprint_added_empty_file_differs_from_renamed_to_same_name() -> None:
+    """Status is hashed: an added empty b is not a renamed a to b."""
+    cls_gate = _load_gate()
+    dict_empty = {"filename": "b", "changes": 0, "sha": _STR_EMPTY_BLOB_SHA}
+    dict_added = {**dict_empty, "status": "added"}
+    dict_renamed = {**dict_empty, "status": "renamed", "previous_filename": "a"}
+    assert cls_gate.patch_fingerprint([dict_added]) != cls_gate.patch_fingerprint([dict_renamed])
+
+
+def test_patch_fingerprint_empty_rename_with_same_blob_matches() -> None:
+    """The same empty-file rename at two commits is the same fingerprint."""
     cls_gate = _load_gate()
     dict_rename = {
         "filename": "b",
         "previous_filename": "a",
         "status": "renamed",
         "changes": 0,
-        "sha": "1",
+        "sha": _STR_EMPTY_BLOB_SHA,
     }
     assert cls_gate.patch_fingerprint([dict_rename]) == cls_gate.patch_fingerprint([dict_rename])
 
 
-def test_patch_fingerprint_pure_rename_without_blob_sha_raises() -> None:
+def test_patch_fingerprint_renamed_nonempty_blob_is_fingerprinted() -> None:
+    """A non-empty pure rename carries forward: blob, names and tree modes prove it."""
+    cls_gate = _load_gate()
+    dict_rename = {
+        "filename": "b",
+        "previous_filename": "a",
+        "status": "renamed",
+        "changes": 0,
+        "sha": "3b18e512dba79e4c8300dd08aeb37f8e728b8dad",
+    }
+    assert len(cls_gate.patch_fingerprint([dict_rename])) == 64
+
+
+def test_patch_fingerprint_renames_of_different_blobs_differ() -> None:
+    """The blob ``sha`` is hashed: the same rename onto different content is not the same."""
+    cls_gate = _load_gate()
+    dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}
+    assert cls_gate.patch_fingerprint(
+        [{**dict_rename, "sha": "3b18e512dba79e4c8300dd08aeb37f8e728b8dad"}]
+    ) != cls_gate.patch_fingerprint(
+        [{**dict_rename, "sha": "9daeafb9864cf43055ae93beb0afd6c7d144bfa4"}]
+    )
+
+
+def test_patch_fingerprint_added_nonempty_blob_raises() -> None:
+    """A patchless ``added`` entry other than the empty blob (a binary) is unproven."""
+    cls_gate = _load_gate()
+    dict_added = {"filename": "b", "status": "added", "changes": 0, "sha": "3b18e512"}
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_added])
+
+
+def test_patch_fingerprint_removed_empty_blob_entry_raises() -> None:
+    """A patchless ``removed`` entry never qualifies, even with the empty-blob ``sha``."""
+    cls_gate = _load_gate()
+    dict_removed = {
+        "filename": "py.typed",
+        "status": "removed",
+        "changes": 0,
+        "sha": _STR_EMPTY_BLOB_SHA,
+    }
+    with pytest.raises(ValueError, match="no patch text"):
+        cls_gate.patch_fingerprint([dict_removed])
+
+
+def test_patch_fingerprint_empty_rename_without_blob_sha_raises() -> None:
     """No ``sha`` means nothing proves the content, so the entry is not trusted."""
     cls_gate = _load_gate()
     dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}
@@ -3860,9 +4115,6 @@ def test_patch_fingerprint_renamed_with_changes_but_no_patch_raises() -> None:
     }
     with pytest.raises(ValueError, match="no patch text"):
         cls_gate.patch_fingerprint([dict_big])
-
-
-_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
 
 def test_patch_fingerprint_added_empty_file_is_fingerprinted() -> None:

@@ -1014,6 +1014,13 @@ is shaped as it is; a generated project gets the behavior, not the history.
   drivers with no stubs) and joblib (the schema-less opt-in's `joblib_handler.py`, #650, which a
   scaffold with no opt-ins never imports). openpyxl is named in docstrings but never imported,
   so it is absent: an unmeasured entry is the guess this scheme exists to stop.
+- **`disallow_any_explicit = True`** (#1022). Measured with the flag on before any fix: 35 errors
+  (lib-minimal), 64 (ddd-orm), 67 (mvc-orm), 70 (ddd-native, api-service), 77 (mvc-native). About
+  half were `_F = TypeVar("_F", bound=Callable[..., object])` in the `type_checker` shim (`...` is an
+  implicit `Any`; the bound is dropped, the shim returns `_F` unchanged) and its `def type_checker`
+  line; the rest were written `Any`, replaced by `object` where the value is only passed through
+  (`Record`, run summaries, query params). Opaque DB-API handles and `SanityCheck` keep `Any` via
+  per-module `disallow_any_explicit = False`, the same list as the `ANN401` ignores.
 - **Baseline strictness.** Annotations and obvious type errors are enforced, not `--strict`,
   so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.
 - **The one exclude** is the runtime type-checking engine (`utils/typing` or `chassis/typing`,
@@ -1888,10 +1895,11 @@ repository. They were moved out of the workflow files, which now carry no prose.
   replays the original event payload.
 - **`release.yml`.** The version input is free text and is validated before `git tag`, the
   irreversible step, so a bad value is a no-op instead of a pushed tag with no artifacts.
-  `release_snap.yml` fails before its 30-minute build when the credential is absent, because
-  an `exit 0` there let v0.16.67 to v0.16.70 report green while nothing reached the store
-  (#669). Every package job stamps the release version into the fallback literal of
-  `blueprintx --version`, since packaged installs have no `.git`.
+  While Snap was a channel, `release_snap.yml` failed before its 30-minute build when the
+  credential was absent, because an `exit 0` there let v0.16.67 to v0.16.70 report green
+  while nothing reached the store (#669); the channel was removed in #1026 (see "Snap is no
+  longer a release channel" below). Every package job stamps the release version into
+  the fallback literal of `blueprintx --version`, since packaged installs have no `.git`.
 - **`verify_branch_protection.yml` (#307).** Guards the `strict` setting, which anyone with
   admin rights can flip with no red check. `GITHUB_TOKEN` cannot read branch protection
   (`administration` is not a grantable scope), so it reuses `GH_PAT_REVIEW_TRIGGER`. It runs
@@ -2306,3 +2314,15 @@ put "every open PR merged, closed, or deferred past 1.0" on the Cut 1.0.0 checkl
 owner judges each one. `tests/test_check_release_gate.sh` pins the decision with a case in which
 a lone unlabelled PR passes the gate. The generated project's `docs/releasing-1-0-0.md` states
 the decision without naming that suite, because a generated project does not ship it.
+
+## Snap is no longer a release channel (#1026)
+
+The `snap` job failed on every recent release (v3.3.0, v3.3.1) with "Waiting for previous
+upload(s) to complete their review process". A classic-confinement snap needs a manual store
+review that was never approved, and snapcraft.io login was returning 502. The red job sat
+beside green apt, Homebrew and Chocolatey jobs on each release, which teaches readers to
+ignore a red release. The owner removed the channel on 2026-11-07: `release_snap.yml`, the
+`snap/` directory are gone. The `SNAPCRAFT_STORE_CREDENTIALS` repository secret and the
+store token behind it must still be deleted and revoked by the owner. Existing Snap
+installs keep their last version and should move to Homebrew, Chocolatey or apt. The old
+plan under `.specs/features/snap-publishing/` stays as a record.
