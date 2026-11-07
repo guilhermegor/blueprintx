@@ -28,13 +28,14 @@ def ratio(str_a, str_b):
 tuple_bg = colorsys.hls_to_rgb(225 / 360, 0.14, 0.15)
 str_bg = "#" + "".join(f"{round(c * 255):02x}" for c in tuple_bg)
 INT_GATE_FAIL = 3
+INT_REFUSED = 4
 
 str_css = re.sub(r"/\*.*?\*/", "", open(sys.argv[1]).read(), flags=re.S)
 
 
 def refuse(str_why):
     print(str_why)
-    sys.exit(INT_GATE_FAIL)
+    sys.exit(INT_REFUSED)
 
 
 list_blocks = re.findall(r'\[data-md-color-scheme="slate"\]\s*\{([^}]*)\}', str_css)
@@ -75,7 +76,8 @@ check() {
 	int_rc=$?
 	case "$int_rc" in
 		0) str_got=pass ;;
-		3) str_got=fail ;;
+		3) str_got=contrast ;;
+		4) str_got=refuse ;;
 		*) echo "FAIL: $str_name: contrast checker crashed (exit $int_rc)"
 			int_failures=$((int_failures + 1)); return ;;
 	esac
@@ -98,6 +100,10 @@ fi
 for str_yml in "${list_ymls[@]}"; do
 	int_primary=$(grep -cE '^\s*primary:\s*custom\s*$' "$str_yml")
 	int_scheme=$(grep -cE '^\s*-\s*scheme:' "$str_yml")
+	if ! grep -qE '^\s*-\s*stylesheets/brand\.css\s*$' "$str_yml"; then
+		echo "FAIL: $str_yml does not list stylesheets/brand.css in extra_css"
+		int_failures=$((int_failures + 1))
+	fi
 	if grep -qE '^\s*accent:' "$str_yml" || [ "$int_primary" -ne "$int_scheme" ] || [ "$int_scheme" -eq 0 ]; then
 		echo "FAIL: $str_yml needs primary: custom on every palette entry and no accent:"
 		int_failures=$((int_failures + 1))
@@ -122,17 +128,17 @@ sed 's/--md-accent-fg-color:[^;]*;//' "$CSS" >"$TMP/no-accent.css"
 sed 's/--md-typeset-a-color:[^;]*;//' "$CSS" >"$TMP/no-link.css"
 
 check "template slate links and hover meet 4.5:1" "$CSS" pass
-check "should-fail: old slate block (link falls back to navy primary)" "$TMP/old.css" fail
-check "should-fail: slate block without a hover colour (Material accent)" "$TMP/no-accent.css" fail
+check "should-fail: old slate block (link falls back to navy primary)" "$TMP/old.css" contrast
+check "should-fail: slate block without a hover colour (Material accent)" "$TMP/no-accent.css" contrast
 sed -E 's|(--md-typeset-a-color:[^;]*;)|/* \1 */|' "$CSS" >"$TMP/no-link-commented.css"
-check "should-fail: commented-out link colour is not live" "$TMP/no-link-commented.css" fail
-check "should-fail: slate block without a link colour" "$TMP/no-link.css" fail
+check "should-fail: commented-out link colour is not live" "$TMP/no-link-commented.css" contrast
+check "should-fail: slate block without a link colour" "$TMP/no-link.css" contrast
 printf ':root {\n  --md-primary-fg-color: #0d2c54;\n}\n' >"$TMP/no-slate.css"
-check "should-fail: no slate block" "$TMP/no-slate.css" fail
-sed 's|^\[data-md-color-scheme="slate"\] {|&\n  --md-hue: 200;|' "$CSS" >"$TMP/hue.css"
-check "should-fail: --md-hue override" "$TMP/hue.css" fail
+check "should-fail: no slate block" "$TMP/no-slate.css" refuse
+{ cat "$CSS"; printf '\n[data-md-color-scheme="slate"] {\n  --md-hue: 200;\n}\n'; } >"$TMP/hue.css"
+check "should-fail: --md-hue override" "$TMP/hue.css" refuse
 sed -E 's|(--md-typeset-a-color:)[^;]*;|\1 rgb(1, 2, 3);|' "$CSS" >"$TMP/unparseable.css"
-check "should-fail: unparseable link value" "$TMP/unparseable.css" fail
+check "should-fail: unparseable link value" "$TMP/unparseable.css" refuse
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
 echo "all cases passed"
