@@ -568,6 +568,9 @@ jobs:
       - name: lib-minimal ships py.typed and per-version classifiers
         run: bash tests/test_lib_minimal_py_typed.sh
 
+      - name: lib-minimal docs cite only poe tasks the scaffold defines (blueprintx#1020)
+        run: bash tests/test_lib_minimal_docs_poe_tasks.sh
+
   explicit-any:
     name: Python scaffolds refuse an explicit Any
     runs-on: ubuntu-latest
