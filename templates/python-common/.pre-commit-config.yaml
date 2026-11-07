@@ -348,7 +348,6 @@ repos:
         entry: bash bin/check_logo_sync.sh
         language: system
         pass_filenames: false
-        always_run: true
         files: (^|/)(README\.md|index\.md|mkdocs\.yml|check_logo_sync\.sh)$|\.(png|jpe?g|svg|ico|webp)$
 
       - id: mypy

@@ -19,7 +19,7 @@ index_logo() {
 
 theme_logo() {
 	local str_key="$1"
-	sed -nE "s#^[[:space:]]+${str_key}:[[:space:]]*[\"']?([^\"'[:space:]]+)[\"']?[[:space:]]*\$#docs/\1#p" \
+	sed -nE "s%^  ${str_key}:[[:space:]]*[\"']?([^\"'[:space:]#]+)[\"']?[[:space:]]*(#.*)?\$%docs/\1%p" \
 		"$ROOT/mkdocs.yml" 2>/dev/null | head -n 1 || true
 }
 
