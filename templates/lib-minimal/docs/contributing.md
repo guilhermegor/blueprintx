@@ -282,7 +282,9 @@ summary:
   enforces), so `develop`, `release/*`, `dependabot/*` and `renovate/*` are never touched;
 - it is not the default branch and not the PR's own base branch;
 - GitHub reports it as not protected, and an unreadable protection state counts as protected;
-- its tip is still the PR head.
+- its name uses only letters, digits and `._/-`, and its tip is still the PR head when read just
+  before the delete (the refs API has no compare-and-delete, so a push in that gap is covered only
+  by the restore path below).
 
 Nothing is lost: the job summary names the deleted ref and its sha, and the PR page offers
 **Restore branch** (or `git push origin <sha>:refs/heads/<branch>`).

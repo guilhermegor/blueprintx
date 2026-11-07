@@ -13,6 +13,7 @@ note() {
 skip_reason() {
 	local str_head="$1" str_base="$2"
 	[[ "$str_head" == "$str_base" ]] && { echo "it is the PR's base branch"; return 0; }
+	[[ "$str_head" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "its name has characters that cannot be sent safely in an API path"; return 0; }
 	is_short_lived_branch "$str_head" && return 0
 	echo "its name is not a short-lived <type>/<N>-<slug> branch"
 }
@@ -44,8 +45,12 @@ delete_ref() {
 		note "Restore: PR #${PR} page, 'Restore branch', or \`git push origin ${str_tip}:refs/heads/${BRANCH}\`."
 		return 0
 	fi
-	if [[ "$str_out" == *"HTTP 404"* || "$str_out" == *"HTTP 422"* ]]; then
-		note "Branch \`${BRANCH}\` was already gone or refused deletion: ${str_out}"
+	if [[ "$str_out" == *"HTTP 404"* || "$str_out" == *"Reference does not exist"* ]]; then
+		note "Branch \`${BRANCH}\` was already gone: ${str_out}"
+		return 0
+	fi
+	if [[ "$str_out" == *"HTTP 422"* ]]; then
+		note "Kept \`${BRANCH}\`: GitHub refused the deletion (a ruleset or server-side rule): ${str_out}"
 		return 0
 	fi
 	echo "$str_out" >&2

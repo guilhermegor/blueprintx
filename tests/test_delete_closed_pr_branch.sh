@@ -33,6 +33,7 @@ case "$*" in
 	*"-X DELETE"*)
 		case "$STUB_DELETE" in
 			422) echo "Reference does not exist (HTTP 422)" >&2; exit 1 ;;
+			ruleset) echo "Repository rule violations found (HTTP 422)" >&2; exit 1 ;;
 			500) echo "boom (HTTP 500)" >&2; exit 1 ;;
 			*) exit 0 ;;
 		esac ;;
@@ -106,6 +107,18 @@ check "an already-deleted ref is a green no-op" "$(deleted && echo 1 || echo $((
 
 STUB_DELETE=422 run_script
 check "a 422 on delete is success" "$((int_status != 0))"
+
+STUB_DELETE=ruleset run_script
+check "a ruleset refusal is not reported as already gone" "$(in_summary 'already gone' && echo 1 || echo 0)"
+in_summary "refused the deletion"
+check "a ruleset refusal is named in the summary" "$?"
+
+BRANCH='fix/12-x#y' run_script
+check "a name unsafe in an API path is never deleted" "$(deleted && echo 1 || echo 0)"
+
+STUB_PROTECTED=404 run_script
+deleted
+check "a 404 protection read proceeds to the tip check and deletes" "$?"
 
 STUB_DELETE=500 run_script
 check "a 500 on delete fails the job" "$((int_status == 0))"
