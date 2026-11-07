@@ -20,9 +20,9 @@ trap cleanup EXIT
 
 if [ -z "$PROJECT" ]; then
 	WORK="$(mktemp -d)"
-	GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/bin/scaffold/ts_lib.sh" "$WORK" barrel-probe "probe" </dev/null >/dev/null 2>&1 || exit 1
+	GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/bin/scaffold/ts_lib.sh" "$WORK" barrel-probe "probe" </dev/null >/dev/null 2>&1 || { echo "FAIL: ts-lib scaffold did not complete" >&2; exit 1; }
 	PROJECT="$WORK/barrel-probe"
-	(cd "$PROJECT" && npm ci >/dev/null 2>&1) || exit 1
+	(cd "$PROJECT" && npm ci >/dev/null 2>&1) || { echo "FAIL: npm ci in the scaffolded project failed" >&2; exit 1; }
 fi
 
 INDEX="$PROJECT/src/index.ts"
