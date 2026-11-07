@@ -32,7 +32,7 @@ The version is the git tag, never a hand-bump:
 
 ## Deferred release channels (backlog)
 
-BlueprintX itself also ships Homebrew, apt (gh-pages), Snap, and (optional)
+BlueprintX itself also ships Homebrew, apt (gh-pages), and (optional)
 Chocolatey sub-workflows (`.github/workflows/release_*.yml`) called from its
 `release.yml` orchestrator. This skeleton's v1 ships only the GitHub Release +
 `make install` leg — start small, verify the skeleton scaffolds/lints/tests green
