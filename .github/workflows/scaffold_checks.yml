@@ -599,6 +599,9 @@ jobs:
       - name: Template dark-theme links and hover meet WCAG AA (blueprintx#1029)
         run: bash tests/test_brand_css_contrast.sh
 
+      - name: mvc-orm refuses an explicit Any in controller/_pipeline.py (blueprintx#1030)
+        run: bash tests/test_explicit_any_refused_py.sh mvc-service-orm-db
+
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json
     runs-on: ubuntu-latest

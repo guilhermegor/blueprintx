@@ -155,6 +155,7 @@ copy_templates() {
 
 copy_common_templates() {
 	scaffold_copy_common_templates "mvc-service-native-db" "$1"
+	cat "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/mypy.exemptions.ini" >>"$1/mypy.ini"
 }
 
 copy_mkdocs_templates() {
