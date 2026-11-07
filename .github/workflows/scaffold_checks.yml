@@ -596,6 +596,9 @@ jobs:
       - name: Plant a nested explicit Any and expect mypy to refuse it (blueprintx#1022)
         run: bash tests/test_explicit_any_refused_py.sh
 
+      - name: Template dark-theme links and hover meet WCAG AA (blueprintx#1029)
+        run: bash tests/test_brand_css_contrast.sh
+
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json
     runs-on: ubuntu-latest

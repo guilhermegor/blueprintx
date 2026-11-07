@@ -118,6 +118,12 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
 3. Set the header colour in `docs/stylesheets/brand.css` (`--md-primary-fg-color`, plus the
    `slate` variant for dark mode) to match your logo.
 
+   Material also uses `--md-primary-fg-color` as the link colour unless `--md-typeset-a-color`
+   is set. The `slate` block therefore sets `--md-typeset-a-color` (links) and
+   `--md-accent-fg-color` (link hover) to light blues; a dark primary colour alone would leave
+   links unreadable on the dark page. Keep both at 4.5:1 or more against the `slate`
+   background (`#1e2129`).
+
 ## Repository protection & security (one-time, scripted)
 
 `poe init` runs three admin-gated helpers. They are **idempotent and non-blocking**: without
