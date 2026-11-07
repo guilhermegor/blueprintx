@@ -91,6 +91,16 @@ The test only requires the budget to stay at or above that computed 60.
 `SCAFFOLD_GH_GRAPHQL_SITES` (16) counts the call sites in the scaffold
 libraries; the same test fails when one is added without updating it.
 
+The two numbers differ because they count different things. Of the 16 sites,
+11 run on a fresh board and 5 (the card-add path: `project view`, two
+`field-list` reads, `item-add`, `item-edit`) do not. One of the 11, the
+`gh project field-create` in the field loop, runs 7 times (one per field), so a
+fresh setup makes 11 - 1 + 7 = 17 calls.
+
+The workflows read asks for `workflows(first:20)`. A real board lists 6
+built-in workflows (read with `workflows(first:100){totalCount}` on 2026-11-07),
+so 20 leaves room and no pagination is needed.
+
 ## Board workflows
 
 After the fields are created, `scaffold_kanban_workflows` reads the board's
