@@ -37,6 +37,7 @@ write_spec() {
     {
         printf 'project_name=spec-probe\nproject_description=probe\nlanguage=%s\n' "${SPEC_LANGUAGE:-python}"
         printf 'skeleton=%s\nlicense=MIT\ngithub_username=ci-bot\n' "$skeleton"
+        [[ " $* " == *" docs_locale="* || -n "${SPEC_NO_DOCS_LOCALE:-}" ]] || printf 'docs_locale=en\n'
         printf '%s\n' "$@"
     } >"$file"
     echo "$file"
@@ -210,13 +211,27 @@ test_docs_locale_reaches_the_scaffold() {
     fi
 }
 
-test_absent_docs_locale_defaults_to_en() {
-    local str_got
-    str_got="$(spec_docs_language docs-default)"
-    if [ "$str_got" = "en" ]; then
-        pass "a spec with no docs_locale renders language: en, the prompt's default"
+test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton() {
+    local file root out int_rc
+    root="$WORK_DIR/no-locale-root"
+    file="$(SPEC_NO_DOCS_LOCALE=1 write_spec no-locale lib-minimal "project_root=$root")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'docs_locale' is required for the MkDocs skeleton 'lib-minimal'"* && ! -e "$root" ]]; then
+        pass "a spec with no docs_locale is refused on an MkDocs skeleton and creates nothing"
     else
-        fail "docs_locale default" "generated mkdocs.yml language='$str_got' (expected en)"
+        fail "absent docs_locale refusal" "rc=$int_rc, root exists or message missing: ${out: -300}"
+    fi
+}
+
+test_absent_docs_locale_is_accepted_on_a_skeleton_without_mkdocs() {
+    local file out
+    file="$(SPEC_LANGUAGE=typescript SPEC_NO_DOCS_LOCALE=1 write_spec ts-no-locale ts-lib "project_root=$WORK_DIR/ts-no-locale-root")"
+    out="$(run_blueprintx new --spec "$file" --dry-run)"
+    if [[ "$out" == *"docs_locale=en"* && "$out" != *"'docs_locale' is required"* ]]; then
+        pass "a spec with no docs_locale still resolves to en on a skeleton that ignores it"
+    else
+        fail "absent docs_locale on non-mkdocs" "${out: -300}"
     fi
 }
 
@@ -843,7 +858,8 @@ main() {
     test_a_failed_answer_stream_stops_the_scaffold_flow
     test_bad_docs_locale_stops_before_anything_is_created
     test_docs_locale_reaches_the_scaffold
-    test_absent_docs_locale_defaults_to_en
+    test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton
+    test_absent_docs_locale_is_accepted_on_a_skeleton_without_mkdocs
 
     if [ "$int_failures" -eq 0 ]; then
         echo "All --spec regression tests passed."
