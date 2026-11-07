@@ -97,7 +97,7 @@ This repo's own Actions secrets (`gh secret list --repo guilhermegor/blueprintx`
 hand with `gh secret set <NAME> --repo guilhermegor/blueprintx`. The real values live only in
 GitHub Secrets; no local file holds them. The table below is the record of each secret's
 consumer and minimum scope. If you still have a root `.env` from the old flow, it holds real
-values: delete it with `shred -u .env`.
+values: delete it with `shred -u .env 2>/dev/null || rm -f .env` (macOS has no `shred`).
 
 | Secret | Consumer(s) | Minimum scope |
 |---|---|---|
@@ -114,7 +114,9 @@ values: delete it with `shred -u .env`.
    issues and 422 on PRs, and the workflows only ever comment on PRs.
 2. Set it with `gh secret set <NAME> --repo guilhermegor/blueprintx`. With no `--body`, `gh`
    prompts for the value, so it never lands in shell history or `ps`/`/proc` argv. A
-   multi-line value must go through stdin, never the prompt. For `APT_GPG_PRIVATE_KEY`, pipe
+   multi-line value must go through stdin, never the prompt: the prompt reads one line, so a
+   pasted armored key is cut to its first line and uploaded without error.
+   For `APT_GPG_PRIVATE_KEY`, pipe
    the armored block from a private file outside the work tree (`mktemp` creates it mode 600
    under `/tmp`, so a stray `git add -A` cannot stage it). The chain refuses to upload an
    empty export (a wrong key id) and removes the file even when `gh` fails. The subshell makes
