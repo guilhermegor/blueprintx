@@ -57,7 +57,8 @@ and a missing `__all__`.
 ## TypeScript library
 
 `src/index.ts` in `templates/ts-lib` is the same shape: a barrel with one export statement per line
-that grows with each module. It is not sorted or gated yet, so parallel PRs appending at the end
-still conflict; blueprintx#1015 tracks that. The Docusaurus sidebar is a fixed list of the
+that grows with each module. The generated project's ESLint config enforces
+`perfectionist/sort-exports` on that file, so parallel PRs add lines at different positions instead
+of both appending at the end. The Docusaurus sidebar is a fixed list of the
 template's own pages (`index`, `usage`, `examples`, `faq`, ...) that does not grow per module, and
 there is no count in its docs.

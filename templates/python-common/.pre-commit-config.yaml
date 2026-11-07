@@ -343,6 +343,13 @@ repos:
         pass_filenames: false
         files: (^|/)(pyproject\.toml|package\.json|mkdocs\.yml|check_description_sync\.sh)$
 
+      - id: check-logo-sync
+        name: README and docs logos are the same image
+        entry: bash bin/check_logo_sync.sh
+        language: system
+        pass_filenames: false
+        files: (^|/)(README\.md|index\.md|mkdocs\.yml|check_logo_sync\.sh)$|\.(png|jpe?g|svg|ico|webp)$
+
       - id: mypy
         name: mypy (static type check)
         entry: bash -c 'cd src && bash ../bin/poetry_exec.sh run mypy --config-file ../mypy.ini .'
