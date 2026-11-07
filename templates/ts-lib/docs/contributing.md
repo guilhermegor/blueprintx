@@ -104,3 +104,15 @@ and updates `versions.json` — Docusaurus's version dropdown reads from these a
 3. Put `Closes #<N>` in the PR body so the issue closes when the PR merges.
 4. Fill out the PR template completely.
 5. Ensure CI (build, lint, test, type-check, pack:smoke) passes — it is the merge gate.
+
+### PRs closed without merging
+
+`delete_branch_on_merge` never fires for a PR **closed unmerged**. `delete-closed-pr-branch.yml`
+deletes the head branch of a same-repository PR closed without merge, but only a short-lived
+`<type>/<N>-<slug>` branch that is not the default or base branch, is not protected, and is not
+used by another open PR; a fork's branch is never touched. A skipped branch is named with its
+reason in the job summary. A deleted branch is recorded there with its sha, and the PR page offers
+**Restore branch**, which a PR needs before it can be reopened. A ruleset refusal is reported as
+"kept" (green); any other unexpected API error fails the job. A PR closed while it has a merge
+conflict keeps its branch, because GitHub does not run the workflow for it. The full list of guards
+is in `CONTRIBUTING.md` at the repository root.
