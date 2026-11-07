@@ -57,6 +57,10 @@ root file, where the change would reach one tier and silently miss the rest.
 Branch off `main` using the CONTRIBUTING prefix policy (`feat/…`, `fix/…`, …), keep `make lint`
 green, and fill out the PR template. Direct commits to `main` are blocked by pre-commit.
 
+Scaffolded repos delete a PR's branch on merge (`delete_branch_on_merge`) and, through
+`delete-closed-pr-branch.yml`, when a same-repo PR is closed without merging; see
+[Repo policy workflows](policy-workflows.md).
+
 ## Blocked work
 
 Work that cannot start because an upstream is unfinished is marked on the issue and on the
