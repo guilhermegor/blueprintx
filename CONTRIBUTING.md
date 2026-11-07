@@ -97,7 +97,8 @@ This repo's own Actions secrets (`gh secret list --repo guilhermegor/blueprintx`
 hand with `gh secret set <NAME> --repo guilhermegor/blueprintx`. The real values live only in
 GitHub Secrets; no local file holds them. The table below is the record of each secret's
 consumer and minimum scope. If you still have a root `.env` from the old flow, it holds real
-values: delete it with `shred -u .env 2>/dev/null || rm -f .env` (macOS has no `shred`).
+values: delete it with `shred -u .env 2>/dev/null || rm -f .env` (macOS has no `shred`), and
+rotate any value that file was ever copied, synced or backed up with.
 
 | Secret | Consumer(s) | Minimum scope |
 |---|---|---|
@@ -115,14 +116,15 @@ values: delete it with `shred -u .env 2>/dev/null || rm -f .env` (macOS has no `
 2. Set it with `gh secret set <NAME> --repo guilhermegor/blueprintx`. With no `--body`, `gh`
    prompts for the value, so it never lands in shell history or `ps`/`/proc` argv. A
    multi-line value must go through stdin, never the prompt: the prompt reads one line, so a
-   pasted armored key is cut to its first line and uploaded without error.
-   For `APT_GPG_PRIVATE_KEY`, pipe
-   the armored block from a private file outside the work tree (`mktemp` creates it mode 600
-   under `/tmp`, so a stray `git add -A` cannot stage it). The chain refuses to upload an
+   pasted armored key is cut to its first line and uploaded without error, and the remaining
+   lines stay in the terminal, run as shell commands and land in your shell history.
+   For `APT_GPG_PRIVATE_KEY`, pipe the armored block from a private file outside the work tree
+   (`mktemp -p /tmp` creates it mode 600 under `/tmp` whatever `TMPDIR` says, so a stray
+   `git add -A` cannot stage it). The chain refuses to upload an
    empty export (a wrong key id) and removes the file even when `gh` fails. The subshell makes
    the `EXIT` trap fire when the chain ends, not when your terminal closes; `shred` is
    best-effort on tmpfs or journaling filesystems:
-   `( f=$(mktemp) && trap 'shred -u "$f" 2>/dev/null || rm -f "$f"' EXIT && gpg --export-secret-keys --armor <key-id> > "$f" && { [ -s "$f" ] || { echo "export empty, nothing uploaded" >&2; exit 1; }; } && gh secret set APT_GPG_PRIVATE_KEY --repo guilhermegor/blueprintx < "$f" )`.
+   `( f=$(mktemp -p /tmp) && trap 'shred -u "$f" 2>/dev/null || rm -f "$f"' EXIT && gpg --export-secret-keys --armor <key-id> > "$f" && { [ -s "$f" ] || { echo "export empty, nothing uploaded" >&2; exit 1; }; } && gh secret set APT_GPG_PRIVATE_KEY --repo guilhermegor/blueprintx < "$f" )`.
    Skip `APT_GPG_PASSPHRASE` when the key has none (the workflow treats it as optional); when
    rotating from a key that had one to a key that has none, also run
    `gh secret delete APT_GPG_PASSPHRASE --repo guilhermegor/blueprintx`, so the old value is
