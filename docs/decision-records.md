@@ -1898,8 +1898,8 @@ repository. They were moved out of the workflow files, which now carry no prose.
   While Snap was a channel, `release_snap.yml` failed before its 30-minute build when the
   credential was absent, because an `exit 0` there let v0.16.67 to v0.16.70 report green
   while nothing reached the store (#669); the channel was removed in #1026 (see "Snap is no
-  longer a release channel" below). Every package job stamps the release version into the fallback literal of
-  `blueprintx --version`, since packaged installs have no `.git`.
+  longer a release channel" below). Every package job stamps the release version into
+  the fallback literal of `blueprintx --version`, since packaged installs have no `.git`.
 - **`verify_branch_protection.yml` (#307).** Guards the `strict` setting, which anyone with
   admin rights can flip with no red check. `GITHUB_TOKEN` cannot read branch protection
   (`administration` is not a grantable scope), so it reuses `GH_PAT_REVIEW_TRIGGER`. It runs
@@ -2322,6 +2322,7 @@ upload(s) to complete their review process". A classic-confinement snap needs a 
 review that was never approved, and snapcraft.io login was returning 502. The red job sat
 beside green apt, Homebrew and Chocolatey jobs on each release, which teaches readers to
 ignore a red release. The owner removed the channel on 2026-11-07: `release_snap.yml`, the
-`snap/` directory and the `SNAPCRAFT_STORE_CREDENTIALS` secret are gone. Existing Snap
+`snap/` directory are gone. The `SNAPCRAFT_STORE_CREDENTIALS` repository secret and the
+store token behind it must still be deleted and revoked by the owner. Existing Snap
 installs keep their last version and should move to Homebrew, Chocolatey or apt. The old
 plan under `.specs/features/snap-publishing/` stays as a record.
