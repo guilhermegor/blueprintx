@@ -2801,6 +2801,10 @@ Offline scaffolds (no GitHub remote) do not receive them.</p>
 <td>On a merged same-repo PR into the default branch, closes the issues named by the branch (<code>&lt;type&gt;/&lt;N&gt;-&lt;slug&gt;</code>) or by <code>Closes/Fixes/Resolves #N</code>.</td>
 </tr>
 <tr>
+<td><code>delete-closed-pr-branch.yml</code></td>
+<td>On a same-repo PR closed <strong>without merge</strong>, deletes its head branch (<code>delete_branch_on_merge</code> never fires there). Deletes only a short-lived <code>&lt;type&gt;/&lt;N&gt;-&lt;slug&gt;</code> branch (never <code>release/*</code>), and skips forks, the default and base branches, a branch that another open PR uses as its base or head (an unreadable answer counts as in use), a protected branch or one whose protection cannot be read, an already-deleted ref and a branch whose tip is not the PR head; the job summary records the ref and sha for a restore, or the reason for a skip. The logic is <code>bin/delete_closed_pr_branch.sh</code>, which reuses the branch pattern of <code>check_pr_policy.sh</code>.</td>
+</tr>
+<tr>
 <td><code>branch-has-issue.yml</code></td>
 <td>Assigns the author when a same-repo PR is opened (job <code>assign</code>), then fails a PR whose head branch carries no issue number (<code>&lt;type&gt;/&lt;N&gt;-&lt;slug&gt;</code>), that has no assignee, or that is linked to no real issue. <code>release/</code>, <code>dependabot/</code> and <code>renovate/</code> branches are exempt from the branch rule.</td>
 </tr>

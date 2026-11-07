@@ -2940,6 +2940,9 @@ root file, where the change would reach one tier and silently miss the rest.</p>
 <h2 id="pull-requests">Pull requests<a class="headerlink" href="#pull-requests" title="Permanent link">&para;</a></h2>
 <p>Branch off <code>main</code> using the CONTRIBUTING prefix policy (<code>feat/…</code>, <code>fix/…</code>, …), keep <code>make lint</code>
 green, and fill out the PR template. Direct commits to <code>main</code> are blocked by pre-commit.</p>
+<p>Scaffolded repos delete a PR's branch on merge (<code>delete_branch_on_merge</code>) and, through
+<code>delete-closed-pr-branch.yml</code>, when a same-repo PR is closed without merging; see
+<a href="../policy-workflows/">Repo policy workflows</a>.</p>
 <h2 id="blocked-work">Blocked work<a class="headerlink" href="#blocked-work" title="Permanent link">&para;</a></h2>
 <p>Work that cannot start because an upstream is unfinished is marked on the issue and on the
 kanban board, so it is obvious when to stop here and go finish the upstream.</p>
