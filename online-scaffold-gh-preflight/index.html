@@ -765,6 +765,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#board-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Board workflows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#not-covered-yet" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2798,6 +2809,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#board-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Board workflows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#not-covered-yet" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2900,14 +2922,45 @@ fields. <code>gh repo create</code> is not idempotent: if the stop
 happened after the repo was created, finish the remaining steps by hand or use
 <a href="../offline-to-online/">Offline to Online</a>.</p>
 <h2 id="the-graphql-budget">The GraphQL budget<a class="headerlink" href="#the-graphql-budget" title="Permanent link">&para;</a></h2>
-<p><code>SCAFFOLD_GH_GRAPHQL_BUDGET</code> (100) is a conservative upper bound, not a live
-measurement. <code>SCAFFOLD_GH_GRAPHQL_SITES</code> (15) counts the <code>gh project</code>,
-<code>gh repo view</code> and <code>gh api graphql</code> call sites in the scaffold libraries;
-<code>tests/test_scaffold_gh_preflight.sh</code> fails when a call site is added without
-updating it, which is the prompt to re-check the budget.</p>
+<p><code>SCAFFOLD_GH_GRAPHQL_MEASURED</code> (17) is the number of GraphQL-backed <code>gh</code> calls
+(<code>gh project ...</code>, <code>gh repo view</code>, <code>gh api graphql</code>) a fresh kanban setup makes.
+<code>tests/test_scaffold_gh_preflight.sh</code> counts them against a stubbed <code>gh</code> and
+fails when the number changes, which is the prompt to re-set the budget.</p>
+<p><code>SCAFFOLD_GH_GRAPHQL_BUDGET</code> (100) stays the conservative bound it was. The
+count above plus the preflight call and <code>gh repo create</code> is 19; times 3, the
+most GraphQL queries one <code>gh</code> command is assumed to send (owner lookup, object
+lookup, mutation), plus 3 for one retried command, gives 60. That multiplier
+has not been measured: <code>gh project</code> subcommands can send more than 3 queries
+(owner fallback, paginated <code>field-list</code>), and a fresh-board run is only one of
+the branches. The budget is therefore not lowered to 60 until <code>gh api
+rate_limit</code> has been read before and after a real run on a throwaway account.
+The test only requires the budget to stay at or above that computed 60. The
+count covers the kanban setup only: <code>gh issue create</code> (the release issue) and
+other GraphQL-backed commands elsewhere in the scaffold are outside it, so 60 is
+a floor for that path, not a total for a whole scaffold.</p>
+<p><code>SCAFFOLD_GH_GRAPHQL_SITES</code> (16) counts the call sites in the scaffold
+libraries; the same test fails when one is added without updating it.</p>
+<p>The two numbers differ because they count different things. Of the 16 sites,
+11 run on a fresh board and 5 (the card-add path: <code>project view</code>, two
+<code>field-list</code> reads, <code>item-add</code>, <code>item-edit</code>) do not. One of the 11, the
+<code>gh project field-create</code> in the field loop, runs 7 times (one per field), so a
+fresh setup makes 11 - 1 + 7 = 17 calls.</p>
+<p>The workflows read asks for <code>workflows(first:20)</code>. A real board lists 6
+built-in workflows (read with <code>workflows(first:100){totalCount}</code> on 2026-11-07),
+so 20 leaves room and no pagination is needed.</p>
+<h2 id="board-workflows">Board workflows<a class="headerlink" href="#board-workflows" title="Permanent link">&para;</a></h2>
+<p>After the fields are created, <code>scaffold_kanban_workflows</code> reads the board's
+built-in workflows through GraphQL (<code>ProjectV2.workflows</code>, which exposes
+<code>enabled</code>). It warns when "Item closed" or "Pull request merged" is off, since
+each moves one kind of card to Done (closed issues, merged pull requests), and says "not found under that name"
+when a workflow is absent from the answer. It never stops the scaffold, and
+it is the one read here that does not go through <code>gh_read</code>: the step is
+advisory, so a failure prints the one-line instruction to enable both by hand,
+with the cause from <code>gh_classify_failure</code> (rate, auth, network or other).
+Workflows cannot be enabled through the API.</p>
 <h2 id="not-covered-yet">Not covered yet<a class="headerlink" href="#not-covered-yet" title="Permanent link">&para;</a></h2>
 <p>The <code>delete_branch_on_merge</code> setting, the <code>Cut 1.0.0</code> release issue and its board card keep their warn-and-print-the-
-manual-command fallback, and the built-in board workflows are not read.</p>
+manual-command fallback.</p>
 
 
 
