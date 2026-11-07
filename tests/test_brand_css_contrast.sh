@@ -5,14 +5,13 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CSS="$REPO_ROOT/templates/python-common/docs/stylesheets/brand.css"
 int_failures=0
 
-contrast_report() {
-	python3 -I - "$1" <<'PY'
+read -r -d '' PY_CHECK <<'PY'
 import colorsys
 import re
 import sys
 
 FLOAT_MIN = 4.5
-MATERIAL_DEFAULT_ACCENT = "#526cfe"  # indigo, mkdocs-material >=9.5 (asserted below)
+MATERIAL_DEFAULT_ACCENT = "#526cfe"  # indigo, mkdocs-material >=9.5 (the no-accent check below keeps it the true fallback)
 
 
 def luminance(str_hex):
@@ -28,55 +27,58 @@ def ratio(str_a, str_b):
 
 tuple_bg = colorsys.hls_to_rgb(225 / 360, 0.14, 0.15)
 str_bg = "#" + "".join(f"{round(c * 255):02x}" for c in tuple_bg)
+INT_GATE_FAIL = 3
 
 str_css = re.sub(r"/\*.*?\*/", "", open(sys.argv[1]).read(), flags=re.S)
-match_block = re.search(r'\[data-md-color-scheme="slate"\]\s*\{([^}]*)\}', str_css)
-if not match_block:
-    print("no slate block")
-    sys.exit(0)
-str_block = match_block.group(1)
+
+
+def refuse(str_why):
+    print(str_why)
+    sys.exit(INT_GATE_FAIL)
+
+
+list_blocks = re.findall(r'\[data-md-color-scheme="slate"\]\s*\{([^}]*)\}', str_css)
+if not list_blocks:
+    refuse("no slate block")
+str_block = list_blocks[-1]
+if "--md-hue" in str_css or "--md-default-bg-color" in str_css:
+    refuse("--md-hue or --md-default-bg-color overridden: background unresolved")
 
 
 def var(str_name):
-    match_var = re.search(rf"{str_name}:\s*([^;]+);", str_block)
-    if not match_var:
+    list_found = re.findall(rf"{str_name}:\s*([^;]+);", str_block)
+    if not list_found:
         return None
-    match_hex = re.fullmatch(r"#[0-9a-fA-F]{6}", match_var.group(1).strip())
-    return match_hex.group(0).lower() if match_hex else "unparseable"
+    match_hex = re.fullmatch(r"#[0-9a-fA-F]{6}", list_found[-1].strip())
+    return match_hex.group(0).lower() if match_hex else refuse(f"{str_name}: unparseable value")
 
-
-if "--md-hue" in str_css:
-    print("--md-hue overridden: background unresolved")
-    sys.exit(0)
 
 str_link = var("--md-typeset-a-color") or var("--md-primary-fg-color")
 str_hover = var("--md-accent-fg-color") or MATERIAL_DEFAULT_ACCENT
-if "unparseable" in (str_link, str_hover):
-    print("unresolved: value is not a 6-digit hex")
-    sys.exit(0)
+int_bad = 0
 for str_label, str_color in (("link", str_link), ("hover", str_hover)):
     if str_color is None:
-        print(f"{str_label}: unresolved")
-        continue
+        refuse(f"{str_label}: unresolved")
     float_ratio = ratio(str_color, str_bg)
     print(f"{str_label} {str_color} on {str_bg} = {float_ratio:.2f}")
-    if float_ratio < FLOAT_MIN:
-        print(f"{str_label}: below {FLOAT_MIN}")
+    int_bad += float_ratio < FLOAT_MIN
+sys.exit(INT_GATE_FAIL if int_bad else 0)
 PY
+
+contrast_report() {
+	python3 -I -c "$PY_CHECK" "$1"
 }
 
 check() {
-	local str_name="$1" str_css="$2" str_expect="$3" str_out str_got
-	if ! str_out="$(contrast_report "$str_css")"; then
-		echo "FAIL: $str_name: contrast checker failed"
-		int_failures=$((int_failures + 1))
-		return
-	fi
-	if grep -qE 'below|unresolved|no slate' <<<"$str_out"; then
-		str_got=fail
-	else
-		str_got=pass
-	fi
+	local str_name="$1" str_css="$2" str_expect="$3" str_out int_rc str_got
+	str_out="$(contrast_report "$str_css")"
+	int_rc=$?
+	case "$int_rc" in
+		0) str_got=pass ;;
+		3) str_got=fail ;;
+		*) echo "FAIL: $str_name: contrast checker crashed (exit $int_rc)"
+			int_failures=$((int_failures + 1)); return ;;
+	esac
 	if [ "$str_got" = "$str_expect" ]; then
 		echo "ok: $str_name ($str_got)"
 	else
@@ -86,9 +88,18 @@ check() {
 	fi
 }
 
-for str_yml in "$REPO_ROOT"/templates/*/mkdocs.yml; do
-	if grep -qE '^\s*accent:' "$str_yml" || grep -E '^\s*primary:' "$str_yml" | grep -qv custom; then
-		echo "FAIL: $str_yml sets accent or a named primary; the gate models indigo accent + custom primary"
+shopt -s nullglob
+list_ymls=("$REPO_ROOT"/templates/*/mkdocs.yml)
+shopt -u nullglob
+if [ "${#list_ymls[@]}" -eq 0 ]; then
+	echo "FAIL: no templates/*/mkdocs.yml found"
+	int_failures=$((int_failures + 1))
+fi
+for str_yml in "${list_ymls[@]}"; do
+	int_primary=$(grep -cE '^\s*primary:\s*custom\s*$' "$str_yml")
+	int_scheme=$(grep -cE '^\s*-\s*scheme:' "$str_yml")
+	if grep -qE '^\s*accent:' "$str_yml" || [ "$int_primary" -ne "$int_scheme" ] || [ "$int_scheme" -eq 0 ]; then
+		echo "FAIL: $str_yml needs primary: custom on every palette entry and no accent:"
 		int_failures=$((int_failures + 1))
 	fi
 done
@@ -116,6 +127,12 @@ check "should-fail: slate block without a hover colour (Material accent)" "$TMP/
 sed -E 's|(--md-typeset-a-color:[^;]*;)|/* \1 */|' "$CSS" >"$TMP/no-link-commented.css"
 check "should-fail: commented-out link colour is not live" "$TMP/no-link-commented.css" fail
 check "should-fail: slate block without a link colour" "$TMP/no-link.css" fail
+printf ':root {\n  --md-primary-fg-color: #0d2c54;\n}\n' >"$TMP/no-slate.css"
+check "should-fail: no slate block" "$TMP/no-slate.css" fail
+sed 's|^\[data-md-color-scheme="slate"\] {|&\n  --md-hue: 200;|' "$CSS" >"$TMP/hue.css"
+check "should-fail: --md-hue override" "$TMP/hue.css" fail
+sed -E 's|(--md-typeset-a-color:)[^;]*;|\1 rgb(1, 2, 3);|' "$CSS" >"$TMP/unparseable.css"
+check "should-fail: unparseable link value" "$TMP/unparseable.css" fail
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
 echo "all cases passed"
