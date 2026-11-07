@@ -86,7 +86,7 @@ TUPLE_BLANKINGS = (
     re.compile(r"<[^>\n]+>"),
 )
 
-RE_FENCE = re.compile(r"^\s*(```|~~~)")
+RE_FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 
 RE_TOP_KEY = re.compile(r"^([A-Za-z_][\w-]*):\s*(.*?)\s*$")
 
@@ -128,7 +128,7 @@ def _block_lines(list_lines: list, str_key: str) -> list:
     bool_in = False
     for str_line in list_lines:
         re_key = RE_TOP_KEY.match(str_line)
-        if bool_in and str_line.strip() and not str_line[0].isspace():
+        if bool_in and str_line.strip() and not str_line[0].isspace() and str_line[0] != "#":
             break
         if re_key and re_key.group(1) == str_key:
             bool_in = True
@@ -252,6 +252,26 @@ def page_set(path_root: pathlib.Path, str_mkdocs: str) -> list:
     return sorted({*list_pages, *([path_readme] if path_readme.is_file() else [])})
 
 
+def _fence_toggles(str_open: str, str_marker: str) -> bool:
+    """Say whether a fence marker opens a block or closes the open one.
+
+    Parameters
+    ----------
+    str_open : str
+        The marker that opened the current block, or empty outside a block.
+    str_marker : str
+        The marker on this line, or empty when the line is not a fence.
+
+    Returns
+    -------
+    bool
+        True for an opener, or for a closer of the same character that is at least as long.
+    """
+    if not str_marker:
+        return False
+    return not str_open or (str_marker[0] == str_open[0] and len(str_marker) >= len(str_open))
+
+
 def _mask_lines(str_text: str) -> list:
     """Blank every line that is fenced code or a table row, keeping line numbers.
 
@@ -266,11 +286,14 @@ def _mask_lines(str_text: str) -> list:
         One entry per source line, plus a trailing empty line that closes the last paragraph.
     """
     list_out: list = []
-    bool_fence = False
+    str_open = ""
     for str_line in [*str_text.splitlines(), ""]:
-        bool_marker = bool(RE_FENCE.match(str_line))
-        bool_fence = bool_fence != bool_marker
-        bool_blank = bool_marker or bool_fence or str_line.lstrip().startswith("|")
+        re_marker = RE_FENCE.match(str_line)
+        str_marker = re_marker.group(1) if re_marker else ""
+        bool_toggle = _fence_toggles(str_open, str_marker)
+        if bool_toggle:
+            str_open = "" if str_open else str_marker
+        bool_blank = bool_toggle or bool(str_open) or str_line.lstrip().startswith("|")
         list_out.append("" if bool_blank else str_line)
     return list_out
 

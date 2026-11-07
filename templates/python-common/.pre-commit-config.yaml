@@ -327,7 +327,7 @@ repos:
         name: docs language matches theme.language
         entry: bash bin/poetry_exec.sh run python bin/check_docs_language.py
         language: system
-        files: ^(README\.md|mkdocs\.yml|docs/.*\.md)$
+        files: ^mkdocs\.yml$|\.md$
         pass_filenames: false
 
       - id: check-comment-budget

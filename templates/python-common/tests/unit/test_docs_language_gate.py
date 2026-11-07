@@ -74,6 +74,9 @@ def _run(path_root: Path) -> int:
             STR_MKDOCS_EN,
             STR_EN + "\nUse `que não para com isso` e [que não para](https://a.b/c).\n",
         ),
+        (STR_MKDOCS_EN, STR_EN + "\n````\n```\nque não para com isso, para que não\n```\n````\n"),
+        (STR_MKDOCS_EN, STR_EN + "\n```\n~~~\nque não para com isso, para que não\n~~~\n```\n"),
+        ("site_name: x\ntheme:\n# note\n  language: pt-BR\n", STR_PT),
         (STR_MKDOCS_EN, STR_EN + "\ndocs-lang:ok Esta é a página que você pode ler, que não.\n"),
     ],
 )
@@ -151,4 +154,12 @@ def test_main_no_mkdocs_exits_one(tmp_path: Path) -> None:
 def test_main_empty_page_set_exits_one(tmp_path: Path) -> None:
     """Zero pages is a vacuous pass, which the gate refuses."""
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    assert _run(tmp_path) == 1
+
+
+def test_main_custom_docs_dir_is_read(tmp_path: Path) -> None:
+    """Pages under a custom ``docs_dir`` are part of the page set."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN + "docs_dir: manual\n")
+    _write(tmp_path / "README.md", STR_EN)
+    _write(tmp_path / "manual" / "guide.md", STR_PT)
     assert _run(tmp_path) == 1
