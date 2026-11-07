@@ -280,6 +280,9 @@ jobs:
       - name: Should-fail regression tests for check_action_pins
         run: bash tests/test_check_actions_pins.sh
 
+      - name: Should-fail regression tests for check_logo_sync
+        run: bash tests/test_check_logo_sync.sh
+
   workflow-names:
     name: Template workflow filenames
     runs-on: ubuntu-latest
@@ -885,6 +888,11 @@ jobs:
       - name: Lint (eslint)
         working-directory: ${{ runner.temp }}/ci-scaffold
         run: npm run lint
+
+      - name: Explicit any and warnings are refused by lint (blueprintx#1022)
+        env:
+          SKELETON: ${{ matrix.skeleton }}
+        run: bash tests/test_explicit_any_refused_ts.sh "$SKELETON" "$RUNNER_TEMP/ci-scaffold"
 
       - name: Boundaries should-fail witness (blueprintx#932)
         if: matrix.skeleton == 'react-spa-webpack'

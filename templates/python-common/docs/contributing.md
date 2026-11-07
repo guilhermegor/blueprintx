@@ -109,7 +109,10 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
 `docs/index.md`. To brand your site:
 
 1. Replace `docs/assets/logo.png` with your own asset (keep the filename, or update the two
-   `mkdocs.yml` paths and the `<img>` in `docs/index.md`).
+   `mkdocs.yml` paths and the `<img>` in `docs/index.md`). The README's logo
+   (`assets/logo_lorem_ipsum.png`) must be the **same file**: the `check-logo-sync` hook
+   compares the README image, the `docs/index.md` image and `theme.logo`/`theme.favicon`
+   byte for byte and fails when any differs or is missing.
 2. Tune size, position and border inline on the `<img>` — `width="200"` (scale),
    `align="right"` (position) and `style="border-radius: 15px;"` (rounded) — in `docs/index.md`.
 3. Set the header colour in `docs/stylesheets/brand.css` (`--md-primary-fg-color`, plus the
