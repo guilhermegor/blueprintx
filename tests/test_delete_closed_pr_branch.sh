@@ -121,9 +121,6 @@ check "a branch whose tip moved is kept" "$(deleted && echo 1 || echo 0)"
 STUB_TIP=404 run_script
 check "an already-deleted ref is a green no-op" "$(deleted && echo 1 || echo $((int_status != 0)))"
 
-STUB_TIP=404 run_script
-check "an already-deleted ref with a prefix sibling stays a green no-op (singular ref endpoint)" "$((int_status != 0))"
-
 STUB_DELETE=422 run_script
 check "a 422 'Reference does not exist' on delete is already gone, green" "$((int_status != 0))"
 
@@ -161,6 +158,11 @@ check "an unreadable open-PR base query does not fail the job" "$((int_status !=
 
 STUB_PULLS_HEAD=err run_script
 check "an unreadable open-PR head query fails closed" "$(deleted && echo 1 || echo 0)"
+check "an unreadable open-PR head query does not fail the job" "$((int_status != 0))"
+
+run_script
+grep -qF 'head=o:fix/12-x' "$STUB_LOG"
+check "the head query carries the owner prefix" "$?"
 
 STUB_NOISE=1 run_script
 deleted

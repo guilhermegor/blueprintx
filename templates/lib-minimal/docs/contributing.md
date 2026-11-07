@@ -298,6 +298,11 @@ reported as "kept" (green); any other unexpected API error fails the job. The wo
 from the PR's merge ref, so a same-repo writer can run code with `contents: write` by editing it;
 that adds no privilege, since they can already push.
 
+Known limits. GitHub does not run `pull_request` workflows while a PR has a merge conflict, so a
+conflicted PR closed unmerged keeps its branch; delete it by hand. The script is checked out from the
+default branch while the workflow YAML comes from the PR's merge ref, so a repository whose default
+branch does not yet contain `bin/delete_closed_pr_branch.sh` fails this job until it does.
+
 ### The work-ledger gate
 
 `bin/check_backlog_ledger.py` (pre-commit + CI) fails a branch that touches `src/` or CI paths but

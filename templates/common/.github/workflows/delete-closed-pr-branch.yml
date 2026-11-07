@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: delete-closed-pr-branch-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: false
+
 jobs:
   delete:
     permissions:
