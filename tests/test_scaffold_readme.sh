@@ -156,6 +156,7 @@ test_ts_lib_readme_has_one_npm_downloads_badge() {
         GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL=https://www.linkedin.com/in/ci-bot
         scaffold_render_readme ts-lib "$REPO_ROOT/templates/ts-lib/README.md" "$path_out" >/dev/null
     )
+    expect "ts-lib README renders" "0" "$?"
     expect "ts-lib README has one npm downloads badge" "1" "$({ grep -oF 'img.shields.io/npm/d18m/acme' "$path_out" || true; } | wc -l | tr -d '[:space:]')"
     expect "ts-lib downloads badge links the npm page" "1" \
         "$(grep -cF '[![Downloads](https://img.shields.io/npm/d18m/acme)](https://www.npmjs.com/package/acme)' "$path_out")"
@@ -168,7 +169,7 @@ test_service_readme_has_no_documentation_or_pypi() {
     LINKEDIN_URL=https://www.linkedin.com/in/ci-bot render_python_readme ddd-service-native-db "$path_out"
     expect "service README has no Documentation section" "0" "$(grep -c '^## Documentation$' "$path_out" || true)"
     expect "service README has no pypi badge" "0" "$(grep -c 'pypi' "$path_out" || true)"
-    expect "service README has no downloads badge" "0" "$(grep -c 'Downloads' "$path_out" || true)"
+    expect "service README has no downloads badge" "0" "$(grep -c 'shields.io/pepy/\|shields.io/npm/d' "$path_out" || true)"
     rm -f "$path_out"
 }
 

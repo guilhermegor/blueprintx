@@ -44,7 +44,9 @@ Further rules:
   contributions. `pypi` and `downloads` are `library` only; no Snyk License advisor badge. The
   downloads badge is `img.shields.io/pepy/dt/<name>` for Python and `img.shields.io/npm/d18m/<name>`
   for ts-lib: shields.io always answers HTTP 200 and prints "not found" for an unpublished package,
-  so it is safe before the first publish. `static.pepy.tech` stays banned (404 until indexed,
+  so it is safe before the first publish (measured 2026-11-07 on both endpoints). They count
+  different windows: `pepy/dt` is all-time, `npm/d18m` the last 18 months, because npm's API
+  serves no all-time total. `static.pepy.tech` stays banned (404 until indexed,
   blueprintx#948) and so does `pypi/dm` (wrong figure). The order is a review convention, not a gate.
 - README images use absolute `raw.githubusercontent.com` URLs (logo, coverage badge), because
   `readme = "README.md"` ships to PyPI where relative paths break. `scaffold_render_readme` fills

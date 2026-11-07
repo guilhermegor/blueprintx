@@ -4,8 +4,8 @@
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/typescript-6.x-3178C6?logo=typescript&logoColor=white)
-[![Linting](https://img.shields.io/badge/linting-eslint_|_prettier-blue)](https://eslint.org)
 [![Downloads](https://img.shields.io/npm/d18m/${PROJECT_NAME})](https://www.npmjs.com/package/${PROJECT_NAME})
+[![Linting](https://img.shields.io/badge/linting-eslint_|_prettier-blue)](https://eslint.org)
 ![License](https://img.shields.io/badge/license-${PROJECT_LICENSE}-green.svg)
 ![Open Issues](https://img.shields.io/github/issues/${GITHUB_USERNAME}/${PROJECT_NAME})
 
