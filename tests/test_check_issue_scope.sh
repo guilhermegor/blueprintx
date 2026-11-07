@@ -89,6 +89,14 @@ test_bare_directory_entry_covers_files_beneath_it() {
     expect_gate "bare directory entries cover files beneath them" "pass" "scope OK"
 }
 
+test_wildcard_directory_entry_covers_files_beneath_it() {
+    export GITHUB_REPOSITORY="o/r" PR_NUMBER="11"
+    export PR_JSON='{"files":[{"path":"templates/ts-common/bin/x.sh"}],"closingIssuesReferences":[{"number":314}],"commits":[{"messageBody":""}]}'
+    export ISSUE_JSON='{"body":"```surface\ntemplates/*-common/\n```"}'
+    unset GH_FAIL_ON || true
+    expect_gate "wildcard directory entry with a trailing slash covers files beneath it" "pass" "scope OK"
+}
+
 test_bare_directory_entry_does_not_cover_sibling_prefix() {
     export GITHUB_REPOSITORY="o/r" PR_NUMBER="10"
     export PR_JSON='{"files":[{"path":"tests-extra/t.sh"}],"closingIssuesReferences":[{"number":314}],"commits":[{"messageBody":""}]}'
@@ -144,7 +152,8 @@ main() {
     test_files_within_declared_surface_passes
     test_file_outside_surface_fails
     test_bare_directory_entry_covers_files_beneath_it
-    test_bare_directory_entry_does_not_cover_sibling_prefix
+    test_wildcard_directory_entry_covers_files_beneath_it
+test_bare_directory_entry_does_not_cover_sibling_prefix
     test_override_trailer_passes
     test_undeclared_surface_warns_not_blocks
     test_empty_surface_block_is_undeclared_not_empty_declaration

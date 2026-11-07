@@ -160,8 +160,10 @@ def path_in_surface(str_path: str, set_patterns: set[str]) -> bool:
     """
     return any(
         str_path == str_pattern
-        or fnmatch.fnmatchcase(str_path, str_pattern.replace("/**", "/*"))
-        or (str_pattern.endswith("/") and str_path.startswith(str_pattern))
+        or fnmatch.fnmatchcase(
+            str_path,
+            str_pattern + "*" if str_pattern.endswith("/") else str_pattern.replace("/**", "/*"),
+        )
         for str_pattern in set_patterns
     )
 
