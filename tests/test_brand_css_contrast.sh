@@ -5,7 +5,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CSS="$REPO_ROOT/templates/python-common/docs/stylesheets/brand.css"
 int_failures=0
 
-contrast_failures() {
+contrast_report() {
 	python3 -I - "$1" <<'PY'
 import colorsys
 import re
@@ -38,12 +38,22 @@ str_block = match_block.group(1)
 
 
 def var(str_name):
-    match_var = re.search(rf"{str_name}:\s*(#[0-9a-fA-F]{{6}})\s*;", str_block)
-    return match_var.group(1).lower() if match_var else None
+    match_var = re.search(rf"{str_name}:\s*([^;]+);", str_block)
+    if not match_var:
+        return None
+    match_hex = re.fullmatch(r"#[0-9a-fA-F]{6}", match_var.group(1).strip())
+    return match_hex.group(0).lower() if match_hex else "unparseable"
 
+
+if "--md-hue" in str_css:
+    print("--md-hue overridden: background unresolved")
+    sys.exit(0)
 
 str_link = var("--md-typeset-a-color") or var("--md-primary-fg-color")
 str_hover = var("--md-accent-fg-color") or MATERIAL_DEFAULT_ACCENT
+if "unparseable" in (str_link, str_hover):
+    print("unresolved: value is not a 6-digit hex")
+    sys.exit(0)
 for str_label, str_color in (("link", str_link), ("hover", str_hover)):
     if str_color is None:
         print(f"{str_label}: unresolved")
@@ -56,8 +66,8 @@ PY
 }
 
 check() {
-	local str_name="$1" str_css="$2" str_expect="$3" str_out
-	if ! str_out="$(contrast_failures "$str_css")"; then
+	local str_name="$1" str_css="$2" str_expect="$3" str_out str_got
+	if ! str_out="$(contrast_report "$str_css")"; then
 		echo "FAIL: $str_name: contrast checker failed"
 		int_failures=$((int_failures + 1))
 		return
