@@ -59,7 +59,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
         fn_build_connection: Callable[[], Any],
         fn_output_path: Callable[[str], Path],
         path_json: Path,
-        dict_context: dict[str, Any],
+        dict_context: dict[str, object],
         cls_email_handler: EmailHandler | None = None,
         cls_webhook: WebhookNotifier | None = None,
         str_webhook_message: str = "",
@@ -73,7 +73,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
         self.cls_webhook = cls_webhook
         self.str_webhook_message = str_webhook_message
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> dict[str, object]:
         """Execute every phase in order, returning the reconciliation summary.
 
         Returns
@@ -86,17 +86,17 @@ class ReconcilePipeline(metaclass=TypeChecker):
             self.cls_logger, self.dict_context, self.cls_email_handler, self.cls_webhook
         )
         dict_baseline = self._read_baseline()
-        dict_summary: dict[str, Any] = {
+        dict_summary: dict[str, object] = {
             "intent": "reconcile",
             "baseline_found": bool(dict_baseline),
-            "baseline_rows": int(dict_baseline.get("rows_read", 0)),
+            "baseline_rows": int(str(dict_baseline.get("rows_read", 0))),
         }
         pipeline_common.write_summary(self.cls_logger, self.path_json, dict_summary)
         pipeline_common.log_elapsed(self.cls_logger, time() - float_start)
         pipeline_common.notify(self.cls_logger, self.cls_webhook, self.str_webhook_message)
         return dict_summary
 
-    def _read_baseline(self) -> dict[str, Any]:
+    def _read_baseline(self) -> dict[str, object]:
         """Read the prior run's summary as the reconciliation baseline.
 
         Returns
@@ -112,7 +112,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
                 self.cls_logger, "No prior summary found — baseline empty (prod: bounded backfill)"
             )
             return {}
-        dict_prior: dict[str, Any] = json.loads(self.path_json.read_text(encoding="utf-8"))
+        dict_prior: dict[str, object] = json.loads(self.path_json.read_text(encoding="utf-8"))
         log_message(
             self.cls_logger, f"Baseline loaded ({dict_prior.get('rows_read', 0)} prior rows)"
         )

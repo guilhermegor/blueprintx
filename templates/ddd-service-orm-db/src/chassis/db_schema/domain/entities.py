@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
 import uuid
 
 
-Record = dict[str, Any]
+Record = dict[str, object]
 
 
 @dataclass

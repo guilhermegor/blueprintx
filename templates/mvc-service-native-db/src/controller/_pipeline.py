@@ -109,7 +109,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         fn_build_connection: Callable[[], Any],
         fn_output_path: Callable[[str], Path],
         path_json: Path,
-        dict_context: dict[str, Any],
+        dict_context: dict[str, object],
         cls_email_handler: EmailHandler | None = None,
         cls_webhook: WebhookNotifier | None = None,
         str_webhook_message: str = "",
@@ -123,7 +123,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         self.cls_webhook = cls_webhook
         self.str_webhook_message = str_webhook_message
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> dict[str, object]:
         """Execute every phase in order, returning the run summary.
 
         Returns
@@ -141,7 +141,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
             log_message(self.logger, "DB connection closed")
         df_report = self._enrich(df_report)
         path_report = self._render(df_report)
-        dict_summary: dict[str, Any] = {
+        dict_summary: dict[str, object] = {
             "rows_read": int(len(df_report)),
             "report_path": str(path_report),
         }
@@ -235,7 +235,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
             not run.
         """
         path_labels = self.dict_context.get("path_labels")
-        if path_labels is None:
+        if not isinstance(path_labels, Path):
             log_message(self.logger, "Label enrichment skipped: no path_labels configured")
             return df_report
         try:
@@ -269,7 +269,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         log_message(self.logger, f"Finishing report-export process ({path_report})")
         return path_report
 
-    def _write_summary(self, dict_summary: dict[str, Any]) -> None:
+    def _write_summary(self, dict_summary: dict[str, object]) -> None:
         """Write the JSON run summary.
 
         Parameters

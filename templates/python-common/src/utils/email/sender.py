@@ -27,7 +27,7 @@ from utils.logs import log_message
 if TYPE_CHECKING:
     from typing import TypeVar
 
-    _F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F")
 
     def type_checker(fn: _F) -> _F:
         """Type-only stub — see src/utils/CLAUDE.md."""

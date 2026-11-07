@@ -159,3 +159,12 @@ job sees the rewritten `package.json`; publishing the literal version stays the 
 
 The example boilerplate is `src/example.ts`, `src/example.test.ts` and the `greet` re-export in
 `src/index.ts`. Delete or replace them, and every doc or smoke check that still shows `greet`.
+
+## Keeping `src/index.ts` merge-friendly
+
+The barrel gains one export statement per module. Keep them sorted by module path, one per
+line: `perfectionist/sort-exports` in `eslint.config.mjs` fails `npm run lint` on any other
+order, and `npm run lint:fix` re-sorts. Two PRs adding a module at different positions then
+merge with no conflict; two adding between the same neighbours still conflict, which is rare
+and accepted. This mirrors the Python `__all__` rule (blueprintx#959); the ESLint rule is used
+because it already checks exactly this construct, so no gate script ships.

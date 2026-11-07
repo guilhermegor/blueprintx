@@ -21,10 +21,9 @@ from utils.dtypes import apply_dtypes
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from typing import TypeVar
 
-    _F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F")
 
     def type_checker(fn: _F) -> _F:
         """Type-only stub — see src/utils/CLAUDE.md."""
@@ -112,7 +111,7 @@ def from_cursor(
 
 @type_checker
 def from_records(
-    list_records: Sequence[Mapping[str, Any]],
+    list_records: Sequence[Mapping[str, object]],
     dict_dtypes: dict[str, str],
     list_date_cols: list[str] | None = None,
 ) -> pd.DataFrame:

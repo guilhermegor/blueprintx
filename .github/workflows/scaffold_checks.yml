@@ -280,6 +280,9 @@ jobs:
       - name: Should-fail regression tests for check_action_pins
         run: bash tests/test_check_actions_pins.sh
 
+      - name: Should-fail regression tests for check_logo_sync
+        run: bash tests/test_check_logo_sync.sh
+
   workflow-names:
     name: Template workflow filenames
     runs-on: ubuntu-latest
@@ -570,6 +573,28 @@ jobs:
 
       - name: every Python tier cites only poe tasks it defines (blueprintx#1023)
         run: bash tests/test_python_docs_poe_tasks.sh
+
+  explicit-any:
+    name: Python scaffolds refuse an explicit Any
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install scaffold tooling (envsubst)
+        run: command -v envsubst >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext-base; }
+
+      - name: Install Poetry
+        run: python -m pip install poetry
+
+      - name: Plant a nested explicit Any and expect mypy to refuse it (blueprintx#1022)
+        run: bash tests/test_explicit_any_refused_py.sh
 
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json
@@ -864,6 +889,12 @@ jobs:
       - name: Boundaries should-fail witness (blueprintx#932)
         if: matrix.skeleton == 'react-spa-webpack'
         run: bash bin/ci/check_boundaries_witness.sh "$RUNNER_TEMP/ci-scaffold"
+
+      - name: Barrel export order should-fail witness (blueprintx#1015)
+        if: matrix.skeleton == 'ts-lib'
+        env:
+          BARREL_PROJECT: ${{ runner.temp }}/ci-scaffold
+        run: bash tests/test_ts_lib_barrel.sh
 
   spell-check:
     name: Spell check — docs/ and templates/
