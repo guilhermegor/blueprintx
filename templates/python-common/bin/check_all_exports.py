@@ -245,6 +245,23 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
     return True
 
 
+_SET_DYNAMIC_WRITERS = frozenset(
+    {
+        "globals",
+        "locals",
+        "vars",
+        "setattr",
+        "exec",
+        "eval",
+        "__import__",
+        "modules",
+        "f_globals",
+        "_getframe",
+        "currentframe",
+    }
+)
+
+
 def _internal_origin(
     path_module: pathlib.Path, str_name: str, set_seen: frozenset[pathlib.Path]
 ) -> str | None:
@@ -286,10 +303,289 @@ def _internal_origin(
             for cls_node in list_nodes
             if isinstance(cls_node, ast.ImportFrom)
             and any(cls_alias.name == "*" for cls_alias in cls_node.names)
-            for str_hit in [_from_import_origin(path_module, cls_node, str_name, set_next)]
+            for str_hit in [_star_origin(path_module, cls_node, str_name, set_next)]
             if str_hit is not None
         ),
         None,
+    )
+
+
+def _extends_all(list_nodes: list[ast.stmt]) -> bool:
+    """Return whether ``__all__`` is anything but one literal list the gate can read.
+
+    ``declared_all`` reads only the first assignment, and only its string literals, so a second
+    assignment, ``+=``, ``.extend``, ``.append``, a subscript write, or a non-literal value
+    leaves an ``__all__`` the gate cannot trust to exclude a name.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``__all__`` is not a single literal list of strings.
+    """
+    list_subs = [cls_sub for cls_node in list_nodes for cls_sub in ast.walk(cls_node)]
+    int_stores = sum(
+        isinstance(cls_sub, ast.Name)
+        and cls_sub.id == "__all__"
+        and isinstance(cls_sub.ctx, ast.Store)
+        for cls_sub in list_subs
+    )
+    return int_stores > 1 or any(_all_is_opaque(cls_sub) for cls_sub in list_subs)
+
+
+def _all_is_opaque(cls_sub: ast.AST) -> bool:
+    """Return whether one node reaches into ``__all__`` or assigns it a non-literal value.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node under a module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``__all__.x``, ``__all__[...]``, or ``__all__ = <not a string list>``.
+    """
+    if isinstance(cls_sub, ast.Attribute | ast.Subscript):
+        return isinstance(cls_sub.value, ast.Name) and cls_sub.value.id == "__all__"
+    if not isinstance(cls_sub, ast.Assign):
+        return False
+    if not any(isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_sub.targets):
+        return False
+    return not isinstance(cls_sub.value, ast.List | ast.Tuple) or any(
+        not (isinstance(cls_elt, ast.Constant) and isinstance(cls_elt.value, str))
+        for cls_elt in cls_sub.value.elts
+    )
+
+
+def _scope_nodes(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
+    """Yield every node in the statements, not entering a nested def, class or lambda.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Yields
+    ------
+    ast.AST
+        Each node evaluated in the module namespace itself.
+    """
+    list_stack: list[ast.AST] = list(list_nodes)
+    while list_stack:
+        cls_cur = list_stack.pop()
+        yield cls_cur
+        if not isinstance(
+            cls_cur, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda
+        ):
+            list_stack.extend(ast.iter_child_nodes(cls_cur))
+
+
+def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
+    """Return whether the module writes its namespace by a route the AST cannot list.
+
+    The whole tree is read, nested scopes, defaults and decorators included, because a function
+    called at import time writes the module namespace as surely as a module-level statement.
+    A writer name counts as a bare name or as an attribute (``builtins.exec``, ``sys.modules``).
+    The one exemption is ``setattr(x, ...)`` or ``vars(x)`` inside a method body, where ``x`` is
+    that method's own first parameter: a caller can still pass a module there, so a lambda or a
+    plain function never qualifies.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Returns
+    -------
+    bool
+        ``True`` when a dynamic writer is named outside that exemption.
+    """
+    set_exempt = {
+        id(cls_call.func)
+        for cls_fn in _methods(list_nodes)
+        for cls_stmt in cls_fn.body
+        for cls_call in ast.walk(cls_stmt)
+        if isinstance(cls_call, ast.Call)
+        and isinstance(cls_call.func, ast.Name)
+        and cls_call.func.id in {"setattr", "vars"}
+        and cls_call.args
+        and isinstance(cls_call.args[0], ast.Name)
+        and cls_call.args[0].id == cls_fn.args.args[0].arg
+        and cls_call.args[0].id in {"self", "cls"}
+    }
+    return any(
+        (
+            (isinstance(cls_sub, ast.Name) and cls_sub.id in _SET_DYNAMIC_WRITERS)
+            or (isinstance(cls_sub, ast.Attribute) and cls_sub.attr in _SET_DYNAMIC_WRITERS)
+        )
+        and id(cls_sub) not in set_exempt
+        for cls_node in list_nodes
+        for cls_sub in ast.walk(cls_node)
+    )
+
+
+def _methods(list_nodes: list[ast.stmt]) -> Iterator[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Yield every def that sits directly in a class body and takes a first parameter.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Yields
+    ------
+    ast.FunctionDef or ast.AsyncFunctionDef
+        Each method with at least one positional parameter.
+    """
+    for cls_node in list_nodes:
+        for cls_cls in ast.walk(cls_node):
+            if isinstance(cls_cls, ast.ClassDef):
+                yield from (
+                    cls_fn
+                    for cls_fn in cls_cls.body
+                    if isinstance(cls_fn, ast.FunctionDef | ast.AsyncFunctionDef)
+                    and cls_fn.args.args
+                )
+
+
+def _pattern_names(cls_sub: ast.AST) -> set[str]:
+    """Return the names a ``match`` pattern node captures.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node.
+
+    Returns
+    -------
+    set of str
+        The captured names; empty for a node that is not a capturing pattern.
+    """
+    if isinstance(cls_sub, ast.MatchAs | ast.MatchStar):
+        return {cls_sub.name} if cls_sub.name else set()
+    if isinstance(cls_sub, ast.MatchMapping) and cls_sub.rest:
+        return {cls_sub.rest}
+    return set()
+
+
+def _bound_names(list_nodes: list[ast.stmt]) -> set[str]:
+    """Return every name the statements bind outside a nested def, class or lambda.
+
+    Wider than ``_definitions``: loop and ``with`` targets, tuple unpacking, walrus, ``match``
+    captures and ``except ... as`` also count, as does a name a function declares ``global``.
+    Names bound inside comprehensions are included, which can only over-charge.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        Statements to read.
+
+    Returns
+    -------
+    set of str
+        The bound names, private ones included.
+    """
+    set_names = _definitions(list_nodes)
+    for cls_cur in _scope_nodes(list_nodes):
+        if isinstance(cls_cur, ast.Name) and isinstance(cls_cur.ctx, ast.Store):
+            set_names.add(cls_cur.id)
+        if isinstance(cls_cur, ast.ExceptHandler) and cls_cur.name:
+            set_names.add(cls_cur.name)
+        set_names |= _pattern_names(cls_cur)
+    for cls_node in list_nodes:
+        set_names.update(
+            str_g
+            for cls_sub in ast.walk(cls_node)
+            if isinstance(cls_sub, ast.Global)
+            for str_g in cls_sub.names
+        )
+    return set_names
+
+
+def _star_origin(
+    path_module: pathlib.Path,
+    cls_node: ast.ImportFrom,
+    str_name: str,
+    set_seen: frozenset[pathlib.Path],
+) -> str | None:
+    """Trace ``str_name`` through one ``*`` import, attributing it only to a module that has it.
+
+    A star import from an ``_internal`` module leaks only the names that module actually binds,
+    so a public name supplied by a sibling star import is not charged to it. When the
+    ``_internal`` file cannot be resolved the name is attributed to it, as before.
+
+    Parameters
+    ----------
+    path_module : pathlib.Path
+        The module containing the import.
+    cls_node : ast.ImportFrom
+        The ``from … import *`` statement.
+    str_name : str
+        The bound name to trace.
+    set_seen : frozenset of pathlib.Path
+        Modules already visited.
+
+    Returns
+    -------
+    str or None
+        The dotted ``_internal`` module, or ``None``.
+    """
+    if "_internal" not in (cls_node.module or "").split("."):
+        return _from_import_origin(path_module, cls_node, str_name, set_seen)
+    path_target = _import_target(path_module, cls_node)
+    if path_target is not None and not _star_provides(path_target, str_name, frozenset()):
+        return None
+    return _from_import_origin(path_module, cls_node, str_name, set_seen)
+
+
+def _star_provides(
+    path_module: pathlib.Path, str_name: str, set_seen: frozenset[pathlib.Path]
+) -> bool:
+    """Return whether ``from <module> import *`` would bind ``str_name``.
+
+    The module's own ``__all__`` limits what a star import brings in, and a name it only
+    re-exports through a star import of its own counts. A nested star import that cannot be
+    resolved, a dynamic namespace write, or an ``__all__`` the gate cannot read as one literal
+    list is assumed to provide the name, so the check fails closed.
+
+    Parameters
+    ----------
+    path_module : pathlib.Path
+        The module being star-imported.
+    str_name : str
+        The name to look for.
+    set_seen : frozenset of pathlib.Path
+        Modules already visited, so an import cycle terminates.
+
+    Returns
+    -------
+    bool
+        ``True`` when the name may come from this module.
+    """
+    if path_module in set_seen:
+        return False
+    list_nodes = list(_module_statements(_parse(path_module).body))
+    list_exported = declared_all(path_module)
+    if _binds_dynamically(list_nodes):
+        return True
+    if _extends_all(list_nodes):
+        return True
+    if list_exported is not None:
+        return str_name in list_exported
+    if str_name in _bound_names(list_nodes) | _imported_names(list_nodes):
+        return True
+    set_next = set_seen | {path_module}
+    return any(
+        (path_target := _import_target(path_module, cls_node)) is None
+        or _star_provides(path_target, str_name, set_next)
+        for cls_node in list_nodes
+        if isinstance(cls_node, ast.ImportFrom)
+        and any(cls_alias.name == "*" for cls_alias in cls_node.names)
     )
 
 
@@ -381,13 +677,39 @@ def _from_import_origin(
         The dotted ``_internal`` module, or ``None`` when the import does not lead there.
     """
     if "_internal" in (cls_node.module or "").split("."):
-        return cls_node.module
-    if not cls_node.module and str_source_name == "_internal":
-        return str_source_name
+        return f"{'.' * cls_node.level}{cls_node.module}"
+    if str_source_name == "_internal":
+        return _internal_package_origin(path_module, cls_node)
     path_target = _import_target(path_module, cls_node)
     if path_target is None:
         return None
     return _internal_origin(path_target, str_source_name, set_seen)
+
+
+def _internal_package_origin(path_module: pathlib.Path, cls_node: ast.ImportFrom) -> str | None:
+    """Return the dotted ``_internal`` package a ``from … import _internal`` names, or ``None``.
+
+    The bare relative form (``from . import _internal``) is always first-party. With a module
+    named, the import counts only when that module resolves inside this package's tree, so
+    ``from pydantic import _internal`` is not charged.
+
+    Parameters
+    ----------
+    path_module : pathlib.Path
+        The module containing the import.
+    cls_node : ast.ImportFrom
+        The import statement.
+
+    Returns
+    -------
+    str or None
+        The dotted path, with its leading dots for a relative import.
+    """
+    if not cls_node.module:
+        return f"{'.' * cls_node.level}_internal"
+    if not cls_node.level and _import_target(path_module, cls_node) is None:
+        return None
+    return f"{'.' * cls_node.level}{cls_node.module}._internal"
 
 
 def _import_target(path_module: pathlib.Path, cls_node: ast.ImportFrom) -> pathlib.Path | None:
