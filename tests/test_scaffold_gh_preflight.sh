@@ -335,6 +335,12 @@ test_board_workflows_name_the_cause_when_rate_limited() {
     expect_said "workflows rate limited" "cause: rate"
 }
 
+test_board_workflows_empty_list_is_not_unreadable() {
+    run_fn '' "GH_WORKFLOWS=" scaffold_kanban_workflows octo 7
+    expect_not_said "workflows empty" "Could not read"
+    expect_said "workflows empty" "'Item closed' was not found under that name"
+}
+
 test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
     local int_calls
     run_fn 'y\n\n' "GH_PROJECT_NUMBER=" scaffold_kanban_setup
@@ -409,7 +415,10 @@ main() {
     test_no_scaffold_swallows_a_failed_gh_user_read
     test_board_workflows_warn_when_item_closed_is_off
     test_board_workflows_silent_when_both_are_on
+    test_board_workflows_report_a_missing_name_not_an_off_toggle
     test_board_workflows_print_the_instruction_when_unreadable
+    test_board_workflows_name_the_cause_when_rate_limited
+    test_board_workflows_empty_list_is_not_unreadable
     test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget
     test_graphql_call_sites_match_the_measured_count
     if [ "$int_failures" -gt 0 ]; then

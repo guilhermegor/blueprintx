@@ -158,12 +158,12 @@ scaffold_kanban_url() {
 }
 
 scaffold_kanban_workflows() {
-	local str_owner="$1" str_number="$2" str_rows str_err str_name str_off=""
+	local str_owner="$1" str_number="$2" str_rows str_err str_name str_off="" str_missing="" int_rc=0
 	str_err="$(mktemp)"
 	str_rows="$(gh api graphql -f o="$str_owner" -F n="$str_number" \
 		-f query='query($o:String!,$n:Int!){repositoryOwner(login:$o){... on ProjectV2Owner{projectV2(number:$n){workflows(first:20){nodes{name enabled}}}}}}' \
-		--jq '.data.repositoryOwner.projectV2.workflows.nodes[] | "\(.enabled)|\(.name)"' 2>"$str_err")" || str_rows=""
-	if [ -z "$str_rows" ]; then
+		--jq '.data.repositoryOwner.projectV2.workflows.nodes[] | "\(.enabled)|\(.name)"' 2>"$str_err")" || int_rc=$?
+	if [ "$int_rc" -ne 0 ]; then
 		print_status "info" "Could not read the board workflows (cause: $(gh_classify_failure "$(cat "$str_err")")); enable 'Item closed' and 'Pull request merged' (cards move to Done) at the board's Workflows page"
 		rm -f "$str_err"
 		return 0
@@ -176,10 +176,11 @@ scaffold_kanban_workflows() {
 		if grep -qFx "false|${str_name}" <<<"$str_rows"; then
 			str_off+="'${str_name}' is off. "
 		else
-			str_off+="'${str_name}' was not found under that name. "
+			str_missing+="'${str_name}' was not found under that name. "
 		fi
 	done
 	[ -z "$str_off" ] || print_status "warning" "${str_off}Cards will not move to Done; enable them at the board's Workflows page"
+	[ -z "$str_missing" ] || print_status "warning" "${str_missing}Check the board's Workflows page; cards move to Done only when both are enabled"
 }
 
 scaffold_kanban_finish() {
