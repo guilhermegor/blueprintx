@@ -231,6 +231,15 @@ repos:
           - python
         pass_filenames: false
 
+      - id: check-registry-order
+        name: __all__ sorted one per line, no stored counts
+        entry: bash bin/poetry_exec.sh run python bin/check_registry_order.py
+        language: system
+        types_or:
+          - python
+          - markdown
+        pass_filenames: false
+
       - id: check-dtypes
         name: numeric dtype policy check (no binary floats)
         entry: bash bin/poetry_exec.sh run python bin/check_dtypes.py

@@ -24,4 +24,9 @@ from utils.tabular_reader import (
 )
 
 
-__all__ = ["EXAMPLE_SOURCE", "ContractError", "FileContract", "find_file_problems"]
+__all__ = [
+    "ContractError",
+    "EXAMPLE_SOURCE",
+    "FileContract",
+    "find_file_problems",
+]

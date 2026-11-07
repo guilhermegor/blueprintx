@@ -3,4 +3,7 @@
 from .ports import DatabaseHandler, Record
 
 
-__all__ = ["DatabaseHandler", "Record"]
+__all__ = [
+    "DatabaseHandler",
+    "Record",
+]
