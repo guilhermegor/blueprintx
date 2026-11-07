@@ -10,6 +10,7 @@ from functools import partial
 import importlib.util
 from itertools import starmap
 from pathlib import Path
+import sys
 from types import ModuleType
 
 import pytest
@@ -764,9 +765,6 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "class B(metaclass=(Priv := type)):\n    pass\n",
         "async def f(x=(Priv := 1)):\n    pass\n",
         _STR_SELF_MODULE
-        + "class A:\n    def f(self):\n        type self = int\n        setattr(self, 'Priv', 1)\n"
-        + "A().f()\n",
-        _STR_SELF_MODULE
         + "class A:\n    @builtins.staticmethod\n    def f(cls):\n"
         + "        setattr(cls, 'Priv', 1)\nA.f(me)\n",
         "def d(v):\n    return lambda f: f\n\n\n@d(Priv := 1)\ndef g():\n    pass\n",
@@ -788,7 +786,6 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "walrus-lambda-default",
         "walrus-class-keyword",
         "walrus-async-default",
-        "type-alias-self",
         "staticmethod-attribute",
         "walrus-decorator",
         "walrus-class-base",
@@ -813,6 +810,7 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "class A:\n    def f(self):\n        self.x = 1\n        setattr(self, 'Priv', 1)\n",
         "class A:\n    @classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
         "from builtins import print as p\np('Priv')\n",
+        "from mypkg import modules\n",
         "class A:\n    def f(self):\n        def g(x=setattr(self, 'Priv', 1)):\n"
         + "            pass\n",
         "class A:\n    def f(self):\n        @setattr(self, 'Priv', 1)\n        def g():\n"
@@ -822,6 +820,7 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "attribute-store-on-self",
         "classmethod-cls",
         "unrelated-builtins-alias",
+        "writer-name-from-first-party-module",
         "own-self-in-nested-default",
         "own-self-in-nested-decorator",
     ],
@@ -836,3 +835,37 @@ def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
         {"_internal/__init__.py": "", "_internal/config.py": str_config},
     )
     assert _load_gate().check_package(path_init) == []
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="type statement needs 3.12")
+def test_type_alias_rebinding_self_is_charged(tmp_path: Path) -> None:
+    """``type self = int`` rebinds the name, so the method gets no exemption."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": _STR_SELF_MODULE
+            + "class A:\n    def f(self):\n        type self = int\n"
+            + "        setattr(self, 'Priv', 1)\nA().f()\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.skipif(sys.version_info >= (3, 14), reason="3.14 rejects a walrus in an annotation")
+@pytest.mark.parametrize(
+    "str_config",
+    ["def f(x: (Priv := 1)):\n    pass\n", "def f() -> (Priv := 1):\n    pass\n"],
+    ids=["walrus-param-annotation", "walrus-return-annotation"],
+)
+def test_walrus_in_an_annotation_is_charged_where_it_is_legal(
+    tmp_path: Path, str_config: str
+) -> None:
+    """Before 3.14 an annotation runs in the enclosing scope, so its walrus binds the name."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))

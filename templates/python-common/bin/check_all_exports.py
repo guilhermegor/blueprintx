@@ -245,6 +245,7 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
     return True
 
 
+_SET_WRITER_MODULES = frozenset({"builtins", "sys", "inspect"})
 _TUPLE_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
 _SET_DYNAMIC_WRITERS = frozenset(
     {
@@ -413,7 +414,7 @@ def _header_nodes(
 ) -> list[ast.AST]:
     """Return the parts of a def, class or lambda that run in the enclosing scope.
 
-    Decorators, defaults and class bases are evaluated where the statement sits, so
+    Decorators, defaults, annotations and class bases are evaluated where the statement sits, so
     a walrus there binds a name in that scope even though the body does not.
 
     Parameters
@@ -432,7 +433,22 @@ def _header_nodes(
     list_found: list[ast.AST] = [*cls_args.defaults, *filter(None, cls_args.kw_defaults)]
     if isinstance(cls_scope, ast.Lambda):
         return list_found
-    return [*cls_scope.decorator_list, *list_found]
+    list_annots = [
+        cls_arg.annotation
+        for cls_arg in [
+            *cls_args.posonlyargs,
+            *cls_args.args,
+            *cls_args.kwonlyargs,
+            *filter(None, [cls_args.vararg, cls_args.kwarg]),
+        ]
+        if cls_arg.annotation
+    ]
+    return [
+        *cls_scope.decorator_list,
+        *list_found,
+        *list_annots,
+        *filter(None, [cls_scope.returns]),
+    ]
 
 
 def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
@@ -482,8 +498,10 @@ def _names_writer(cls_sub: ast.AST) -> bool:
         return cls_sub.id in _SET_DYNAMIC_WRITERS
     if isinstance(cls_sub, ast.Attribute):
         return cls_sub.attr in _SET_DYNAMIC_WRITERS
-    return isinstance(cls_sub, ast.ImportFrom) and any(
-        cls_alias.name in _SET_DYNAMIC_WRITERS for cls_alias in cls_sub.names
+    return (
+        isinstance(cls_sub, ast.ImportFrom)
+        and cls_sub.module in _SET_WRITER_MODULES
+        and any(cls_alias.name in _SET_DYNAMIC_WRITERS for cls_alias in cls_sub.names)
     )
 
 
@@ -503,7 +521,7 @@ def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set
     set of int
         ``id()`` of each exempt ``Name`` node; empty when the method gets no exemption.
     """
-    str_param = cls_fn.args.args[0].arg
+    str_param = [*cls_fn.args.posonlyargs, *cls_fn.args.args][0].arg
     if str_param not in {"self", "cls"} or _is_static(cls_fn) or _rebinds(cls_fn, str_param):
         return set()
     return {
@@ -605,7 +623,7 @@ def _methods(list_nodes: list[ast.stmt]) -> Iterator[ast.FunctionDef | ast.Async
                     cls_fn
                     for cls_fn in cls_cls.body
                     if isinstance(cls_fn, ast.FunctionDef | ast.AsyncFunctionDef)
-                    and cls_fn.args.args
+                    and (cls_fn.args.posonlyargs or cls_fn.args.args)
                 )
 
 
