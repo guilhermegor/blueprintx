@@ -276,25 +276,23 @@ Still superseded, so a new review is needed: a merge that resolves a conflict, a
 and a force-push that rewrites the code, because each changes the fingerprint. The gate fails
 closed: a missing commit, an API error, a malformed response (`files` not a list, an entry
 that is not an object, a non-JSON body), a binary or oversized file with no patch text, or a
-full 300-file list is read as "not covered". Two patchless entries are fingerprinted by their
-names and blob `sha`, so they carry forward: an added empty file such as a `py.typed` or
-`.gitkeep` (status `added`, zero changes) and a renamed empty file (status `renamed`, zero
-changes), both with exactly the empty-blob `sha` `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`.
-The `sha` is required: a binary file also reports zero changes, and only its blob proves the
-content. That is
-why both need the empty blob specifically: an exec bit on an empty file runs nothing, so its
-mode cannot matter, while any other patchless `added` entry (a binary) and any patchless
-`renamed` entry (a rename plus a mode flip keeps the same blob `sha`) counts as "not covered".
-So does a patchless entry without a `sha`, with changes above zero, or a `modified` or
-`removed` one. Moving a non-empty file therefore needs a fresh review.
+full 300-file list is read as "not covered". Two patchless entries are fingerprinted by their names and blob `sha`, so they carry forward:
+an added empty file such as a `py.typed` or `.gitkeep` (status `added`, zero changes, exactly
+the empty-blob `sha` `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`) and a pure rename (status
+`renamed`, zero changes, any `sha`, which proves the content did not change). A binary file also
+reports zero changes, so an `added` entry needs the empty blob. Any other patchless entry, one
+without a `sha`, with changes above zero, or a `modified` or `removed` one, counts as "not
+covered".
 
 The compare payload and the patch text carry no file mode, so the gate also reads the real
 modes from the git tree API (the merge base and the reviewed commit) and hashes them for every
-entry, which makes an exec-bit flip, with or without an edit, break the carry-forward. If a tree
-read fails, is truncated, or lacks a path, the gate fails closed and the review is not carried.
+entry, which makes an exec-bit flip, with or without an edit or a rename, break the
+carry-forward. If a tree read fails, is truncated, or lacks a path, the gate fails closed and
+the review is not carried. A repository so large that GitHub truncates its recursive tree
+therefore never carries a review forward.
 
-The compare API returns at most 300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
-off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
+The compare API returns at most 300 files whatever `per_page` says (it pages commits, not
+files), so a list that long may be cut off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
 
 ## Why does every scaffold have to ship the hosted-reviewer config?
 

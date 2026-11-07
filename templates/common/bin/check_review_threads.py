@@ -509,23 +509,19 @@ _STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
 
 def _is_provable_without_patch(dict_file: dict) -> bool:
-    """Return whether a patchless entry is an added or renamed empty file.
+    """Return whether a patchless entry is an empty added file or a pure rename.
 
-    Both need ``changes == 0`` and the empty-blob ``sha``. The API reports ``changes == 0`` for
-    a binary file too, so the ``sha`` is what proves the content; without it the entry is not
-    trusted. The tree modes are hashed separately by :func:`fetch_patch_fingerprint`. An
-    ``added`` or ``renamed`` entry therefore qualifies only with the empty-blob ``sha``: an exec
-    bit on an empty file runs nothing, so mode cannot matter there, and any other patchless
-    entry (a binary, or a rename plus a mode flip) raises. A ``modified`` or ``removed`` entry
-    never qualifies.
+    Both need ``changes == 0``. An ``added`` entry also needs the empty-blob ``sha``: the API
+    reports ``changes == 0`` for a binary too, so only the blob proves its content. A
+    ``renamed`` entry needs any non-empty ``sha``, which proves the content is unchanged;
+    the file modes on both sides are hashed separately by :func:`fetch_patch_fingerprint`,
+    so a rename plus an exec-bit flip changes the digest. Any other patchless entry raises.
     """
     str_status = dict_file.get("status")
     str_sha = dict_file.get("sha")
-    return (
-        dict_file.get("changes") == 0
-        and str_status in ("added", "renamed")
-        and str_sha == _STR_EMPTY_BLOB_SHA
-    )
+    if dict_file.get("changes") != 0 or not isinstance(str_sha, str) or not str_sha:
+        return False
+    return str_status == "renamed" or (str_status == "added" and str_sha == _STR_EMPTY_BLOB_SHA)
 
 
 _TUPLE_PATCH_PREFIXES = ("+", "-")
@@ -616,8 +612,13 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
         f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1"
     )
     list_files = dict_compare.get("files")
-    str_merge_base = (dict_compare.get("merge_base_commit") or {}).get("sha")
-    if not isinstance(list_files, list) or not str_merge_base:
+    dict_merge_base = dict_compare.get("merge_base_commit")
+    str_merge_base = dict_merge_base.get("sha") if isinstance(dict_merge_base, dict) else None
+    if (
+        not isinstance(list_files, list)
+        or not isinstance(str_merge_base, str)
+        or not str_merge_base
+    ):
         raise ValueError("patch unavailable: the compare response lacks files or a merge base")
     dict_head = _tree_modes(str_owner, str_repo, str_oid)
     dict_base = _tree_modes(str_owner, str_repo, str_merge_base)
@@ -687,7 +688,10 @@ def _tree_modes(str_owner: str, str_repo: str, str_commit: str) -> dict[str, str
     list_entries = dict_tree.get("tree")
     if dict_tree.get("truncated") or not isinstance(list_entries, list):
         raise ValueError("patch unavailable: the git tree is truncated or malformed")
-    return {d["path"]: d["mode"] for d in list_entries if isinstance(d, dict) and "mode" in d}
+    list_blobs = [d for d in list_entries if isinstance(d, dict) and "mode" in d]
+    if not all(isinstance(d.get("path"), str) and isinstance(d["mode"], str) for d in list_blobs):
+        raise ValueError("patch unavailable: the git tree is malformed")
+    return {d["path"]: d["mode"] for d in list_blobs}
 
 
 def _with_modes(dict_file: dict, dict_head: dict[str, str], dict_base: dict[str, str]) -> dict:
@@ -716,8 +720,11 @@ def _with_modes(dict_file: dict, dict_head: dict[str, str], dict_base: dict[str,
         raise ValueError("patch unavailable: the file list is malformed")
     str_name = dict_file.get("filename")
     str_status = dict_file.get("status")
+    str_source = dict_file.get("previous_filename") or str_name
+    if not isinstance(str_name, str) or not isinstance(str_source, str):
+        raise ValueError("patch unavailable: malformed file entry")
     str_mode = dict_head.get(str_name, "")
-    str_previous = dict_base.get(dict_file.get("previous_filename") or str_name, "")
+    str_previous = dict_base.get(str_source, "")
     if (str_status != "removed" and not str_mode) or (str_status != "added" and not str_previous):
         raise ValueError(f"patch unavailable: no tree mode for {str_name!r}")
     return {**dict_file, "mode": str_mode, "previous_mode": str_previous}

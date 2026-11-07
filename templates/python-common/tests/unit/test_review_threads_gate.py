@@ -3575,6 +3575,62 @@ def test_fetch_patch_fingerprint_missing_tree_path_fails_closed(
         _digest(monkeypatch, _LIST_EDITED, _tree({}), _tree({"a": "100644"}))
 
 
+_LIST_ADDED = [{"filename": "n", "status": "added", "patch": "@@ -0,0 +1 @@\n+x"}]
+_LIST_REMOVED = [{"filename": "gone", "status": "removed", "patch": "@@ -1 +0,0 @@\n-x"}]
+
+
+def test_fetch_patch_fingerprint_added_file_needs_only_the_head_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An added file has no base side, so the base tree need not list it."""
+    assert len(_digest(monkeypatch, _LIST_ADDED, _tree({"n": "100644"}), _tree({}))) == 64
+
+
+def test_fetch_patch_fingerprint_removed_file_needs_only_the_base_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A removed file has no head side, so the head tree need not list it."""
+    assert len(_digest(monkeypatch, _LIST_REMOVED, _tree({}), _tree({"gone": "100644"}))) == 64
+
+
+def test_fetch_patch_fingerprint_rename_source_missing_from_base_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rename whose source is absent from the base tree has no provable previous mode."""
+    with pytest.raises(ValueError, match="no tree mode"):
+        _digest(monkeypatch, _LIST_EMPTY_RENAME, _tree({"b": "100644"}), _tree({}))
+
+
+def test_fetch_patch_fingerprint_base_side_mode_flip_changes_the_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A different mode at the merge base is a different fingerprint."""
+    cls_head = _tree({"a": "100644"})
+    str_plain = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}))
+    str_flipped = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100755"}))
+    assert str_plain != str_flipped
+
+
+def test_fetch_patch_fingerprint_missing_merge_base_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A compare response without a merge base cannot name the base tree."""
+    cls_gate = _load_gate()
+    cls_body = _ok({"files": _LIST_EDITED, "merge_base_commit": "oops"})
+    monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_body))
+    with pytest.raises(ValueError, match="merge base"):
+        cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+
+
+def test_fetch_patch_fingerprint_tree_entry_without_a_path_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tree entry carrying a mode but no path is malformed, not a crash."""
+    cls_bad = _ok({"tree": [{"mode": "100644"}], "truncated": False})
+    with pytest.raises(ValueError, match="malformed"):
+        _digest(monkeypatch, _LIST_EDITED, cls_bad, _tree({"a": "100644"}))
+
+
 def test_reviewed_commits_dismissed_review_is_not_revived() -> None:
     """A dismissal retracts the review; a later merge must not bring it back."""
     cls_gate = _load_gate()
@@ -3967,8 +4023,8 @@ def test_patch_fingerprint_empty_rename_with_same_blob_matches() -> None:
     assert cls_gate.patch_fingerprint([dict_rename]) == cls_gate.patch_fingerprint([dict_rename])
 
 
-def test_patch_fingerprint_renamed_nonempty_blob_raises() -> None:
-    """A rename plus an exec-bit flip keeps the blob ``sha``, so a non-empty rename is unproven."""
+def test_patch_fingerprint_renamed_nonempty_blob_is_fingerprinted() -> None:
+    """A non-empty pure rename carries forward: blob, names and tree modes prove it."""
     cls_gate = _load_gate()
     dict_rename = {
         "filename": "b",
@@ -3977,8 +4033,15 @@ def test_patch_fingerprint_renamed_nonempty_blob_raises() -> None:
         "changes": 0,
         "sha": "3b18e512dba79e4c8300dd08aeb37f8e728b8dad",
     }
+    assert len(cls_gate.patch_fingerprint([dict_rename])) == 64
+
+
+def test_patch_fingerprint_added_nonempty_blob_raises() -> None:
+    """A patchless ``added`` entry other than the empty blob (a binary) is unproven."""
+    cls_gate = _load_gate()
+    dict_added = {"filename": "b", "status": "added", "changes": 0, "sha": "3b18e512"}
     with pytest.raises(ValueError, match="no patch text"):
-        cls_gate.patch_fingerprint([dict_rename])
+        cls_gate.patch_fingerprint([dict_added])
 
 
 def test_patch_fingerprint_removed_empty_blob_entry_raises() -> None:
