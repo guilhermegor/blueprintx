@@ -281,16 +281,19 @@ names and blob `sha`, so they carry forward: an added empty file such as a `py.t
 `.gitkeep` (status `added`, zero changes) and a renamed empty file (status `renamed`, zero
 changes), both with exactly the empty-blob `sha` `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`.
 The `sha` is required: a binary file also reports zero changes, and only its blob proves the
-content. The compare API carries no file mode, so a `sha` cannot prove the mode bits. That is
+content. That is
 why both need the empty blob specifically: an exec bit on an empty file runs nothing, so its
 mode cannot matter, while any other patchless `added` entry (a binary) and any patchless
 `renamed` entry (a rename plus a mode flip keeps the same blob `sha`) counts as "not covered".
 So does a patchless entry without a `sha`, with changes above zero, or a `modified` or
-`removed` one. Moving a non-empty file therefore needs a fresh review. The same blind spot
-exists for an entry that has a patch: the patch text carries no mode lines, so a content edit
-combined with an exec-bit flip hashes the same as the edit alone. Closing it needs the file
-mode from the git tree API, which the compare payload does not offer. The compare API returns at most
-300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
+`removed` one. Moving a non-empty file therefore needs a fresh review.
+
+The compare payload and the patch text carry no file mode, so the gate also reads the real
+modes from the git tree API (the merge base and the reviewed commit) and hashes them for every
+entry, which makes an exec-bit flip, with or without an edit, break the carry-forward. If a tree
+read fails, is truncated, or lacks a path, the gate fails closed and the review is not carried.
+
+The compare API returns at most 300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
 off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
 
 ## Why does every scaffold have to ship the hosted-reviewer config?

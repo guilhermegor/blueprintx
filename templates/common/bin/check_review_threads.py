@@ -513,7 +513,7 @@ def _is_provable_without_patch(dict_file: dict) -> bool:
 
     Both need ``changes == 0`` and the empty-blob ``sha``. The API reports ``changes == 0`` for
     a binary file too, so the ``sha`` is what proves the content; without it the entry is not
-    trusted. The compare API carries no file mode, so a ``sha`` cannot prove the mode bits. An
+    trusted. The tree modes are hashed separately by :func:`fetch_patch_fingerprint`. An
     ``added`` or ``renamed`` entry therefore qualifies only with the empty-blob ``sha``: an exec
     bit on an empty file runs nothing, so mode cannot matter there, and any other patchless
     entry (a binary, or a rename plus a mode flip) raises. A ``modified`` or ``removed`` entry
@@ -566,6 +566,8 @@ def patch_fingerprint(list_files: list[dict]) -> str:
                 d.get("status", ""),
                 d.get("previous_filename", ""),
                 d.get("sha", "") if d.get("patch") is None else "",
+                d.get("mode", ""),
+                d.get("previous_mode", ""),
                 [s for s in (d.get("patch") or "").splitlines() if s[:1] in _TUPLE_PATCH_PREFIXES],
             ]
             for d in sorted(list_files, key=lambda d: d["filename"])
@@ -610,24 +612,115 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
     """
     if not str_base:
         raise ValueError("patch unavailable: the PR's base commit is unknown")
-    list_cmd = [
-        "gh",
-        "api",
-        f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1",
-    ]
+    dict_compare = _gh_get_object(
+        f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1"
+    )
+    list_files = dict_compare.get("files")
+    str_merge_base = (dict_compare.get("merge_base_commit") or {}).get("sha")
+    if not isinstance(list_files, list) or not str_merge_base:
+        raise ValueError("patch unavailable: the compare response lacks files or a merge base")
+    dict_head = _tree_modes(str_owner, str_repo, str_oid)
+    dict_base = _tree_modes(str_owner, str_repo, str_merge_base)
+    return patch_fingerprint([_with_modes(d, dict_head, dict_base) for d in list_files])
+
+
+def _gh_get_object(str_path: str) -> dict:
+    """Return the JSON object ``gh api`` serves at ``str_path``.
+
+    Parameters
+    ----------
+    str_path : str
+        The REST path, without host.
+
+    Returns
+    -------
+    dict
+        The parsed response.
+
+    Raises
+    ------
+    RuntimeError
+        If the call fails.
+    ValueError
+        If the response is not a JSON object.
+    """
     cls_run = subprocess.run(  # noqa: S603
-        list_cmd,
+        ["gh", "api", str_path],  # noqa: S607
         capture_output=True,
         text=True,
         check=False,
         timeout=_INT_COMPARE_TIMEOUT_S,
     )
     if cls_run.returncode != 0:
-        raise RuntimeError(f"compare failed: {cls_run.stderr.strip()[:400]}")
-    dict_compare = json.loads(cls_run.stdout)
-    if not isinstance(dict_compare, dict):
-        raise ValueError("patch unavailable: the compare response is not an object")
-    return patch_fingerprint(dict_compare.get("files"))
+        raise RuntimeError(f"gh api failed: {cls_run.stderr.strip()[:400]}")
+    dict_body = json.loads(cls_run.stdout)
+    if not isinstance(dict_body, dict):
+        raise ValueError("patch unavailable: the response is not an object")
+    return dict_body
+
+
+def _tree_modes(str_owner: str, str_repo: str, str_commit: str) -> dict[str, str]:
+    """Map every path of a commit's tree to its git file mode.
+
+    The compare payload carries no mode, so an exec-bit flip is invisible to it; the tree does.
+
+    Parameters
+    ----------
+    str_owner : str
+        Repository owner.
+    str_repo : str
+        Repository name.
+    str_commit : str
+        The commit whose tree is read.
+
+    Returns
+    -------
+    dict of str to str
+        Path to mode, such as ``100644``.
+
+    Raises
+    ------
+    ValueError
+        If the tree is truncated or malformed: a partial map would let a flip pass unseen.
+    """
+    dict_tree = _gh_get_object(f"repos/{str_owner}/{str_repo}/git/trees/{str_commit}?recursive=1")
+    list_entries = dict_tree.get("tree")
+    if dict_tree.get("truncated") or not isinstance(list_entries, list):
+        raise ValueError("patch unavailable: the git tree is truncated or malformed")
+    return {d["path"]: d["mode"] for d in list_entries if isinstance(d, dict) and "mode" in d}
+
+
+def _with_modes(dict_file: dict, dict_head: dict[str, str], dict_base: dict[str, str]) -> dict:
+    """Return the compare entry with the file mode on each side attached.
+
+    Parameters
+    ----------
+    dict_file : dict
+        One entry of the compare ``files`` array.
+    dict_head : dict of str to str
+        Path to mode at the reviewed commit.
+    dict_base : dict of str to str
+        Path to mode at the merge base.
+
+    Returns
+    -------
+    dict
+        The entry plus ``mode`` and ``previous_mode``.
+
+    Raises
+    ------
+    ValueError
+        If a side that must exist has no mode, so a mode cannot be assumed.
+    """
+    if not isinstance(dict_file, dict):
+        raise ValueError("patch unavailable: the file list is malformed")
+    str_name = dict_file.get("filename")
+    str_status = dict_file.get("status")
+    str_mode = dict_head.get(str_name, "")
+    str_previous = dict_base.get(dict_file.get("previous_filename") or str_name, "")
+    if (str_status != "removed" and not str_mode) or (str_status != "added" and not str_previous):
+        raise ValueError(f"patch unavailable: no tree mode for {str_name!r}")
+    return {**dict_file, "mode": str_mode, "previous_mode": str_previous}
 
 
 def review_covers_head(
