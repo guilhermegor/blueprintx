@@ -3,7 +3,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$REPO_ROOT/bin/lib/spec.sh"
+source "$REPO_ROOT/bin/lib/spec.sh" || { echo "FAIL: cannot load bin/lib/spec.sh"; exit 1; }
 WORK_DIR="$(mktemp -d)"
 list_planted=()
 cleanup() {
@@ -92,7 +92,7 @@ check_tier() {
 			return
 		}
 	fi
-	cd "$str_project" || return
+	cd "$str_project" || { fail "$str_name: cannot enter $str_project"; return; }
 	local str_baseline
 	if ! str_baseline="$(npm run lint 2>&1)"; then
 		echo "$str_baseline"
