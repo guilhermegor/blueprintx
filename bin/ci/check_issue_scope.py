@@ -151,6 +151,7 @@ def path_in_surface(str_path: str, set_patterns: set[str]) -> bool:
     set_patterns : set of str
         Declared patterns — an exact path, or a glob (``docs/**`` and ``docs/*`` are
         equivalent: `fnmatch` wildcards are not path-segment-aware, so `*` already spans `/`).
+        A trailing ``/`` (``docs/``) is read as ``docs/**``.
 
     Returns
     -------
@@ -159,7 +160,10 @@ def path_in_surface(str_path: str, set_patterns: set[str]) -> bool:
     """
     return any(
         str_path == str_pattern
-        or fnmatch.fnmatchcase(str_path, str_pattern.replace("/**", "/*"))
+        or fnmatch.fnmatchcase(
+            str_path,
+            str_pattern + "*" if str_pattern.endswith("/") else str_pattern.replace("/**", "/*"),
+        )
         for str_pattern in set_patterns
     )
 

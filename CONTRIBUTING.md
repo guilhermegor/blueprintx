@@ -106,7 +106,6 @@ GitHub Actions cannot read it — it is only the source you `gh secret set` from
 | `APT_GPG_KEY_ID` | `release_apt.yml`, `release.yml` | GPG key ID of `APT_GPG_PRIVATE_KEY` |
 | `APT_GPG_PASSPHRASE` | `release_apt.yml`, `release.yml` | Passphrase for `APT_GPG_PRIVATE_KEY` |
 | `APT_GPG_PRIVATE_KEY` | `release_apt.yml`, `release.yml` | Armored GPG private key that signs the APT repo |
-| `SNAPCRAFT_STORE_CREDENTIALS` | `release_snap.yml`, `release.yml` | Snap Store login exported with `snapcraft export-login`; first-time setup is in `.specs/features/snap-publishing/plan.md` |
 
 **Re-provisioning a lost/rotated value:**
 1. Mint the new credential (fine-grained PAT at github.com/settings/personal-access-tokens,
@@ -141,9 +140,7 @@ GitHub Actions cannot read it — it is only the source you `gh secret set` from
 when the key has no passphrase, and never leave placeholder text there. Wrap a real value in
 single quotes so `$` and backticks survive sourcing. `APT_GPG_PRIVATE_KEY` is a multi-line
 armored block: keep the single quotes and paste the whole block, header and footer included;
-it needs a bash-style `source`, not a strict dotenv parser. `SNAPCRAFT_STORE_CREDENTIALS` is
-the file written by `snapcraft export-login credentials.txt`; the publish step fails without
-it rather than exiting 0.
+it needs a bash-style `source`, not a strict dotenv parser.
 
 ## Template workflow file names (#947)
 
@@ -298,6 +295,7 @@ machine-decidable — it is a review question, so it stays prose reviewed by a h
 | Broad-except / catch-safety | ✅ ruff `BLE` (blueprintx#440) on top of the already-selected `E722`/`S110` | ✅ `@typescript-eslint/use-unknown-in-catch-callback-variable` + `only-throw-error` (blueprintx#440/#443) — by construction, not transcription: JS has no typed catch clause to mirror `BLE`, so the TS side closes the one gap `strict: true`'s `useUnknownInCatchVariables` leaves open (`.catch(cb)` callbacks) instead |
 | Barrel / registry export order — row added 2026-11-07 | ✅ `check_registry_order.py` over `__all__` (blueprintx#959) | ✅ `perfectionist/sort-exports` on `templates/ts-lib/src/index.ts` (blueprintx#1015); an existing lint rule, so no gate script |
 | Required status checks provisioned on the default branch — row added 2026-09-20 | ✅ `bin/enable_repo_rules.sh` seeds `REQUIRED_CHECKS=("Review threads answered")` and provisions the `pr-quality-gate` ruleset from it | ❌ none — the script ships only from `templates/python-common/`, so the check names `ts-common`/`ts-lib` emit (`webpack`, `eslint`, `stylelint`, `jest`, `type-check`, `Review threads answered`) are required by nothing. Same for the `bash-cli` tier, which additionally ships no review-threads workflow at all (blueprintx#164; per-tier inventory and the four-rule qualification test in `docs/required-status-checks.md`) |
+| Explicit `any` and lint warnings refused — row added 2026-11-07 | 🔧 in flight — the Python half of blueprintx#1022 (ruff `ANN401`) | ✅ `@typescript-eslint/no-explicit-any` at `error` in both tiers' ESLint configs, and `npm run lint` runs `--max-warnings 0` so no rule left at `warn` passes. `tests/test_explicit_any_refused_ts.sh` plants one `any` (checked with `eslint --quiet`, so only an `error` severity fails it) and one real warning (`no-unused-vars`, which must pass plain `eslint` yet fail `npm run lint`); reverting either edit turns the matching case red (blueprintx#1022) |
 
 Re-measure before trusting this table on a later read — it is a snapshot, not a standing fact.
 The heading date covers the table as a whole; a row re-measured later carries its own date in
