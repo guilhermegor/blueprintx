@@ -119,6 +119,7 @@ scaffold_create_github_repo() {
 	esac
 
 	gh_preflight
+	scaffold_kanban_check_duplicates "$str_slug"
 
 	prompt_read str_vis_choice "Visibility [1] Public (default)  [2] Private: "
 	str_vis_flag="--public"
