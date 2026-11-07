@@ -73,9 +73,8 @@ That shell entrypoint is the second and last interface in this project. Everythi
 
 ## Run
 
-```bash
-poe run             # runs the service entry point (src/.../main.py)
-```
+Service tiers start with `bash bin/run.sh`, which runs the entry point under `src/`
+(`main.py`); `poe_tasks.toml` exposes it as the `run` task. A library has nothing to run.
 
 ## Common tasks
 
