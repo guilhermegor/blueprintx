@@ -245,6 +245,9 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
     return True
 
 
+_SET_DYNAMIC_WRITERS = frozenset({"globals", "locals", "vars", "setattr", "exec"})
+
+
 def _internal_origin(
     path_module: pathlib.Path, str_name: str, set_seen: frozenset[pathlib.Path]
 ) -> str | None:
@@ -345,8 +348,31 @@ def _all_is_opaque(cls_sub: ast.AST) -> bool:
     )
 
 
+def _scope_nodes(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
+    """Yield every node in the statements, not entering a nested def, class or lambda.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Yields
+    ------
+    ast.AST
+        Each node evaluated in the module namespace itself.
+    """
+    list_stack: list[ast.AST] = list(list_nodes)
+    while list_stack:
+        cls_cur = list_stack.pop()
+        yield cls_cur
+        if not isinstance(
+            cls_cur, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda
+        ):
+            list_stack.extend(ast.iter_child_nodes(cls_cur))
+
+
 def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
-    """Return whether the statements write the module namespace by a route the AST cannot list.
+    """Return whether module-level code writes the namespace by a route the AST cannot list.
 
     Parameters
     ----------
@@ -356,25 +382,45 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
     Returns
     -------
     bool
-        ``True`` when ``globals()``, ``vars()`` or ``setattr`` appears.
+        ``True`` when ``globals``, ``locals``, ``vars``, ``setattr`` or ``exec`` is named at
+        module level; a method that calls ``setattr(self, ...)`` is not module level.
     """
     return any(
-        isinstance(cls_sub, ast.Name) and cls_sub.id in {"globals", "vars", "setattr"}
-        for cls_node in list_nodes
-        for cls_sub in ast.walk(cls_node)
+        isinstance(cls_sub, ast.Name) and cls_sub.id in _SET_DYNAMIC_WRITERS
+        for cls_sub in _scope_nodes(list_nodes)
     )
 
 
-def _bound_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
-    """Return every name the statements bind outside a nested def, class or lambda.
-
-    Wider than ``_definitions``: loop and ``with`` targets, tuple unpacking, walrus and
-    ``except ... as`` also count, and names bound inside comprehensions are included, which can
-    only over-charge, never miss a leak.
+def _pattern_names(cls_sub: ast.AST) -> set[str]:
+    """Return the names a ``match`` pattern node captures.
 
     Parameters
     ----------
-    list_nodes : iterable of ast.stmt
+    cls_sub : ast.AST
+        Any node.
+
+    Returns
+    -------
+    set of str
+        The captured names; empty for a node that is not a capturing pattern.
+    """
+    if isinstance(cls_sub, ast.MatchAs | ast.MatchStar):
+        return {cls_sub.name} if cls_sub.name else set()
+    if isinstance(cls_sub, ast.MatchMapping) and cls_sub.rest:
+        return {cls_sub.rest}
+    return set()
+
+
+def _bound_names(list_nodes: list[ast.stmt]) -> set[str]:
+    """Return every name the statements bind outside a nested def, class or lambda.
+
+    Wider than ``_definitions``: loop and ``with`` targets, tuple unpacking, walrus, ``match``
+    captures and ``except ... as`` also count, as does a name a function declares ``global``.
+    Names bound inside comprehensions are included, which can only over-charge.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
         Statements to read.
 
     Returns
@@ -383,17 +429,19 @@ def _bound_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
         The bound names, private ones included.
     """
     set_names = _definitions(list_nodes)
-    list_stack: list[ast.AST] = list(list_nodes)
-    while list_stack:
-        cls_cur = list_stack.pop()
+    for cls_cur in _scope_nodes(list_nodes):
         if isinstance(cls_cur, ast.Name) and isinstance(cls_cur.ctx, ast.Store):
             set_names.add(cls_cur.id)
         if isinstance(cls_cur, ast.ExceptHandler) and cls_cur.name:
             set_names.add(cls_cur.name)
-        if not isinstance(
-            cls_cur, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda
-        ):
-            list_stack.extend(ast.iter_child_nodes(cls_cur))
+        set_names |= _pattern_names(cls_cur)
+    for cls_node in list_nodes:
+        set_names.update(
+            str_g
+            for cls_sub in ast.walk(cls_node)
+            if isinstance(cls_sub, ast.Global)
+            for str_g in cls_sub.names
+        )
     return set_names
 
 
@@ -440,7 +488,7 @@ def _star_provides(
 
     The module's own ``__all__`` limits what a star import brings in, and a name it only
     re-exports through a star import of its own counts. A nested star import that cannot be
-    resolved, a dynamic namespace write, or an ``__all__`` the gate cannot read as one literal
+    resolved, a dynamic module-level write, or an ``__all__`` the gate cannot read as one literal
     list is assumed to provide the name, so the check fails closed.
 
     Parameters
@@ -461,10 +509,10 @@ def _star_provides(
         return False
     list_nodes = list(_module_statements(_parse(path_module).body))
     list_exported = declared_all(path_module)
-    if list_exported is not None and not _extends_all(list_nodes):
-        return str_name in list_exported
     if _binds_dynamically(list_nodes):
         return True
+    if list_exported is not None and not _extends_all(list_nodes):
+        return str_name in list_exported
     if str_name in _bound_names(list_nodes) | _imported_names(list_nodes):
         return True
     set_next = set_seen | {path_module}
@@ -595,7 +643,7 @@ def _internal_package_origin(path_module: pathlib.Path, cls_node: ast.ImportFrom
     """
     if not cls_node.module:
         return f"{'.' * cls_node.level}_internal"
-    if _import_target(path_module, cls_node) is None:
+    if not cls_node.level and _import_target(path_module, cls_node) is None:
         return None
     return f"{'.' * cls_node.level}{cls_node.module}._internal"
 

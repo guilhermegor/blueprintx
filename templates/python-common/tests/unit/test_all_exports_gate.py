@@ -508,7 +508,7 @@ def test_name_listed_in_internal_all_is_charged_even_when_unbound_visibly(
         'from ._internal.config import *\n__all__ = ["Priv"]\n',
         {
             "_internal/__init__.py": "",
-            "_internal/config.py": '__all__ = ["Priv"]\nfor Priv in range(1):\n    pass\n',
+            "_internal/config.py": '__all__ = ["Priv"]\n',
         },
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
@@ -539,8 +539,25 @@ def test_internal_all_extended_after_assignment_is_not_trusted(tmp_path: Path) -
         "(Priv := 1)\n",
         "try:\n    pass\nexcept ValueError as Priv:\n    pass\n",
         "globals()['Priv'] = 1\n",
+        "locals()['Priv'] = 1\n",
+        "exec('Priv = 1')\n",
+        "import builtins\nsetattr(builtins, 'Priv', 1)\n",
+        "match 1:\n    case Priv:\n        pass\n",
+        "def f():\n    global Priv\n    Priv = 1\n",
     ],
-    ids=["for", "with", "unpack", "walrus", "except", "globals"],
+    ids=[
+        "for",
+        "with",
+        "unpack",
+        "walrus",
+        "except",
+        "globals",
+        "locals",
+        "exec",
+        "setattr",
+        "match",
+        "global",
+    ],
 )
 def test_binding_form_without_all_is_still_charged(tmp_path: Path, str_config: str) -> None:
     """With no ``__all__``, any form that binds the name in an ``_internal`` target leaks it."""
@@ -576,6 +593,35 @@ def test_internal_all_changed_after_assignment_is_not_trusted(
         },
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_dynamic_write_beside_a_trusted_all_is_still_charged(tmp_path: Path) -> None:
+    """A ``globals()`` write can grow ``__all__`` past what the literal says."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": '__all__ = ["Other"]\nglobals()["__all__"].append("Priv")\n',
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_setattr_inside_a_method_does_not_charge_a_public_star_name(tmp_path: Path) -> None:
+    """Only module-level dynamic writes count; ``setattr(self, ...)`` in a method does not."""
+    path_init = _tree(
+        tmp_path,
+        _STR_STAR_INTERNAL + '__all__ = ["Pub"]\n',
+        {
+            "public.py": "class Pub:\n    pass\n",
+            "_internal/__init__.py": "",
+            "_internal/config.py": (
+                "class Box:\n    def put(self, k, v):\n        setattr(self, k, v)\n"
+            ),
+        },
+    )
+    assert _load_gate().check_package(path_init) == []
 
 
 def test_internal_all_built_from_a_non_literal_is_not_trusted(tmp_path: Path) -> None:
@@ -619,6 +665,16 @@ def test_third_party_internal_package_is_not_charged(tmp_path: Path) -> None:
     """``from otherlib import _internal`` is not this package's ``_internal``."""
     path_init = _tree(tmp_path, "from otherlib import _internal as Doc\n" + _STR_EXPORT_DOC, {})
     assert _load_gate().check_package(path_init) == []
+
+
+def test_relative_internal_package_in_a_namespace_directory_is_charged(tmp_path: Path) -> None:
+    """A relative import is first-party even when its directory has no ``__init__.py``."""
+    path_init = _tree(
+        tmp_path,
+        "from .sub import _internal as Doc\n" + _STR_EXPORT_DOC,
+        {"sub/_internal/__init__.py": ""},
+    )
+    assert "'Doc'" in _sole(_load_gate().check_package(path_init))
 
 
 def test_relative_internal_package_keeps_its_leading_dot(tmp_path: Path) -> None:
