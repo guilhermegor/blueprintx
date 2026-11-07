@@ -14,7 +14,7 @@ from collections.abc import Callable
 import json
 from logging import Logger
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
