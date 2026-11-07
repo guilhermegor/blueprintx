@@ -4690,10 +4690,11 @@ repository. They were moved out of the workflow files, which now carry no prose.
   replays the original event payload.</li>
 <li><strong><code>release.yml</code>.</strong> The version input is free text and is validated before <code>git tag</code>, the
   irreversible step, so a bad value is a no-op instead of a pushed tag with no artifacts.
-  <code>release_snap.yml</code> fails before its 30-minute build when the credential is absent, because
-  an <code>exit 0</code> there let v0.16.67 to v0.16.70 report green while nothing reached the store
-  (#669). Every package job stamps the release version into the fallback literal of
-  <code>blueprintx --version</code>, since packaged installs have no <code>.git</code>.</li>
+  While Snap was a channel, <code>release_snap.yml</code> failed before its 30-minute build when the
+  credential was absent, because an <code>exit 0</code> there let v0.16.67 to v0.16.70 report green
+  while nothing reached the store (#669); the channel was removed in #1026 (see "Snap is no
+  longer a release channel" below). Every package job stamps the release version into
+  the fallback literal of <code>blueprintx --version</code>, since packaged installs have no <code>.git</code>.</li>
 <li><strong><code>verify_branch_protection.yml</code> (#307).</strong> Guards the <code>strict</code> setting, which anyone with
   admin rights can flip with no red check. <code>GITHUB_TOKEN</code> cannot read branch protection
   (<code>administration</code> is not a grantable scope), so it reuses <code>GH_PAT_REVIEW_TRIGGER</code>. It runs
@@ -5107,6 +5108,16 @@ put "every open PR merged, closed, or deferred past 1.0" on the Cut 1.0.0 checkl
 owner judges each one. <code>tests/test_check_release_gate.sh</code> pins the decision with a case in which
 a lone unlabelled PR passes the gate. The generated project's <code>docs/releasing-1-0-0.md</code> states
 the decision without naming that suite, because a generated project does not ship it.</p>
+<h2 id="snap-is-no-longer-a-release-channel-1026">Snap is no longer a release channel (#1026)<a class="headerlink" href="#snap-is-no-longer-a-release-channel-1026" title="Permanent link">&para;</a></h2>
+<p>The <code>snap</code> job failed on every recent release (v3.3.0, v3.3.1) with "Waiting for previous
+upload(s) to complete their review process". A classic-confinement snap needs a manual store
+review that was never approved, and snapcraft.io login was returning 502. The red job sat
+beside green apt, Homebrew and Chocolatey jobs on each release, which teaches readers to
+ignore a red release. The owner removed the channel on 2026-11-07: <code>release_snap.yml</code>, the
+<code>snap/</code> directory are gone. The <code>SNAPCRAFT_STORE_CREDENTIALS</code> repository secret and the
+store token behind it must still be deleted and revoked by the owner. Existing Snap
+installs keep their last version and should move to Homebrew, Chocolatey or apt. The old
+plan under <code>.specs/features/snap-publishing/</code> stays as a record.</p>
 
 
 
