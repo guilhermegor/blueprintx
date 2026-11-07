@@ -28,7 +28,9 @@ One path or glob per line. A path matches an entry either exactly, or via shell-
 wildcards (`fnmatch`) — `*` already spans `/`, so `docs/*` and `docs/**` match the same set;
 either spelling is accepted for readability. A bare directory with a trailing `/`
 (`templates/python-common/`) is read as `templates/python-common/**`: it covers every file
-beneath it, and not a sibling that merely shares its prefix (`templates/python-common-extra/`).
+beneath it, and a literal directory does not cover a sibling that merely shares its prefix
+(`templates/python-common-extra/`); a wildcard directory (`templates/*-common/`) follows the
+`*`-spans-`/` rule above.
 Before this was handled, a bare directory entry matched nothing, so every file under it was
 reported as outside the surface (blueprintx#1031). Lines starting with `#` are comments.
 

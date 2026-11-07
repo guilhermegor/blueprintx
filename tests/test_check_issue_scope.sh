@@ -153,7 +153,7 @@ main() {
     test_file_outside_surface_fails
     test_bare_directory_entry_covers_files_beneath_it
     test_wildcard_directory_entry_covers_files_beneath_it
-test_bare_directory_entry_does_not_cover_sibling_prefix
+    test_bare_directory_entry_does_not_cover_sibling_prefix
     test_override_trailer_passes
     test_undeclared_surface_warns_not_blocks
     test_empty_surface_block_is_undeclared_not_empty_declaration
