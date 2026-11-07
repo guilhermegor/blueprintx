@@ -270,6 +270,23 @@ actual fix** — scheduled events are exempt from the "no new workflow runs" sup
 swallows the fast `pull_request: [closed]` path for a bot merge. Latency is up to one day; that is
 the accepted cost of not needing a personal access token.
 
+### PRs closed without merging
+
+`delete_branch_on_merge` never fires for a PR **closed unmerged**, so its branch would pile up on
+`origin`. `delete-closed-pr-branch.yml` deletes the head branch of a same-repo PR closed without
+merge, and only when every guard holds; a skipped branch is named with its reason in the job
+summary:
+
+- the PR is from this repository, never a fork;
+- the branch is short-lived, matching `<type>/<N>-<slug>` (the pattern `bin/check_pr_policy.sh`
+  enforces), so `develop`, `release/*`, `dependabot/*` and `renovate/*` are never touched;
+- it is not the default branch and not the PR's own base branch;
+- GitHub reports it as not protected, and an unreadable protection state counts as protected;
+- its tip is still the PR head.
+
+Nothing is lost: the job summary names the deleted ref and its sha, and the PR page offers
+**Restore branch** (or `git push origin <sha>:refs/heads/<branch>`).
+
 ### The work-ledger gate
 
 `bin/check_backlog_ledger.py` (pre-commit + CI) fails a branch that touches `src/` or CI paths but
