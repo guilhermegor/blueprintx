@@ -80,6 +80,21 @@ else
 	int_failures=$((int_failures + 1))
 fi
 
+if [ -f "$PROJECT_PATH/src/controller/_pipeline.py" ] && [ "$SKELETON" != "mvc-service-native-db" ]; then
+	rm -f "$str_plant_dir/planted_any.py"
+	printf '\nfrom typing import Any\n\n\ndef planted(x: list[Any]) -> int:\n    """Probe."""\n    return len(x)\n' \
+		>>"$PROJECT_PATH/src/controller/_pipeline.py"
+	str_out="$(run_mypy)"
+	int_rc=$?
+	if [ "$int_rc" -ne 0 ] && grep -q 'controller/_pipeline.py.*\[explicit-any\]' <<<"$str_out"; then
+		echo "ok: an explicit Any in controller/_pipeline.py is refused outside mvc-native (blueprintx#1030)"
+	else
+		echo "FAIL: mypy accepted an explicit Any in controller/_pipeline.py (exit $int_rc)"
+		echo "$str_out"
+		int_failures=$((int_failures + 1))
+	fi
+fi
+
 [ "$int_failures" -eq 0 ] || {
 	echo "$int_failures case(s) failed"
 	exit 1
