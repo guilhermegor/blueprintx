@@ -323,6 +323,13 @@ repos:
         files: \.(py|ya?ml|sql|sh|toml|cfg|ini)$|\.env\.example$
         exclude: ^docs/
 
+      - id: check-docs-language
+        name: docs language matches theme.language
+        entry: bash bin/poetry_exec.sh run python bin/check_docs_language.py
+        language: system
+        files: ^mkdocs\.yml$|\.md$
+        pass_filenames: false
+
       - id: check-comment-budget
         name: comment budget (long runs + decorative banners)
         entry: bash bin/poetry_exec.sh run python bin/check_comment_budget.py --require-baseline

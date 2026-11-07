@@ -342,6 +342,8 @@ lib_minimal_copy_gate_tests() {
 
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
         "$project_path/tests/unit/test_layer_imports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_language_gate.py" \
+        "$project_path/tests/unit/test_docs_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
         "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_sql_guards_gate.py" \
