@@ -280,7 +280,9 @@ full 300-file list is read as "not covered". Two patchless entries are fingerpri
 names and blob `sha`, so they carry forward:
 an added empty file such as a `py.typed` or `.gitkeep` (status `added`, zero changes, exactly
 the empty-blob `sha` `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`) and a pure rename (status
-`renamed`, zero changes, any `sha`, which pins the content at the reviewed head). A binary file also
+`renamed`, zero changes, any `sha`, which pins the content at the reviewed head; the
+source blob at the merge base is hashed too, so a rename whose source changed in the base is
+not carried). A binary file also
 reports zero changes, so an `added` entry needs the empty blob. Any other patchless entry, one
 without a `sha`, with changes above zero, or a `modified` or `removed` one, counts as "not
 covered".

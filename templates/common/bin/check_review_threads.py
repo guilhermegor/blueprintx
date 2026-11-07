@@ -547,7 +547,7 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     ------
     ValueError
         If the list is malformed, empty, possibly truncated, or a file carries no patch text
-            (an added or renamed empty file has none and is hashed by its blob ``sha``).
+            (an added empty file or a renamed file has none and is hashed by its blob ``sha``).
     """
     if not isinstance(list_files, list) or not all(isinstance(d, dict) for d in list_files):
         raise ValueError("patch unavailable: the file list is malformed")
@@ -564,6 +564,7 @@ def patch_fingerprint(list_files: list[dict]) -> str:
                 d.get("sha", "") if d.get("patch") is None else "",
                 d.get("mode", ""),
                 d.get("previous_mode", ""),
+                d.get("previous_sha", "") if d.get("patch") is None else "",
                 [s for s in (d.get("patch") or "").splitlines() if s[:1] in _TUPLE_PATCH_PREFIXES],
             ]
             for d in sorted(list_files, key=lambda d: d["filename"])
@@ -660,8 +661,8 @@ def _gh_get_object(str_path: str) -> dict:
     return dict_body
 
 
-def _tree_modes(str_owner: str, str_repo: str, str_commit: str) -> dict[str, str]:
-    """Map every path of a commit's tree to its git file mode.
+def _tree_modes(str_owner: str, str_repo: str, str_commit: str) -> dict[str, tuple[str, str]]:
+    """Map every path of a commit's tree to its git file mode and blob ``sha``.
 
     The compare payload carries no mode, so an exec-bit flip is invisible to it; the tree does.
 
@@ -676,8 +677,8 @@ def _tree_modes(str_owner: str, str_repo: str, str_commit: str) -> dict[str, str
 
     Returns
     -------
-    dict of str to str
-        Path to mode, such as ``100644``.
+    dict of str to tuple of str
+        Path to ``(mode, sha)``, such as ``("100644", "e69de29...")``.
 
     Raises
     ------
@@ -688,28 +689,36 @@ def _tree_modes(str_owner: str, str_repo: str, str_commit: str) -> dict[str, str
     list_entries = dict_tree.get("tree")
     if dict_tree.get("truncated") or not isinstance(list_entries, list):
         raise ValueError("patch unavailable: the git tree is truncated or malformed")
-    list_blobs = [d for d in list_entries if isinstance(d, dict) and "mode" in d]
-    if not all(isinstance(d.get("path"), str) and isinstance(d["mode"], str) for d in list_blobs):
+    if not all(isinstance(d, dict) and _is_tree_entry(d) for d in list_entries):
         raise ValueError("patch unavailable: the git tree is malformed")
-    return {d["path"]: d["mode"] for d in list_blobs}
+    return {d["path"]: (d["mode"], d["sha"]) for d in list_entries}
 
 
-def _with_modes(dict_file: dict, dict_head: dict[str, str], dict_base: dict[str, str]) -> dict:
+def _is_tree_entry(dict_entry: dict) -> bool:
+    """Return whether a git tree entry carries a string path, mode and blob ``sha``."""
+    return all(isinstance(dict_entry.get(k), str) for k in ("path", "mode", "sha"))
+
+
+def _with_modes(
+    dict_file: dict,
+    dict_head: dict[str, tuple[str, str]],
+    dict_base: dict[str, tuple[str, str]],
+) -> dict:
     """Return the compare entry with the file mode on each side attached.
 
     Parameters
     ----------
     dict_file : dict
         One entry of the compare ``files`` array.
-    dict_head : dict of str to str
-        Path to mode at the reviewed commit.
-    dict_base : dict of str to str
-        Path to mode at the merge base.
+    dict_head : dict of str to tuple of str
+        Path to ``(mode, sha)`` at the reviewed commit.
+    dict_base : dict of str to tuple of str
+        Path to ``(mode, sha)`` at the merge base.
 
     Returns
     -------
     dict
-        The entry plus ``mode`` and ``previous_mode``.
+        The entry plus ``mode``, ``previous_mode`` and ``previous_sha``.
 
     Raises
     ------
@@ -723,11 +732,16 @@ def _with_modes(dict_file: dict, dict_head: dict[str, str], dict_base: dict[str,
     str_source = dict_file.get("previous_filename") or str_name
     if not isinstance(str_name, str) or not isinstance(str_source, str):
         raise ValueError("patch unavailable: malformed file entry")
-    str_mode = dict_head.get(str_name, "")
-    str_previous = dict_base.get(str_source, "")
+    str_mode = dict_head.get(str_name, ("", ""))[0]
+    str_previous, str_previous_sha = dict_base.get(str_source, ("", ""))
     if (str_status != "removed" and not str_mode) or (str_status != "added" and not str_previous):
         raise ValueError(f"patch unavailable: no tree mode for {str_name!r}")
-    return {**dict_file, "mode": str_mode, "previous_mode": str_previous}
+    return {
+        **dict_file,
+        "mode": str_mode,
+        "previous_mode": str_previous,
+        "previous_sha": str_previous_sha,
+    }
 
 
 def review_covers_head(

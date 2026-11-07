@@ -3231,14 +3231,12 @@ def _ok(dict_body: dict) -> Mock:
     return Mock(returncode=0, stdout=json.dumps(dict_body))
 
 
-def _blob(tuple_item: tuple) -> dict:
-    """Return the git tree entry for one ``(path, mode)`` pair."""
-    return {"path": tuple_item[0], "mode": tuple_item[1], "type": "blob"}
-
-
-def _tree(dict_modes: dict) -> Mock:
+def _tree(dict_modes: dict, str_sha: str = "s1") -> Mock:
     """Return the ``gh api`` result for a complete git tree holding ``dict_modes``."""
-    return _ok({"tree": list(map(_blob, dict_modes.items())), "truncated": False})
+    list_tree = [
+        {"path": k, "mode": v, "type": "blob", "sha": str_sha} for k, v in dict_modes.items()
+    ]
+    return _ok({"tree": list_tree, "truncated": False})
 
 
 def _gh_router(
@@ -3609,6 +3607,35 @@ def test_fetch_patch_fingerprint_base_side_mode_flip_changes_the_digest(
     str_plain = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}))
     str_flipped = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100755"}))
     assert str_plain != str_flipped
+
+
+def test_fetch_patch_fingerprint_renamed_source_blob_moving_in_base_changes_the_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A patchless rename hashes the source blob too, so a moved base is a new fingerprint."""
+    cls_head = _tree({"b": "100644"})
+    str_one = _digest(monkeypatch, _LIST_EMPTY_RENAME, cls_head, _tree({"a": "100644"}, "s1"))
+    str_two = _digest(monkeypatch, _LIST_EMPTY_RENAME, cls_head, _tree({"a": "100644"}, "s2"))
+    assert str_one != str_two
+
+
+def test_fetch_patch_fingerprint_patched_file_ignores_the_base_blob(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A patched file keeps carrying forward when main edits its base: only the patch counts."""
+    cls_head = _tree({"a": "100644"})
+    str_one = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}, "s1"))
+    str_two = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}, "s2"))
+    assert str_one == str_two
+
+
+def test_fetch_patch_fingerprint_tree_entry_that_is_not_an_object_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A skipped tree entry would make the mode map partial, so it raises where it is read."""
+    cls_bad = _ok({"tree": ["oops"], "truncated": False})
+    with pytest.raises(ValueError, match="malformed"):
+        _digest(monkeypatch, _LIST_EDITED, cls_bad, _tree({"a": "100644"}))
 
 
 def test_fetch_patch_fingerprint_missing_merge_base_fails_closed(
