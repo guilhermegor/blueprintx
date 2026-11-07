@@ -13,7 +13,7 @@ export GIT_AUTHOR_NAME=ci-bot GIT_COMMITTER_NAME=ci-bot
 export GIT_AUTHOR_EMAIL=ci-bot@example.com GIT_COMMITTER_EMAIL=ci-bot@example.com
 
 RE_GENERATED_ONLY='^(LICENSE|README\.md|AGENTS\.md|Makefile|pyproject\.toml|package\.json|mkdocs\.yml|docusaurus\.config\.js|ventoy-usb\.conf|comment_budget_baseline\.txt|\.blueprintx-provenance\.yaml|poe_tasks\.offline\.toml|bin/git_diff_(apply|check|export)\.sh|bin/project|tests/cli\.bats|tests/helpers/common\.bash|SECURITY\.md|src/project/(_internal/(config/)?)?__init__\.py|tests/unit/test_(main|typing)\.py|docs/(index|usage|contributing|examples|faq)\.md)$|(^|/)\.(keep|gitkeep)$'
-RE_LISTED_ONLY='^(\.github/.*|bin/(check_pr_policy|close_linked_issues|dependabot_auto_merge)\.sh|\.review-bots\.yaml)$'
+RE_LISTED_ONLY='^(\.github/.*|bin/(check_pr_policy|close_linked_issues|delete_closed_pr_branch|dependabot_auto_merge)\.sh|\.review-bots\.yaml)$'
 
 pass() { echo "ok: $1"; }
 fail() {
