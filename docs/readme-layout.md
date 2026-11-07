@@ -40,9 +40,12 @@ Further rules:
   for Python libraries, `npm run docs:start` for TypeScript libraries.
 - The logo is centered on its own line under the H1 (`<p align="center"><img ... width="200"></p>`),
   never inside the heading.
-- Badge order: status, python, pypi, docs, linting, mypy, coverage, license, issues,
-  contributions. `pypi` is `library` only; no Snyk License advisor badge, and no pepy badge before
-  the first publish. The order is a review convention, not a gate.
+- Badge order: status, python, pypi, downloads, docs, linting, mypy, coverage, license, issues,
+  contributions. `pypi` and `downloads` are `library` only; no Snyk License advisor badge. The
+  downloads badge is `img.shields.io/pepy/dt/<name>` for Python and `img.shields.io/npm/d18m/<name>`
+  for ts-lib: shields.io always answers HTTP 200 and prints "not found" for an unpublished package,
+  so it is safe before the first publish. `static.pepy.tech` stays banned (404 until indexed,
+  blueprintx#948) and so does `pypi/dm` (wrong figure). The order is a review convention, not a gate.
 - README images use absolute `raw.githubusercontent.com` URLs (logo, coverage badge), because
   `readme = "README.md"` ships to PyPI where relative paths break. `scaffold_render_readme` fills
   them from `GITHUB_USERNAME` and `PROJECT_NAME`.

@@ -123,7 +123,8 @@ test_library_badge_row_is_live_and_not_duplicated() {
         "$(grep -c 'add_library_badges\|snyk\.io\|pepy\.tech' "$str_scaffold" || true)"
     expect "the PyPI version badge is emitted once" "1" "$(grep -c 'img.shields.io/pypi/v/' "$path_out")"
     expect "no Snyk badge" "0" "$(grep -c 'snyk' "$path_out" || true)"
-    expect "no pepy badge" "0" "$(grep -c 'pepy' "$path_out" || true)"
+    expect "one shields downloads badge" "1" "$(grep -c 'img.shields.io/pepy/dt/acme' "$path_out")"
+    expect "no static.pepy.tech badge" "0" "$(grep -c 'static.pepy.tech' "$path_out" || true)"
     expect "type-checked text is escaped for shields" "1" "$(grep -cF 'badge/type--checked-mypy-blue' "$path_out")"
     expect "linting separator is escaped for shields" "1" "$(grep -cF 'badge/linting-ruff_%7C_codespell-blue' "$path_out")"
     expect "docs badge links the project docs site" "1" \
@@ -141,8 +142,24 @@ test_real_scaffold_readme_has_one_pypi_badge_and_no_dead_ones() {
     expect "the real scaffold wrote a README" "1" "$([ -f "$path_readme" ] && echo 1 || echo 0)"
     expect "scaffolded README has the PyPI badge once" "1" "$(grep -c 'img.shields.io/pypi/v/' "$path_readme" || true)"
     expect "scaffolded README has no Snyk badge" "0" "$(grep -c 'snyk' "$path_readme" || true)"
-    expect "scaffolded README has no pepy badge" "0" "$(grep -c 'pepy' "$path_readme" || true)"
+    expect "scaffolded README has one shields downloads badge" "1" "$(grep -c 'img.shields.io/pepy/dt/ci-scaffold' "$path_readme" || true)"
+    expect "scaffolded README has no static.pepy.tech badge" "0" "$(grep -c 'static.pepy.tech' "$path_readme" || true)"
     rm -rf "$path_work"
+}
+
+test_ts_lib_readme_has_one_npm_downloads_badge() {
+    local path_out
+    path_out="$(mktemp)"
+    (
+        BLUEPRINTX_ROOT="$REPO_ROOT"
+        PROJECT_NAME=acme PROJECT_DESCRIPTION="A test project." PROJECT_DISPLAY_NAME=Acme
+        GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL=https://www.linkedin.com/in/ci-bot
+        scaffold_render_readme ts-lib "$REPO_ROOT/templates/ts-lib/README.md" "$path_out" >/dev/null
+    )
+    expect "ts-lib README has one npm downloads badge" "1" "$(grep -c 'img.shields.io/npm/d18m/acme' "$path_out")"
+    expect "ts-lib downloads badge links the npm page" "1" \
+        "$(grep -cF '(https://www.npmjs.com/package/acme)' "$path_out")"
+    rm -f "$path_out"
 }
 
 test_service_readme_has_no_documentation_or_pypi() {
@@ -151,6 +168,7 @@ test_service_readme_has_no_documentation_or_pypi() {
     LINKEDIN_URL=https://www.linkedin.com/in/ci-bot render_python_readme ddd-service-native-db "$path_out"
     expect "service README has no Documentation section" "0" "$(grep -c '^## Documentation$' "$path_out" || true)"
     expect "service README has no pypi badge" "0" "$(grep -c 'pypi' "$path_out" || true)"
+    expect "service README has no downloads badge" "0" "$(grep -c 'Downloads' "$path_out" || true)"
     rm -f "$path_out"
 }
 
