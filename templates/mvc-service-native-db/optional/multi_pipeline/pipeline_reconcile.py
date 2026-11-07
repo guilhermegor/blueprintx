@@ -90,7 +90,9 @@ class ReconcilePipeline(metaclass=TypeChecker):
         dict_summary: dict[str, object] = {
             "intent": "reconcile",
             "baseline_found": bool(dict_baseline),
-            "baseline_rows": int(baseline_rows) if isinstance(baseline_rows, int | float) else 0,
+            "baseline_rows": (
+                int(baseline_rows) if isinstance(baseline_rows, int | float | str) else 0
+            ),
         }
         pipeline_common.write_summary(self.cls_logger, self.path_json, dict_summary)
         pipeline_common.log_elapsed(self.cls_logger, time() - float_start)
