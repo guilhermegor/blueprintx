@@ -931,7 +931,8 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   which runs before `pyproject.toml` exists.
 - **No env files, library badges.** A distributable library has no runtime `.env`, so
   `.env` and `.env.example` are removed. The PyPI badge comes from the shared README
-  template, library-only; no Snyk or pepy badges.
+  template, library-only, followed by a shields.io downloads badge; no Snyk badge and no
+  `static.pepy.tech` badge.
 - **Publish and consume (Q1 to Q3).** Official registry is PyPI, staging is Test PyPI, and a
   private source is a PEP 503 index or git source. Only the selected release workflows are
   emitted, the defaults keep the previous behaviour (both shipped) for non-interactive runs,
