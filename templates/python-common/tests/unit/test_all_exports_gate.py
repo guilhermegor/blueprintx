@@ -491,10 +491,43 @@ def test_internal_all_limits_what_its_star_import_is_charged(tmp_path: Path) -> 
         {
             "public.py": "class Pub:\n    pass\n",
             "_internal/__init__.py": "",
-            "_internal/config.py": '__all__ = ["Other"]\n\n\nclass Other:\n    pass\n',
+            "_internal/config.py": (
+                '__all__ = ["Other"]\n\n\nclass Other:\n    pass\n\n\nclass Pub:\n    pass\n'
+            ),
         },
     )
     assert _load_gate().check_package(path_init) == []
+
+
+def test_name_listed_in_internal_all_is_charged_even_when_unbound_visibly(
+    tmp_path: Path,
+) -> None:
+    """A name in the ``_internal`` module's ``__all__`` is its star import's, bound or not."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": '__all__ = ["Priv"]\nfor Priv in range(1):\n    pass\n',
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_internal_all_extended_after_assignment_is_not_trusted(tmp_path: Path) -> None:
+    """A ``+=`` on ``__all__`` means the first assignment cannot exclude a name."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": (
+                '__all__ = ["Other"]\n__all__ += ["Priv"]\n\n\nclass Other:\n    pass\n\n\n'
+                "class Priv:\n    pass\n"
+            ),
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
 
 
 def test_broken_internal_star_target_is_a_finding_not_a_traceback(tmp_path: Path) -> None:

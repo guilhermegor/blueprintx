@@ -293,6 +293,38 @@ def _internal_origin(
     )
 
 
+def _extends_all(list_nodes: list[ast.stmt]) -> bool:
+    """Return whether a module grows ``__all__`` after its first assignment.
+
+    ``declared_all`` reads only the first assignment, so a module that also uses ``+=``,
+    ``.extend`` or ``.append`` has an ``__all__`` the gate cannot trust to exclude a name.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``__all__`` is mutated after assignment.
+    """
+    return any(
+        (
+            isinstance(cls_sub, ast.AugAssign)
+            and isinstance(cls_sub.target, ast.Name)
+            and cls_sub.target.id == "__all__"
+        )
+        or (
+            isinstance(cls_sub, ast.Attribute)
+            and isinstance(cls_sub.value, ast.Name)
+            and cls_sub.value.id == "__all__"
+        )
+        for cls_node in list_nodes
+        for cls_sub in ast.walk(cls_node)
+    )
+
+
 def _star_origin(
     path_module: pathlib.Path,
     cls_node: ast.ImportFrom,
@@ -356,8 +388,8 @@ def _star_provides(
         return False
     list_nodes = list(_module_statements(_parse(path_module).body))
     list_exported = declared_all(path_module)
-    if list_exported is not None and str_name not in list_exported:
-        return False
+    if list_exported is not None and not _extends_all(list_nodes):
+        return str_name in list_exported
     if str_name in _definitions(list_nodes) | _imported_names(list_nodes):
         return True
     set_next = set_seen | {path_module}
@@ -458,7 +490,7 @@ def _from_import_origin(
         The dotted ``_internal`` module, or ``None`` when the import does not lead there.
     """
     if "_internal" in (cls_node.module or "").split("."):
-        return cls_node.module
+        return f"{'.' * cls_node.level}{cls_node.module}"
     if str_source_name == "_internal":
         return _internal_package_origin(path_module, cls_node)
     path_target = _import_target(path_module, cls_node)
@@ -487,7 +519,7 @@ def _internal_package_origin(path_module: pathlib.Path, cls_node: ast.ImportFrom
         The dotted path, with its leading dots for a relative import.
     """
     if not cls_node.module:
-        return "_internal"
+        return f"{'.' * cls_node.level}_internal"
     if _import_target(path_module, cls_node) is None:
         return None
     return f"{'.' * cls_node.level}{cls_node.module}._internal"
