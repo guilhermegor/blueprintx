@@ -210,7 +210,7 @@ copy_online_assets_service_tier() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
     local dest="$PROJECT_PATH" wf
     mkdir -p "$dest/.github/workflows"
-    for wf in tests review-threads coderabbit-trigger review-retry pr-gate pr-reconcile contract-drift release; do
+    for wf in tests review-threads coderabbit-trigger review-retry pr-gate pr-reconcile docstring-urls contract-drift release; do
         cp "$common/.github/workflows/$wf.yml" "$dest/.github/workflows/$wf.yml"
     done
     cp "$shared/docs_version/docs.yml" "$dest/.github/workflows/docs.yml"
