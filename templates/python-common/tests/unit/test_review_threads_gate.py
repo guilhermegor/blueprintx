@@ -3888,7 +3888,7 @@ def test_patch_fingerprint_removed_empty_blob_entry_raises() -> None:
         cls_gate.patch_fingerprint([dict_removed])
 
 
-def test_patch_fingerprint_pure_rename_without_blob_sha_raises() -> None:
+def test_patch_fingerprint_empty_rename_without_blob_sha_raises() -> None:
     """No ``sha`` means nothing proves the content, so the entry is not trusted."""
     cls_gate = _load_gate()
     dict_rename = {"filename": "b", "previous_filename": "a", "status": "renamed", "changes": 0}

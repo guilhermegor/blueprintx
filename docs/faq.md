@@ -286,7 +286,10 @@ why both need the empty blob specifically: an exec bit on an empty file runs not
 mode cannot matter, while any other patchless `added` entry (a binary) and any patchless
 `renamed` entry (a rename plus a mode flip keeps the same blob `sha`) counts as "not covered".
 So does a patchless entry without a `sha`, with changes above zero, or a `modified` or
-`removed` one. A consequence: moving a non-empty file now needs a fresh review. The compare API returns at most
+`removed` one. Moving a non-empty file therefore needs a fresh review. The same blind spot
+exists for an entry that has a patch: the patch text carries no mode lines, so a content edit
+combined with an exec-bit flip hashes the same as the edit alone. Closing it needs the file
+mode from the git tree API, which the compare payload does not offer. The compare API returns at most
 300 files whatever `per_page` says (it pages commits, not files), so a list that long may be cut
 off. The gate asks for `per_page=1` to keep the commit list, which it does not use, small.
 
