@@ -70,7 +70,10 @@ def _run(path_root: Path) -> int:
         (STR_MKDOCS_UNSET, STR_EN),
         (STR_MKDOCS_PT, STR_PT),
         (STR_MKDOCS_EN, STR_EN + "\n```\nque não para com isso, para que não\n```\n"),
-        (STR_MKDOCS_EN, STR_EN + "\nUse `que não para com isso` e [que não para](https://a.b/c).\n"),
+        (
+            STR_MKDOCS_EN,
+            STR_EN + "\nUse `que não para com isso` e [que não para](https://a.b/c).\n",
+        ),
         (STR_MKDOCS_EN, STR_EN + "\ndocs-lang:ok Esta é a página que você pode ler, que não.\n"),
     ],
 )
