@@ -86,7 +86,10 @@ has not been measured: `gh project` subcommands can send more than 3 queries
 (owner fallback, paginated `field-list`), and a fresh-board run is only one of
 the branches. The budget is therefore not lowered to 60 until `gh api
 rate_limit` has been read before and after a real run on a throwaway account.
-The test only requires the budget to stay at or above that computed 60.
+The test only requires the budget to stay at or above that computed 60. The
+count covers the kanban setup only: `gh issue create` (the release issue) and
+other GraphQL-backed commands elsewhere in the scaffold are outside it, so 60 is
+a floor for that path, not a total for a whole scaffold.
 
 `SCAFFOLD_GH_GRAPHQL_SITES` (16) counts the call sites in the scaffold
 libraries; the same test fails when one is added without updating it.
@@ -106,7 +109,7 @@ so 20 leaves room and no pagination is needed.
 After the fields are created, `scaffold_kanban_workflows` reads the board's
 built-in workflows through GraphQL (`ProjectV2.workflows`, which exposes
 `enabled`). It warns when "Item closed" or "Pull request merged" is off, since
-moving cards to Done relies on both, and says "not found under that name"
+each moves one kind of card to Done (closed issues, merged pull requests), and says "not found under that name"
 when a workflow is absent from the answer. It never stops the scaffold, and
 it is the one read here that does not go through `gh_read`: the step is
 advisory, so a failure prints the one-line instruction to enable both by hand,

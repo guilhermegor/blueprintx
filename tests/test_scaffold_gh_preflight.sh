@@ -302,7 +302,7 @@ test_a_stop_after_the_repo_exists_does_not_advise_a_plain_rerun() {
 test_board_workflows_warn_when_item_closed_is_off() {
     run_fn '' "GH_WORKFLOWS=false|Item closed\\ntrue|Pull request merged" scaffold_kanban_workflows octo 7
     [ "$int_rc" -eq 0 ] || fail "workflows off: must warn, not stop: $str_out"
-    expect_said "workflows off" "'Item closed' is off"
+    expect_said "workflows off" "'Item closed' is off, so closed issues will not move"
     expect_not_said "workflows off" "'Pull request merged' is off"
 }
 
@@ -317,6 +317,7 @@ test_board_workflows_silent_when_both_are_on() {
 
 test_board_workflows_report_a_missing_name_not_an_off_toggle() {
     run_fn '' "GH_WORKFLOWS=true|Item closed archived\\ntrue|Pull request merged" scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows renamed: must warn, not stop: $str_out"
     expect_said "workflows renamed" "'Item closed' was not found under that name"
     expect_not_said "workflows renamed" "'Item closed' is off"
     expect_not_said "workflows renamed" "'Pull request merged'"
@@ -337,6 +338,7 @@ test_board_workflows_name_the_cause_when_rate_limited() {
 
 test_board_workflows_empty_list_is_not_unreadable() {
     run_fn '' "GH_WORKFLOWS=" scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows empty: must warn, not stop: $str_out"
     expect_not_said "workflows empty" "Could not read"
     expect_said "workflows empty" "'Item closed' was not found under that name"
 }
