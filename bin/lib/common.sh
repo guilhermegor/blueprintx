@@ -352,15 +352,16 @@ copy_repo_policy_workflows() {
         cp "$common_root/.github/workflows/$str_wf.yml" "$project_path/.github/workflows/"
     done
     cp "$common_root/bin/close_linked_issues.sh" "$common_root/bin/check_pr_policy.sh" \
-        "$project_path/bin/"
-    chmod +x "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh"
+        "$common_root/bin/delete_closed_pr_branch.sh" "$project_path/bin/"
+    chmod +x "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh" \
+        "$project_path/bin/delete_closed_pr_branch.sh"
     copy_dependabot_auto_merge "$project_path"
 }
 
 remove_repo_policy_scripts() {
     local project_path="$1"
     rm -f "$project_path/bin/close_linked_issues.sh" "$project_path/bin/check_pr_policy.sh" \
-        "$project_path/bin/dependabot_auto_merge.sh"
+        "$project_path/bin/delete_closed_pr_branch.sh" "$project_path/bin/dependabot_auto_merge.sh"
 }
 
 # shellcheck source=bin/lib/scaffold_comment_budget.sh
