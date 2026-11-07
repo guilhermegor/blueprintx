@@ -20,6 +20,9 @@ printf '%s\n' "$*" >>"$GH_LOG"
 case "$1 $2" in
 "api graphql")
     [ -z "${GH_GRAPHQL_ERR:-}" ] || { echo "$GH_GRAPHQL_ERR" >&2; exit 1; } ;;
+"api -i")
+    [ "${GH_SCOPES_HEADER:-on}" = off ] || printf 'HTTP/2.0 200 OK\r\n%s: %s\r\n\r\n{}\n' "${GH_SCOPES_NAME:-X-Oauth-Scopes}" "${GH_SCOPES-repo, project, read:org}" ;;
+"config get") case "$*" in *"-h github.com"*) echo "${GH_HOST_PROTOCOL:-${GH_PROTOCOL:-https}}" ;; *) echo "${GH_PROTOCOL:-https}" ;; esac ;;
 "api user")
     [ -z "${GH_USER_ERR:-}" ] || { echo "$GH_USER_ERR" >&2; exit 1; }
     echo "${GH_LOGIN-octo}" ;;
@@ -135,6 +138,109 @@ test_preflight_passes_on_a_healthy_gh() {
     expect_said "healthy" "gh preflight passed"
 }
 
+test_preflight_stops_when_the_project_scope_is_missing() {
+    run_fn '' "GH_SCOPES=repo, read:org" gh_preflight
+    expect_stop "project scope"
+    expect_said "project scope" "lacks the 'project' scope"
+    expect_said "project scope" "gh auth refresh -s project"
+    expect_not_said "project scope" "gh auth refresh -s repo"
+    expect_not_said "project scope" "gh preflight passed"
+}
+
+test_preflight_names_every_missing_scope() {
+    run_fn '' "GH_SCOPES=" gh_preflight
+    expect_stop "no scopes"
+    expect_said "no scopes" "gh auth refresh -s repo"
+    expect_said "no scopes" "gh auth refresh -s project"
+}
+
+test_preflight_does_not_match_a_scope_by_substring() {
+    run_fn '' "GH_SCOPES=repo, read:project" gh_preflight
+    expect_stop "read:project only"
+    expect_said "read:project only" "gh auth refresh -s project"
+}
+
+test_preflight_skips_the_scope_check_when_none_are_reported() {
+    run_fn '' "GH_SCOPES_HEADER=off" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "no header: preflight stopped: $str_out"
+    expect_said "no header" "not verified"
+}
+
+test_create_repo_never_runs_without_the_project_scope() {
+    run_fn 'y\n1\n' "GH_SCOPES=repo" scaffold_create_github_repo "$WORK_DIR"
+    expect_stop "create repo scope"
+    expect_said "create repo scope" "gh auth refresh -s project"
+    expect_not_called "create repo scope" "repo create"
+}
+
+test_preflight_reads_the_scopes_header_in_any_casing() {
+    run_fn '' "GH_SCOPES_NAME=X-OAUTH-SCOPES" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "upper-case header: preflight stopped: $str_out"
+    run_fn '' "GH_SCOPES_NAME=x-oauth-scopes" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "lower-case header: preflight stopped: $str_out"
+}
+
+test_preflight_tolerates_any_spacing_in_the_scope_list() {
+    run_fn '' "GH_SCOPES=repo,project" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "no spaces: preflight stopped: $str_out"
+    run_fn '' "GH_SCOPES= repo ,  project ," gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "odd spaces: preflight stopped: $str_out"
+}
+
+test_an_https_promotion_requires_the_workflow_scope() {
+    local str_cmd='source "$1/bin/lib/common.sh"; source "$1/bin/lib/gh_preflight.sh"; gh_require_workflow_for_https; gh_preflight'
+    run_fn '' "GH_SCOPES=repo, project" bash -c "$str_cmd" _ "$REPO_ROOT"
+    expect_stop "https promote"
+    expect_said "https promote" "gh auth refresh -s workflow"
+    run_fn '' "GH_SCOPES=repo, project" "GH_PROTOCOL=ssh" bash -c "$str_cmd" _ "$REPO_ROOT"
+    [ "$int_rc" -eq 0 ] || fail "ssh promote: preflight stopped: $str_out"
+    run_fn '' "GH_SCOPES=repo, project" "GH_PROTOCOL=https" "GH_HOST_PROTOCOL=ssh" bash -c "$str_cmd" _ "$REPO_ROOT"
+    [ "$int_rc" -eq 0 ] || fail "per-host ssh: preflight stopped on the global https value: $str_out"
+}
+
+run_promoter_gate() {
+    run_fn '' "GH_SCOPES=$1" bash -c '
+        source "$1/bin/promote_offline_to_online.sh"
+        gh() {
+            case "$1 $2" in
+            "auth status") return 0 ;;
+            "config get") echo https ;;
+            "api -i") printf "HTTP/2 200\r\nX-Oauth-Scopes: %s\r\n\r\n{}\n" "$GH_SCOPES" ;;
+            "api rate_limit") echo "5000 9999999999" ;;
+            "api user") echo octo ;;
+            esac
+        }
+        require_gh_ready' _ "$REPO_ROOT"
+}
+
+test_the_promoter_needs_repo_and_workflow_but_not_project() {
+    run_promoter_gate "repo, workflow"
+    [ "$int_rc" -eq 0 ] || fail "promoter: stopped though it holds repo and workflow: $str_out"
+    run_promoter_gate "repo"
+    expect_stop "promoter without workflow"
+    expect_said "promoter without workflow" "gh auth refresh -s workflow"
+    expect_not_said "promoter without workflow" "gh auth refresh -s project"
+}
+
+test_an_empty_required_scope_list_opts_out_of_the_check() {
+    run_fn '' "SCAFFOLD_GH_REQUIRED_SCOPES=" "GH_SCOPES=" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "opt-out: preflight still stopped: $str_out"
+}
+
+test_the_board_title_has_one_definition() {
+    local int_defs
+    int_defs="$(grep -cE '(%s|\}) kanban' "$REPO_ROOT/bin/lib/scaffold_kanban.sh")"
+    [ "$int_defs" -eq 1 ] || fail "the '<project> kanban' title is built in ${int_defs} places, not one helper"
+}
+
+test_create_repo_never_runs_when_two_boards_share_the_title() {
+    run_fn 'y\n1\n' "GH_PROJECT_NUMBER=$(printf '4\n9')" scaffold_create_github_repo "$WORK_DIR"
+    expect_stop "early duplicates"
+    expect_said "early duplicates" "https://github.com/users/octo/projects/4"
+    expect_said "early duplicates" "https://github.com/users/octo/projects/9"
+    expect_not_called "early duplicates" "repo create"
+}
+
 test_create_repo_never_runs_when_the_preflight_fails() {
     run_fn 'y\n1\n' "GH_GRAPHQL_ERR=API rate limit exceeded" scaffold_create_github_repo "$WORK_DIR"
     expect_stop "create repo"
@@ -219,6 +325,18 @@ main() {
     test_preflight_stops_when_the_budget_is_too_low
     test_preflight_stops_on_a_blank_login
     test_preflight_passes_on_a_healthy_gh
+    test_preflight_stops_when_the_project_scope_is_missing
+    test_preflight_names_every_missing_scope
+    test_preflight_does_not_match_a_scope_by_substring
+    test_preflight_skips_the_scope_check_when_none_are_reported
+    test_create_repo_never_runs_without_the_project_scope
+    test_preflight_reads_the_scopes_header_in_any_casing
+    test_preflight_tolerates_any_spacing_in_the_scope_list
+    test_an_https_promotion_requires_the_workflow_scope
+    test_the_promoter_needs_repo_and_workflow_but_not_project
+    test_an_empty_required_scope_list_opts_out_of_the_check
+    test_the_board_title_has_one_definition
+    test_create_repo_never_runs_when_two_boards_share_the_title
     test_create_repo_never_runs_when_the_preflight_fails
     test_visibility_never_defaults_to_public_on_a_failed_read
     test_board_url_never_guesses_the_owner_kind
