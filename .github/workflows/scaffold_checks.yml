@@ -596,6 +596,9 @@ jobs:
       - name: Plant a nested explicit Any and expect mypy to refuse it (blueprintx#1022)
         run: bash tests/test_explicit_any_refused_py.sh
 
+      - name: mvc-orm refuses an explicit Any in controller/_pipeline.py (blueprintx#1030)
+        run: bash tests/test_explicit_any_refused_py.sh mvc-service-orm-db
+
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json
     runs-on: ubuntu-latest
