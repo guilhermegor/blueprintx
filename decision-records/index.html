@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/logo.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -3803,6 +3803,13 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   drivers with no stubs) and joblib (the schema-less opt-in's <code>joblib_handler.py</code>, #650, which a
   scaffold with no opt-ins never imports). openpyxl is named in docstrings but never imported,
   so it is absent: an unmeasured entry is the guess this scheme exists to stop.</li>
+<li><strong><code>disallow_any_explicit = True</code></strong> (#1022). Measured with the flag on before any fix: 35 errors
+  (lib-minimal), 64 (ddd-orm), 67 (mvc-orm), 70 (ddd-native, api-service), 77 (mvc-native). About
+  half were <code>_F = TypeVar("_F", bound=Callable[..., object])</code> in the <code>type_checker</code> shim (<code>...</code> is an
+  implicit <code>Any</code>; the bound is dropped, the shim returns <code>_F</code> unchanged) and its <code>def type_checker</code>
+  line; the rest were written <code>Any</code>, replaced by <code>object</code> where the value is only passed through
+  (<code>Record</code>, run summaries, query params). Opaque DB-API handles and <code>SanityCheck</code> keep <code>Any</code> via
+  per-module <code>disallow_any_explicit = False</code>, the same list as the <code>ANN401</code> ignores.</li>
 <li><strong>Baseline strictness.</strong> Annotations and obvious type errors are enforced, not <code>--strict</code>,
   so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.</li>
 <li><strong>The one exclude</strong> is the runtime type-checking engine (<code>utils/typing</code> or <code>chassis/typing</code>,
@@ -5152,7 +5159,7 @@ the decision without naming that suite, because a generated project does not shi
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>
