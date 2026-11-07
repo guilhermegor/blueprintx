@@ -3223,20 +3223,40 @@ def test_patch_fingerprint_field_boundaries_are_unambiguous() -> None:
     assert cls_gate.patch_fingerprint([dict_plain]) != cls_gate.patch_fingerprint([dict_crafted])
 
 
-def _gh_router(dict_modes_head: dict, dict_modes_base: dict, list_files: list) -> Mock:
+_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+
+
+def _ok(dict_body: dict) -> Mock:
+    """Return a successful ``gh api`` result carrying ``dict_body`` as JSON."""
+    return Mock(returncode=0, stdout=json.dumps(dict_body))
+
+
+def _blob(tuple_item: tuple) -> dict:
+    """Return the git tree entry for one ``(path, mode)`` pair."""
+    return {"path": tuple_item[0], "mode": tuple_item[1], "type": "blob"}
+
+
+def _tree(dict_modes: dict) -> Mock:
+    """Return the ``gh api`` result for a complete git tree holding ``dict_modes``."""
+    return _ok({"tree": list(map(_blob, dict_modes.items())), "truncated": False})
+
+
+def _gh_router(
+    list_files: list,
+    cls_head_tree: Mock,
+    cls_base_tree: Mock,
+    str_base: str = "base",
+    str_head: str = "head",
+) -> Mock:
     """Stand in for ``subprocess.run``: serve the compare, then each commit's git tree."""
-
-    def fn_run(list_cmd: list, **_kwargs: object) -> Mock:
-        str_path = list_cmd[2]
-        if "/compare/" in str_path:
-            dict_body = {"files": list_files, "merge_base_commit": {"sha": "mb"}}
-        else:
-            dict_modes = dict_modes_base if "/trees/mb" in str_path else dict_modes_head
-            list_tree = [{"path": k, "mode": v, "type": "blob"} for k, v in dict_modes.items()]
-            dict_body = {"tree": list_tree, "truncated": False}
-        return Mock(returncode=0, stdout=json.dumps(dict_body))
-
-    return Mock(side_effect=fn_run)
+    dict_by_path = {
+        f"repos/o/r/compare/{str_base}...{str_head}?per_page=1": _ok(
+            {"files": list_files, "merge_base_commit": {"sha": "mb"}}
+        ),
+        f"repos/o/r/git/trees/{str_head}?recursive=1": cls_head_tree,
+        "repos/o/r/git/trees/mb?recursive=1": cls_base_tree,
+    }
+    return Mock(side_effect=lambda list_cmd, **_kwargs: dict_by_path[list_cmd[2]])
 
 
 def test_fetch_patch_fingerprint_compares_against_the_pinned_base_sha(
@@ -3245,7 +3265,9 @@ def test_fetch_patch_fingerprint_compares_against_the_pinned_base_sha(
     """Both compares name the base by the SHA read once, never by a movable branch name."""
     cls_gate = _load_gate()
     list_files = [{"filename": "a", "status": "modified", "patch": "x"}]
-    fn_run = _gh_router({"a": "100644"}, {"a": "100644"}, list_files)
+    fn_run = _gh_router(
+        list_files, _tree({"a": "100644"}), _tree({"a": "100644"}), "basesha", "headsha"
+    )
     monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
     cls_gate.fetch_patch_fingerprint("o", "r", "basesha", "headsha")
     assert fn_run.call_args_list[0][0][0][2].startswith("repos/o/r/compare/basesha...headsha")
@@ -3476,33 +3498,44 @@ def test_fetch_patch_fingerprint_bounds_the_compare_call(
     """The compare call carries a timeout, so a hung ``gh`` cannot stall the job."""
     cls_gate = _load_gate()
     list_files = [{"filename": "a", "status": "modified", "patch": "x"}]
-    fn_run = _gh_router({"a": "100644"}, {"a": "100644"}, list_files)
+    fn_run = _gh_router(list_files, _tree({"a": "100644"}), _tree({"a": "100644"}))
     monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
     cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
     assert all(c.kwargs["timeout"] > 0 for c in fn_run.call_args_list)
 
 
-def _rename_fingerprint(monkeypatch: pytest.MonkeyPatch, str_mode_head: str) -> str:
-    """Fingerprint an empty-file rename whose destination carries ``str_mode_head``."""
+def _digest(
+    monkeypatch: pytest.MonkeyPatch,
+    list_files: list,
+    cls_head_tree: Mock,
+    cls_base_tree: Mock,
+) -> str:
+    """Fingerprint ``list_files`` with the given head and base git trees."""
     cls_gate = _load_gate()
-    dict_rename = {
+    fn_run = _gh_router(list_files, cls_head_tree, cls_base_tree)
+    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    return cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+
+
+_LIST_EMPTY_RENAME = [
+    {
         "filename": "b",
         "previous_filename": "a",
         "status": "renamed",
         "changes": 0,
         "sha": _STR_EMPTY_BLOB_SHA,
     }
-    fn_run = _gh_router({"b": str_mode_head}, {"a": "100644"}, [dict_rename])
-    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
-    return cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+]
+_LIST_EDITED = [{"filename": "a", "status": "modified", "patch": "@@ -1 +1 @@\n-x\n+y"}]
 
 
 def test_fetch_patch_fingerprint_exec_bit_flip_on_a_rename_changes_the_digest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A rename plus an exec-bit flip keeps the blob ``sha``, so only the tree mode shows it."""
-    str_plain = _rename_fingerprint(monkeypatch, "100644")
-    str_flipped = _rename_fingerprint(monkeypatch, "100755")
+    cls_base = _tree({"a": "100644"})
+    str_plain = _digest(monkeypatch, _LIST_EMPTY_RENAME, _tree({"b": "100644"}), cls_base)
+    str_flipped = _digest(monkeypatch, _LIST_EMPTY_RENAME, _tree({"b": "100755"}), cls_base)
     assert str_plain != str_flipped
 
 
@@ -3510,62 +3543,36 @@ def test_fetch_patch_fingerprint_exec_bit_flip_on_a_patched_file_changes_the_dig
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The patch text has no mode lines, so an edit plus a flip needs the tree mode too."""
-    cls_gate = _load_gate()
-    list_files = [{"filename": "a", "status": "modified", "patch": "@@ -1 +1 @@\n-x\n+y"}]
-    list_digests = []
-    for str_mode in ("100644", "100755"):
-        fn_run = _gh_router({"a": str_mode}, {"a": "100644"}, list_files)
-        monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
-        list_digests.append(cls_gate.fetch_patch_fingerprint("o", "r", "base", "head"))
-    assert list_digests[0] != list_digests[1]
+    cls_base = _tree({"a": "100644"})
+    str_plain = _digest(monkeypatch, _LIST_EDITED, _tree({"a": "100644"}), cls_base)
+    str_flipped = _digest(monkeypatch, _LIST_EDITED, _tree({"a": "100755"}), cls_base)
+    assert str_plain != str_flipped
 
 
 def test_fetch_patch_fingerprint_truncated_tree_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A truncated tree is a partial mode map, so it must raise rather than pass."""
-    cls_gate = _load_gate()
-    list_files = [{"filename": "a", "status": "modified", "patch": "x"}]
-    fn_ok = _gh_router({"a": "100644"}, {"a": "100644"}, list_files)
-
-    def fn_run(list_cmd: list, **kwargs: object) -> Mock:
-        cls_result = fn_ok(list_cmd, **kwargs)
-        if "/trees/" in list_cmd[2]:
-            return Mock(returncode=0, stdout='{"tree": [], "truncated": true}')
-        return cls_result
-
-    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    cls_truncated = _ok({"tree": [], "truncated": True})
     with pytest.raises(ValueError, match="truncated"):
-        cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+        _digest(monkeypatch, _LIST_EDITED, cls_truncated, _tree({"a": "100644"}))
 
 
 def test_fetch_patch_fingerprint_failed_tree_read_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """If the tree call fails the gate says "not covered", never a pass."""
-    cls_gate = _load_gate()
-    list_files = [{"filename": "a", "status": "modified", "patch": "x"}]
-    fn_ok = _gh_router({"a": "100644"}, {"a": "100644"}, list_files)
-
-    def fn_run(list_cmd: list, **kwargs: object) -> Mock:
-        if "/trees/" in list_cmd[2]:
-            return Mock(returncode=1, stdout="", stderr="boom")
-        return fn_ok(list_cmd, **kwargs)
-
-    monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
+    cls_failed = Mock(returncode=1, stdout="", stderr="boom")
     with pytest.raises(RuntimeError, match="gh api failed"):
-        cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+        _digest(monkeypatch, _LIST_EDITED, _tree({"a": "100644"}), cls_failed)
 
 
 def test_fetch_patch_fingerprint_missing_tree_path_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A path absent from the tree has no provable mode, so the entry is not trusted."""
-    cls_gate = _load_gate()
-    list_files = [{"filename": "a", "status": "modified", "patch": "x"}]
-    monkeypatch.setattr(cls_gate.subprocess, "run", _gh_router({}, {"a": "100644"}, list_files))
     with pytest.raises(ValueError, match="no tree mode"):
-        cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+        _digest(monkeypatch, _LIST_EDITED, _tree({}), _tree({"a": "100644"}))
 
 
 def test_reviewed_commits_dismissed_review_is_not_revived() -> None:
@@ -3918,9 +3925,6 @@ def test_review_covers_head_malformed_files_body_fails_closed(
     )
     fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
     assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
-
-
-_STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
 
 def test_patch_fingerprint_empty_renames_at_different_names_differ() -> None:
