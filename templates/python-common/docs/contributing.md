@@ -232,6 +232,39 @@ actual fix** — scheduled events are exempt from the "no new workflow runs" sup
 swallows the fast `pull_request: [closed]` path for a bot merge. Latency is up to one day; that is
 the accepted cost of not needing a personal access token.
 
+### PRs closed without merging
+
+`delete_branch_on_merge` never fires for a PR **closed unmerged**, so its branch would pile up on
+`origin`. `delete-closed-pr-branch.yml` deletes the head branch of a same-repo PR closed without
+merge, and only when every guard holds; a skipped branch is named with its reason in the job
+summary:
+
+- the PR is from this repository, never a fork;
+- the branch is short-lived, matching `<type>/<N>-<slug>` (the pattern `bin/check_pr_policy.sh`
+  enforces), so `develop`, `release/*`, `dependabot/*` and `renovate/*` are never touched;
+- it is not the default branch and not the PR's own base branch;
+- no other open PR uses it as its base or its head (a stacked PR or a second PR from the same head
+  would be closed by the deletion); an unreadable answer counts as "in use";
+- GitHub reports it as not protected, and an unreadable protection state counts as protected;
+- its name uses only letters, digits and `._/-`, and its tip is still the PR head when read just
+  before the delete.
+
+The checks and the delete are separate API calls and the refs API has no compare-and-delete, so a
+push, or a PR opened from or against the branch, in that gap is covered only by the restore path
+below.
+
+Nothing is lost: the job summary names the deleted ref and its sha, and the PR page offers
+**Restore branch** (or, from a clone that holds the commit, `git push origin <sha>:refs/heads/<branch>`).
+A PR whose branch was deleted can only be reopened after **Restore branch**. A ruleset refusal is
+reported as "kept" (green); any other unexpected API error fails the job. The workflow file is read
+from the PR's merge ref, so a same-repo writer can run code with `contents: write` by editing it;
+that adds no privilege, since they can already push.
+
+Known limits. GitHub does not run `pull_request` workflows while a PR has a merge conflict, so a
+conflicted PR closed unmerged keeps its branch; delete it by hand. The script is checked out from the
+default branch while the workflow YAML comes from the PR's merge ref, so a repository whose default
+branch does not yet contain `bin/delete_closed_pr_branch.sh` fails this job until it does.
+
 ### The work-ledger gate
 
 `bin/check_backlog_ledger.py` (pre-commit + CI) fails a branch that touches `src/` or CI paths but
