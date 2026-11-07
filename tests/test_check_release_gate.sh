@@ -102,6 +102,7 @@ main() {
 	case_with_issues "0.x to 1.0.0 with only post-1.0 issues passes" "$str_deferred" 0 "gate passed"
 	case_with_issues "a look-alike Cut 1.0.0 title still blocks" '[{"number":11,"title":"Cut 1.0.0 docs rewrite","labels":[]}]' 1 "#11"
 	case_with_issues "0.x to 1.0.0 with no open issues passes" "[]" 0 "gate passed"
+	case_with_issues "an open unlabelled pull request alone does not block (documented decision)" '[{"number":12,"title":"Dependabot bump","pull_request":{},"labels":[]}]' 0 "gate passed"
 
 	run_gate "1.0.0" "1.0.1"
 	expect "1.0.0 to 1.0.1 is unaffected (no API call)" 0 "$?" "not applicable"
