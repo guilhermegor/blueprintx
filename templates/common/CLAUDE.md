@@ -82,8 +82,8 @@ LIST_REQUIRED = [cls_contract.str_filename for cls_contract in contracts.ALL]
 > If they can disagree silently, one of them must be computed from the other. This is the same
 > rule `check_codespell_sync.sh` exists to enforce for the two `.codespellrc` files — that
 > pair drifted in both directions, and the stale copy was the one shipping to projects.
-> The README logo and the docs-site logo are a second such pair (layouts-cvm#109), enforced
-> by `bin/check_logo_sync.sh` (`check-logo-sync` hook).
+> The README logo and the docs-site logo are a second such pair in the Python skeletons,
+> enforced by `bin/check_logo_sync.sh` (`check-logo-sync` hook); TypeScript and Bash skeletons have no such gate.
 
 ## Data-handling guardrails (advisory, Python)
 
