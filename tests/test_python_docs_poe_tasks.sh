@@ -13,6 +13,21 @@ export HOME="$WORK_DIR/home"
 mkdir -p "$HOME"
 
 int_failures=0
+cited_tasks() {
+	grep -rhoE --include='*.md' --exclude-dir=.git --exclude-dir=.venv \
+		--exclude-dir=node_modules '(^|`|\$ )([[:space:]]|[-*+][[:space:]])*poe [A-Za-z_][A-Za-z0-9_-]*' \
+		"$1" | sed -E 's/.*poe //' | sort -u
+}
+
+path_witness="$WORK_DIR/witness"
+mkdir -p "$path_witness"
+printf -- '- poe missing_task\n' >"$path_witness/list.md"
+if grep -qxF missing_task <<<"$(cited_tasks "$path_witness")"; then
+	echo "ok: a poe task cited in a Markdown list is read"
+else
+	echo "FAIL: a poe task cited in a Markdown list is not read"
+	int_failures=$((int_failures + 1))
+fi
 for str_tier in lib-minimal api-service-native-db ddd-service-native-db ddd-service-orm-db \
 	mvc-service-native-db mvc-service-orm-db; do
 	str_scaffold="$(sed -n 's/^scaffold=//p' "$REPO_ROOT/templates/$str_tier/skeleton.meta")"
@@ -34,9 +49,7 @@ print("\n".join(sorted(load_tasks(Path.cwd()))))
 ' "$REPO_ROOT/bin/ci")"
 	[ -n "$list_defined" ] || { echo "FAIL: $str_tier: no poe tasks were read"; exit 1; }
 
-	list_cited="$(grep -rhoE --include='*.md' --exclude-dir=.git --exclude-dir=.venv \
-		--exclude-dir=node_modules '(^|`|\$ )[[:space:]]*poe [A-Za-z_][A-Za-z0-9_-]*' \
-		"$path_project" | sed -E 's/.*poe //' | sort -u)"
+	list_cited="$(cited_tasks "$path_project")"
 	[ -n "$list_cited" ] || { echo "FAIL: $str_tier: no poe task is cited"; exit 1; }
 
 	while IFS= read -r str_task; do
