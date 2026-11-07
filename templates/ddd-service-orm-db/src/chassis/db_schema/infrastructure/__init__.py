@@ -8,8 +8,8 @@ from .repository import SQLAlchemyRecordRepository
 __all__ = [
     "Base",
     "DatabaseSession",
-    "Repository",
     "generate_uuid",
     "RecordModel",
+    "Repository",
     "SQLAlchemyRecordRepository",
 ]

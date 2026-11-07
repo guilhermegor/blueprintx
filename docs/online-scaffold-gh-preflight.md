@@ -73,13 +73,50 @@ happened after the repo was created, finish the remaining steps by hand or use
 
 ## The GraphQL budget
 
-`SCAFFOLD_GH_GRAPHQL_BUDGET` (100) is a conservative upper bound, not a live
-measurement. `SCAFFOLD_GH_GRAPHQL_SITES` (15) counts the `gh project`,
-`gh repo view` and `gh api graphql` call sites in the scaffold libraries;
-`tests/test_scaffold_gh_preflight.sh` fails when a call site is added without
-updating it, which is the prompt to re-check the budget.
+`SCAFFOLD_GH_GRAPHQL_MEASURED` (17) is the number of GraphQL-backed `gh` calls
+(`gh project ...`, `gh repo view`, `gh api graphql`) a fresh kanban setup makes.
+`tests/test_scaffold_gh_preflight.sh` counts them against a stubbed `gh` and
+fails when the number changes, which is the prompt to re-set the budget.
+
+`SCAFFOLD_GH_GRAPHQL_BUDGET` (100) stays the conservative bound it was. The
+count above plus the preflight call and `gh repo create` is 19; times 3, the
+most GraphQL queries one `gh` command is assumed to send (owner lookup, object
+lookup, mutation), plus 3 for one retried command, gives 60. That multiplier
+has not been measured: `gh project` subcommands can send more than 3 queries
+(owner fallback, paginated `field-list`), and a fresh-board run is only one of
+the branches. The budget is therefore not lowered to 60 until `gh api
+rate_limit` has been read before and after a real run on a throwaway account.
+The test only requires the budget to stay at or above that computed 60. The
+count covers the kanban setup only: `gh issue create` (the release issue) and
+other GraphQL-backed commands elsewhere in the scaffold are outside it, so 60 is
+a floor for that path, not a total for a whole scaffold.
+
+`SCAFFOLD_GH_GRAPHQL_SITES` (16) counts the call sites in the scaffold
+libraries; the same test fails when one is added without updating it.
+
+The two numbers differ because they count different things. Of the 16 sites,
+11 run on a fresh board and 5 (the card-add path: `project view`, two
+`field-list` reads, `item-add`, `item-edit`) do not. One of the 11, the
+`gh project field-create` in the field loop, runs 7 times (one per field), so a
+fresh setup makes 11 - 1 + 7 = 17 calls.
+
+The workflows read asks for `workflows(first:20)`. A real board lists 6
+built-in workflows (read with `workflows(first:100){totalCount}` on 2026-11-07),
+so 20 leaves room and no pagination is needed.
+
+## Board workflows
+
+After the fields are created, `scaffold_kanban_workflows` reads the board's
+built-in workflows through GraphQL (`ProjectV2.workflows`, which exposes
+`enabled`). It warns when "Item closed" or "Pull request merged" is off, since
+each moves one kind of card to Done (closed issues, merged pull requests), and says "not found under that name"
+when a workflow is absent from the answer. It never stops the scaffold, and
+it is the one read here that does not go through `gh_read`: the step is
+advisory, so a failure prints the one-line instruction to enable both by hand,
+with the cause from `gh_classify_failure` (rate, auth, network or other).
+Workflows cannot be enabled through the API.
 
 ## Not covered yet
 
 The `delete_branch_on_merge` setting, the `Cut 1.0.0` release issue and its board card keep their warn-and-print-the-
-manual-command fallback, and the built-in board workflows are not read.
+manual-command fallback.

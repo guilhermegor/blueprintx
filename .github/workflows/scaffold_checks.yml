@@ -502,6 +502,9 @@ jobs:
       - name: Should-fail regression tests for the gate
         run: bash tests/test_check_test_git_env.sh
 
+      - name: Two branches adding a module merge clean and pass the gate (blueprintx#959)
+        run: bash tests/test_check_registry_order.sh
+
   readme-structure:
     name: README structure gate — plain headings, slug sections, Authors links
     runs-on: ubuntu-latest

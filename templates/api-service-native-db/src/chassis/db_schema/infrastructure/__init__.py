@@ -12,11 +12,11 @@ from .sqlite_handler import SQLiteDatabaseHandler
 
 __all__ = [
     "DatabaseHandler",
+    "MariaDBDatabaseHandler",
+    "MSSQLDatabaseHandler",
+    "MySQLDatabaseHandler",
+    "OracleDatabaseHandler",
+    "PostgresDatabaseHandler",
     "Record",
     "SQLiteDatabaseHandler",
-    "PostgresDatabaseHandler",
-    "MariaDBDatabaseHandler",
-    "MySQLDatabaseHandler",
-    "MSSQLDatabaseHandler",
-    "OracleDatabaseHandler",
 ]

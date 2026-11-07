@@ -10,4 +10,6 @@ callers use one import: ``from <pkg>._internal.config.ports import ExamplePort``
 from ports.example_port import ExamplePort
 
 
-__all__ = ["ExamplePort"]
+__all__ = [
+    "ExamplePort",
+]

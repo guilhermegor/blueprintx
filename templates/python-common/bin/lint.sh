@@ -66,6 +66,9 @@ $POETRY run python bin/check_typing.py
 print_status info "__all__ export completeness"
 $POETRY run python bin/check_all_exports.py
 
+print_status info "registry order and stored counts"
+$POETRY run python bin/check_registry_order.py
+
 print_status info "numeric dtype policy"
 $POETRY run python bin/check_dtypes.py
 
