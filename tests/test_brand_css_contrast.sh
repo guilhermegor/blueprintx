@@ -12,7 +12,7 @@ import re
 import sys
 
 FLOAT_MIN = 4.5
-MATERIAL_DEFAULT_ACCENT = "#526cfe"
+MATERIAL_DEFAULT_ACCENT = "#526cfe"  # indigo, mkdocs-material >=9.5 (asserted below)
 
 
 def luminance(str_hex):
@@ -29,7 +29,7 @@ def ratio(str_a, str_b):
 tuple_bg = colorsys.hls_to_rgb(225 / 360, 0.14, 0.15)
 str_bg = "#" + "".join(f"{round(c * 255):02x}" for c in tuple_bg)
 
-str_css = open(sys.argv[1]).read()
+str_css = re.sub(r"/\*.*?\*/", "", open(sys.argv[1]).read(), flags=re.S)
 match_block = re.search(r'\[data-md-color-scheme="slate"\]\s*\{([^}]*)\}', str_css)
 if not match_block:
     print("no slate block")
@@ -86,6 +86,13 @@ check() {
 	fi
 }
 
+for str_yml in "$REPO_ROOT"/templates/*/mkdocs.yml; do
+	if grep -qE '^\s*accent:' "$str_yml" || grep -E '^\s*primary:' "$str_yml" | grep -qv custom; then
+		echo "FAIL: $str_yml sets accent or a named primary; the gate models indigo accent + custom primary"
+		int_failures=$((int_failures + 1))
+	fi
+done
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -106,6 +113,8 @@ sed 's/--md-typeset-a-color:[^;]*;//' "$CSS" >"$TMP/no-link.css"
 check "template slate links and hover meet 4.5:1" "$CSS" pass
 check "should-fail: old slate block (link falls back to navy primary)" "$TMP/old.css" fail
 check "should-fail: slate block without a hover colour (Material accent)" "$TMP/no-accent.css" fail
+sed -E 's|(--md-typeset-a-color:[^;]*;)|/* \1 */|' "$CSS" >"$TMP/no-link-commented.css"
+check "should-fail: commented-out link colour is not live" "$TMP/no-link-commented.css" fail
 check "should-fail: slate block without a link colour" "$TMP/no-link.css" fail
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
