@@ -77,6 +77,9 @@ def _run(path_root: Path) -> int:
         (STR_MKDOCS_EN, STR_EN + "\n````\n```\nque não para com isso, para que não\n```\n````\n"),
         (STR_MKDOCS_EN, STR_EN + "\n```\n~~~\nque não para com isso, para que não\n~~~\n```\n"),
         ("site_name: x\ntheme:\n# note\n  language: pt-BR\n", STR_PT),
+        ("site_name: x\ntheme:\n  language: pt-BR  # site language\n", STR_PT),
+        ("site_name: x\ntheme: {name: material, language: pt-BR}\n", STR_PT),
+        (STR_MKDOCS_EN, STR_EN + "\n```\n```bash\nque não para com isso, para que não\n```\n"),
         (STR_MKDOCS_EN, STR_EN + "\ndocs-lang:ok Esta é a página que você pode ler, que não.\n"),
     ],
 )
@@ -162,4 +165,75 @@ def test_main_custom_docs_dir_is_read(tmp_path: Path) -> None:
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN + "docs_dir: manual\n")
     _write(tmp_path / "README.md", STR_EN)
     _write(tmp_path / "manual" / "guide.md", STR_PT)
+    assert _run(tmp_path) == 1
+
+
+@pytest.mark.parametrize(
+    "str_mkdocs",
+    [
+        "site_name: x\ntheme:\n  language: !ENV [LANG, en]\n",
+        "site_name: x\ntheme:\n  language: es  # note\n",
+        "site_name: x\ntheme: {name: material, language: es}\n",
+        "site_name: x: [\n",
+    ],
+)
+def test_main_unreadable_declaration_exits_one(tmp_path: Path, str_mkdocs: str) -> None:
+    """A declaration the gate cannot resolve to a known locale fails closed."""
+    _write(tmp_path / "mkdocs.yml", str_mkdocs)
+    _write(tmp_path / "docs" / "index.md", STR_EN)
+    assert _run(tmp_path) == 1
+
+
+@pytest.mark.parametrize(
+    "str_mkdocs",
+    [STR_MKDOCS_EN + "docs_dir: missing\n", STR_MKDOCS_EN + "docs_dir: manual  # c\n"],
+)
+def test_main_missing_docs_dir_exits_one_even_with_readme(tmp_path: Path, str_mkdocs: str) -> None:
+    """A README alone must not make a misconfigured ``docs_dir`` pass."""
+    _write(tmp_path / "mkdocs.yml", str_mkdocs)
+    _write(tmp_path / "README.md", STR_EN)
+    _write(tmp_path / "docs" / "index.md", STR_EN)
+    assert _run(tmp_path) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_exclude", "str_page"),
+    [
+        ("exclude_docs: |\n  /internal.md\n", "sub/internal.md"),
+        ("exclude_docs: |\n  *.md\n  !keep.md\n", "keep.md"),
+        ("exclude_docs: |\n  internal/specs/\n", "internal/specs-notes.md"),
+    ],
+)
+def test_main_exclude_docs_follows_gitignore_semantics(
+    tmp_path: Path, str_exclude: str, str_page: str
+) -> None:
+    """Anchoring and negation keep a page in the set that a looser match would drop."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN + str_exclude)
+    _write(tmp_path / "README.md", STR_EN)
+    _write(tmp_path / "docs" / str_page, STR_PT)
+    assert _run(tmp_path) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_exclude", "str_page"),
+    [
+        ("exclude_docs: drafts.md\n", "drafts.md"),
+        ("exclude_docs: |\n  backlog\n", "backlog/plan.md"),
+        ("", ".hidden/plan.md"),
+    ],
+)
+def test_main_exclude_docs_drops_what_mkdocs_drops(
+    tmp_path: Path, str_exclude: str, str_page: str
+) -> None:
+    """A page MkDocs does not publish is not read, whichever way the pattern is written."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN + str_exclude)
+    _write(tmp_path / "README.md", STR_EN)
+    _write(tmp_path / "docs" / str_page, STR_PT)
+    assert _run(tmp_path) == 0
+
+
+def test_main_inline_triple_backticks_do_not_open_a_fence(tmp_path: Path) -> None:
+    """A line that starts with inline triple backticks leaves the prose after it readable."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", STR_EN + "\n```foo``` bar\n\n" + STR_PT)
     assert _run(tmp_path) == 1

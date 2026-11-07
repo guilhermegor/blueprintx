@@ -8,10 +8,12 @@ minority paragraphs, which is the margin a function-word classifier needs.
 
 How it decides:
 
-1. **Page set.** ``README.md`` plus every ``*.md`` under ``docs_dir`` (default ``docs``) that
-   ``exclude_docs`` does not match, so an internal tree is excluded by the config that already
-   excludes it. A project with no ``mkdocs.yml``, or whose page set is empty, fails: a gate that
-   checked nothing must not print success.
+1. **Page set.** ``README.md`` plus every page MkDocs publishes under ``docs_dir`` (default
+   ``docs``), found by ``check_docs_gap.published_pages`` so ``exclude_docs`` and the implicit
+   dot-path and ``templates/`` drops follow MkDocs' own gitignore engine. A ``docs_dir`` that is
+   not a directory fails rather than leaving the README alone to pass. A project with no
+   ``mkdocs.yml``, or whose page set is empty, fails: a gate that checked nothing must not
+   print success.
 2. **Prose only.** Fenced code, inline code, links, bare URLs, HTML tags and table rows are
    blanked before counting, so quoting a command or naming a Portuguese product proves nothing.
 3. **One verdict per paragraph.** Each paragraph is scored against every locale's function-word
@@ -24,12 +26,13 @@ A locale outside ``DICT_LOCALE_WORDS`` fails closed: the gate cannot say what it
 checking against.
 """
 
-import fnmatch
 import pathlib
 import re
 import sys
 
 from check_comment_language import RE_WORD, SET_PT_WORDS, split_root_option
+from check_docs_gap import load_mkdocs, published_pages, unpublished_specs
+import yaml
 
 
 SET_EN_WORDS = frozenset(
@@ -86,190 +89,81 @@ TUPLE_BLANKINGS = (
     re.compile(r"<[^>\n]+>"),
 )
 
-RE_FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
-
-RE_TOP_KEY = re.compile(r"^([A-Za-z_][\w-]*):\s*(.*?)\s*$")
-
-RE_THEME_LANGUAGE = re.compile(r"^\s+language:\s*(\S+)\s*$")
+RE_FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
 
 
-def _unquote(str_value: str) -> str:
-    """Return a YAML scalar without its surrounding quotes.
-
-    Parameters
-    ----------
-    str_value : str
-        The raw scalar.
-
-    Returns
-    -------
-    str
-        The scalar, trimmed of whitespace and one pair of matching quotes.
-    """
-    return str_value.strip().strip("\"'")
-
-
-def _block_lines(list_lines: list, str_key: str) -> list:
-    """Return the indented lines that follow a top-level ``key:`` line.
-
-    Parameters
-    ----------
-    list_lines : list of str
-        The file's lines.
-    str_key : str
-        The top-level key whose block is wanted.
-
-    Returns
-    -------
-    list of str
-        The block's lines up to the next column-0 line; empty when the key is absent.
-    """
-    list_out: list = []
-    bool_in = False
-    for str_line in list_lines:
-        re_key = RE_TOP_KEY.match(str_line)
-        if bool_in and str_line.strip() and not str_line[0].isspace() and str_line[0] != "#":
-            break
-        if re_key and re_key.group(1) == str_key:
-            bool_in = True
-        elif bool_in:
-            list_out.append(str_line)
-    return list_out
-
-
-def declared_locale(str_mkdocs: str) -> str:
+def declared_locale(dict_mkdocs: dict) -> str:
     """Return the locale ``mkdocs.yml`` declares in ``theme.language``.
 
     Parameters
     ----------
-    str_mkdocs : str
-        The file's text.
+    dict_mkdocs : dict
+        The parsed ``mkdocs.yml``.
 
     Returns
     -------
     str
-        The declared locale, or ``STR_DEFAULT_LOCALE`` when the key is absent (MkDocs' own
-        default).
+        The declared locale, ``STR_DEFAULT_LOCALE`` when the key is absent (MkDocs' own
+        default), or ``""`` when it is not a plain string (``!ENV``, a list), which no word set
+        matches and so fails closed.
     """
-    for str_line in _block_lines(str_mkdocs.splitlines(), "theme"):
-        re_lang = RE_THEME_LANGUAGE.match(str_line)
-        if re_lang:
-            return _unquote(re_lang.group(1))
-    return STR_DEFAULT_LOCALE
+    dict_theme = dict_mkdocs.get("theme")
+    if not isinstance(dict_theme, dict) or "language" not in dict_theme:
+        return STR_DEFAULT_LOCALE
+    str_language = dict_theme["language"]
+    return str_language if isinstance(str_language, str) else ""
 
 
-def docs_dir_name(str_mkdocs: str) -> str:
-    """Return the ``docs_dir`` setting of ``mkdocs.yml``.
-
-    Parameters
-    ----------
-    str_mkdocs : str
-        The file's text.
-
-    Returns
-    -------
-    str
-        The configured directory, or ``STR_DEFAULT_DOCS_DIR``.
-    """
-    for str_line in str_mkdocs.splitlines():
-        re_key = RE_TOP_KEY.match(str_line)
-        if re_key and re_key.group(1) == "docs_dir" and re_key.group(2):
-            return _unquote(re_key.group(2))
-    return STR_DEFAULT_DOCS_DIR
-
-
-def excluded_patterns(str_mkdocs: str) -> list:
-    """Return the ``exclude_docs`` patterns of ``mkdocs.yml``.
-
-    Parameters
-    ----------
-    str_mkdocs : str
-        The file's text.
-
-    Returns
-    -------
-    list of str
-        One pattern per non-blank, non-comment line of the block.
-    """
-    list_lines = _block_lines(str_mkdocs.splitlines(), "exclude_docs")
-    return [
-        str_line.strip()
-        for str_line in list_lines
-        if str_line.strip() and not str_line.strip().startswith("#")
-    ]
-
-
-def is_excluded(path_rel: pathlib.PurePosixPath, list_patterns: list) -> bool:
-    """Say whether a page under ``docs_dir`` is excluded by ``exclude_docs``.
-
-    Parameters
-    ----------
-    path_rel : pathlib.PurePosixPath
-        The page's path relative to ``docs_dir``.
-    list_patterns : list of str
-        Patterns from ``excluded_patterns``. A trailing ``/`` names a directory at any depth;
-        anything else is matched against the whole path and the file name.
-
-    Returns
-    -------
-    bool
-        True when any pattern matches.
-    """
-    for str_pattern in list_patterns:
-        str_bare = str_pattern.lstrip("/")
-        if str_pattern.endswith("/") and str_bare.rstrip("/") in path_rel.parts[:-1]:
-            return True
-        if fnmatch.fnmatch(str(path_rel), str_bare) or fnmatch.fnmatch(path_rel.name, str_bare):
-            return True
-    return False
-
-
-def page_set(path_root: pathlib.Path, str_mkdocs: str) -> list:
+def page_set(path_root: pathlib.Path, dict_mkdocs: dict) -> list:
     """Return the pages the gate reads.
 
     Parameters
     ----------
     path_root : pathlib.Path
         The project root.
-    str_mkdocs : str
-        Text of the project's ``mkdocs.yml``.
+    dict_mkdocs : dict
+        The parsed ``mkdocs.yml``.
 
     Returns
     -------
     list of pathlib.Path
-        ``README.md`` (when present) and every non-excluded ``*.md`` under ``docs_dir``, sorted.
+        ``README.md`` (when present) and every page MkDocs publishes under ``docs_dir``, sorted.
     """
-    path_docs = path_root / docs_dir_name(str_mkdocs)
-    list_patterns = excluded_patterns(str_mkdocs)
+    path_docs = path_root / str(dict_mkdocs.get("docs_dir") or STR_DEFAULT_DOCS_DIR)
     list_pages = [
-        path_page
-        for path_page in path_docs.rglob("*.md")
-        if not is_excluded(
-            pathlib.PurePosixPath(path_page.relative_to(path_docs).as_posix()), list_patterns
-        )
+        path_docs / str_rel
+        for str_rel in published_pages(path_docs, unpublished_specs(dict_mkdocs))
     ]
     path_readme = path_root / "README.md"
     return sorted({*list_pages, *([path_readme] if path_readme.is_file() else [])})
 
 
-def _fence_toggles(str_open: str, str_marker: str) -> bool:
-    """Say whether a fence marker opens a block or closes the open one.
+def _fence_toggles(str_open: str, str_marker: str, str_info: str) -> bool:
+    """Say whether a fence line opens a block or closes the open one, as CommonMark does.
 
     Parameters
     ----------
     str_open : str
         The marker that opened the current block, or empty outside a block.
     str_marker : str
-        The marker on this line, or empty when the line is not a fence.
+        The run of backticks or tildes on this line, or empty when the line is not a fence.
+    str_info : str
+        What follows the marker on the line.
 
     Returns
     -------
     bool
-        True for an opener, or for a closer of the same character that is at least as long.
+        True for an opener (a backtick info string may not hold a backtick, so inline
+        ``code`` at a line start is not one), or for a closer: same character, at least as
+        long, and nothing after it.
     """
     if not str_marker:
         return False
-    return not str_open or (str_marker[0] == str_open[0] and len(str_marker) >= len(str_open))
+    if not str_open:
+        return "`" not in str_info or str_marker[0] != "`"
+    return (
+        str_marker[0] == str_open[0] and len(str_marker) >= len(str_open) and not str_info.strip()
+    )
 
 
 def _mask_lines(str_text: str) -> list:
@@ -289,8 +183,8 @@ def _mask_lines(str_text: str) -> list:
     str_open = ""
     for str_line in [*str_text.splitlines(), ""]:
         re_marker = RE_FENCE.match(str_line)
-        str_marker = re_marker.group(1) if re_marker else ""
-        bool_toggle = _fence_toggles(str_open, str_marker)
+        str_marker, str_info = re_marker.groups() if re_marker else ("", "")
+        bool_toggle = _fence_toggles(str_open, str_marker, str_info)
         if bool_toggle:
             str_open = "" if str_open else str_marker
         bool_blank = bool_toggle or bool(str_open) or str_line.lstrip().startswith("|")
@@ -402,6 +296,32 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
     return list_out
 
 
+def _load_config(path_root: pathlib.Path) -> tuple:
+    """Parse ``mkdocs.yml`` and check that its ``docs_dir`` exists.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+
+    Returns
+    -------
+    tuple of (dict, str)
+        The parsed config, then an error message that is empty when the config is usable.
+    """
+    path_mkdocs = path_root / "mkdocs.yml"
+    if not path_mkdocs.is_file():
+        return {}, f"{path_mkdocs} must exist"
+    try:
+        dict_mkdocs = load_mkdocs(path_mkdocs)
+    except yaml.YAMLError as cls_err:
+        return {}, f"{path_mkdocs} is not valid YAML: {cls_err}"
+    path_docs = path_root / str(dict_mkdocs.get("docs_dir") or STR_DEFAULT_DOCS_DIR)
+    if not path_docs.is_dir():
+        return dict_mkdocs, f"docs_dir {path_docs} is not a directory; README alone would pass"
+    return dict_mkdocs, ""
+
+
 def main(list_argv: list) -> int:
     """Check every page against the locale ``mkdocs.yml`` declares.
 
@@ -422,18 +342,20 @@ def main(list_argv: list) -> int:
         print(f"❌ {cls_err}")
         return 1
     path_root = path_arg or pathlib.Path(__file__).resolve().parent.parent
-    path_mkdocs = path_root / "mkdocs.yml"
-    if list_rest or not path_mkdocs.is_file():
-        print(f"❌ usage: check_docs_language.py [--root <dir>]; {path_mkdocs} must exist")
+    if list_rest:
+        print("❌ usage: check_docs_language.py [--root <dir>]")
         return 1
-    str_mkdocs = path_mkdocs.read_text(encoding="utf-8")
-    str_declared = declared_locale(str_mkdocs)
-    if str_declared not in DICT_LOCALE_WORDS:
-        print(f"❌ theme.language '{str_declared}' has no function-word set; add one to this gate")
-        return 1
-    list_pages = page_set(path_root, str_mkdocs)
-    if not list_pages:
-        print(f"❌ no page found under {path_root}; this gate would pass vacuously")
+    dict_mkdocs, str_error = _load_config(path_root)
+    str_declared = declared_locale(dict_mkdocs)
+    if not str_error and str_declared not in DICT_LOCALE_WORDS:
+        str_error = (
+            f"theme.language '{str_declared}' has no function-word set; add one to this gate"
+        )
+    list_pages = [] if str_error else page_set(path_root, dict_mkdocs)
+    if not str_error and not list_pages:
+        str_error = f"no page found under {path_root}; this gate would pass vacuously"
+    if str_error:
+        print(f"❌ {str_error}")
         return 1
     list_problems = [
         str_problem

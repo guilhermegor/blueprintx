@@ -228,7 +228,8 @@ test_absent_docs_locale_is_accepted_on_a_skeleton_without_mkdocs() {
     local file out
     file="$(SPEC_LANGUAGE=typescript SPEC_NO_DOCS_LOCALE=1 write_spec ts-no-locale ts-lib "project_root=$WORK_DIR/ts-no-locale-root")"
     out="$(run_blueprintx new --spec "$file" --dry-run)"
-    if [[ "$out" == *"docs_locale=en"* && "$out" != *"'docs_locale' is required"* ]]; then
+    local int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [[ "$out" == *"docs_locale=en"* && "$out" != *"'docs_locale' is required"* ]]; then
         pass "a spec with no docs_locale still resolves to en on a skeleton that ignores it"
     else
         fail "absent docs_locale on non-mkdocs" "${out: -300}"

@@ -40,7 +40,8 @@ its pages are translated. That is the gate working: the declaration and the page
 
 A `--spec` file must carry `docs_locale` on an MkDocs skeleton. An omitted key used to become
 `en` silently; it is now refused, naming the key, before anything is created. Skeletons that
-ignore the locale (`ts-lib`, `react-spa-webpack`, `bash-cli`) still default to `en`.
+ignore the locale (every one without an `mkdocs.yml`: `ts-lib`, `react-spa-webpack`,
+`bash-cli`, `etcher-chromeos`, `ventoy-usb`) still default to `en`.
 
 Two things the choice does **not** change:
 
