@@ -46,10 +46,14 @@ def binds_all(cls_node: ast.Assign | ast.AnnAssign | ast.AugAssign) -> bool:
     Returns
     -------
     bool
-        ``True`` when ``__all__`` is one of its targets.
+        ``True`` when ``__all__`` is one of its targets, including inside tuple unpacking.
     """
     list_targets = cls_node.targets if isinstance(cls_node, ast.Assign) else [cls_node.target]
-    return any(isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in list_targets)
+    return any(
+        isinstance(cls_n, ast.Name) and cls_n.id == "__all__"
+        for cls_t in list_targets
+        for cls_n in ast.walk(cls_t)
+    )
 
 
 def all_value(path_init: pathlib.Path) -> ast.expr | None:

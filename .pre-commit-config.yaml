@@ -404,7 +404,7 @@ repos:
         entry: bash tests/test_check_registry_order.sh
         language: system
         pass_filenames: false
-        files: ^(templates/python-common/bin/check_registry_order\.py|templates/lib-minimal/rendered/package__init__\.py\.tmpl|tests/test_check_registry_order\.sh)$
+        files: ^(templates/python-common/bin/check_registry_order\.py|templates/lib-minimal/rendered/package__init__\.py\.tmpl|tests/test_check_registry_order\.sh|bin/lib/common\.sh)$
 
       - id: test-git-env
         name: tests clear inherited GIT_* env before spawning git (blueprintx#901)

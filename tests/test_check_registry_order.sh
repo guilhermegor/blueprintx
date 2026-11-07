@@ -136,6 +136,7 @@ test_unreadable_all_forms_fail() {
     expect_init "dynamic __all__" '__all__ = ["a"] + ["b"]\n' "$str_literal"
     expect_init "augmented __all__" '__all__ = [\n    "a",\n]\n__all__ += ["b"]\n' "$str_literal"
     expect_init "starred entry" '__all__ = [\n    *other,\n]\n' "$str_literal"
+    expect_init "tuple-unpacked __all__" '__all__, other = ["a"], 1\n' "$str_literal"
     expect_init "non-string entry" '__all__ = [\n    1,\n]\n' "$str_literal"
 }
 
