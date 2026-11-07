@@ -595,33 +595,50 @@ def test_internal_all_changed_after_assignment_is_not_trusted(
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
 
 
-def test_dynamic_write_beside_a_trusted_all_is_still_charged(tmp_path: Path) -> None:
-    """A ``globals()`` write can grow ``__all__`` past what the literal says."""
+@pytest.mark.parametrize(
+    ("str_config", "bool_charged"),
+    [
+        ('globals()["Priv"] = 1\n', True),
+        ('def _i():\n    globals()["Priv"] = 1\n\n\n_i()\n', True),
+        ('class A:\n    globals()["Priv"] = 1\n', True),
+        ("(lambda: globals().update(Priv=1))()\n", True),
+        ("def f(x=globals().update(Priv=1)):\n    pass\n", True),
+        (
+            "def d(f):\n    return f\n\n\n@d(globals().update(Priv=1))\ndef g():\n    pass\n",
+            True,
+        ),
+        ('def _i():\n    exec("Priv = 1", globals())\n\n\n_i()\n', True),
+        ('__all__ = ["Other"]\ndef _i():\n    globals()["__all__"].append("Priv")\n', True),
+        ("import sys\nsetattr(sys.modules[__name__], 'Priv', 1)\n", True),
+        ("def f():\n    setattr(sys.modules[__name__], 'Priv', 1)\n", True),
+        ('class A:\n    def __init__(self):\n        setattr(self, "Priv", 1)\n', False),
+        ("class A:\n    def d(self):\n        return vars(self)\n", False),
+    ],
+    ids=[
+        "module",
+        "def-called",
+        "class-body",
+        "lambda",
+        "default-arg",
+        "decorator",
+        "exec-in-def",
+        "all-append-in-def",
+        "setattr-sys-modules",
+        "setattr-sys-modules-in-def",
+        "setattr-self",
+        "vars-self",
+    ],
+)
+def test_dynamic_write_anywhere_is_charged_except_on_self(
+    tmp_path: Path, str_config: str, bool_charged: bool
+) -> None:
+    """Any dynamic write is assumed to provide the name; ``self``/``cls`` writes are exempt."""
     path_init = _tree(
         tmp_path,
         'from ._internal.config import *\n__all__ = ["Priv"]\n',
-        {
-            "_internal/__init__.py": "",
-            "_internal/config.py": '__all__ = ["Other"]\nglobals()["__all__"].append("Priv")\n',
-        },
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
     )
-    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
-
-
-def test_setattr_inside_a_method_does_not_charge_a_public_star_name(tmp_path: Path) -> None:
-    """Only module-level dynamic writes count; ``setattr(self, ...)`` in a method does not."""
-    path_init = _tree(
-        tmp_path,
-        _STR_STAR_INTERNAL + '__all__ = ["Pub"]\n',
-        {
-            "public.py": "class Pub:\n    pass\n",
-            "_internal/__init__.py": "",
-            "_internal/config.py": (
-                "class Box:\n    def put(self, k, v):\n        setattr(self, k, v)\n"
-            ),
-        },
-    )
-    assert _load_gate().check_package(path_init) == []
+    assert bool(_load_gate().check_package(path_init)) is bool_charged
 
 
 def test_internal_all_built_from_a_non_literal_is_not_trusted(tmp_path: Path) -> None:

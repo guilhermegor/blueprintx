@@ -372,7 +372,12 @@ def _scope_nodes(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
 
 
 def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
-    """Return whether module-level code writes the namespace by a route the AST cannot list.
+    """Return whether the module writes its namespace by a route the AST cannot list.
+
+    The whole tree is read, nested scopes, defaults and decorators included, because a function
+    called at import time writes the module namespace as surely as a module-level statement.
+    The one exemption is ``setattr(self, ...)`` or ``vars(self)`` (``cls`` likewise) inside a
+    nested scope's body, which acts on an instance or class, never on the module.
 
     Parameters
     ----------
@@ -382,13 +387,48 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
     Returns
     -------
     bool
-        ``True`` when ``globals``, ``locals``, ``vars``, ``setattr`` or ``exec`` is named at
-        module level; a method that calls ``setattr(self, ...)`` is not module level.
+        ``True`` when ``globals``, ``locals``, ``vars``, ``setattr`` or ``exec`` is named
+        outside that exemption.
     """
+    set_exempt = {
+        id(cls_call.func)
+        for cls_scope in _nested_scope_bodies(list_nodes)
+        for cls_call in ast.walk(cls_scope)
+        if isinstance(cls_call, ast.Call)
+        and isinstance(cls_call.func, ast.Name)
+        and cls_call.func.id in {"setattr", "vars"}
+        and cls_call.args
+        and isinstance(cls_call.args[0], ast.Name)
+        and cls_call.args[0].id in {"self", "cls"}
+    }
     return any(
-        isinstance(cls_sub, ast.Name) and cls_sub.id in _SET_DYNAMIC_WRITERS
-        for cls_sub in _scope_nodes(list_nodes)
+        isinstance(cls_sub, ast.Name)
+        and cls_sub.id in _SET_DYNAMIC_WRITERS
+        and id(cls_sub) not in set_exempt
+        for cls_node in list_nodes
+        for cls_sub in ast.walk(cls_node)
     )
+
+
+def _nested_scope_bodies(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
+    """Yield the body of every def, class and lambda, leaving out defaults and decorators.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Yields
+    ------
+    ast.AST
+        One statement of a def or class body, or the expression of a lambda.
+    """
+    for cls_node in list_nodes:
+        for cls_sub in ast.walk(cls_node):
+            if isinstance(cls_sub, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                yield from cls_sub.body
+            elif isinstance(cls_sub, ast.Lambda):
+                yield cls_sub.body
 
 
 def _pattern_names(cls_sub: ast.AST) -> set[str]:
@@ -488,7 +528,7 @@ def _star_provides(
 
     The module's own ``__all__`` limits what a star import brings in, and a name it only
     re-exports through a star import of its own counts. A nested star import that cannot be
-    resolved, a dynamic module-level write, or an ``__all__`` the gate cannot read as one literal
+    resolved, a dynamic namespace write, or an ``__all__`` the gate cannot read as one literal
     list is assumed to provide the name, so the check fails closed.
 
     Parameters
