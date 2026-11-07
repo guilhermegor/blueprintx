@@ -1,12 +1,13 @@
 <!-- readme-archetype: ${README_ARCHETYPE} -->
 # ${PROJECT_NAME}
 
-<p align="center"><img src="https://raw.githubusercontent.com/${GITHUB_USERNAME}/${PROJECT_NAME}/main/assets/logo.png" width="200" alt="${PROJECT_DISPLAY_NAME} logo"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/${GITHUB_USERNAME}/${PROJECT_NAME}/main/assets/logo_lorem_ipsum.png" width="200" alt="${PROJECT_DISPLAY_NAME} logo"></p>
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 <!-- only: library -->
 [![PyPI](https://img.shields.io/pypi/v/${PROJECT_NAME}.svg)](https://pypi.org/project/${PROJECT_NAME}/)
+[![Downloads](https://img.shields.io/pepy/dt/${PROJECT_NAME})](https://pepy.tech/projects/${PROJECT_NAME})
 <!-- /only -->
 [![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/)
 [![Linting](https://img.shields.io/badge/linting-ruff_%7C_codespell-blue)](https://github.com/astral-sh/ruff)

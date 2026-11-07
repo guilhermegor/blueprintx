@@ -14,7 +14,7 @@ from collections.abc import Callable
 from logging import Logger
 from pathlib import Path
 import sys
-from typing import Any, NoReturn
+from typing import NoReturn
 
 from sqlalchemy import Engine
 
@@ -102,7 +102,7 @@ def build_pipeline(  # noqa: PLR0913
     fn_build_engine: Callable[[], Engine],
     fn_output_path: Callable[[str], Path],
     path_json: Path,
-    dict_context: dict[str, Any],
+    dict_context: dict[str, object],
     cls_email_handler: EmailHandler | None = None,
     cls_webhook: WebhookNotifier | None = None,
     str_webhook_message: str = "",

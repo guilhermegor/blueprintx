@@ -6,6 +6,7 @@ import prettierConfig from 'eslint-config-prettier';
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import importPlugin from 'eslint-plugin-import-x';
 import jest from 'eslint-plugin-jest';
+import perfectionist from 'eslint-plugin-perfectionist';
 import tseslint from 'typescript-eslint';
 
 const VENDOR_POLICY = {
@@ -169,7 +170,7 @@ export default [
           varsIgnorePattern: '^_',
         },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-magic-numbers': [
         'error',
         {
@@ -224,6 +225,14 @@ export default [
     ignores: ['**/*.{test,spec}.ts'],
     plugins: { local: { rules: { 'vendor-allowlist': vendorAllowlistRule } } },
     rules: { 'local/vendor-allowlist': 'error' },
+  },
+
+  {
+    files: ['src/index.ts'],
+    plugins: { perfectionist },
+    rules: {
+      'perfectionist/sort-exports': ['error', { type: 'natural', order: 'asc', ignoreCase: true }],
+    },
   },
 
   prettierConfig,

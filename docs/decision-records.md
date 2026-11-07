@@ -1014,6 +1014,13 @@ is shaped as it is; a generated project gets the behavior, not the history.
   drivers with no stubs) and joblib (the schema-less opt-in's `joblib_handler.py`, #650, which a
   scaffold with no opt-ins never imports). openpyxl is named in docstrings but never imported,
   so it is absent: an unmeasured entry is the guess this scheme exists to stop.
+- **`disallow_any_explicit = True`** (#1022). Measured with the flag on before any fix: 35 errors
+  (lib-minimal), 64 (ddd-orm), 67 (mvc-orm), 70 (ddd-native, api-service), 77 (mvc-native). About
+  half were `_F = TypeVar("_F", bound=Callable[..., object])` in the `type_checker` shim (`...` is an
+  implicit `Any`; the bound is dropped, the shim returns `_F` unchanged) and its `def type_checker`
+  line; the rest were written `Any`, replaced by `object` where the value is only passed through
+  (`Record`, run summaries, query params). Opaque DB-API handles and `SanityCheck` keep `Any` via
+  per-module `disallow_any_explicit = False`, the same list as the `ANN401` ignores.
 - **Baseline strictness.** Annotations and obvious type errors are enforced, not `--strict`,
   so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.
 - **The one exclude** is the runtime type-checking engine (`utils/typing` or `chassis/typing`,

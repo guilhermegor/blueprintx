@@ -100,7 +100,7 @@ def build_pipeline(  # noqa: PLR0913
     fn_build_connection: Callable[[], Any],
     fn_output_path: Callable[[str], Path],
     path_json: Path,
-    dict_context: dict[str, Any],
+    dict_context: dict[str, object],
     cls_email_handler: EmailHandler | None = None,
     cls_webhook: WebhookNotifier | None = None,
     str_webhook_message: str = "",

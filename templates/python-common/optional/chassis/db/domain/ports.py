@@ -10,12 +10,11 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any
 
 from chassis.typing import ABCTypeCheckerMeta
 
 
-Record = dict[str, Any]
+Record = dict[str, object]
 
 
 class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
