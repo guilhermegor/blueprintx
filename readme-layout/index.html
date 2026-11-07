@@ -2901,9 +2901,14 @@ heading (blank lines between are fine): <code>&lt;!-- slug: install --&gt;</code
   for Python libraries, <code>npm run docs:start</code> for TypeScript libraries.</li>
 <li>The logo is centered on its own line under the H1 (<code>&lt;p align="center"&gt;&lt;img ... width="200"&gt;&lt;/p&gt;</code>),
   never inside the heading.</li>
-<li>Badge order: status, python, pypi, docs, linting, mypy, coverage, license, issues,
-  contributions. <code>pypi</code> is <code>library</code> only; no Snyk License advisor badge, and no pepy badge before
-  the first publish. The order is a review convention, not a gate.</li>
+<li>Badge order: status, python, pypi, downloads, docs, linting, mypy, coverage, license, issues,
+  contributions. <code>pypi</code> and <code>downloads</code> are <code>library</code> only; no Snyk License advisor badge. The
+  downloads badge is <code>img.shields.io/pepy/dt/&lt;name&gt;</code> for Python and <code>img.shields.io/npm/d18m/&lt;name&gt;</code>
+  for ts-lib: shields.io always answers HTTP 200 and prints "not found" for an unpublished package,
+  so it is safe before the first publish (measured 2026-11-07 on both endpoints). They count
+  different windows: <code>pepy/dt</code> is all-time, <code>npm/d18m</code> the last 18 months, because npm's API
+  serves no all-time total. <code>static.pepy.tech</code> stays banned (404 until indexed,
+  blueprintx#948) and so does <code>pypi/dm</code> (wrong figure). The order is a review convention, not a gate.</li>
 <li>README images use absolute <code>raw.githubusercontent.com</code> URLs (logo, coverage badge), because
   <code>readme = "README.md"</code> ships to PyPI where relative paths break. <code>scaffold_render_readme</code> fills
   them from <code>GITHUB_USERNAME</code> and <code>PROJECT_NAME</code>.</li>
