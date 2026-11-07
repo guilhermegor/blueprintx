@@ -185,6 +185,16 @@ exhaustive. `utils/typing/` is the one place `Any` is the honest signature (it i
 of any type) and is ANN401-exempt. The package ships from
 `templates/python-common/optional/typing/`.
 
+**Explicit `Any` is refused** (`disallow_any_explicit = True` in `mypy.ini`, plus ruff `ANN401`),
+including nested (`Callable[[Any, str], ...]`) which `ANN401` cannot see. Use `object`, a `TypeVar`,
+a `ParamSpec` or a `Protocol`. Exemptions are `[mypy-<module>]` sections with
+`disallow_any_explicit = False`, mirroring the `ANN401` `per-file-ignores`: the typing engine
+(inspects values of any type), the DB-API handles (`utils/tabular_reader.py`, `utils/frames.py`,
+`config/connection_db.py`, `model/example_entity.py`, the controller pipelines and the native DB
+handler modules, module-wide and not only `_connect`; no shared driver type; the controller
+pipeline exemption is shared by every tier though only mvc-native still uses `Any` there) and `SanityCheck` (any joblib payload). Bash is out of
+scope: it has no static types.
+
 The shared `utils/` helpers (`dtypes`, `br_identifiers`, `decimals`, `loggers`, `text`,
 `paths`, `signatures`, `dates`, …) carry the runtime checker too — every function is
 `@type_checker` and every class uses `metaclass=TypeChecker` (Protocol ports use
