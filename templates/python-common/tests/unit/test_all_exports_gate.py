@@ -354,6 +354,16 @@ _STR_FROM_MEMBER = "from .member import Doc\n" + _STR_EXPORT_DOC
             {"member.py": _STR_LEAK},
             id="star-import-through-sibling",
         ),
+        pytest.param(
+            "from pkg import _internal as Doc\n" + _STR_EXPORT_DOC,
+            {"_internal/__init__.py": ""},
+            id="absolute-internal-package",
+        ),
+        pytest.param(
+            "from .member import Doc\n" + _STR_EXPORT_DOC,
+            {"member.py": "from pkg import _internal as Doc\n", "_internal/__init__.py": ""},
+            id="absolute-internal-package-via-sibling",
+        ),
     ],
 )
 def test_internal_leak_is_traced_through_every_import_shape(
@@ -426,3 +436,291 @@ def test_followed_file_with_a_syntax_error_is_reported_not_raised(tmp_path: Path
     """A broken sibling is a finding naming that file, not a traceback."""
     path_init = _tree(tmp_path, _STR_FROM_MEMBER, {"member.py": "def (:\n"})
     assert "member.py: could not parse" in _sole(_load_gate().check_package(path_init))
+
+
+_STR_STAR_INTERNAL = "from .public import *\nfrom ._internal.config import *\n"
+
+
+def test_public_and_internal_star_imports_do_not_flag_the_public_names(tmp_path: Path) -> None:
+    """A public star import beside an ``_internal`` one keeps its names."""
+    path_init = _tree(
+        tmp_path,
+        _STR_STAR_INTERNAL + '__all__ = ["Pub", "Priv"]\n',
+        {
+            "public.py": "class Pub:\n    pass\n",
+            "_internal/__init__.py": "",
+            "_internal/config.py": "class Priv:\n    pass\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_nested_star_import_inside_internal_is_still_charged(tmp_path: Path) -> None:
+    """A name an ``_internal`` module re-exports through its own star import still leaks."""
+    path_init = _tree(
+        tmp_path,
+        _STR_STAR_INTERNAL + '__all__ = ["Pub", "Priv"]\n',
+        {
+            "public.py": "class Pub:\n    pass\n",
+            "_internal/__init__.py": "",
+            "_internal/config.py": "from .deeper import *\n",
+            "_internal/deeper.py": "class Priv:\n    pass\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_unresolvable_nested_star_inside_internal_fails_closed(tmp_path: Path) -> None:
+    """A nested star import nobody can read is assumed to provide the name."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": "from otherlib import *\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_internal_all_limits_what_its_star_import_is_charged(tmp_path: Path) -> None:
+    """A name outside the ``_internal`` module's own ``__all__`` is not its star import's."""
+    path_init = _tree(
+        tmp_path,
+        _STR_STAR_INTERNAL + '__all__ = ["Pub"]\n',
+        {
+            "public.py": "class Pub:\n    pass\n",
+            "_internal/__init__.py": "",
+            "_internal/config.py": (
+                '__all__ = ["Other"]\n\n\nclass Other:\n    pass\n\n\nclass Pub:\n    pass\n'
+            ),
+        },
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_name_listed_in_internal_all_is_charged_even_when_unbound_visibly(
+    tmp_path: Path,
+) -> None:
+    """A name in the ``_internal`` module's ``__all__`` is its star import's, bound or not."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": '__all__ = ["Priv"]\n',
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_internal_all_extended_after_assignment_is_not_trusted(tmp_path: Path) -> None:
+    """A ``+=`` on ``__all__`` means the first assignment cannot exclude a name."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": (
+                '__all__ = ["Other"]\n__all__ += ["Priv"]\n\n\nclass Other:\n    pass\n\n\n'
+                "class Priv:\n    pass\n"
+            ),
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_config",
+    [
+        "for Priv in range(1):\n    pass\n",
+        "with open('x') as Priv:\n    pass\n",
+        "Other, Priv = 1, 2\n",
+        "(Priv := 1)\n",
+        "try:\n    pass\nexcept ValueError as Priv:\n    pass\n",
+        "globals()['Priv'] = 1\n",
+        "locals()['Priv'] = 1\n",
+        "exec('Priv = 1')\n",
+        "import builtins\nsetattr(builtins, 'Priv', 1)\n",
+        "match 1:\n    case Priv:\n        pass\n",
+        "def f():\n    global Priv\n    Priv = 1\n",
+    ],
+    ids=[
+        "for",
+        "with",
+        "unpack",
+        "walrus",
+        "except",
+        "globals",
+        "locals",
+        "exec",
+        "setattr",
+        "match",
+        "global",
+    ],
+)
+def test_binding_form_without_all_is_still_charged(tmp_path: Path, str_config: str) -> None:
+    """With no ``__all__``, any form that binds the name in an ``_internal`` target leaks it."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_tail",
+    [
+        '__all__ = __all__ + ["Priv"]\n',
+        '__all__ = ["Other"]\n',
+        '__all__.append("Priv")\n',
+        '__all__.extend(["Priv"])\n',
+        '__all__[:] = ["Priv"]\n',
+    ],
+    ids=["concat", "reassign", "append", "extend", "subscript"],
+)
+def test_internal_all_changed_after_assignment_is_not_trusted(
+    tmp_path: Path, str_tail: str
+) -> None:
+    """Any later write to ``__all__`` means its first assignment cannot exclude a name."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": '__all__ = ["Other"]\n' + str_tail + "Priv = Other = 1\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    ("str_config", "bool_charged"),
+    [
+        ('globals()["Priv"] = 1\n', True),
+        ('def _i():\n    globals()["Priv"] = 1\n\n\n_i()\n', True),
+        ('class A:\n    globals()["Priv"] = 1\n', True),
+        ("(lambda: globals().update(Priv=1))()\n", True),
+        ("def f(x=globals().update(Priv=1)):\n    pass\n", True),
+        (
+            "def d(f):\n    return f\n\n\n@d(globals().update(Priv=1))\ndef g():\n    pass\n",
+            True,
+        ),
+        ('def _i():\n    exec("Priv = 1", globals())\n\n\n_i()\n', True),
+        ('__all__ = ["Other"]\ndef _i():\n    globals()["__all__"].append("Priv")\n', True),
+        ("import sys\nsetattr(sys.modules[__name__], 'Priv', 1)\n", True),
+        ("def f():\n    setattr(sys.modules[__name__], 'Priv', 1)\n", True),
+        ("(lambda self: setattr(self, 'Priv', 1))(sys.modules[__name__])\n", True),
+        ("def f(cls=sys.modules[__name__]):\n    setattr(cls, 'Priv', 1)\nf()\n", True),
+        ("eval('globals().update(Priv=1)')\n", True),
+        ("import builtins\nbuiltins.exec('Priv = 1')\n", True),
+        ("import sys\nsys.modules[__name__].Priv = 1\n", True),
+        ("import os\nif os.environ.get('X'):\n    globals()['Priv'] = 1\n", True),
+        ('class A:\n    def __init__(self):\n        setattr(self, "Priv", 1)\n', False),
+        ("class A:\n    def d(self):\n        return vars(self)\n", False),
+    ],
+    ids=[
+        "module",
+        "def-called",
+        "class-body",
+        "lambda",
+        "default-arg",
+        "decorator",
+        "exec-in-def",
+        "all-append-in-def",
+        "setattr-sys-modules",
+        "setattr-sys-modules-in-def",
+        "lambda-self",
+        "def-cls-default",
+        "eval",
+        "builtins-attr",
+        "sys-modules-store",
+        "dynamic-in-if",
+        "setattr-self",
+        "vars-self",
+    ],
+)
+def test_dynamic_write_anywhere_is_charged_except_on_self(
+    tmp_path: Path, str_config: str, bool_charged: bool
+) -> None:
+    """Any dynamic write is assumed to provide the name; ``self``/``cls`` writes are exempt."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert bool(_load_gate().check_package(path_init)) is bool_charged
+
+
+def test_opaque_all_provides_a_name_that_is_not_visibly_bound(tmp_path: Path) -> None:
+    """An ``__all__`` the gate cannot read provides every name, bound or not."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": '__all__ = ["Priv"] + []\n'},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_internal_all_built_from_a_non_literal_is_not_trusted(tmp_path: Path) -> None:
+    """``__all__ = [*other]`` hides names from the literal reader, so it excludes nothing."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": '__all__ = [*["Priv"]]\nPriv = 1\n',
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_missing_internal_star_target_is_still_charged(tmp_path: Path) -> None:
+    """A star import from an ``_internal`` file that does not exist is attributed to it."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.missing import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": ""},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_broken_internal_star_target_is_a_finding_not_a_traceback(tmp_path: Path) -> None:
+    """A syntax error in the ``_internal`` star target is reported by file name."""
+    path_init = _tree(
+        tmp_path,
+        _STR_STAR_INTERNAL + _STR_EXPORT_DOC,
+        {
+            "public.py": "Doc = 1\n",
+            "_internal/__init__.py": "",
+            "_internal/config.py": "def (:\n",
+        },
+    )
+    assert "config.py: could not parse" in _sole(_load_gate().check_package(path_init))
+
+
+def test_third_party_internal_package_is_not_charged(tmp_path: Path) -> None:
+    """``from otherlib import _internal`` is not this package's ``_internal``."""
+    path_init = _tree(tmp_path, "from otherlib import _internal as Doc\n" + _STR_EXPORT_DOC, {})
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_relative_internal_package_in_a_namespace_directory_is_charged(tmp_path: Path) -> None:
+    """A relative import is first-party even when its directory has no ``__init__.py``."""
+    path_init = _tree(
+        tmp_path,
+        "from .sub import _internal as Doc\n" + _STR_EXPORT_DOC,
+        {"sub/_internal/__init__.py": ""},
+    )
+    assert "'Doc'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_relative_internal_package_keeps_its_leading_dot(tmp_path: Path) -> None:
+    """The finding names ``.sub._internal``, the path as written."""
+    path_init = _tree(
+        tmp_path,
+        "from .sub import _internal as Doc\n" + _STR_EXPORT_DOC,
+        {"sub/__init__.py": "", "sub/_internal/__init__.py": ""},
+    )
+    assert "(.sub._internal)" in _sole(_load_gate().check_package(path_init))
