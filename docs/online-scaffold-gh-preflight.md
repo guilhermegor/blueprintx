@@ -83,11 +83,27 @@ The budget is in points, the unit `rate_limit` reports, not requests. One
 `items(first:100)` and `fields(first:30)`, so a count of requests says little
 about what a scaffold spends.
 
-`SCAFFOLD_GH_GRAPHQL_POINTS` (560) is what one full online scaffold spends, and
-`SCAFFOLD_GH_GRAPHQL_BUDGET` (1120) is twice that. A run does its own preflight,
-so a retry is a new run and needs no allowance of its own; the 2x covers the
-estimated rows below and a future `gh` version. The test fails when the budget
-drops below `2 * SCAFFOLD_GH_GRAPHQL_POINTS`.
+One full online scaffold spends 560 points, a literal in
+`test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget`, and
+`SCAFFOLD_GH_GRAPHQL_BUDGET` (1120) is twice that. Only a re-run of the command
+re-enters preflight, so a user retry is a new run and needs no allowance of its
+own. The scaffold libraries have no in-run retry loop; if one is added, each
+retried `field-list` costs about 102 points, and the 2x margin absorbs it along
+with the estimated rows below and a future `gh` version.
+
+The test asserts `budget >= 2 * 560`. Both sides are literals, so that checks
+only that the two numbers were edited together, not that the cost has not
+drifted. The drift guard is the invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED`
+and `SCAFFOLD_GH_GRAPHQL_SITES`), which counts invocations and not points: a
+change in what one call costs, or a new `field-list`, passes it.
+
+`SCAFFOLD_GH_GRAPHQL_BUDGET` changed unit from calls to points. An old exported
+value (for example `100`) is now about 5x too loose and nothing warns at
+runtime; unset it or re-set it in points.
+
+Online scaffolds are run by a person with their own `gh` login, never under an
+Actions `GITHUB_TOKEN` (1,000 points per hour, below the 1120 budget); CI only
+runs the stubbed test.
 
 The request counts were measured on 2026-11-07 with `gh` 2.103.3: a local HTTPS
 server that logs every `POST /api/graphql` and answers with canned JSON was set
@@ -122,7 +138,7 @@ priced at the API's minimum of 1 point, not read individually.
 | card add: `field-list` x2 | 4 | 204 |
 | card add: `item-add` and `item-edit` | 4 (estimated) | 4 (estimated) |
 | `gh issue create` | 5 (estimated) | 5 (estimated) |
-| Total | | 560 |
+| Total | 59 (9 estimated) | 560 |
 
 The fake-server run did not cover the card-add path or `gh issue create`, so
 those request counts come from the per-command shape above and are marked

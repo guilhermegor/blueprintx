@@ -344,7 +344,8 @@ test_board_workflows_empty_list_is_not_unreadable() {
 }
 
 test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
-    local int_calls
+    local int_calls int_points=560
+    unset SCAFFOLD_GH_GRAPHQL_BUDGET
     run_fn 'y\n\n' "GH_PROJECT_NUMBER=" scaffold_kanban_setup
     [ "$int_rc" -eq 0 ] || fail "budget: scaffold stopped: $str_out"
     int_calls="$(grep -cE '^(project|repo view|api graphql)' "$WORK_DIR/gh.log")"
@@ -352,8 +353,8 @@ test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
     source "$REPO_ROOT/bin/lib/gh_preflight.sh"
     [ "$int_calls" -eq "$SCAFFOLD_GH_GRAPHQL_MEASURED" ] ||
         fail "a fresh scaffold makes ${int_calls} GraphQL-backed gh calls, SCAFFOLD_GH_GRAPHQL_MEASURED is ${SCAFFOLD_GH_GRAPHQL_MEASURED}"
-    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge $((SCAFFOLD_GH_GRAPHQL_POINTS * 2)) ] ||
-        fail "SCAFFOLD_GH_GRAPHQL_BUDGET ${SCAFFOLD_GH_GRAPHQL_BUDGET} is below 2 * SCAFFOLD_GH_GRAPHQL_POINTS (${SCAFFOLD_GH_GRAPHQL_POINTS})"
+    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge $((int_points * 2)) ] ||
+        fail "SCAFFOLD_GH_GRAPHQL_BUDGET ${SCAFFOLD_GH_GRAPHQL_BUDGET} is below 2 * ${int_points} points"
 }
 
 test_graphql_call_sites_match_the_measured_count() {

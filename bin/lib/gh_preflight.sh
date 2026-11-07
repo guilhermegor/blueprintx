@@ -1,7 +1,6 @@
 #!/bin/bash
 
 : "${SCAFFOLD_GH_GRAPHQL_BUDGET:=1120}"
-: "${SCAFFOLD_GH_GRAPHQL_POINTS:=560}"
 : "${SCAFFOLD_GH_GRAPHQL_SITES:=16}"
 : "${SCAFFOLD_GH_GRAPHQL_MEASURED:=17}"
 : "${SCAFFOLD_RERUN_CMD:=the same blueprintx command}"
@@ -133,7 +132,7 @@ gh_preflight() {
 	int_left="${str_rl%% *}"
 	[[ "$int_left" =~ ^[0-9]+$ ]] || gh_stop_online "preflight: unreadable rate_limit answer" "$str_rl"
 	if [ "$int_left" -lt "$SCAFFOLD_GH_GRAPHQL_BUDGET" ]; then
-		GH_RESET_EPOCH="${str_rl##* }" gh_stop_online "preflight: GraphQL budget (${int_left} left, ${SCAFFOLD_GH_GRAPHQL_BUDGET} needed)" "rate limit"
+		GH_RESET_EPOCH="${str_rl##* }" gh_stop_online "preflight: GraphQL budget (${int_left} points left, ${SCAFFOLD_GH_GRAPHQL_BUDGET} points needed)" "rate limit"
 	fi
-	print_status "success" "gh preflight passed (${str_login}, ${int_left} GraphQL calls left)"
+	print_status "success" "gh preflight passed (${str_login}, ${int_left} GraphQL points left)"
 }
