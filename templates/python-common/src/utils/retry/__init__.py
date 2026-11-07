@@ -20,4 +20,9 @@ from utils.retry.log_emitter import LogEmitter
 from utils.retry.policy import RetryPolicy
 
 
-__all__ = ["LogEmitter", "RetryPolicy", "call_with_backoff", "retry_with_backoff"]
+__all__ = [
+    "call_with_backoff",
+    "LogEmitter",
+    "retry_with_backoff",
+    "RetryPolicy",
+]
