@@ -724,3 +724,50 @@ def test_relative_internal_package_keeps_its_leading_dot(tmp_path: Path) -> None
         {"sub/__init__.py": "", "sub/_internal/__init__.py": ""},
     )
     assert "(.sub._internal)" in _sole(_load_gate().check_package(path_init))
+
+
+_STR_SELF_MODULE = "import pkg._internal.config as me\n"
+
+
+@pytest.mark.parametrize(
+    "str_config",
+    [
+        "from builtins import exec as run\nrun('Priv = 1')\n",
+        "from builtins import globals as gl\ngl()['Priv'] = 1\n",
+        "from sys import modules as m\nm[__name__].Priv = 1\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        self = me\n        setattr(self, 'Priv', 1)\n"
+        + "A().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        def inner(self):\n"
+        + "            setattr(self, 'Priv', 1)\n        inner(me)\nA().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    @staticmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\nA.f(me)\n",
+        "def f(x=(Priv := 1)):\n    pass\n",
+        "def d(v):\n    return lambda f: f\n\n\n@d(Priv := 1)\ndef g():\n    pass\n",
+        "class B((Priv := 1).__class__):\n    pass\n",
+        "__all__ = ['Other']\ndel __all__\nPriv = 1\n",
+    ],
+    ids=[
+        "alias-exec",
+        "alias-globals",
+        "alias-sys-modules",
+        "self-reassigned",
+        "nested-def-self",
+        "staticmethod-cls",
+        "walrus-default",
+        "walrus-decorator",
+        "walrus-class-base",
+        "del-all",
+    ],
+)
+def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
+    tmp_path: Path, str_config: str
+) -> None:
+    """An aliased writer, a rebound ``self``, a walrus outside a body or ``del __all__`` leaks."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
