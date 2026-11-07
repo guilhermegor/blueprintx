@@ -39,14 +39,6 @@ main()
 
 ---
 
-## Running from the Makefile
-
-```bash
-poe run            # runs src/<package_name>/main.py
-```
-
----
-
 ## Running tests
 
 ```bash
