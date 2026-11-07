@@ -562,6 +562,9 @@ jobs:
       - name: 1.0.0 release gate should-fail cases
         run: bash tests/test_check_release_gate.sh
 
+      - name: lib-minimal ships py.typed and per-version classifiers
+        run: bash tests/test_lib_minimal_py_typed.sh
+
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json
     runs-on: ubuntu-latest
