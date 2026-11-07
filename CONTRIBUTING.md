@@ -106,7 +106,6 @@ GitHub Actions cannot read it — it is only the source you `gh secret set` from
 | `APT_GPG_KEY_ID` | `release_apt.yml`, `release.yml` | GPG key ID of `APT_GPG_PRIVATE_KEY` |
 | `APT_GPG_PASSPHRASE` | `release_apt.yml`, `release.yml` | Passphrase for `APT_GPG_PRIVATE_KEY` |
 | `APT_GPG_PRIVATE_KEY` | `release_apt.yml`, `release.yml` | Armored GPG private key that signs the APT repo |
-| `SNAPCRAFT_STORE_CREDENTIALS` | `release_snap.yml`, `release.yml` | Snap Store login exported with `snapcraft export-login`; first-time setup is in `.specs/features/snap-publishing/plan.md` |
 
 **Re-provisioning a lost/rotated value:**
 1. Mint the new credential (fine-grained PAT at github.com/settings/personal-access-tokens,
@@ -141,9 +140,7 @@ GitHub Actions cannot read it — it is only the source you `gh secret set` from
 when the key has no passphrase, and never leave placeholder text there. Wrap a real value in
 single quotes so `$` and backticks survive sourcing. `APT_GPG_PRIVATE_KEY` is a multi-line
 armored block: keep the single quotes and paste the whole block, header and footer included;
-it needs a bash-style `source`, not a strict dotenv parser. `SNAPCRAFT_STORE_CREDENTIALS` is
-the file written by `snapcraft export-login credentials.txt`; the publish step fails without
-it rather than exiting 0.
+it needs a bash-style `source`, not a strict dotenv parser.
 
 ## Template workflow file names (#947)
 

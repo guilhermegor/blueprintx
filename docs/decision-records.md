@@ -2306,3 +2306,14 @@ put "every open PR merged, closed, or deferred past 1.0" on the Cut 1.0.0 checkl
 owner judges each one. `tests/test_check_release_gate.sh` pins the decision with a case in which
 a lone unlabelled PR passes the gate. The generated project's `docs/releasing-1-0-0.md` states
 the decision without naming that suite, because a generated project does not ship it.
+
+## Snap is no longer a release channel (#1026)
+
+The `snap` job failed on every recent release (v3.3.0, v3.3.1) with "Waiting for previous
+upload(s) to complete their review process". A classic-confinement snap needs a manual store
+review that was never approved, and snapcraft.io login was returning 502. The red job sat
+beside green apt, Homebrew and Chocolatey jobs on each release, which teaches readers to
+ignore a red release. The owner removed the channel on 2026-11-07: `release_snap.yml`, the
+`snap/` directory and the `SNAPCRAFT_STORE_CREDENTIALS` secret are gone. Existing Snap
+installs keep their last version and should move to Homebrew, Chocolatey or apt. The old
+plan under `.specs/features/snap-publishing/` stays as a record.
