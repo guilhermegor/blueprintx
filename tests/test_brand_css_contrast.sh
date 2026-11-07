@@ -57,7 +57,11 @@ PY
 
 check() {
 	local str_name="$1" str_css="$2" str_expect="$3" str_out
-	str_out="$(contrast_failures "$str_css")"
+	if ! str_out="$(contrast_failures "$str_css")"; then
+		echo "FAIL: $str_name: contrast checker failed"
+		int_failures=$((int_failures + 1))
+		return
+	fi
 	if grep -qE 'below|unresolved|no slate' <<<"$str_out"; then
 		str_got=fail
 	else
@@ -86,8 +90,8 @@ cat >"$TMP/old.css" <<'EOF'
   --md-primary-fg-color--dark: #06142a;
 }
 EOF
-sed 's/--md-accent-fg-color: #8c9eff;//' "$CSS" >"$TMP/no-accent.css"
-sed 's/--md-typeset-a-color: #8ab4f8;//' "$CSS" >"$TMP/no-link.css"
+sed 's/--md-accent-fg-color:[^;]*;//' "$CSS" >"$TMP/no-accent.css"
+sed 's/--md-typeset-a-color:[^;]*;//' "$CSS" >"$TMP/no-link.css"
 
 check "template slate links and hover meet 4.5:1" "$CSS" pass
 check "should-fail: old slate block (link falls back to navy primary)" "$TMP/old.css" fail
