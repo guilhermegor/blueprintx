@@ -19,7 +19,20 @@ make_stub() {
 printf '%s\n' "$*" >>"$GH_LOG"
 case "$1 $2" in
 "api graphql")
-    [ -z "${GH_GRAPHQL_ERR:-}" ] || { echo "$GH_GRAPHQL_ERR" >&2; exit 1; } ;;
+    [ -z "${GH_GRAPHQL_ERR:-}" ] || { echo "$GH_GRAPHQL_ERR" >&2; exit 1; }
+    case "$*" in
+    *workflows*) ;;
+    *) exit 0 ;;
+    esac
+    case "$*" in
+    *"... on ProjectV2Owner"*"workflows(first:"*"nodes{name enabled}"*) ;;
+    *) echo "stub: unexpected GraphQL query: $*" >&2; exit 1 ;;
+    esac
+    str_expr="."
+    while [ "$#" -gt 0 ]; do [ "$1" = "--jq" ] && str_expr="$2"; shift; done
+    printf '%b' "${GH_WORKFLOWS-true|Item closed\\ntrue|Pull request merged\\n}" |
+        jq -R -s '{data:{repositoryOwner:{projectV2:{workflows:{nodes:(split("\n")|map(select(length>0)|split("|")|{enabled:(.[0]=="true"),name:.[1]}))}}}}}' |
+        jq -r "$str_expr" ;;
 "api -i")
     [ "${GH_SCOPES_HEADER:-on}" = off ] || printf 'HTTP/2.0 200 OK\r\n%s: %s\r\n\r\n{}\n' "${GH_SCOPES_NAME:-X-Oauth-Scopes}" "${GH_SCOPES-repo, project, read:org}" ;;
 "config get") case "$*" in *"-h github.com"*) echo "${GH_HOST_PROTOCOL:-${GH_PROTOCOL:-https}}" ;; *) echo "${GH_PROTOCOL:-https}" ;; esac ;;
@@ -286,6 +299,63 @@ test_a_stop_after_the_repo_exists_does_not_advise_a_plain_rerun() {
     expect_not_said "created repo" "half-created online project is never acceptable. Re-run"
 }
 
+test_board_workflows_warn_when_item_closed_is_off() {
+    run_fn '' "GH_WORKFLOWS=false|Item closed\\ntrue|Pull request merged" scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows off: must warn, not stop: $str_out"
+    expect_said "workflows off" "'Item closed' is off, so closed issues will not move"
+    expect_not_said "workflows off" "'Pull request merged' is off"
+}
+
+test_board_workflows_silent_when_both_are_on() {
+    run_fn '' scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows on: rc=${int_rc}: $str_out"
+    expect_not_said "workflows on" "is off"
+    expect_not_said "workflows on" "was not found"
+    expect_not_said "workflows on" "Could not read"
+    expect_not_said "workflows on" "Cards will not move"
+}
+
+test_board_workflows_report_a_missing_name_not_an_off_toggle() {
+    run_fn '' "GH_WORKFLOWS=true|Item closed archived\\ntrue|Pull request merged" scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows renamed: must warn, not stop: $str_out"
+    expect_said "workflows renamed" "'Item closed' was not found under that name"
+    expect_not_said "workflows renamed" "'Item closed' is off"
+    expect_not_said "workflows renamed" "'Pull request merged'"
+}
+
+test_board_workflows_print_the_instruction_when_unreadable() {
+    run_fn '' "GH_GRAPHQL_ERR=boom" scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows unreadable: must not stop: $str_out"
+    expect_said "workflows unreadable" "enable 'Item closed' and 'Pull request merged'"
+    expect_said "workflows unreadable" "cause: other"
+}
+
+test_board_workflows_name_the_cause_when_rate_limited() {
+    run_fn '' "GH_GRAPHQL_ERR=API rate limit exceeded" scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows rate limited: must not stop: $str_out"
+    expect_said "workflows rate limited" "cause: rate"
+}
+
+test_board_workflows_empty_list_is_not_unreadable() {
+    run_fn '' "GH_WORKFLOWS=" scaffold_kanban_workflows octo 7
+    [ "$int_rc" -eq 0 ] || fail "workflows empty: must warn, not stop: $str_out"
+    expect_not_said "workflows empty" "Could not read"
+    expect_said "workflows empty" "'Item closed' was not found under that name"
+}
+
+test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
+    local int_calls
+    run_fn 'y\n\n' "GH_PROJECT_NUMBER=" scaffold_kanban_setup
+    [ "$int_rc" -eq 0 ] || fail "budget: scaffold stopped: $str_out"
+    int_calls="$(grep -cE '^(project|repo view|api graphql)' "$WORK_DIR/gh.log")"
+    # shellcheck source=bin/lib/gh_preflight.sh
+    source "$REPO_ROOT/bin/lib/gh_preflight.sh"
+    [ "$int_calls" -eq "$SCAFFOLD_GH_GRAPHQL_MEASURED" ] ||
+        fail "a fresh scaffold makes ${int_calls} GraphQL-backed gh calls, SCAFFOLD_GH_GRAPHQL_MEASURED is ${SCAFFOLD_GH_GRAPHQL_MEASURED}"
+    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge $(((SCAFFOLD_GH_GRAPHQL_MEASURED + 2) * 3 + 3)) ] ||
+        fail "SCAFFOLD_GH_GRAPHQL_BUDGET ${SCAFFOLD_GH_GRAPHQL_BUDGET} is below (MEASURED + 2) * 3 + 3"
+}
+
 test_graphql_call_sites_match_the_measured_count() {
     local int_sites
     int_sites="$(cat "$REPO_ROOT"/bin/lib/scaffold_kanban.sh "$REPO_ROOT"/bin/lib/scaffold_git_remote.sh \
@@ -345,6 +415,13 @@ main() {
     test_a_stop_after_the_repo_exists_does_not_advise_a_plain_rerun
     test_stop_message_prints_the_real_rerun_command
     test_no_scaffold_swallows_a_failed_gh_user_read
+    test_board_workflows_warn_when_item_closed_is_off
+    test_board_workflows_silent_when_both_are_on
+    test_board_workflows_report_a_missing_name_not_an_off_toggle
+    test_board_workflows_print_the_instruction_when_unreadable
+    test_board_workflows_name_the_cause_when_rate_limited
+    test_board_workflows_empty_list_is_not_unreadable
+    test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget
     test_graphql_call_sites_match_the_measured_count
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
