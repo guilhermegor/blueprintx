@@ -571,6 +571,9 @@ jobs:
       - name: lib-minimal docs cite only poe tasks the scaffold defines (blueprintx#1020)
         run: bash tests/test_lib_minimal_docs_poe_tasks.sh
 
+      - name: Template dark-theme links and hover meet WCAG AA (blueprintx#1029)
+        run: bash tests/test_brand_css_contrast.sh
+
   lockfile-sync:
     name: Lockfile sync — templates/*/package.json vs package-lock.json
     runs-on: ubuntu-latest
