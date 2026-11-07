@@ -2980,7 +2980,13 @@ nothing verified an agent actually respected it.</p>
 </span></code></pre></div>
 <p>One path or glob per line. A path matches an entry either exactly, or via shell-style
 wildcards (<code>fnmatch</code>) — <code>*</code> already spans <code>/</code>, so <code>docs/*</code> and <code>docs/**</code> match the same set;
-either spelling is accepted for readability. Lines starting with <code>#</code> are comments.</p>
+either spelling is accepted for readability. A bare directory with a trailing <code>/</code>
+(<code>templates/python-common/</code>) is read as <code>templates/python-common/**</code>: it covers every file
+beneath it, and a literal directory does not cover a sibling that merely shares its prefix
+(<code>templates/python-common-extra/</code>); a wildcard directory (<code>templates/*-common/</code>) follows the
+<code>*</code>-spans-<code>/</code> rule above.
+Before this was handled, a bare directory entry matched nothing, so every file under it was
+reported as outside the surface (blueprintx#1031). Lines starting with <code>#</code> are comments.</p>
 <p><strong>Why not the label.</strong> A label needs a second artifact to mean anything: a taxonomy file
 mapping each <code>scope:*</code> value to the paths it actually names, kept in sync with the milestone
 structure by hand. The issue's own scope section already names the risk: <em>"backfilling ~40
