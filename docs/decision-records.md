@@ -1888,9 +1888,10 @@ repository. They were moved out of the workflow files, which now carry no prose.
   replays the original event payload.
 - **`release.yml`.** The version input is free text and is validated before `git tag`, the
   irreversible step, so a bad value is a no-op instead of a pushed tag with no artifacts.
-  `release_snap.yml` fails before its 30-minute build when the credential is absent, because
-  an `exit 0` there let v0.16.67 to v0.16.70 report green while nothing reached the store
-  (#669). Every package job stamps the release version into the fallback literal of
+  While Snap was a channel, `release_snap.yml` failed before its 30-minute build when the
+  credential was absent, because an `exit 0` there let v0.16.67 to v0.16.70 report green
+  while nothing reached the store (#669); the channel was removed in #1026 (see "Snap is no
+  longer a release channel" below). Every package job stamps the release version into the fallback literal of
   `blueprintx --version`, since packaged installs have no `.git`.
 - **`verify_branch_protection.yml` (#307).** Guards the `strict` setting, which anyone with
   admin rights can flip with no red check. `GITHUB_TOKEN` cannot read branch protection
