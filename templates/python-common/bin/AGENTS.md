@@ -62,7 +62,7 @@ source "$SCRIPT_DIR/lib/bootstrap.sh"
 |------|-----------|-----------|
 | `lib/ca_bundle.py` | `bootstrap.sh::build_union_ca_bundle` | `BX_CA_CORPORATE` + `BX_CA_OUT` in; certificate count out; non-zero when the union would NARROW the trust store |
 | `lib/pip_requirements.py` | `pip_fallback.sh::pip_fallback_emit_pip_requirements_from_pyproject` | `PROJECT_ROOT` + `BX_GROUPS` in; one pip requirement per line out |
-| `lib/wheelhouse_select.py` | `build_wheelhouse.sh` (`poe wheelhouse` / `poe wheelhouse_assemble`) | subcommands `select`/`pack`/`assemble` — see `docs/offline-wheelhouse.md` |
+| `lib/wheelhouse_select.py` | `build_wheelhouse.sh` (the `wheelhouse` tasks, service tiers only) | subcommands `select`/`pack`/`assemble` — see `docs/offline-wheelhouse.md` |
 | `lib/description_sources.py` | `check_description_sync.sh` | subcommands `manifest ROOT` / `mkdocs FILE`; description on stdout; exit 3/4 when the source is absent, 5 when it is present but unreadable |
 
 `ca_bundle.py` and `pip_requirements.py` were `"$PYTHON" - <<'PYEOF'` heredocs inside their shell functions — 151 and 66
@@ -94,7 +94,7 @@ carries a `help =`.
 `get_corporate_ca.sh` is the **manual** generator for `bin/corporate_ca.pem` — it
 disables TLS verification *on purpose* to capture a TLS-inspecting proxy's CA,
 so run it only on such a network. The pem is git-ignored; its mere presence
-opts a project into corporate-SSL mode on the next `poe venv` / `poe run`.
+opts a project into corporate-SSL mode on the next `poe venv` or service start.
 
 ## Resolve Poetry — never call a bare `poetry`
 
