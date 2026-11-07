@@ -736,6 +736,7 @@ main() {
     copy_mkdocs_templates "$PROJECT_PATH"
     scaffold_purge_caches "$PROJECT_PATH"
     scaffold_comment_budget "$PROJECT_PATH"
+    scaffold_mark_untranslated "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
     finalize_github_or_offline "$PROJECT_PATH"

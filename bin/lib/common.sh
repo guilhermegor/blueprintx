@@ -365,6 +365,8 @@ remove_repo_policy_scripts() {
 
 # shellcheck source=bin/lib/scaffold_comment_budget.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_comment_budget.sh"
+# shellcheck source=bin/lib/scaffold_docs_locale.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scaffold_docs_locale.sh"
 
 scaffold_git_commit() {
     local str_dir="$1" str_message="$2"

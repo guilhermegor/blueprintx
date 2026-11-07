@@ -328,6 +328,7 @@ repos:
         entry: bash bin/poetry_exec.sh run python bin/check_docs_language.py
         language: system
         files: ^mkdocs\.yml$|\.md$
+        exclude: ^\.specs/
         pass_filenames: false
 
       - id: check-comment-budget

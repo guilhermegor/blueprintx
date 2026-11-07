@@ -35,8 +35,11 @@ excludes is never read. Fenced code, inline code, links and tables are ignored, 
 `docs-lang:ok` marker in a paragraph skips it. A `theme.language` other than `en` or `pt-BR`
 fails closed. Its Portuguese function words are the ones `check_comment_language.py` uses.
 
-⚠️ The shipped templates are English, so a project scaffolded as `pt-BR` fails this gate until
-its pages are translated. That is the gate working: the declaration and the pages disagree.
+⚠️ The shipped templates are English, so a project scaffolded as `pt-BR` gets
+`<!-- docs-lang:untranslated -->` appended to every shipped page. The gate skips a marked page
+and counts it in its summary line (`10 skipped as docs-lang:untranslated`), so the first lint is
+green and the untranslated pages stay visible. Delete the marker from a page once it is
+translated; from then on the gate checks it.
 
 A `--spec` file must carry `docs_locale` on an MkDocs skeleton. An omitted key used to become
 `en` silently; it is now refused, naming the key, before anything is created. Skeletons that

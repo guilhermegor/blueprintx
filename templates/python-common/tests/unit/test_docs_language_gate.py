@@ -237,3 +237,46 @@ def test_main_inline_triple_backticks_do_not_open_a_fence(tmp_path: Path) -> Non
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
     _write(tmp_path / "docs" / "index.md", STR_EN + "\n```foo``` bar\n\n" + STR_PT)
     assert _run(tmp_path) == 1
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        "# Using a database as a cache\n",
+        "## Support for the API\n\nUse a cache as a store.\n",
+        "## Dos and don'ts\n\n- Set the mode\n- Use a cache\n- Do not ask for more\n",
+        "- Install the package\n- Run the tests\n- Read the docs\n",
+    ],
+)
+def test_main_short_english_headings_and_bullets_pass(tmp_path: Path, str_text: str) -> None:
+    """Short English headings and list items are not read as Portuguese."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", str_text)
+    assert _run(tmp_path) == 0
+
+
+def test_main_untranslated_page_is_skipped_and_counted(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A page carrying the untranslated marker passes, and the summary says so."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_PT)
+    _write(tmp_path / "docs" / "index.md", STR_PT)
+    _write(tmp_path / "docs" / "usage.md", STR_EN + "\n<!-- docs-lang:untranslated -->\n")
+    assert _run(tmp_path) == 0
+    assert "1 skipped as docs-lang:untranslated" in capsys.readouterr().out
+
+
+def test_main_untranslated_marker_does_not_excuse_other_pages(tmp_path: Path) -> None:
+    """The marker is page-scoped: an unmarked wrong-language page still fails."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_PT)
+    _write(tmp_path / "docs" / "index.md", STR_EN)
+    _write(tmp_path / "docs" / "usage.md", STR_EN + "\n<!-- docs-lang:untranslated -->\n")
+    assert _run(tmp_path) == 1
+
+
+def test_main_docs_dir_outside_root_reports_instead_of_raising(tmp_path: Path) -> None:
+    """A ``docs_dir`` above the project root yields a finding, not a traceback."""
+    path_root = tmp_path / "proj"
+    _write(path_root / "mkdocs.yml", STR_MKDOCS_EN + "docs_dir: ../site-docs\n")
+    _write(tmp_path / "site-docs" / "index.md", STR_PT)
+    assert _run(path_root) == 1

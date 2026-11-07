@@ -20,12 +20,17 @@ How it decides:
    set; the paragraph reads as the locale with the most hits, and only when that count reaches
    ``INT_MIN_HITS`` and beats the declared locale's own. The Portuguese set is imported from
    ``check_comment_language`` rather than copied, so the two gates cannot disagree about it.
-4. **Escape.** ``docs-lang:ok`` anywhere in a paragraph skips it.
+4. **Escape.** ``docs-lang:ok`` anywhere in a paragraph skips it. ``docs-lang:untranslated``
+   anywhere in a page skips the whole page and is counted in the final line, so skipped pages are
+   never silent. A scaffold whose locale is not ``en`` appends it to every shipped page, which
+   the English templates would otherwise fail on the first lint; deleting it is the act of
+   declaring the page translated.
 
 A locale outside ``DICT_LOCALE_WORDS`` fails closed: the gate cannot say what it would be
 checking against.
 """
 
+import os
 import pathlib
 import re
 import sys
@@ -77,6 +82,8 @@ DICT_LOCALE_WORDS = {"en": SET_EN_WORDS, "pt-BR": SET_PT_WORDS}
 INT_MIN_HITS = 2
 
 STR_ESCAPE = "docs-lang:ok"
+
+STR_UNTRANSLATED = "docs-lang:untranslated"
 
 STR_DEFAULT_LOCALE = "en"
 
@@ -285,12 +292,14 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
     """
     list_out = []
     str_text = path_page.read_text(encoding="utf-8")
+    if STR_UNTRANSLATED in str_text:
+        return list_out
     for int_line, str_para in prose_paragraphs(str_text):
         str_read = paragraph_locale(str_para, str_declared)
         if str_read != str_declared:
             str_excerpt = " ".join(str_para.split())[:80]
             list_out.append(
-                f"❌ {path_page.relative_to(path_root)}:{int_line}: paragraph reads as "
+                f"❌ {os.path.relpath(path_page, path_root)}:{int_line}: paragraph reads as "
                 f"{str_read} but theme.language is {str_declared} -- {str_excerpt}…"
             )
     return list_out
@@ -370,7 +379,9 @@ def main(list_argv: list) -> int:
             f"change theme.language, or add {STR_ESCAPE} to the paragraph."
         )
         return 1
-    print(f"✅ docs language is {str_declared} ({len(list_pages)} page(s) checked)")
+    int_skipped = sum(STR_UNTRANSLATED in path_page.read_text("utf-8") for path_page in list_pages)
+    str_note = f", {int_skipped} skipped as {STR_UNTRANSLATED}" if int_skipped else ""
+    print(f"✅ docs language is {str_declared} ({len(list_pages)} page(s) checked{str_note})")
     return 0
 
 
