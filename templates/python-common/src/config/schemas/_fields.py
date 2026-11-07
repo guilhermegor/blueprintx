@@ -17,10 +17,9 @@ from utils.br_identifiers import is_valid_cnpj, is_valid_cpf
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from typing import TypeVar
 
-    _F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F")
 
     def type_checker(fn: _F) -> _F:
         """Type-only stub — see src/utils/CLAUDE.md."""

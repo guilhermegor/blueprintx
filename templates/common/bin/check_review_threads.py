@@ -509,23 +509,19 @@ _STR_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
 
 def _is_provable_without_patch(dict_file: dict) -> bool:
-    """Return whether a patchless entry is a pure rename or an added empty file.
+    """Return whether a patchless entry is an empty added file or a pure rename.
 
-    Both need ``changes == 0`` and a blob ``sha`` to hash. The API reports ``changes == 0`` for
-    a binary file too, so the ``sha`` is what proves the content; without it the entry is not
-    trusted. The compare API carries no file mode, so a ``sha`` cannot prove the mode bits. An
-    ``added`` entry therefore qualifies only with the empty-blob ``sha``: an exec bit on an empty
-    file runs nothing, so mode cannot matter there, and any other patchless ``added`` entry (a
-    binary) raises. A ``modified`` entry never qualifies, since a mode-only change keeps its
-    blob ``sha``. A rename keeps its earlier rule and shares the mode gap.
+    Both need ``changes == 0``. An ``added`` entry also needs the empty-blob ``sha``: the API
+    reports ``changes == 0`` for a binary too, so only the blob proves its content. A
+    ``renamed`` entry needs any non-empty ``sha``, which pins the content at the reviewed head;
+    the file modes on both sides are hashed separately by :func:`fetch_patch_fingerprint`,
+    so a rename plus an exec-bit flip changes the digest. Any other patchless entry raises.
     """
     str_status = dict_file.get("status")
     str_sha = dict_file.get("sha")
-    return (
-        dict_file.get("changes") == 0
-        and bool(str_sha)
-        and (str_status == "renamed" or (str_status == "added" and str_sha == _STR_EMPTY_BLOB_SHA))
-    )
+    if dict_file.get("changes") != 0 or not isinstance(str_sha, str) or not str_sha:
+        return False
+    return str_status == "renamed" or (str_status == "added" and str_sha == _STR_EMPTY_BLOB_SHA)
 
 
 _TUPLE_PATCH_PREFIXES = ("+", "-")
@@ -551,7 +547,7 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     ------
     ValueError
         If the list is malformed, empty, possibly truncated, or a file carries no patch text
-            (a pure rename or an added empty file has none and is hashed by its blob ``sha``).
+            (an added empty file or a renamed file has none and is hashed by its blob ``sha``).
     """
     if not isinstance(list_files, list) or not all(isinstance(d, dict) for d in list_files):
         raise ValueError("patch unavailable: the file list is malformed")
@@ -566,6 +562,9 @@ def patch_fingerprint(list_files: list[dict]) -> str:
                 d.get("status", ""),
                 d.get("previous_filename", ""),
                 d.get("sha", "") if d.get("patch") is None else "",
+                d.get("mode", ""),
+                d.get("previous_mode", ""),
+                d.get("previous_sha", "") if d.get("patch") is None else "",
                 [s for s in (d.get("patch") or "").splitlines() if s[:1] in _TUPLE_PATCH_PREFIXES],
             ]
             for d in sorted(list_files, key=lambda d: d["filename"])
@@ -610,24 +609,139 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
     """
     if not str_base:
         raise ValueError("patch unavailable: the PR's base commit is unknown")
-    list_cmd = [
-        "gh",
-        "api",
-        f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1",
-    ]
+    dict_compare = _gh_get_object(
+        f"repos/{str_owner}/{str_repo}/compare/{str_base}...{str_oid}?per_page=1"
+    )
+    list_files = dict_compare.get("files")
+    dict_merge_base = dict_compare.get("merge_base_commit")
+    str_merge_base = dict_merge_base.get("sha") if isinstance(dict_merge_base, dict) else None
+    if (
+        not isinstance(list_files, list)
+        or not isinstance(str_merge_base, str)
+        or not str_merge_base
+    ):
+        raise ValueError("patch unavailable: the compare response lacks files or a merge base")
+    dict_head = _tree_modes(str_owner, str_repo, str_oid)
+    dict_base = _tree_modes(str_owner, str_repo, str_merge_base)
+    return patch_fingerprint([_with_modes(d, dict_head, dict_base) for d in list_files])
+
+
+def _gh_get_object(str_path: str) -> dict:
+    """Return the JSON object ``gh api`` serves at ``str_path``.
+
+    Parameters
+    ----------
+    str_path : str
+        The REST path, without host.
+
+    Returns
+    -------
+    dict
+        The parsed response.
+
+    Raises
+    ------
+    RuntimeError
+        If the call fails.
+    ValueError
+        If the response is not a JSON object.
+    """
     cls_run = subprocess.run(  # noqa: S603
-        list_cmd,
+        ["gh", "api", str_path],  # noqa: S607
         capture_output=True,
         text=True,
         check=False,
         timeout=_INT_COMPARE_TIMEOUT_S,
     )
     if cls_run.returncode != 0:
-        raise RuntimeError(f"compare failed: {cls_run.stderr.strip()[:400]}")
-    dict_compare = json.loads(cls_run.stdout)
-    if not isinstance(dict_compare, dict):
-        raise ValueError("patch unavailable: the compare response is not an object")
-    return patch_fingerprint(dict_compare.get("files"))
+        raise RuntimeError(f"gh api failed: {cls_run.stderr.strip()[:400]}")
+    dict_body = json.loads(cls_run.stdout)
+    if not isinstance(dict_body, dict):
+        raise ValueError("patch unavailable: the response is not an object")
+    return dict_body
+
+
+def _tree_modes(str_owner: str, str_repo: str, str_commit: str) -> dict[str, tuple[str, str]]:
+    """Map every path of a commit's tree to its git file mode and blob ``sha``.
+
+    The compare payload carries no mode, so an exec-bit flip is invisible to it; the tree does.
+
+    Parameters
+    ----------
+    str_owner : str
+        Repository owner.
+    str_repo : str
+        Repository name.
+    str_commit : str
+        The commit whose tree is read.
+
+    Returns
+    -------
+    dict of str to tuple of str
+        Path to ``(mode, sha)``, such as ``("100644", "e69de29...")``.
+
+    Raises
+    ------
+    ValueError
+        If the tree is truncated or malformed: a partial map would let a flip pass unseen.
+    """
+    dict_tree = _gh_get_object(f"repos/{str_owner}/{str_repo}/git/trees/{str_commit}?recursive=1")
+    list_entries = dict_tree.get("tree")
+    if dict_tree.get("truncated") or not isinstance(list_entries, list):
+        raise ValueError("patch unavailable: the git tree is truncated or malformed")
+    if not all(isinstance(d, dict) and _is_tree_entry(d) for d in list_entries):
+        raise ValueError("patch unavailable: the git tree is malformed")
+    return {d["path"]: (d["mode"], d["sha"]) for d in list_entries}
+
+
+def _is_tree_entry(dict_entry: dict) -> bool:
+    """Return whether a git tree entry carries a string path, mode and blob ``sha``."""
+    return all(isinstance(dict_entry.get(k), str) for k in ("path", "mode", "sha"))
+
+
+def _with_modes(
+    dict_file: dict,
+    dict_head: dict[str, tuple[str, str]],
+    dict_base: dict[str, tuple[str, str]],
+) -> dict:
+    """Return the compare entry with the file mode on each side attached.
+
+    Parameters
+    ----------
+    dict_file : dict
+        One entry of the compare ``files`` array.
+    dict_head : dict of str to tuple of str
+        Path to ``(mode, sha)`` at the reviewed commit.
+    dict_base : dict of str to tuple of str
+        Path to ``(mode, sha)`` at the merge base.
+
+    Returns
+    -------
+    dict
+        The entry plus ``mode``, ``previous_mode`` and ``previous_sha``.
+
+    Raises
+    ------
+    ValueError
+        If a side that must exist has no mode, so a mode cannot be assumed.
+    """
+    if not isinstance(dict_file, dict):
+        raise ValueError("patch unavailable: the file list is malformed")
+    str_name = dict_file.get("filename")
+    str_status = dict_file.get("status")
+    str_source = dict_file.get("previous_filename") or str_name
+    if not isinstance(str_name, str) or not isinstance(str_source, str):
+        raise ValueError("patch unavailable: malformed file entry")
+    str_mode = dict_head.get(str_name, ("", ""))[0]
+    str_previous, str_previous_sha = dict_base.get(str_source, ("", ""))
+    if (str_status != "removed" and not str_mode) or (str_status != "added" and not str_previous):
+        raise ValueError(f"patch unavailable: no tree mode for {str_name!r}")
+    return {
+        **dict_file,
+        "mode": str_mode,
+        "previous_mode": str_previous,
+        "previous_sha": str_previous_sha,
+    }
 
 
 def review_covers_head(

@@ -54,7 +54,7 @@ class SendPipeline(metaclass=TypeChecker):
         fn_build_connection: Callable[[], Any],
         fn_output_path: Callable[[str], Path],
         path_json: Path,
-        dict_context: dict[str, Any],
+        dict_context: dict[str, object],
         cls_email_handler: EmailHandler | None = None,
         cls_webhook: WebhookNotifier | None = None,
         str_webhook_message: str = "",
@@ -68,7 +68,7 @@ class SendPipeline(metaclass=TypeChecker):
         self.cls_webhook = cls_webhook
         self.str_webhook_message = str_webhook_message
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> dict[str, object]:
         """Execute every phase in order, returning the run summary.
 
         Returns
@@ -89,7 +89,7 @@ class SendPipeline(metaclass=TypeChecker):
         path_report = pipeline_common.render_report(
             self.cls_logger, self.fn_output_path, df_report
         )
-        dict_summary: dict[str, Any] = {
+        dict_summary: dict[str, object] = {
             "intent": "send",
             "rows_read": int(len(df_report)),
             "report_path": str(path_report),

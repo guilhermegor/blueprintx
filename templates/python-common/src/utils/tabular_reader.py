@@ -50,7 +50,7 @@ from utils.text import safe_str
 if TYPE_CHECKING:
     from typing import TypeVar
 
-    _F = TypeVar("_F", bound=Callable[..., object])
+    _F = TypeVar("_F")
 
     def type_checker(fn: _F) -> _F:
         """Type-only stub — see src/utils/CLAUDE.md."""
@@ -258,7 +258,7 @@ def read_query(
     str_sql: str,
     dict_dtypes: dict[str, str],
     cls_contract: FileContract,
-    list_params: Sequence[Any] | None = None,
+    list_params: Sequence[object] | None = None,
     list_date_cols: Sequence[str] | None = None,
 ) -> pd.DataFrame:
     """Run a parameterized SQL query into a typed, contract-validated DataFrame.
@@ -405,7 +405,7 @@ def _cnpj_column_problem(  # complexity-ok: two acceptance rules, empty-column o
 
 @type_checker
 def decode_positional_payload(  # complexity-ok: two rejection rules, never invent or drop data
-    list_columns: Sequence[str], list_rows: Sequence[Sequence[Any]]
+    list_columns: Sequence[str], list_rows: Sequence[Sequence[object]]
 ) -> pd.DataFrame:
     """Decode an API payload whose rows are positional arrays beside a separate header.
 

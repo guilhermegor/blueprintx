@@ -82,6 +82,8 @@ LIST_REQUIRED = [cls_contract.str_filename for cls_contract in contracts.ALL]
 > If they can disagree silently, one of them must be computed from the other. This is the same
 > rule `check_codespell_sync.sh` exists to enforce for the two `.codespellrc` files — that
 > pair drifted in both directions, and the stale copy was the one shipping to projects.
+> The README logo and the docs-site logo are a second such pair in the Python skeletons,
+> enforced by `bin/check_logo_sync.sh` (`check-logo-sync` hook); TypeScript and Bash skeletons have no such gate.
 
 ## Data-handling guardrails (advisory, Python)
 
@@ -182,6 +184,16 @@ violations raise `TypeError` (beartype's own exception is not a `TypeError` subc
 exhaustive. `utils/typing/` is the one place `Any` is the honest signature (it inspects values
 of any type) and is ANN401-exempt. The package ships from
 `templates/python-common/optional/typing/`.
+
+**Explicit `Any` is refused** (`disallow_any_explicit = True` in `mypy.ini`, plus ruff `ANN401`),
+including nested (`Callable[[Any, str], ...]`) which `ANN401` cannot see. Use `object`, a `TypeVar`,
+a `ParamSpec` or a `Protocol`. Exemptions are `[mypy-<module>]` sections with
+`disallow_any_explicit = False`, mirroring the `ANN401` `per-file-ignores`: the typing engine
+(inspects values of any type), the DB-API handles (`utils/tabular_reader.py`, `utils/frames.py`,
+`config/connection_db.py`, `model/example_entity.py`, the controller pipelines and the native DB
+handler modules, module-wide and not only `_connect`; no shared driver type; the controller
+pipeline exemption is shared by every tier though only mvc-native still uses `Any` there) and `SanityCheck` (any joblib payload). Bash is out of
+scope: it has no static types.
 
 The shared `utils/` helpers (`dtypes`, `br_identifiers`, `decimals`, `loggers`, `text`,
 `paths`, `signatures`, `dates`, …) carry the runtime checker too — every function is
