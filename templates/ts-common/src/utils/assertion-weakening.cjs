@@ -101,7 +101,6 @@ function main() {
     console.error('could not resolve a merge-base against the default branch - refusing to pass blind.');
     return 1;
   }
-  if (base === git(['rev-parse', 'HEAD']).trim()) return 0;
   const findings = collect(base);
   findings.forEach((finding) => console.log(finding));
   if (findings.length === 0) return 0;
