@@ -125,8 +125,12 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
    4.5:1 or more against the `slate` background (`#1e2129`, Material 9.5 default hue). The
    template enables no `md-button`, `navigation.top` or `content.code.annotate`; if you add
    one, also set `--md-accent-bg-color`, since Material draws its hover text white on the
-   accent colour. Known limit: the gate derives the background from Material 9.5's default
-   hue and does not follow a Material version bump that changes it.
+   accent colour (the gate fails when `mkdocs.yml` enables the first two, or any template
+   page uses `md-button`). The `:root` block sets `--md-accent-fg-color` to a dark blue, since
+   Material's default hover (`#526cfe`) is only 4.25:1 on white; keep it at 4.5:1 or more
+   against white. Known limits: a direct `color:` rule on `.md-typeset a` bypasses these
+   variables and is invisible to the gate, and the gate derives the background from Material 9.5's
+   default hue and does not follow a Material version bump that changes it.
 
 ## Repository protection & security (one-time, scripted)
 
