@@ -69,8 +69,13 @@ done
     exit 1
 }
 
+export DOCS_LOCALE="${DOCS_LOCALE:-en}"
+case "$DOCS_LOCALE" in
+    en|pt-BR) ;;
+    *) echo "ERROR: DOCS_LOCALE must be en or pt-BR, got '$DOCS_LOCALE'" >&2; exit 1 ;;
+esac
 str_opt_label="${SCAFFOLD_SPEC_FILE:+opt-ins from $SCAFFOLD_SPEC_FILE}"
-echo "::group::Scaffold $SKELETON (offline, ${str_opt_label:-no opt-ins})"
+echo "::group::Scaffold $SKELETON (offline, docs_locale=$DOCS_LOCALE, ${str_opt_label:-no opt-ins})"
 spec_skeleton_supported "$SKELETON" || {
     echo "ERROR: bin/lib/spec.sh has no named-key prompt map for '$SKELETON'" >&2
     exit 1
