@@ -126,16 +126,21 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
    template enables no `md-button`, `navigation.top` or `content.code.annotate`; if you add
    one, also set `--md-accent-bg-color`, since Material draws its hover text white on the
    accent colour (BlueprintX's template gate, `tests/test_brand_css_contrast.sh`, fails when
-   `mkdocs.yml` enables the last two, or any template page uses `md-button`; it is not
-   shipped into generated projects, so re-check by hand after editing). The
+   `mkdocs.yml` enables `navigation.top` or `content.code.annotate`, or any template page
+   uses `md-button`; it is not shipped into generated projects, so re-check by hand after
+   editing: links and hover at 4.5:1 or more on `#ffffff` and `#1e2129`). The
    `[data-md-color-scheme="default"]` block sets `--md-accent-fg-color` to a dark blue,
    since Material's default hover (`#526cfe`) is only 4.25:1 on white. It cannot live in
-   `:root`: Material sets the accent on `body[data-md-color-accent]`, which overrides
-   `:root`; keep it at 4.5:1 or more against white. Known limits: a direct `color:` rule on
-   `.md-typeset a` bypasses these variables and is invisible to the gate, a grouped selector
-   such as `:root, [data-md-color-scheme="default"]` makes the gate refuse rather than
-   resolve, and the gate derives the background from Material 9.5's
-   default hue and does not follow a Material version bump that changes it.
+   `:root`: the `<body>` carries `data-md-color-accent="indigo"`, whose palette rule
+   `[data-md-color-accent=indigo]` sits on `body` and shadows `:root`. The scheme block has
+   the same specificity and wins only because `brand.css` loads after Material's palette CSS
+   (measured on a built site: hovered link `rgb(63, 81, 181)`, 6.87:1 on white). Keep
+   `brand.css` last in `extra_css`. The primary colour set in `:root` does reach the page
+   (computed `#0d2c54`). Known limits: a direct `color:` rule on `.md-typeset a` bypasses
+   these variables and is invisible to the gate, any selector on `:root` or a colour scheme
+   other than the bare one (grouped, compound or descendant) makes the gate refuse rather
+   than resolve, and the gate derives the background from Material 9.5's default hue and
+   does not follow a Material version bump that changes it.
 
 ## Repository protection & security (one-time, scripted)
 

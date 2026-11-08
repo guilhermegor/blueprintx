@@ -39,8 +39,10 @@ def refuse(str_why):
 
 
 for str_prelude in re.findall(r"([^{}]+)\{", str_css):
-    if "," in str_prelude and re.search(r":root|data-md-color-scheme", str_prelude):
-        refuse("grouped selector with :root or a colour scheme: unresolved")
+    if re.search(r":root|data-md-color-scheme", str_prelude) and not re.fullmatch(
+        r"\s*(:root|\[data-md-color-scheme\s*=\s*[\"']?(slate|default)[\"']?\s*\])\s*", str_prelude
+    ):
+        refuse("grouped, compound or descendant selector on :root or a colour scheme: unresolved")
 
 
 def block(str_selector,str_name, is_optional=False):
@@ -140,6 +142,7 @@ for str_yml in "${list_ymls[@]}"; do
 done
 md_button_users() {
 	local str_hits
+	[ "$#" -gt 0 ] || return 0
 	str_hits="$(grep -rl 'md-button' "$@" 2>&1)"
 	[ $? -le 1 ] || { echo "grep failed: $str_hits"; return 2; }
 	printf '%s' "$str_hits" | grep -v '/python-common/docs/contributing\.md$'
@@ -224,6 +227,12 @@ check "should-fail: grouped scheme selector is refused, not half-parsed" "$TMP/g
 check "should-fail: grouped :root selector is refused" "$TMP/grouped-root.css" refuse
 { cat "$CSS"; printf '\n:root {\n  --md-primary-fg-color: #cccccc;\n  --md-typeset-a-color: #0d2c54;\n}\n'; } >"$TMP/root-link.css"
 check "should-fail: a :root link colour is shadowed, the real link is the pale primary" "$TMP/root-link.css" contrast
+{ cat "$CSS"; printf '\n[data-md-color-scheme="default"] .md-typeset {\n  --md-typeset-a-color: #aaaaaa;\n}\n'; } >"$TMP/descendant.css"
+check "should-fail: descendant scheme selector is refused, not skipped" "$TMP/descendant.css" refuse
+{ cat "$CSS"; printf '\n[data-md-color-scheme="default"][data-md-color-primary="custom"] {\n  --md-typeset-a-color: #aaaaaa;\n}\n'; } >"$TMP/compound.css"
+check "should-fail: compound scheme selector is refused, not skipped" "$TMP/compound.css" refuse
+{ printf '/* :root, then slate */\n'; cat "$CSS"; } >"$TMP/comment.css"
+check "a comment naming :root and a comma does not trip the selector scan" "$TMP/comment.css" pass
 mkdir "$TMP/docs"
 printf '[x](y){ .md-button }\n' >"$TMP/docs/page.md"
 [ -n "$(md_button_users "$TMP/docs")" ] && echo "ok: md-button in a docs page is detected" || { echo "FAIL: md-button not detected"; int_failures=$((int_failures + 1)); }
