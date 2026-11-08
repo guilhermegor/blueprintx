@@ -52,7 +52,7 @@ class CreateLog(metaclass=TypeChecker):
 
     @staticmethod
     def _validate_path(
-        path: str
+        path: str,
     ) -> None:  # complexity-ok: two distinct validation faults, each with its own message
         """Validate a path string.
 

@@ -232,6 +232,7 @@ def _is_non_public(cls_ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> boo
     )
 
 
+@type_checker
 def _assert_public_host(
     str_url: str,
 ) -> None:  # complexity-ok: SSRF guard, one branch per rejection rule

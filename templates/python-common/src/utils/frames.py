@@ -147,7 +147,9 @@ def from_records(
 
 
 @type_checker
-def map_with_default(series_value: pd.Series, dict_mapping: dict, default: object) -> pd.Series:
+def map_with_default(
+    series_value: pd.Series, dict_mapping: dict[object, object], default: object
+) -> pd.Series:
     """Relabel a Series via a mapping, sending every unmapped value to ``default``.
 
     A **total** relabel: unlike ``series.map(dict_mapping)`` (which yields ``NaN`` for any
@@ -160,7 +162,7 @@ def map_with_default(series_value: pd.Series, dict_mapping: dict, default: objec
     ----------
     series_value : pandas.Series
         The column whose values are relabelled.
-    dict_mapping : dict
+    dict_mapping : dict of {object: object}
         ``{raw_value: label}`` mapping applied to each cell.
     default : Any
         The value assigned to any cell whose raw value is not a key in ``dict_mapping``.

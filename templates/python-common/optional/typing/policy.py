@@ -65,7 +65,7 @@ def _int_hint(  # complexity-ok: type metaprogramming
         except ModuleNotFoundError:  # pragma: no cover - depends on the tier's deps
             int_base = int
     if STRICT_BOOL:
-        return Annotated[int_base, Is[lambda obj: not isinstance(obj, bool)]]  # type: ignore[valid-type]
+        return Annotated[int_base, Is[lambda obj: not isinstance(obj, bool)]]
     return int_base
 
 
@@ -86,7 +86,7 @@ def build_conf() -> BeartypeConf:
     return BeartypeConf(
         violation_type=VIOLATION_TYPE,
         is_pep484_tower=PEP484_NUMERIC_TOWER,
-        hint_overrides=BeartypeHintOverrides({int: int_hint}),
+        hint_overrides=BeartypeHintOverrides({int: int_hint}),  # type: ignore[operator]
     )
 
 

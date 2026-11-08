@@ -59,12 +59,12 @@ class LabelEnricher(metaclass=TypeChecker):
         df_enriched["label"] = df_enriched["id"].astype(str).map(dict_labels)
         return df_enriched
 
-    def _load_labels(self) -> dict:
+    def _load_labels(self) -> dict[str, str]:
         """Read the label map from disk.
 
         Returns
         -------
-        dict
+        dict of {str: str}
             The parsed label map.
         """
         with self.path_labels.open(encoding="utf-8") as file_labels:

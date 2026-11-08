@@ -10,7 +10,7 @@ from chassis.typing.type_checker import TypeChecker
 _ProtocolMeta = type(Protocol)
 
 
-class ProtocolTypeCheckerMeta(_ProtocolMeta, TypeChecker):
+class ProtocolTypeCheckerMeta(_ProtocolMeta, TypeChecker):  # type: ignore[misc,valid-type]
     """Metaclass for ``Protocol`` classes with runtime type checking.
 
     Combines Python's internal ``Protocol`` metaclass (structural subtyping) with

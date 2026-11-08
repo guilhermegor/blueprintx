@@ -14,7 +14,9 @@ copied into generated projects — blueprintx#325).
 
 from __future__ import annotations
 
-from utils.tabular_reader import FileContract  # noqa: TID251 -- contracts are constructed here
+from utils.tabular_reader import (
+    FileContract,  # noqa: TID251 -- contracts are constructed here
+)
 
 
 EXAMPLE_SOURCE = FileContract(

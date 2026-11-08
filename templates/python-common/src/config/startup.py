@@ -58,8 +58,8 @@ _DICT_FALLBACK_OUTPUTS: dict[str, str] = {
 }
 
 _str_config_error: str | None = None
-YAML_OUTPUTS: dict = {}
-YAML_INPUTS: dict = {}
+YAML_OUTPUTS: dict[str, str] = {}
+YAML_INPUTS: dict[str, object] = {}
 
 try:
     YAML_OUTPUTS = yaml.safe_load(
@@ -135,7 +135,9 @@ def output_path(str_name_key: str) -> Path:
 
 
 @type_checker
-def resolve_reference_spec(dict_inputs: dict, str_source: str) -> dict | None:
+def resolve_reference_spec(
+    dict_inputs: dict[str, object], str_source: str
+) -> dict[str, object] | None:
     """Resolve ``str_source``'s reference ("golden copy") spec, override-first then real-input.
 
     Generalises the ``_input_spec_for_source`` pattern (lesson
