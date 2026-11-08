@@ -139,6 +139,34 @@ test_preflight_stops_when_the_budget_is_too_low() {
     expect_said "low budget" "retry in 10 min"
 }
 
+test_preflight_stops_on_a_non_numeric_budget_or_cost() {
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=lots" gh_preflight
+    expect_stop "non-numeric budget"
+    expect_said "non-numeric budget" "SCAFFOLD_GH_GRAPHQL_BUDGET must be a whole number"
+    expect_not_said "non-numeric budget" "gh preflight passed"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=5x" gh_preflight
+    expect_stop "non-numeric cost"
+    expect_said "non-numeric cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    expect_not_said "non-numeric cost" "gh preflight passed"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=0560" gh_preflight
+    expect_stop "octal cost"
+    expect_said "octal cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=60000000" gh_preflight
+    expect_stop "eight-digit cost"
+    expect_said "eight-digit cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=9999999" gh_preflight
+    expect_not_said "largest cost" "must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=99999999999999999999" gh_preflight
+    expect_stop "overlong budget"
+    expect_said "overlong budget" "SCAFFOLD_GH_GRAPHQL_BUDGET must be a whole number"
+}
+
+test_preflight_warns_when_the_budget_is_below_one_scaffold() {
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=100" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "low override: preflight stopped: $str_out"
+    expect_said "low override" "it is in points now, not calls"
+}
+
 test_preflight_stops_on_a_blank_login() {
     run_fn '' "GH_LOGIN=" gh_preflight
     expect_stop "blank login"
@@ -343,17 +371,24 @@ test_board_workflows_empty_list_is_not_unreadable() {
     expect_said "workflows empty" "'Item closed' was not found under that name"
 }
 
-test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
-    local int_calls
+test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults() {
+    local int_calls int_fields
+    unset SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET SCAFFOLD_GH_GRAPHQL_MEASURED SCAFFOLD_GH_GRAPHQL_SITES
     run_fn 'y\n\n' "GH_PROJECT_NUMBER=" scaffold_kanban_setup
     [ "$int_rc" -eq 0 ] || fail "budget: scaffold stopped: $str_out"
     int_calls="$(grep -cE '^(project|repo view|api graphql)' "$WORK_DIR/gh.log")"
+    int_fields="$(grep -c '^project field-list' "$WORK_DIR/gh.log")"
+    [ "$int_fields" -eq 3 ] ||
+        fail "a fresh scaffold makes ${int_fields} field-list calls (101 points each), the doc's fresh-setup rows say 3"
     # shellcheck source=bin/lib/gh_preflight.sh
     source "$REPO_ROOT/bin/lib/gh_preflight.sh"
     [ "$int_calls" -eq "$SCAFFOLD_GH_GRAPHQL_MEASURED" ] ||
         fail "a fresh scaffold makes ${int_calls} GraphQL-backed gh calls, SCAFFOLD_GH_GRAPHQL_MEASURED is ${SCAFFOLD_GH_GRAPHQL_MEASURED}"
-    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge $(((SCAFFOLD_GH_GRAPHQL_MEASURED + 2) * 3 + 3)) ] ||
-        fail "SCAFFOLD_GH_GRAPHQL_BUDGET ${SCAFFOLD_GH_GRAPHQL_BUDGET} is below (MEASURED + 2) * 3 + 3"
+    [ "$SCAFFOLD_GH_GRAPHQL_COST" -eq 560 ] ||
+        fail "SCAFFOLD_GH_GRAPHQL_COST default is ${SCAFFOLD_GH_GRAPHQL_COST}, pinned at 560: update the doc table with it"
+    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -eq 1120 ] ||
+        fail "SCAFFOLD_GH_GRAPHQL_BUDGET default is ${SCAFFOLD_GH_GRAPHQL_BUDGET}, pinned at 1120 (2 * cost)"
+    unset SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET SCAFFOLD_GH_GRAPHQL_MEASURED SCAFFOLD_GH_GRAPHQL_SITES
 }
 
 test_graphql_call_sites_match_the_measured_count() {
@@ -393,6 +428,8 @@ main() {
     test_preflight_stops_on_an_auth_error
     test_preflight_stops_on_a_network_error
     test_preflight_stops_when_the_budget_is_too_low
+    test_preflight_stops_on_a_non_numeric_budget_or_cost
+    test_preflight_warns_when_the_budget_is_below_one_scaffold
     test_preflight_stops_on_a_blank_login
     test_preflight_passes_on_a_healthy_gh
     test_preflight_stops_when_the_project_scope_is_missing
@@ -421,7 +458,7 @@ main() {
     test_board_workflows_print_the_instruction_when_unreadable
     test_board_workflows_name_the_cause_when_rate_limited
     test_board_workflows_empty_list_is_not_unreadable
-    test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget
+    test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults
     test_graphql_call_sites_match_the_measured_count
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"
