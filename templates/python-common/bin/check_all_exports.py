@@ -569,7 +569,11 @@ def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_para
 
 
 def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    """Return whether a def is a ``staticmethod``: decorated so, or the implicit ``__new__``.
+    """Return whether a def gets no ``self``/``cls`` exemption: ``__new__`` or an unknown decorator.
+
+    Only ``classmethod``, ``property``, ``abstractmethod`` and ``*.setter``/``getter``/``deleter``
+    keep the exemption. ``staticmethod`` and any decorator that could call the method with
+    another object (``@(lambda fn: fn(me))``) lose it.
 
     Parameters
     ----------
@@ -579,10 +583,14 @@ def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     Returns
     -------
     bool
-        ``True`` when a decorator is named ``staticmethod`` or the def is ``__new__``.
+        ``True`` when the def is ``__new__`` or carries a decorator outside the safe set.
     """
+    set_safe = {"classmethod", "property", "abstractmethod", "setter", "getter", "deleter"}
     return cls_fn.name == "__new__" or any(
-        "staticmethod" in {getattr(cls_dec, "id", None), getattr(cls_dec, "attr", None)}
+        not (
+            {getattr(cls_dec, "id", None), getattr(cls_dec, "attr", None)} & set_safe
+            and isinstance(cls_dec, ast.Name | ast.Attribute)
+        )
         for cls_dec in cls_fn.decorator_list
     )
 

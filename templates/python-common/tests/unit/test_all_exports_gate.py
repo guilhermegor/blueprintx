@@ -775,6 +775,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         + "        setattr(cls, 'Priv', 1)\nA.f(me)\n",
         "def d(v):\n    return lambda f: f\n\n\n@d(Priv := 1)\ndef g():\n    pass\n",
         "class B((Priv := 1).__class__):\n    pass\n",
+        "import pkg._internal.config as me\nclass A:\n    @(lambda fn: fn(me))\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
         "__all__ = ['Other']\ndel __all__\nPriv = 1\n",
     ],
     ids=[
@@ -800,6 +802,7 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "staticmethod-attribute",
         "walrus-decorator",
         "walrus-class-base",
+        "decorator-invokes-method",
         "del-all",
     ],
 )
