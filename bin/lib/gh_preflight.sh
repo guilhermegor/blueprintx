@@ -1,6 +1,7 @@
 #!/bin/bash
 
-: "${SCAFFOLD_GH_GRAPHQL_BUDGET:=100}"
+: "${SCAFFOLD_GH_GRAPHQL_COST:=560}"
+[[ "$SCAFFOLD_GH_GRAPHQL_COST" =~ ^(0|[1-9][0-9]{0,6})$ ]] && : "${SCAFFOLD_GH_GRAPHQL_BUDGET:=$((SCAFFOLD_GH_GRAPHQL_COST * 2))}"
 : "${SCAFFOLD_GH_GRAPHQL_SITES:=16}"
 : "${SCAFFOLD_GH_GRAPHQL_MEASURED:=17}"
 : "${SCAFFOLD_RERUN_CMD:=the same blueprintx command}"
@@ -119,6 +120,14 @@ gh_require_workflow_for_https() {
 
 gh_preflight() {
 	local str_err str_login str_rl int_left
+	local str_var str_re str_max
+	for str_var in SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET; do
+		str_re='^(0|[1-9][0-9]{0,7})$' str_max=8
+		[ "$str_var" = SCAFFOLD_GH_GRAPHQL_COST ] && str_re='^(0|[1-9][0-9]{0,6})$' str_max=7
+		[[ "${!str_var:-}" =~ $str_re ]] && continue
+		print_status "error" "${str_var} must be a whole number of GraphQL points (no leading zero, at most ${str_max} digits), got '${!str_var:-}'"
+		gh_stop_footer
+	done
 	str_err="$(mktemp)"
 	gh api graphql -f query='{viewer{login}}' >/dev/null 2>"$str_err" ||
 		gh_stop_online "preflight: GraphQL API" "$(cat "$str_err")"
@@ -132,7 +141,9 @@ gh_preflight() {
 	int_left="${str_rl%% *}"
 	[[ "$int_left" =~ ^[0-9]+$ ]] || gh_stop_online "preflight: unreadable rate_limit answer" "$str_rl"
 	if [ "$int_left" -lt "$SCAFFOLD_GH_GRAPHQL_BUDGET" ]; then
-		GH_RESET_EPOCH="${str_rl##* }" gh_stop_online "preflight: GraphQL budget (${int_left} left, ${SCAFFOLD_GH_GRAPHQL_BUDGET} needed)" "rate limit"
+		GH_RESET_EPOCH="${str_rl##* }" gh_stop_online "preflight: GraphQL budget (${int_left} points left, ${SCAFFOLD_GH_GRAPHQL_BUDGET} points needed)" "rate limit"
 	fi
-	print_status "success" "gh preflight passed (${str_login}, ${int_left} GraphQL calls left)"
+	[ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge "$SCAFFOLD_GH_GRAPHQL_COST" ] ||
+		print_status "warning" "SCAFFOLD_GH_GRAPHQL_BUDGET=${SCAFFOLD_GH_GRAPHQL_BUDGET} is below the ${SCAFFOLD_GH_GRAPHQL_COST} points one scaffold costs; it is in points now, not calls"
+	print_status "success" "gh preflight passed (${str_login}, ${int_left} GraphQL points left)"
 }
