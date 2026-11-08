@@ -374,7 +374,7 @@ test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
     int_calls="$(grep -cE '^(project|repo view|api graphql)' "$WORK_DIR/gh.log")"
     int_fields="$(grep -c '^project field-list' "$WORK_DIR/gh.log")"
     [ "$int_fields" -eq 3 ] ||
-        fail "a fresh scaffold makes ${int_fields} field-list calls (101 points each), the doc table says 3"
+        fail "a fresh scaffold makes ${int_fields} field-list calls (101 points each), the doc's fresh-setup rows say 3"
     # shellcheck source=bin/lib/gh_preflight.sh
     source "$REPO_ROOT/bin/lib/gh_preflight.sh"
     [ "$int_calls" -eq "$SCAFFOLD_GH_GRAPHQL_MEASURED" ] ||

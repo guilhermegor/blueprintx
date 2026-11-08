@@ -94,9 +94,13 @@ with the estimated rows below and a future `gh` version.
 The test pins the sourced defaults to literals (`SCAFFOLD_GH_GRAPHQL_COST` is
 560 and `SCAFFOLD_GH_GRAPHQL_BUDGET` is 1120, with overrides unset), so
 changing either default fails it and forces this table to be re-read. It cannot
-tell whether 560 still matches what GitHub charges. The drift guard is the invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED`
-and `SCAFFOLD_GH_GRAPHQL_SITES`), which counts invocations and not points: a
-change in what one call costs, or a new `field-list`, passes it.
+tell whether 560 still matches what GitHub charges.
+
+The invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED` and
+`SCAFFOLD_GH_GRAPHQL_SITES`) counts invocations and not points, so a change in
+what one call costs passes it. A new `field-list` in the fresh-setup path
+fails the test's `field-list == 3` check; one on the card-add path is not
+covered by any test yet.
 
 `SCAFFOLD_GH_GRAPHQL_BUDGET` changed unit from calls to points. An old exported
 value (for example `100`) is now about 5x too loose, so the preflight prints a
