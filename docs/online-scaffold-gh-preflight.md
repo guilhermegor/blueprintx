@@ -83,23 +83,26 @@ The budget is in points, the unit `rate_limit` reports, not requests. One
 `items(first:100)` and `fields(first:30)`, so a count of requests says little
 about what a scaffold spends.
 
-One full online scaffold spends 560 points, a literal in
-`test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget`, and
-`SCAFFOLD_GH_GRAPHQL_BUDGET` (1120) is twice that. Only a re-run of the command
+One full online scaffold spends 560 points, the `SCAFFOLD_GH_GRAPHQL_COST`
+default in `bin/lib/gh_preflight.sh`, and `SCAFFOLD_GH_GRAPHQL_BUDGET` (1120)
+defaults to twice that. Only a re-run of the command
 re-enters preflight, so a user retry is a new run and needs no allowance of its
 own. The scaffold libraries have no in-run retry loop; if one is added, each
 retried `field-list` costs about 102 points, and the 2x margin absorbs it along
 with the estimated rows below and a future `gh` version.
 
-The test asserts `budget >= 2 * 560`. Both sides are literals, so that checks
-only that the two numbers were edited together, not that the cost has not
-drifted. The drift guard is the invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED`
+The test asserts `budget >= 2 * cost`, with the cost read from
+`SCAFFOLD_GH_GRAPHQL_COST`, so the warning threshold, the default budget and the
+test share one number. That checks only that the budget follows the cost, not
+that the cost has not drifted. The drift guard is the invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED`
 and `SCAFFOLD_GH_GRAPHQL_SITES`), which counts invocations and not points: a
 change in what one call costs, or a new `field-list`, passes it.
 
 `SCAFFOLD_GH_GRAPHQL_BUDGET` changed unit from calls to points. An old exported
-value (for example `100`) is now about 5x too loose and nothing warns at
-runtime; unset it or re-set it in points.
+value (for example `100`) is now about 5x too loose, so the preflight prints a
+warning when the budget is below the cost; unset it or re-set it in points. It
+stays a warning, not a stop, because a deliberately low budget is a legitimate
+override.
 
 Online scaffolds are run by a person with their own `gh` login, never under an
 Actions `GITHUB_TOKEN` (1,000 points per hour, below the 1120 budget); CI only

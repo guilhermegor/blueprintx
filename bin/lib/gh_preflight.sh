@@ -1,6 +1,7 @@
 #!/bin/bash
 
-: "${SCAFFOLD_GH_GRAPHQL_BUDGET:=1120}"
+: "${SCAFFOLD_GH_GRAPHQL_COST:=560}"
+: "${SCAFFOLD_GH_GRAPHQL_BUDGET:=$((SCAFFOLD_GH_GRAPHQL_COST * 2))}"
 : "${SCAFFOLD_GH_GRAPHQL_SITES:=16}"
 : "${SCAFFOLD_GH_GRAPHQL_MEASURED:=17}"
 : "${SCAFFOLD_RERUN_CMD:=the same blueprintx command}"
@@ -134,7 +135,7 @@ gh_preflight() {
 	if [ "$int_left" -lt "$SCAFFOLD_GH_GRAPHQL_BUDGET" ]; then
 		GH_RESET_EPOCH="${str_rl##* }" gh_stop_online "preflight: GraphQL budget (${int_left} points left, ${SCAFFOLD_GH_GRAPHQL_BUDGET} points needed)" "rate limit"
 	fi
-	[ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge 560 ] ||
-		print_status "warning" "SCAFFOLD_GH_GRAPHQL_BUDGET=${SCAFFOLD_GH_GRAPHQL_BUDGET} is below the 560 points one scaffold costs; it is in points now, not calls"
+	[ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge "$SCAFFOLD_GH_GRAPHQL_COST" ] ||
+		print_status "warning" "SCAFFOLD_GH_GRAPHQL_BUDGET=${SCAFFOLD_GH_GRAPHQL_BUDGET} is below the ${SCAFFOLD_GH_GRAPHQL_COST} points one scaffold costs; it is in points now, not calls"
 	print_status "success" "gh preflight passed (${str_login}, ${int_left} GraphQL points left)"
 }
