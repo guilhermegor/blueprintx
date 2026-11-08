@@ -2,6 +2,9 @@
   --md-primary-fg-color: #0d2c54;
   --md-primary-fg-color--light: #2a4a75;
   --md-primary-fg-color--dark: #081c38;
+}
+
+[data-md-color-scheme="default"] {
   --md-accent-fg-color: #3f51b5;
 }
 

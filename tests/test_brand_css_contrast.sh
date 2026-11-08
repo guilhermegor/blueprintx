@@ -47,6 +47,7 @@ def block(str_selector, str_name):
 
 str_slate = block(r"\[data-md-color-scheme\s*=\s*[\"']?slate[\"']?\s*\]", "slate")
 str_root = block(r"(?<![\w-]):root", "root")
+str_light = ";\n".join(re.findall(r"\[data-md-color-scheme\s*=\s*[\"']?default[\"']?\s*\]\s*\{([^}]*)\}", str_css))
 if "--md-hue" in str_css or "--md-default-bg-color" in str_css:
     refuse("--md-hue or --md-default-bg-color overridden: background unresolved")
 
@@ -60,9 +61,12 @@ def var(str_block, str_name):
 
 
 int_bad = 0
-for str_scheme, str_block, str_page in (("slate", str_slate, str_bg), ("root", str_root, "#ffffff")):
+for str_scheme, str_block, str_accent, str_page in (
+    ("slate", str_slate, str_slate, str_bg),
+    ("light", str_root, str_light, "#ffffff"),
+):
     str_link = var(str_block, "--md-typeset-a-color") or var(str_block, "--md-primary-fg-color")
-    str_hover = var(str_block, "--md-accent-fg-color") or MATERIAL_DEFAULT_ACCENT
+    str_hover = var(str_accent, "--md-accent-fg-color") or MATERIAL_DEFAULT_ACCENT
     for str_label, str_color in (("link", str_link), ("hover", str_hover)):
         if str_color is None:
             refuse(f"{str_scheme} {str_label}: unresolved")
@@ -183,20 +187,22 @@ check "slate selector single-quoted" "$TMP/single.css" pass
 sed -E 's|(--md-accent-fg-color--transparent:[^;]*);|\1|' "$CSS" >"$TMP/no-semi.css"
 check "last declaration without trailing semicolon" "$TMP/no-semi.css" pass
 sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS" >"$TMP/no-root-accent.css"
-check "should-fail: :root without a hover colour (Material accent 4.25:1)" "$TMP/no-root-accent.css" contrast
+check "should-fail: light scheme without a hover colour (Material accent 4.25:1)" "$TMP/no-root-accent.css" contrast
 sed '0,/--md-accent-fg-color:[^;]*;/s//--md-accent-fg-color: #526cfe;/' "$CSS" >"$TMP/root-default.css"
-check "should-fail: :root hover is the Material default" "$TMP/root-default.css" contrast
+check "should-fail: light hover is the Material default" "$TMP/root-default.css" contrast
 sed -E 's|(--md-accent-fg-color:)[^;]*;|\1 #8c9eff;|' "$CSS" >"$TMP/root-pale.css"
-check "should-fail: :root hover too pale for white" "$TMP/root-pale.css" contrast
+check "should-fail: light hover too pale for white" "$TMP/root-pale.css" contrast
 
 { cat "$CSS"; printf '\n[data-md-color-scheme="slate"] {\n  --md-primary-fg-color: #0b2140;\n}\n'; } >"$TMP/split-slate-ok.css"
 check "split slate block keeps the earlier link colour (cascade)" "$TMP/split-slate-ok.css" pass
 { printf '[data-md-color-scheme="slate"] {\n  --md-typeset-a-color: #102030;\n}\n'; grep -v -- '--md-typeset-a-color: #8ab4f8' "$CSS"; } >"$TMP/split-slate-dark.css"
 check "should-fail: split slate block, earlier block holds a dark link colour" "$TMP/split-slate-dark.css" contrast
-{ printf ':root {\n  --md-accent-fg-color: #3f51b5;\n}\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/split-root.css"
-check "split :root block resolves across both blocks" "$TMP/split-root.css" pass
-{ printf ':root { --md-accent-fg-color: #3f51b5 }\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/split-root-nosemi.css"
-check "split :root block, earlier block without a final semicolon" "$TMP/split-root-nosemi.css" pass
+{ printf '[data-md-color-scheme="default"] {\n  --md-accent-fg-color: #3f51b5;\n}\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/split-light.css"
+check "split light block resolves across both blocks" "$TMP/split-light.css" pass
+{ printf '[data-md-color-scheme="default"] { --md-accent-fg-color: #3f51b5 }\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/split-light-nosemi.css"
+check "split light block, earlier block without a final semicolon" "$TMP/split-light-nosemi.css" pass
+{ printf ':root {\n  --md-accent-fg-color: #3f51b5;\n}\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/root-accent-only.css"
+check "should-fail: a :root hover colour loses to Material's body accent rule" "$TMP/root-accent-only.css" contrast
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
 echo "all cases passed"
