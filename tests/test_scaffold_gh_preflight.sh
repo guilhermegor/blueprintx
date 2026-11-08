@@ -147,6 +147,19 @@ test_preflight_stops_on_a_non_numeric_budget_or_cost() {
     run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=5x" gh_preflight
     expect_stop "non-numeric cost"
     expect_said "non-numeric cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    expect_not_said "non-numeric cost" "gh preflight passed"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=0560" gh_preflight
+    expect_stop "octal cost"
+    expect_said "octal cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=99999999999999999999" gh_preflight
+    expect_stop "overlong budget"
+    expect_said "overlong budget" "SCAFFOLD_GH_GRAPHQL_BUDGET must be a whole number"
+}
+
+test_preflight_warns_when_the_budget_is_below_one_scaffold() {
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=100" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "low override: preflight stopped: $str_out"
+    expect_said "low override" "it is in points now, not calls"
 }
 
 test_preflight_stops_on_a_blank_login() {
@@ -410,6 +423,7 @@ main() {
     test_preflight_stops_on_a_network_error
     test_preflight_stops_when_the_budget_is_too_low
     test_preflight_stops_on_a_non_numeric_budget_or_cost
+    test_preflight_warns_when_the_budget_is_below_one_scaffold
     test_preflight_stops_on_a_blank_login
     test_preflight_passes_on_a_healthy_gh
     test_preflight_stops_when_the_project_scope_is_missing
