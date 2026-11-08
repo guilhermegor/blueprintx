@@ -255,15 +255,36 @@ def test_main_short_english_headings_and_bullets_pass(tmp_path: Path, str_text: 
     assert _run(tmp_path) == 0
 
 
-def test_main_untranslated_page_is_skipped_and_counted(
-    tmp_path: Path, capsys: pytest.CaptureFixture
-) -> None:
-    """A page carrying the untranslated marker passes, and the summary says so."""
+@pytest.fixture
+def tuple_untranslated_run(tmp_path: Path, capsys: pytest.CaptureFixture) -> tuple:
+    """Run the gate over a pt-BR project with one marked English page.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Throwaway project root.
+    capsys : pytest.CaptureFixture
+        Output capture.
+
+    Returns
+    -------
+    tuple
+        The exit code and the captured stdout.
+    """
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_PT)
     _write(tmp_path / "docs" / "index.md", STR_PT)
     _write(tmp_path / "docs" / "usage.md", STR_EN + "\n<!-- docs-lang:untranslated -->\n")
-    assert _run(tmp_path) == 0
-    assert "1 skipped as docs-lang:untranslated" in capsys.readouterr().out
+    return _run(tmp_path), capsys.readouterr().out
+
+
+def test_main_untranslated_page_passes(tuple_untranslated_run: tuple) -> None:
+    """A page carrying the untranslated marker passes."""
+    assert tuple_untranslated_run[0] == 0
+
+
+def test_main_untranslated_page_is_counted(tuple_untranslated_run: tuple) -> None:
+    """The summary line counts the skipped page."""
+    assert "1 skipped as docs-lang:untranslated" in tuple_untranslated_run[1]
 
 
 def test_main_untranslated_marker_does_not_excuse_other_pages(tmp_path: Path) -> None:
