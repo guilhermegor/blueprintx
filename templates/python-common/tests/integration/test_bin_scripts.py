@@ -797,7 +797,26 @@ def _run_url_hook(path_root: Path) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         check=False,
+        env={**os.environ, "URL_CHECK_CACHE_DIR": str(path_root / ".url_check_cache")},
     )
+
+
+@pytest.mark.skipif(_STR_GIT is None, reason="git not available -- integration guard only")
+def test_check_urls_uses_the_seeded_cache_inside_a_git_work_tree(tmp_path: Path) -> None:
+    """The seeded cache must be read even when the scanned dir is a git work tree.
+
+    Without the ``URL_CHECK_CACHE_DIR`` isolation in ``_run_url_hook`` the hook would look in
+    the git common dir, miss the seed and fetch the URL live instead.
+    """
+    subprocess.run([str(_STR_GIT), "init", "-q", str(tmp_path)], check=True)  # noqa: S603
+    (tmp_path / "module_under_test.py").write_text(
+        DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
+    )
+    _seed_url_cache(tmp_path, _URL_404, "200")
+
+    cls_result = _run_url_hook(tmp_path)
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
 
 
 @pytest.mark.parametrize("str_shape", sorted(DICT_DOCSTRING_SHAPES))
@@ -2724,7 +2743,11 @@ def test_check_urls_scans_every_filename_passed_not_only_the_first(tmp_path: Pat
     cls_result = subprocess.run(  # noqa: S603
         [_STR_BASH, str(_bin_script("test_urls_docstrings.sh")), "first.py", "second.py"],
         cwd=tmp_path,
-        env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
+        env={
+            **os.environ,
+            "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}",
+            "URL_CHECK_CACHE_DIR": str(tmp_path / "isolated_cache"),
+        },
         capture_output=True,
         text=True,
         check=False,
