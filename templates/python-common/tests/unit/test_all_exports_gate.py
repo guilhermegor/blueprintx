@@ -787,13 +787,13 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         + "        setattr(self, 'Priv', 1)\n",
         "class A:\n    def f(self):\n        with open('x') as self:\n            pass\n"
         + "        setattr(self, 'Priv', 1)\n",
-        "class A:\n    def f(self):\n        del self\n"
+        "class A:\n    def f(self):\n        del self\n" + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        (self := 1)\n" + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self, v):\n"
+        + "        match v:\n            case {**self}:\n                pass\n"
         + "        setattr(self, 'Priv', 1)\n",
-        "class A:\n    def f(self):\n        (self := 1)\n"
-        + "        setattr(self, 'Priv', 1)\n",
-        "class A:\n    def f(self, v):\n        match v:\n            case {**self}:\n                pass\n"
-        + "        setattr(self, 'Priv', 1)\n",
-        "class A:\n    def f(self, v):\n        match v:\n            case [*self]:\n                pass\n"
+        "class A:\n    def f(self, v):\n"
+        + "        match v:\n            case [*self]:\n                pass\n"
         + "        setattr(self, 'Priv', 1)\n",
         "class A:\n    @evil.setter\n    def f(self, v):\n        setattr(self, 'Priv', v)\n",
         "class A:\n    def f(self, w):\n        (lambda setattr: setattr(self, 'Priv', 1))(w)\n",
@@ -868,13 +868,15 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         + "            pass\n",
         "class A:\n    def f(self, /):\n        setattr(self, 'Priv', 1)\n",
         "class A:\n    @property\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
-        "import abc\nclass A:\n    @abc.abstractmethod\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "import abc\nclass A:\n    @abc.abstractmethod\n"
+        + "    def f(self):\n        setattr(self, 'Priv', 1)\n",
         "class A:\n    @f.setter\n    def f(self, v):\n        setattr(self, 'Priv', v)\n",
         "class A:\n    @f.getter\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
         "class A:\n    @f.deleter\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
         "class A:\n    def vars(self):\n        setattr(self, 'Priv', 1)\n",
         "class A:\n    def f(self):\n        self.__class__ = A\n",
-        "import builtins\nclass A:\n    @builtins.classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
+        "import builtins\nclass A:\n    @builtins.classmethod\n"
+        + "    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
         "from typing import override\nclass A:\n    @override\n    def f(self):\n"
         + "        setattr(self, 'Priv', 1)\n",
         "import typing_extensions\nclass A:\n    @typing_extensions.override\n    def f(self):\n"
