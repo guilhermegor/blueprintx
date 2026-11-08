@@ -70,7 +70,7 @@ run_script() {
 	PATH="$str_bin:$PATH" STUB_LOG="$STUB_LOG" GITHUB_STEP_SUMMARY="$str_bin/summary" \
 		STUB_PROTECTED="${STUB_PROTECTED:-false}" STUB_TIP="${STUB_TIP:-abc}" STUB_DELETE="${STUB_DELETE:-ok}" \
 		STUB_PULLS_BASE="${STUB_PULLS_BASE:-0}" STUB_PULLS_HEAD="${STUB_PULLS_HEAD:-0}" STUB_NOISE="${STUB_NOISE:-}" \
-		BRANCH="${BRANCH:-fix/12-x}" BASE_REF="${BASE_REF:-main}" DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}" HEAD_SHA="abc" PR="7" GH_REPO="o/r" \
+		BRANCH="${BRANCH:-fix/12-x}" BASE_REF="${BASE_REF-main}" DEFAULT_BRANCH="${DEFAULT_BRANCH-main}" HEAD_SHA="abc" PR="7" GH_REPO="o/r" \
 		bash "$SCRIPT" >/dev/null 2>&1
 	int_status=$?
 	str_log=$(<"$STUB_LOG")
@@ -104,6 +104,14 @@ BRANCH="fix/12-x" BASE_REF="fix/12-x" run_script
 check "the PR's own base ref is never deleted" "$(deleted && echo 1 || echo 0)"
 in_summary "base branch"
 check "a base-ref skip says why in the summary" "$?"
+
+BRANCH="fix/12-x" DEFAULT_BRANCH="" run_script
+check "an empty default branch keeps the branch" "$(deleted && echo 1 || echo 0)"
+in_summary "unknown"
+check "an empty default branch says why in the summary" "$?"
+
+BRANCH="fix/12-x" BASE_REF="" run_script
+check "an empty base ref keeps the branch" "$(deleted && echo 1 || echo 0)"
 
 BRANCH="fix/12-x" DEFAULT_BRANCH="fix/12-x" run_script
 check "the default branch as head is never deleted" "$(deleted && echo 1 || echo 0)"
