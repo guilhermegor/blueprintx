@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: delete-closed-pr-branch-${{ github.event.pull_request.head.ref }}
+  group: delete-closed-pr-branch-${{ github.repository }}-${{ github.event.pull_request.head.repo.full_name }}-${{ github.event.pull_request.head.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -35,6 +35,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR: ${{ github.event.pull_request.number }}
         run: bash bin/delete_closed_pr_branch.sh
