@@ -126,7 +126,7 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
    template enables no `md-button`, `navigation.top` or `content.code.annotate`; if you add
    one, also set `--md-accent-bg-color`, since Material draws its hover text white on the
    accent colour (BlueprintX's template gate, `tests/test_brand_css_contrast.sh`, fails when
-   `mkdocs.yml` enables the first two, or any template page uses `md-button`; it is not
+   `mkdocs.yml` enables the last two, or any template page uses `md-button`; it is not
    shipped into generated projects, so re-check by hand after editing). The
    `[data-md-color-scheme="default"]` block sets `--md-accent-fg-color` to a dark blue,
    since Material's default hover (`#526cfe`) is only 4.25:1 on white. It cannot live in

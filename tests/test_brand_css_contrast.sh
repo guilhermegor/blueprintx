@@ -38,7 +38,12 @@ def refuse(str_why):
     sys.exit(INT_REFUSED)
 
 
-def block(str_selector, str_name, is_optional=False):
+for str_prelude in re.findall(r"([^{}]+)\{", str_css):
+    if "," in str_prelude and re.search(r":root|data-md-color-scheme", str_prelude):
+        refuse("grouped selector with :root or a colour scheme: unresolved")
+
+
+def block(str_selector,str_name, is_optional=False):
     list_blocks = re.findall(str_selector + r"\s*\{([^}]*)\}", str_css)
     if not list_blocks and not is_optional:
         refuse(f"no {str_name} block")
@@ -213,6 +218,10 @@ check "split light block, earlier block without a final semicolon" "$TMP/split-l
 check "should-fail: a :root hover colour loses to Material's body accent rule" "$TMP/root-accent-only.css" contrast
 { cat "$CSS"; printf '\n[data-md-color-scheme="default"] {\n  --md-typeset-a-color: #aaaaaa;\n}\n'; } >"$TMP/light-link.css"
 check "should-fail: low-contrast light link colour in the default block" "$TMP/light-link.css" contrast
+{ cat "$CSS"; printf '\n[data-md-color-scheme="default"], [data-md-color-scheme="slate"] {\n  --md-accent-fg-color: #8c9eff;\n}\n'; } >"$TMP/grouped.css"
+check "should-fail: grouped scheme selector is refused, not half-parsed" "$TMP/grouped.css" refuse
+{ cat "$CSS"; printf '\n:root, [data-md-color-scheme="default"] {\n  --md-accent-fg-color: #8c9eff;\n}\n'; } >"$TMP/grouped-root.css"
+check "should-fail: grouped :root selector is refused" "$TMP/grouped-root.css" refuse
 mkdir "$TMP/docs"
 printf '[x](y){ .md-button }\n' >"$TMP/docs/page.md"
 [ -n "$(md_button_users "$TMP/docs")" ] && echo "ok: md-button in a docs page is detected" || { echo "FAIL: md-button not detected"; int_failures=$((int_failures + 1)); }
