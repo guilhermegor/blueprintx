@@ -93,11 +93,12 @@ All commits must follow the [Conventional Commits](https://www.conventionalcommi
 
 ## Repository Secrets (Actions)
 
-This repo's own Actions secrets (`gh secret list`) are set by hand and reproducible from
-`.env.example`, not from memory — the pattern `dotfiles-dev` uses for its own credentials.
-`.env.example` (tracked) documents every secret's consumer and minimum scope; `.env`
-(git-ignored, `*.env` in `.gitignore`) holds the real values. **`.env` does NOT feed CI** —
-GitHub Actions cannot read it — it is only the source you `gh secret set` from.
+This repo's own Actions secrets (`gh secret list --repo guilhermegor/blueprintx`) are set by
+hand with `gh secret set <NAME> --repo guilhermegor/blueprintx`. The real values live only in
+GitHub Secrets; no local file holds them. The table below is the record of each secret's
+consumer and minimum scope. If you still have a root `.env` from the old flow, it holds real
+values: delete it with `shred -u .env 2>/dev/null || rm -f .env` (macOS has no `shred`), and
+rotate any value that file was ever copied, synced or backed up with.
 
 | Secret | Consumer(s) | Minimum scope |
 |---|---|---|
@@ -109,38 +110,29 @@ GitHub Actions cannot read it — it is only the source you `gh secret set` from
 
 **Re-provisioning a lost/rotated value:**
 1. Mint the new credential (fine-grained PAT at github.com/settings/personal-access-tokens,
-   API key at the vendor, or the GPG key exported to a private file outside the work tree,
-   never to the terminal: `f=$(mktemp) && gpg --export-secret-keys --armor <key-id> > "$f"`
-   (`mktemp` creates it mode 600 under `/tmp`, so a stray `git add -A` cannot stage it), paste
-   it into `.env`, then `shred -u "$f"`, or `rm "$f"` where `shred` is unavailable) with the
-   scope from the table above, never broader. The PAT's `Issues: write` stays off: a token
-   with it was measured (2026-09-10) to 403 on issues and 422 on PRs, and the workflows only
-   ever comment on PRs.
-2. `[ -e .env ] || install -m 600 .env.example .env; chmod 600 .env` (never overwrites a
-   `.env` that already holds real values, and tightens one with loose permissions), then
-   replace the `KEY-GOES-HERE` placeholder of the secret you are setting.
-3. Source it in a subshell, so the variables do not outlive the command, without `set -a`, so
-   they are never exported into `gh`'s environment (`printf` is a builtin, so the value still
-   reaches the pipe), and upload over stdin, so the value never lands in `ps`/`/proc` argv
-   (single-quote any value containing `$` so sourcing keeps it literal; a literal `'` inside
-   is written `'\''`). The command refuses to upload when `.env` fails to source, when
-   `<NAME>` is unset or empty, or when it still equals the placeholder, so a typo can never
-   overwrite a working secret with an empty or placeholder value:
-   `( . ./.env || exit 1; v=${<NAME>:?unset or empty in .env}; [ "$v" != KEY-GOES-HERE ] || { echo "<NAME> is still the placeholder" >&2; exit 1; }; printf '%s' "$v" | gh secret set <NAME> --repo guilhermegor/blueprintx )`.
+   API key at the vendor, or the GPG key) with the scope from the table above, never broader.
+   The PAT's `Issues: write` stays off: a token with it was measured (2026-09-10) to 403 on
+   issues and 422 on PRs, and the workflows only ever comment on PRs.
+2. Set it with `gh secret set <NAME> --repo guilhermegor/blueprintx`. With no `--body`, `gh`
+   prompts for the value, so it never lands in shell history or `ps`/`/proc` argv. A
+   multi-line value must go through stdin, never the prompt: the prompt reads one line, so a
+   pasted armored key is cut to its first line and uploaded without error, and the remaining
+   lines stay in the terminal, run as shell commands and land in your shell history.
+   For `APT_GPG_PRIVATE_KEY`, pipe the armored block from a private file outside the work tree
+   (`mktemp -p /tmp` creates it mode 600 under `/tmp` whatever `TMPDIR` says, so a stray
+   `git add -A` cannot stage it). The chain refuses to upload an
+   empty export (a wrong key id) and removes the file even when `gh` fails. The subshell makes
+   the `EXIT` trap fire when the chain ends, not when your terminal closes; `shred` is
+   best-effort on tmpfs or journaling filesystems:
+   `( f=$(mktemp -p /tmp) && trap 'shred -u "$f" 2>/dev/null || rm -f "$f"' EXIT && gpg --export-secret-keys --armor <key-id> > "$f" && { [ -s "$f" ] || { echo "export empty, nothing uploaded" >&2; exit 1; }; } && gh secret set APT_GPG_PRIVATE_KEY --repo guilhermegor/blueprintx < "$f" )`.
    Skip `APT_GPG_PASSPHRASE` when the key has none (the workflow treats it as optional); when
    rotating from a key that had one to a key that has none, also run
    `gh secret delete APT_GPG_PASSPHRASE --repo guilhermegor/blueprintx`, so the old value is
    not left behind.
    Replacing `APT_GPG_PRIVATE_KEY` with a different key changes the public key APT users
    trust, so they must re-import it or `apt update` fails the signature check.
-4. Verify: `gh secret list --repo guilhermegor/blueprintx` shows an updated timestamp for
+3. Verify: `gh secret list --repo guilhermegor/blueprintx` shows an updated timestamp for
    `<NAME>`, and the workflow that consumes it succeeds on its next run.
-
-`.env.example` keeps placeholders only, never real values. Leave `APT_GPG_PASSPHRASE` empty
-when the key has no passphrase, and never leave placeholder text there. Wrap a real value in
-single quotes so `$` and backticks survive sourcing. `APT_GPG_PRIVATE_KEY` is a multi-line
-armored block: keep the single quotes and paste the whole block, header and footer included;
-it needs a bash-style `source`, not a strict dotenv parser.
 
 ## Template workflow file names (#947)
 
