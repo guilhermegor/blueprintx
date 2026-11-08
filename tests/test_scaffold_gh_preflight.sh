@@ -151,9 +151,11 @@ test_preflight_stops_on_a_non_numeric_budget_or_cost() {
     run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=0560" gh_preflight
     expect_stop "octal cost"
     expect_said "octal cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
-    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=500000000" gh_preflight
-    expect_stop "cost whose doubled budget overflows the digit cap"
-    expect_said "huge cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=60000000" gh_preflight
+    expect_stop "eight-digit cost"
+    expect_said "eight-digit cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=9999999" gh_preflight
+    expect_not_said "largest cost" "must be a whole number"
     run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=99999999999999999999" gh_preflight
     expect_stop "overlong budget"
     expect_said "overlong budget" "SCAFFOLD_GH_GRAPHQL_BUDGET must be a whole number"
