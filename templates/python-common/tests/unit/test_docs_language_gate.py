@@ -316,6 +316,7 @@ def test_main_front_matter_comments_and_shallow_fences_are_not_prose(
     [
         STR_EN + "\n    ```\n\n" + STR_PT,
         STR_PT + "Mention `docs-lang:ok` here.\n",
+        STR_EN + "\nUse `<!--` to open one.\n\n" + STR_PT + "\n<!-- end -->\n",
     ],
 )
 def test_main_deep_indent_fence_and_quoted_escape_do_not_hide_prose(

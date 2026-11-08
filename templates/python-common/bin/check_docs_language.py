@@ -210,6 +210,8 @@ def _mask_lines(str_text: str) -> list:
 def _blank_multiline(list_lines: list) -> list:
     """Blank YAML front matter and HTML comments that span lines, keeping line numbers.
 
+    Inline code spans are blanked first, so a quoted ``<!--`` cannot open a comment.
+
     Parameters
     ----------
     list_lines : list of str
@@ -224,7 +226,7 @@ def _blank_multiline(list_lines: list) -> list:
         lambda re_hit: re.sub(r"[^\n]", "", re_hit.group())
         if "\n" in re_hit.group()
         else re_hit.group(),
-        "\n".join(list_lines),
+        RE_CODE_SPAN.sub(" ", "\n".join(list_lines)),
     )
     return str_blanked.split("\n")
 
@@ -252,7 +254,6 @@ def prose_paragraphs(str_text: str) -> list:
             list_block.append(str_line)
             continue
         str_para = "\n".join(list_block)
-        str_para = RE_CODE_SPAN.sub(" ", str_para)
         if list_block and STR_ESCAPE not in str_para:
             for re_span in TUPLE_BLANKINGS:
                 str_para = re_span.sub(" ", str_para)
