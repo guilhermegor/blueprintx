@@ -42,7 +42,7 @@ def block(str_selector, str_name):
     list_blocks = re.findall(str_selector + r"\s*\{([^}]*)\}", str_css)
     if not list_blocks:
         refuse(f"no {str_name} block")
-    return list_blocks[-1]
+    return "\n".join(list_blocks)
 
 
 str_slate = block(r"\[data-md-color-scheme\s*=\s*[\"']?slate[\"']?\s*\]", "slate")
@@ -188,6 +188,13 @@ sed '0,/--md-accent-fg-color:[^;]*;/s//--md-accent-fg-color: #526cfe;/' "$CSS" >
 check "should-fail: :root hover is the Material default" "$TMP/root-default.css" contrast
 sed -E 's|(--md-accent-fg-color:)[^;]*;|\1 #8c9eff;|' "$CSS" >"$TMP/root-pale.css"
 check "should-fail: :root hover too pale for white" "$TMP/root-pale.css" contrast
+
+{ cat "$CSS"; printf '\n[data-md-color-scheme="slate"] {\n  --md-primary-fg-color: #0b2140;\n}\n'; } >"$TMP/split-slate-ok.css"
+check "split slate block keeps the earlier link colour (cascade)" "$TMP/split-slate-ok.css" pass
+{ printf '[data-md-color-scheme="slate"] {\n  --md-typeset-a-color: #102030;\n}\n'; grep -v -- '--md-typeset-a-color: #8ab4f8' "$CSS"; } >"$TMP/split-slate-dark.css"
+check "should-fail: split slate block, earlier block holds a dark link colour" "$TMP/split-slate-dark.css" contrast
+{ printf ':root {\n  --md-accent-fg-color: #3f51b5;\n}\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/split-root.css"
+check "split :root block resolves across both blocks" "$TMP/split-root.css" pass
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
 echo "all cases passed"
