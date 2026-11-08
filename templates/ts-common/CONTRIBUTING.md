@@ -54,8 +54,7 @@ report the seed and the failing test instead of retrying.
 red test goes green without the behaviour being fixed. `src/**/assertion-weakening.cjs` compares
 every changed `*.test.*` / `*.spec.*` file against the merge-base and fails when a `toBe`,
 `toEqual` or `toStrictEqual` in a test became `toBeGreaterThan`, `toBeLessThan`,
-`toBeGreaterThanOrEqual` or `toBeLessThanOrEqual`. It checks `*.test.{ts,tsx,js,jsx}` and
-`*.spec.*` files only (not `.mts`/`.cjs` variants or `__tests__/` files). It judges a change from
+`toBeGreaterThanOrEqual` or `toBeLessThanOrEqual`. It checks `*.{test,spec}.{ts,tsx,js,jsx}` files only (not `.mts`/`.cjs` variants or `__tests__/` files). It judges a change from
 equality, so assertions that were always inequalities (thresholds, budgets) are untouched, and
 strengthening an inequality to equality passes. It runs in `.husky/pre-commit` and in the lint
 workflow, which checks out full history.

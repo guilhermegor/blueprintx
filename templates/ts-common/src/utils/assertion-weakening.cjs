@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
 const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.each\((?:[^()]|\([^()]*\))*\)|\.\w+)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
 const RE_MATCHER = /\.(not\.)?(to[A-Z]\w*)\(/g;
+const RE_PLACEHOLDER = /^<[^>]*>$/;
 const RE_JUSTIFICATION = /^\s*test-change-ok:[ \t]*(\S.*)$/im;
 
 const EQUALITY_MATCHERS = new Set(['toBe', 'toEqual', 'toStrictEqual']);
@@ -79,15 +80,24 @@ function defaultBranch() {
   return candidates.find((ref) => git(['rev-parse', '--verify', '--quiet', ref]).trim()) ?? '';
 }
 
+function prBody(eventPath) {
+  if (!eventPath) return '';
+  try {
+    return JSON.parse(fs.readFileSync(eventPath, 'utf8')).pull_request?.body ?? '';
+  } catch {
+    return '';
+  }
+}
+
 function justification(base) {
   const isCi = Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
   const fromEnv = isCi ? '' : (process.env.TEST_CHANGE_OK ?? '').trim();
   if (fromEnv) return fromEnv;
   const eventPath = process.env.GITHUB_EVENT_PATH;
-  const prBody = eventPath ? (JSON.parse(fs.readFileSync(eventPath, 'utf8')).pull_request?.body ?? '') : '';
   const trailers = git(['log', `${base}..HEAD`, '--format=%B']);
-  const match = RE_JUSTIFICATION.exec(prBody) ?? RE_JUSTIFICATION.exec(trailers);
-  return match ? match[1].trim() : '';
+  const match = RE_JUSTIFICATION.exec(prBody(eventPath)) ?? RE_JUSTIFICATION.exec(trailers);
+  const reason = match ? match[1].trim() : '';
+  return RE_PLACEHOLDER.test(reason) ? '' : reason;
 }
 
 function changedPaths(output) {
@@ -104,7 +114,7 @@ function changedPaths(output) {
 function collect(base) {
   const output = gitStrict(['diff', '--cached', '-z', '--name-status', '--find-renames', base]);
   const rows = changedPaths(output).filter(
-    (row) => row.status !== 'A' && row.status !== 'D' && RE_TEST_PATH.test(row.paths[row.paths.length - 1]),
+    (row) => !['A', 'D', 'U'].includes(row.status) && RE_TEST_PATH.test(row.paths[row.paths.length - 1]),
   );
   return rows.flatMap((row) => {
     const newPath = row.paths[row.paths.length - 1];
@@ -141,6 +151,6 @@ function main() {
   return 1;
 }
 
-module.exports = { fileFindings, collect };
+module.exports = { fileFindings, collect, justification };
 
 if (require.main === module) process.exit(main());

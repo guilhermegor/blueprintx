@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { collect, fileFindings } from './assertion-weakening.cjs';
+import { collect, fileFindings, justification } from './assertion-weakening.cjs';
 
 const spec = (matcher: string): string =>
   `it('computes', () => {\n  expect(compute()).${matcher}(5);\n});\n`;
@@ -59,6 +59,29 @@ describe('assertion weakening gate matching', () => {
 });
 
 describe('assertion weakening gate justification', () => {
+  const withEvent = (event: string, check: () => void): void => {
+    const saved = process.env.GITHUB_EVENT_PATH;
+    process.env.GITHUB_EVENT_PATH = event;
+    try {
+      check();
+    } finally {
+      process.env.GITHUB_EVENT_PATH = saved ?? '';
+    }
+  };
+
+  it('rejects an unfilled <reason> placeholder', () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'aw-')), 'event.json');
+    fs.writeFileSync(file, JSON.stringify({ pull_request: { body: 'test-change-ok: <reason>' } }));
+    withEvent(file, () => expect(justification('HEAD')).toBe(''));
+  });
+
+  it('survives an unreadable event file', () => {
+    withEvent('/nonexistent/event.json', () => expect(justification('HEAD')).toBe(''));
+  });
+
+});
+
+describe('assertion weakening gate justification in a branch', () => {
   it('does not take a justification reason from the next line', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-'));
     const run = (...args: string[]): Buffer =>
