@@ -29,7 +29,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! grep -qE 'URL (issue|problem)|Failed to access URL' docstring_urls_report.txt; then
-            echo "No dead docstring URLs."
+            if grep -qF 'All docstring URLs are reachable' docstring_urls_report.txt; then
+              echo "No dead docstring URLs."
+            else
+              echo "::warning::Docstring URL scan produced no verdict; see log."
+              cat docstring_urls_report.txt
+            fi
             exit 0
           fi
           gh label create docstring-urls --color fbca04 \

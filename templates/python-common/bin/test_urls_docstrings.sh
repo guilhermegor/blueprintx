@@ -10,7 +10,9 @@ CACHE_FAIL_TTL=$((60 * 60 * 6))
 
 resolve_cache_dir() {
 	local str_common_dir
-	if str_common_dir=$(git rev-parse --git-common-dir 2>/dev/null); then
+	if [[ -n "${URL_CHECK_CACHE_DIR:-}" ]]; then
+		echo "$URL_CHECK_CACHE_DIR"
+	elif str_common_dir=$(git rev-parse --git-common-dir 2>/dev/null); then
 		echo "${str_common_dir}/url_check_cache"
 	else
 		echo ".url_check_cache"
@@ -233,7 +235,10 @@ process_python_files() {
 }
 
 main() {
-	mkdir -p "$CACHE_DIR"
+	if ! mkdir -p "$CACHE_DIR" 2>/dev/null; then
+		CACHE_DIR="$(mktemp -d)"
+		print_status "warning" "Cache dir not writable; using ${CACHE_DIR}"
+	fi
 	process_python_files "$@" || exit 1
 }
 
