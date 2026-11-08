@@ -453,6 +453,7 @@ repos:
         name: check urls in docstrings
         entry: bash bin/test_urls_docstrings.sh
         language: system
+        require_serial: true
         types:
           - python
         verbose: true

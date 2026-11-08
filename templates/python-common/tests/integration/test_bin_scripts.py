@@ -2803,11 +2803,12 @@ def test_check_urls_cache_defaults_to_the_git_common_dir(tmp_path: Path) -> None
     assert list((tmp_path / ".git" / "url_check_cache").iterdir())
 
 
-def test_check_urls_does_not_cache_a_transport_failure(tmp_path: Path) -> None:
-    """A curl status of 000 (no HTTP answer) must never enter the shared cache."""
+@pytest.mark.parametrize("str_status", ["000", "429", "503"])
+def test_check_urls_does_not_cache_a_transient_failure(tmp_path: Path, str_status: str) -> None:
+    """No HTTP answer, a rate limit or a 5xx must never enter the shared cache."""
     path_bin = tmp_path / "stubs"
     path_bin.mkdir()
-    (path_bin / "curl").write_text("#!/bin/bash\nprintf 000\n", encoding="utf-8")
+    (path_bin / "curl").write_text(f"#!/bin/bash\nprintf {str_status}\n", encoding="utf-8")
     (path_bin / "curl").chmod(0o755)
     (tmp_path / "mod.py").write_text(f'"""See {_URL_404}."""\n', encoding="utf-8")
     path_cache = tmp_path / "cache"

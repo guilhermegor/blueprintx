@@ -46,7 +46,8 @@ set_cache() {
 	local str_status="$2"
 	local str_cache_file
 	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
-	echo "$str_status" >"$str_cache_file"
+	echo "$str_status" >"${str_cache_file}.$$"
+	mv -f "${str_cache_file}.$$" "$str_cache_file"
 }
 
 clean_cache() {
@@ -129,7 +130,7 @@ check_url() {
 	fi
 
 	str_status_code=$(probe_url_status "$str_url")
-	[[ "$str_status_code" =~ ^[1-5][0-9][0-9]$ ]] && set_cache "$str_url" "$str_status_code"
+	[[ "$str_status_code" =~ ^[1-4][0-9][0-9]$ && "$str_status_code" != 429 ]] && set_cache "$str_url" "$str_status_code"
 	echo "$str_status_code"
 }
 
@@ -240,6 +241,7 @@ process_python_files() {
 main() {
 	if ! mkdir -p "$CACHE_DIR" 2>/dev/null || [[ ! -w "$CACHE_DIR" ]]; then
 		CACHE_DIR="$(mktemp -d)"
+		trap 'rm -rf "$CACHE_DIR"' EXIT
 		print_status "warning" "Cache dir not writable; using ${CACHE_DIR}"
 	fi
 	process_python_files "$@" || exit 1
