@@ -83,8 +83,9 @@ The budget is in points, the unit `rate_limit` reports, not requests. One
 `items(first:100)` and `fields(first:30)`, so a count of requests says little
 about what a scaffold spends.
 
-One full online scaffold spends 560 points, the `SCAFFOLD_GH_GRAPHQL_COST`
-default in `bin/lib/gh_preflight.sh`, and `SCAFFOLD_GH_GRAPHQL_BUDGET` (1120)
+One full online scaffold spends about 560 points (the table sums to 563, the
+3 points of the card-add board lookup sit inside the 2x margin), the
+`SCAFFOLD_GH_GRAPHQL_COST` default in `bin/lib/gh_preflight.sh`, and `SCAFFOLD_GH_GRAPHQL_BUDGET` (1120)
 defaults to twice that. Only a re-run of the command
 re-enters preflight, so a user retry is a new run and needs no allowance of its
 own. The scaffold libraries have no in-run retry loop; if one is added, each
@@ -100,9 +101,11 @@ The invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED` and
 `SCAFFOLD_GH_GRAPHQL_SITES`) counts invocations and not points, so a change in
 what one call costs passes it. A new `field-list` in the fresh-setup path
 fails the test's `field-list == 3` check; one on the card-add path fails its
-`field-list == 2` check. That test also sums the three `card add:` rows below
-(210 points) and compares them with 102 points per `field-list` and 2 per other
-call, so editing either the table or the call count alone fails it. The
+`field-list == 2` check. That test also sums the four `card add:` rows below
+(213 points) and compares them with 102 points per `field-list`, 3 per
+`project list` and 2 per other call, so editing either the table or the call
+count alone fails it. Those prices are pinned in the test as well as here, so
+re-pricing means changing both. The
 `first:100` inside `gh` is not visible to a stub, so a price change is caught
 only through those table rows.
 
@@ -145,11 +148,12 @@ priced at the API's minimum of 1 point, not read individually.
 | `gh project field-create` x7 | 21 | 21 |
 | workflows read | 1 | 1 |
 | Fresh setup subtotal | 44 | 345 |
+| card add: `project list` (board lookup) | 2 | 3 |
 | card add: `project view` | 2 | 2 |
 | card add: `field-list` x2 | 4 | 204 |
 | card add: `item-add` and `item-edit` | 4 (estimated) | 4 (estimated) |
 | `gh issue create` | 5 (estimated) | 5 (estimated) |
-| Total | 59 (9 estimated) | 560 |
+| Total | 61 (9 estimated) | 563 |
 
 The fake-server run did not cover the card-add path or `gh issue create`, so
 those request counts come from the per-command shape above and are marked
