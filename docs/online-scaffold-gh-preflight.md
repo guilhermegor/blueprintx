@@ -83,10 +83,10 @@ The budget is in points, the unit `rate_limit` reports, not requests. One
 `items(first:100)` and `fields(first:30)`, so a count of requests says little
 about what a scaffold spends.
 
-One full online scaffold spends about 560 points (the table sums to 563, the
-3 points of the card-add board lookup sit inside the 2x margin), the
-`SCAFFOLD_GH_GRAPHQL_COST` default in `bin/lib/gh_preflight.sh`, and `SCAFFOLD_GH_GRAPHQL_BUDGET` (1120)
-defaults to twice that. Only a re-run of the command
+One full online scaffold spends about 560 points. That is the
+`SCAFFOLD_GH_GRAPHQL_COST` default in `bin/lib/gh_preflight.sh`; the table
+below sums to 563 and the test fails if the two differ by more than 5. The
+`SCAFFOLD_GH_GRAPHQL_BUDGET` default (1120) is twice the 560 default. Only a re-run of the command
 re-enters preflight, so a user retry is a new run and needs no allowance of its
 own. The scaffold libraries have no in-run retry loop; if one is added, each
 retried `field-list` costs about 102 points, and the 2x margin absorbs it along
