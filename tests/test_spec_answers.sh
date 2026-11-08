@@ -211,6 +211,37 @@ test_docs_locale_reaches_the_scaffold() {
     fi
 }
 
+spec_scaffold_root() {
+    local out
+    out="$(run_blueprintx new --spec "$(write_spec "$1" lib-minimal "${@:2}")" --dev)"
+    sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1
+}
+
+test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate() {
+    local str_temp int_pages int_marked str_gate int_rc=0
+    str_temp="$(spec_scaffold_root docs-pt-e2e "docs_locale=pt-BR")"
+    int_pages="$(find "$str_temp/spec-probe/docs" -name '*.md' | wc -l)"
+    int_marked="$(grep -rlx '<!-- docs-lang:untranslated -->' "$str_temp/spec-probe/docs" | wc -l)"
+    str_gate="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" 2>&1)" || int_rc=$?
+    if [ "$int_pages" -gt 0 ] && [ "$int_pages" = "$int_marked" ] && [ "$int_rc" -eq 0 ]; then
+        pass "pt-BR scaffold marks all $int_pages pages and its own gate passes"
+    else
+        fail "pt-BR e2e" "pages=$int_pages marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
+    fi
+}
+
+test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate() {
+    local str_temp int_marked str_gate int_rc=0
+    str_temp="$(spec_scaffold_root docs-en-e2e "docs_locale=en")"
+    int_marked="$(grep -rl 'docs-lang:untranslated' "$str_temp/spec-probe/docs" | wc -l)"
+    str_gate="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" 2>&1)" || int_rc=$?
+    if [ "$int_marked" -eq 0 ] && [ "$int_rc" -eq 0 ]; then
+        pass "en scaffold leaves pages unmarked and its own gate passes"
+    else
+        fail "en e2e" "marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
+    fi
+}
+
 test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton() {
     local file root out int_rc
     root="$WORK_DIR/no-locale-root"
@@ -878,6 +909,8 @@ main() {
     test_a_failed_answer_stream_stops_the_scaffold_flow
     test_bad_docs_locale_stops_before_anything_is_created
     test_docs_locale_reaches_the_scaffold
+    test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate
+    test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate
     test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton
     test_absent_docs_locale_is_refused_on_every_python_tier
     test_absent_docs_locale_is_accepted_on_a_skeleton_without_mkdocs
