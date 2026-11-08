@@ -61,3 +61,30 @@ Then:
 - Keep PRs focused: one logical change per PR.
 - All CI checks must pass before merging.
 - Direct commits to `main` are not allowed.
+
+### PRs closed without merging
+
+`delete_branch_on_merge` never fires for a PR **closed unmerged**, so its branch would pile up on
+`origin`. `delete-closed-pr-branch.yml` deletes the head branch of a same-repository PR closed
+without merge, and only when every guard holds; a skipped branch is named with its reason in the
+job summary:
+
+- the PR is from this repository, never a fork;
+- the branch is short-lived, matching `<type>/<N>-<slug>`, so `develop`, `release/*`,
+  `dependabot/*` and `renovate/*` are never touched;
+- it is not the default branch and not the PR's own base branch;
+- no other open PR uses it as its base or its head (a stacked PR or a second PR from the same head
+  would be closed by the deletion); an unreadable answer counts as "in use";
+- GitHub reports it as not protected, and an unreadable protection state counts as protected;
+- its name uses only letters, digits and `._/-`, and its tip is still the PR head when read just
+  before the delete.
+
+The checks and the delete are separate API calls and the refs API has no compare-and-delete, so a
+push in that gap is covered only by the restore path.
+
+Nothing is lost: the job summary names the deleted ref and its sha, and the PR page offers
+**Restore branch** (or, from a clone that holds the commit,
+`git push origin <sha>:refs/heads/<branch>`). A PR whose branch was deleted can only be reopened
+after **Restore branch**. A ruleset refusal is reported as "kept" (green); any other unexpected API
+error fails the job. GitHub does not run `pull_request` workflows while a PR has a merge conflict,
+so a conflicted PR closed unmerged keeps its branch; delete it by hand.
