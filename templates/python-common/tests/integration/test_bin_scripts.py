@@ -925,6 +925,7 @@ def test_check_urls_warns_and_scans_when_the_cache_dir_is_uncreatable(
     assert "Cache dir not writable" in cls_result.stdout + cls_result.stderr
     assert cls_result.returncode == 0
 
+
 def test_check_urls_ignores_a_url_outside_any_docstring(tmp_path: Path) -> None:
     """A URL in ordinary code or a ``#`` comment is out of scope and must not fail the gate.
 
