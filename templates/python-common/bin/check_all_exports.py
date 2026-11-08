@@ -510,7 +510,8 @@ def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set
     """Return the ids of ``setattr``/``vars`` names that act on this method's own ``self``/``cls``.
 
     A ``staticmethod`` has no bound first parameter, a rebound ``self`` is no longer the
-    instance, and a nested def or lambda has a parameter of its own, so none of those exempt.
+    instance, and a nested def or lambda that takes the name as its own parameter shadows it,
+    so none of those exempt. A closure that merely reads the method's ``self`` still does.
 
     Parameters
     ----------
@@ -523,11 +524,17 @@ def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set
         ``id()`` of each exempt ``Name`` node; empty when the method gets no exemption.
     """
     str_param = [*cls_fn.args.posonlyargs, *cls_fn.args.args][0].arg
-    if str_param not in {"self", "cls"} or _is_static(cls_fn) or _rebinds(cls_fn, str_param):
+    if (
+        str_param not in {"self", "cls"}
+        or _is_static(cls_fn)
+        or _rebinds(cls_fn, str_param)
+        or _shadowed_by_nested(cls_fn, str_param)
+    ):
         return set()
     return {
         id(cls_call.func)
-        for cls_call in _scope_nodes(cls_fn.body)
+        for cls_stmt in cls_fn.body
+        for cls_call in ast.walk(cls_stmt)
         if isinstance(cls_call, ast.Call)
         and isinstance(cls_call.func, ast.Name)
         and cls_call.func.id in {"setattr", "vars"}
@@ -535,6 +542,28 @@ def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set
         and isinstance(cls_call.args[0], ast.Name)
         and cls_call.args[0].id == str_param
     }
+
+
+def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> bool:
+    """Return whether a def or lambda nested in the method takes the name as a parameter.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        The method.
+    str_param : str
+        Its first parameter name.
+
+    Returns
+    -------
+    bool
+        ``True`` when any nested scope declares a parameter of that name.
+    """
+    return any(
+        isinstance(cls_sub, ast.arg) and cls_sub.arg == str_param
+        for cls_stmt in cls_fn.body
+        for cls_sub in ast.walk(cls_stmt)
+    )
 
 
 def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:

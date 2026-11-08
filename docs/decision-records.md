@@ -172,12 +172,12 @@ test suite keep the contract; this section records the reasoning that lived besi
     *Dynamic bindings* (#1011, #1024): a name is assumed provided when the file names a writer
     (`globals`, `locals`, `vars`, `setattr`, `exec`, `eval`, `__import__`, `modules`, `f_globals`,
     `_getframe`, `currentframe`), as a bare name, an attribute (`builtins.exec`) or an import alias
-    (`from builtins import exec as run`), anywhere in the tree. The one exemption is
+    from `builtins`, `sys` or `inspect` (`from builtins import exec as run`), anywhere in the tree. The one exemption is
     `setattr(self|cls, ...)` / `vars(self|cls)` on the first parameter of a method that is not a
-    `staticmethod` and never rebinds that name (assignment, `del`, `import ... as`, `match`
-    capture, `except ... as`, `type`, or a nested `def`/`class` of that name). The call may sit in
-    the method body or in a nested def's decorator or default, which run in the method's scope,
-    but not inside a nested def or lambda body. An `__all__` that is not one literal list of
+    `staticmethod`, has no nested def or lambda taking that name as a parameter, and never rebinds
+    it (assignment, `del`, `import ... as`, `match`
+    capture, `except ... as`, `type`, or a nested `def`/`class` of that name). The call may sit
+    anywhere in the method, closures over `self` included. An `__all__` that is not one literal list of
     strings (second assignment, `+=`, `.append`, `.extend`, subscript write, `[*x]`, `del __all__`)
     is assumed to provide the name. A loop, `with`, unpacking, walrus (in a default, decorator or
     class base or annotation too), `match` capture, `except ... as` or a function's `global` counts as
@@ -188,8 +188,10 @@ test suite keep the contract; this section records the reasoning that lived besi
     a class built by `create_model(...)`, a `pydantic.dataclasses` decorator, an import through
     `importlib` / `__getattr__`, a method called through its class with another object
     (`A.f(me)`), a `staticmethod` spelled other than as a plain decorator (`f = staticmethod(f)`,
-    `sm = staticmethod`, `@wrapper(staticmethod)`), a writer reached through a string constant (`getattr(builtins, "exec")(...)`,
-    `getattr(sys, "modules")`, `__builtins__["exec"]`), and an absolute import of another top-level
+    `sm = staticmethod`, `@wrapper(staticmethod)`), a writer re-exported by a first-party module
+    (`from ._compat import exec_ as run`), a plain attribute store on a module alias (`me.Priv = 1`, `me.__dict__["Priv"] = 1`), a writer reached through a
+    string constant (`getattr(builtins, "exec")(...)`, `getattr(sys, "modules")`,
+    `__builtins__["exec"]`), and an absolute import of another top-level
     package.
 - **`check_assertion_weakening.py`** (#289, #324, #590). Comparison operators weaker than `==`
   include the `in` example and `>=`; `Gt` and `Lt` are excluded because swapping equality for a

@@ -739,6 +739,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
     [
         "from builtins import exec as run\nrun('Priv = 1')\n",
         "from builtins import globals as gl\ngl()['Priv'] = 1\n",
+        "from sys import _getframe as g\ng(0).f_globals['Priv'] = 1\n",
+        "from inspect import currentframe as c\nc().f_globals['Priv'] = 1\n",
         "from sys import modules as m\nm[__name__].Priv = 1\n",
         _STR_SELF_MODULE
         + "class A:\n    def f(self):\n        self = me\n        setattr(self, 'Priv', 1)\n"
@@ -774,6 +776,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
     ids=[
         "alias-exec",
         "alias-globals",
+        "alias-getframe",
+        "alias-currentframe",
         "alias-sys-modules",
         "self-reassigned",
         "nested-def-self",
@@ -811,6 +815,9 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "class A:\n    @classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
         "from builtins import print as p\np('Priv')\n",
         "from mypkg import modules\n",
+        "class A:\n    def f(self, ks):\n        list(map(lambda k: setattr(self, k, 1), ks))\n",
+        "class A:\n    def f(self):\n        def helper():\n            setattr(self, 'Priv', 1)\n"
+        + "        helper()\n",
         "from .sys import modules\n",
         "class A:\n    def f(self):\n        def g(x=setattr(self, 'Priv', 1)):\n"
         + "            pass\n",
@@ -822,6 +829,8 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "classmethod-cls",
         "unrelated-builtins-alias",
         "writer-name-from-first-party-module",
+        "lambda-closure-over-self",
+        "def-closure-over-self",
         "writer-name-from-relative-sys-module",
         "own-self-in-nested-default",
         "own-self-in-nested-decorator",
@@ -864,7 +873,7 @@ def test_type_alias_rebinding_self_is_charged(tmp_path: Path) -> None:
 def test_walrus_in_an_annotation_is_charged_where_it_is_legal(
     tmp_path: Path, str_config: str
 ) -> None:
-    """Before 3.14 an annotation runs in the enclosing scope, so its walrus binds the name."""
+    """On 3.11 and earlier an annotation runs in the enclosing scope and binds the name."""
     path_init = _tree(
         tmp_path,
         'from ._internal.config import *\n__all__ = ["Priv"]\n',
