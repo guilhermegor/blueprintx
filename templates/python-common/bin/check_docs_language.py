@@ -14,9 +14,10 @@ How it decides:
    not a directory fails rather than leaving the README alone to pass. A project with no
    ``mkdocs.yml``, or whose page set is empty, fails: a gate that checked nothing must not
    print success.
-2. **Prose only.** Fenced code (fences indented 0-3 spaces, as CommonMark has it), YAML front
-   matter, multi-line HTML comments, inline code, links, bare URLs, HTML tags and table rows are
-   blanked before counting, so quoting a command or naming a Portuguese product proves nothing.
+2. **Prose only.** Fenced code (fences at any indent, since MkDocs admonitions and tabs nest
+   them), YAML front matter, multi-line HTML comments, inline code, links, bare URLs, HTML
+   tags and table rows are blanked before counting, so quoting a command or naming a
+   Portuguese product proves nothing.
 3. **One verdict per paragraph.** Each paragraph is scored against every locale's function-word
    set; the paragraph reads as the locale with the most hits, and only when that count reaches
    ``INT_MIN_HITS`` and beats the declared locale's own. The Portuguese set is imported from
@@ -90,13 +91,14 @@ STR_DEFAULT_LOCALE = "en"
 
 STR_DEFAULT_DOCS_DIR = "docs"
 
-RE_CODE_SPAN = re.compile(r"`[^`\n]*`")
+RE_CODE_SPAN = re.compile(r"(`+).+?\1")
 
 RE_MULTILINE_BLANK = re.compile(
     r"\A---\n.*?\n(?:---|\.\.\.)[ \t]*$|<!--.*?-->", re.DOTALL | re.MULTILINE
 )
 
 TUPLE_BLANKINGS = (
+    re.compile(r"<!--.*?-->"),
     re.compile(r"!?\[[^\]\n]*\]\([^)\n]*\)"),
     re.compile(r"https?://\S+"),
     re.compile(r"<[^>\n]+>"),
@@ -104,7 +106,7 @@ TUPLE_BLANKINGS = (
 
 RE_UNTRANSLATED = re.compile(rf"^<!--\s*{re.escape(STR_UNTRANSLATED)}\s*-->\s*$", re.MULTILINE)
 
-RE_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+RE_FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})(.*)$")
 
 
 def declared_locale(dict_mkdocs: dict) -> str:
@@ -319,7 +321,7 @@ def is_untranslated(str_text: str) -> bool:
         True only for the exact HTML-comment line outside fenced code, not for prose or code
         that mentions it.
     """
-    return bool(RE_UNTRANSLATED.search("\n".join(_mask_lines(str_text))))
+    return bool(RE_UNTRANSLATED.search("\n".join(_blank_multiline(_mask_lines(str_text)))))
 
 
 def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared: str) -> tuple:

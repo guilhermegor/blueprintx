@@ -335,7 +335,6 @@ def test_main_front_matter_comments_and_shallow_fences_are_not_prose(
 @pytest.mark.parametrize(
     "str_text",
     [
-        STR_EN + "\n    ```\n\n" + STR_PT,
         STR_PT + "Mention `docs-lang:ok` here.\n",
         STR_EN + "\nUse `<!--` to open one.\n\n" + STR_PT + "\n<!-- end -->\n",
     ],
@@ -343,7 +342,7 @@ def test_main_front_matter_comments_and_shallow_fences_are_not_prose(
 def test_main_deep_indent_fence_and_quoted_escape_do_not_hide_prose(
     tmp_path: Path, str_text: str
 ) -> None:
-    """A 4-space-indented fence is not a fence, and a quoted escape does not escape."""
+    """A quoted escape does not escape, and a quoted escape does not escape."""
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
     _write(tmp_path / "docs" / "index.md", str_text)
     assert _run(tmp_path) == 1
@@ -391,3 +390,19 @@ def test_main_reads_each_page_once(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(Path, "read_text", _counting_read_text)
     _run(tmp_path)
     assert LIST_READS.count("index.md") == 1
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        STR_EN + "\n!!! example\n    ```python\n" + STR_FOREIGN_BLOCK + "    ```\n",
+        STR_EN + "\n- item\n\n        ```\n" + STR_FOREIGN_BLOCK + "        ```\n",
+        STR_EN + "\n<!-- a -> " + STR_FOREIGN_BLOCK.strip() + " -->\n",
+        STR_EN + "\n`` " + STR_FOREIGN_BLOCK.strip() + " ` x `` \n",
+    ],
+)
+def test_main_indented_fences_and_odd_spans_are_not_prose(tmp_path: Path, str_text: str) -> None:
+    """Admonition fences, ``>`` in one-line comments and double-backtick spans are blanked."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", str_text)
+    assert _run(tmp_path) == 0
