@@ -91,10 +91,10 @@ own. The scaffold libraries have no in-run retry loop; if one is added, each
 retried `field-list` costs about 102 points, and the 2x margin absorbs it along
 with the estimated rows below and a future `gh` version.
 
-The test asserts `budget >= 2 * cost`, with the cost read from
-`SCAFFOLD_GH_GRAPHQL_COST`, so the warning threshold, the default budget and the
-test share one number. That checks only that the budget follows the cost, not
-that the cost has not drifted. The drift guard is the invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED`
+The test pins the sourced defaults to literals (`SCAFFOLD_GH_GRAPHQL_COST` is
+560 and `SCAFFOLD_GH_GRAPHQL_BUDGET` is 1120, with overrides unset), so
+changing either default fails it and forces this table to be re-read. It cannot
+tell whether 560 still matches what GitHub charges. The drift guard is the invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED`
 and `SCAFFOLD_GH_GRAPHQL_SITES`), which counts invocations and not points: a
 change in what one call costs, or a new `field-list`, passes it.
 
