@@ -66,11 +66,11 @@ def var(str_block, str_name):
 
 
 int_bad = 0
-for str_scheme, str_block, str_accent, str_page in (
-    ("slate", str_slate, str_slate, str_bg),
-    ("light", str_root + ";\n" + str_light, str_light, "#ffffff"),
+for str_scheme, str_block, str_accent, str_page, str_link_src in (
+    ("slate", str_slate, str_slate, str_bg, str_slate),
+    ("light", str_root + ";\n" + str_light, str_light, "#ffffff", str_light),
 ):
-    str_link = var(str_block, "--md-typeset-a-color") or var(str_block, "--md-primary-fg-color")
+    str_link = var(str_link_src, "--md-typeset-a-color") or var(str_block, "--md-primary-fg-color")
     str_hover = var(str_accent, "--md-accent-fg-color") or MATERIAL_DEFAULT_ACCENT
     for str_label, str_color in (("link", str_link), ("hover", str_hover)):
         if str_color is None:
@@ -222,6 +222,8 @@ check "should-fail: low-contrast light link colour in the default block" "$TMP/l
 check "should-fail: grouped scheme selector is refused, not half-parsed" "$TMP/grouped.css" refuse
 { cat "$CSS"; printf '\n:root, [data-md-color-scheme="default"] {\n  --md-accent-fg-color: #8c9eff;\n}\n'; } >"$TMP/grouped-root.css"
 check "should-fail: grouped :root selector is refused" "$TMP/grouped-root.css" refuse
+{ cat "$CSS"; printf '\n:root {\n  --md-primary-fg-color: #cccccc;\n  --md-typeset-a-color: #0d2c54;\n}\n'; } >"$TMP/root-link.css"
+check "should-fail: a :root link colour is shadowed, the real link is the pale primary" "$TMP/root-link.css" contrast
 mkdir "$TMP/docs"
 printf '[x](y){ .md-button }\n' >"$TMP/docs/page.md"
 [ -n "$(md_button_users "$TMP/docs")" ] && echo "ok: md-button in a docs page is detected" || { echo "FAIL: md-button not detected"; int_failures=$((int_failures + 1)); }
