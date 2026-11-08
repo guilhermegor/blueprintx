@@ -778,6 +778,23 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "from mypkg import modules\nmodules.foo\n",
         "import pkg._internal.config as me\nclass A:\n    @(lambda fn: fn(me))\n    def f(self):\n"
         + "        setattr(self, 'Priv', 1)\n",
+        "import pkg._internal.config as me\nclass M:\n    pass\nme.__class__ = M\n",
+        "class A:\n    def f(self, vars=lambda _: 1):\n        vars(self)\n",
+        "class A:\n    def f(self):\n        def setattr(*a):\n            pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @evil.classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        for self in ():\n            pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        with open('x') as self:\n            pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        del self\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        (self := 1)\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self, v):\n        match v:\n            case {**self}:\n                pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self, v):\n        match v:\n            case [*self]:\n                pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
         "__all__ = ['Other']\ndel __all__\nPriv = 1\n",
     ],
     ids=[
@@ -805,6 +822,16 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "walrus-class-base",
         "writer-name-used-from-first-party-module",
         "decorator-invokes-method",
+        "module-class-swap",
+        "param-shadows-vars",
+        "nested-def-shadows-setattr",
+        "attribute-decorator-unknown-receiver",
+        "for-self",
+        "with-as-self",
+        "del-self",
+        "walrus-self",
+        "match-mapping-rest-self",
+        "match-star-self",
         "del-all",
     ],
 )
@@ -835,6 +862,12 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         + "            pass\n",
         "class A:\n    def f(self):\n        @setattr(self, 'Priv', 1)\n        def g():\n"
         + "            pass\n",
+        "class A:\n    def f(self, /):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @property\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "import abc\nclass A:\n    @abc.abstractmethod\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @f.setter\n    def f(self, v):\n        setattr(self, 'Priv', v)\n",
+        "class A:\n    @f.getter\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @f.deleter\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
         "from typing import override\nclass A:\n    @override\n    def f(self):\n"
         + "        setattr(self, 'Priv', 1)\n",
         "import typing_extensions\nclass A:\n    @typing_extensions.override\n    def f(self):\n"
@@ -852,6 +885,12 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "writer-name-from-relative-sys-module",
         "own-self-in-nested-default",
         "own-self-in-nested-decorator",
+        "positional-only-self",
+        "property-decorator",
+        "abstractmethod-decorator",
+        "setter-decorator",
+        "getter-decorator",
+        "deleter-decorator",
         "override-decorator",
         "typing-extensions-override-decorator",
         "cached-property-decorator",
@@ -898,5 +937,15 @@ def test_walrus_in_an_annotation_is_charged_where_it_is_legal(
         tmp_path,
         'from ._internal.config import *\n__all__ = ["Priv"]\n',
         {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_comprehension_target_in_the_package_does_not_provide_the_name(tmp_path: Path) -> None:
+    """A comprehension variable is local to it, so it must not hide an ``_internal`` leak."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n[Priv for Priv in ()]\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": "Priv = 1\n"},
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))

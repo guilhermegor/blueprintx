@@ -177,10 +177,13 @@ test suite keep the contract; this section records the reasoning that lived besi
     `staticmethod` (nor the implicit one, `__new__`), is decorated only with `classmethod`,
     `property`, `abstractmethod`, `override`, `cached_property` or `.setter`/`.getter`/`.deleter`
     (any other decorator could call the method with another object, so it removes the
-    exemption and over-charges, e.g. `@contextmanager` or `@pytest.fixture`), has no nested def or lambda taking that name as a parameter, and never rebinds
+    exemption and over-charges, e.g. `@contextmanager` or `@pytest.fixture`; the safe names
+    count bare or on `abc`, `typing`, `typing_extensions`, `functools` and `builtins`, so
+    `@evil.classmethod` is charged), does not rebind or take `setattr`/`vars` as a parameter,
+    has no nested def or lambda taking that name as a parameter, and never rebinds
     it (assignment, `del`, `import ... as`, `match`
     capture, `except ... as`, `type`, or a nested `def`/`class` of that name). The call may sit
-    anywhere in the method, closures over `self` included. An `__all__` that is not one literal list of
+    anywhere in the method, closures over `self` included. A store to `__class__` is charged like a writer (a module whose class is swapped makes `self` the module). An `__all__` that is not one literal list of
     strings (second assignment, `+=`, `.append`, `.extend`, subscript write, `[*x]`, `del __all__`)
     is assumed to provide the name. A loop, `with`, unpacking, walrus (in a default, decorator or
     class base or annotation too), `match` capture, `except ... as` or a function's `global` counts as

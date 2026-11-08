@@ -246,6 +246,11 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
 
 
 _SET_WRITER_MODULES = frozenset({"builtins", "sys", "inspect"})
+_SET_SAFE_DECORATORS = frozenset(
+    {"classmethod", "property", "abstractmethod", "override", "cached_property"}
+)
+_SET_ACCESSORS = frozenset({"setter", "getter", "deleter"})
+_SET_SAFE_MODULES = frozenset({"abc", "typing", "typing_extensions", "functools", "builtins"})
 _TUPLE_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
 _SET_DYNAMIC_WRITERS = frozenset(
     {
@@ -407,6 +412,8 @@ def _scope_nodes(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
         yield cls_cur
         if isinstance(cls_cur, _TUPLE_SCOPES):
             list_stack.extend(_header_nodes(cls_cur))
+        elif isinstance(cls_cur, ast.comprehension):
+            list_stack.extend([cls_cur.iter, *cls_cur.ifs])
         else:
             list_stack.extend(ast.iter_child_nodes(cls_cur))
 
@@ -494,12 +501,15 @@ def _names_writer(cls_sub: ast.AST) -> bool:
     Returns
     -------
     bool
-        ``True`` for a bare or attribute writer name, or ``from x import <writer> as y``.
+        ``True`` for a bare or attribute writer name, a ``__class__`` store, or
+        ``from x import <writer> as y``.
     """
     if isinstance(cls_sub, ast.Name):
         return cls_sub.id in _SET_DYNAMIC_WRITERS
     if isinstance(cls_sub, ast.Attribute):
-        return cls_sub.attr in _SET_DYNAMIC_WRITERS
+        return cls_sub.attr in _SET_DYNAMIC_WRITERS or (
+            cls_sub.attr == "__class__" and isinstance(cls_sub.ctx, ast.Store)
+        )
     return (
         isinstance(cls_sub, ast.ImportFrom)
         and cls_sub.level == 0
@@ -528,8 +538,9 @@ def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set
     str_param = [*cls_fn.args.posonlyargs, *cls_fn.args.args][0].arg
     if (
         str_param not in {"self", "cls"}
-        or _is_static(cls_fn)
+        or _loses_exemption(cls_fn)
         or _rebinds(cls_fn, str_param)
+        or _shadows_writer(cls_fn)
         or _shadowed_by_nested(cls_fn, str_param)
     ):
         return set()
@@ -568,11 +579,12 @@ def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_para
     )
 
 
-def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Return whether a def gets no ``self``/``cls`` exemption (``__new__``, unknown decorator).
 
-    Only ``classmethod``, ``property``, ``abstractmethod``, ``override``, ``cached_property``
-    and ``*.setter``/``getter``/``deleter`` keep the exemption. ``staticmethod`` and any
+    Only ``classmethod``, ``property``, ``abstractmethod``, ``override`` and ``cached_property``
+    (bare, or on ``abc``/``typing``/``typing_extensions``/``functools``/``builtins``) and
+    ``*.setter``/``getter``/``deleter`` keep the exemption. ``staticmethod`` and any
     decorator that could call the method with another object (``@(lambda fn: fn(me))``)
     lose it.
 
@@ -586,22 +598,33 @@ def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     bool
         ``True`` when the def is ``__new__`` or carries a decorator outside the safe set.
     """
-    set_safe = {
-        "classmethod",
-        "property",
-        "abstractmethod",
-        "override",
-        "cached_property",
-        "setter",
-        "getter",
-        "deleter",
-    }
-    return cls_fn.name == "__new__" or any(
-        not (
-            {getattr(cls_dec, "id", None), getattr(cls_dec, "attr", None)} & set_safe
-            and isinstance(cls_dec, ast.Name | ast.Attribute)
+    return cls_fn.name == "__new__" or not all(
+        _is_safe_decorator(cls_dec) for cls_dec in cls_fn.decorator_list
+    )
+
+
+def _is_safe_decorator(cls_dec: ast.expr) -> bool:
+    """Return whether a decorator is one of the known names that never calls the method.
+
+    Parameters
+    ----------
+    cls_dec : ast.expr
+        One entry of ``decorator_list``.
+
+    Returns
+    -------
+    bool
+        ``True`` for a safe bare name, a safe name on a known module, or a property accessor.
+    """
+    if isinstance(cls_dec, ast.Name):
+        return cls_dec.id in _SET_SAFE_DECORATORS
+    return isinstance(cls_dec, ast.Attribute) and (
+        cls_dec.attr in _SET_ACCESSORS
+        or (
+            cls_dec.attr in _SET_SAFE_DECORATORS
+            and isinstance(cls_dec.value, ast.Name)
+            and cls_dec.value.id in _SET_SAFE_MODULES
         )
-        for cls_dec in cls_fn.decorator_list
     )
 
 
@@ -628,6 +651,31 @@ def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> 
         _bound_name(cls_sub) == str_param
         and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
         for cls_sub in ast.walk(cls_fn)
+    )
+
+
+def _shadows_writer(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Return whether the def rebinds ``setattr`` or ``vars``, or takes either as a parameter.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        The def.
+
+    Returns
+    -------
+    bool
+        ``True`` when a call to either name in the body may not reach the builtin.
+    """
+    cls_args = cls_fn.args
+    set_params = {
+        cls_a.arg
+        for cls_a in (*cls_args.posonlyargs, *cls_args.args, *cls_args.kwonlyargs)
+        + (cls_args.vararg, cls_args.kwarg)
+        if cls_a
+    }
+    return bool(set_params & {"setattr", "vars"}) or any(
+        _rebinds(cls_fn, str_writer) for str_writer in ("setattr", "vars")
     )
 
 
