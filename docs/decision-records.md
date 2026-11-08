@@ -174,7 +174,10 @@ test suite keep the contract; this section records the reasoning that lived besi
     `_getframe`, `currentframe`, `__globals__`, `f_locals`), as a bare name, an attribute (`builtins.exec`) or an import alias
     from `builtins`, `sys` or `inspect` (`from builtins import exec as run`), anywhere in the file. The one exemption is
     `setattr(self|cls, ...)` / `vars(self|cls)` on the first parameter of a method that is not a
-    `staticmethod` (nor the implicit one, `__new__`), has no nested def or lambda taking that name as a parameter, and never rebinds
+    `staticmethod` (nor the implicit one, `__new__`), is decorated only with `classmethod`,
+    `property`, `abstractmethod`, `override`, `cached_property` or `.setter`/`.getter`/`.deleter`
+    (any other decorator could call the method with another object, so it removes the
+    exemption and over-charges, e.g. `@contextmanager` or `@pytest.fixture`), has no nested def or lambda taking that name as a parameter, and never rebinds
     it (assignment, `del`, `import ... as`, `match`
     capture, `except ... as`, `type`, or a nested `def`/`class` of that name). The call may sit
     anywhere in the method, closures over `self` included. An `__all__` that is not one literal list of
@@ -188,7 +191,7 @@ test suite keep the contract; this section records the reasoning that lived besi
     `importlib` / `__getattr__`, a method called through its class with another object
     (`A.f(me)`), a `staticmethod` spelled other than as a plain decorator (`f = staticmethod(f)`,
     `sm = staticmethod`, `@wrapper(staticmethod)`), a writer re-exported by a first-party module
-    (`from ._compat import exec_ as run`), a plain attribute store on a module alias (`me.Priv = 1`, `me.__dict__["Priv"] = 1`), a writer reached through a
+    (`from ._compat import exec_ as run`), a plain attribute store on a module alias (`me.Priv = 1`, `me.__dict__["Priv"] = 1`), a module written through `__setattr__` (`object.__setattr__(me, "Priv", 1)`; not a charged writer, since `super().__setattr__` is routine in frozen classes), a safe-set decorator name that is not the real one (a local `def setter(fn): fn(me)` used as `@setter`; the set is matched by name, not by origin), a writer reached through a
     string constant (`getattr(builtins, "exec")(...)`, `getattr(sys, "modules")`,
     `__builtins__["exec"]`), and an absolute import of another top-level
     package.

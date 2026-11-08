@@ -775,6 +775,7 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         + "        setattr(cls, 'Priv', 1)\nA.f(me)\n",
         "def d(v):\n    return lambda f: f\n\n\n@d(Priv := 1)\ndef g():\n    pass\n",
         "class B((Priv := 1).__class__):\n    pass\n",
+        "from mypkg import modules\nmodules.foo\n",
         "import pkg._internal.config as me\nclass A:\n    @(lambda fn: fn(me))\n    def f(self):\n"
         + "        setattr(self, 'Priv', 1)\n",
         "__all__ = ['Other']\ndel __all__\nPriv = 1\n",
@@ -802,6 +803,7 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "staticmethod-attribute",
         "walrus-decorator",
         "walrus-class-base",
+        "writer-name-used-from-first-party-module",
         "decorator-invokes-method",
         "del-all",
     ],
@@ -833,17 +835,26 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         + "            pass\n",
         "class A:\n    def f(self):\n        @setattr(self, 'Priv', 1)\n        def g():\n"
         + "            pass\n",
+        "from typing import override\nclass A:\n    @override\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "import typing_extensions\nclass A:\n    @typing_extensions.override\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "import functools\nclass A:\n    @functools.cached_property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
     ],
     ids=[
         "attribute-store-on-self",
         "classmethod-cls",
         "unrelated-builtins-alias",
-        "writer-name-from-first-party-module",
+        "writer-name-imported-only-from-first-party-module",
         "lambda-closure-over-self",
         "def-closure-over-self",
         "writer-name-from-relative-sys-module",
         "own-self-in-nested-default",
         "own-self-in-nested-decorator",
+        "override-decorator",
+        "typing-extensions-override-decorator",
+        "cached-property-decorator",
     ],
 )
 def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
