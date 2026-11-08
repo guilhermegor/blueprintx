@@ -327,7 +327,7 @@ repos:
         name: docs language matches theme.language
         entry: bash bin/poetry_exec.sh run python bin/check_docs_language.py
         language: system
-        files: ^mkdocs\.yml$|\.md$
+        files: ^mkdocs\.yml$|\.md$|^bin/check_(docs_language|docs_gap|comment_language)\.py$
         exclude: ^\.specs/
         pass_filenames: false
 

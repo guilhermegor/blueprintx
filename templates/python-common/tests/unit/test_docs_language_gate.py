@@ -7,14 +7,14 @@ import sys
 import pytest
 
 
-_BIN = Path(__file__).resolve().parents[2] / "bin"
-sys.path.insert(0, str(_BIN))
+PATH_BIN = Path(__file__).resolve().parents[2] / "bin"
+sys.path.insert(0, str(PATH_BIN))
 
-_SPEC = importlib.util.spec_from_file_location(
-    "check_docs_language", _BIN / "check_docs_language.py"
+SPEC_GATE = importlib.util.spec_from_file_location(
+    "check_docs_language", PATH_BIN / "check_docs_language.py"
 )
-gate = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(gate)
+cls_gate = importlib.util.module_from_spec(SPEC_GATE)
+SPEC_GATE.loader.exec_module(cls_gate)
 
 STR_EN = "This is the page that you can read, and it is written in English for the reader.\n"
 STR_PT = "Esta é a página que você pode ler, e ela está escrita para o leitor que não sabe.\n"
@@ -60,7 +60,7 @@ def _run(path_root: Path) -> int:
     int
         The gate's exit code.
     """
-    return gate.main(["--root", str(path_root)])
+    return cls_gate.main(["--root", str(path_root)])
 
 
 @pytest.mark.parametrize(
@@ -406,3 +406,13 @@ def test_main_indented_fences_and_odd_spans_are_not_prose(tmp_path: Path, str_te
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
     _write(tmp_path / "docs" / "index.md", str_text)
     assert _run(tmp_path) == 0
+
+
+@pytest.mark.parametrize("str_yaml", ["- a\n- b\n", "just text\n"])
+def test_main_non_mapping_mkdocs_fails_with_a_message(
+    tmp_path: Path, capsys: pytest.CaptureFixture, str_yaml: str
+) -> None:
+    """A list- or scalar-shaped ``mkdocs.yml`` fails closed with a message, not a traceback."""
+    _write(tmp_path / "mkdocs.yml", str_yaml)
+    _write(tmp_path / "docs" / "index.md", STR_EN)
+    assert (_run(tmp_path), "YAML mapping" in capsys.readouterr().out) == (1, True)

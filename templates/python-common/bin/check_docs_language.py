@@ -83,6 +83,8 @@ DICT_LOCALE_WORDS = {"en": SET_EN_WORDS, "pt-BR": SET_PT_WORDS}
 
 INT_MIN_HITS = 2
 
+INT_EXCERPT = 80
+
 STR_ESCAPE = "docs-lang:ok"
 
 STR_UNTRANSLATED = "docs-lang:untranslated"
@@ -98,7 +100,7 @@ RE_MULTILINE_BLANK = re.compile(
 )
 
 TUPLE_BLANKINGS = (
-    re.compile(r"<!--.*?-->"),
+    re.compile(r"<!--.*?-->", re.DOTALL),
     re.compile(r"!?\[[^\]\n]*\]\([^)\n]*\)"),
     re.compile(r"https?://\S+"),
     re.compile(r"<[^>\n]+>"),
@@ -349,10 +351,12 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
     for int_line, str_para in prose_paragraphs(str_text):
         str_read = paragraph_locale(str_para, str_declared)
         if str_read != str_declared:
-            str_excerpt = " ".join(str_para.split())[:80]
+            str_flat = " ".join(str_para.split())
+            str_tail = "…" if len(str_flat) > INT_EXCERPT else ""
+            str_excerpt = f"{str_flat[:INT_EXCERPT]}{str_tail}"
             list_out.append(
                 f"❌ {os.path.relpath(path_page, path_root)}:{int_line}: paragraph reads as "
-                f"{str_read} but theme.language is {str_declared} -- {str_excerpt}…"
+                f"{str_read} but theme.language is {str_declared} -- {str_excerpt}"
             )
     return list_out, False
 
@@ -377,6 +381,8 @@ def _load_config(path_root: pathlib.Path) -> tuple:
         dict_mkdocs = load_mkdocs(path_mkdocs)
     except yaml.YAMLError as cls_err:
         return {}, f"{path_mkdocs} is not valid YAML: {cls_err}"
+    if not isinstance(dict_mkdocs, dict):
+        return {}, f"{path_mkdocs} must be a YAML mapping"
     path_docs = path_root / str(dict_mkdocs.get("docs_dir") or STR_DEFAULT_DOCS_DIR)
     if not path_docs.is_dir():
         return dict_mkdocs, f"docs_dir {path_docs} is not a directory; README alone would pass"
