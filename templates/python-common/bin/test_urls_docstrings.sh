@@ -129,7 +129,7 @@ check_url() {
 	fi
 
 	str_status_code=$(probe_url_status "$str_url")
-	[[ -n "$str_status_code" ]] && set_cache "$str_url" "$str_status_code"
+	[[ "$str_status_code" =~ ^[1-5][0-9][0-9]$ ]] && set_cache "$str_url" "$str_status_code"
 	echo "$str_status_code"
 }
 
@@ -224,6 +224,9 @@ process_python_files() {
 			done < <(find "$str_target" -type f -name "*.py" -print0)
 		elif [[ -f "$str_target" && "$str_target" == *.py ]]; then
 			scan_file_for_urls "$str_target"
+		elif [[ ! -e "$str_target" ]]; then
+			print_status "error" "Path not found: $str_target"
+			INT_URL_ERRORS=1
 		fi
 	done
 
@@ -235,7 +238,7 @@ process_python_files() {
 }
 
 main() {
-	if ! mkdir -p "$CACHE_DIR" 2>/dev/null; then
+	if ! mkdir -p "$CACHE_DIR" 2>/dev/null || [[ ! -w "$CACHE_DIR" ]]; then
 		CACHE_DIR="$(mktemp -d)"
 		print_status "warning" "Cache dir not writable; using ${CACHE_DIR}"
 	fi

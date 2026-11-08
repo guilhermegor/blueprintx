@@ -32,8 +32,9 @@ jobs:
             if grep -qF 'All docstring URLs are reachable' docstring_urls_report.txt; then
               echo "No dead docstring URLs."
             else
-              echo "::warning::Docstring URL scan produced no verdict; see log."
+              echo "::error::Docstring URL scan produced no verdict."
               cat docstring_urls_report.txt
+              exit 1
             fi
             exit 0
           fi
@@ -48,9 +49,9 @@ jobs:
           existing=$(gh issue list --label docstring-urls --state open \
             --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body-file docstring_urls_body.md || true
+            gh issue comment "$existing" --body-file docstring_urls_body.md
           else
             gh issue create --title "Dead docstring URLs" \
-              --label docstring-urls --body-file docstring_urls_body.md || true
+              --label docstring-urls --body-file docstring_urls_body.md
           fi
           exit 0
