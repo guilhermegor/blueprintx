@@ -2,7 +2,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 
 const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
-const RE_TEST_START = /\b(?:it|test)(?:\.each\((?:[^()]|\([^()]*\))*\)|\.\w+)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
+const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.each\((?:[^()]|\([^()]*\))*\)|\.\w+)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
 const RE_MATCHER = /\.(not\.)?(to[A-Z]\w*)\(/g;
 const RE_JUSTIFICATION = /^\s*test-change-ok:\s*(\S.*)$/im;
 
@@ -26,29 +26,28 @@ function splitTests(source) {
 }
 
 function matchers(body) {
-  return [...body.matchAll(RE_MATCHER)].map((match) => ({
-    negated: Boolean(match[1]),
-    name: match[2],
-  }));
+  return [...body.matchAll(RE_MATCHER)].filter((match) => !match[1]).map((match) => match[2]);
 }
 
-function isLoosened(before, after) {
-  return (
-    !before.negated &&
-    !after.negated &&
-    EQUALITY_MATCHERS.has(before.name) &&
-    INEQUALITY_MATCHERS.has(after.name)
-  );
+function surplus(names, others, allowed) {
+  const left = [...others];
+  return names
+    .filter((name) => allowed.has(name))
+    .filter((name) => {
+      const index = left.indexOf(name);
+      if (index >= 0) left.splice(index, 1);
+      return index < 0;
+    });
 }
 
 function testFindings(path, oldTest, newTest) {
-  const oldMatchers = matchers(oldTest.body);
-  const newMatchers = matchers(newTest.body);
-  return oldMatchers
-    .slice(0, newMatchers.length)
-    .map((before, index) => [before, newMatchers[index]])
-    .filter(([before, after]) => isLoosened(before, after))
-    .map(([before, after]) => `${path}: ${newTest.name}: ${before.name} loosened to ${after.name}`);
+  const oldNames = matchers(oldTest.body);
+  const newNames = matchers(newTest.body);
+  const removed = surplus(oldNames, newNames, EQUALITY_MATCHERS);
+  const added = surplus(newNames, oldNames, INEQUALITY_MATCHERS);
+  return removed
+    .slice(0, added.length)
+    .map((name, index) => `${path}: ${newTest.name}: ${name} loosened to ${added[index]}`);
 }
 
 function fileFindings(path, oldSource, newSource) {
@@ -60,14 +59,19 @@ function fileFindings(path, oldSource, newSource) {
 
 function git(args) {
   try {
-    return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return execFileSync('git', args, {
+      encoding: 'utf8',
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
   } catch {
     return '';
   }
 }
 
 function defaultBranch() {
-  const candidates = ['origin/main', 'origin/master', 'main', 'master'];
+  const fromCi = process.env.GITHUB_BASE_REF ? [`origin/${process.env.GITHUB_BASE_REF}`] : [];
+  const candidates = [...fromCi, 'origin/HEAD', 'origin/main', 'origin/master', 'main', 'master'];
   return candidates.find((ref) => git(['rev-parse', '--verify', '--quiet', ref]).trim()) ?? '';
 }
 
@@ -82,15 +86,26 @@ function justification(base) {
   return match ? match[1].trim() : '';
 }
 
+function changedPaths(output) {
+  const tokens = output.split('\0');
+  const rows = [];
+  for (let index = 0; index < tokens.length - 1; ) {
+    const width = /^[RC]/.test(tokens[index]) ? 2 : 1;
+    rows.push(tokens.slice(index + 1, index + 1 + width));
+    index += width + 1;
+  }
+  return rows;
+}
+
 function collect(base) {
-  const rows = git(['diff', '--cached', '--name-status', '--find-renames', base])
-    .split('\n')
-    .map((line) => line.split('\t'))
-    .filter((parts) => parts.length >= 2 && RE_TEST_PATH.test(parts[parts.length - 1]));
-  return rows.flatMap((parts) => {
-    const oldSource = git(['show', `${base}:${parts[1]}`]);
-    const newSource = git(['show', `:${parts[parts.length - 1]}`]);
-    return oldSource && newSource ? fileFindings(parts[parts.length - 1], oldSource, newSource) : [];
+  const rows = changedPaths(git(['diff', '--cached', '-z', '--name-status', '--find-renames', base])).filter(
+    (paths) => RE_TEST_PATH.test(paths[paths.length - 1]),
+  );
+  return rows.flatMap((paths) => {
+    const newPath = paths[paths.length - 1];
+    const oldSource = git(['show', `${base}:${paths[0]}`]);
+    const newSource = git(['show', `:${newPath}`]);
+    return oldSource && newSource ? fileFindings(newPath, oldSource, newSource) : [];
   });
 }
 

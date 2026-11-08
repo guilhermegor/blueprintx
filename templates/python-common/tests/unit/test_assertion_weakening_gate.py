@@ -205,6 +205,17 @@ def test_an_inequality_tightened_to_equality_is_clean(str_symbol: str) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "str_call", ["assertGreater", "assertLess", "assertGreaterEqual", "assertLessEqual"]
+)
+def test_assert_equal_loosened_to_an_inequality_call_is_reported(str_call: str) -> None:
+    """``assertEqual`` swapped for an inequality call is the unittest twin of ``== -> >``."""
+    assert f"assertEqual() weakened to {str_call}()" in _sole_finding(
+        "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n",
+        f"class T:\n\tdef test_x(self) -> None:\n\t\tself.{str_call}(compute(), 5)\n",
+    )
+
+
 def test_assert_equal_weakened_to_assert_true_is_reported() -> None:
     """``assertEqual`` downgraded to ``assertTrue`` loses the value it pinned."""
     str_old = "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n"

@@ -60,7 +60,10 @@ strengthening an inequality to equality passes. It runs in `.husky/pre-commit` a
 workflow, which checks out full history.
 
 When the expectation was provably wrong, justify the change: put `test-change-ok: <reason>` in the
-PR body or a commit trailer, or prefix one local commit with `TEST_CHANGE_OK='<reason>'`.
+PR body (CI reads it from the event payload, so a re-run after editing the body keeps the old
+text; push a new commit) or in the trailer of an earlier commit on the branch. The commit that
+introduces the weakening cannot carry its own trailer, because the hook runs before the message
+exists: prefix that commit with `TEST_CHANGE_OK='<reason>'`.
 Matching is positional within a test; a reordered set of matchers can misreport, and the
 justification covers that rare case.
 

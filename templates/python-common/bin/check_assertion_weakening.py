@@ -104,6 +104,10 @@ _WEAKER_ASSERT_CALLS = {
             "assertIsInstance",
             "assertFalse",
             "assertIsNone",
+            "assertGreater",
+            "assertLess",
+            "assertGreaterEqual",
+            "assertLessEqual",
         }
     ),
     "assertIs": frozenset({"assertIsNotNone", "assertTrue"}),
