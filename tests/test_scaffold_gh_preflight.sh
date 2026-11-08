@@ -139,6 +139,16 @@ test_preflight_stops_when_the_budget_is_too_low() {
     expect_said "low budget" "retry in 10 min"
 }
 
+test_preflight_stops_on_a_non_numeric_budget_or_cost() {
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=lots" gh_preflight
+    expect_stop "non-numeric budget"
+    expect_said "non-numeric budget" "SCAFFOLD_GH_GRAPHQL_BUDGET must be a whole number"
+    expect_not_said "non-numeric budget" "gh preflight passed"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=5x" gh_preflight
+    expect_stop "non-numeric cost"
+    expect_said "non-numeric cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+}
+
 test_preflight_stops_on_a_blank_login() {
     run_fn '' "GH_LOGIN=" gh_preflight
     expect_stop "blank login"
@@ -399,6 +409,7 @@ main() {
     test_preflight_stops_on_an_auth_error
     test_preflight_stops_on_a_network_error
     test_preflight_stops_when_the_budget_is_too_low
+    test_preflight_stops_on_a_non_numeric_budget_or_cost
     test_preflight_stops_on_a_blank_login
     test_preflight_passes_on_a_healthy_gh
     test_preflight_stops_when_the_project_scope_is_missing
