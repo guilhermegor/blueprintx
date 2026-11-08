@@ -569,7 +569,7 @@ def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_para
 
 
 def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    """Return whether a def gets no ``self``/``cls`` exemption: ``__new__`` or an unknown decorator.
+    """Return whether a def gets no ``self``/``cls`` exemption (``__new__``, unknown decorator).
 
     Only ``classmethod``, ``property``, ``abstractmethod`` and ``*.setter``/``getter``/
     ``deleter`` keep the exemption. ``staticmethod`` and any decorator that could call the
