@@ -125,12 +125,16 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
    4.5:1 or more against the `slate` background (`#1e2129`, Material 9.5 default hue). The
    template enables no `md-button`, `navigation.top` or `content.code.annotate`; if you add
    one, also set `--md-accent-bg-color`, since Material draws its hover text white on the
-   accent colour (the gate fails when `mkdocs.yml` enables the first two, or any template
-   page uses `md-button`). The `[data-md-color-scheme="default"]` block sets `--md-accent-fg-color` to a dark blue,
-   since Material's default hover (`#526cfe`) is only 4.25:1 on white. It cannot live in `:root`:
-   Material sets the accent on `body[data-md-color-accent]`, which overrides `:root`; keep it at 4.5:1 or more
-   against white. Known limits: a direct `color:` rule on `.md-typeset a` bypasses these
-   variables and is invisible to the gate, and the gate derives the background from Material 9.5's
+   accent colour (BlueprintX's template gate, `tests/test_brand_css_contrast.sh`, fails when
+   `mkdocs.yml` enables the first two, or any template page uses `md-button`; it is not
+   shipped into generated projects, so re-check by hand after editing). The
+   `[data-md-color-scheme="default"]` block sets `--md-accent-fg-color` to a dark blue,
+   since Material's default hover (`#526cfe`) is only 4.25:1 on white. It cannot live in
+   `:root`: Material sets the accent on `body[data-md-color-accent]`, which overrides
+   `:root`; keep it at 4.5:1 or more against white. Known limits: a direct `color:` rule on
+   `.md-typeset a` bypasses these variables and is invisible to the gate, a grouped selector
+   such as `:root, [data-md-color-scheme="default"]` makes the gate refuse rather than
+   resolve, and the gate derives the background from Material 9.5's
    default hue and does not follow a Material version bump that changes it.
 
 ## Repository protection & security (one-time, scripted)

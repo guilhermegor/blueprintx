@@ -38,16 +38,16 @@ def refuse(str_why):
     sys.exit(INT_REFUSED)
 
 
-def block(str_selector, str_name):
+def block(str_selector, str_name, is_optional=False):
     list_blocks = re.findall(str_selector + r"\s*\{([^}]*)\}", str_css)
-    if not list_blocks:
+    if not list_blocks and not is_optional:
         refuse(f"no {str_name} block")
     return ";\n".join(list_blocks)
 
 
 str_slate = block(r"\[data-md-color-scheme\s*=\s*[\"']?slate[\"']?\s*\]", "slate")
 str_root = block(r"(?<![\w-]):root", "root")
-str_light = ";\n".join(re.findall(r"\[data-md-color-scheme\s*=\s*[\"']?default[\"']?\s*\]\s*\{([^}]*)\}", str_css))
+str_light = block(r"\[data-md-color-scheme\s*=\s*[\"']?default[\"']?\s*\]", "default", True)
 if "--md-hue" in str_css or "--md-default-bg-color" in str_css:
     refuse("--md-hue or --md-default-bg-color overridden: background unresolved")
 
@@ -63,7 +63,7 @@ def var(str_block, str_name):
 int_bad = 0
 for str_scheme, str_block, str_accent, str_page in (
     ("slate", str_slate, str_slate, str_bg),
-    ("light", str_root, str_light, "#ffffff"),
+    ("light", str_root + ";\n" + str_light, str_light, "#ffffff"),
 ):
     str_link = var(str_block, "--md-typeset-a-color") or var(str_block, "--md-primary-fg-color")
     str_hover = var(str_accent, "--md-accent-fg-color") or MATERIAL_DEFAULT_ACCENT
@@ -112,9 +112,9 @@ yml_problem() {
 }
 
 check_yml() {
-	local str_name="$1" str_yml="$2" str_expect="$3" str_why
+	local str_name="$1" str_yml="$2" str_expect="$3" str_reason="${4:-}" str_why
 	str_why="$(yml_problem "$str_yml")"
-	if { [ -z "$str_why" ] && [ "$str_expect" = pass ]; } || { [ -n "$str_why" ] && [ "$str_expect" = refuse ]; }; then
+	if { [ -z "$str_why" ] && [ "$str_expect" = pass ]; } || { [ -n "$str_why" ] && [ "$str_expect" = refuse ] && [[ "$str_why" == *"$str_reason"* ]]; }; then
 		echo "ok: $str_name (${str_expect})"
 	else
 		echo "FAIL: $str_name expected $str_expect, got: ${str_why:-pass}"
@@ -133,8 +133,16 @@ fi
 for str_yml in "${list_ymls[@]}"; do
 	check_yml "$str_yml invariants" "$str_yml" pass
 done
-if grep -rl --exclude=contributing.md 'md-button' "${list_docs[@]}" "${list_ymls[@]}" >/dev/null 2>&1; then
-	echo "FAIL: md-button used; contributing.md says the template has none"
+md_button_users() {
+	local str_hits
+	str_hits="$(grep -rl 'md-button' "$@" 2>&1)"
+	[ $? -le 1 ] || { echo "grep failed: $str_hits"; return 2; }
+	printf '%s' "$str_hits" | grep -v '/python-common/docs/contributing\.md$'
+	return 0
+}
+str_hits="$(md_button_users "${list_docs[@]}" "${list_ymls[@]}")"
+if [ -n "$str_hits" ]; then
+	echo "FAIL: md-button used or grep failed; contributing.md says the template has none: $str_hits"
 	int_failures=$((int_failures + 1))
 fi
 
@@ -170,15 +178,15 @@ check "should-fail: unparseable link value" "$TMP/unparseable.css" refuse
 
 YML="$REPO_ROOT/templates/lib-minimal/mkdocs.yml"
 sed 's/^\(\s*\)- scheme: default/&\n\1  accent: indigo/' "$YML" >"$TMP/accent.yml"
-check_yml "should-fail: accent: set in mkdocs.yml" "$TMP/accent.yml" refuse
+check_yml "should-fail: accent: set in mkdocs.yml" "$TMP/accent.yml" refuse "accent: set"
 sed '0,/primary: custom/{/primary: custom/d}' "$YML" >"$TMP/no-primary.yml"
-check_yml "should-fail: primary: custom missing" "$TMP/no-primary.yml" refuse
+check_yml "should-fail: primary: custom missing" "$TMP/no-primary.yml" refuse "primary: custom missing"
 sed '/stylesheets\/brand\.css/d' "$YML" >"$TMP/no-css.yml"
-check_yml "should-fail: brand.css not in extra_css" "$TMP/no-css.yml" refuse
+check_yml "should-fail: brand.css not in extra_css" "$TMP/no-css.yml" refuse "no stylesheets/brand.css"
 sed 's/^\(\s*\)- navigation\.tabs$/&\n\1- navigation.top/' "$YML" >"$TMP/nav-top.yml"
-check_yml "should-fail: navigation.top enabled" "$TMP/nav-top.yml" refuse
+check_yml "should-fail: navigation.top enabled" "$TMP/nav-top.yml" refuse "navigation.top"
 sed 's/^\(\s*\)- navigation\.tabs$/&\n\1- content.code.annotate/' "$YML" >"$TMP/annotate.yml"
-check_yml "should-fail: content.code.annotate enabled" "$TMP/annotate.yml" refuse
+check_yml "should-fail: content.code.annotate enabled" "$TMP/annotate.yml" refuse "content.code.annotate"
 
 sed "s/\"slate\"/slate/" "$CSS" >"$TMP/unquoted.css"
 check "slate selector unquoted" "$TMP/unquoted.css" pass
@@ -186,8 +194,8 @@ sed "s/\"slate\"/'slate'/" "$CSS" >"$TMP/single.css"
 check "slate selector single-quoted" "$TMP/single.css" pass
 sed -E 's|(--md-accent-fg-color--transparent:[^;]*);|\1|' "$CSS" >"$TMP/no-semi.css"
 check "last declaration without trailing semicolon" "$TMP/no-semi.css" pass
-sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS" >"$TMP/no-root-accent.css"
-check "should-fail: light scheme without a hover colour (Material accent 4.25:1)" "$TMP/no-root-accent.css" contrast
+sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS" >"$TMP/no-light-accent.css"
+check "should-fail: light scheme without a hover colour (Material accent 4.25:1)" "$TMP/no-light-accent.css" contrast
 sed '0,/--md-accent-fg-color:[^;]*;/s//--md-accent-fg-color: #526cfe;/' "$CSS" >"$TMP/root-default.css"
 check "should-fail: light hover is the Material default" "$TMP/root-default.css" contrast
 sed -E 's|(--md-accent-fg-color:)[^;]*;|\1 #8c9eff;|' "$CSS" >"$TMP/root-pale.css"
@@ -203,6 +211,12 @@ check "split light block resolves across both blocks" "$TMP/split-light.css" pas
 check "split light block, earlier block without a final semicolon" "$TMP/split-light-nosemi.css" pass
 { printf ':root {\n  --md-accent-fg-color: #3f51b5;\n}\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/root-accent-only.css"
 check "should-fail: a :root hover colour loses to Material's body accent rule" "$TMP/root-accent-only.css" contrast
+{ cat "$CSS"; printf '\n[data-md-color-scheme="default"] {\n  --md-typeset-a-color: #aaaaaa;\n}\n'; } >"$TMP/light-link.css"
+check "should-fail: low-contrast light link colour in the default block" "$TMP/light-link.css" contrast
+mkdir "$TMP/docs"
+printf '[x](y){ .md-button }\n' >"$TMP/docs/page.md"
+[ -n "$(md_button_users "$TMP/docs")" ] && echo "ok: md-button in a docs page is detected" || { echo "FAIL: md-button not detected"; int_failures=$((int_failures + 1)); }
+md_button_users "$TMP/missing" >/dev/null && { echo "FAIL: grep read error swallowed"; int_failures=$((int_failures + 1)); } || echo "ok: grep read error is reported"
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
 echo "all cases passed"
