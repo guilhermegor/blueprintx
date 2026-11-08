@@ -1,3 +1,4 @@
 npx lint-staged
 python3 bin/check_comment_budget.py --require-baseline
 bash bin/check_agents_md_pairs.sh --root .
+node "$(find src -name assertion-weakening.cjs -print -quit)"

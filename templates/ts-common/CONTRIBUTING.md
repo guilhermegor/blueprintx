@@ -47,6 +47,23 @@ run reports the seed it used; reproduce that order by passing the number back yo
 re-run away.** Re-running until it goes green hides the exact bug this exists to catch —
 report the seed and the failing test instead of retrying.
 
+## Assertion weakening
+
+`==` is not implied by `>`, `<`, `>=` or `<=`: turning `expect(x).toBe(5)` into
+`expect(x).toBeGreaterThan(5)` accepts infinitely many values the old assertion rejected, so a
+red test goes green without the behaviour being fixed. `src/**/assertion-weakening.cjs` compares
+every changed `*.test.*` / `*.spec.*` file against the merge-base and fails when a `toBe`,
+`toEqual` or `toStrictEqual` in a test became `toBeGreaterThan`, `toBeLessThan`,
+`toBeGreaterThanOrEqual` or `toBeLessThanOrEqual` at the same position. It judges a change from
+equality, so assertions that were always inequalities (thresholds, budgets) are untouched, and
+strengthening an inequality to equality passes. It runs in `.husky/pre-commit` and in the lint
+workflow, which checks out full history.
+
+When the expectation was provably wrong, justify the change: put `test-change-ok: <reason>` in the
+PR body or a commit trailer, or prefix one local commit with `TEST_CHANGE_OK='<reason>'`.
+Matching is positional within a test; a reordered set of matchers can misreport, and the
+justification covers that rare case.
+
 ## Pull requests
 
 1. Open an issue first, using the repository's issue template. State what you want to change
