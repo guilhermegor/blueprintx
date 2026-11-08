@@ -42,7 +42,7 @@ def block(str_selector, str_name):
     list_blocks = re.findall(str_selector + r"\s*\{([^}]*)\}", str_css)
     if not list_blocks:
         refuse(f"no {str_name} block")
-    return "\n".join(list_blocks)
+    return ";\n".join(list_blocks)
 
 
 str_slate = block(r"\[data-md-color-scheme\s*=\s*[\"']?slate[\"']?\s*\]", "slate")
@@ -195,6 +195,8 @@ check "split slate block keeps the earlier link colour (cascade)" "$TMP/split-sl
 check "should-fail: split slate block, earlier block holds a dark link colour" "$TMP/split-slate-dark.css" contrast
 { printf ':root {\n  --md-accent-fg-color: #3f51b5;\n}\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/split-root.css"
 check "split :root block resolves across both blocks" "$TMP/split-root.css" pass
+{ printf ':root { --md-accent-fg-color: #3f51b5 }\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/split-root-nosemi.css"
+check "split :root block, earlier block without a final semicolon" "$TMP/split-root-nosemi.css" pass
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
 echo "all cases passed"
