@@ -37,7 +37,7 @@ fails closed. Its Portuguese function words are the ones `check_comment_language
 
 ⚠️ The shipped templates are English, so a project scaffolded as `pt-BR` gets
 `<!-- docs-lang:untranslated -->` appended to every shipped page. The gate skips a marked page
-and counts it in its summary line (`10 skipped as docs-lang:untranslated`), so the first lint is
+and counts it in its summary line (`N skipped as docs-lang:untranslated`), so the first lint is
 green and the untranslated pages stay visible. Delete the marker from a page once it is
 translated; from then on the gate checks it.
 

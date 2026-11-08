@@ -224,8 +224,9 @@ test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate() {
     int_pages="$(find "$str_temp/spec-probe/docs" -name '*.md' | wc -l)"
     int_marked="$(grep -rlx '<!-- docs-lang:untranslated -->' "$str_temp/spec-probe/docs" | wc -l)"
     str_gate="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" 2>&1)" || int_rc=$?
+    grep -qxF '<!-- docs-lang:untranslated -->' "$str_temp/spec-probe/README.md" || int_rc=99
     if [ "$int_pages" -gt 0 ] && [ "$int_pages" = "$int_marked" ] && [ "$int_rc" -eq 0 ]; then
-        pass "pt-BR scaffold marks all $int_pages pages and its own gate passes"
+        pass "pt-BR scaffold marks README and all $int_pages docs pages and its own gate passes"
     else
         fail "pt-BR e2e" "pages=$int_pages marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
     fi

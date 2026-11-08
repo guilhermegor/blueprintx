@@ -339,10 +339,10 @@ def test_main_front_matter_comments_and_shallow_fences_are_not_prose(
         STR_EN + "\nUse `<!--` to open one.\n\n" + STR_PT + "\n<!-- end -->\n",
     ],
 )
-def test_main_deep_indent_fence_and_quoted_escape_do_not_hide_prose(
+def test_main_quoted_escape_and_quoted_comment_opener_do_not_hide_prose(
     tmp_path: Path, str_text: str
 ) -> None:
-    """A quoted escape does not escape, and a quoted escape does not escape."""
+    """A quoted ``docs-lang:ok`` or ``<!--`` neither escapes a paragraph nor opens a comment."""
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
     _write(tmp_path / "docs" / "index.md", str_text)
     assert _run(tmp_path) == 1
