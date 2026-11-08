@@ -138,8 +138,11 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
    `brand.css` last in `extra_css`. The primary colour set in `:root` does reach the page
    (computed `#0d2c54`). Known limits: a direct `color:` rule on `.md-typeset a` bypasses
    these variables and is invisible to the gate, any selector on `:root` or a colour scheme
-   other than the bare one (grouped, compound or descendant) makes the gate refuse rather
-   than resolve, and the gate derives the background from Material 9.5's default hue and
+   other than the bare `default` or `slate` one (grouped, compound, descendant or a third
+   scheme), a rule that sets `--md-accent-fg-color`, `--md-primary-fg-color` or
+   `--md-typeset-a-color` under any other selector, and any `@media`/`@supports` wrapper make
+   the gate refuse rather than resolve, a value with `!important` is refused as unparseable,
+   and the gate derives the background from Material 9.5's default hue and
    does not follow a Material version bump that changes it.
 
 ## Repository protection & security (one-time, scripted)

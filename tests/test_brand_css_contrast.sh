@@ -38,11 +38,21 @@ def refuse(str_why):
     sys.exit(INT_REFUSED)
 
 
-for str_prelude in re.findall(r"([^{}]+)\{", str_css):
-    if re.search(r":root|data-md-color-scheme", str_prelude) and not re.fullmatch(
-        r"\s*(:root|\[data-md-color-scheme\s*=\s*[\"']?(slate|default)[\"']?\s*\])\s*", str_prelude
-    ):
-        refuse("grouped, compound or descendant selector on :root or a colour scheme: unresolved")
+RE_BARE = re.compile(
+    r"\s*(:root|\[data-md-color-scheme\s*=\s*[\"']?(slate|default)[\"']?\s*\])\s*"
+)
+RE_GATED = re.compile(
+    r"(?<![\w-])--md-(accent-fg|primary-fg|typeset-a)-color\s*:"
+)
+if re.search(r"@(media|supports|container|layer)\b", str_css):
+    refuse("a conditional at-rule wraps rules: the cascade is unresolved")
+for str_prelude, str_body in re.findall(r"([^{}]+)\{([^}]*)\}", str_css):
+    if RE_BARE.fullmatch(str_prelude):
+        continue
+    if re.search(r":root|data-md-color-scheme", str_prelude):
+        refuse("selector on :root or a colour scheme other than the bare default or slate: unresolved")
+    if RE_GATED.search(str_body):
+        refuse("a gated colour variable is set outside the :root, default and slate blocks: unresolved")
 
 
 def block(str_selector,str_name, is_optional=False):
@@ -113,7 +123,8 @@ yml_problem() {
 	int_scheme=$(grep -cE '^\s*-\s*scheme:' "$str_yml")
 	grep -qE '^\s*-\s*stylesheets/brand\.css\s*$' "$str_yml" || { echo "no stylesheets/brand.css in extra_css"; return; }
 	grep -qE '^\s*accent:' "$str_yml" && { echo "accent: set"; return; }
-	{ [ "$int_primary" -ne "$int_scheme" ] || [ "$int_scheme" -eq 0 ]; } && { echo "primary: custom missing on a palette entry"; return; }
+	[ "$int_scheme" -eq 0 ] && { echo "no palette entries (- scheme:) in mkdocs.yml"; return; }
+	[ "$int_primary" -ne "$int_scheme" ] && { echo "primary: custom missing on a palette entry"; return; }
 	grep -qE '^\s*-\s*(navigation\.top|content\.code\.annotate)\s*$' "$str_yml" && { echo "navigation.top or content.code.annotate enabled"; return; }
 	return 0
 }
@@ -189,6 +200,8 @@ sed 's/^\(\s*\)- scheme: default/&\n\1  accent: indigo/' "$YML" >"$TMP/accent.ym
 check_yml "should-fail: accent: set in mkdocs.yml" "$TMP/accent.yml" refuse "accent: set"
 sed '0,/primary: custom/{/primary: custom/d}' "$YML" >"$TMP/no-primary.yml"
 check_yml "should-fail: primary: custom missing" "$TMP/no-primary.yml" refuse "primary: custom missing"
+sed '/^\s*-\s*scheme:/d' "$YML" >"$TMP/no-palette.yml"
+check_yml "should-fail: no palette entries" "$TMP/no-palette.yml" refuse "no palette entries"
 sed '/stylesheets\/brand\.css/d' "$YML" >"$TMP/no-css.yml"
 check_yml "should-fail: brand.css not in extra_css" "$TMP/no-css.yml" refuse "no stylesheets/brand.css"
 sed 's/^\(\s*\)- navigation\.tabs$/&\n\1- navigation.top/' "$YML" >"$TMP/nav-top.yml"
@@ -233,6 +246,15 @@ check "should-fail: descendant scheme selector is refused, not skipped" "$TMP/de
 check "should-fail: compound scheme selector is refused, not skipped" "$TMP/compound.css" refuse
 { printf '/* :root, then slate */\n'; cat "$CSS"; } >"$TMP/comment.css"
 check "a comment naming :root and a comma does not trip the selector scan" "$TMP/comment.css" pass
+for str_sel in '[data-md-color-accent="indigo"]' '[data-md-color-primary="custom"]' '.md-typeset'; do
+	str_file="$TMP/outside-${str_sel//[^a-z]/}.css"
+	{ cat "$CSS"; printf '\n%s {\n  --md-accent-fg-color: #8c9eff;\n  --md-typeset-a-color: #aaaaaa;\n}\n' "$str_sel"; } >"$str_file"
+	check "should-fail: gated variable set under $str_sel is refused" "$str_file" refuse
+done
+{ cat "$CSS"; printf '\n.x {\n  --md-primary-fg-color--light: #aaaaaa;\n}\n'; } >"$TMP/ungated.css"
+check "an ungated variable outside the scheme blocks passes" "$TMP/ungated.css" pass
+{ cat "$CSS"; printf '\n@media (min-width: 60em) {\n  [data-md-color-scheme="default"] {\n    --md-accent-fg-color: #8c9eff;\n  }\n}\n'; } >"$TMP/media.css"
+check "should-fail: a rule inside @media is refused, not read as unconditional" "$TMP/media.css" refuse
 mkdir "$TMP/docs"
 printf '[x](y){ .md-button }\n' >"$TMP/docs/page.md"
 [ -n "$(md_button_users "$TMP/docs")" ] && echo "ok: md-button in a docs page is detected" || { echo "FAIL: md-button not detected"; int_failures=$((int_failures + 1)); }
