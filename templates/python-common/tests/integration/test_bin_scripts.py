@@ -840,6 +840,72 @@ def test_check_urls_passes_when_the_same_url_resolves(tmp_path: Path) -> None:
     assert "All docstring URLs are reachable" in cls_result.stdout + cls_result.stderr
 
 
+def _run_url_hook_with_cache_override(
+    path_root: Path, path_cache: Path
+) -> subprocess.CompletedProcess:
+    """Run the check-urls hook with ``URL_CHECK_CACHE_DIR`` pointing at ``path_cache``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Directory to scan; also the hook's CWD.
+    path_cache : pathlib.Path
+        The cache directory the hook is told to use.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The completed run.
+    """
+    return subprocess.run(  # noqa: S603
+        [shutil.which("bash") or "bash", str(_bin_script("test_urls_docstrings.sh")), "."],
+        cwd=path_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "URL_CHECK_CACHE_DIR": str(path_cache)},
+    )
+
+
+def test_check_urls_honors_the_cache_dir_override(tmp_path: Path) -> None:
+    """A 200 seeded ONLY in the override dir must satisfy the scan.
+
+    The scanned tree and its CWD hold no cache, so a hook that ignored
+    ``URL_CHECK_CACHE_DIR`` would fetch the 404 URL live and fail.
+    """
+    path_proj = tmp_path / "proj"
+    path_proj.mkdir()
+    (path_proj / "module_under_test.py").write_text(
+        DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
+    )
+    (tmp_path / "elsewhere_parent").mkdir()
+    _seed_url_cache(tmp_path / "elsewhere_parent", _URL_404, "200")
+
+    cls_result = _run_url_hook_with_cache_override(
+        path_proj, tmp_path / "elsewhere_parent" / ".url_check_cache"
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+
+
+def test_check_urls_warns_and_scans_when_the_cache_dir_is_uncreatable(
+    tmp_path: Path,
+) -> None:
+    """An uncreatable cache dir must fall back to a temp dir, warn, and still scan.
+
+    The override sits beneath a regular file, so ``mkdir -p`` fails deterministically
+    (even as root).
+    """
+    path_blocker = tmp_path / "blocker"
+    path_blocker.write_text("not a directory", encoding="utf-8")
+    path_proj = tmp_path / "proj"
+    path_proj.mkdir()
+
+    cls_result = _run_url_hook_with_cache_override(path_proj, path_blocker / "cache")
+
+    assert "Cache dir not writable" in cls_result.stdout + cls_result.stderr
+    assert cls_result.returncode == 0
+
 def test_check_urls_ignores_a_url_outside_any_docstring(tmp_path: Path) -> None:
     """A URL in ordinary code or a ``#`` comment is out of scope and must not fail the gate.
 
