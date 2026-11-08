@@ -424,6 +424,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install pathspec and pyyaml
+        run: python3 -m pip install pathspec pyyaml
+
       - name: Run the --spec should-fail suite (blueprintx#629)
         run: bash tests/test_spec_answers.sh
 
