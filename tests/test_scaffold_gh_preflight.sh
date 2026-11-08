@@ -151,6 +151,9 @@ test_preflight_stops_on_a_non_numeric_budget_or_cost() {
     run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=0560" gh_preflight
     expect_stop "octal cost"
     expect_said "octal cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=500000000" gh_preflight
+    expect_stop "cost whose doubled budget overflows the digit cap"
+    expect_said "huge cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
     run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=99999999999999999999" gh_preflight
     expect_stop "overlong budget"
     expect_said "overlong budget" "SCAFFOLD_GH_GRAPHQL_BUDGET must be a whole number"
@@ -366,7 +369,7 @@ test_board_workflows_empty_list_is_not_unreadable() {
     expect_said "workflows empty" "'Item closed' was not found under that name"
 }
 
-test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
+test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults() {
     local int_calls int_fields
     unset SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET SCAFFOLD_GH_GRAPHQL_MEASURED SCAFFOLD_GH_GRAPHQL_SITES
     run_fn 'y\n\n' "GH_PROJECT_NUMBER=" scaffold_kanban_setup
@@ -453,7 +456,7 @@ main() {
     test_board_workflows_print_the_instruction_when_unreadable
     test_board_workflows_name_the_cause_when_rate_limited
     test_board_workflows_empty_list_is_not_unreadable
-    test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget
+    test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults
     test_graphql_call_sites_match_the_measured_count
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"

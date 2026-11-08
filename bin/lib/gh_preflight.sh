@@ -1,7 +1,7 @@
 #!/bin/bash
 
 : "${SCAFFOLD_GH_GRAPHQL_COST:=560}"
-[[ "$SCAFFOLD_GH_GRAPHQL_COST" =~ ^(0|[1-9][0-9]{0,8})$ ]] && : "${SCAFFOLD_GH_GRAPHQL_BUDGET:=$((SCAFFOLD_GH_GRAPHQL_COST * 2))}"
+[[ "$SCAFFOLD_GH_GRAPHQL_COST" =~ ^(0|[1-9][0-9]{0,7})$ ]] && : "${SCAFFOLD_GH_GRAPHQL_BUDGET:=$((SCAFFOLD_GH_GRAPHQL_COST * 2))}"
 : "${SCAFFOLD_GH_GRAPHQL_SITES:=16}"
 : "${SCAFFOLD_GH_GRAPHQL_MEASURED:=17}"
 : "${SCAFFOLD_RERUN_CMD:=the same blueprintx command}"
@@ -122,8 +122,8 @@ gh_preflight() {
 	local str_err str_login str_rl int_left
 	local str_var
 	for str_var in SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET; do
-		[[ "${!str_var:-}" =~ ^(0|[1-9][0-9]{0,8})$ ]] && continue
-		print_status "error" "${str_var} must be a whole number of GraphQL points (no leading zero, at most 9 digits), got '${!str_var:-}'"
+		[[ "${!str_var:-}" =~ ^(0|[1-9][0-9]{0,7})$ ]] && continue
+		print_status "error" "${str_var} must be a whole number of GraphQL points (no leading zero, at most 8 digits), got '${!str_var:-}'"
 		gh_stop_footer
 	done
 	str_err="$(mktemp)"
