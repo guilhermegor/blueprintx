@@ -871,7 +871,6 @@ def test_type_alias_rebinding_self_is_charged(tmp_path: Path) -> None:
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
 
 
-@pytest.mark.skipif(sys.version_info >= (3, 14), reason="3.14 rejects it")
 @pytest.mark.parametrize(
     "str_config",
     ["def f(x: (Priv := 1)):\n    pass\n", "def f() -> (Priv := 1):\n    pass\n"],
@@ -880,7 +879,7 @@ def test_type_alias_rebinding_self_is_charged(tmp_path: Path) -> None:
 def test_walrus_in_an_annotation_is_charged_where_it_is_legal(
     tmp_path: Path, str_config: str
 ) -> None:
-    """Before 3.14 an annotation runs in the enclosing scope and binds the name."""
+    """The name is charged on every version, including 3.14 where only ``compile`` refuses it."""
     path_init = _tree(
         tmp_path,
         'from ._internal.config import *\n__all__ = ["Priv"]\n',

@@ -181,8 +181,7 @@ test suite keep the contract; this section records the reasoning that lived besi
     strings (second assignment, `+=`, `.append`, `.extend`, subscript write, `[*x]`, `del __all__`)
     is assumed to provide the name. A loop, `with`, unpacking, walrus (in a default, decorator or
     class base or annotation too), `match` capture, `except ... as` or a function's `global` counts as
-    binding. A walrus in an annotation binds at module level before Python 3.14 (measured on 3.12 only) and is
-    rejected from 3.14 on (not measured here; the CPython error is `named expression cannot be used within an annotation`), and `from __future__ import annotations` does not make it legal.
+    binding. A walrus in an annotation binds at module level through 3.13 (measured on 3.12 and 3.13). On 3.14 `ast.parse` still accepts it and only `compile` refuses it (`named expression cannot be used within an annotation`, measured), so the gate charges the name on every version, and `from __future__ import annotations` does not make it legal.
 
     *Remaining limits* (an AST-only reader): a name rebound by assignment (`Doc = _internal_doc`),
     a class built by `create_model(...)`, a `pydantic.dataclasses` decorator, an import through
