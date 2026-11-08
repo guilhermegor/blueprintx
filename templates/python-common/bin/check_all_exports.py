@@ -260,6 +260,8 @@ _SET_DYNAMIC_WRITERS = frozenset(
         "f_globals",
         "_getframe",
         "currentframe",
+        "__globals__",
+        "f_locals",
     }
 )
 

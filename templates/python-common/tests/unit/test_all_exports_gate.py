@@ -741,6 +741,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "from builtins import globals as gl\ngl()['Priv'] = 1\n",
         "from sys import _getframe as g\ng(0).f_globals['Priv'] = 1\n",
         "from inspect import currentframe as c\nc().f_globals['Priv'] = 1\n",
+        "def _f():\n    pass\n_f.__globals__['Priv'] = 1\n",
+        "import inspect\ninspect.stack()[0].frame.f_locals['Priv'] = 1\n",
         "from sys import modules as m\nm[__name__].Priv = 1\n",
         _STR_SELF_MODULE
         + "class A:\n    def f(self):\n        self = me\n        setattr(self, 'Priv', 1)\n"
@@ -778,6 +780,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "alias-globals",
         "alias-getframe",
         "alias-currentframe",
+        "function-globals",
+        "frame-locals",
         "alias-sys-modules",
         "self-reassigned",
         "nested-def-self",
@@ -864,7 +868,7 @@ def test_type_alias_rebinding_self_is_charged(tmp_path: Path) -> None:
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
 
 
-@pytest.mark.skipif(sys.version_info >= (3, 12), reason="3.12 and later reject it")
+@pytest.mark.skipif(sys.version_info >= (3, 14), reason="3.14 rejects it")
 @pytest.mark.parametrize(
     "str_config",
     ["def f(x: (Priv := 1)):\n    pass\n", "def f() -> (Priv := 1):\n    pass\n"],
@@ -873,7 +877,7 @@ def test_type_alias_rebinding_self_is_charged(tmp_path: Path) -> None:
 def test_walrus_in_an_annotation_is_charged_where_it_is_legal(
     tmp_path: Path, str_config: str
 ) -> None:
-    """On 3.11 and earlier an annotation runs in the enclosing scope and binds the name."""
+    """Before 3.14 an annotation runs in the enclosing scope and binds the name."""
     path_init = _tree(
         tmp_path,
         'from ._internal.config import *\n__all__ = ["Priv"]\n',

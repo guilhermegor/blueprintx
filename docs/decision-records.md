@@ -171,7 +171,7 @@ test suite keep the contract; this section records the reasoning that lived besi
 
     *Dynamic bindings* (#1011, #1024): a name is assumed provided when the file names a writer
     (`globals`, `locals`, `vars`, `setattr`, `exec`, `eval`, `__import__`, `modules`, `f_globals`,
-    `_getframe`, `currentframe`), as a bare name, an attribute (`builtins.exec`) or an import alias
+    `_getframe`, `currentframe`, `__globals__`, `f_locals`), as a bare name, an attribute (`builtins.exec`) or an import alias
     from `builtins`, `sys` or `inspect` (`from builtins import exec as run`), anywhere in the tree. The one exemption is
     `setattr(self|cls, ...)` / `vars(self|cls)` on the first parameter of a method that is not a
     `staticmethod`, has no nested def or lambda taking that name as a parameter, and never rebinds
@@ -181,8 +181,8 @@ test suite keep the contract; this section records the reasoning that lived besi
     strings (second assignment, `+=`, `.append`, `.extend`, subscript write, `[*x]`, `del __all__`)
     is assumed to provide the name. A loop, `with`, unpacking, walrus (in a default, decorator or
     class base or annotation too), `match` capture, `except ... as` or a function's `global` counts as
-    binding. A walrus in an annotation is legal only on Python 3.10 and 3.11; 3.12 and later
-    reject it, and `from __future__ import annotations` does not make it legal.
+    binding. A walrus in an annotation binds at module level through Python 3.12 (measured) and is
+    rejected from 3.14 on (measured: `named expression cannot be used within an annotation`), and `from __future__ import annotations` does not make it legal.
 
     *Remaining limits* (an AST-only reader): a name rebound by assignment (`Doc = _internal_doc`),
     a class built by `create_model(...)`, a `pydantic.dataclasses` decorator, an import through
