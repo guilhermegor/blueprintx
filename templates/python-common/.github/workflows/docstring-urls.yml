@@ -28,9 +28,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          open_issues=$(gh issue list --label docstring-urls --state open \
+            --json number --jq 'sort_by(.number) | .[].number')
           if ! grep -qE 'URL (issue|problem)|Failed to access URL' docstring_urls_report.txt; then
             if grep -qF 'All docstring URLs are reachable' docstring_urls_report.txt; then
               echo "No dead docstring URLs."
+              for n in $open_issues; do
+                gh issue close "$n" --comment "All docstring URLs are reachable again."
+              done
             else
               echo "::error::Docstring URL scan produced no verdict."
               cat docstring_urls_report.txt
@@ -46,10 +51,13 @@ jobs:
             grep -E 'URL (issue|problem)|Failed to access URL' docstring_urls_report.txt
             printf '```\n'
           } > docstring_urls_body.md
-          existing=$(gh issue list --label docstring-urls --state open \
-            --json number --jq '.[0].number // empty')
+          existing=$(echo "$open_issues" | head -n 1)
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body-file docstring_urls_body.md
+            for n in $open_issues; do
+              [ "$n" = "$existing" ] || gh issue close "$n" --reason "not planned" \
+                --comment "Duplicate of #$existing."
+            done
           else
             gh issue create --title "Dead docstring URLs" \
               --label docstring-urls --body-file docstring_urls_body.md

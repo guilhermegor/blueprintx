@@ -2803,13 +2803,15 @@ def test_check_urls_cache_defaults_to_the_git_common_dir(tmp_path: Path) -> None
     assert list((tmp_path / ".git" / "url_check_cache").iterdir())
 
 
-@pytest.mark.parametrize("str_status", ["000", "429", "503"])
+@pytest.mark.parametrize("str_status", ["000", "403", "408", "429", "503"])
 def test_check_urls_does_not_cache_a_transient_failure(tmp_path: Path, str_status: str) -> None:
-    """No HTTP answer, a rate limit or a 5xx must never enter the shared cache."""
+    """No HTTP answer, a bot block, a timeout, a rate limit or a 5xx must never be cached."""
     path_bin = tmp_path / "stubs"
     path_bin.mkdir()
     (path_bin / "curl").write_text(f"#!/bin/bash\nprintf {str_status}\n", encoding="utf-8")
     (path_bin / "curl").chmod(0o755)
+    (path_bin / "wget").write_text("#!/bin/bash\nexit 1\n", encoding="utf-8")
+    (path_bin / "wget").chmod(0o755)
     (tmp_path / "mod.py").write_text(f'"""See {_URL_404}."""\n', encoding="utf-8")
     path_cache = tmp_path / "cache"
 
@@ -2827,3 +2829,91 @@ def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
     )
 
     assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
+
+
+def _tracker_step_script() -> str:
+    """Return the shell of the workflow's tracking-issue step.
+
+    Skips when the workflow is not shipped (it needs a GitHub remote).
+
+    Returns
+    -------
+    str
+        The dedented ``run:`` block of the ``Open or Update Tracking Issue`` step.
+    """
+    path_workflow = (
+        Path(__file__).resolve().parents[2] / ".github" / "workflows" / "docstring-urls.yml"
+    )
+    _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
+    str_after = path_workflow.read_text(encoding="utf-8").split("Open or Update Tracking Issue")[1]
+    list_lines = str_after.split("run: |\n")[1].splitlines()
+    return "\n".join(str_line[10:] for str_line in list_lines) + "\n"
+
+
+def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[str]:
+    """Run the tracking step against a stub ``gh`` and return the ``gh`` calls it made.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Scratch directory used as the step's CWD.
+    str_report : str
+        Content of ``docstring_urls_report.txt``.
+    str_open : str
+        Numbers the stub prints for ``gh issue list``, ``\\n``-separated.
+
+    Returns
+    -------
+    list[str]
+        One line per ``gh`` invocation.
+    """
+    path_bin = path_root / "stubs"
+    path_bin.mkdir()
+    path_log = path_root / "gh.log"
+    (path_bin / "gh").write_text(
+        f'#!/bin/bash\necho "$*" >> "{path_log}"\n'
+        f'[ "$2" = list ] && printf "%b" "{str_open}"\nexit 0\n',
+        encoding="utf-8",
+    )
+    (path_bin / "gh").chmod(0o755)
+    (path_root / "docstring_urls_report.txt").write_text(str_report, encoding="utf-8")
+    subprocess.run(  # noqa: S603
+        [_STR_BASH, "-c", _tracker_step_script()],
+        cwd=path_root,
+        env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return path_log.read_text(encoding="utf-8").splitlines() if path_log.exists() else []
+
+
+def test_docstring_urls_workflow_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None:
+    """A clean scan must close every open tracking issue, not leave it open forever."""
+    list_calls = _run_tracker_step(tmp_path, "All docstring URLs are reachable\n", "7\\n9\\n")
+
+    assert [str_call for str_call in list_calls if str_call.startswith("issue close")] == [
+        "issue close 7 --comment All docstring URLs are reachable again.",
+        "issue close 9 --comment All docstring URLs are reachable again.",
+    ]
+
+
+def test_docstring_urls_workflow_dedupes_to_one_open_tracker(tmp_path: Path) -> None:
+    """With duplicates open, a failing scan updates the oldest and closes the rest."""
+    list_calls = _run_tracker_step(tmp_path, "URL issue (404) in a.py (line 1): u\n", "7\\n9\\n")
+
+    assert [str_call for str_call in list_calls if str_call.startswith("issue c")] == [
+        "issue comment 7 --body-file docstring_urls_body.md",
+        "issue close 9 --reason not planned --comment Duplicate of #7.",
+    ]
+
+
+def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
+    """The hook must filter on ``.py`` like the script, not on ``types: python``."""
+    path_config = Path(__file__).resolve().parents[2] / ".pre-commit-config.yaml"
+    _skip_unless(path_config.is_file(), "no pre-commit config in this tree")
+    str_hook = path_config.read_text(encoding="utf-8").split("id: check-urls")[1]
+    str_hook = str_hook.split("stages:")[0]
+
+    assert "files: \\.py$" in str_hook
+    assert "types:" not in str_hook

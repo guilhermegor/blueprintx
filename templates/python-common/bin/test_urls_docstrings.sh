@@ -130,7 +130,7 @@ check_url() {
 	fi
 
 	str_status_code=$(probe_url_status "$str_url")
-	[[ "$str_status_code" =~ ^[1-4][0-9][0-9]$ && "$str_status_code" != 429 ]] && set_cache "$str_url" "$str_status_code"
+	[[ "$str_status_code" =~ ^[1-4][0-9][0-9]$ && ! "$str_status_code" =~ ^(403|408|429)$ ]] && set_cache "$str_url" "$str_status_code"
 	echo "$str_status_code"
 }
 
