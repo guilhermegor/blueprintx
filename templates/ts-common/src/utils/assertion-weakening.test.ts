@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { fileFindings } from './assertion-weakening.cjs';
+import { collect, fileFindings } from './assertion-weakening.cjs';
 
 const spec = (matcher: string): string =>
   `it('computes', () => {\n  expect(compute()).${matcher}(5);\n});\n`;
@@ -52,6 +52,42 @@ describe('assertion weakening gate', () => {
 });
 
 describe('assertion weakening gate matching', () => {
+  it('fails closed when the staged diff cannot be read', () => {
+    expect(() => collect('0000000000000000000000000000000000000000')).toThrow();
+  });
+
+});
+
+describe('assertion weakening gate justification', () => {
+  it('does not take a justification reason from the next line', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-'));
+    const run = (...args: string[]): Buffer =>
+      execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', ...args], {
+        cwd: dir,
+        stdio: 'ignore',
+        env: CLEAN_ENV,
+      });
+    try {
+      run('init', '-q');
+      run('checkout', '-q', '-b', 'main');
+      run('config', 'user.email', 'a@b');
+      run('config', 'user.name', 't');
+      fs.writeFileSync(path.join(dir, 'a.test.ts'), spec('toBe'));
+      run('add', '.');
+      run('commit', '-qm', 'init');
+      run('checkout', '-q', '-b', 'feat');
+      fs.writeFileSync(path.join(dir, 'a.test.ts'), spec('toBeGreaterThan'));
+      run('add', '.');
+      run('commit', '-qm', 'weaken', '-m', 'test-change-ok:', '-m', 'unrelated line');
+      fs.writeFileSync(path.join(dir, 'b.txt'), 'x');
+      run('add', '.');
+      const result = spawnSync('node', [GATE], { cwd: dir, env: GATE_ENV, encoding: 'utf8' });
+      expect(result.status).toBe(1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('splits it.each tests so their matchers are not folded into the previous test', () => {
     const each = (matcher: string): string =>
       `it('first', () => {\n  expect(a).toBe(1);\n});\nit.each([[1], [2]])('second %s', (n) => {\n  expect(n).${matcher}(1);\n});\n`;

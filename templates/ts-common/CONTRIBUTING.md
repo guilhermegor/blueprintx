@@ -54,7 +54,8 @@ report the seed and the failing test instead of retrying.
 red test goes green without the behaviour being fixed. `src/**/assertion-weakening.cjs` compares
 every changed `*.test.*` / `*.spec.*` file against the merge-base and fails when a `toBe`,
 `toEqual` or `toStrictEqual` in a test became `toBeGreaterThan`, `toBeLessThan`,
-`toBeGreaterThanOrEqual` or `toBeLessThanOrEqual` at the same position. It judges a change from
+`toBeGreaterThanOrEqual` or `toBeLessThanOrEqual`. It checks `*.test.{ts,tsx,js,jsx}` and
+`*.spec.*` files only (not `.mts`/`.cjs` variants or `__tests__/` files). It judges a change from
 equality, so assertions that were always inequalities (thresholds, budgets) are untouched, and
 strengthening an inequality to equality passes. It runs in `.husky/pre-commit` and in the lint
 workflow, which checks out full history.
@@ -63,9 +64,13 @@ When the expectation was provably wrong, justify the change: put `test-change-ok
 PR body (CI reads it from the event payload, so a re-run after editing the body keeps the old
 text; push a new commit) or in the trailer of an earlier commit on the branch. The commit that
 introduces the weakening cannot carry its own trailer, because the hook runs before the message
-exists: prefix that commit with `TEST_CHANGE_OK='<reason>'`.
-Matching is positional within a test; a reordered set of matchers can misreport, and the
-justification covers that rare case.
+exists: prefix that commit with `TEST_CHANGE_OK='<reason>'` AND put the same `test-change-ok:`
+trailer in its message. The gate re-checks the whole branch since the merge-base on every later
+commit, and the env var is not stored, so only the trailer carries the justification forward.
+Matching is by matcher multiset within a test (same-named tests only): a test that loses a
+`toBe` and gains an unrelated `toBeGreaterThan` is reported, and a loosening masked by another
+`toBe` added in the same test is not. The justification covers the first case. A failing `git`
+call makes the gate fail rather than pass.
 
 ## Pull requests
 

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
 const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.each\((?:[^()]|\([^()]*\))*\)|\.\w+)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
 const RE_MATCHER = /\.(not\.)?(to[A-Z]\w*)\(/g;
-const RE_JUSTIFICATION = /^\s*test-change-ok:\s*(\S.*)$/im;
+const RE_JUSTIFICATION = /^\s*test-change-ok:[ \t]*(\S.*)$/im;
 
 const EQUALITY_MATCHERS = new Set(['toBe', 'toEqual', 'toStrictEqual']);
 const INEQUALITY_MATCHERS = new Set([
@@ -57,13 +57,17 @@ function fileFindings(path, oldSource, newSource) {
     .flatMap((test) => testFindings(path, oldTests.get(test.key), test));
 }
 
+function gitStrict(args) {
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    maxBuffer: 256 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+}
+
 function git(args) {
   try {
-    return execFileSync('git', args, {
-      encoding: 'utf8',
-      maxBuffer: 256 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
+    return gitStrict(args);
   } catch {
     return '';
   }
@@ -91,21 +95,22 @@ function changedPaths(output) {
   const rows = [];
   for (let index = 0; index < tokens.length - 1; ) {
     const width = /^[RC]/.test(tokens[index]) ? 2 : 1;
-    rows.push(tokens.slice(index + 1, index + 1 + width));
+    rows.push({ status: tokens[index][0], paths: tokens.slice(index + 1, index + 1 + width) });
     index += width + 1;
   }
   return rows;
 }
 
 function collect(base) {
-  const rows = changedPaths(git(['diff', '--cached', '-z', '--name-status', '--find-renames', base])).filter(
-    (paths) => RE_TEST_PATH.test(paths[paths.length - 1]),
+  const output = gitStrict(['diff', '--cached', '-z', '--name-status', '--find-renames', base]);
+  const rows = changedPaths(output).filter(
+    (row) => row.status !== 'A' && row.status !== 'D' && RE_TEST_PATH.test(row.paths[row.paths.length - 1]),
   );
-  return rows.flatMap((paths) => {
-    const newPath = paths[paths.length - 1];
-    const oldSource = git(['show', `${base}:${paths[0]}`]);
-    const newSource = git(['show', `:${newPath}`]);
-    return oldSource && newSource ? fileFindings(newPath, oldSource, newSource) : [];
+  return rows.flatMap((row) => {
+    const newPath = row.paths[row.paths.length - 1];
+    const oldSource = gitStrict(['show', `${base}:${row.paths[0]}`]);
+    const newSource = gitStrict(['show', `:${newPath}`]);
+    return fileFindings(newPath, oldSource, newSource);
   });
 }
 
@@ -121,7 +126,13 @@ function main() {
     console.error('could not resolve a merge-base against the default branch - refusing to pass blind.');
     return 1;
   }
-  const findings = collect(base);
+  let findings;
+  try {
+    findings = collect(base);
+  } catch (error) {
+    console.error(`git failed while reading the staged diff - refusing to pass blind: ${error.message}`);
+    return 1;
+  }
   findings.forEach((finding) => console.log(finding));
   if (findings.length === 0) return 0;
   const reason = justification(base);
@@ -130,6 +141,6 @@ function main() {
   return 1;
 }
 
-module.exports = { fileFindings };
+module.exports = { fileFindings, collect };
 
 if (require.main === module) process.exit(main());
