@@ -31,8 +31,8 @@ The locale is **checked**, not just recorded: the generated project's
 `poe lint`) reads `theme.language` from `mkdocs.yml` and fails, naming the file and line, when a
 prose paragraph of `README.md` or of a page under `docs_dir` is written in the other locale. The
 page set comes from `mkdocs.yml` (`docs_dir`, `exclude_docs`), so a tree that config already
-excludes is never read. Fenced code, inline code, links and tables are ignored, and a
-`docs-lang:ok` marker in a paragraph skips it. A `theme.language` other than `en` or `pt-BR`
+excludes is never read. Fenced code, YAML front matter, multi-line HTML comments, inline code, links and tables are
+ignored, and a `docs-lang:ok` marker in a paragraph (outside inline code) skips it. A `theme.language` other than `en` or `pt-BR`
 fails closed. Its Portuguese function words are the ones `check_comment_language.py` uses.
 
 ⚠️ The shipped templates are English, so a project scaffolded as `pt-BR` gets

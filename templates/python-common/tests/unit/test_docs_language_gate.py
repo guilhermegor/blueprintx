@@ -288,3 +288,84 @@ def test_main_docs_dir_outside_root_reports_instead_of_raising(tmp_path: Path) -
     _write(path_root / "mkdocs.yml", STR_MKDOCS_EN + "docs_dir: ../site-docs\n")
     _write(tmp_path / "site-docs" / "index.md", STR_PT)
     assert _run(path_root) == 1
+
+
+STR_FOREIGN_BLOCK = "que não para com isso, para que não\n"
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        "---\ntitle: " + STR_FOREIGN_BLOCK + "---\n\n" + STR_EN,
+        STR_EN + "\n<!--\n" + STR_FOREIGN_BLOCK + "-->\n",
+        STR_EN + "\n   ```\n" + STR_FOREIGN_BLOCK + "   ```\n",
+        STR_EN + "\n<!-- docs-lang:ok --> Esta é a página que você pode ler, que não.\n",
+    ],
+)
+def test_main_front_matter_comments_and_shallow_fences_are_not_prose(
+    tmp_path: Path, str_text: str
+) -> None:
+    """Front matter, multi-line comments and 0-3 space fences are blanked, not scored."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", str_text)
+    assert _run(tmp_path) == 0
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        STR_EN + "\n    ```\n\n" + STR_PT,
+        STR_PT + "Mention `docs-lang:ok` here.\n",
+    ],
+)
+def test_main_deep_indent_fence_and_quoted_escape_do_not_hide_prose(
+    tmp_path: Path, str_text: str
+) -> None:
+    """A 4-space-indented fence is not a fence, and a quoted escape does not escape."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", str_text)
+    assert _run(tmp_path) == 1
+
+
+def test_main_marker_inside_fenced_code_does_not_skip_page(tmp_path: Path) -> None:
+    """A page that shows the untranslated marker in a fence is still checked."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_PT)
+    str_fence = "\n```\n<!-- docs-lang:untranslated -->\n```\n"
+    _write(tmp_path / "docs" / "index.md", STR_EN + str_fence)
+    assert _run(tmp_path) == 1
+
+
+LIST_READS: list = []
+
+FN_READ_TEXT = Path.read_text
+
+
+def _counting_read_text(self: Path, *list_args: object, **dict_kwargs: object) -> str:
+    """Record the name of each file read, then read it.
+
+    Parameters
+    ----------
+    self : pathlib.Path
+        The file being read.
+    *list_args : object
+        Positional arguments for ``Path.read_text``.
+    **dict_kwargs : object
+        Keyword arguments for ``Path.read_text``.
+
+    Returns
+    -------
+    str
+        The file's text.
+    """
+    LIST_READS.append(self.name)
+    return FN_READ_TEXT(self, *list_args, **dict_kwargs)
+
+
+def test_main_reads_each_page_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The skip count comes from the first read, not a second pass over every page."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", STR_EN)
+    LIST_READS.clear()
+    monkeypatch.setattr(Path, "read_text", _counting_read_text)
+    _run(tmp_path)
+    assert LIST_READS.count("index.md") == 1

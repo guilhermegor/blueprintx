@@ -14,17 +14,18 @@ How it decides:
    not a directory fails rather than leaving the README alone to pass. A project with no
    ``mkdocs.yml``, or whose page set is empty, fails: a gate that checked nothing must not
    print success.
-2. **Prose only.** Fenced code, inline code, links, bare URLs, HTML tags and table rows are
+2. **Prose only.** Fenced code (fences indented 0-3 spaces, as CommonMark has it), YAML front
+   matter, multi-line HTML comments, inline code, links, bare URLs, HTML tags and table rows are
    blanked before counting, so quoting a command or naming a Portuguese product proves nothing.
 3. **One verdict per paragraph.** Each paragraph is scored against every locale's function-word
    set; the paragraph reads as the locale with the most hits, and only when that count reaches
    ``INT_MIN_HITS`` and beats the declared locale's own. The Portuguese set is imported from
    ``check_comment_language`` rather than copied, so the two gates cannot disagree about it.
-4. **Escape.** ``docs-lang:ok`` anywhere in a paragraph skips it. ``docs-lang:untranslated``
-   anywhere in a page skips the whole page and is counted in the final line, so skipped pages are
-   never silent. A scaffold whose locale is not ``en`` appends it to every shipped page, which
-   the English templates would otherwise fail on the first lint; deleting it is the act of
-   declaring the page translated.
+4. **Escape.** ``docs-lang:ok`` in a paragraph, outside inline code, skips it.
+   ``docs-lang:untranslated`` as its own HTML comment line outside fenced code skips the whole page
+   and is counted in the final line, so skipped pages are never silent. A scaffold whose locale
+   is not ``en`` appends it to every shipped page, which the English templates would otherwise
+   fail on the first lint; deleting it is the act of declaring the page translated.
 
 A locale outside ``DICT_LOCALE_WORDS`` fails closed: the gate cannot say what it would be
 checking against.
@@ -89,8 +90,13 @@ STR_DEFAULT_LOCALE = "en"
 
 STR_DEFAULT_DOCS_DIR = "docs"
 
+RE_CODE_SPAN = re.compile(r"`[^`\n]*`")
+
+RE_MULTILINE_BLANK = re.compile(
+    r"\A---\n.*?\n(?:---|\.\.\.)[ \t]*$|<!--.*?-->", re.DOTALL | re.MULTILINE
+)
+
 TUPLE_BLANKINGS = (
-    re.compile(r"`[^`\n]*`"),
     re.compile(r"!?\[[^\]\n]*\]\([^)\n]*\)"),
     re.compile(r"https?://\S+"),
     re.compile(r"<[^>\n]+>"),
@@ -98,7 +104,7 @@ TUPLE_BLANKINGS = (
 
 RE_UNTRANSLATED = re.compile(rf"^<!--\s*{re.escape(STR_UNTRANSLATED)}\s*-->\s*$", re.MULTILINE)
 
-RE_FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
+RE_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 
 def declared_locale(dict_mkdocs: dict) -> str:
@@ -201,6 +207,28 @@ def _mask_lines(str_text: str) -> list:
     return list_out
 
 
+def _blank_multiline(list_lines: list) -> list:
+    """Blank YAML front matter and HTML comments that span lines, keeping line numbers.
+
+    Parameters
+    ----------
+    list_lines : list of str
+        The lines ``_mask_lines`` returned, with fenced code already blanked.
+
+    Returns
+    -------
+    list of str
+        The same number of lines, with each blanked span reduced to empty lines.
+    """
+    str_blanked = RE_MULTILINE_BLANK.sub(
+        lambda re_hit: re.sub(r"[^\n]", "", re_hit.group())
+        if "\n" in re_hit.group()
+        else re_hit.group(),
+        "\n".join(list_lines),
+    )
+    return str_blanked.split("\n")
+
+
 def prose_paragraphs(str_text: str) -> list:
     """Split a page into its prose paragraphs, keyed by start line.
 
@@ -218,12 +246,13 @@ def prose_paragraphs(str_text: str) -> list:
     list_out: list = []
     list_block: list = []
     int_start = 0
-    for int_line, str_line in enumerate(_mask_lines(str_text), 1):
+    for int_line, str_line in enumerate(_blank_multiline(_mask_lines(str_text)), 1):
         if str_line.strip():
             int_start = int_start or int_line
             list_block.append(str_line)
             continue
         str_para = "\n".join(list_block)
+        str_para = RE_CODE_SPAN.sub(" ", str_para)
         if list_block and STR_ESCAPE not in str_para:
             for re_span in TUPLE_BLANKINGS:
                 str_para = re_span.sub(" ", str_para)
@@ -286,12 +315,13 @@ def is_untranslated(str_text: str) -> bool:
     Returns
     -------
     bool
-        True only for the exact HTML-comment line, not for prose or code that mentions it.
+        True only for the exact HTML-comment line outside fenced code, not for prose or code
+        that mentions it.
     """
-    return bool(RE_UNTRANSLATED.search(str_text))
+    return bool(RE_UNTRANSLATED.search("\n".join(_mask_lines(str_text))))
 
 
-def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared: str) -> list:
+def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared: str) -> tuple:
     """Return one message per paragraph of a page written in the wrong locale.
 
     Parameters
@@ -305,13 +335,14 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
 
     Returns
     -------
-    list of str
-        ``path:line`` messages naming the locale the paragraph reads as and an excerpt.
+    tuple of (list of str, bool)
+        ``path:line`` messages naming the locale the paragraph reads as and an excerpt, then
+        whether the page was skipped as untranslated.
     """
-    list_out = []
+    list_out: list = []
     str_text = path_page.read_text(encoding="utf-8")
     if is_untranslated(str_text):
-        return list_out
+        return list_out, True
     for int_line, str_para in prose_paragraphs(str_text):
         str_read = paragraph_locale(str_para, str_declared)
         if str_read != str_declared:
@@ -320,7 +351,7 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
                 f"❌ {os.path.relpath(path_page, path_root)}:{int_line}: paragraph reads as "
                 f"{str_read} but theme.language is {str_declared} -- {str_excerpt}…"
             )
-    return list_out
+    return list_out, False
 
 
 def _load_config(path_root: pathlib.Path) -> tuple:
@@ -384,11 +415,8 @@ def main(list_argv: list) -> int:
     if str_error:
         print(f"❌ {str_error}")
         return 1
-    list_problems = [
-        str_problem
-        for path_page in list_pages
-        for str_problem in page_problems(path_page, path_root, str_declared)
-    ]
+    list_results = [page_problems(path_page, path_root, str_declared) for path_page in list_pages]
+    list_problems = [str_problem for list_found, _ in list_results for str_problem in list_found]
     for str_problem in list_problems:
         print(str_problem)
     if list_problems:
@@ -397,7 +425,7 @@ def main(list_argv: list) -> int:
             f"change theme.language, or add {STR_ESCAPE} to the paragraph."
         )
         return 1
-    int_skipped = sum(is_untranslated(path_page.read_text("utf-8")) for path_page in list_pages)
+    int_skipped = sum(bool_skipped for _, bool_skipped in list_results)
     str_note = f", {int_skipped} skipped as {STR_UNTRANSLATED}" if int_skipped else ""
     print(f"✅ docs language is {str_declared} ({len(list_pages)} page(s) checked{str_note})")
     return 0
