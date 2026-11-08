@@ -2,7 +2,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 
 const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
-const RE_TEST_START = /\b(?:it|test)(?:\.\w+)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
+const RE_TEST_START = /\b(?:it|test)(?:\.each\((?:[^()]|\([^()]*\))*\)|\.\w+)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
 const RE_MATCHER = /\.(not\.)?(to[A-Z]\w*)\(/g;
 const RE_JUSTIFICATION = /^\s*test-change-ok:\s*(\S.*)$/im;
 
@@ -94,7 +94,12 @@ function collect(base) {
   });
 }
 
+function hasCommits() {
+  return Boolean(git(['rev-parse', '--verify', '--quiet', 'HEAD']).trim());
+}
+
 function main() {
+  if (!hasCommits()) return 0;
   const ref = defaultBranch();
   const base = ref ? git(['merge-base', ref, 'HEAD']).trim() : '';
   if (!base) {
