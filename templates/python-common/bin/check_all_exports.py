@@ -569,7 +569,7 @@ def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_para
 
 
 def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    """Return whether a def is decorated with ``staticmethod``, bare or as an attribute.
+    """Return whether a def is a ``staticmethod``: decorated so, or the implicit ``__new__``.
 
     Parameters
     ----------
@@ -579,9 +579,9 @@ def _is_static(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     Returns
     -------
     bool
-        ``True`` when a decorator is named ``staticmethod``.
+        ``True`` when a decorator is named ``staticmethod`` or the def is ``__new__``.
     """
-    return any(
+    return cls_fn.name == "__new__" or any(
         "staticmethod" in {getattr(cls_dec, "id", None), getattr(cls_dec, "attr", None)}
         for cls_dec in cls_fn.decorator_list
     )

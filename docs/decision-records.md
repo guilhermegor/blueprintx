@@ -172,17 +172,17 @@ test suite keep the contract; this section records the reasoning that lived besi
     *Dynamic bindings* (#1011, #1024): a name is assumed provided when the file names a writer
     (`globals`, `locals`, `vars`, `setattr`, `exec`, `eval`, `__import__`, `modules`, `f_globals`,
     `_getframe`, `currentframe`, `__globals__`, `f_locals`), as a bare name, an attribute (`builtins.exec`) or an import alias
-    from `builtins`, `sys` or `inspect` (`from builtins import exec as run`), anywhere in the tree. The one exemption is
+    from `builtins`, `sys` or `inspect` (`from builtins import exec as run`), anywhere in the file. The one exemption is
     `setattr(self|cls, ...)` / `vars(self|cls)` on the first parameter of a method that is not a
-    `staticmethod`, has no nested def or lambda taking that name as a parameter, and never rebinds
+    `staticmethod` (nor the implicit one, `__new__`), has no nested def or lambda taking that name as a parameter, and never rebinds
     it (assignment, `del`, `import ... as`, `match`
     capture, `except ... as`, `type`, or a nested `def`/`class` of that name). The call may sit
     anywhere in the method, closures over `self` included. An `__all__` that is not one literal list of
     strings (second assignment, `+=`, `.append`, `.extend`, subscript write, `[*x]`, `del __all__`)
     is assumed to provide the name. A loop, `with`, unpacking, walrus (in a default, decorator or
     class base or annotation too), `match` capture, `except ... as` or a function's `global` counts as
-    binding. A walrus in an annotation binds at module level through Python 3.12 (measured) and is
-    rejected from 3.14 on (measured: `named expression cannot be used within an annotation`), and `from __future__ import annotations` does not make it legal.
+    binding. A walrus in an annotation binds at module level before Python 3.14 (measured on 3.12 only) and is
+    rejected from 3.14 on (not measured here; the CPython error is `named expression cannot be used within an annotation`), and `from __future__ import annotations` does not make it legal.
 
     *Remaining limits* (an AST-only reader): a name rebound by assignment (`Doc = _internal_doc`),
     a class built by `create_model(...)`, a `pydantic.dataclasses` decorator, an import through

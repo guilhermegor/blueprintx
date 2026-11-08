@@ -763,6 +763,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         + "class A:\n    def f(self):\n        try:\n            pass\n"
         + "        except Exception as self:\n            pass\n        setattr(self, 'Priv', 1)\n"
         + "A().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def __new__(cls):\n        setattr(cls, 'Priv', 1)\nA.__new__(me)\n",
         "def f(x=(Priv := 1)):\n    pass\n",
         "def f(*, x=(Priv := 1)):\n    pass\n",
         "g = lambda x=(Priv := 1): x\n",
@@ -789,6 +791,7 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "import-as-self",
         "match-capture-self",
         "except-as-self",
+        "implicit-staticmethod-new",
         "walrus-default",
         "walrus-kwonly-default",
         "walrus-lambda-default",
