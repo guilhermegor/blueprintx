@@ -225,15 +225,17 @@ test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton() {
 }
 
 test_absent_docs_locale_is_refused_on_every_python_tier() {
-    local meta skeleton file out int_rc str_bad=""
+    local meta skeleton file out int_rc str_bad="" int_tiers=0
     for meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
         grep -q '^language=python$' "$meta" || continue
+        int_tiers=$((int_tiers + 1))
         skeleton="$(basename "$(dirname "$meta")")"
         file="$(SPEC_NO_DOCS_LOCALE=1 write_spec "tier-$skeleton" "$skeleton" "project_root=$WORK_DIR/tier-$skeleton-root")"
         out="$(run_blueprintx new --spec "$file" --dry-run)"
         int_rc=$?
         { [ "$int_rc" -ne 0 ] && [[ "$out" == *"'docs_locale' is required"* ]]; } || str_bad="$str_bad $skeleton"
     done
+    [ "$int_tiers" -gt 0 ] || str_bad=" (no Python tier found)"
     if [ -z "$str_bad" ]; then
         pass "a spec with no docs_locale is refused on every Python tier"
     else
