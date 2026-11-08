@@ -501,14 +501,16 @@ def _names_writer(cls_sub: ast.AST) -> bool:
     Returns
     -------
     bool
-        ``True`` for a bare or attribute writer name, a ``__class__`` store, or
-        ``from x import <writer> as y``.
+        ``True`` for a bare or attribute writer name, a ``__class__`` store (not on
+        ``self``/``cls``), or ``from x import <writer> as y``.
     """
     if isinstance(cls_sub, ast.Name):
         return cls_sub.id in _SET_DYNAMIC_WRITERS
     if isinstance(cls_sub, ast.Attribute):
         return cls_sub.attr in _SET_DYNAMIC_WRITERS or (
-            cls_sub.attr == "__class__" and isinstance(cls_sub.ctx, ast.Store)
+            cls_sub.attr == "__class__"
+            and isinstance(cls_sub.ctx, ast.Store)
+            and not (isinstance(cls_sub.value, ast.Name) and cls_sub.value.id in {"self", "cls"})
         )
     return (
         isinstance(cls_sub, ast.ImportFrom)
@@ -599,17 +601,21 @@ def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         ``True`` when the def is ``__new__`` or carries a decorator outside the safe set.
     """
     return cls_fn.name == "__new__" or not all(
-        _is_safe_decorator(cls_dec) for cls_dec in cls_fn.decorator_list
+        _is_safe_decorator(cls_dec, cls_fn.name) for cls_dec in cls_fn.decorator_list
     )
 
 
-def _is_safe_decorator(cls_dec: ast.expr) -> bool:
+def _is_safe_decorator(cls_dec: ast.expr, str_method: str) -> bool:
     """Return whether a decorator is one of the known names that never calls the method.
+
+    A property accessor counts only on the method's own name (``@x.setter def x``).
 
     Parameters
     ----------
     cls_dec : ast.expr
         One entry of ``decorator_list``.
+    str_method : str
+        The name of the decorated method.
 
     Returns
     -------
@@ -619,7 +625,11 @@ def _is_safe_decorator(cls_dec: ast.expr) -> bool:
     if isinstance(cls_dec, ast.Name):
         return cls_dec.id in _SET_SAFE_DECORATORS
     return isinstance(cls_dec, ast.Attribute) and (
-        cls_dec.attr in _SET_ACCESSORS
+        (
+            cls_dec.attr in _SET_ACCESSORS
+            and isinstance(cls_dec.value, ast.Name)
+            and cls_dec.value.id == str_method
+        )
         or (
             cls_dec.attr in _SET_SAFE_DECORATORS
             and isinstance(cls_dec.value, ast.Name)
@@ -650,7 +660,8 @@ def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> 
     return any(
         _bound_name(cls_sub) == str_param
         and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
-        for cls_sub in ast.walk(cls_fn)
+        for cls_stmt in cls_fn.body
+        for cls_sub in ast.walk(cls_stmt)
     )
 
 
@@ -667,16 +678,10 @@ def _shadows_writer(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     bool
         ``True`` when a call to either name in the body may not reach the builtin.
     """
-    cls_args = cls_fn.args
-    set_params = {
-        cls_a.arg
-        for cls_a in (*cls_args.posonlyargs, *cls_args.args, *cls_args.kwonlyargs)
-        + (cls_args.vararg, cls_args.kwarg)
-        if cls_a
-    }
-    return bool(set_params & {"setattr", "vars"}) or any(
-        _rebinds(cls_fn, str_writer) for str_writer in ("setattr", "vars")
-    )
+    return any(
+        isinstance(cls_sub, ast.arg) and cls_sub.arg in {"setattr", "vars"}
+        for cls_sub in ast.walk(cls_fn)
+    ) or any(_rebinds(cls_fn, str_writer) for str_writer in ("setattr", "vars"))
 
 
 def _bound_name(cls_node: ast.AST) -> str | None:
@@ -698,7 +703,8 @@ def _bound_name(cls_node: ast.AST) -> str | None:
         return cls_node.asname or cls_node.name.split(".")[0]
     if isinstance(cls_node, ast.MatchMapping):
         return cls_node.rest
-    return getattr(cls_node, "name", None)
+    str_name = getattr(cls_node, "name", None)
+    return str_name if isinstance(str_name, str) else None
 
 
 def _methods(list_nodes: list[ast.stmt]) -> Iterator[ast.FunctionDef | ast.AsyncFunctionDef]:

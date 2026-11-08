@@ -795,6 +795,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         + "        setattr(self, 'Priv', 1)\n",
         "class A:\n    def f(self, v):\n        match v:\n            case [*self]:\n                pass\n"
         + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @evil.setter\n    def f(self, v):\n        setattr(self, 'Priv', v)\n",
+        "class A:\n    def f(self, w):\n        (lambda setattr: setattr(self, 'Priv', 1))(w)\n",
         "__all__ = ['Other']\ndel __all__\nPriv = 1\n",
     ],
     ids=[
@@ -832,6 +834,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "walrus-self",
         "match-mapping-rest-self",
         "match-star-self",
+        "accessor-on-foreign-receiver",
+        "nested-lambda-parameter-shadows-setattr",
         "del-all",
     ],
 )
@@ -868,6 +872,9 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "class A:\n    @f.setter\n    def f(self, v):\n        setattr(self, 'Priv', v)\n",
         "class A:\n    @f.getter\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
         "class A:\n    @f.deleter\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def vars(self):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        self.__class__ = A\n",
+        "import builtins\nclass A:\n    @builtins.classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
         "from typing import override\nclass A:\n    @override\n    def f(self):\n"
         + "        setattr(self, 'Priv', 1)\n",
         "import typing_extensions\nclass A:\n    @typing_extensions.override\n    def f(self):\n"
@@ -891,6 +898,9 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "setter-decorator",
         "getter-decorator",
         "deleter-decorator",
+        "method-named-vars",
+        "class-store-on-self",
+        "builtins-classmethod",
         "override-decorator",
         "typing-extensions-override-decorator",
         "cached-property-decorator",
