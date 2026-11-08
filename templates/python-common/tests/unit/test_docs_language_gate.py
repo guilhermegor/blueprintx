@@ -274,6 +274,14 @@ def test_main_untranslated_marker_does_not_excuse_other_pages(tmp_path: Path) ->
     assert _run(tmp_path) == 1
 
 
+def test_main_marker_mentioned_in_prose_does_not_skip_page(tmp_path: Path) -> None:
+    """Prose that merely names the marker must not exempt a wrong-language page."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_PT)
+    str_mention = "\nUse `<!-- docs-lang:untranslated -->` to skip.\n"
+    _write(tmp_path / "docs" / "index.md", STR_EN + str_mention)
+    assert _run(tmp_path) == 1
+
+
 def test_main_docs_dir_outside_root_reports_instead_of_raising(tmp_path: Path) -> None:
     """A ``docs_dir`` above the project root yields a finding, not a traceback."""
     path_root = tmp_path / "proj"

@@ -96,6 +96,8 @@ TUPLE_BLANKINGS = (
     re.compile(r"<[^>\n]+>"),
 )
 
+RE_UNTRANSLATED = re.compile(rf"^<!--\s*{re.escape(STR_UNTRANSLATED)}\s*-->\s*$", re.MULTILINE)
+
 RE_FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
 
 
@@ -273,6 +275,22 @@ def paragraph_locale(str_paragraph: str, str_declared: str) -> str:
     return str_declared
 
 
+def is_untranslated(str_text: str) -> bool:
+    """Tell whether a page carries the untranslated marker as its own comment line.
+
+    Parameters
+    ----------
+    str_text : str
+        The page's text.
+
+    Returns
+    -------
+    bool
+        True only for the exact HTML-comment line, not for prose or code that mentions it.
+    """
+    return bool(RE_UNTRANSLATED.search(str_text))
+
+
 def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared: str) -> list:
     """Return one message per paragraph of a page written in the wrong locale.
 
@@ -292,7 +310,7 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
     """
     list_out = []
     str_text = path_page.read_text(encoding="utf-8")
-    if STR_UNTRANSLATED in str_text:
+    if is_untranslated(str_text):
         return list_out
     for int_line, str_para in prose_paragraphs(str_text):
         str_read = paragraph_locale(str_para, str_declared)
@@ -379,7 +397,7 @@ def main(list_argv: list) -> int:
             f"change theme.language, or add {STR_ESCAPE} to the paragraph."
         )
         return 1
-    int_skipped = sum(STR_UNTRANSLATED in path_page.read_text("utf-8") for path_page in list_pages)
+    int_skipped = sum(is_untranslated(path_page.read_text("utf-8")) for path_page in list_pages)
     str_note = f", {int_skipped} skipped as {STR_UNTRANSLATED}" if int_skipped else ""
     print(f"✅ docs language is {str_declared} ({len(list_pages)} page(s) checked{str_note})")
     return 0
