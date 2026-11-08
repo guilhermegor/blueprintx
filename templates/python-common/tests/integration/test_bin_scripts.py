@@ -16,6 +16,7 @@ work tree instead of aborting ``init``).
 
 from collections.abc import Mapping
 import importlib.util
+import itertools
 import os
 from pathlib import Path
 import re
@@ -2847,7 +2848,9 @@ def _tracker_step_script() -> str:
     _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
     str_after = path_workflow.read_text(encoding="utf-8").split("Open or Update Tracking Issue")[1]
     list_lines = str_after.split("run: |\n")[1].splitlines()
-    return "\n".join(str_line[10:] for str_line in list_lines) + "\n"
+    fn_indented = lambda str_line: str_line.startswith(" " * 10)  # noqa: E731
+    list_body = list(itertools.takewhile(fn_indented, list_lines))
+    return "\n".join(str_line[10:] for str_line in list_body) + "\n"
 
 
 def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[str]:
@@ -2877,14 +2880,15 @@ def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[s
     )
     (path_bin / "gh").chmod(0o755)
     (path_root / "docstring_urls_report.txt").write_text(str_report, encoding="utf-8")
-    subprocess.run(  # noqa: S603
-        [_STR_BASH, "-c", _tracker_step_script()],
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, "-ec", _tracker_step_script()],
         cwd=path_root,
         env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
         capture_output=True,
         text=True,
         check=False,
     )
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     return path_log.read_text(encoding="utf-8").splitlines() if path_log.exists() else []
 
 
