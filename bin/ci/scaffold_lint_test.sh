@@ -91,6 +91,12 @@ spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
         "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
 
+if ! grep -qx "  language: $DOCS_LOCALE" "$PROJECT_PATH/mkdocs.yml"; then
+    echo "ERROR: DOCS_LOCALE=$DOCS_LOCALE did not reach the generated mkdocs.yml (language:)" >&2
+    exit 1
+fi
+echo "Generated mkdocs.yml carries language: $DOCS_LOCALE."
+
 str_leaked="$(find "$PROJECT_PATH" \
     \( -type d \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.ruff_cache' \
     -o -name '.mypy_cache' \) -o -type f -name '*.py[cod]' \) -print)"
