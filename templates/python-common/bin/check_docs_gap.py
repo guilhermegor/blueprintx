@@ -238,7 +238,7 @@ def published_pages(
     for path_md in sorted(_walk_markdown(path_docs)[0]):
         str_rel = path_md.relative_to(path_docs).as_posix()
         is_excluded = any(spec.match_file(str_rel) for spec in tuple_specs)
-        if str_rel in ("CLAUDE.md", "AGENTS.md") or is_excluded:
+        if str_rel in {"CLAUDE.md", "AGENTS.md"} or is_excluded:
             continue
         list_pages.append(str_rel)
     return list_pages

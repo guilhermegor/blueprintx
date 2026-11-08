@@ -665,7 +665,7 @@ def _matching_deny_key(str_target: str, dict_deny: dict) -> str | None:
         str_key
         for str_key in dict_deny
         if (str_target == str_key or str_target.startswith(f"{str_key}."))
-        if "." in str_key or str_target.split(".")[0] == str_key
+        if "." in str_key or str_target.split(".", 1)[0] == str_key
     ]
     return max(list_hits, key=len) if list_hits else None
 

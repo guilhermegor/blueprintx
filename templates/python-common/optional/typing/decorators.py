@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import ParamSpec, TypeVar
 
 from chassis.typing.validate import create_type_checked_method
 
 
-def type_checker(func: Callable[..., Any]) -> Callable[..., Any]:
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def type_checker(func: Callable[P, R]) -> Callable[P, R]:
     """Wrap ``func`` with runtime argument type checking from its annotations.
 
     Use on standalone module-level functions, or on a method whose class cannot
@@ -16,12 +20,12 @@ def type_checker(func: Callable[..., Any]) -> Callable[..., Any]:
 
     Parameters
     ----------
-    func : Callable[..., Any]
+    func : Callable[P, R]
         Function to wrap.
 
     Returns
     -------
-    Callable[..., Any]
+    Callable[P, R]
         Wrapped callable that validates argument types on every call.
 
     Examples

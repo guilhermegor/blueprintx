@@ -119,7 +119,7 @@ def plan_file(
     if not path_project_file.is_file():
         return "add", bytes_theirs
     bytes_ours = path_project_file.read_bytes()
-    if bytes_theirs in (bytes_ours, bytes_base):
+    if bytes_theirs in {bytes_ours, bytes_base}:
         return "same", None
     if bytes_ours == bytes_base:
         return "fast_forward", bytes_theirs

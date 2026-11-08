@@ -2365,6 +2365,32 @@ def _roster_or_verdict(
     return dict_roster, None
 
 
+def _fetch_current_pr(str_repo_full: str, str_number: str, dict_roster: dict) -> dict:
+    """Fetch the PR under check, trusting the roster plus the marker posters.
+
+    Parameters
+    ----------
+    str_repo_full : str
+        ``owner/repo``.
+    str_number : str
+        The PR number, digits only.
+    dict_roster : dict
+        The review-bot roster.
+
+    Returns
+    -------
+    dict
+        The pull-request payload as returned by :func:`fetch_pull_request`.
+    """
+    str_owner, _, str_repo = str_repo_full.partition("/")
+    return fetch_pull_request(
+        str_owner,
+        str_repo,
+        int(str_number),
+        frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
+    )
+
+
 def main(list_argv: list[str] | None = None) -> int:
     """Check the current PR's review threads.
 
@@ -2396,13 +2422,7 @@ def main(list_argv: list[str] | None = None) -> int:
     set_roster = set(dict_roster)
     set_reviewers = reviewer_logins(dict_roster)
 
-    str_owner, _, str_repo = str_repo_full.partition("/")
-    dict_pr = fetch_pull_request(
-        str_owner,
-        str_repo,
-        int(str_number),
-        frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
-    )
+    dict_pr = _fetch_current_pr(str_repo_full, str_number, dict_roster)
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 

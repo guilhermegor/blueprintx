@@ -46,7 +46,7 @@ class _Sample(metaclass=TypeChecker):
         """
         return x * 2
 
-    def maybe(self, value: str | None) -> str:
+    def maybe(self, value: str | None) -> str:  # noqa: PLR6301 -- fixed foreign/port signature
         """Return ``value`` or a placeholder.
 
         Parameters
@@ -61,7 +61,7 @@ class _Sample(metaclass=TypeChecker):
         """
         return value or "<none>"
 
-    def total(self, values: list[int]) -> int:
+    def total(self, values: list[int]) -> int:  # noqa: PLR6301 -- fixed foreign/port signature
         """Sum ``values``.
 
         Parameters

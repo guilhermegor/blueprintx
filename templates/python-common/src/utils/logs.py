@@ -50,8 +50,9 @@ LogLevel = Literal["info", "warning", "error", "critical"]
 class CreateLog(metaclass=TypeChecker):
     """Create and manage log files with a customizable format and caller context."""
 
+    @staticmethod
     def _validate_path(
-        self, path: str
+        path: str
     ) -> None:  # complexity-ok: two distinct validation faults, each with its own message
         """Validate a path string.
 
@@ -89,7 +90,8 @@ class CreateLog(metaclass=TypeChecker):
             return True
         return False
 
-    def _close_handlers(self, logger: logging.Logger) -> None:
+    @staticmethod
+    def _close_handlers(logger: logging.Logger) -> None:
         """Close and detach every handler currently attached to ``logger``.
 
         Parameters
@@ -212,8 +214,8 @@ class CreateLog(metaclass=TypeChecker):
 
         return str_class_name, str_method_name
 
+    @staticmethod
     def _emit(  # complexity-ok: two sinks and one rejected level, one branch each
-        self,
         logger: logging.Logger | None,
         log_level: LogLevel,
         message: str,

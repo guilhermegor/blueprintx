@@ -13,7 +13,8 @@ import pymsteams
 class TeamsNotifier:
     """Adapter that posts notifications to a Microsoft Teams incoming webhook."""
 
-    def _validate_url(self, str_url: str) -> None:
+    @staticmethod
+    def _validate_url(str_url: str) -> None:
         """Validate the webhook URL format.
 
         Parameters

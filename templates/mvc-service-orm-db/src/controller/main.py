@@ -25,7 +25,7 @@ from config.startup import (  # noqa: E402
     YAML_INPUTS,
     output_path,
 )
-from controller._pipeline import PipelineOrchestrator  # noqa: E402
+from controller._pipeline import PipelineOrchestrator  # noqa: E402, PLC2701
 
 
 warnings.simplefilter(action="ignore", category=FutureWarning)

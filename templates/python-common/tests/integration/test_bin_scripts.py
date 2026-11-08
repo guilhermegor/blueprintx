@@ -15,6 +15,7 @@ work tree instead of aborting ``init``).
 """
 
 from collections.abc import Mapping
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -770,8 +771,6 @@ def _seed_url_cache(path_root: Path, str_url: str, str_status: str) -> None:
     -------
     None
     """
-    import hashlib
-
     path_cache = path_root / ".url_check_cache"
     path_cache.mkdir(exist_ok=True)
     str_key = hashlib.md5(str_url.encode()).hexdigest()  # noqa: S324

@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import os
 from pathlib import Path
+import sqlite3
 from typing import Any
 
 from dotenv import load_dotenv
@@ -53,8 +54,6 @@ def _compose_dsn(str_backend: str) -> str:
 @type_checker
 def _connect_sqlite() -> Any:
     """Open a stdlib ``sqlite3`` connection, creating the parent directory."""
-    import sqlite3
-
     path_db = Path(os.getenv("DB_PATH", "./data/app.db"))
     path_db.parent.mkdir(parents=True, exist_ok=True)
     return sqlite3.connect(str(path_db))
@@ -63,7 +62,7 @@ def _connect_sqlite() -> Any:
 @type_checker
 def _connect_postgresql() -> Any:
     """Open a PostgreSQL connection via ``psycopg``."""
-    import psycopg
+    import psycopg  # noqa: PLC0415 -- optional dependency, imported lazily
 
     str_dsn = os.getenv("DB_DSN")
     if str_dsn:
@@ -80,7 +79,7 @@ def _connect_postgresql() -> Any:
 @type_checker
 def _connect_mysql() -> Any:
     """Open a MySQL/MariaDB connection via ``mysql.connector``."""
-    import mysql.connector
+    import mysql.connector  # noqa: PLC0415 -- optional dependency, imported lazily
 
     str_dsn = os.getenv("DB_DSN")
     if str_dsn:
@@ -133,7 +132,7 @@ def _connect_mssql() -> Any:  # complexity-ok: DSN assembly per auth mode
     ``yes``/``no``) — needed for ODBC Driver 18 (which defaults ``Encrypt=yes``) against a
     server with a self-signed certificate.
     """
-    import pyodbc
+    import pyodbc  # noqa: PLC0415 -- optional dependency, imported lazily
 
     str_dsn = os.getenv("DB_DSN")
     if str_dsn:
@@ -165,7 +164,7 @@ def _connect_mssql() -> Any:  # complexity-ok: DSN assembly per auth mode
 @type_checker
 def _connect_oracle() -> Any:
     """Open an Oracle connection via ``oracledb``."""
-    import oracledb
+    import oracledb  # noqa: PLC0415 -- optional dependency, imported lazily
 
     str_dsn = os.getenv("DB_DSN") or _compose_dsn("oracle")
     return oracledb.connect(

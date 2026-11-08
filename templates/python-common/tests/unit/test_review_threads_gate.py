@@ -222,7 +222,7 @@ def test_an_answered_but_open_thread_is_now_reported() -> None:
     assert "NOT resolved" in _sole(cls_gate.find_thread_problems(list_threads, _ROSTER))
 
 
-def test_no_threads_is_not_a_THREAD_problem() -> None:
+def test_no_threads_is_not_a_thread_problem() -> None:
     """A reviewer posting only a status check leaves no thread — not a THREAD failure.
 
     Measured: one tool posted five inline threads on a PR while another posted none at all. A

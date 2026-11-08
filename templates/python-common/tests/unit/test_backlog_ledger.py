@@ -4,6 +4,7 @@ Only the path-classification and ledger-validation seams are tested here — the
 (`merge-base`, `diff --cached`) belongs to an integration test, not a unit one.
 """
 
+import ast
 import importlib.util
 import json
 from pathlib import Path
@@ -840,8 +841,6 @@ def test_not_equal_is_weaker_than_equal() -> None:
 
 def test_skipif_does_not_register_a_skip_mark() -> None:
     """``@pytest.mark.skipif(platform.skip, …)`` holds `skip` in its ARGUMENTS, not as a mark."""
-    import ast
-
     gate_integrity = _load("check_gate_integrity")
     cls_node = ast.parse(
         '@pytest.mark.skipif(platform.skip, reason="x")\ndef test_a() -> None:\n\tpass\n'
@@ -851,8 +850,6 @@ def test_skipif_does_not_register_a_skip_mark() -> None:
 
 def test_a_bare_skip_mark_is_still_registered() -> None:
     """The control: excluding `skipif` must not exclude `skip` itself."""
-    import ast
-
     gate_integrity = _load("check_gate_integrity")
     cls_node = ast.parse("@pytest.mark.skip\ndef test_b() -> None:\n\tpass\n").body[0]
     assert gate_integrity.skip_marks(cls_node) == frozenset({"skip"})

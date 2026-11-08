@@ -8,8 +8,6 @@ argument.
 
 from __future__ import annotations
 
-from typing import Any
-
 from chassis.typing.validate import create_type_checked_method
 
 
@@ -31,8 +29,8 @@ class TypeChecker(type):
     def __new__(  # complexity-ok: metaclass machinery
         cls: type[TypeChecker],
         str_name: str,
-        tuple_bases: tuple,
-        dict_attrs: dict[str, Any],
+        tuple_bases: tuple[type, ...],
+        dict_attrs: dict[str, object],
     ) -> TypeChecker:
         """Wrap public methods with type checking before the class is created.
 
@@ -42,9 +40,9 @@ class TypeChecker(type):
             The metaclass.
         str_name : str
             Name of the class being created.
-        tuple_bases : tuple
+        tuple_bases : tuple[type, ...]
             Base classes.
-        dict_attrs : dict[str, Any]
+        dict_attrs : dict[str, object]
             Class namespace dictionary.
 
         Returns
@@ -57,22 +55,22 @@ class TypeChecker(type):
                 continue
             dict_attrs[str_attr] = _wrap_attribute(attr_value)
         if "__init__" in dict_attrs:
-            dict_attrs["__init__"] = create_type_checked_method(dict_attrs["__init__"])
+            dict_attrs["__init__"] = _wrap_attribute(dict_attrs["__init__"])
         return super().__new__(cls, str_name, tuple_bases, dict_attrs)
 
 
-def _wrap_attribute(attr_value: Any) -> Any:  # complexity-ok: metaclass machinery
+def _wrap_attribute(attr_value: object) -> object:  # complexity-ok: metaclass machinery
     """Wrap a class attribute with type checking, preserving its descriptor.
 
     Parameters
     ----------
-    attr_value : Any
+    attr_value : object
         The class-body attribute (function, staticmethod, classmethod, property,
         or a non-callable).
 
     Returns
     -------
-    Any
+    object
         The wrapped attribute (descriptor preserved), or the attribute unchanged
         when it is not a checkable callable.
     """

@@ -294,7 +294,7 @@ def read_query(
     ContractError
         When the result violates ``cls_contract``.
     """
-    df_raw = pd.read_sql_query(str_sql, cls_connection, params=list_params)
+    df_raw = pd.read_sql_query(str_sql, cls_connection, params=list_params)  # noqa: TID251 -- the one authorised read seam
     return _finalize(df_raw, dict_dtypes, list_date_cols, cls_contract)
 
 
@@ -453,7 +453,9 @@ def decode_positional_payload(  # complexity-ok: two rejection rules, never inve
         int_pos
         for int_pos in range(int_declared, int_widest)
         if any(
-            seq_row[int_pos] not in (None, "") for seq_row in list_rows if len(seq_row) > int_pos
+            seq_row[int_pos] not in (None, "")  # noqa: PLR6201 -- a cell may be unhashable
+            for seq_row in list_rows
+            if len(seq_row) > int_pos
         )
     ]
     if list_populated_surplus:
@@ -501,7 +503,7 @@ def resolve_sheet_name(  # complexity-ok: three documented resolution outcomes, 
     """
     if path_file.suffix.lower() not in {".xlsx", ".xls", ".xlsm"}:
         return ""
-    with pd.ExcelFile(path_file) as cls_excel:
+    with pd.ExcelFile(path_file) as cls_excel:  # noqa: TID251 -- the one authorised read seam
         list_sheets = [str(s) for s in cls_excel.sheet_names]
     if len(list_sheets) == 1:
         return list_sheets[0]
@@ -714,7 +716,7 @@ def _read_csv_raw(
         The raw frame.
     """
     dict_header = {"header": None, "names": list(list_columns)} if list_columns is not None else {}
-    return pd.read_csv(
+    return pd.read_csv(  # noqa: TID251 -- the one authorised read seam
         path_file,
         dtype=str_dtype,
         sep=str_csv_sep,
@@ -801,7 +803,7 @@ def _read_excel_raw(
         The raw frame.
     """
     sheet_excel: str | int = 0 if str_sheet == "" else str_sheet
-    return pd.read_excel(path_file, sheet_name=sheet_excel, dtype=str_dtype, header=int_header_row)
+    return pd.read_excel(path_file, sheet_name=sheet_excel, dtype=str_dtype, header=int_header_row)  # noqa: TID251 -- the one authorised read seam
 
 
 _DICT_RAW_READERS: dict[str, Callable[..., pd.DataFrame]] = {

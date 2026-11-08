@@ -86,7 +86,7 @@ def test_render_roundtrip_preserves_data(df_sample: pd.DataFrame, tmp_path: Path
     """
     path_out = tmp_path / "report.xlsx"
     RenderToExcel(path_out).render(df_sample)
-    df_read = pd.read_excel(path_out, engine="openpyxl")
+    df_read = pd.read_excel(path_out, engine="openpyxl")  # noqa: TID251 -- reads back the rendered output to assert on it
     pd.testing.assert_frame_equal(df_read, df_sample)
 
 

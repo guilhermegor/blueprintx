@@ -18,15 +18,16 @@ import functools
 import time
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
-from utils.retry._schedule import (
+from utils.retry.log_emitter import LogEmitter
+from utils.retry.policy import RetryPolicy
+
+from ._schedule import (
     _DEFAULT_BASE_WAIT_S,
     _DEFAULT_FACTOR,
     _DEFAULT_MAX_ATTEMPTS,
     _DEFAULT_STRATEGY,
     _compute_backoff_wait,
 )
-from utils.retry.log_emitter import LogEmitter
-from utils.retry.policy import RetryPolicy
 
 
 if TYPE_CHECKING:
