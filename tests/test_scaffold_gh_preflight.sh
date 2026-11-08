@@ -53,7 +53,9 @@ case "$1 $2" in
 "repo create") echo "created" ;;
 "project list") echo "${GH_PROJECT_NUMBER:-}" ;;
 "project create") echo 7 ;;
-"project field-list") case "$*" in *".fields[].name"* | *options*) ;; *) echo PVTSSF_status ;; esac ;;
+"project field-list") case "$*" in *Blocked*) echo PVTSO_blocked ;; *".fields[].name"* | *options*) ;; *) echo PVTSSF_status ;; esac ;;
+"project view") echo PVT_board ;;
+"project item-add") echo PVTI_card ;;
 esac
 exit 0
 STUB
@@ -391,6 +393,24 @@ test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults() {
     unset SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET SCAFFOLD_GH_GRAPHQL_MEASURED SCAFFOLD_GH_GRAPHQL_SITES
 }
 
+test_the_card_add_path_pins_its_field_list_calls_and_points() {
+    local int_fields int_others int_calls int_doc
+    run_fn '' "GH_PROJECT_NUMBER=7" scaffold_release_issue_card octo/widget https://github.com/octo/widget/issues/1
+    [ "$int_rc" -eq 0 ] || fail "card add: stopped: $str_out"
+    expect_not_said "card add" "Could not place"
+    int_fields="$(grep -c '^project field-list' "$WORK_DIR/gh.log")"
+    int_others="$(grep -cE '^project (view|item-add|item-edit)' "$WORK_DIR/gh.log")"
+    int_calls=$((int_fields + int_others))
+    [ "$int_fields" -eq 2 ] ||
+        fail "the card-add path makes ${int_fields} field-list calls (102 points each), the doc's card-add rows say 2"
+    [ "$int_calls" -eq 5 ] ||
+        fail "the card-add path makes ${int_calls} GraphQL-backed gh calls, the doc says 5 sites (view, 2 field-list, item-add, item-edit)"
+    int_doc="$(awk -F'|' '/^\| card add:/ { gsub(/[^0-9]/, "", $4); int_sum += $4 } END { print int_sum + 0 }' \
+        "$REPO_ROOT/docs/online-scaffold-gh-preflight.md")"
+    [ $((int_fields * 102 + int_others * 2)) -eq "$int_doc" ] ||
+        fail "the card-add path costs $((int_fields * 102 + int_others * 2)) points (102 per field-list, 2 per other call), the doc's card-add rows sum to ${int_doc}"
+}
+
 test_graphql_call_sites_match_the_measured_count() {
     local int_sites
     int_sites="$(cat "$REPO_ROOT"/bin/lib/scaffold_kanban.sh "$REPO_ROOT"/bin/lib/scaffold_git_remote.sh \
@@ -459,6 +479,7 @@ main() {
     test_board_workflows_name_the_cause_when_rate_limited
     test_board_workflows_empty_list_is_not_unreadable
     test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults
+    test_the_card_add_path_pins_its_field_list_calls_and_points
     test_graphql_call_sites_match_the_measured_count
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"

@@ -99,8 +99,12 @@ tell whether 560 still matches what GitHub charges.
 The invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED` and
 `SCAFFOLD_GH_GRAPHQL_SITES`) counts invocations and not points, so a change in
 what one call costs passes it. A new `field-list` in the fresh-setup path
-fails the test's `field-list == 3` check; one on the card-add path is not
-covered by any test yet.
+fails the test's `field-list == 3` check; one on the card-add path fails its
+`field-list == 2` check. That test also sums the three `card add:` rows below
+(210 points) and compares them with 102 points per `field-list` and 2 per other
+call, so editing either the table or the call count alone fails it. The
+`first:100` inside `gh` is not visible to a stub, so a price change is caught
+only through those table rows.
 
 `SCAFFOLD_GH_GRAPHQL_BUDGET` changed unit from calls to points. An old exported
 value (for example `100`) is now about 5x too loose, so the preflight prints a
