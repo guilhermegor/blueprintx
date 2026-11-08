@@ -2860,7 +2860,7 @@ def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[s
     str_report : str
         Content of ``docstring_urls_report.txt``.
     str_open : str
-        Numbers the stub prints for ``gh issue list``, ``\\n``-separated.
+        Issue numbers the stub prints for ``gh issue list``, separated by escaped newlines.
 
     Returns
     -------
