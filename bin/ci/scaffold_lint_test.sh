@@ -240,6 +240,21 @@ echo "::group::poe integration_tests"
 bash bin/poe_exec.sh integration_tests || [ $? -eq 5 ]
 echo "::endgroup::"
 
+echo "::group::final tree is self-consistent"
+git add -A
+git diff --cached --quiet \
+    || { echo "ERROR: [$SKELETON] the tree has uncommitted changes after the run:" >&2; git status --short >&2; exit 1; }
+if git remote get-url origin >/dev/null 2>&1; then
+    [ -z "$(git rev-list origin/main..main)" ] \
+        || { echo "ERROR: [$SKELETON] local main has commits origin/main lacks:" >&2; git rev-list --oneline origin/main..main >&2; exit 1; }
+fi
+[ ! -e .specs/.specs ] \
+    || { echo "ERROR: [$SKELETON] nested .specs/.specs was scaffolded." >&2; exit 1; }
+poetry install --only docs --no-root --no-interaction --no-ansi
+poetry run mkdocs build --strict -d "$(mktemp -d)"
+echo "Final tree: committed, pushed (when a remote exists), no nested .specs, mkdocs --strict builds."
+echo "::endgroup::"
+
 if [ "$SKELETON" = "lib-minimal" ]; then
     echo "::group::built wheel carries py.typed"
     poetry build -f wheel --no-interaction --no-ansi
