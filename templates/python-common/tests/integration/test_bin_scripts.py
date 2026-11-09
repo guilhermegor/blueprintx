@@ -797,7 +797,26 @@ def _run_url_hook(path_root: Path) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         check=False,
+        env={**os.environ, "URL_CHECK_CACHE_DIR": str(path_root / ".url_check_cache")},
     )
+
+
+@pytest.mark.skipif(_STR_GIT is None, reason="git not available -- integration guard only")
+def test_check_urls_uses_the_seeded_cache_inside_a_git_work_tree(tmp_path: Path) -> None:
+    """The seeded cache must be read even when the scanned dir is a git work tree.
+
+    Without the ``URL_CHECK_CACHE_DIR`` isolation in ``_run_url_hook`` the hook would look in
+    the git common dir, miss the seed and fetch the URL live instead.
+    """
+    subprocess.run([str(_STR_GIT), "init", "-q", str(tmp_path)], check=True)  # noqa: S603
+    (tmp_path / "module_under_test.py").write_text(
+        DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
+    )
+    _seed_url_cache(tmp_path, _URL_404, "200")
+
+    cls_result = _run_url_hook(tmp_path)
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
 
 
 @pytest.mark.parametrize("str_shape", sorted(DICT_DOCSTRING_SHAPES))
@@ -838,6 +857,73 @@ def test_check_urls_passes_when_the_same_url_resolves(tmp_path: Path) -> None:
 
     assert cls_result.returncode == 0
     assert "All docstring URLs are reachable" in cls_result.stdout + cls_result.stderr
+
+
+def _run_url_hook_with_cache_override(
+    path_root: Path, path_cache: Path
+) -> subprocess.CompletedProcess:
+    """Run the check-urls hook with ``URL_CHECK_CACHE_DIR`` pointing at ``path_cache``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Directory to scan; also the hook's CWD.
+    path_cache : pathlib.Path
+        The cache directory the hook is told to use.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The completed run.
+    """
+    return subprocess.run(  # noqa: S603
+        [shutil.which("bash") or "bash", str(_bin_script("test_urls_docstrings.sh")), "."],
+        cwd=path_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "URL_CHECK_CACHE_DIR": str(path_cache)},
+    )
+
+
+def test_check_urls_honors_the_cache_dir_override(tmp_path: Path) -> None:
+    """A 200 seeded ONLY in the override dir must satisfy the scan.
+
+    The scanned tree and its CWD hold no cache, so a hook that ignored
+    ``URL_CHECK_CACHE_DIR`` would fetch the 404 URL live and fail.
+    """
+    path_proj = tmp_path / "proj"
+    path_proj.mkdir()
+    (path_proj / "module_under_test.py").write_text(
+        DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
+    )
+    (tmp_path / "elsewhere_parent").mkdir()
+    _seed_url_cache(tmp_path / "elsewhere_parent", _URL_404, "200")
+
+    cls_result = _run_url_hook_with_cache_override(
+        path_proj, tmp_path / "elsewhere_parent" / ".url_check_cache"
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+
+
+def test_check_urls_warns_and_scans_when_the_cache_dir_is_uncreatable(
+    tmp_path: Path,
+) -> None:
+    """An uncreatable cache dir must fall back to a temp dir, warn, and still scan.
+
+    The override sits beneath a regular file, so ``mkdir -p`` fails deterministically
+    (even as root).
+    """
+    path_blocker = tmp_path / "blocker"
+    path_blocker.write_text("not a directory", encoding="utf-8")
+    path_proj = tmp_path / "proj"
+    path_proj.mkdir()
+
+    cls_result = _run_url_hook_with_cache_override(path_proj, path_blocker / "cache")
+
+    assert "Cache dir not writable" in cls_result.stdout + cls_result.stderr
+    assert cls_result.returncode == 0
 
 
 def test_check_urls_ignores_a_url_outside_any_docstring(tmp_path: Path) -> None:
@@ -2619,3 +2705,125 @@ def test_ensure_env_with_an_example_still_seeds_the_env_file(tmp_path: Path) -> 
     )
 
     assert (tmp_path / ".env").read_text(encoding="utf-8") == "KEY=value\n"
+
+
+def _stub_curl_returning_404(path_dir: Path) -> Path:
+    """Write a ``curl`` stub that logs its arguments and answers 404.
+
+    Parameters
+    ----------
+    path_dir : pathlib.Path
+        Directory that becomes the head of ``PATH``.
+
+    Returns
+    -------
+    pathlib.Path
+        The log file the stub appends every argument line to.
+    """
+    path_log = path_dir / "curl_calls.log"
+    path_stub = path_dir / "curl"
+    path_stub.write_text(
+        f'#!/bin/bash\nprintf \'%s\\n\' "$@" >> "{path_log}"\nprintf 404\n', encoding="utf-8"
+    )
+    path_stub.chmod(0o755)
+    return path_log
+
+
+def test_check_urls_scans_every_filename_passed_not_only_the_first(tmp_path: Path) -> None:
+    """A URL living only in the second file must still be probed and fail the run.
+
+    Before blueprintx#1045 the first filename became the ``find`` root, so a commit staging
+    two files scanned only the first. The probe is a stub: no network is touched.
+    """
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    path_log = _stub_curl_returning_404(path_bin)
+    (tmp_path / "first.py").write_text('"""No links here."""\n', encoding="utf-8")
+    (tmp_path / "second.py").write_text(f'"""See {_URL_404} for details."""\n', encoding="utf-8")
+
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, str(_bin_script("test_urls_docstrings.sh")), "first.py", "second.py"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}",
+            "URL_CHECK_CACHE_DIR": str(tmp_path / "isolated_cache"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
+    assert _URL_404 in path_log.read_text(encoding="utf-8")
+
+
+def _run_url_hook_with_stub_curl(
+    path_root: Path, path_stub_dir: Path, list_args: list[str], dict_env: dict[str, str]
+) -> subprocess.CompletedProcess:
+    """Run the check-urls hook with a stubbed ``curl`` at the head of ``PATH``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The hook's CWD.
+    path_stub_dir : pathlib.Path
+        Directory holding the ``curl`` stub.
+    list_args : list[str]
+        Arguments passed to the hook.
+    dict_env : dict[str, str]
+        Extra environment variables.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The completed run.
+    """
+    return subprocess.run(  # noqa: S603
+        [_STR_BASH, str(_bin_script("test_urls_docstrings.sh")), *list_args],
+        cwd=path_root,
+        env={**os.environ, "PATH": f"{path_stub_dir}{os.pathsep}{os.environ['PATH']}", **dict_env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.mark.skipif(_STR_GIT is None, reason="git not available -- integration guard only")
+def test_check_urls_cache_defaults_to_the_git_common_dir(tmp_path: Path) -> None:
+    """With no override, a probed URL is cached under ``.git/url_check_cache``."""
+    subprocess.run([str(_STR_GIT), "init", "-q", str(tmp_path)], check=True)  # noqa: S603
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    _stub_curl_returning_404(path_bin)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404}."""\n', encoding="utf-8")
+
+    _run_url_hook_with_stub_curl(tmp_path, path_bin, ["mod.py"], {})
+
+    assert list((tmp_path / ".git" / "url_check_cache").iterdir())
+
+
+@pytest.mark.parametrize("str_status", ["000", "429", "503"])
+def test_check_urls_does_not_cache_a_transient_failure(tmp_path: Path, str_status: str) -> None:
+    """No HTTP answer, a rate limit or a 5xx must never enter the shared cache."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text(f"#!/bin/bash\nprintf {str_status}\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404}."""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+
+    _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    assert not list(path_cache.iterdir())
+
+
+def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
+    """A typo'd explicit path must fail, never report ``All docstring URLs are reachable``."""
+    cls_result = _run_url_hook_with_stub_curl(
+        tmp_path, tmp_path, ["no_such_dir"], {"URL_CHECK_CACHE_DIR": str(tmp_path / "cache")}
+    )
+
+    assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr

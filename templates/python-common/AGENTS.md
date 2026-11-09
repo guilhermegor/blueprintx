@@ -112,7 +112,7 @@ Most of this directory is *tooling* (ruff, pytest, poe_tasks.toml, bin scripts).
 | `bin/check_clean_index.sh` | `pre-push` hook (`check-clean-index`) — refuses to push while the **index** is non-empty. Staged-but-uncommitted work at push time is the fingerprint of a commit that was REJECTED after `git add` ran: the push then ships the *previous* commit and prints success, so every signal is green while the work stays behind. No other layer can see it — CI only sees what was pushed (a commit that does not exist is not a diff) and pre-commit already did its job by rejecting. Guards the **index**, never the dirty tree: unstaged edits while pushing are routine, and a noisy guard gets disabled. Escape hatch: `git push --no-verify` |
 | `bin/install_shell_linters.sh` | `poe install_shell_linters` — **optional** system-binary install of shellcheck + shfmt (choco/scoop/brew/apt). The pip dev-deps are primary; this is for boxes whose venv drive blocks the vendored binary |
 | `bin/fix_playwright.sh` | Reinstall Playwright browsers — OS-aware `--with-deps` (Linux only); resolves Poetry via the bootstrap lib (`run_poetry`) |
-| `bin/test_urls_docstrings.sh` | Pre-commit hook: validate URLs in docstrings (1-week cache) |
+| `bin/test_urls_docstrings.sh` | Manual-stage hook + weekly `docstring-urls.yml`: validate URLs in docstrings. Scans every filename passed (whole tree when none). Cache in the git common dir (shared by worktrees): 7 days for 2xx, 6 hours for failures |
 | `assets/logo_lorem_ipsum.png` | Placeholder logo copied into new projects |
 | `CONTRIBUTING.md` | Contribution guide template |
 
