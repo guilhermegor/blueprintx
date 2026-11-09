@@ -432,6 +432,8 @@ copy_common_templates() {
     chmod +x "$project_path/bin/export_repo_content.sh"
 
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
+    cp "$COMMON_TEMPLATE_ROOT/bin/check_doc_commands.sh" "$project_path/bin/check_doc_commands.sh"
+    chmod +x "$project_path/bin/check_doc_commands.sh"
     copy_repo_rules_provisioner "$project_path" "$COMMON_TEMPLATE_ROOT/bin/required-checks.txt"
     copy_dependabot_auto_merge "$project_path"
 

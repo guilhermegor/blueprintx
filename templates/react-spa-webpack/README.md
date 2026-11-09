@@ -66,7 +66,7 @@ npm install
 ### Usage
 
 ```bash
-npm run dev    # webpack-dev-server with HMR at http://localhost:3000
+npm start      # webpack-dev-server with HMR at http://localhost:3000
 npm run build  # production build, emits to dist/
 ```
 
@@ -186,10 +186,10 @@ contain TypeScript at all — a course submission, a client handoff, a
 consumer with no TS toolchain.
 
 ```bash
-npm run js-copy:build   # strips types with @babel/preset-typescript → js-copy/
-npm run js-copy:verify  # fails loudly if any .ts(x)/tsconfig, or a mention
+npm run js-copy:build   # strips types with @babel/preset-typescript → js-copy/ # doc-commands:optional
+npm run js-copy:verify  # fails loudly if any .ts(x)/tsconfig, or a mention # doc-commands:optional
                          # of TypeScript in a generated .md/.txt/.html, survived
-npm run js-copy          # both, in order
+npm run js-copy          # both, in order # doc-commands:optional
 ```
 
 `js-copy/` is a build artifact (git-ignored, excluded from lint) with its own
