@@ -5,7 +5,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TEMPLATES_DIR="$REPO_ROOT/templates"
 CLAUDE_MD="$REPO_ROOT/CLAUDE.md"
-REQUIRED_FIELDS=(language display_name description scaffold)
+REQUIRED_FIELDS=(language display_name description scaffold ships_docs)
 CHECK_README="$REPO_ROOT/templates/common/bin/check_readme_structure.sh"
 errors=0
 
@@ -30,6 +30,12 @@ for meta in "$TEMPLATES_DIR"/*/skeleton.meta; do
     scaffold_rel="$(grep '^scaffold=' "$meta" | cut -d= -f2- || true)"
     if [ -n "$scaffold_rel" ] && [ ! -f "$REPO_ROOT/$scaffold_rel" ]; then
         echo "  ERROR: scaffold path does not exist: $scaffold_rel" >&2
+        errors=$((errors + 1))
+    fi
+
+    str_ships_docs="$(grep '^ships_docs=' "$meta" | cut -d= -f2- | tr -d '[:space:]' || true)"
+    if [ -n "$str_ships_docs" ] && [ "$str_ships_docs" != "true" ] && [ "$str_ships_docs" != "false" ]; then
+        echo "  ERROR: ships_docs '$str_ships_docs' must be true or false" >&2
         errors=$((errors + 1))
     fi
 

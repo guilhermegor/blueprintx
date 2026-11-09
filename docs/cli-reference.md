@@ -64,3 +64,9 @@ Only MkDocs skeletons consume the value today; `ts-lib` (Docusaurus), `react-spa
 Create `templates/<name>/` with a `skeleton.meta`, write a scaffold script under
 `bin/scaffold/`, and the menu updates automatically — no change to `blueprintx.sh`. See
 [Contributing](contributing.md).
+
+Besides `language`, `display_name`, `description` and `scaffold`, every `skeleton.meta`
+must carry `ships_docs=true` or `ships_docs=false`: whether the generated project ships a
+documentation site. A consumer such as the docs-locale gate reads this key instead of
+guessing from the presence of `mkdocs.yml`. `bin/ci/validate_meta.sh` rejects a missing
+key or any other value.

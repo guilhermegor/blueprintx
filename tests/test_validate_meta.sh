@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$REPO_ROOT/bin/lib/common.sh"
 
-REQUIRED_FIELDS=(language display_name description scaffold)
+REQUIRED_FIELDS=(language display_name description scaffold ships_docs)
 int_failures=0
 
 base_value() {
@@ -15,6 +15,7 @@ base_value() {
         display_name) echo "Fake Skeleton" ;;
         description) echo "A fake skeleton for testing" ;;
         scaffold) echo "bin/scaffold/fake.sh" ;;
+        ships_docs) echo "true" ;;
     esac
 }
 
@@ -61,7 +62,8 @@ test_valid_meta_passes() {
         "language=$(base_value language)" \
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)"
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)"
     expect_gate "a fully valid skeleton.meta" "$str_root" "pass"
 }
 
@@ -123,10 +125,26 @@ test_skeleton_not_documented_in_claude_md() {
         "language=$(base_value language)" \
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)"
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)"
     printf '# CLAUDE.md\n\nNothing about this skeleton here.\n' > "$str_root/CLAUDE.md"
     expect_gate "skeleton undocumented in CLAUDE.md" "$str_root" "fail" \
         "skeleton 'fake-skeleton' is not mentioned in CLAUDE.md"
+}
+
+test_ships_docs_must_be_boolean() {
+    local str_root
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    : > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=maybe"
+    expect_gate "ships_docs outside true/false" "$str_root" "fail" \
+        "ships_docs 'maybe' must be true or false"
 }
 
 test_readme_archetype() {
@@ -140,6 +158,7 @@ test_readme_archetype() {
             "display_name=$(base_value display_name)" \
             "description=$(base_value description)" \
             "scaffold=$(base_value scaffold)" \
+            "ships_docs=$(base_value ships_docs)" \
             "readme_archetype=$str_value"
         expect_gate "readme_archetype=$str_value" "$str_root" "pass"
     done
@@ -151,6 +170,7 @@ test_readme_archetype() {
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
         "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)" \
         "readme_archetype=monolith"
     expect_gate "readme_archetype outside the allowed set" "$str_root" "fail" \
         "readme_archetype 'monolith' is not one of"
@@ -162,6 +182,7 @@ main() {
     test_empty_value
     test_missing_scaffold_path
     test_skeleton_not_documented_in_claude_md
+    test_ships_docs_must_be_boolean
     test_readme_archetype
 
     if [ "$int_failures" -ne 0 ]; then
