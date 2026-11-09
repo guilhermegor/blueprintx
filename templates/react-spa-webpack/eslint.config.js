@@ -63,6 +63,8 @@ export default [
     rules: {
       'no-console': 'off',
       'jest/no-export': 'error',
+      'jest/no-disabled-tests': 'error',
+      'jest/no-focused-tests': 'error',
     },
   },
 

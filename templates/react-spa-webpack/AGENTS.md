@@ -404,6 +404,11 @@ export function noteFromCreateDTO(dto: NoteCreateDTO): Note {
 
 Tests live in `src/capabilities/<feature>/__tests__/`.
 
+`npm run lint` fails on a committed `it.only`/`fit`/`describe.only`
+(`jest/no-focused-tests`) and on `it.skip`/`xit`/`describe.skip`
+(`jest/no-disabled-tests`): a skipped or focused block leaves every CI signal
+green while silently running fewer tests. Delete the test or fix it.
+
 ## CSS conventions
 
 Global design tokens live in `shared/styles/foundations/` — import via
