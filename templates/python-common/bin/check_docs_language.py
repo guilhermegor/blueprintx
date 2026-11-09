@@ -435,10 +435,27 @@ def main(list_argv: list) -> int:
             f"change theme.language, or add {STR_ESCAPE} to the paragraph."
         )
         return 1
-    int_skipped = sum(bool_skipped for _, bool_skipped in list_results)
-    str_note = f", {int_skipped} skipped as {STR_UNTRANSLATED}" if int_skipped else ""
-    print(f"✅ docs language is {str_declared} ({len(list_pages)} page(s) checked{str_note})")
+    _print_summary(list_results, str_declared)
     return 0
+
+
+def _print_summary(list_results: list, str_declared: str) -> None:
+    """Report how many pages were read, never claiming success when none was.
+
+    Parameters
+    ----------
+    list_results : list of tuple
+        One ``(problems, skipped)`` pair per page, from ``page_problems``.
+    str_declared : str
+        The locale the pages were checked against.
+    """
+    int_skipped = sum(bool_skipped for _, bool_skipped in list_results)
+    int_checked = len(list_results) - int_skipped
+    if int_checked == 0:
+        print(f"⚠️ docs language: 0 page(s) checked, all {int_skipped} marked {STR_UNTRANSLATED}")
+        return
+    str_note = f", {int_skipped} skipped as {STR_UNTRANSLATED}" if int_skipped else ""
+    print(f"✅ docs language is {str_declared} ({int_checked} page(s) checked{str_note})")
 
 
 if __name__ == "__main__":

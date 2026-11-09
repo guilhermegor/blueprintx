@@ -287,6 +287,21 @@ def test_main_untranslated_page_is_counted(tuple_untranslated_run: tuple) -> Non
     assert "1 skipped as docs-lang:untranslated" in tuple_untranslated_run[1]
 
 
+def test_main_skipped_page_is_not_counted_as_checked(tuple_untranslated_run: tuple) -> None:
+    """Only the unmarked page counts as checked."""
+    assert "(1 page(s) checked," in tuple_untranslated_run[1]
+
+
+def test_main_all_pages_skipped_does_not_report_success(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A run that read no page must not print the success mark."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_PT)
+    _write(tmp_path / "docs" / "index.md", STR_EN + "\n<!-- docs-lang:untranslated -->\n")
+    _run(tmp_path)
+    assert "✅" not in capsys.readouterr().out
+
+
 def test_main_untranslated_marker_does_not_excuse_other_pages(tmp_path: Path) -> None:
     """The marker is page-scoped: an unmarked wrong-language page still fails."""
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_PT)

@@ -218,8 +218,15 @@ spec_scaffold_root() {
     sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1
 }
 
+require_gate_deps() {
+    python3 -c 'import pathspec, yaml' 2>/dev/null && return 0
+    fail "$1" "missing test dependency, not a gate failure: pip install pathspec pyyaml"
+    return 1
+}
+
 test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate() {
     local str_temp int_pages int_marked str_gate int_rc=0
+    require_gate_deps "pt-BR e2e" || return 0
     str_temp="$(spec_scaffold_root docs-pt-e2e "docs_locale=pt-BR")"
     int_pages="$(find "$str_temp/spec-probe/docs" -name '*.md' | wc -l)"
     int_marked="$(grep -rlx '<!-- docs-lang:untranslated -->' "$str_temp/spec-probe/docs" | wc -l)"
@@ -235,6 +242,7 @@ test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate() {
 
 test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate() {
     local str_temp int_marked str_gate int_rc=0
+    require_gate_deps "en e2e" || return 0
     str_temp="$(spec_scaffold_root docs-en-e2e "docs_locale=en")"
     int_marked="$(grep -rl 'docs-lang:untranslated' "$str_temp/spec-probe/docs" | wc -l)"
     str_gate="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" 2>&1)" || int_rc=$?
