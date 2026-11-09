@@ -33,7 +33,7 @@ EOF
 name: b
 on:
   pull_request:
-    branches: [main]
+    branches: [develop]
 jobs:
   filtered:
     name: Filtered gate
@@ -135,6 +135,21 @@ fixture
 printf 'name: c\non: pull_request\njobs:\n  t:\n    name: Wrapped true\n    if: ${{ github.event_name == '"'"'pull_request'"'"' }}\n    runs-on: x\n    steps: []\n  c:\n    name: Wrapped cond\n    if: ${{ github.event.pull_request.draft == false }}\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/c.yml"
 expected '"Lint gate", "App check", "Wrapped true"' ''
 expect "wrapped always-true if counts as unconditional, wrapped conditional does not" 0 "findings=0"
+
+fixture
+printf 'name: k\non:\n  pull_request:\n    branches: [main]\njobs:\n  t:\n    name: Base gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/k.yml"
+expected '"Lint gate", "App check", "Base gate"' ''
+expect "a branches filter that includes the base is unconditional" 0 "findings=0"
+
+fixture
+printf 'name: k\non:\n  pull_request:\n    branches: [main]\n    paths: [src/**]\njobs:\n  t:\n    name: Base gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/k.yml"
+expected '"Lint gate", "App check", "Base gate"' ''
+expect "a base branches filter plus paths stays conditional" 1 "Base gate"
+
+fixture
+printf 'name: k\non:\n  pull_request:\n    branches: [main]\n    branches-ignore: [main]\njobs:\n  t:\n    name: Base gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/k.yml"
+expected '"Lint gate", "App check", "Base gate"' ''
+expect "a base branches filter plus branches-ignore stays conditional" 1 "Base gate"
 
 fixture
 printf 'name: d\non: pull_request\njobs:\n  call:\n    uses: ./.github/workflows/x.yml\n' >"$str_tmp/wf/d.yml"

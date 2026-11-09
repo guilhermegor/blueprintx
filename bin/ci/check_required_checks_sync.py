@@ -37,6 +37,7 @@ PR_TYPES = {"opened", "reopened", "synchronize"}
 POLICY_FIELDS = 3
 PR_EVENTS = ("pull_request", "pull_request_target")
 FILTERS = ("branches", "branches-ignore", "paths", "paths-ignore")
+BASE_BRANCH = "main"
 RE_EVENT_CLAUSE = re.compile(r"^github\.event_name\s*(==|!=)\s*'([a-z_]+)'$")
 
 
@@ -87,7 +88,12 @@ def pr_trigger_unfiltered(dict_on: object) -> bool:
 def event_unfiltered(dict_event: dict | None) -> bool:
     """One event's config: no filter, and `types:` (a scalar counts as a list) complete."""
     dict_event = dict_event or {}
-    if any(k in dict_event for k in FILTERS):
+    list_branches = dict_event.get("branches")
+    list_branches = [list_branches] if isinstance(list_branches, str) else list_branches
+    set_filters = {k for k in FILTERS if k in dict_event}
+    if BASE_BRANCH in (list_branches or []):
+        set_filters.discard("branches")
+    if set_filters:
         return False
     list_types = dict_event.get("types")
     if list_types is None:

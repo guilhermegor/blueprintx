@@ -29,7 +29,9 @@ A name belongs in `REQUIRED_CHECKS` only if all four hold:
    string is what gets reported.
 2. Its workflow triggers on `pull_request` with **no `types:` filter**, or with
    a `types:` list that includes `opened`, `reopened`, and `synchronize`, and
-   with **no `branches:`/`branches-ignore:`/`paths:`/`paths-ignore:` filter** —
+   with **no `branches-ignore:`/`paths:`/`paths-ignore:` filter and no `branches:`
+   filter that omits `main`** (a `branches:` list containing `main` always matches a PR
+   into the protected base) —
    otherwise the check is simply absent on some PRs, which reads as permanently
    pending.
 3. No job-level `if:` can skip it on an otherwise ordinary PR.
