@@ -790,6 +790,12 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "import pkg._internal.config as me\nclass A:\n    def f(self):\n        def g():\n"
         + "            nonlocal self\n"
         + "        setattr(self, 'Priv', 1)\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self):\n        def g():\n"
+        + "            nonlocal self\n            self = me\n        g()\n"
+        + "        setattr(self, 'Priv', 1)\nA().f()\n",
+        "from ._compat import vars\nclass A:\n    def f(self):\n        vars(self)['Priv'] = 1\n",
+        "def setattr(o, n, v):\n    pass\nclass A:\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
         "class A:\n    def f(self, vars=lambda _: 1):\n        vars(self)\n",
         "class A:\n    def f(self):\n        def setattr(*a):\n            pass\n"
         + "        setattr(self, 'Priv', 1)\n",
@@ -840,6 +846,9 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "class-swap-through-rebound-method-self",
         "global-self-in-nested-def",
         "nonlocal-self-in-nested-def",
+        "nonlocal-self-rebound-and-called",
+        "module-import-shadows-vars",
+        "module-def-shadows-setattr",
         "param-shadows-vars",
         "nested-def-shadows-setattr",
         "attribute-decorator-unknown-receiver",
@@ -857,7 +866,12 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
 def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
     tmp_path: Path, str_config: str
 ) -> None:
-    """An aliased writer, a rebound ``self``, a walrus outside a body or ``del __all__`` leaks."""
+    """An aliased writer, a rebound ``self``, an outside walrus or ``del __all__`` is charged.
+
+    Some ids pin a deliberate over-charge rather than a leak: ``global``/``nonlocal`` in a nested
+    def that never rebinds, and ``del``/``except ... as``/walrus on ``self``. Narrowing
+    ``_rebinds`` past them is a decision, so it has to turn these red first.
+    """
     path_init = _tree(
         tmp_path,
         'from ._internal.config import *\n__all__ = ["Priv"]\n',

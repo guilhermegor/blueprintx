@@ -174,13 +174,13 @@ test suite keep the contract; this section records the reasoning that lived besi
     `_getframe`, `currentframe`, `__globals__`, `f_locals`), as a bare name, an attribute (`builtins.exec`) or an import alias
     from `builtins`, `sys` or `inspect` (`from builtins import exec as run`), anywhere in the file. The one exemption is
     `setattr(self|cls, ...)` / `vars(self|cls)` on the first parameter of a method that is not a
-    `staticmethod` (nor the implicit one, `__new__`), is decorated only with `classmethod`,
+    `staticmethod` (nor the implicit one, `__new__`), is decorated with nothing or only with `classmethod`,
     `property`, `abstractmethod`, `override`, `cached_property`, `final`, `overload` or `.setter`/`.getter`/`.deleter`
     (any other decorator could call the method with another object, so it removes the
     exemption and over-charges, e.g. `@contextmanager` or `@pytest.fixture`; the safe names
     count bare or on `abc`, `typing`, `typing_extensions`, `functools` and `builtins`, so
     `@evil.classmethod` is charged, and `.setter`/`.getter`/`.deleter` count only on the
-    method's own name, as in `@x.setter def x`), does not rebind or take `setattr`/`vars` as a parameter,
+    method's own name, as in `@x.setter def x`), does not rebind or take `setattr`/`vars` as a parameter (nor does the file bind either name at module level, as `from ._compat import vars` or a `def setattr` does),
     has no nested def or lambda taking that name as a parameter, and never rebinds
     it (assignment, `del`, `import ... as`, `match`
     capture, `except ... as`, `type`, or a nested `def`/`class` of that name). The call may sit
