@@ -266,6 +266,12 @@ scan. The hook **skips host-only URLs** (regex `https?://[^/]+$`), so write
 examples as bare hosts (`https://hooks.slack.com`) and refresh any stale doc
 URL to its current 200 home.
 
+`bin/test_urls_docstrings.sh --track <report>` is the tracking-issue step of
+`docstring-urls.yml` (open or comment on one `docstring-urls` issue; exit 1 when
+the report has no verdict). It lives in the script, not the workflow, so
+`tests/integration/test_bin_scripts.py` witnesses it with a stub `gh` in every
+generated project, including those without a GitHub remote.
+
 ## SC2155 — split `local x` from `x=$(…)`
 
 `local x=$(cmd)` swallows `cmd`'s exit code. Declare then assign:
