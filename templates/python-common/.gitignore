@@ -4,8 +4,8 @@ __pycache__/
 
 *.so
 
-.venv/
-venv/
+.venv
+venv
 env/
 
 .uv/
