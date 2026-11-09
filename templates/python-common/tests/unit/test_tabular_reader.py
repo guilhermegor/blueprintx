@@ -4,12 +4,15 @@ import csv
 from pathlib import Path
 import time
 
+import pandas as pd
 import pytest
+from pytest_mock import MockerFixture
 
 from src.utils.tabular_reader import (
     ContractError,
     FileContract,
     ProblemReport,
+    _read_raw,
     find_file_problems,
     read_table,
 )
@@ -511,20 +514,37 @@ def test_column_names_both_padded_and_colliding_after_trimming_are_rejected(
         read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
 
 
-def test_read_table_with_many_unique_columns_checks_collisions_in_linear_time(
-    tmp_path: Path,
+def _time_collision_check(mocker: MockerFixture, int_cols: int) -> float:
+    """Time ``_read_raw`` rejecting a header of ``int_cols`` columns holding one collision.
+
+    Parameters
+    ----------
+    mocker : pytest_mock.MockerFixture
+        Patches the format-specific read, so only the collision check is timed.
+    int_cols : int
+        Number of distinct column names, before the one padded duplicate is appended.
+
+    Returns
+    -------
+    float
+        Seconds taken to raise the collision error.
+    """
+    list_names = [f"c{int_idx}" for int_idx in range(int_cols)] + ["c0 "]
+    df_wide = pd.DataFrame(columns=list_names)
+    mocker.patch("src.utils.tabular_reader._read_raw_dispatch", return_value=df_wide)
+    float_start = time.perf_counter()
+    with pytest.raises(ContractError, match="collide after trimming"):
+        _read_raw(Path("wide.csv"), "", None, ";")
+    return time.perf_counter() - float_start
+
+
+def test_read_raw_collision_check_on_a_very_wide_header_runs_in_linear_time(
+    mocker: MockerFixture,
 ) -> None:
-    """The collision check stays cheap on a very wide header with no collision.
+    """The collision check stays cheap however many columns the source publishes.
 
     A ``list.count`` per column name is O(n^2) in the column count, paid on every read,
     against one linear ``Counter`` pass. The ceiling sits far above the linear cost and
     far below the quadratic one at this width.
     """
-    int_cols = 20_000
-    list_names = [f"c{int_idx}" for int_idx in range(int_cols)]
-    path_csv = tmp_path / "wide.csv"
-    path_csv.write_text(";".join(list_names) + "\n" + ";".join(["1"] * int_cols) + "\n")
-    cls_contract = FileContract("data", "data", ("c0",), ())
-    float_start = time.perf_counter()
-    read_table(path_csv, "", {"c0": "str"}, cls_contract)
-    assert time.perf_counter() - float_start < 3.0
+    assert _time_collision_check(mocker, 20_000) < 1.0
