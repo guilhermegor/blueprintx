@@ -85,13 +85,23 @@ def pr_trigger_unfiltered(dict_on: object) -> bool:
     return "pull_request" in dict_on and event_unfiltered(dict_on["pull_request"])
 
 
+def branches_cover_base(branches: object) -> bool:
+    """Whether a `branches:` value always matches a PR into the base (literal, no negation).
+
+    Anything but a string or a list of strings, or any `!` entry, stays conditional (the safe
+    direction) instead of raising or being misread.
+    """
+    list_branches = [branches] if isinstance(branches, str) else branches
+    if not isinstance(list_branches, list) or not all(isinstance(b, str) for b in list_branches):
+        return False
+    return BASE_BRANCH in list_branches and not any(b.startswith("!") for b in list_branches)
+
+
 def event_unfiltered(dict_event: dict | None) -> bool:
     """One event's config: no filter, and `types:` (a scalar counts as a list) complete."""
     dict_event = dict_event or {}
-    list_branches = dict_event.get("branches")
-    list_branches = [list_branches] if isinstance(list_branches, str) else list_branches
     set_filters = {k for k in FILTERS if k in dict_event}
-    if BASE_BRANCH in (list_branches or []):
+    if branches_cover_base(dict_event.get("branches")):
         set_filters.discard("branches")
     if set_filters:
         return False

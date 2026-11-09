@@ -152,6 +152,26 @@ expected '"Lint gate", "App check", "Base gate"' ''
 expect "a base branches filter plus branches-ignore stays conditional" 1 "Base gate"
 
 fixture
+printf 'name: k\non:\n  pull_request:\n    branches: main\njobs:\n  t:\n    name: Base gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/k.yml"
+expected '"Lint gate", "App check", "Base gate"' ''
+expect "a scalar branches value naming the base is unconditional" 0 "findings=0"
+
+fixture
+printf 'name: k\non:\n  pull_request_target:\n    branches: [main]\njobs:\n  t:\n    name: Base gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/k.yml"
+expected '"Lint gate", "App check", "Base gate"' ''
+expect "a base branches filter on pull_request_target stays conditional" 1 "Base gate"
+
+fixture
+printf 'name: k\non:\n  pull_request:\n    branches: [main, "!main"]\njobs:\n  t:\n    name: Base gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/k.yml"
+expected '"Lint gate", "App check", "Base gate"' ''
+expect "a negated base entry keeps the branches filter conditional" 1 "Base gate"
+
+fixture
+printf 'name: k\non:\n  pull_request:\n    branches: {main: x}\njobs:\n  t:\n    name: Base gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/k.yml"
+expected '"Lint gate", "App check", "Base gate"' ''
+expect "a malformed branches value is a clean finding, not a traceback" 1 "Base gate"
+
+fixture
 printf 'name: d\non: pull_request\njobs:\n  call:\n    uses: ./.github/workflows/x.yml\n' >"$str_tmp/wf/d.yml"
 expect "reusable-workflow job fails loudly" 1 "unsupported"
 
