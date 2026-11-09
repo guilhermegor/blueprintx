@@ -497,6 +497,13 @@ repos:
         pass_filenames: false
         files: ^(bin/scaffold/.*\.sh|bin/lib/.*\.sh|templates/common/.*|templates/[^/]+/skeleton\.meta|bin/ci/check_review_config_shipped\.sh)$
 
+      - id: generated-references
+        name: every file a generated project references was copied (blueprintx#1094)
+        entry: bash bin/ci/check_generated_references.sh --generated
+        language: system
+        pass_filenames: false
+        stages: [manual]
+
       - id: dependabot-shipped
         name: every skeleton ships dependabot.yml with a cooldown (blueprintx#838)
         entry: bash bin/ci/check_dependabot_shipped.sh --static

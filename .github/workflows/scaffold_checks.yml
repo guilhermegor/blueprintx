@@ -550,6 +550,21 @@ jobs:
       - name: Should-fail regression tests for the review-config guard
         run: bash tests/test_check_review_config_shipped.sh
 
+  generated-references:
+    name: Every generated project ships the files it references
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scaffold every skeleton and assert each nav page and bin/ script exists (blueprintx#1094)
+        run: bash bin/ci/check_generated_references.sh --generated
+
+      - name: Should-fail regression tests for the reference guard
+        run: bash tests/test_check_generated_references.sh
+
   dependabot-shipped:
     name: Every skeleton ships dependabot.yml with a cooldown
     runs-on: ubuntu-latest

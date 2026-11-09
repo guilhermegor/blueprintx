@@ -341,6 +341,21 @@ content checks, such as keeping Greptile queue-only. `tests/test_check_review_co
 removes a `cp` line, a manifest file and an unshipped entry from a copy of the tree and shows
 the gate going red in both modes.
 
+## Why does CI scaffold every skeleton and look for dangling references?
+
+`templates/lib-minimal/mkdocs.yml` once listed `incidents.md` in its nav while the scaffold
+script never copied that page, so `mkdocs build --strict` failed in every generated project and
+no gate noticed. Each scaffold keeps its own copy list, and the lists drift apart.
+`bin/ci/check_generated_references.sh --generated` scaffolds every skeleton found through
+`templates/*/skeleton.meta` and fails when a `mkdocs.yml` nav page is missing under `docs/`, or
+a `bin/*.sh` / `bin/*.py` path named in `poe_tasks.toml`, `.pre-commit-config.yaml` or
+`.github/workflows/*.yml` is missing from the tree. `--project <dir>` checks one tree.
+`tests/test_check_generated_references.sh` deletes one file per reference kind and shows the
+gate naming it. The scaffold takes about 95 seconds, so the pre-commit hook runs on the
+`manual` stage (`pre-commit run generated-references --hook-stage manual`); CI runs it on
+every pull request. lib-minimal now copies shared docs through `scaffold_copy_docs_extras`,
+as the other Python tiers do.
+
 ## Why must a test clear the GIT_* environment before running git?
 
 Git exports `GIT_DIR`, `GIT_INDEX_FILE` and `GIT_WORK_TREE` to hooks. A test that runs

@@ -4,6 +4,8 @@
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_provenance.sh"
 # shellcheck source=bin/lib/scaffold_readme.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_readme.sh"
+# shellcheck source=bin/lib/scaffold_docs_extras.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scaffold_docs_extras.sh"
 
 scaffold_render_pyproject() {
 	local str_tier="$1"
@@ -194,12 +196,6 @@ scaffold_copy_executables_and_vscode() {
 		"$str_project_path/.vscode/extensions.json"
 	cp "$COMMON_TEMPLATE_ROOT/.vscode/tasks.json" \
 		"$str_project_path/.vscode/tasks.json"
-}
-
-scaffold_copy_docs_extras() {
-	local str_project_path="$1"
-
-	cp "$COMMON_TEMPLATE_ROOT/docs/incidents.md" "$str_project_path/docs/incidents.md"
 }
 
 scaffold_copy_leaf_docs() {
