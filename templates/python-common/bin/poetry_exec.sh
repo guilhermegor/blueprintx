@@ -17,6 +17,7 @@ main() {
 		bootstrap_init
 		wire_corporate_ca
 		ensure_poetry
+		[[ "$1" != "run" ]] || ensure_venv_deps
 	} 1>&2
 
 	exec "${POETRY_CMD[@]}" "$@"

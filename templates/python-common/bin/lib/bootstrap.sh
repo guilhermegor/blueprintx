@@ -148,6 +148,20 @@ ensure_poetry() {
 	return 1
 }
 
+venv_missing_deps() {
+	run_poetry install --dry-run --no-root --only main,dev 2>/dev/null |
+		sed -n 's/^[[:space:]]*-[[:space:]]*\(Installing\|Updating\) \([^ ]*\).*/\2/p'
+}
+
+ensure_venv_deps() {
+	local str_missing
+
+	str_missing="$(venv_missing_deps | tr '\n' ' ')"
+	[[ -z "${str_missing// /}" ]] && return 0
+	print_status "error" "The venv is missing locked dependencies: ${str_missing% } — run 'poetry install --with dev'"
+	return 1
+}
+
 bootstrap_init() {
 	BIN_DIR="$(cd "$BOOTSTRAP_LIB_DIR/.." && pwd)"
 	PROJECT_ROOT="$(cd "$BOOTSTRAP_LIB_DIR/../.." && pwd)"
