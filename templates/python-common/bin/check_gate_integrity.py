@@ -737,12 +737,18 @@ def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
         One message per deleted or gutted test.
     """
     dict_old, dict_new = test_functions(str_old), test_functions(str_new)
-    list_problems = [
-        f"{str_shown}: test {str_name!r} deleted"
-        for str_name in sorted(set(dict_old) - set(dict_new))
-    ]
+    list_added = sorted(set(dict_new) - set(dict_old))
+    dict_old_of = {}
+    list_problems = []
+    for str_name in sorted(set(dict_old) - set(dict_new)):
+        list_close = difflib.get_close_matches(str_name, list_added, n=1, cutoff=0.8)
+        if not list_close:
+            list_problems.append(f"{str_shown}: test {str_name!r} deleted")
+            continue
+        list_added.remove(list_close[0])
+        dict_old_of[list_close[0]] = dict_old[str_name]
     for str_name, cls_new_node in dict_new.items():
-        cls_old_node = dict_old.get(str_name)
+        cls_old_node = dict_old.get(str_name) or dict_old_of.get(str_name)
         if cls_old_node and not is_gutted_body(cls_old_node) and is_gutted_body(cls_new_node):
             list_problems.append(f"{str_shown}: test {str_name!r} body replaced with a no-op")
     return list_problems

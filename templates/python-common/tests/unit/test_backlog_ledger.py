@@ -684,6 +684,21 @@ def test_deleted_test_is_detected() -> None:
     assert list_problems == ["x: test 'test_b' deleted"]
 
 
+def test_renamed_test_is_not_reported_deleted() -> None:
+    """Renaming `..._six_...` to `..._seven_...` is a rename, not a deletion (#1073)."""
+    str_old = "def test_has_six_required_pages() -> None:\n\tassert 1 == 1\n"
+    str_new = "def test_has_seven_required_pages() -> None:\n\tassert 1 == 1\n"
+    assert gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x") == []
+
+
+def test_renamed_test_gutted_in_the_same_change_is_detected() -> None:
+    """NEGATIVE CONTROL: a rename does not launder a no-op body."""
+    str_old = "def test_has_six_required_pages() -> None:\n\tassert compute() == 6\n"
+    str_new = "def test_has_seven_required_pages() -> None:\n\tpass\n"
+    list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
+    assert list_problems == ["x: test 'test_has_seven_required_pages' body replaced with a no-op"]
+
+
 def test_gutted_test_body_is_detected() -> None:
     """A body collapsed to `pass` is functionally the same as deleting the test."""
     str_old = 'def test_a() -> None:\n\t"""Doc."""\n\tassert compute() == 42\n'
