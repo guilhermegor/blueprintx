@@ -24,3 +24,5 @@ poe docs_serve   # serve this documentation at http://0.0.0.0:8000
 ---
 
 Generated from the **lib-minimal** template via [BlueprintX](https://github.com/guilhermegor/BlueprintX).
+
+<!-- docs-lang:untranslated -->

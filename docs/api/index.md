@@ -29,3 +29,5 @@ When you add pages:
 - **Register every new page in `mkdocs.yml` `nav:` in the same commit.** MkDocs builds an
   unregistered page anyway — it just vanishes from navigation, which is how a page silently goes
   missing (and what the `check_docs_sections.py` gate exists to catch).
+
+<!-- docs-lang:untranslated -->

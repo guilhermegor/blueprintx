@@ -127,3 +127,5 @@ This project is licensed under MIT; see [LICENSE](LICENSE).
 
 <sub>Generated from the lib-minimal template via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>
 <!-- add any project disclaimer inside the sub tag above; for a library wrapping a third party, e.g. "Unofficial, community library. Not affiliated with or endorsed by ORG_NAME." -->
+
+<!-- docs-lang:untranslated -->

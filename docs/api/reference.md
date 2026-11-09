@@ -42,3 +42,5 @@ Follow the one-class-per-file convention: utility functions with no shared state
 | Docstrings | NumPy style; explain *why*, not *what* |
 | Variable names | Type-prefixed (`str_`, `list_`, `cls_`, `dict_`, …) |
 | Testing | `unittest`; one assertion per test; name as `test_<unit>_<scenario>_<expected>` |
+
+<!-- docs-lang:untranslated -->

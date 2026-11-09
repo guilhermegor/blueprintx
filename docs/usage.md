@@ -75,3 +75,5 @@ Configure once, on each index (pypi.org and test.pypi.org), a pending publisher:
 
 After the first `release-pypi.yaml` run creates the `gh-pages` branch, run `poe enable_pages`
 once to serve the docs.
+
+<!-- docs-lang:untranslated -->

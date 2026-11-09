@@ -35,3 +35,5 @@ See the `python = "..."` constraint in `pyproject.toml`; CI runs the test matrix
 
 The version is the **git tag** (via poetry-dynamic-versioning); `pyproject.toml` holds a `0.0.0`
 placeholder. Cut a release from the release workflow — see [Contributing](contributing.md).
+
+<!-- docs-lang:untranslated -->

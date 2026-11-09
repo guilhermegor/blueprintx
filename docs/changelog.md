@@ -15,3 +15,5 @@ any time with `poe changelog` (or `poe changelog`).
 
 <!-- Single-sourced from the repo-root CHANGELOG.md — never edit the entries here by hand. -->
 --8<-- "CHANGELOG.md"
+
+<!-- docs-lang:untranslated -->

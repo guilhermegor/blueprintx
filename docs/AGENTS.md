@@ -39,3 +39,5 @@ published deep link. Group new API pages by the codebase's own top-level split. 
 live in `docs/assets/` (placeholder `logo.png`, wired as `theme.logo`/`favicon` + the
 landing image), with size/position/border tuned inline on the `<img>` (`width` / `align` /
 `style="border-radius"`) in `docs/index.md` and `README.md`.
+
+<!-- docs-lang:untranslated -->

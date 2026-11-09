@@ -27,3 +27,5 @@ Add one `##` section per recipe. Comments in the code should explain **why**, no
 ```python
 # Replace with a second illustrative example.
 ```
+
+<!-- docs-lang:untranslated -->

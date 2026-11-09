@@ -41,3 +41,5 @@ it lists the open issues and fails while any lacks the `post-1.0` label, naming 
 - A first publish counts as coming from 0.0.0, so a project whose first release is 1.0.0 is gated too.
 
 To pass, implement each named issue or label it `post-1.0`, then re-run the workflow.
+
+<!-- docs-lang:untranslated -->
