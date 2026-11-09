@@ -2827,3 +2827,76 @@ def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
     )
 
     assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
+
+
+def _run_track_mode(
+    path_root: Path, str_report: str, str_open: str
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    """Run ``test_urls_docstrings.sh --track`` against a stub ``gh``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Scratch directory used as CWD.
+    str_report : str
+        Content of ``docstring_urls_report.txt``.
+    str_open : str
+        What the stub prints for ``gh issue list`` (the open tracker number, or empty).
+
+    Returns
+    -------
+    tuple[subprocess.CompletedProcess[str], list[str]]
+        The finished process and one line per ``gh`` invocation.
+    """
+    path_bin = path_root / "stubs"
+    path_bin.mkdir()
+    path_log = path_root / "gh.log"
+    (path_bin / "gh").write_text(
+        f'#!/bin/bash\necho "$*" >> "{path_log}"\n'
+        f'[ "$2" = list ] && printf "%s" "{str_open}"\nexit 0\n',
+        encoding="utf-8",
+    )
+    (path_bin / "gh").chmod(0o755)
+    (path_root / "report.txt").write_text(str_report, encoding="utf-8")
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, str(_bin_script("test_urls_docstrings.sh")), "--track", "report.txt"],
+        cwd=path_root,
+        env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    path_log.touch()
+    return cls_result, path_log.read_text(encoding="utf-8").splitlines()
+
+
+def test_track_mode_opens_a_tracker_for_a_dead_url(tmp_path: Path) -> None:
+    """A failing scan with no open tracker creates one; runs in any generated project."""
+    cls_result, list_calls = _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "")
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert [str_call for str_call in list_calls if str_call.startswith("issue create")]
+
+
+def test_track_mode_comments_on_the_open_tracker(tmp_path: Path) -> None:
+    """With a tracker already open, the failure is a comment, not a second issue."""
+    _, list_calls = _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "7")
+
+    assert "issue comment 7 --body-file docstring_urls_body.md" in list_calls
+    assert not [str_call for str_call in list_calls if str_call.startswith("issue create")]
+
+
+def test_track_mode_fails_when_the_scan_gave_no_verdict(tmp_path: Path) -> None:
+    """A report with neither a failure nor the success line must fail, never pass silently."""
+    cls_result, list_calls = _run_track_mode(tmp_path, "curl: not found\n", "")
+
+    assert cls_result.returncode != 0
+    assert not list_calls
+
+
+def test_track_mode_is_quiet_when_every_url_is_reachable(tmp_path: Path) -> None:
+    """A clean scan touches no issue."""
+    cls_result, list_calls = _run_track_mode(tmp_path, "All docstring URLs are reachable\n", "7")
+
+    assert cls_result.returncode == 0
+    assert not list_calls

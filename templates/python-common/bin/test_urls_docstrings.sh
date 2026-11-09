@@ -238,7 +238,44 @@ process_python_files() {
 	return 1
 }
 
+track_dead_urls() {
+	local str_report="$1"
+	local str_pattern='URL (issue|problem)|Failed to access URL'
+	local str_marker='<!-- docstring-urls-tracker -->'
+	local str_body="docstring_urls_body.md" str_existing
+
+	if ! grep -qE "$str_pattern" "$str_report"; then
+		if grep -qF 'All docstring URLs are reachable' "$str_report"; then
+			echo "No dead docstring URLs."
+			return 0
+		fi
+		echo "::error::Docstring URL scan produced no verdict."
+		cat "$str_report"
+		return 1
+	fi
+
+	gh label create docstring-urls --color fbca04 \
+		--description "A docstring URL no longer resolves" --force || true
+	{
+		printf '%s\n\nDead docstring URLs (status, file, line):\n\n```\n' "$str_marker"
+		grep -E "$str_pattern" "$str_report"
+		printf '```\n'
+	} >"$str_body"
+	str_existing=$(gh issue list --label docstring-urls --state open \
+		--json number --jq '.[0].number // empty')
+	if [[ -n "$str_existing" ]]; then
+		gh issue comment "$str_existing" --body-file "$str_body"
+	else
+		gh issue create --title "Dead docstring URLs" \
+			--label docstring-urls --body-file "$str_body"
+	fi
+}
+
 main() {
+	if [[ "${1:-}" == "--track" ]]; then
+		track_dead_urls "${2:?--track needs the report file}"
+		return
+	fi
 	if ! mkdir -p "$CACHE_DIR" 2>/dev/null || [[ ! -w "$CACHE_DIR" ]]; then
 		CACHE_DIR="$(mktemp -d)"
 		trap 'rm -rf "$CACHE_DIR"' EXIT
