@@ -354,8 +354,9 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
             str_flat = " ".join(str_para.split())
             str_tail = "…" if len(str_flat) > INT_EXCERPT else ""
             str_excerpt = f"{str_flat[:INT_EXCERPT]}{str_tail}"
+            str_rel = pathlib.Path(os.path.relpath(path_page, path_root)).as_posix()
             list_out.append(
-                f"❌ {os.path.relpath(path_page, path_root)}:{int_line}: paragraph reads as "
+                f"❌ {str_rel}:{int_line}: paragraph reads as "
                 f"{str_read} but theme.language is {str_declared} -- {str_excerpt}"
             )
     return list_out, False
