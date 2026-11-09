@@ -431,3 +431,61 @@ def test_main_non_mapping_mkdocs_fails_with_a_message(
     _write(tmp_path / "mkdocs.yml", str_yaml)
     _write(tmp_path / "docs" / "index.md", STR_EN)
     assert (_run(tmp_path), "YAML mapping" in capsys.readouterr().out) == (1, True)
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        STR_EN + '\n<div\n  title="' + STR_FOREIGN_BLOCK.strip() + '">\n',
+        STR_EN + "\n<img\n  alt='" + STR_FOREIGN_BLOCK.strip() + "'\n  src=\"a.png\" />\n",
+        STR_EN + '\n[ref]: https://a.b "' + STR_FOREIGN_BLOCK.strip() + '"\n',
+    ],
+)
+def test_main_multiline_html_tags_and_link_definitions_are_not_prose(
+    tmp_path: Path, str_text: str
+) -> None:
+    """A tag split over lines and a reference-link definition are blanked, not scored."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", str_text)
+    assert _run(tmp_path) == 0
+
+
+def test_main_prose_with_a_lone_angle_bracket_is_still_scored(tmp_path: Path) -> None:
+    """A stray ``<`` in a paragraph is not a tag, so it does not hide the text after it."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", STR_EN + "\nSe 1 < 2 então " + STR_PT + "e 3 > 2\n")
+    assert _run(tmp_path) == 1
+
+
+def test_main_failing_run_still_counts_skipped_pages(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A run that fails still says how many pages it skipped as untranslated."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_PT)
+    _write(tmp_path / "docs" / "index.md", STR_EN)
+    _write(tmp_path / "docs" / "usage.md", STR_EN + "\n<!-- docs-lang:untranslated -->\n")
+    _run(tmp_path)
+    assert "1 skipped as docs-lang:untranslated" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "str_text", ["```\n" + STR_FOREIGN_BLOCK + "```\n", "| a | b |\n|---|---|\n", "\n\n"]
+)
+def test_main_run_that_scored_no_paragraph_exits_one(tmp_path: Path, str_text: str) -> None:
+    """Pages that exist but hold no scoreable prose must not read as a pass."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", str_text)
+    assert _run(tmp_path) == 1
+
+
+def test_list_pages_prints_the_gates_own_page_set(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """``--list-pages`` prints README plus the published pages, minus ``exclude_docs``."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN + STR_EXCLUDE_TREE)
+    _write(tmp_path / "README.md", STR_EN)
+    _write(tmp_path / "docs" / "index.md", STR_EN)
+    _write(tmp_path / "docs" / "backlog" / "plan.md", STR_EN)
+    int_rc = cls_gate.main(["--root", str(tmp_path), "--list-pages"])
+    list_names = [Path(str_line).name for str_line in capsys.readouterr().out.splitlines()]
+    assert (int_rc, sorted(list_names)) == (0, ["README.md", "index.md"])
