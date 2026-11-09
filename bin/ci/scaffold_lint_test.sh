@@ -91,6 +91,10 @@ spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
         "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
 
+[[ -f "$PROJECT_PATH/mkdocs.yml" ]] || {
+    echo "ERROR: the scaffold did not generate $PROJECT_PATH/mkdocs.yml" >&2
+    exit 1
+}
 if ! grep -Eq "^[[:space:]]+language:[[:space:]]*[\"']?${DOCS_LOCALE}[\"']?[[:space:]]*(#.*)?$" "$PROJECT_PATH/mkdocs.yml"; then
     echo "ERROR: DOCS_LOCALE=$DOCS_LOCALE did not reach the generated mkdocs.yml (language:)" >&2
     exit 1
