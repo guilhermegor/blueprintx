@@ -2859,6 +2859,10 @@ def _stage_poetry_exec(path_root: Path, str_dry_run_output: str) -> tuple[Path, 
     )
     path_poetry.chmod(0o755)
     dict_env = dict(os.environ)
+    dict_env.pop("LOG_FILE", None)
+    dict_env.pop("FORCE_COLOR", None)
+    dict_env.pop("CLICOLOR_FORCE", None)
+    dict_env.pop("NO_COLOR", None)
     dict_env["PATH"] = f"{path_stubs}{os.pathsep}{dict_env['PATH']}"
     dict_env["DRY_RUN_OUT"] = str_dry_run_output
     return path_bin / "poetry_exec.sh", dict_env

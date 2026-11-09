@@ -22,8 +22,11 @@ def _is_required(spec: object) -> bool:
     Returns
     -------
     bool
-        False for optional or marker-gated entries.
+        False for optional or marker-gated entries; for a list of alternative constraints,
+        True when at least one of them is unconditional.
     """
+    if isinstance(spec, list):
+        return any(_is_required(spec_item) for spec_item in spec)
     return not isinstance(spec, dict) or not (
         spec.get("optional") or spec.get("markers") or spec.get("python")
     )
