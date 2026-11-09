@@ -106,6 +106,7 @@ create_python_files() {
 
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_import_root.py" "$project_path/tests/unit/test_import_root.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dynamic_version_stub_gate.py" "$project_path/tests/unit/test_dynamic_version_stub_gate.py"
 
