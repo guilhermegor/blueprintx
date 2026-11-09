@@ -784,6 +784,12 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "import pkg._internal.config as me\nclass M:\n    pass\nself = me\nself.__class__ = M\n",
         "import pkg._internal.config as me\nclass A:\n    def f(self):\n        self = me\n"
         + "        self.__class__ = A\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self):\n        def g():\n"
+        + "            global self\n"
+        + "        setattr(self, 'Priv', 1)\nself = me\nA().f()\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self):\n        def g():\n"
+        + "            nonlocal self\n"
+        + "        setattr(self, 'Priv', 1)\n",
         "class A:\n    def f(self, vars=lambda _: 1):\n        vars(self)\n",
         "class A:\n    def f(self):\n        def setattr(*a):\n            pass\n"
         + "        setattr(self, 'Priv', 1)\n",
@@ -832,6 +838,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "module-class-swap",
         "class-swap-through-rebound-module-self",
         "class-swap-through-rebound-method-self",
+        "global-self-in-nested-def",
+        "nonlocal-self-in-nested-def",
         "param-shadows-vars",
         "nested-def-shadows-setattr",
         "attribute-decorator-unknown-receiver",

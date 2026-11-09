@@ -672,7 +672,8 @@ def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> 
     """Return whether the name is bound or deleted by any statement under the def.
 
     A store or delete, an ``import ... as``, a ``match`` capture, an ``except ... as`` and a
-    nested ``def`` or ``class`` of that name all count. Nested scopes are included, which can
+    nested ``def`` or ``class`` of that name, and a ``global`` or ``nonlocal`` declaration of
+    it, all count. Nested scopes are included, which can
     only over-charge.
 
     Parameters
@@ -688,8 +689,11 @@ def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> 
         ``True`` when a binding of that name is found.
     """
     return any(
-        _bound_name(cls_sub) == str_param
-        and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
+        (isinstance(cls_sub, ast.Global | ast.Nonlocal) and str_param in cls_sub.names)
+        or (
+            _bound_name(cls_sub) == str_param
+            and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
+        )
         for cls_stmt in cls_fn.body
         for cls_sub in ast.walk(cls_stmt)
     )
