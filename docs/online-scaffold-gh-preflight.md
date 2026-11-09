@@ -85,7 +85,7 @@ about what a scaffold spends.
 
 One full online scaffold spends about 560 points. That is the
 `SCAFFOLD_GH_GRAPHQL_COST` default in `bin/lib/gh_preflight.sh`; the table
-below sums to 563 and the test fails if the two differ by more than 5. The
+below sums to 563 and the test fails if the table total is below the default or exceeds it by more than 5. The
 `SCAFFOLD_GH_GRAPHQL_BUDGET` default (1120) is twice the 560 default. Only a re-run of the command
 re-enters preflight, so a user retry is a new run and needs no allowance of its
 own. The scaffold libraries have no in-run retry loop; if one is added, each

@@ -407,7 +407,7 @@ test_the_card_add_path_pins_its_field_list_calls_and_points() {
     [ "$int_calls" -eq 6 ] ||
         fail "the card-add path makes ${int_calls} GraphQL-backed gh calls, the doc says 6 (list, view, 2 field-list, item-add, item-edit)"
     int_cost=$((int_fields * 102 + int_list * 3 + int_others * 2))
-    int_doc="$(awk -F'|' '/^\| card add:/ { gsub(/[^0-9]/, "", $(NF-1)); int_sum += $(NF-1) } END { print int_sum + 0 }' \
+    int_doc="$(awk -F'|' '/^\| Step/ { in_t = 1 } /^\| Total/ { in_t = 0 } in_t && /^\| card add:/ { gsub(/[^0-9]/, "", $(NF-1)); int_sum += $(NF-1) } END { print int_sum + 0 }' \
         "$REPO_ROOT/docs/online-scaffold-gh-preflight.md")"
     [ "$int_doc" -gt 0 ] || fail "no '| card add:' rows found in docs/online-scaffold-gh-preflight.md"
     [ "$int_cost" -eq "$int_doc" ] ||
@@ -417,14 +417,21 @@ test_the_card_add_path_pins_its_field_list_calls_and_points() {
 
 check_doc_total_matches_rows() {
     local str_doc="$REPO_ROOT/docs/online-scaffold-gh-preflight.md" int_rows int_total
-    int_rows="$(awk -F'|' '/^\| / && !/^\| (Step|Total)/ && !/subtotal/ { gsub(/[^0-9]/, "", $(NF-1)); int_sum += $(NF-1) } END { print int_sum + 0 }' "$str_doc")"
+    local int_total_rows int_cost_default
+    int_rows="$(awk -F'|' '/^\| Step/ { in_t = 1; next } /^\| Total/ { exit } in_t && /^\| / && !/subtotal/ { gsub(/[^0-9]/, "", $(NF-1)); int_sum += $(NF-1) } END { print int_sum + 0 }' "$str_doc")"
+    int_total_rows="$(grep -c '^| Total' "$str_doc" || true)"
+    if [ "$int_total_rows" -ne 1 ]; then
+        fail "the doc has ${int_total_rows} '| Total' rows, expected exactly 1"
+        return 0
+    fi
     int_total="$(awk -F'|' '/^\| Total/ { gsub(/[^0-9]/, "", $(NF-1)); print $(NF-1) }' "$str_doc")"
-    [ -n "$int_total" ] && [ "$int_rows" -eq "$int_total" ] ||
+    if [ -z "$int_total" ] || [ "$int_rows" -ne "$int_total" ]; then
         fail "the doc's Total row is '${int_total}', the rows above it sum to ${int_rows}"
-    # shellcheck source=bin/lib/gh_preflight.sh
-    source "$REPO_ROOT/bin/lib/gh_preflight.sh"
-    [ $((int_total - SCAFFOLD_GH_GRAPHQL_COST)) -le 5 ] && [ "$int_total" -ge "$SCAFFOLD_GH_GRAPHQL_COST" ] ||
-        fail "the doc's Total is ${int_total}, SCAFFOLD_GH_GRAPHQL_COST is ${SCAFFOLD_GH_GRAPHQL_COST}: they may differ by at most 5"
+        return 0
+    fi
+    int_cost_default="$(unset SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET; source "$REPO_ROOT/bin/lib/gh_preflight.sh"; echo "$SCAFFOLD_GH_GRAPHQL_COST")"
+    [ $((int_total - int_cost_default)) -ge 0 ] && [ $((int_total - int_cost_default)) -le 5 ] ||
+        fail "the doc's Total is ${int_total}, SCAFFOLD_GH_GRAPHQL_COST is ${int_cost_default}: Total may exceed the default by at most 5 and never undershoot it"
 }
 
 test_graphql_call_sites_match_the_measured_count() {
