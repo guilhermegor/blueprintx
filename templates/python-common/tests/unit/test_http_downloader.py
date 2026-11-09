@@ -1,4 +1,4 @@
-"""Unit tests for the HTTP download seam (offline — SSRF/validation guards only)."""
+"""Unit tests for the HTTP download seam (SSRF guards, plus a loopback redirect check)."""
 
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -24,15 +24,27 @@ class _RedirectHandler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture
-def str_redirect_url() -> Iterator[str]:
-    """Yield the URL of a local server that always answers 302."""
+def str_redirect_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+    """Yield the URL of a local server that always answers 302, bypassing any proxy.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Sets ``no_proxy`` so an ambient ``http_proxy`` cannot intercept the loopback call.
+
+    Yields
+    ------
+    str
+        The redirecting URL.
+    """
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
     cls_server = HTTPServer(("127.0.0.1", 0), _RedirectHandler)
     cls_thread = threading.Thread(target=cls_server.serve_forever, daemon=True)
     cls_thread.start()
     yield f"http://127.0.0.1:{cls_server.server_port}/start"
     cls_server.shutdown()
     cls_server.server_close()
-    cls_thread.join()
+    cls_thread.join(timeout=5)
 
 
 def test_download_rejects_empty_url(tmp_path: Path) -> None:
