@@ -405,6 +405,8 @@ lib_minimal_copy_project_scaffolding() {
         "$project_path/tests/unit/test_pr_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_check_backlog_ledger.py" \
+        "$project_path/tests/unit/test_check_backlog_ledger.py"
     lib_minimal_copy_gate_tests "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
         "$project_path/tests/unit/test_pip_requirements.py"
