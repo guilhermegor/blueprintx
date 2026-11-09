@@ -197,11 +197,13 @@ no comments apart from QA suppressions.
 - **Deterministic.** No real network, no real clock dependence, no unseeded randomness.
 - **A `match=` names a message this project raises, never one the stdlib or a vendor raises.**
   Their wording is not a contract: Python 3.14 reworded `strptime`'s out-of-range-day error, so
-  a `pytest.raises(ValueError, match=<3.13 wording>)` passed on 3.11-3.13 and failed only in
-  the 3.14 job (layouts-cvm#100). Assert the exception type, or match a token the test itself
-  injected (`test_dead_code_gate.py` matches the module name it planted, not the
-  `ImportError` sentence). Shared validators own their messages, so a test of a caller matches
-  the validator's own text or just its type.
+  a `pytest.raises(ValueError, match=<3.13 wording>)` passed on 3.11 to 3.13 and failed only
+  in the 3.14 job of the `tests.yml` matrix. Assert the exception type, or match a token the
+  test itself injected: plant `from os import no_such_name`, then `match="no_such_name"`,
+  not the `ImportError` sentence around it. `match=` is a regex (`re.search`), so a token
+  with `.` or other metacharacters goes through `re.escape(str_token)`. A shared validator owns its
+  message only when it composes that message itself; one that re-raises `str(exc)` from the
+  stdlib or a vendor is vendor wording again, so its callers assert the type.
 
 ### The network guard is not advisory
 
