@@ -27,7 +27,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Assertion weakening gate
-        run: node "$(find src -name assertion-weakening.cjs -print -quit)"
+        run: |
+          gate=$(find src -name assertion-weakening.cjs -print -quit)
+          [ -n "$gate" ] || { echo 'assertion-weakening gate missing' >&2; exit 1; }
+          node "$gate"
       - run: npm run lint
 
   stylelint:

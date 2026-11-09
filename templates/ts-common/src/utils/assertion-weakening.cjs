@@ -92,7 +92,7 @@ function prBody(eventPath) {
 function justification(base) {
   const isCi = Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
   const fromEnv = isCi ? '' : (process.env.TEST_CHANGE_OK ?? '').trim();
-  if (fromEnv) return fromEnv;
+  if (fromEnv && !RE_PLACEHOLDER.test(fromEnv)) return fromEnv;
   const eventPath = process.env.GITHUB_EVENT_PATH;
   const trailers = git(['log', `${base}..HEAD`, '--format=%B']);
   const reasons = [prBody(eventPath), trailers].map((text) => RE_JUSTIFICATION.exec(text)?.[1].trim() ?? '');

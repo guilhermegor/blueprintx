@@ -79,6 +79,22 @@ describe('assertion weakening gate justification', () => {
     withEvent('/nonexistent/event.json', () => expect(justification('HEAD')).toBe(''));
   });
 
+  it('rejects an unfilled <reason> placeholder in TEST_CHANGE_OK', () => {
+    const names = ['CI', 'GITHUB_ACTIONS', 'TEST_CHANGE_OK'];
+    const saved = names.map((name) => process.env[name] || '');
+    names.forEach((name) => {
+      process.env[name] = '';
+    });
+    process.env.TEST_CHANGE_OK = '<reason>';
+    try {
+      withEvent('', () => expect(justification('HEAD')).toBe(''));
+    } finally {
+      names.forEach((name, index) => {
+        process.env[name] = saved[index];
+      });
+    }
+  });
+
 });
 
 describe('assertion weakening gate justification in a branch', () => {
@@ -248,6 +264,22 @@ describe('assertion weakening gate fails closed', () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
       fs.rmSync(event, { force: true });
+    }
+  });
+});
+
+describe('assertion weakening hook wiring', () => {
+  it('fails the pre-commit hook when the gate file is missing', () => {
+    const hook = fs.readFileSync(path.join(process.cwd(), '.husky', 'pre-commit'), 'utf8');
+    const lines = hook.split('\n');
+    const script = lines.slice(lines.findIndex((line) => line.startsWith('gate='))).join('\n');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'package.json'), '{"main":"x.js"}');
+      fs.writeFileSync(path.join(dir, 'x.js'), '');
+      expect(spawnSync('sh', ['-c', script], { cwd: dir, encoding: 'utf8' }).status).toBe(1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 });
