@@ -79,6 +79,17 @@ is the first of `origin/$GITHUB_BASE_REF`, `origin/HEAD`, `origin/main`, `origin
 `master` that exists, so a repo whose default branch has another name and no `origin/HEAD` fails
 every commit after the first until you create one (for example `git branch main`).
 
+The test split is textual, not a parse, which costs precision both ways. A test is keyed by its
+name and its occurrence number across the whole file, ignoring `describe` nesting, so adding or
+removing an earlier test with the same name shifts which old and new tests are compared. A test
+body runs from its `it(` to the next test start, so matchers in a following `afterEach`,
+`beforeEach` or helper count toward it, and matchers above the first test are never read. An
+`it.each` whose table holds a call nested two levels deep, or a tagged-template `it.each`, is not
+split from the test before it. Negated matchers are skipped, so `toBe(5)` becoming
+`.not.toBeLessThan(5)` is not reported. A file git sees as a delete plus an add (a rewrite below
+its 50% rename similarity) is skipped. A spurious finding is answered with the justification
+above. A missed one is a review question.
+
 ## Pull requests
 
 1. Open an issue first, using the repository's issue template. State what you want to change
