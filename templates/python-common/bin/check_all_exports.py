@@ -617,9 +617,7 @@ def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_para
     )
 
 
-def _loses_exemption(
-    cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, set_bound: set[str]
-) -> bool:
+def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, set_bound: set[str]) -> bool:
     """Return whether a def gets no ``self``/``cls`` exemption (``__new__``, unknown decorator).
 
     Only ``classmethod``, ``property``, ``abstractmethod``, ``override``, ``cached_property``,
