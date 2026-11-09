@@ -164,7 +164,7 @@ def map_with_default(
         The column whose values are relabelled.
     dict_mapping : dict of {object: object}
         ``{raw_value: label}`` mapping applied to each cell.
-    default : Any
+    default : object
         The value assigned to any cell whose raw value is not a key in ``dict_mapping``.
 
     Returns

@@ -46,7 +46,7 @@ class _Sample(metaclass=TypeChecker):
         """
         return x * 2
 
-    def maybe(self, value: str | None) -> str:  # noqa: PLR6301 -- fixed foreign/port signature
+    def maybe(self, value: str | None) -> str:  # noqa: PLR6301 -- exercises instance-method wrapping
         """Return ``value`` or a placeholder.
 
         Parameters
@@ -61,7 +61,7 @@ class _Sample(metaclass=TypeChecker):
         """
         return value or "<none>"
 
-    def total(self, values: list[int]) -> int:  # noqa: PLR6301 -- fixed foreign/port signature
+    def total(self, values: list[int]) -> int:  # noqa: PLR6301 -- exercises instance-method wrapping
         """Sum ``values``.
 
         Parameters
@@ -80,6 +80,12 @@ class _Sample(metaclass=TypeChecker):
 def test_metaclass_allows_valid_calls() -> None:
     """Correctly-typed calls pass through unchanged."""
     assert _Sample(10).n == 10
+
+
+def test_metaclass_checks_constructor_arguments() -> None:
+    """``__init__`` is wrapped too: a wrong-typed constructor argument raises ``TypeError``."""
+    with pytest.raises(TypeError):
+        _Sample("ten")
 
 
 def test_metaclass_allows_a_valid_optional_call() -> None:

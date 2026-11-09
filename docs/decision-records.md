@@ -1028,9 +1028,13 @@ is shaped as it is; a generated project gets the behavior, not the history.
   ruff and mypy, so it was never checked. It is now checked under `disallow_any_explicit` and
   `disallow_any_generics`: decorators and wrappers are `ParamSpec` + `TypeVar`, the metaclass
   namespace is `dict[str, object]`, and `value` / `expected_type` are `object`. `TypeForm`
-  (PEP 747) is not supported by mypy yet, so `expected_type` stays `object`. The one
-  `# type: ignore[valid-type]` is `Annotated[<variable>, ...]` in `policy.py`, whose first
-  argument is chosen at import time. `^chassis/` and `^capabilities/example_feature/` were both removed in #190:
+  (PEP 747) is not supported by mypy yet, so `expected_type` stays `object`. Three
+  `# type: ignore`s remain, each a limit of mypy rather than of the code:
+  `[valid-type]` on `Annotated[<variable>, ...]` in `policy.py` (its first argument is chosen
+  at import time), `[operator]` on the `BeartypeHintOverrides({...})` call in `policy.py`, and
+  `[misc,valid-type]` on `ProtocolTypeCheckerMeta` in `protocol_type_checker.py`, which mixes
+  two metaclasses.
+- **No `chassis` / `example_feature` mypy exclude** (#190). `^chassis/` and `^capabilities/example_feature/` were both removed in #190:
   `chassis` was unchecked and had accumulated 20 errors in the DB handlers while shipping into
   every DDD project; `example_feature` was excluded yet checked anyway, because `main.py` and
   `app/container.py` import it. Dropping it took the DDD native tier from 58 to 69 checked
@@ -1122,7 +1126,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
 - **`bin/` is linted like the rest** (#207). It was excluded for a hypothetical (ruff-format
   would tabify space-indented helpers and trip E101); the 27 E101s all sat in one genuinely
   mixed file, and the exclude hid the project's own quality machinery, with 73 findings behind
-  it. Two rules were relaxed there (both removed in #1054 after measuring 0 findings): `ERA001` (100% false positives, 0 of 24 true: the gates'
+  it. Two rules were relaxed there (both removed in #1054 after re-measuring 0 findings with the ignore lifted): `ERA001` (as measured when it was introduced: 100% false positives, 0 of 24 true: the gates'
   long wrapped prose comments contain `(`, `:` or `=` and read as code; per-line `noqa` would
   teach authors that `noqa` is how you write a comment; `src/` keeps it, and the global
   decision is open in #169) and `E101` (the 2-space hanging indent of a wrapped Markdown
