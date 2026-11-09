@@ -1,10 +1,38 @@
 """Unit tests for the HTTP download seam (offline — SSRF/validation guards only)."""
 
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+import threading
 
 import pytest
 
-from src.utils.http_downloader import download_file
+from src.utils.http_downloader import _fetch_bytes, download_file
+
+
+class _RedirectHandler(BaseHTTPRequestHandler):
+    """Serve a 302 for every GET."""
+
+    def do_GET(self) -> None:  # noqa: N802
+        """Answer with a redirect to another path."""
+        self.send_response(302)
+        self.send_header("Location", "/elsewhere")
+        self.end_headers()
+
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+        """Silence request logging."""
+
+
+@pytest.fixture
+def str_redirect_url() -> Iterator[str]:
+    """Yield the URL of a local server that always answers 302."""
+    cls_server = HTTPServer(("127.0.0.1", 0), _RedirectHandler)
+    cls_thread = threading.Thread(target=cls_server.serve_forever, daemon=True)
+    cls_thread.start()
+    yield f"http://127.0.0.1:{cls_server.server_port}/start"
+    cls_server.shutdown()
+    cls_server.server_close()
+    cls_thread.join()
 
 
 def test_download_rejects_empty_url(tmp_path: Path) -> None:
@@ -29,3 +57,10 @@ def test_download_rejects_url_without_host(tmp_path: Path) -> None:
     """A URL with no host is rejected."""
     with pytest.raises(ValueError, match="without host"):
         download_file("http:///nohost", tmp_path / "out.bin")
+
+
+@pytest.mark.allow_network
+def test_fetch_bytes_redirect_raises_oserror_not_typeerror(str_redirect_url: str) -> None:
+    """A 302 surfaces as the intended OSError, not a TypeChecker TypeError."""
+    with pytest.raises(OSError, match="redirect blocked"):
+        _fetch_bytes(str_redirect_url, 5)
