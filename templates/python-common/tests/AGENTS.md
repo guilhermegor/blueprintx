@@ -195,6 +195,13 @@ no comments apart from QA suppressions.
   collaborator is expected — `Mock(spec=DatabaseHandler)` is the form that passes, and it is
   also the one that fails when the real class loses the method you are calling.
 - **Deterministic.** No real network, no real clock dependence, no unseeded randomness.
+- **A `match=` names a message this project raises, never one the stdlib or a vendor raises.**
+  Their wording is not a contract: Python 3.14 reworded `strptime`'s out-of-range-day error, so
+  a `pytest.raises(ValueError, match=<3.13 wording>)` passed on 3.11-3.13 and failed only in
+  the 3.14 job (layouts-cvm#100). Assert the exception type, or match a token the test itself
+  injected (`test_dead_code_gate.py` matches the module name it planted, not the
+  `ImportError` sentence). Shared validators own their messages, so a test of a caller matches
+  the validator's own text or just its type.
 
 ### The network guard is not advisory
 
