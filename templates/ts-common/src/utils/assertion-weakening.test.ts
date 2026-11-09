@@ -75,6 +75,13 @@ describe('assertion weakening gate justification', () => {
     withEvent(file, () => expect(justification('HEAD')).toBe(''));
   });
 
+  it('takes a real reason that follows a placeholder line in the same text', () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'aw-')), 'event.json');
+    const body = 'test-change-ok: <reason>\ntest-change-ok: the old value was wrong';
+    fs.writeFileSync(file, JSON.stringify({ pull_request: { body } }));
+    withEvent(file, () => expect(justification('HEAD')).toBe('the old value was wrong'));
+  });
+
   it('survives an unreadable event file', () => {
     withEvent('/nonexistent/event.json', () => expect(justification('HEAD')).toBe(''));
   });

@@ -5,7 +5,7 @@ const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
 const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.each\((?:[^()]|\([^()]*\))*\)|\.\w+)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
 const RE_MATCHER = /\.(not\.)?(to[A-Z]\w*)\(/g;
 const RE_PLACEHOLDER = /^<[^>]*>$/;
-const RE_JUSTIFICATION = /^\s*test-change-ok:[ \t]*(\S.*)$/im;
+const RE_JUSTIFICATION = /^\s*test-change-ok:[ \t]*(\S.*)$/gim;
 
 const EQUALITY_MATCHERS = new Set(['toBe', 'toEqual', 'toStrictEqual']);
 const INEQUALITY_MATCHERS = new Set([
@@ -95,8 +95,10 @@ function justification(base) {
   if (fromEnv && !RE_PLACEHOLDER.test(fromEnv)) return fromEnv;
   const eventPath = process.env.GITHUB_EVENT_PATH;
   const trailers = git(['log', `${base}..HEAD`, '--format=%B']);
-  const reasons = [prBody(eventPath), trailers].map((text) => RE_JUSTIFICATION.exec(text)?.[1].trim() ?? '');
-  return reasons.find((reason) => reason && !RE_PLACEHOLDER.test(reason)) ?? '';
+  const reasons = [prBody(eventPath), trailers].flatMap((text) =>
+    [...text.matchAll(RE_JUSTIFICATION)].map((match) => match[1].trim()),
+  );
+  return reasons.find((reason) => !RE_PLACEHOLDER.test(reason)) ?? '';
 }
 
 function changedPaths(output) {

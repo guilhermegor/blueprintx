@@ -60,8 +60,12 @@ strengthening an inequality to equality passes. It runs in `.husky/pre-commit` a
 workflow, which checks out full history.
 
 When the expectation was provably wrong, justify the change: put `test-change-ok: <reason>` in the
-PR body (CI reads it from the event payload, so a re-run after editing the body keeps the old
-text; push a new commit) or in the trailer of an earlier commit on the branch. The commit that
+trailer of a commit on the branch (the only form the local hook can read) or, for CI only, in
+the PR body (CI reads it from the event payload, so a re-run after editing the body keeps the
+old text; push a new commit). A PR-body-only justification passes CI but does not satisfy the
+local hook, which has no event payload: later local commits stay blocked until the trailer
+exists. One justification covers every finding on the branch, not only the change it was
+written for, so keep a weakening and its reason in the same small branch. The commit that
 introduces the weakening cannot carry its own trailer, because the hook runs before the message
 exists: prefix that commit with `TEST_CHANGE_OK='<reason>'` AND put the same `test-change-ok:`
 trailer in its message. The gate re-checks the whole branch since the merge-base on every later

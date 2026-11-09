@@ -160,8 +160,9 @@ test suite keep the contract; this section records the reasoning that lived besi
   complete tuple read as empty and every public member as missing, a gate that fails loudest on
   correct code. Vendored and generated trees are skipped.
 - **`check_assertion_weakening.py`** (#289, #324, #590). Comparison operators weaker than `==`
-  include the `in` example and `>=`; `Gt` and `Lt` are excluded because swapping equality for a
-  strict inequality still excludes the old value, so it stays out of the decidable core. The
+  include the `in` example, `>=`, `>` and `<` (#1053: `==` is not implied by any inequality, so
+  `Gt`/`Lt` accept infinitely many values the old assertion rejected, and the earlier
+  "decidable core" exclusion was wrong). The
   unittest-style call list is the measured, decidable subset, with only exact equivalences paired
   with a bare `assert`. A rename removes its source, so a production file moved into `tests/`
   still counts; a non-test source moved into `tests/` defines no baseline and is newly added.
