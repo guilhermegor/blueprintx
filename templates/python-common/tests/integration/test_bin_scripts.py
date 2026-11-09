@@ -2853,6 +2853,9 @@ def _tracker_step_script() -> str:
     return "\n".join(str_line[10:] for str_line in list_body).rstrip("\n") + "\n"
 
 
+_STR_OPEN_TRACKERS_NEWEST_FIRST = '[{"number": 9}, {"number": 7}]'
+
+
 def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[str]:
     """Run the tracking step against a stub ``gh`` and return the ``gh`` calls it made.
 
@@ -2863,19 +2866,23 @@ def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[s
     str_report : str
         Content of ``docstring_urls_report.txt``.
     str_open : str
-        Issue numbers the stub prints for ``gh issue list``, separated by escaped newlines.
+        JSON the stub serves for ``gh issue list``; the step's own ``--jq`` runs over it.
 
     Returns
     -------
     list[str]
         One line per ``gh`` invocation.
     """
+    _skip_unless(shutil.which("jq") is not None, "jq is needed to apply the step's --jq")
     path_bin = path_root / "stubs"
     path_bin.mkdir()
     path_log = path_root / "gh.log"
+    path_json = path_root / "issues.json"
+    path_json.write_text(str_open, encoding="utf-8")
     (path_bin / "gh").write_text(
-        f'#!/bin/bash\necho "$*" >> "{path_log}"\n'
-        f'[ "$2" = list ] && printf "%b" "{str_open}"\nexit 0\n',
+        f'#!/bin/bash\necho "$*" >> "{path_log}"\n[ "$2" = list ] || exit 0\n'
+        'while [ $# -gt 0 ]; do [ "$1" = --jq ] && str_jq="$2"; shift; done\n'
+        f'jq -r "$str_jq" "{path_json}"\n',
         encoding="utf-8",
     )
     (path_bin / "gh").chmod(0o755)
@@ -2894,7 +2901,9 @@ def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[s
 
 def test_docstring_urls_workflow_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None:
     """A clean scan must close every open tracking issue, not leave it open forever."""
-    list_calls = _run_tracker_step(tmp_path, "All docstring URLs are reachable\n", "7\\n9\\n")
+    list_calls = _run_tracker_step(
+        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+    )
 
     assert [str_call for str_call in list_calls if str_call.startswith("issue close")] == [
         "issue close 7 --comment All docstring URLs are reachable again.",
@@ -2904,7 +2913,9 @@ def test_docstring_urls_workflow_closes_the_tracker_once_urls_recover(tmp_path: 
 
 def test_docstring_urls_workflow_dedupes_to_one_open_tracker(tmp_path: Path) -> None:
     """With duplicates open, a failing scan updates the oldest and closes the rest."""
-    list_calls = _run_tracker_step(tmp_path, "URL issue (404) in a.py (line 1): u\n", "7\\n9\\n")
+    list_calls = _run_tracker_step(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+    )
 
     assert [str_call for str_call in list_calls if str_call.startswith("issue c")] == [
         "issue comment 7 --body-file docstring_urls_body.md",
@@ -2916,7 +2927,7 @@ def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
     """The hook must filter on ``.py`` like the script, not on ``types: python``."""
     path_config = Path(__file__).resolve().parents[2] / ".pre-commit-config.yaml"
     _skip_unless(path_config.is_file(), "no pre-commit config in this tree")
-    str_hook = path_config.read_text(encoding="utf-8").split("id: check-urls")[1]
+    str_hook = path_config.read_text(encoding="utf-8").split("id: check-urls\n")[1]
     str_hook = str_hook.split("stages:")[0]
 
     assert "files: \\.py$" in str_hook
