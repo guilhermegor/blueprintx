@@ -1,8 +1,0 @@
-*.tar.gz
-*.tar.gz.sha256
-*.bin
-*.img
-*.zip
-*.xz
-.tools/
-downloads/

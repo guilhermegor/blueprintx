@@ -1,7 +1,0 @@
-*.iso
-*.exe
-*.zip
-*.dat
-*.7z
-build/
-.tools/

@@ -1,36 +1,71 @@
 [tool.poetry]
-name = "BlueprintX"
-version = "0.0.0"
-description = "Docs and tooling for the BlueprintX scaffolder"
-authors = []
+name = "docs-probe"
+version = "0.0.1"
+description = "Docs probe"
+authors = ["ci-bot"]
 readme = "README.md"
 license = "MIT"
-homepage = "https://github.com/guilhermegor/BlueprintX"
-repository = "https://github.com/guilhermegor/BlueprintX"
-keywords = ["python", "scaffolding", "mkdocs"]
+homepage = "https://example.com/docs-probe"
+repository = "https://github.com/ci-bot/docs-probe"
+keywords = ["docs-probe", "python", "library"]
+packages = [{ include = "docs_probe", from = "src" }]
+exclude = ["src/**/CLAUDE.md"]
+package-mode = true
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
+    "License :: OSI Approved :: MIT License",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
 ]
-package-mode = false
 
 [tool.poetry.urls]
-"Bug Reports" = "https://github.com/guilhermegor/BlueprintX/issues"
-"Source" = "https://github.com/guilhermegor/BlueprintX"
+"Bug Reports" = "https://github.com/ci-bot/docs-probe/issues"
+"Source" = "https://github.com/ci-bot/docs-probe"
 
 [tool.poetry.dependencies]
-python = ">=3.12,<4.0"
+python = ">=3.11,<4.0"
+beartype = ">=0.22"
+pandas = ">=2.1.0"
+numpy = ">=1.22"
+openpyxl = ">=3.1.0"
+defusedxml = ">=0.7"
 
 [tool.poetry.group.dev.dependencies]
+poethepoet = ">=0.35"
 pre-commit = ">=4.1.0"
 pretty-errors = ">=1.2.25"
 commitizen = ">=4.4.1"
+build = ">=1.2.2"
+twine = ">=6.1.0"
+ruff = ">=0.11.13,<0.12"
+codespell = ">=2.4.1"
+pydocstyle = ">=6.3.0"
+pytest = ">=8.0.0"
+pytest-cov = ">=6.0.0"
+pytest-randomly = ">=3.15.0"
+coverage = ">=7.6.0"
+genbadge = {extras = ["coverage"], version = ">=1.1.0"}
+mypy = ">=1.8.0"
+sqlfluff = ">=3.0.0"
+yamllint = ">=1.35.0"
+shfmt-py = ">=3.7.0"
+shellcheck-py = ">=0.10.0"
+deptry = ">=0.20"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = ">=1.6.0"
 mkdocs-material = ">=9.5.0"
 pymdown-extensions = ">=10.0"
+mike = ">=2.1.0"
+
+[tool.deptry.per_rule_ignores]
+DEP002 = ["openpyxl"]
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]

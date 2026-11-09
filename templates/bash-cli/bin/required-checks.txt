@@ -1,3 +1,0 @@
-Lint — shellcheck + shfmt
-Test — bats
-Secret scan — gitleaks

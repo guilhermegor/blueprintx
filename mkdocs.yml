@@ -1,96 +1,46 @@
-site_name: BlueprintX
-site_description: Documentation for BlueprintX scaffolds (Python and TypeScript)
-site_url: https://github.com/guilhermegor/BlueprintX
-repo_url: https://github.com/guilhermegor/BlueprintX
-exclude_docs: |
-  superpowers/
-  blueprintx-lessons.md
+site_name: docs-probe
+site_description: "Docs probe"
+repo_url: https://github.com/ci-bot/docs-probe
 nav:
   - Home: index.md
-  - Getting Started:
-      - Get Started: get-started.md
+  - Guide:
+      - Usage: usage.md
       - Examples: examples.md
-      - CLI Reference: cli-reference.md
-      - Spec Answers: spec-answers.md
-      - Prompt Defaults: prompt-defaults.md
-      - Offline to Online: offline-to-online.md
-      - Online Preflight: online-scaffold-gh-preflight.md
-      - Offline Wheelhouse: offline-wheelhouse.md
-      - Troubleshooting: troubleshooting.md
-      - FAQ: faq.md
-  - Skeletons:
-    - Python:
-        - API Service (Native DB): skeletons.md
-        - DDD Service (Native DB):
-            - Overview: py-ddd-service-native-db.md
-            - Example - External API Calls: py-examples/ddd-external-api.md
-            - Example - Wiring with FastAPI: py-examples/ddd-usage-examples.md
-            - Example - Bank Balance Alert: py-examples/ddd-bank-balance-alert.md
-        - DDD Service (ORM DB):
-            - Overview: py-ddd-service-orm-db.md
-            - Example - Usage with SQLAlchemy: py-examples-orm/ddd-orm-usage-examples.md
-            - Example - External API Calls: py-examples-orm/ddd-orm-external-api.md
-            - Example - Bank Balance Alert: py-examples-orm/ddd-orm-bank-balance-alert.md
-        - MVC Service (Native DB):
-            - Overview: py-mvc-service-native-db.md
-        - MVC Service (ORM DB):
-            - Overview: py-mvc-service-orm-db.md
-        - Lib Minimal: py-lib-minimal.md
-    - Bash:
-        - Bash CLI: skeletons/bash-cli.md
-        - Ventoy USB: skeletons/ventoy-usb.md
-        - Etcher ChromeOS flasher: skeletons/etcher-chromeos.md
-    - TypeScript:
-        - React SPA (Webpack): ts-react-spa-webpack.md
-        - Library (TS, npm-ready): ts-lib.md
-  - Quality Gates:
-      - Quality Rules: quality-rules.md
-      - Coverage Floor: coverage-floor.md
-      - Conflict-Free Registries: conflict-free-registries.md
-      - Complexity Ceilings Measured: complexity-ceilings-measured.md
-      - Lockfile Sync: lockfile-sync.md
-      - Docs Boundary Gate: docs-boundary-gate.md
-      - README Layout Gate: readme-layout.md
-      - README Standard Adoption: readme-standard.md
-      - Issue Scope: issue-scope.md
-      - Secret Scanning: secret-scanning.md
-      - Required Status Checks: required-status-checks.md
-      - Template Drift: template-drift.md
-  - Review & Dependencies:
-      - Policy Workflows: policy-workflows.md
-      - CodeRabbit Configuration: coderabbit-config.md
-      - Graphite Configuration: graphite-config.md
-      - Dependabot Config: dependabot-config.md
-      - Dependabot Auto-merge: dependabot-auto-merge.md
-  - Decisions & Audits:
-      - Decision Records: decision-records.md
-      - Quality Gate Blind Spots: quality-gate-blind-spots.md
-      - CI Scanner Gap Analysis: ci-scanner-gap-analysis.md
-      - SonarQube Evaluation: sonarqube-evaluation.md
+  - API Reference:
+      - Overview: api/index.md
+      - Reference: api/reference.md
   - Project:
+      - FAQ: faq.md
       - Contributing: contributing.md
+      - Releasing 1.0.0: releasing-1-0-0.md
       - Changelog: changelog.md
-      - Versioning: versioning.md
+      - Incidents: incidents.md
+
 theme:
   name: material
   features:
     - navigation.tabs
     - navigation.sections
+  language: en
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
     - scheme: default
-      primary: indigo
+      primary: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
+      primary: custom
       toggle:
         icon: material/white-balance-sunny
         name: Switch to light mode
 extra_css:
-  - stylesheets/extra.css
+  - stylesheets/brand.css
+extra:
+  version:
+    provider: mike
+
 markdown_extensions:
   - admonition
   - toc:
@@ -105,3 +55,16 @@ markdown_extensions:
   - pymdownx.snippets:
       base_path:
         - .
+
+exclude_docs: |
+  superpowers/
+  CLAUDE.md
+  AGENTS.md
+  blueprintx-lessons.md
+  dotfiles-dev-lessons.md
+  checkpoints.md
+  blueprintx-lessons.md
+
+validation:
+  nav:
+    omitted_files: warn

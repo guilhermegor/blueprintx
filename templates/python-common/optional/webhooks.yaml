@@ -1,7 +1,0 @@
-title: "ROUTINE_CONCLUSION"
-message: >
-  Routine: {app_name}
-  Environment: {environment}
-  Host: {hostname}
-  Operator: {user}
-  Logs: {log_path}

@@ -3,43 +3,143 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=bin/lib/bootstrap.sh
+source "$SCRIPT_DIR/lib/bootstrap.sh"
+# shellcheck source=bin/lib/pip_fallback.sh
+source "$SCRIPT_DIR/lib/pip_fallback.sh"
 
-read_py_version() {
-	if [[ -f "$ROOT_DIR/.python-version" ]]; then
-		cat "$ROOT_DIR/.python-version"
+configure_poetry_virtualenv() {
+	export POETRY_VIRTUALENVS_IN_PROJECT=true
+
+	if [[ -f "$PROJECT_ROOT/poetry.toml" ]]; then
+		print_status "config" "Using Poetry local config from poetry.toml"
 	else
-		echo "3.12.0"
+		print_status "info" "Configuring Poetry virtualenv (in-project)..."
+		run_poetry config virtualenvs.in-project true --local
+	fi
+
+	print_status "info" "Selecting Python interpreter for Poetry..."
+	run_poetry env use "$PYTHON" >/dev/null
+
+	if ! pip_fallback_poetry_env_is_local; then
+		print_status "warning" "Poetry is using a non-local virtualenv."
+		print_status "warning" "Trying one reset to recreate .venv locally..."
+
+		run_poetry env remove --all >/dev/null 2>&1 || true
+		run_poetry env use "$PYTHON" >/dev/null
+
+		if ! pip_fallback_poetry_env_is_local; then
+			print_status "warning" "Poetry still did not switch to .venv inside the project."
+			return 1
+		fi
+	fi
+
+	print_status "success" "Poetry environment configured for $PYTHON"
+	return 0
+}
+
+upgrade_poetry_env_pip() {
+	print_status "info" "Upgrading pip inside the Poetry environment..."
+	run_poetry run python -m pip install --upgrade pip
+	print_status "success" "pip upgraded inside the Poetry environment"
+}
+
+install_full_env_with_poetry() {
+	if ! configure_poetry_virtualenv; then
+		return 1
+	fi
+
+	upgrade_poetry_env_pip
+
+	print_status "info" "Installing project dependencies with Poetry..."
+	if ! run_poetry install --with dev,docs --no-interaction; then
+		print_status "warning" "Poetry install failed for the full environment"
+		return 1
+	fi
+
+	print_status "success" "Dependencies installed with Poetry"
+	return 0
+}
+
+bootstrap_local_venv_with_pip() {
+	local str_venv_python
+
+	print_status "warning" "Creating local .venv with stdlib venv + pip fallback..."
+	pip_fallback_recreate_project_venv || return 1
+
+	str_venv_python="$(pip_fallback_project_venv_python)"
+	if ! pip_fallback_install_groups_in_venv \
+		"$str_venv_python" \
+		"main,dev,docs" \
+		"project dependencies (main, dev, docs)"; then
+		print_status "error" "Local .venv bootstrap failed — the environment is not usable"
+		return 1
+	fi
+
+	print_status "success" "Local .venv created with pip fallback"
+	print_status "warning" "Fallback mode installed dependencies from pyproject.toml without Poetry package installation"
+}
+
+install_playwright_in_local_venv() {
+	local str_venv_python
+	str_venv_python="$(pip_fallback_project_venv_python)"
+
+	if [[ -x "$str_venv_python" ]] && "$str_venv_python" -c "import playwright" >/dev/null 2>&1; then
+		try_install_playwright_browsers "$str_venv_python"
+	fi
+}
+
+install_playwright() {
+	if run_poetry run python -c "import playwright" 2>/dev/null; then
+		try_install_playwright_browsers run_poetry run python
+	fi
+}
+
+try_install_playwright_browsers() {
+	local -a cmd_python=("$@")
+	local -a args_install=(chromium)
+	[[ "${OS_TYPE:-$(detect_os)}" == "linux" ]] && args_install+=(--with-deps)
+
+	print_status "info" "Installing Playwright browsers (best-effort)..."
+	if "${cmd_python[@]}" -m playwright install "${args_install[@]}"; then
+		print_status "success" "Playwright browsers installed"
+	else
+		print_status "warning" \
+			"Could not install Playwright browsers — init continues; run 'poe fix_playwright' later if you need them"
 	fi
 }
 
 main() {
-	cd "$ROOT_DIR"
+	local bool_full_env_ready=0
+	local bool_fallback_used=0
 
-	local py_version
-	py_version=$(read_py_version)
-	if [[ -z "$py_version" ]]; then
-		echo "PY_VERSION is empty; set .python-version" >&2
-		exit 1
-	fi
+	print_status "section" "Virtual Environment Setup"
+	bootstrap_init
+	ensure_python_version
+	wire_corporate_ca
 
-	if command -v pyenv >/dev/null 2>&1; then
-		if ! pyenv versions --bare | grep -Fx "$py_version" >/dev/null 2>&1; then
-			pyenv install "$py_version"
-		fi
-		pyenv local "$py_version"
+	if pip_fallback_ensure_project_poetry && install_full_env_with_poetry; then
+		bool_full_env_ready=1
 	else
-		echo "pyenv not found; using current Python"
+		print_status "warning" "Falling back because Poetry could not provide a local full environment"
+		if ! bootstrap_local_venv_with_pip; then
+			print_status "error" "venv setup failed — no usable environment was produced. Never treat this as success."
+			return 1
+		fi
+		bool_fallback_used=1
 	fi
 
-	python -m pip install --upgrade pip
-	if [[ -f "$ROOT_DIR/requirements.txt" ]]; then
-		python -m pip install -r "$ROOT_DIR/requirements.txt"
+	if [[ "$bool_full_env_ready" -eq 1 ]]; then
+		install_playwright
+		print_status "success" "Virtual environment ready"
+		return 0
 	fi
-	poetry config virtualenvs.in-project true --local
-	poetry install
-	echo "Virtual environment created in ./.venv"
-	echo "Poetry project installed"
+
+	if [[ "$bool_fallback_used" -eq 1 ]]; then
+		install_playwright_in_local_venv
+		print_status "warning" "Local .venv is ready for runtime usage; Poetry-managed package installation was skipped"
+	fi
 }
 
 main "$@"

@@ -1,4 +1,0 @@
-#!/bin/bash
-
-env | grep '^GIT_' || true
-git init -q "$1"

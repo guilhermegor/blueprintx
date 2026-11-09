@@ -1,31 +1,48 @@
-
-default_install_hook_types:
-  - pre-commit
-  - commit-msg
-
 default_stages:
   - pre-commit
 
 repos:
+  - repo: local
+    hooks:
+      - id: protect-branch
+        name: block direct commits to main/master
+        entry: bash bin/protect_branch.sh
+        language: system
+        always_run: true
+        pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      - id: forbid-new-submodules
+      - id: detect-private-key
+      - id: detect-aws-credentials
+        args:
+          - --allow-missing-credentials
+      - id: check-merge-conflict
       - id: trailing-whitespace
         args:
           - --markdown-linebreak-ext=md
+        exclude: ^tests/fixtures/
       - id: end-of-file-fixer
+        exclude: ^tests/fixtures/
+      - id: check-xml
       - id: check-yaml
         args:
           - --unsafe
-      - id: check-json
-        exclude: (^|/)\.vscode/|(^|/)tsconfig[^/]*\.json$
       - id: check-toml
-      - id: check-merge-conflict
-      - id: detect-private-key
+      - id: check-json
+        exclude: ^\.vscode/.*\.json$
+      - id: check-symlinks
+      - id: debug-statements
       - id: check-added-large-files
         args:
-          - --maxkb=1000
-      - id: no-commit-to-branch
+          - --maxkb=500
+        exclude: (?i)^(data/large/.*|poetry\.lock)$
+      - id: check-illegal-windows-names
+      - id: check-case-conflict
+      - id: name-tests-test
+        args:
+          - --pytest-test-first
 
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.8.3
@@ -33,6 +50,8 @@ repos:
       - id: commitizen
         stages:
           - commit-msg
+          - manual
+        always_run: true
 
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
@@ -40,507 +59,416 @@ repos:
       - id: gitlint
         stages:
           - commit-msg
+          - manual
+        always_run: true
+
+  - repo: https://github.com/PyCQA/pydocstyle
+    rev: 6.3.0
+    hooks:
+      - id: pydocstyle
+        name: pydocstyle (docstring conventions)
+        args:
+          - --select=D412,D417
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff
+        name: ruff check
+        args:
+          - --config=ruff.toml
+      - id: ruff-format
+        name: ruff format
+        args:
+          - --config=ruff.toml
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        name: codespell check
+        args:
+          - --config=.codespellrc
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        name: lint dockerfiles
+        files: (?i).*dockerfile
 
   - repo: local
     hooks:
-      - id: codespell
-        name: codespell (docs/ + templates/)
-        entry: bash bin/ci/check_spelling.sh
+      - id: check-unix-filenames
+        name: check unix/linux filename validity
+        entry: bash bin/check_unix_filenames.sh
         language: system
-        pass_filenames: false
-        always_run: true
+        types:
+          - file
 
-      - id: codespell-sync
-        name: codespell ignore-list sync (root vs template)
-        entry: bash bin/ci/check_codespell_sync.sh
+      - id: check-docstrings
+        name: docstring type/raises consistency check
+        entry: bash bin/poetry_exec.sh run python bin/check_docstrings.py
         language: system
+        types:
+          - python
         pass_filenames: false
-        files: \.codespellrc$
 
-      - id: python-floor-drift
-        name: Python floor drift gate (blueprintx#951)
-        entry: python3 bin/python_eol_bump.py --check
+      - id: check-typing
+        name: runtime type-checker application check
+        entry: bash bin/poetry_exec.sh run python bin/check_typing.py
         language: system
+        types:
+          - python
         pass_filenames: false
-        files: ^(templates/.*(pyproject\.toml|\.python-version|ruff\.toml|mypy\.ini|requirements\.txt|README.*\.md|tests\.yml)|bin/python_eol_bump\.py)$
 
-      - id: agents-md-bridge
-        name: CLAUDE.md bridge and leaf pairing gate (blueprintx#754)
-        entry: bash -c 'bash bin/ci/check_agents_md_bridge.sh && bash tests/test_check_agents_md_bridge.sh'
+      - id: check-provenance
+        name: ingestion provenance stamp check
+        entry: bash bin/poetry_exec.sh run python bin/check_provenance.py
         language: system
+        types:
+          - python
         pass_filenames: false
-        files: ^(templates/.*(CLAUDE|AGENTS)\.md|templates/[^/]+/[^/]+\.(md|meta)|templates/common/.*|bin/(scaffold|lib)/.*\.sh|bin/ci/check_agents_md_bridge\.sh|tests/test_check_agents_md_bridge\.sh)$
-
-      - id: workflow-python-pins
-        name: workflow python-version minor-only pins (blueprintx#945)
-        entry: bash -c 'bash bin/ci/check_workflow_python_pins.sh && bash tests/test_check_workflow_python_pins.sh'
-        language: system
-        pass_filenames: false
-        files: ^(\.github/workflows/.*|templates/.*/\.github/workflows/.*|bin/ci/check_workflow_python_pins\.sh|tests/test_check_workflow_python_pins\.sh)$
-
-      - id: shellcheck
-        name: shellcheck (bin/**/*.sh)
-        entry: bash bin/ci/check_shell.sh
-        language: system
-        pass_filenames: false
-        files: ^bin/.*\.sh$
-
-      - id: sed-portability
-        name: sed portability (no bare sed -i, blueprintx#459)
-        entry: bash bin/ci/check_sed_portability.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/.*\.sh|templates/.*/bin/.*\.sh)$
-
-      - id: git-remote-guard
-        name: scaffold origin verification (mismatched remote must fail)
-        entry: bash bin/ci/check_git_remote_guard.sh
-        language: system
-        pass_filenames: false
-        files: ^bin/(lib/scaffold_git_remote\.sh|ci/check_git_remote_guard\.sh)$
-
-      - id: review-bot-roster-optout
-        name: review-bot roster opt-out ("no" must omit .review-bots.yaml)
-        entry: bash bin/ci/check_review_bot_roster_optout.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/(lib/scaffold_(git_remote|python_templates)\.sh|scaffold/(ts_lib|ts_react_app|python_lib_minimal)\.sh|ci/check_review_bot_roster_optout\.sh)|templates/(python-common/\.review-bots\.yaml|ts-common/\.github/\.review-bots\.yaml))$
-
-      - id: lint-actions
-        name: actionlint (workflows, repo + templates)
-        entry: bash bin/ci/check_actions.sh
-        language: system
-        pass_filenames: false
-        files: (^|/)\.github/workflows/.*\.(yml|yaml)$
-
-      - id: workflow-names
-        name: template workflow filenames (kebab-case .yml, blueprintx#947)
-        entry: bash -c 'bash bin/ci/check_workflow_names.sh && bash tests/test_check_workflow_names.sh'
-        language: system
-        pass_filenames: false
-        files: ^(templates/.*\.github/workflows/|bin/ci/check_workflow_names\.sh|tests/test_check_workflow_names\.sh)
-
-      - id: docs-gap
-        name: docs gap (published pages registered in mkdocs nav + docs/CLAUDE.md index, blueprintx#340)
-        entry: python templates/python-common/bin/check_docs_gap.py --root .
-        language: python
-        additional_dependencies: [pathspec, pyyaml]
-        pass_filenames: false
-        always_run: true
-      - id: required-checks-sync
-        name: required checks vs PR jobs in sync (blueprintx#535)
-        entry: python bin/ci/check_required_checks_sync.py
-        language: python
-        additional_dependencies: [pyyaml==6.0.3]
-        pass_filenames: false
-        files: ^(\.github/workflows/.*\.ya?ml|bin/ci/required_checks_policy\.txt|\.github/required-checks\.json|bin/ci/check_required_checks_sync\.py)$
-      - id: required-checks-sync-tests
-        name: check_required_checks_sync should-fail regression tests (blueprintx#535)
-        entry: bash tests/test_check_required_checks_sync.sh
-        language: python
-        additional_dependencies: [pyyaml==6.0.3]
-        pass_filenames: false
-        files: ^(bin/ci/check_required_checks_sync\.py|tests/test_check_required_checks_sync\.sh)$
-      - id: action-pins-tests
-        name: check_action_pins should-fail regression tests (blueprintx#369)
-        entry: bash tests/test_check_actions_pins.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/ci/check_actions\.sh|tests/test_check_actions_pins\.sh)$
-
-      - id: logo-sync-tests
-        name: check_logo_sync should-fail regression tests (blueprintx#1016)
-        entry: bash tests/test_check_logo_sync.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/python-common/bin/(check_logo_sync\.sh|lib/common\.sh)|tests/test_check_logo_sync\.sh)$
 
       - id: function-length
         name: function length (60 lines, docstring excluded)
-        entry: python3 templates/python-common/bin/check_function_length.py --root .
+        entry: bash bin/poetry_exec.sh run python bin/check_function_length.py
+        language: system
+        files: \.(py|sh)$
+        pass_filenames: false
+
+      - id: dynamic-version-stub
+        name: tag-versioned projects keep the 0.0.0 version stub
+        entry: bash bin/poetry_exec.sh run python bin/check_dynamic_version_stub.py
+        language: system
+        files: ^pyproject\.toml$
+        pass_filenames: false
+
+      - id: specs-structure
+        name: .specs/ structure guard
+        entry: bash bin/check_specs_structure.sh --root .
+        language: system
+        files: ^\.specs/|^bin/check_specs_structure\.sh$
+        pass_filenames: false
+
+      - id: agents-md-pairs
+        name: every CLAUDE.md has an AGENTS.md pair
+        entry: bash bin/check_agents_md_pairs.sh --root .
+        language: system
+        files: (^|/)(CLAUDE|AGENTS)\.md$|^bin/check_agents_md_pairs\.sh$
+        pass_filenames: false
+
+      - id: readme-structure
+        name: README structure (plain headings, slug sections, Authors links)
+        entry: bash bin/check_readme_structure.sh README.md
+        language: system
+        files: ^(README\.md|bin/check_readme_structure\.sh|bin/lib/md_structure\.sh)$
+        pass_filenames: false
+
+      - id: required-checks-sync
+        name: required checks are all unconditional PR jobs (blueprintx#164)
+        entry: bash bin/poetry_exec.sh run python bin/check_required_checks_sync.py --required-list bin/required-checks.txt
+        language: system
+        files: ^(\.github/workflows/.*\.ya?ml|bin/required-checks\.txt|bin/check_required_checks_sync\.py)$
+        pass_filenames: false
+
+      - id: docs-boundary
+        name: docs/ boundary guard (working material belongs in .specs/, blueprintx#576)
+        entry: bash bin/check_docs_boundary.sh --root .
         language: system
         pass_filenames: false
-        files: \.(py|sh)$
+        always_run: true
+
+      - id: identifier-masking
+        name: identifier masking (masked CPF/CNPJ in a comparison)
+        entry: bash bin/poetry_exec.sh run python bin/check_identifier_masking.py
+        language: system
+        files: \.(py|sql)$
+        pass_filenames: false
+
+      - id: fixture-scope
+        name: fixture scope (non-function scope needs a written reason)
+        entry: bash bin/poetry_exec.sh run python bin/check_fixture_scope.py
+        language: system
+        files: ^tests/.*\.py$
+        pass_filenames: false
+
+      - id: gate-integrity
+        name: gate integrity (a PR must not weaken a check without saying why)
+        entry: bash bin/poetry_exec.sh run python bin/check_gate_integrity.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: assertion-weakening
+        name: assertion weakening (a PR must not loosen a test without saying why)
+        entry: bash bin/poetry_exec.sh run python bin/check_assertion_weakening.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-complexity
+        name: cyclomatic complexity (tests 1, src 2, bin 8)
+        entry: bash bin/check_complexity.sh
+        language: system
+        files: \.py$
+        pass_filenames: false
+
+      - id: one-assert
+        name: one assertion site per unit test (zero asserts fails anywhere)
+        entry: bash bin/poetry_exec.sh run python bin/check_one_assert.py
+        language: system
+        files: \.py$
+        pass_filenames: false
+
+      - id: check-secrets
+        name: secret scan (gitleaks)
+        entry: bash bin/check_secrets.sh --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-all-exports
+        name: __all__ names every public member
+        entry: bash bin/poetry_exec.sh run python bin/check_all_exports.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      - id: check-registry-order
+        name: __all__ sorted one per line, no stored counts
+        entry: bash bin/poetry_exec.sh run python bin/check_registry_order.py
+        language: system
+        types_or:
+          - python
+          - markdown
+        pass_filenames: false
+
+      - id: check-dtypes
+        name: numeric dtype policy check (no binary floats)
+        entry: bash bin/poetry_exec.sh run python bin/check_dtypes.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      - id: check-rmw-race
+        name: read-modify-write race (arithmetic write on an ORM-read row, no lock)
+        entry: bash bin/poetry_exec.sh run python bin/check_rmw_race.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      - id: check-layer-imports
+        name: layer import policy (vendors live behind a seam)
+        entry: bash bin/poetry_exec.sh run python bin/check_layer_imports.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      - id: check-sql-guards
+        name: SQL guards (WHERE-less mutations, NOLOCK)
+        entry: bash bin/poetry_exec.sh run python bin/check_sql_guards.py
+        language: system
+        files: \.(py|sql)$
+        pass_filenames: false
+
+      - id: check-migration-slugs
+        name: migration slug convention (leading verb)
+        entry: bash bin/poetry_exec.sh run python bin/check_migration_slugs.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      - id: check-orm-model-guards
+        name: ORM model-definition guards (bitwise filter, two Base, duplicate constraint)
+        entry: bash bin/poetry_exec.sh run python bin/check_orm_model_guards.py
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      - id: check-docs-sections
+        name: docs skeleton (slug + nav) check
+        entry: bash bin/poetry_exec.sh run python bin/check_docs_sections.py
+        language: system
+        files: ^(mkdocs\.yml|docs/)
+        pass_filenames: false
+
+      - id: docs-gap
+        name: docs gap (pages registered in nav, nav ceiling, blueprintx#860)
+        entry: python bin/check_docs_gap.py --root .
+        language: python
+        additional_dependencies: [pathspec, pyyaml]
+        files: ^(mkdocs\.yml|docs/)
+        pass_filenames: false
+
+      - id: check-docs-code-refs
+        name: docs code references (symbols + import paths)
+        entry: bash bin/poetry_exec.sh run python bin/check_docs_code_refs.py
+        language: system
+        files: ^(docs/|README\.md|src/)
+        pass_filenames: false
+
+      - id: check-backlog-ledger
+        name: work-ledger (.specs/backlog) check
+        entry: bash bin/poetry_exec.sh run python bin/check_backlog_ledger.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-comment-language
+        name: documentation-language boundary (code is English)
+        entry: bash bin/poetry_exec.sh run python bin/check_comment_language.py
+        language: system
+        files: \.(py|ya?ml|sql|sh|toml|cfg|ini)$|\.env\.example$
+        exclude: ^docs/
+
+      - id: check-docs-language
+        name: docs language matches theme.language
+        entry: bash bin/poetry_exec.sh run python bin/check_docs_language.py
+        language: system
+        files: ^mkdocs\.yml$|\.md$|^bin/check_(docs_language|docs_gap|comment_language)\.py$
+        exclude: ^\.specs/
+        pass_filenames: false
 
       - id: check-comment-budget
-        name: comment budget (zero tolerance ratchet, blueprintx#304)
-        entry: python3 templates/python-common/bin/check_comment_budget.py --root . --require-baseline
+        name: comment budget (long runs + decorative banners)
+        entry: bash bin/poetry_exec.sh run python bin/check_comment_budget.py --require-baseline
         language: system
         pass_filenames: false
 
-      - id: env-docs-sync
-        name: .env.example and docs/configuration.md list the same variables (blueprintx#304)
-        entry: python3 templates/python-common/bin/check_env_docs_sync.py --each-under templates
+      - id: check-env-docs-sync
+        name: .env.example and docs/configuration.md list the same variables
+        entry: bash bin/poetry_exec.sh run python bin/check_env_docs_sync.py
         language: system
         pass_filenames: false
         files: (^|/)(\.env\.example|configuration\.md|check_env_docs_sync\.py)$
 
-      - id: check-complexity
-        name: cyclomatic complexity (tests 1, src 2, bin 8)
-        entry: bash templates/python-common/bin/check_complexity.sh --root .
+      - id: check-description-sync
+        name: manifest, mkdocs and GitHub About share one description
+        entry: bash bin/check_description_sync.sh
         language: system
         pass_filenames: false
-        files: \.py$
+        files: (^|/)(pyproject\.toml|package\.json|mkdocs\.yml|check_description_sync\.sh)$
 
-      - id: check-complexity-templates
-        name: cyclomatic complexity (templates/python-common — tests 1, src 2, bin 8)
-        entry: bash templates/python-common/bin/check_complexity.sh --root templates/python-common
+      - id: check-logo-sync
+        name: README and docs logos are the same image
+        entry: bash bin/check_logo_sync.sh
         language: system
         pass_filenames: false
-        files: ^templates/python-common/.*\.py$
+        files: (^|/)(README\.md|index\.md|mkdocs\.yml|check_logo_sync\.sh)$|\.(png|jpe?g|svg|ico|webp)$
 
-      - id: gate-integrity
-        name: gate integrity (a PR must not weaken a check without saying why)
-        entry: python3 templates/python-common/bin/check_gate_integrity.py --root .
+      - id: mypy
+        name: mypy (static type check)
+        entry: bash -c 'cd src && bash ../bin/poetry_exec.sh run mypy --config-file ../mypy.ini .'
+        language: system
+        types:
+          - python
+        pass_filenames: false
+
+      - id: lint-shell
+        name: shellcheck + shfmt (shell lint)
+        entry: bash bin/lint_shell.sh --check
+        language: system
+        types:
+          - shell
+        pass_filenames: false
+
+      - id: lint-yaml
+        name: yamllint (yaml style)
+        entry: bash bin/lint_yaml.sh
+        language: system
+        types:
+          - yaml
+        pass_filenames: false
+
+      - id: lint-sql
+        name: sqlfluff (sql lint)
+        entry: bash bin/lint_sql.sh
+        language: system
+        types:
+          - sql
+        pass_filenames: false
+
+      - id: lint-actions
+        name: actionlint (github actions workflows)
+        entry: bash bin/lint_actions.sh
+        language: system
+        files: ^\.github/workflows/.*\.(yml|yaml)$
+        pass_filenames: false
+
+      - id: lint-deps
+        name: deptry (every imported package is a direct dependency)
+        entry: bash bin/lint_deps.sh
+        language: system
+        files: ^(pyproject\.toml|src/.*\.py)$
+        pass_filenames: false
+
+      - id: unit-tests
+        name: checking unit tests
+        entry: bash -c "bash bin/poetry_exec.sh run pytest tests/unit/ || [ $? -eq 5 ]"
+        language: system
+        types:
+          - file
+        pass_filenames: false
+
+      - id: integration-tests
+        name: checking integration tests
+        entry: bash -c "bash bin/poetry_exec.sh run pytest tests/integration/ || [ $? -eq 5 ]"
+        language: system
+        types:
+          - file
+        pass_filenames: false
+
+      - id: check-clean-index
+        name: pre-push — index must be empty (a rejected commit leaves it populated)
+        entry: bash bin/check_clean_index.sh
         language: system
         pass_filenames: false
         always_run: true
+        stages:
+          - pre-push
 
-      - id: pr-file-count
-        name: PR file-count ceiling (90 files, blueprintx#551)
-        entry: python3 bin/ci/check_pr_file_count.py
+      - id: coverage-floor
+        name: coverage floor (omit list must not swallow capability logic)
+        entry: bash bin/poetry_exec.sh run python bin/check_coverage_floor.py
         language: system
+        files: ^(\.coveragerc|src/capabilities/.*\.py)$
         pass_filenames: false
-        always_run: true
 
-      - id: check-secrets
-        name: secret scan (gitleaks)
-        entry: bash templates/python-common/bin/check_secrets.sh --root . --staged
+      - id: coverage-check
+        name: test coverage check
+        entry: bash -c "bash bin/poetry_exec.sh run pytest tests/unit/ --cov=src --cov-report=term-missing"
         language: system
+        types:
+          - python
         pass_filenames: false
-        always_run: true
+        verbose: true
+        stages:
+          - pre-push
 
-      - id: test-copy-lists
-        name: shared test copy lists (scaffolds vs python-common)
-        entry: python3 bin/ci/check_test_copy_lists.py
+      - id: coverage-badge
+        name: coverage badge
+        entry: bash -c "bash bin/poetry_exec.sh run pytest tests/unit/ --cov=src && bash bin/poetry_exec.sh run coverage xml -o coverage.xml && bash bin/poetry_exec.sh run genbadge coverage --local -i coverage.xml -o coverage.svg"
         language: system
+        types:
+          - python
         pass_filenames: false
-        files: ^(bin/scaffold/python_.*\.sh|templates/python-common/tests/unit/.*\.py)$
+        stages:
+          - manual
 
-      - id: project-name-identities
-        name: dist name vs import package (blueprintx#113)
-        entry: bash bin/ci/check_project_name_identities.sh
+      - id: check-urls
+        name: check urls in docstrings
+        entry: bash bin/test_urls_docstrings.sh
         language: system
-        pass_filenames: false
-        files: ^(bin/lib/common\.sh|bin/blueprintx\.sh|bin/scaffold/python_.*\.sh|templates/lib-minimal/.*)$
-
-      - id: validate-meta
-        name: validate skeleton.meta integrity
-        entry: bash bin/ci/validate_meta.sh
-        language: system
-        pass_filenames: false
-        files: skeleton\.meta$
-
-      - id: validate-meta-tests
-        name: validate_meta.sh should-fail regression tests (blueprintx#407)
-        entry: bash tests/test_validate_meta.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/ci/validate_meta\.sh|tests/test_validate_meta\.sh)$
-
-      - id: check-secrets-tests
-        name: check_secrets.sh staged/full should-fail tests (blueprintx#759)
-        entry: bash tests/test_check_secrets.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/python-common/bin/check_secrets\.sh|tests/test_check_secrets\.sh)$
-
-      - id: scaffold-comment-budget-tests
-        name: generated projects ship the comment ratchet (blueprintx#826)
-        entry: bash tests/test_scaffold_comment_budget.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/scaffold_comment_budget\.sh|bin/scaffold/.*\.sh|templates/common/bin/comment_budget_routing\.txt|templates/python-common/bin/check_comment_budget\.py|tests/test_scaffold_comment_budget\.sh)$
-
-      - id: close-linked-issues-tests
-        name: close_linked_issues.sh should-fail regression tests (blueprintx#604)
-        entry: bash tests/test_close_linked_issues.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/common/bin/close_linked_issues\.sh|templates/common/\.github/workflows/close-linked-issues\.yml|tests/test_close_linked_issues\.sh)$
-
-      - id: dependabot-auto-merge-tests
-        name: dependabot_auto_merge.sh should-fail regression tests (blueprintx#800)
-        entry: bash tests/test_dependabot_auto_merge.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/common\.sh|\.github/workflows/dependabot-auto-merge\.yml|templates/common/bin/dependabot_auto_merge\.sh|templates/common/\.github/workflows/dependabot-auto-merge\.yml|tests/test_dependabot_auto_merge\.sh)$
-
-      - id: check-pr-policy-tests
-        name: check_pr_policy.sh should-fail regression tests (blueprintx#604)
-        entry: bash tests/test_check_pr_policy.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/common/bin/check_pr_policy\.sh|templates/common/\.github/(workflows/.*|PULL_REQUEST_TEMPLATE)\.(yml|md)|tests/test_check_pr_policy\.sh)$
-
-      - id: delete-closed-pr-branch-tests
-        name: delete_closed_pr_branch.sh should-fail regression tests (blueprintx#1040)
-        entry: bash tests/test_delete_closed_pr_branch.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/common/bin/(delete_closed_pr_branch|check_pr_policy)\.sh|templates/common/\.github/workflows/delete-closed-pr-branch\.yml|tests/test_delete_closed_pr_branch\.sh)$
-
-      - id: docs-locale-prompt-tests
-        name: docs-locale prompt should-fail regression tests (blueprintx#247)
-        entry: bash tests/test_docs_locale_prompt.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/blueprintx\.sh|bin/lib/scaffold_docs_locale\.sh|bin/scaffold/python_[^/]+\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
-
-      - id: prompt-tty-guard-tests
-        name: scaffold prompt tty-guard should-fail tests (blueprintx#539)
-        entry: bash tests/test_prompt_tty_guard.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/common\.sh|bin/lib/scaffold_[^/]+\.sh|bin/scaffold/[^/]+\.sh|tests/test_prompt_tty_guard\.sh)$
-
-      - id: scaffold-first-commit-tests
-        name: scaffold first-commit should-fail tests (blueprintx#812)
-        entry: bash tests/test_scaffold_first_commit.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/common\.sh|bin/lib/scaffold_[^/]+\.sh|bin/scaffold/[^/]+\.sh|tests/test_scaffold_first_commit\.sh)$
-
-      - id: scaffold-lint-test-cleanup-tests
-        name: scaffold_lint_test.sh cleanup-trap should-fail tests (blueprintx#762)
-        entry: bash tests/test_scaffold_lint_test_cleanup.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/ci/(scaffold_lint_test|check_review_config_shipped)\.sh|bin/lib/no_background_git\.sh|tests/test_scaffold_lint_test_cleanup\.sh)$
-
-      - id: spec-answers-tests
-        name: --spec regression tests (blueprintx#629)
-        entry: bash tests/test_spec_answers.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/(spec|common|scaffold_docs_locale)\.sh|templates/python-common/bin/check_docs_(language|gap)\.py|bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/lib-minimal/.*|tests/test_spec_answers\.sh)$
-
-      - id: scaffold-kanban-tests
-        name: scaffold kanban board and labels should-fail tests (blueprintx#592)
-        entry: bash tests/test_scaffold_kanban.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/(scaffold_kanban|common)\.sh|bin/lib/scaffold_git_remote\.sh|tests/test_scaffold_kanban\.sh)$
-
-      - id: scaffold-gh-preflight-tests
-        name: scaffold gh preflight and fail-closed should-fail tests (blueprintx#998)
-        entry: bash tests/test_scaffold_gh_preflight.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/(gh_preflight|scaffold_kanban|scaffold_git_remote|scaffold_repo_settings)\.sh|bin/blueprintx\.sh|bin/promote_offline_to_online\.sh|bin/scaffold/[^/]+\.sh|tests/test_scaffold_gh_preflight\.sh)$
-
-      - id: scaffold-git-remote-tests
-        name: scaffold git-remote secret-before-push should-fail tests (blueprintx#732)
-        entry: bash tests/test_scaffold_git_remote.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/(scaffold_git_remote|common)\.sh|tests/test_scaffold_git_remote\.sh)$
-
-      - id: enable-repo-rules-tests
-        name: enable_repo_rules missing-ruleset and stranded-PR tests (blueprintx#944)
-        entry: bash tests/test_enable_repo_rules.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/python-common/bin/enable_repo_rules\.sh|tests/test_enable_repo_rules\.sh)$
-
-      - id: ts-lib-pack-smoke-shape-tests
-        name: ts-lib verdaccio rehearsal publishes a prerelease and pins the install (blueprintx#934)
-        entry: bash tests/test_ts_lib_pack_smoke_shape.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/ts-lib/\.github/workflows/pack-smoke\.yml|tests/test_ts_lib_pack_smoke_shape\.sh)$
-
-      - id: prune-merged-branches-tests
-        name: scaffold deletes merged branches and prunes on fetch (blueprintx#923)
-        entry: bash tests/test_prune_merged_branches.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/(scaffold_git_remote|scaffold_repo_settings|common)\.sh|bin/promote_offline_to_online\.sh|bin/scaffold/(etcher_chromeos|ventoy_usb)\.sh|tests/test_prune_merged_branches\.sh)$
-
-      - id: description-sync-tests
-        name: description reaches every slot in every tier (blueprintx#895)
-        entry: bash tests/test_description_sync.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/common\.sh|bin/scaffold/(python|ts)_.*\.sh|templates/[^/]+/(mkdocs\.yml|pyproject\.toml|package\.json|docusaurus\.config\.js)|templates/python-common/bin/check_description_sync\.sh|tests/test_description_sync\.sh)$
-
-      - id: scaffold-python-templates-tests
-        name: scaffold provenance and copy-list tests (blueprintx#635)
-        entry: bash tests/test_scaffold_python_templates.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/(scaffold_(python_templates|provenance)|common)\.sh|templates/(python-)?common/.*|bin/scaffold/python_lib_minimal\.sh|templates/python-common/bin/check_template_drift\.py|tests/test_scaffold_python_templates\.sh)$
-
-      - id: scaffold-list-copies-tests
-        name: scaffold --list-copies tests, every tier (blueprintx#872)
-        entry: bash tests/test_scaffold_list_copies.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/lib/[a-z_]+\.sh|bin/scaffold/[a-z_]+\.sh|templates/.*|tests/test_scaffold_list_copies\.sh)$
-
-      - id: specs-structure
-        name: .specs/ structure guard (blueprintx#447)
-        entry: bash bin/ci/check_specs_structure.sh --root .
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      - id: specs-structure-tests
-        name: .specs/ structure guard should-fail regression tests (blueprintx#583)
-        entry: bash tests/test_check_specs_structure.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/ci/check_specs_structure\.sh|tests/test_check_specs_structure\.sh|bin/lib/common\.sh)$
-
-      - id: promote-offline-to-online-tests
-        name: promote_offline_to_online.sh refusal-path tests (blueprintx#382)
-        entry: bash tests/test_promote_offline_to_online.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/promote_offline_to_online\.sh|tests/test_promote_offline_to_online\.sh|bin/lib/common\.sh|templates/(common|python-common|lib-minimal|react-spa-webpack)/(\.github/|SECURITY\.md|optional/deploy/|docs_version/))
-
-      - id: docs-boundary
-        name: docs/ boundary guard (working material stays out of docs/, blueprintx#536)
-        entry: bash bin/ci/check_docs_boundary.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      - id: docs-boundary-tests
-        name: check_docs_boundary.sh should-fail regression tests (blueprintx#536)
-        entry: bash tests/test_check_docs_boundary.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/ci/check_docs_boundary\.sh|tests/test_check_docs_boundary\.sh)$
-
-      - id: registry-order-tests
-        name: registry order gate and two-branch merge proof (blueprintx#959)
-        entry: bash tests/test_check_registry_order.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/python-common/bin/check_registry_order\.py|templates/lib-minimal/rendered/package__init__\.py\.tmpl|tests/test_check_registry_order\.sh|bin/lib/common\.sh)$
-
-      - id: test-git-env
-        name: tests clear inherited GIT_* env before spawning git (blueprintx#901)
-        entry: bash bin/ci/check_test_git_env.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      - id: test-git-env-tests
-        name: check_test_git_env.sh should-fail regression tests (blueprintx#901)
-        entry: bash tests/test_check_test_git_env.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/ci/check_test_git_env\.sh|tests/test_check_test_git_env\.sh|tests/fixtures/test_git_env/)
-
-      - id: pr-template-tests
-        name: check_pr_template.sh should-fail regression tests (blueprintx#587)
-        entry: bash tests/test_check_pr_template.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/ci/check_pr_template\.sh|tests/test_check_pr_template\.sh|\.github/PULL_REQUEST_TEMPLATE\.md|templates/common/bin/lib/md_structure\.sh)$
-
-      - id: readme-structure
-        name: README structure (plain headings, slug sections, Authors links, blueprintx#867)
-        entry: bash bin/ci/check_readme_structure.sh
-        language: system
-        pass_filenames: false
-        files: ^(README\.md|templates/[^/]+/README(\.template)?\.md|templates/common/bin/(check_readme_structure\.sh|lib/md_structure\.sh)|bin/ci/check_readme_structure\.sh)$
-
-      - id: readme-structure-tests
-        name: check_readme_structure.sh and scaffold README should-fail tests (blueprintx#867)
-        entry: bash -c 'bash tests/test_check_readme_structure.sh && bash tests/test_scaffold_readme.sh'
-        language: system
-        pass_filenames: false
-        files: ^(templates/common/(bin/(check_readme_structure\.sh|lib/md_structure\.sh)|README\.template\.md)|templates/python-common/README\.md|bin/lib/scaffold_readme\.sh|tests/test_(check_readme_structure|scaffold_readme)\.sh)$
-
-      - id: lockfile-sync
-        name: lockfile sync (template package.json vs package-lock.json, blueprintx#588)
-        entry: bash bin/ci/check_lockfile_sync.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/[^/]+/package(-lock)?\.json|bin/ci/check_lockfile_sync\.sh)$
-
-      - id: lockfile-sync-tests
-        name: check_lockfile_sync.sh should-fail regression tests (blueprintx#588)
-        entry: bash tests/test_check_lockfile_sync.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/ci/check_lockfile_sync\.sh|tests/test_check_lockfile_sync\.sh)$
-
-      - id: version-sync
-        name: version sync (pyproject vs CLI)
-        entry: bash bin/ci/check_version_sync.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      - id: mkdocs-strict
-        name: mkdocs build --strict
-        entry: bash bin/ci/check_docs_build.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      - id: makefile-pairing
-        name: Makefile <-> tasks.sh <-> bin/help.sh pairing (blueprintx#241)
-        entry: bash bin/check_makefile_pairing.sh
-        language: system
-        pass_filenames: false
-        files: ^(Makefile|tasks\.sh|bin/help\.sh|bin/check_makefile_pairing\.sh)$
-
-      - id: review-config-shipped
-        name: every skeleton ships the hosted-reviewer config (blueprintx#740)
-        entry: bash bin/ci/check_review_config_shipped.sh --static
-        language: system
-        pass_filenames: false
-        files: ^(bin/scaffold/.*\.sh|bin/lib/.*\.sh|templates/common/.*|templates/[^/]+/skeleton\.meta|bin/ci/check_review_config_shipped\.sh)$
-
-      - id: dependabot-shipped
-        name: every skeleton ships dependabot.yml with a cooldown (blueprintx#838)
-        entry: bash bin/ci/check_dependabot_shipped.sh --static
-        language: system
-        pass_filenames: false
-        files: ^(bin/scaffold/.*\.sh|templates/common/\.github/dependabot\.yml|templates/ts-common/dependabot\.yml|templates/python-common/\.github/dependabot\.yml|templates/[^/]+/skeleton\.meta|bin/ci/check_dependabot_shipped\.sh)$
-
-      - id: dependabot-shipped-tests
-        name: dependabot guard should-fail regression tests (blueprintx#838)
-        entry: bash tests/test_check_dependabot_shipped.sh
-        language: system
-        pass_filenames: false
-        files: ^(bin/scaffold/.*\.sh|templates/.*dependabot\.yml|bin/ci/check_dependabot_shipped\.sh|tests/test_check_dependabot_shipped\.sh)$
-
-      - id: review-roster-ladder-tests
-        name: template review rosters trust the reviewer ladder (blueprintx#870)
-        entry: bash tests/test_check_review_threads_roster.sh
-        language: system
-        pass_filenames: false
-        files: ^(templates/python-common/\.review-bots\.yaml|templates/ts-common/\.github/\.review-bots\.yaml|templates/common/bin/check_review_threads\.py|tests/test_check_review_threads_roster\.sh)$
-
-      - id: precommit-ci-parity
-        name: pre-commit and CI run the same checks, both directions (blueprintx#384)
-        entry: bash bin/check_precommit_ci_parity.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-      - id: docs-code-refs
-        name: docs code references (symbols + import paths, blueprintx#159)
-        entry: python3 templates/python-common/bin/check_docs_code_refs.py --root .
-        language: system
-        pass_filenames: false
-        files: \.(py|md)$
-
-      - id: quality-rules
-        name: quality-rules.yaml validation (blueprintx#432)
-        entry: python3 templates/python-common/bin/check_quality_rules.py --root .
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      - id: check-markdown
-        name: markdownlint (pymarkdownlnt, measured rule set — blueprintx#383)
-        entry: bash bin/ci/check_markdown.sh
-        language: system
-        pass_filenames: false
-        files: \.md$
+        require_serial: true
+        types:
+          - python
+        verbose: true
+        stages:
+          - manual

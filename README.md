@@ -1,465 +1,129 @@
-<!-- markdownlint-disable MD013 -->
-<!-- readme-archetype: cli -->
-# BlueprintX
+<!-- readme-archetype: library -->
+# docs-probe
 
-<p align="center"><img src="https://raw.githubusercontent.com/guilhermegor/BlueprintX/main/assets/logo.png" width="200" alt="BlueprintX logo"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/ci-bot/docs-probe/main/assets/logo_lorem_ipsum.png" width="200" alt="docs-probe logo"></p>
 
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-[![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://guilhermegor.github.io/blueprintx/)
-![Bash](https://img.shields.io/badge/bash-%3E%3D4-4EAA25?logo=gnubash&logoColor=white)
+![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+[![PyPI](https://img.shields.io/pypi/v/docs-probe.svg)](https://pypi.org/project/docs-probe/)
+[![Downloads](https://img.shields.io/pepy/dt/docs-probe)](https://pepy.tech/projects/docs-probe)
+[![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://ci-bot.github.io/docs-probe/)
+[![Linting](https://img.shields.io/badge/linting-ruff_%7C_codespell-blue)](https://github.com/astral-sh/ruff)
+[![Mypy](https://img.shields.io/badge/type--checked-mypy-blue)](https://mypy-lang.org)
+![Test Coverage](https://raw.githubusercontent.com/ci-bot/docs-probe/badges/coverage.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Open Issues](https://img.shields.io/github/issues/guilhermegor/BlueprintX)
+![Open Issues](https://img.shields.io/github/issues/ci-bot/docs-probe)
 ![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-darkgreen.svg)
-
-**BlueprintX** is a lightweight scaffolding tool (Make + bash) for creating ready-to-code projects. It is language-agnostic by design.
 
 <!-- slug: overview -->
 ## Overview
 
-### Highlights
+Docs probe
 
-- Interactive CLI (`make new`) with auto-discovered language and skeleton menus
-- **Python skeletons**: **DDD service (Native DB)**, **DDD service (ORM DB)** with SQLAlchemy, **MVC service (Native DB)**, **MVC service (ORM DB)**, and **lib-minimal**
-- **TypeScript skeletons**: **React SPA (Webpack)** — React 19 + TypeScript + Webpack 5 + Babel + ESLint + Prettier
-- **Bash skeletons**: **bash-cli** — a standalone Bash CLI with git-tag versioning, bats and shellcheck; **etcher-chromeos** — a CLI that downloads, verifies and flashes ChromeOS Flex or FydeOS to a USB pendrive (see `docs/skeletons/etcher-chromeos.md`)
-- Common Python baseline: templated `pyproject.toml`, pre-commit, VS Code settings, CI workflow, CODEOWNERS, PR template, and test folders
-- Common TypeScript baseline: `package.json` with pinned deps, `.gitignore`, VS Code settings, `CONTRIBUTING.md`, GitHub Actions CI (type-check + lint + build)
-- **Offline git-diff sync**: when you scaffold a project without connecting it to GitHub, BlueprintX adds a `git_diff_export` / `git_diff_check` / `git_diff_apply` workflow for moving changes between machines via patch files (e.g. email) — no GitHub required
-- Dev/preview modes: temp scaffolds, dry-run structure previews, optional auto-clean
-- **Extensible by design**: drop a `skeleton.meta` file into any `templates/` directory and it appears in the menu automatically
+<!-- optional section: delete it when the project has no feature list -->
+<!-- slug: features -->
+## Features
+
+- The capabilities users care about, one line each.
 
 <!-- slug: documentation -->
 ## Documentation
 
-The documentation site lives at https://guilhermegor.github.io/blueprintx/. Serve it locally with `make mkdocs_serve`.
+The documentation site lives at https://ci-bot.github.io/docs-probe/. Serve it locally with `bash bin/poe_exec.sh docs_serve`.
 
 <!-- slug: getting-started -->
 ## Getting Started
 
+Python 3.11+ is the only prerequisite; `bin/venv.sh` installs [Poetry](https://python-poetry.org/) when it is missing.
+
 <!-- slug: install -->
 ### Install
 
-<details>
-<summary><strong>Homebrew</strong> (macOS / Linux)</summary>
-
 ```bash
-brew tap guilhermegor/blueprintx https://github.com/guilhermegor/blueprintx
-brew install blueprintx
+git clone https://github.com/ci-bot/docs-probe.git
+cd docs-probe
+bash bin/venv.sh
+bash bin/poe_exec.sh init
 ```
 
-To uninstall:
-
-```bash
-brew uninstall blueprintx
-brew untap guilhermegor/blueprintx
-```
-
-</details>
-
-<details>
-<summary><strong>Chocolatey</strong> (Windows)</summary>
-
-Requires [Git for Windows](https://gitforwindows.org/) (provides `bash.exe`).
-
-```powershell
-choco install blueprintx
-```
-
-To uninstall:
-
-```powershell
-choco uninstall blueprintx
-```
-
-</details>
-
-
-<details>
-<summary><strong>apt</strong> (Debian / Ubuntu)</summary>
-
-```bash
-# One-time: add the repository and signing key
-curl -fsSL https://guilhermegor.github.io/blueprintx/apt/gpg.key \
-    | sudo gpg --dearmor -o /usr/share/keyrings/blueprintx.gpg
-
-echo "deb [arch=all signed-by=/usr/share/keyrings/blueprintx.gpg] \
-    https://guilhermegor.github.io/blueprintx/apt stable main" \
-    | sudo tee /etc/apt/sources.list.d/blueprintx.list
-
-sudo apt update
-sudo apt install blueprintx
-```
-
-To uninstall:
-
-```bash
-sudo apt remove blueprintx
-sudo rm /etc/apt/sources.list.d/blueprintx.list /usr/share/keyrings/blueprintx.gpg
-```
-
-</details>
-
-> Snap is no longer published. If you installed through Snap, you keep your last
-> version; switch to Homebrew, Chocolatey or apt above for updates.
-
-<details>
-<summary><strong>Git clone</strong> (any platform)</summary>
-
-```bash
-git clone https://github.com/guilhermegor/blueprintx.git
-cd blueprintx
-make new
-```
-
-</details>
+`poe` lives inside the virtualenv, so `bin/venv.sh` creates it first; `bin/poe_exec.sh` then
+runs `poe init` without activating anything.
 
 <!-- slug: usage -->
 ### Usage
 
-#### After a package manager installation
-
-The `blueprintx` command is available system-wide:
-
-```bash
-blueprintx new              # interactive scaffolder — choose a skeleton and project name
-blueprintx new --dev        # scaffold into a temp dir (kept after exit)
-blueprintx new --dev --clean  # scaffold into temp dir, auto-deleted on exit
-blueprintx new --dry-run    # print chosen skeleton structure; no files written
-blueprintx preview          # show all available skeleton structures
-blueprintx --help           # show all commands and options
-```
-
-`new`, `preview`, and `help` are the only `blueprintx` subcommands — `--dev`, `--dry-run`, and
-`--clean` are flags on `new`, not standalone subcommands.
-
-#### After git clone
-
-The same targets are available via `make` or `./tasks.sh` from the repo root:
-
-```bash
-make new          # equivalent to blueprintx new
-make preview      # equivalent to blueprintx preview
-make dev
-make dev_clean
-make dry_run
-make mkdocs_serve  # serve the docs site locally at http://0.0.0.0:8000
-```
-
-**Requirements:** `bash` ≥ 4. For Python skeletons, use `pyenv`/`poetry` in the generated project. For TypeScript skeletons, the Node.js floor is per skeleton — `react-spa-webpack` and `ts-lib` both need `^22.18.0 || >=24.11.0` — and each declares its own `engines.node`; run `npm install` after scaffolding. On Windows, [Git for Windows](https://gitforwindows.org/) must be installed so that `bash.exe` is on `PATH`.
-
-## Supported skeletons
-
-### DDD service — Native DB (templates/ddd-service-native-db)
-Domain-Driven Design service skeleton with hexagonal/ports-and-adapters structure. Uses **native database libraries** (psycopg, sqlite3, oracledb, pyodbc, mysql-connector-python) for direct DB access. `chassis/` holds shared cross-cutting providers; `capabilities/<feature>/` hosts each bounded context's domain, application layer, and adapters.
-
-```
-project/
-    src/
-        chassis/
-            db/domain/ports.py            # DatabaseHandler ABC
-            db_schema/
-                domain/
-                infrastructure/           # sqlite, postgres, mariadb, mysql, mssql, oracle
-                application/              # build_database_handler() factory
-            db_wschema/                   # optional — added only if you opt into schema-less storage
-                infrastructure/           # json, csv, joblib handlers + SanityCheck
-                application/              # build_storage_handler() factory
-            typing/                       # ABCTypeCheckerMeta, ProtocolTypeCheckerMeta
-        capabilities/
-            example_feature/
-                domain/                   # entities, DTOs, enums, Protocol ports
-                application/              # use-cases, factories
-                infrastructure/           # repositories implementing domain ports
-        app/
-            bootstrap.py                  # env loading, logging, timing
-            container.py                  # composition root (AppContainer)
-        config/
-            startup.py                    # logger, webhooks, runtime constants
-        main.py
-    tests/{unit,integration,performance}/
-    container/
-    bin/
-    assets/
-    docs/
-    .github/
-    .vscode/
-    .env
-    pyproject.toml
-    requirements.txt
-    README.md
-```
-
-### DDD service — ORM DB (templates/ddd-service-orm-db)
-Same DDD hexagonal structure, but uses **SQLAlchemy ORM (≥ 2.0)** for database operations. Works with PostgreSQL, MySQL, SQLite, Oracle, and MSSQL through a unified `DatabaseSession` / `Repository` ABC.
-
-```
-project/
-    src/
-        chassis/
-            db_schema/
-                domain/
-                infrastructure/
-                    base.py          # Base (DeclarativeBase) + DatabaseSession + Repository ABC
-                    models.py        # ORM models
-                    repository.py    # SQLAlchemyRecordRepository (generic reference impl)
-                application/         # build_database_session() factory
-            typing/
-        capabilities/
-            example_feature/
-                domain/
-                application/
-                infrastructure/
-        app/
-        config/
-        main.py
-    tests/{unit,integration,performance}/
-    ... (same structure as native-db)
-```
-
-### MVC service — Native DB (templates/mvc-service-native-db)
-Layered **Model–View–Controller** skeleton for script/pipeline-style projects, using **native database drivers** (sqlite3, psycopg, mysql-connector, pyodbc, oracledb). The controller (`src/controller/main.py`) is a script-style, top-to-bottom pipeline that wires config → model → view. The model returns pandas DataFrames; the view renders them (e.g. `RenderToExcel`). Flatter than DDD — ideal for data/analytics pipelines and reports. Tests use pytest.
-
-```
-project/
-    src/
-        controller/main.py    # script-style entry-point: config → model → view
-        model/
-            conexao_db.py     # build_connection() — native DB-API connection factory
-            example_entity.py # service-style class: SQL in, pandas DataFrame out
-        view/report_renderer.py  # RenderToExcel — DataFrame → .xlsx
-        utils/                # project helpers (BR calendar comes from wwdates)
-        config/               # startup.py singletons + YAML (shared with DDD skeletons)
-    tests/{unit,integration,performance}/
-    bin/ · data/ · assets/ · docs/
-    .env · pyproject.toml · ruff.toml · pytest.ini
-```
-
-### MVC service — ORM DB (templates/mvc-service-orm-db)
-Same flat MVC structure, but the model uses the **SQLAlchemy ORM (≥ 2.0)** — `build_engine()` / `build_session_factory()`, declarative models, and `pd.read_sql` reads. Works with PostgreSQL, MySQL, SQLite, Oracle, and MSSQL.
-
-```
-project/
-    src/
-        controller/main.py
-        model/
-            conexao_db.py     # build_engine() / build_session_factory()
-            example_entity.py # DeclarativeBase + ORM model + service class
-        view/report_renderer.py
-        utils/ · config/
-    tests/{unit,integration,performance}/
-    ... (same structure as native-db)
-```
-
-### lib-minimal
-Lean library starter: package under `src/<project_name>/`, tests, CI, VS Code config, and pre-commit ready to go.
-
-```
-project/
-    src/<project_name>/
-    tests/{unit,integration,performance}/
-    docs/
-    container/
-    bin/
-    .github/
-    .vscode/
-    .env
-    pyproject.toml
-    README.md
-```
-
-### React SPA — Webpack (templates/react-spa-webpack)
-Full-stack SPA skeleton using **React 19**, **TypeScript 6**, **Webpack 5**, and **Babel**, structured around **hexagonal / DDD principles**. Each business capability lives in `src/capabilities/<name>/` with isolated `domain/`, `application/`, `infrastructure/`, and `ui/` layers. Layer boundaries are enforced at lint time via `eslint-plugin-boundaries`. At scaffold time you choose a **state management strategy** (React Context, Zustand, or Redux Toolkit) — only the chosen variant's files are written.
-
-```
-project/
-    src/
-        App.tsx                          # wires capability providers
-        index.tsx                        # entry point
-        declarations.d.ts               # CSS module type declarations
-        capabilities/
-            <feature>/
-                domain/                  # DTOs, entities, enums, port interfaces
-                application/             # use-case hooks, DTO↔entity assemblers
-                infrastructure/          # API adapters implementing domain ports
-                ui/                      # components, pages, CSS Modules
-                context.tsx              # composition root (wires infra into app)
-                index.ts                 # public barrel
-        routes/
-        shared/                          # cross-cutting styles, components, utils
-    public/
-        index.html
-    .babelrc
-    eslint.config.js
-    .prettierrc.js
-    tsconfig.json
-    webpack.config.js
-    package.json
-    .gitignore
-    .vscode/
-    docs/
-    .github/
-        workflows/
-            ci.yml                       # type-check, lint, build
-    CONTRIBUTING.md
-    LICENSE
-```
-
-After scaffolding, run `npm install && npm start` to launch the dev server on `http://localhost:3000`.
-
-### Library (TS, npm-ready) (templates/ts-lib)
-Publishable TypeScript library: dual **ESM + CommonJS** output plus bundled `.d.ts` declarations, built with `tsc` alone — no bundler, no framework. Ships its own **Docusaurus** docs site and an npm OIDC trusted-publishing release workflow.
-
-```
-project/
-    src/
-        index.ts                     # public barrel — only what this re-exports is public API
-        example.ts
-        example.test.ts
-        utils/
-            log-emitter.ts            # injectable LogEmitter port (shared TS source)
-    bin/
-        write_esm_package_json.sh    # postbuild:esm — stamps dist/esm's own package.json
-        smoke_pack.sh                # npm pack smoke test
-    docs/                            # Docusaurus site source
-    .github/
-        workflows/
-            docs.yml · docs-deploy.yml · pack-smoke.yml · release-npm.yml
-    tsconfig.json · tsconfig.esm.json · tsconfig.cjs.json · tsconfig.types.json
-    eslint.config.mjs                # vendor allowlist + function-length + catch-safety
-    jest.config.cjs
-    docusaurus.config.js
-    package.json
-    .gitignore
-    .vscode/
-    CONTRIBUTING.md
-    LICENSE
-```
-
-After scaffolding, run `npm install && npm run build && npm test` to build all three targets (`dist/esm`, `dist/cjs`, `dist/types`) and run the test suite.
-
-### Ventoy USB (templates/ventoy-usb)
-Rebuilds a [Ventoy](https://www.ventoy.net) multiboot drive with a fixed folder layout. A source manifest drives everything: latest ISOs are resolved and downloaded at build time, each verified against an upstream checksum (the build fails closed without one), an empty persistence image is created the way Ventoy does it, and `ventoy.json` is generated and path-checked. `make drive` asks for the pendrive, then installs Ventoy (after a typed confirmation) or syncs an existing one, asking before deleting anything outside the layout; `DRY_RUN=1` previews. ISOs, installers and persistence images are never committed; small own files go in `payload/`. Replaces a ~50 GB drive backup. See `docs/skeletons/ventoy-usb.md`.
-
-## Offline git-diff sync
-
-When you scaffold a project and **decline** connecting it to a GitHub remote, BlueprintX adds a small offline-sync workflow so you can move changes between machines as patch files (e.g. attach to an email) — useful in restricted/air-gapped environments. It is **only** added in this no-GitHub case; projects pushed to GitHub stay clean.
-
-| Command (Python: `make` / TypeScript: `npm run`) | Action |
-|---------------------------------------------------|--------|
-| `git_diff_export` (`git:diff:export`) | Export commits in `DIFF_RANGE` (default `main..HEAD`) to a dated `git_diffs/<branch>_<timestamp>.diff` |
-| `git_diff_check FILE=<path>` (`git:diff:check`) | Check whether a `.diff` applies cleanly — no changes made |
-| `git_diff_apply FILE=<path>` (`git:diff:apply`) | Apply a `.diff` to the working tree (does **not** stage or commit — you review and commit yourself) |
-
-Cross-platform (Windows Git Bash, macOS, Linux); the scripts live in `bin/` and source a shared `bin/lib/common.sh` status helper.
-
-## Folder attribution (ddd-service templates)
-- `chassis/`: shared cross-cutting providers (DB handlers, storage, type enforcement).
-- `chassis/db/`: `DatabaseHandler` ABC — contract all backends implement.
-- `chassis/db_schema/`: SQL-backed handlers + `build_database_handler()` factory.
-- `chassis/db_wschema/`: schema-less handlers (JSON, CSV, joblib) + `build_storage_handler()`.
-- `chassis/typing/`: runtime type enforcement (`ABCTypeCheckerMeta`, `ProtocolTypeCheckerMeta`).
-- `capabilities/<feature>/domain/`: feature entities, DTOs, enums, `Protocol` ports.
-- `capabilities/<feature>/application/`: use-case orchestration; no I/O or framework code.
-- `capabilities/<feature>/infrastructure/`: adapters implementing domain ports.
-- `app/`: `bootstrap.py` (env/logging) + `container.py` (composition root).
-- `config/`: module-level singletons and YAML config; secrets stay in `.env`.
+Run the project through its entry points under `src/`; replace this paragraph with the
+commands your users run first.
 
 <!-- slug: project-structure -->
 ## Project Structure
 
-The layout of this tool itself (generated projects have their own, see the skeleton previews above).
-
-
-```
-BlueprintX/
-├── Makefile                 # entry targets: new, preview, dev, dev_clean, dry_run
-├── tasks.sh                 # same targets for non-make usage
-├── bin/
-│   ├── blueprintx.sh        # interactive menu + auto-discovery
-│   ├── preview.sh           # skeleton previews
-│   ├── help.sh              # usage tips and targets
-│   ├── venv.sh              # convenience venv bootstrap
-│   └── scaffold/            # per-skeleton scaffolders
-│       ├── python_ddd_service.sh      # DDD native DB scaffold
-│       ├── python_ddd_service_orm.sh  # DDD SQLAlchemy ORM scaffold
-│       ├── python_mvc_service.sh      # MVC native DB scaffold
-│       ├── python_mvc_service_orm.sh  # MVC SQLAlchemy ORM scaffold
-│       ├── python_lib_minimal.sh      # lib-minimal scaffold
-│       ├── ts_react_app.sh            # React SPA (Webpack) scaffold
-│       ├── ts_lib.sh                  # publishable TS library scaffold
-│       └── ventoy_usb.sh              # Ventoy drive builder scaffold
-├── templates/               # skeleton contents + discovery metadata
-│   ├── common/                 # language-agnostic shared assets (CODEOWNERS, PR template,
-│   │   │                       #   bin/ git-diff scripts + lib/common.sh, make/git_diff.mk)
-│   │   ├── bin/
-│   │   └── make/
-│   ├── python-common/          # shared assets for all Python skeletons
-│   ├── ts-common/              # shared assets for all TypeScript skeletons
-│   ├── ddd-service-native-db/  # DDD/hexagonal with native DB libraries
-│   │   └── skeleton.meta
-│   ├── ddd-service-orm-db/     # DDD/hexagonal with SQLAlchemy ORM
-│   │   └── skeleton.meta
-│   ├── mvc-service-native-db/  # layered MVC with native DB drivers
-│   │   └── skeleton.meta
-│   ├── mvc-service-orm-db/     # layered MVC with SQLAlchemy ORM
-│   │   └── skeleton.meta
-│   ├── lib-minimal/            # minimal library template
-│   │   └── skeleton.meta
-│   ├── react-spa-webpack/      # React 19 + TypeScript + Webpack 5 SPA
-│   │   └── skeleton.meta
-│   ├── ts-lib/                 # publishable TypeScript library
-│   │   └── skeleton.meta
-│   ├── ventoy-usb/             # Ventoy drive builder (manifest, verified downloads)
-│   ├── etcher-chromeos/        # Bash CLI that flashes ChromeOS Flex or FydeOS
-│   │   └── skeleton.meta
-│   └── licenses/               # license text files
-├── docs/                    # mkdocs sources
-├── mkdocs.yml               # mkdocs config
-└── assets/logo.png          # logo used in this README
+```text
+docs-probe/
+├── .github/        workflows, CODEOWNERS, PR template
+├── .specs/         feature specs and backlog trackers
+├── bin/            gate scripts and helpers
+├── docs/           published documentation
+├── src/            application code
+├── tests/
+│   ├── unit/
+│   └── integration/
+├── pyproject.toml
+└── poe_tasks.toml  task runner entry points
 ```
 
 <!-- slug: development -->
 ## Development
 
+After the bootstrap under Install, any task can be run with the bootstrap script:
+`bash bin/poe_exec.sh <task>`, and `bash bin/poe_exec.sh` with no task lists them.
+
 ```bash
-make init           # bootstrap the venv, install the pre-commit hooks, set fetch.prune
-make lint           # run every pre-commit hook across the repo (mirrors CI)
-make verify_tiers   # scaffold each Python tier and run that project's lint and tests
+bash bin/poe_exec.sh unit_tests
+bash bin/poe_exec.sh integration_tests
 ```
 
-<!-- slug: releasing -->
-## Releasing
+Once the first release's docs deploy has created the `gh-pages` branch, run
+`bash bin/poe_exec.sh enable_pages` once: until that branch exists, `init` leaves Pages untouched.
 
-The version is the git tag; there is no hand-bump. Cut a release from the **Release**
-GitHub Action (`release.yml`, `workflow_dispatch` with a `version` field).
+<!-- slug: public-api -->
+## Public API
+
+The public surface is whatever the package `__init__.py` lists in `__all__`; everything
+under `_internal/` is private.
+
+<!-- slug: publishing -->
+## Publishing
+
+Releases go out from the release workflows under `.github/workflows/`; the git tag is the
+version.
+
+The path from 0.x to 1.0.0, and the release gate that guards it, is in
+[docs/releasing-1-0-0.md](docs/releasing-1-0-0.md).
 
 <!-- slug: contributing -->
 ## Contributing
 
-Issues and PRs are welcome. Please keep templates minimal, opinionated, and consistent across skeletons.
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch, commit and review rules.
 
 <!-- slug: license -->
 ## License
 
-MIT. See [LICENSE](LICENSE).
+This project is licensed under MIT; see [LICENSE](LICENSE).
 
 <!-- slug: authors -->
 ## Authors
 
-- Guilherme Rodrigues — [GitHub](https://github.com/guilhermegor) | [LinkedIn](https://www.linkedin.com/in/guilhermegor/)
+- ci-bot — [GitHub](https://github.com/ci-bot) | [LinkedIn](https://www.linkedin.com/in/ci-bot)
 
 <!-- slug: useful-links -->
 ## Useful Links
 
-* [GitHub Repository](https://github.com/guilhermegor/BlueprintX)
-
-* [Issue Tracker](https://github.com/guilhermegor/BlueprintX/issues)
-
-* [Versioning & the v1.0.0 entry bar](docs/versioning.md)
-
-* [Quality rules — the registry, per language](docs/quality-rules.md)
+- [GitHub Repository](https://github.com/ci-bot/docs-probe)
+- [Issue Tracker](https://github.com/ci-bot/docs-probe/issues)
+- [Documentation](https://ci-bot.github.io/docs-probe/)
 
 ---
 
-<sub>BlueprintX follows its own README standard; see [README standard](docs/readme-standard.md).</sub>
+<sub>Generated from the lib-minimal template via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>
+<!-- add any project disclaimer inside the sub tag above; for a library wrapping a third party, e.g. "Unofficial, community library. Not affiliated with or endorsed by ORG_NAME." -->

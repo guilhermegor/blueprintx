@@ -1,3 +1,0 @@
-- Dual ESM and CJS output with .d.ts; tsc only, no bundler.
-- Public surface is the package exports map; keep internals unexported.
-- No any; no unchecked casts.

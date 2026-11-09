@@ -1,3 +1,0 @@
-- Capabilities keep domain, application, infrastructure and ui layers apart; domain imports nothing from the others.
-- UI never calls infrastructure directly; go through application.
-- No any; no unchecked casts.

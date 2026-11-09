@@ -1,3 +1,0 @@
-#!/bin/bash
-
-git -c user.name=test -C "$1" commit -q --allow-empty -m seed

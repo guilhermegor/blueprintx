@@ -1,3 +1,0 @@
-#!/bin/bash
-
-bash "$REPO_ROOT/bin/scaffold/python_lib_minimal.sh" out

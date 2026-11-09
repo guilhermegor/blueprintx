@@ -1,1 +1,0 @@
-"""Views — output rendering (MVC)."""

@@ -1,119 +1,318 @@
 # **Contributing**
 
-How to contribute to BlueprintX itself (the scaffolding tool).
+Everything you need to develop, test, and release this library.
 
-> **See also:** the repository's root `CONTRIBUTING.md` holds the authoritative branch/PR and
-> commit-message policy · [CLI Reference](cli-reference.md).
+> **See also:** [Usage](usage.md) · [API Reference](api/index.md) · the repository's root
+> `CONTRIBUTING.md` holds the authoritative branch/PR and commit-message policy.
 
 ---
 
-## Development setup
+## Setting up for development
+
+`poe` is a dev dependency, so it exists only once the virtualenv does. Bootstrap with the shell
+entry point first. For that very first bootstrap use a plain shell (not inside `poetry run`, `poe` or an activated venv),
+then let `poe_exec.sh` find the venv's `poe` for the rest:
 
 ```bash
-make init          # bootstrap the venv + install pre-commit hooks
-make lint          # run all pre-commit hooks across the repo (mirrors CI)
+bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
+bash bin/poe_exec.sh init  # .env (when the tier ships one), venv, git hooks, GitHub helpers
 ```
 
-The root repo's pre-commit mirrors `.github/workflows/scaffold_checks.yml`: the shared checks
-live in `bin/ci/*.sh` and both the workflow and the hook call them — one home per check.
+`init` composes `ensure_env` (seed `.env`; an info-line no-op here, since a library ships no
+`.env.example`), `venv` (create the Poetry virtualenv, install **all** dependencies including
+dev + docs), and `precommit` (install the git hooks). Poetry is auto-installed if missing.
+Re-running `venv` from inside the project virtualenv is safe: it bootstraps from a base
+interpreter, and refuses to delete the `.venv` it is running from.
 
-## Adding a new skeleton
+## Tests and linting
 
-1. Create `templates/<name>/` with the skeleton's files.
-2. Add a `skeleton.meta` descriptor (`language`, `display_name`, `description`, `scaffold`).
-3. Write a scaffold script under `bin/scaffold/`.
-4. The interactive menu discovers it automatically — no change to `blueprintx.sh`.
-5. Add the install/usage notes to `README.md` and a docs page under `docs/`.
+```bash
+poe unit_tests          # poetry run pytest tests/unit/
+poe integration_tests   # poetry run pytest tests/integration/
+poe lint                # ruff + mypy + codespell + pydocstyle + shell/sql/yaml gates
+```
 
-## Cross-language quality parity
+CI runs the same gates on every pull request; keep them green locally before pushing.
 
-A quality decision (a lint rule, a gate, a coding convention) applies to **every** scaffolded
-language unless that language's own community standard overrides it — in which case the
-community standard wins. Parity is by prohibited construct, never by a copied number. These
-decisions are written in `CONTRIBUTING.md`/`README.md`/docs, never as a code comment (QA
-suppressions like `noqa` are exempt). See the root `CONTRIBUTING.md` → "Cross-Language Quality
-Parity" for the full rule, worked examples, and the dated Python-vs-TypeScript gate table.
+## Verifying the built package
 
-## Shared template sources
+Before opening a release PR, confirm the wheel actually builds and imports — this catches
+packaging mistakes (a missing `__init__`, an unshipped `_internal/` subpackage) that source-tree
+tests never surface:
 
-`templates/python-common/` (shared Python tooling), `templates/ts-common/` (shared TypeScript
-tooling), and `templates/common/` (language-agnostic assets) are the single sources of truth —
-change them there and every skeleton inherits the change on the next scaffold run.
+```bash
+poe install_dist_locally    # python -m build → install → smoke-import → report the built wheel
+```
 
-The per-project Claude Code guidance follows the same rule. `templates/common/CLAUDE.md` is the
-one home for what every skeleton shares (the boundary rules, data-handling guardrails, naming
-and file-naming conventions, tooling summary, runtime type-checking notes, project-memory
-rule); it ships to a generated project as `.claude/CLAUDE.md`, and each skeleton's root
-`CLAUDE.md` keeps only what is specific to that tier plus a pointer. Measured before the split
-(blueprintx#549, shared non-blank lines over the smaller file): `mvc-service-native-db` vs
-`mvc-service-orm-db` 89%, `ddd-service-native-db` vs `ddd-service-orm-db` 85%, any DDD tier vs
-any MVC tier 60–66%. After it: 65%, 62% and 20–28% — what remains is the architecture each
-pair genuinely shares (layer tables, key abstractions), which the issue classifies as
-per-skeleton. Edit a shared convention in `templates/common/CLAUDE.md`, never in one skeleton's
-root file, where the change would reach one tier and silently miss the rest.
+## Publishing the documentation (versioned, via mike)
+
+The published site is **versioned**: a consumer pinned to an older release reads *that
+release's* docs, not HEAD. [mike](https://github.com/jimporter/mike) maintains the version tree
+on the `gh-pages` branch and MkDocs-Material renders the version dropdown.
+
+Two workflows split the work:
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `Docs - Strict Build Check` (`docs.yml`) | every push + PR | `mkdocs build --strict` only — catches broken links/nav before a release. **Never deploys.** |
+| `Release to PyPI` (`release-pypi.yaml`) | manual release | after the PyPI publish succeeds, deploys the released version with `mike deploy --update-aliases <X.Y> latest` |
+
+Because the deploy runs **after** publishing, the site only ever advertises versions that
+actually shipped. Notes:
+
+- **Granularity is `X.Y`** — `1.4.2` and `1.4.7` share the `1.4` entry; the `latest` alias
+  always tracks the newest release and is the default landing version.
+- **Prereleases never move `latest`** — a version with a suffix (`1.2.3rc1`) builds and
+  publishes, but the docs deploy job is skipped.
+
+### One-time Pages setup
+
+mike serves from the **`gh-pages` branch**, so Pages must be set to *Deploy from a branch →
+gh-pages*. The workflow's `GITHUB_TOKEN` cannot change that (it is a GitHub App token without
+repo-admin rights), so do it with your own `gh` auth:
+
+```bash
+poe enable_pages
+```
+
+This already runs inside `poe init` (after bootstrap), and is **idempotent and
+non-blocking** — it warns and continues if `gh` is absent/unauthenticated, no remote resolves,
+or you are not a repo admin (a fork), so it never breaks `init`.
+
+**Ordering matters:** the `gh-pages` branch does not exist until the first release deploy
+creates it. Until then `enable_pages` deliberately leaves Pages untouched (so the site is never
+pointed at an empty branch) and tells you to re-run it. So: cut the first release, then run
+`poe enable_pages` once. Manual alternative: *Settings → Pages → Build and deployment →
+Source: Deploy from a branch → `gh-pages` / `/`*.
 
 ## Pull requests
 
-Branch off `main` using the CONTRIBUTING prefix policy (`feat/…`, `fix/…`, …), keep `make lint`
-green, and fill out the PR template. Direct commits to `main` are blocked by pre-commit.
-
-Scaffolded repos delete a PR's branch on merge (`delete_branch_on_merge`) and, through
-`delete-closed-pr-branch.yml`, when a same-repo PR is closed without merging; see
-[Repo policy workflows](policy-workflows.md).
-
-## Blocked work
-
-Work that cannot start because an upstream is unfinished is marked on the issue and on the
-kanban board, so it is obvious when to stop here and go finish the upstream.
-
-**Convention.** An issue that cannot start carries the `state:blocked` label and a
-`**Blocked by:**` line at the start of a body line, naming each blocker as `repo#N`, or as
-`decision: <why>` when the blocker is a choice nobody has made yet. The same convention is used in
-`greenfield` (`project-seed.md`), so every repo reads it the same way. The
-[issue template](https://github.com/guilhermegor/blueprintx/blob/main/.github/ISSUE_TEMPLATE/feature_or_fix.md)
-carries the line plus the machine-readable `issue-template-guard:` directive that makes a
-`state:blocked` issue without it get rejected (guard: `issue_template_guard.sh` in `dotfiles-dev`,
-`ai_clients/claude/hooks/`).
-
-**Why a convention and not only GitHub's native `blocked_by`.** The native relationship is
-same-repo only, so a blocker in another repository cannot use it. Where it does apply, nothing
-propagates it: GitHub resolves the dependency when the blocker closes, but the board Status, the
-label and the `Blocked by` field sit still until the reconciler (`roadmap_unblock.sh` in
-`dotfiles-linux-dev`) re-reads them. Where the blocker is in the same repository, mirror it as a native
-relationship too.
-
-**Rules.**
-
-- Name the specific upstream issue whenever one exists. Link the terminal issue
-  ([#601](https://github.com/guilhermegor/blueprintx/issues/601)) only when the blocker really
-  is "not 1.0 yet" — the reconciler clears on the *named* issue, so pointing everything at that
-  issue holds work that is in fact ready.
-- A `decision:` blocker is never auto-cleared; only a person removes it. That is deliberate.
-- A board Status alone is not durable: the reconciler clears any item it reads as blocked by
-  nothing. Each blocked item needs the label plus the `**Blocked by:**` body line (the issue
-  template guard rejects a `state:blocked` issue without it). A native `blocked_by` entry is an
-  additional mirror where supported, never a replacement for the body line.
-
-**Board.** The kanban board's `Status` options read
-`Blocked | Backlog | Ready | In progress | In review | Done` (`Blocked` first, as on the boards
-this convention has been applied to), with a `Blocked by` text field.
-
-!!! warning "Pin every option `id` when editing the Status field"
-    `updateProjectV2Field` replaces the entire option set, and an option sent without its
-    existing `id` is minted as a new one — every item's stored value then dangles and reads
-    empty. Adding `Blocked` to another board this way wiped all 271 item Statuses in one call.
-    Get the item count first (`gh project view <n> --owner <o> --format json`, field
-    `items.totalCount`), then snapshot with
-    `gh project item-list <n> --owner <o> --limit <count+1> --format json` and check that the
-    snapshot length equals the count. Send every option with its existing `id` (only the new
-    `Blocked` has none), pass the payload as a `{query, variables}` body via
-    `gh api graphql --input <file>`, then diff per item id against the snapshot. If the diff
-    shows any wiped Status, stop and restore each one with `updateProjectV2ItemFieldValue`.
-    Its `singleSelectOptionId` must be an option that exists now, and a wipe means the old ids
-    were replaced, so map each item's saved Status label to the field's current option id
-    (re-read the field's options first). Then re-diff until the diff is empty.
+1. Open an issue first, using the repository's issue template. State what you want to change
+   and why, and list the files it will touch. For non-trivial work, wait for the issue to be
+   accepted before writing code.
+2. Branch off the default branch as `<type>/<issue-number>-<slug>` (for example
+   `feat/42-user-authentication`), following the prefix policy (`feat/…`, `fix/…`, …).
+3. Put `Closes #<N>` in the PR body so the issue closes when the PR merges.
+4. Fill out the PR template completely.
+5. Ensure the CI checks (tests, lint, docs build) pass — they are the merge gate.
 
 ## Releasing
 
-The version is the git tag — cut a release from the **Release** GitHub Action (enter the
-version once). See the [FAQ](faq.md#how-is-blueprintx-itself-versioned).
+Releases are **tag-driven and secret-free** when the project is connected to a GitHub remote:
+
+- The version is the **git tag** (via `poetry-dynamic-versioning`); `pyproject.toml` holds a
+  `0.0.0` placeholder. Do not hand-edit it. Trigger a release from the Actions tab
+  (`Release to PyPI` / `Release to Test PyPI`, `workflow_dispatch` with the version), or by pushing
+  a `vX.Y.Z` tag.
+- The published version is derived from the latest git tag matching `vX.Y.Z`. On an exact tag
+  the build is clean (`0.2.0`); off-tag builds get a PEP 440 dev version. The release workflows
+  pass `POETRY_DYNAMIC_VERSIONING_BYPASS` to build a specific version. Build with
+  `python -m build` (a PEP 517 frontend).
+- A hand-bumped `version` fails the `dynamic-version-stub` pre-commit hook
+  (`bin/check_dynamic_version_stub.py`): it contradicts the tag and the package index. The hook
+  is a no-op for projects that do not enable `poetry-dynamic-versioning`.
+- The release workflow runs the **full test suite** as a hard gate, builds with `python -m build`,
+  and publishes via **OIDC trusted publishing** (`pypa/gh-action-pypi-publish`) — no token secrets
+  are needed.
+- The changelog is regenerated from tags at release/build time (`poe changelog` locally); CI never
+  commits `CHANGELOG.md` back to the protected default branch.
+
+### Maintainer setup — trusted publisher (one time, before the first release)
+
+Register a **trusted publisher** on **both** [pypi.org](https://pypi.org) and
+[test.pypi.org](https://test.pypi.org). Every claim must match the workflow exactly or the upload
+fails with an opaque `invalid-publisher`:
+
+| Claim | Value |
+|-------|-------|
+| Owner / repository | your GitHub `<owner>` / `<repo>` |
+| Workflow filename | `release-pypi.yaml` (PyPI) / `release-test-pypi.yaml` (Test PyPI) |
+| Environment | `release-pypi` / `release-test-pypi` |
+| PyPI **Project Name** | must equal the distribution name (`name` in `pyproject.toml`) |
+
+The GitHub Release step exists only in `release-pypi.yaml`, not in the Test PyPI workflow, so a change there is never rehearsed; diff the two workflows when editing either.
+
+For the very first upload the project does not exist yet — register a **pending publisher** at the
+account level (not under an existing project's settings). Publishing from a laptop instead of CI is
+the one case that still needs an API token; OIDC works only from GitHub Actions.
+
+### Serving the docs — first release
+
+The first `release-pypi.yaml` run creates the `gh-pages` branch with `mike deploy`.
+`GITHUB_TOKEN` cannot set the Pages source (the endpoint needs repository admin rights), so the
+`deploy_docs` job prints the remedy in its job summary. Run `poe enable_pages` once as a
+repository admin afterwards.
+
+### Choosing publish targets
+
+The scaffold wires the release workflows for the official public registry (PyPI) and a staging
+registry (Test PyPI). To publish to a **private / non-official** source instead — a git source
+(`pip install git+https://…`), a private PEP 503 index, or (for ecosystems that support it) GitHub
+Packages — wire the consumer-side source in `pyproject.toml` with an explicit-priority guard
+against dependency confusion (`poetry`'s `priority = "explicit"`; `pip --index-url`, never
+`--extra-index-url`).
+
+## Branding the docs site
+
+The scaffold ships a **placeholder** brand image at `docs/assets/logo.png`, wired as the header
+logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing hero on
+`docs/index.md`. To brand your site:
+
+1. Replace `docs/assets/logo.png` with your own asset (keep the filename, or update the two
+   `mkdocs.yml` paths and the `<img>` in `docs/index.md`).
+2. Tune size, position and border inline on the `<img>` — `width="200"` (scale),
+   `align="right"` (position) and `style="border-radius: 15px;"` (rounded) — in `docs/index.md`.
+3. Set the header colour in `docs/stylesheets/brand.css` (`--md-primary-fg-color`, plus the
+   `slate` variant for dark mode) to match your logo.
+
+## Repository protection & security (one-time, scripted)
+
+`poe init` runs three admin-gated helpers. They are **idempotent and non-blocking**: without
+`gh`, without auth, without a GitHub remote, or without repo-admin rights they warn and skip, so
+`init` still completes for contributors and offline scaffolds. Re-run any of them alone later:
+
+| Target | What it provisions |
+|--------|--------------------|
+| `poe enable_pages` | GitHub Pages source (gh-pages branch for versioned docs, else Actions) |
+| `poe enable_repo_rules` | The `pr-quality-gate` branch ruleset + the merge settings the PR gate needs |
+| `poe enable_security` | Private vulnerability reporting, Dependabot alerts, Dependabot security updates |
+
+### The `pr-quality-gate` ruleset
+
+Applied to `~DEFAULT_BRANCH` (that ref survives a branch rename), looked up **by name** so a
+re-run updates in place instead of creating a duplicate:
+
+| Rule | Setting | Why |
+|------|---------|-----|
+| `pull_request` | `required_approving_review_count: 0` | ⚠️ **Must be 0.** GitHub forbids approving your own PR, so any value ≥ 1 locks a solo maintainer out of merging their own work. Zero still forces every change through a PR — that is the real guardrail. |
+| `pull_request` | `required_review_thread_resolution: true` | Makes review comments **binding**: an unresolved thread blocks the merge instead of being decorative. |
+| `code_scanning` | CodeQL, security `high_or_higher`, alerts `errors` | Alerts stay at `errors`: `errors_and_warnings`/`all` start blocking merges on stylistic queries, duplicating ruff/mypy with noise. |
+| `copilot_code_review` | `review_on_push: true` | Its **own rule type** — not a `pull_request` parameter (that returns HTTP 422 and makes the feature look UI-only). |
+| `non_fast_forward`, `deletion` | on | No force-push, no branch deletion on the default branch. |
+| `required_status_checks` | **empty by default** | ⚠️ Deliberate. A required check whose name never reports blocks **every** PR forever. Populate `REQUIRED_CHECKS` in `bin/enable_repo_rules.sh` from a real PR — `gh api repos/:owner/:repo/commits/<sha>/check-runs --jq ".check_runs[].name"` — then re-run. |
+
+**Deliberately not enabled:** *Require code quality results* (subjective AI severity on the merge
+path — ruff, mypy and the `bin/check_*.py` gates already enforce quality deterministically) and
+*Restrict code coverage* (preview; the floor is single-sourced in `.coveragerc` `fail_under`).
+
+### Automatic vs manual — the boundary is repo config vs account plan
+
+**Nothing here needs a click.** Every *repository* setting above is scripted. What is **not**
+scriptable is your *account's* entitlement: the `copilot_code_review` rule only fires if the author
+has access to Copilot code review, and **code review is not part of Copilot Free**. Without a
+qualifying plan the rule sits correctly configured and **inert** — no review appears and nothing
+errors. That silence is the trap, because the ruleset JSON looks perfect either way.
+
+Every other rule (PR required, CI green, CodeQL clean) works regardless of any Copilot plan, so
+the ruleset is worth applying unconditionally. Copilot Pro is free for verified students,
+teachers and popular-OSS maintainers.
+
+> Do **not** diagnose this with `gh api user/copilot_billing` → 404: that endpoint is for
+> org/enterprise seat management and 404s for a personal account even when Copilot Free is active.
+
+### Security
+
+`SECURITY.md` at the repo root is auto-detected by GitHub (no API call) and flips *Security
+policy* to Enabled; `poe enable_security` turns on the matching private-reporting intake plus
+Dependabot alerts and security updates. Ordinary version bumps are separate — see
+`.github/dependabot.yml`, which uses `versioning-strategy: lockfile-only` so it refreshes
+`poetry.lock` (keeping CI honest about what consumers install) without ever rewriting your
+`pyproject` ranges.
+
+## Automated PR flow (the quality gate)
+
+Every PR is classified by `bin/pr_gate.py` (workflow `pr-gate.yml`), which labels it, posts one
+sticky comment with a per-axis status table, and hands the **safe classes** to GitHub's native
+auto-merge. Two rules are the whole design:
+
+**Classified by PATH, never by diff size.** The dangerous change is *semantic*, not big: a
+one-character edit to a schema/contract constant is the smallest possible diff and the most
+dangerous — and every test still passes, because the tests assert the contract that was written.
+So size never decides eligibility; the changed paths do. (The one place size still matters — an
+`XL` diff is vetoed — is **waived for a lockfile-only diff**, whose line count tracks how many
+dependency hashes moved, not risk.)
+
+| Risk class | Paths | Auto-merge? |
+|------------|-------|-------------|
+| `src` | `src/` | ❌ defines what "passing" means |
+| `tests` | `tests/` | ❌ defines what "passing" means |
+| `other` | anything unmatched | ❌ unknown = unsafe (default-deny) |
+| `ci` | `.github/`, `bin/`, `Makefile`, `tasks.sh`, `.pre-commit-config.yaml` | ✅ |
+| `deps` | `pyproject.toml`, `poetry.lock`, `requirements.txt` | ✅ (the test suite is the gate) |
+| `docs` | `docs/`, `mkdocs.yml`, `README.md`, `CHANGELOG.md`, … | ✅ |
+
+**Consent is opt-OUT.** The safe classes auto-merge with **no label**; add `do-not-merge` to force
+a human merge. Native auto-merge **bypasses nothing** — GitHub holds the merge until every required
+check of the ruleset is green, so the gate only decides *eligibility*, never *whether it passed*.
+
+Edit the risk table (the `RISK_PATHS` constant) in `bin/pr_gate.py` for your project's real layout.
+
+### ⚠️ After changing gate policy, backfill the open PRs
+
+The gate runs on `pull_request` events, so a PR that was **already open** when you change the
+policy (the classification/consent rules in `pr_gate.py`, or `allow_auto_merge` /
+`delete_branch_on_merge`) is **never re-evaluated** — it keeps the labels and auto-merge state it
+got under the old rules until some new event touches it. That is not a bug; the gate simply never
+ran again. So after merging a policy change, run the backfill:
+
+```bash
+gh workflow run pr-gate.yml -f backfill=true   # re-evaluates every open PR
+# for a Dependabot PR, `gh pr comment <n> --body "@dependabot rebase"` also works
+```
+
+### Bot-merged PRs and the reconciler
+
+A PR merged by **native auto-merge** (a bot action) does **not** close its linked issue and does
+**not** delete its branch, even with `delete_branch_on_merge` on — bot-performed actions are
+deliberately inert to prevent automation recursion. `pr-reconcile.yml` fixes both: it closes the
+`Closes #N` issues and deletes the head branch of merged PRs. Its **scheduled daily run is the
+actual fix** — scheduled events are exempt from the "no new workflow runs" suppression that also
+swallows the fast `pull_request: [closed]` path for a bot merge. Latency is up to one day; that is
+the accepted cost of not needing a personal access token.
+
+### PRs closed without merging
+
+`delete_branch_on_merge` never fires for a PR **closed unmerged**, so its branch would pile up on
+`origin`. `delete-closed-pr-branch.yml` deletes the head branch of a same-repo PR closed without
+merge, and only when every guard holds; a skipped branch is named with its reason in the job
+summary:
+
+- the PR is from this repository, never a fork;
+- the branch is short-lived, matching `<type>/<N>-<slug>` (the pattern `bin/check_pr_policy.sh`
+  enforces), so `develop`, `release/*`, `dependabot/*` and `renovate/*` are never touched;
+- it is not the default branch and not the PR's own base branch;
+- no other open PR uses it as its base or its head (a stacked PR or a second PR from the same head
+  would be closed by the deletion); an unreadable answer counts as "in use";
+- GitHub reports it as not protected, and an unreadable protection state counts as protected;
+- its name uses only letters, digits and `._/-`, and its tip is still the PR head when read just
+  before the delete.
+
+The checks and the delete are separate API calls and the refs API has no compare-and-delete, so a
+push, or a PR opened from or against the branch, in that gap is covered only by the restore path
+below.
+
+Nothing is lost: the job summary names the deleted ref and its sha, and the PR page offers
+**Restore branch** (or, from a clone that holds the commit, `git push origin <sha>:refs/heads/<branch>`).
+A PR whose branch was deleted can only be reopened after **Restore branch**. A ruleset refusal is
+reported as "kept" (green); any other unexpected API error fails the job. The workflow file is read
+from the PR's merge ref, so a same-repo writer can run code with `contents: write` by editing it;
+that adds no privilege, since they can already push.
+
+Known limits. GitHub does not run `pull_request` workflows while a PR has a merge conflict, so a
+conflicted PR closed unmerged keeps its branch; delete it by hand. The script is checked out from the
+default branch while the workflow YAML comes from the PR's merge ref, so a repository whose default
+branch does not yet contain `bin/delete_closed_pr_branch.sh` fails this job until it does.
+
+### The work-ledger gate
+
+`bin/check_backlog_ledger.py` (pre-commit + CI) fails a branch that touches `src/` or CI paths but
+adds no `.specs/backlog/<kebab>_YYYYMMDD_HHMMSS.md` ledger with a `- [ ]` checklist — making the
+per-branch work-ledger convention structural instead of a thing you remember. Routine
+docs/deps/tests-only branches need none.
+
+### Registering a new module
+
+Add the import to `src/<package>/__init__.py` and the name to `__all__`, each in sorted position
+and one entry per line. Never write a number next to a countable noun in the README or docs. Two parallel PRs
+then touch different lines and merge cleanly; `bin/check_registry_order.py` (part of `poe lint`)
+enforces the order and the absence of counts.
