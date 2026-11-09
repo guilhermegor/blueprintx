@@ -35,7 +35,10 @@ jobs:
           if ! grep -qE 'URL (issue|problem)|Failed to access URL' docstring_urls_report.txt; then
             if grep -qF 'All docstring URLs are reachable' docstring_urls_report.txt; then
               echo "No dead docstring URLs."
-              open_issues=$(list_open) || open_issues=""
+              open_issues=$(list_open) || {
+                echo "::warning::Could not list open docstring-urls issues; stale trackers stay open."
+                open_issues=""
+              }
               for n in $open_issues; do
                 gh issue close "$n" --comment "All docstring URLs are reachable again."
               done

@@ -2848,9 +2848,9 @@ def _tracker_step_script() -> str:
     _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
     str_after = path_workflow.read_text(encoding="utf-8").split("Open or Update Tracking Issue")[1]
     list_lines = str_after.split("run: |\n")[1].splitlines()
-    fn_indented = lambda str_line: str_line.startswith(" " * 10)  # noqa: E731
+    fn_indented = lambda str_line: not str_line.strip() or str_line.startswith(" " * 10)  # noqa: E731
     list_body = list(itertools.takewhile(fn_indented, list_lines))
-    return "\n".join(str_line[10:] for str_line in list_body) + "\n"
+    return "\n".join(str_line[10:] for str_line in list_body).rstrip("\n") + "\n"
 
 
 def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[str]:
@@ -2881,7 +2881,7 @@ def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[s
     (path_bin / "gh").chmod(0o755)
     (path_root / "docstring_urls_report.txt").write_text(str_report, encoding="utf-8")
     cls_result = subprocess.run(  # noqa: S603
-        [_STR_BASH, "-ec", _tracker_step_script()],
+        [_STR_BASH, "-eo", "pipefail", "-c", _tracker_step_script()],
         cwd=path_root,
         env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
         capture_output=True,
