@@ -334,6 +334,7 @@ copy_global_config() {
         cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" "$project_path/tests/unit/test_env_config.py"
     fi
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_import_root.py" "$project_path/tests/unit/test_import_root.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_graph_gate.py" "$project_path/tests/unit/test_migration_graph_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" "$project_path/tests/unit/test_quality_rules_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
