@@ -2895,13 +2895,28 @@
 into <code>theme.language</code> in the project's <code>mkdocs.yml</code>, so Material's search and UI strings
 follow the pages. Running a <code>bin/scaffold/*.sh</code> script directly, without the menu, falls back
 to <code>en</code>.</p>
-<p>Three things the choice does <strong>not</strong> change:</p>
+<p>The locale is <strong>checked</strong>, not just recorded: the generated project's
+<code>bin/check_docs_language.py</code> (pre-commit <code>check-docs-language</code>, the <code>tests.yml</code> step, and
+<code>poe lint</code>) reads <code>theme.language</code> from <code>mkdocs.yml</code> and fails, naming the file and line, when a
+prose paragraph of <code>README.md</code> or of a page under <code>docs_dir</code> is written in the other locale. The
+page set comes from <code>mkdocs.yml</code> (<code>docs_dir</code>, <code>exclude_docs</code>), so a tree that config already
+excludes is never read. Fenced code, YAML front matter, multi-line HTML comments, inline code, links and tables are
+ignored, and a <code>docs-lang:ok</code> marker in a paragraph (outside inline code) skips it. A <code>theme.language</code> other than <code>en</code> or <code>pt-BR</code>
+fails closed. Its Portuguese function words are the ones <code>check_comment_language.py</code> uses.</p>
+<p>⚠️ The shipped templates are English, so a project scaffolded as <code>pt-BR</code> gets
+<code>&lt;!-- docs-lang:untranslated --&gt;</code> appended to every shipped page. The gate skips a marked page
+and counts it in its summary line (<code>N skipped as docs-lang:untranslated</code>), so the first lint is
+green and the untranslated pages stay visible. Delete the marker from a page once it is
+translated; from then on the gate checks it.</p>
+<p>A <code>--spec</code> file must carry <code>docs_locale</code> on an MkDocs skeleton. An omitted key used to become
+<code>en</code> silently; it is now refused, naming the key, before anything is created. Skeletons that
+ignore the locale (every one without an <code>mkdocs.yml</code>: <code>ts-lib</code>, <code>react-spa-webpack</code>,
+<code>bash-cli</code>, <code>etcher-chromeos</code>, <code>ventoy-usb</code>) still default to <code>en</code>.</p>
+<p>Two things the choice does <strong>not</strong> change:</p>
 <ul>
-<li><strong>The shipped page text.</strong> The templates are English; <code>pt-BR</code> sets the MkDocs UI language
-  and the project's declared locale, and translating the pages is left to the project.</li>
 <li><strong>Code stays English in every locale.</strong> Comments and docstrings are English whether the
-  docs are <code>en</code> or <code>pt-BR</code>; the generated project's <code>bin/check_comment_language.py</code> enforces
-  that boundary and never reads <code>docs/</code>, which is why it needs no locale setting of its own.</li>
+  docs are <code>en</code> or <code>pt-BR</code>; <code>bin/check_comment_language.py</code> enforces that and never reads
+  <code>docs/</code>, which is why it needs no locale setting of its own.</li>
 <li><strong>BlueprintX's own prose.</strong> This repository is en-US with no exceptions (blueprintx#194).
   The prompt describes the project being created, not the tool creating it.</li>
 </ul>
