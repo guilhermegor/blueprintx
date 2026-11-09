@@ -488,8 +488,11 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
     bool
         ``True`` when a dynamic writer is named outside that exemption.
     """
+    set_bound = _bound_names(list_nodes)
     set_exempt = {
-        int_id for cls_fn in _methods(list_nodes) for int_id in _own_parameter_writes(cls_fn)
+        int_id
+        for cls_fn in _methods(list_nodes)
+        for int_id in _own_parameter_writes(cls_fn, set_bound)
     }
     return any(
         _names_writer(cls_sub) and id(cls_sub) not in set_exempt
@@ -526,7 +529,9 @@ def _names_writer(cls_sub: ast.AST) -> bool:
     )
 
 
-def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
+def _own_parameter_writes(
+    cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, set_bound: set[str]
+) -> set[int]:
     """Return the ids of ``setattr``/``vars`` names that act on this method's own ``self``/``cls``.
 
     A ``staticmethod`` has no bound first parameter, a rebound ``self`` is no longer the
@@ -537,6 +542,8 @@ def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set
     ----------
     cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
         A method with at least one positional parameter.
+    set_bound : set of str
+        Names the module binds itself; a decorator spelled with one is not the builtin.
 
     Returns
     -------
@@ -546,7 +553,7 @@ def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set
     str_param = [*cls_fn.args.posonlyargs, *cls_fn.args.args][0].arg
     if (
         str_param not in {"self", "cls"}
-        or _loses_exemption(cls_fn)
+        or _loses_exemption(cls_fn, set_bound)
         or _rebinds(cls_fn, str_param)
         or _shadows_writer(cls_fn)
         or _shadowed_by_nested(cls_fn, str_param)
@@ -610,7 +617,9 @@ def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_para
     )
 
 
-def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+def _loses_exemption(
+    cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, set_bound: set[str]
+) -> bool:
     """Return whether a def gets no ``self``/``cls`` exemption (``__new__``, unknown decorator).
 
     Only ``classmethod``, ``property``, ``abstractmethod``, ``override``, ``cached_property``,
@@ -624,6 +633,8 @@ def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     ----------
     cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
         The def.
+    set_bound : set of str
+        Names the module defines or assigns; a decorator spelled with one loses the exemption.
 
     Returns
     -------
@@ -631,11 +642,11 @@ def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         ``True`` when the def is ``__new__`` or carries a decorator outside the safe set.
     """
     return cls_fn.name == "__new__" or not all(
-        _is_safe_decorator(cls_dec, cls_fn.name) for cls_dec in cls_fn.decorator_list
+        _is_safe_decorator(cls_dec, cls_fn.name, set_bound) for cls_dec in cls_fn.decorator_list
     )
 
 
-def _is_safe_decorator(cls_dec: ast.expr, str_method: str) -> bool:
+def _is_safe_decorator(cls_dec: ast.expr, str_method: str, set_bound: set[str]) -> bool:
     """Return whether a decorator is one of the known names that never calls the method.
 
     A property accessor counts only on the method's own name (``@x.setter def x``).
@@ -646,6 +657,8 @@ def _is_safe_decorator(cls_dec: ast.expr, str_method: str) -> bool:
         One entry of ``decorator_list``.
     str_method : str
         The name of the decorated method.
+    set_bound : set of str
+        Names the module defines itself; the safe name or module must not be one of them.
 
     Returns
     -------
@@ -653,7 +666,7 @@ def _is_safe_decorator(cls_dec: ast.expr, str_method: str) -> bool:
         ``True`` for a safe bare name, a safe name on a known module, or a property accessor.
     """
     if isinstance(cls_dec, ast.Name):
-        return cls_dec.id in _SET_SAFE_DECORATORS
+        return cls_dec.id in _SET_SAFE_DECORATORS and cls_dec.id not in set_bound
     return isinstance(cls_dec, ast.Attribute) and (
         (
             cls_dec.attr in _SET_ACCESSORS
@@ -664,6 +677,7 @@ def _is_safe_decorator(cls_dec: ast.expr, str_method: str) -> bool:
             cls_dec.attr in _SET_SAFE_DECORATORS
             and isinstance(cls_dec.value, ast.Name)
             and cls_dec.value.id in _SET_SAFE_MODULES
+            and cls_dec.value.id not in set_bound
         )
     )
 

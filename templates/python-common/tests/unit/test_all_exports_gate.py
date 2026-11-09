@@ -941,6 +941,30 @@ def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
     assert _load_gate().check_package(path_init) == []
 
 
+@pytest.mark.parametrize(
+    "str_config",
+    [
+        "def property(fn):\n    return fn\n\nclass A:\n    @property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "import abc\nabc = object()\nclass A:\n    @abc.abstractmethod\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "classmethod = lambda fn: fn\nclass A:\n    @classmethod\n    def f(cls):\n"
+        + "        setattr(cls, 'Priv', 1)\n",
+    ],
+    ids=["local-property-def", "rebound-abc-module", "local-classmethod-assign"],
+)
+def test_decorator_rebound_in_the_module_is_not_the_builtin(
+    tmp_path: Path, str_config: str
+) -> None:
+    """A safe decorator name the module defines itself no longer earns the exemption."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="type statement needs 3.12")
 def test_type_alias_rebinding_self_is_charged(tmp_path: Path) -> None:
     """``type self = int`` rebinds the name, so the method gets no exemption."""
