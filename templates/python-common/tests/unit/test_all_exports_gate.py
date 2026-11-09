@@ -815,6 +815,14 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "class A:\n    @evil.setter\n    def f(self, v):\n        setattr(self, 'Priv', v)\n",
         "class A:\n    def f(self, w):\n        (lambda setattr: setattr(self, 'Priv', 1))(w)\n",
         "__all__ = ['Other']\ndel __all__\nPriv = 1\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self=me):\n"
+        + "        setattr(self, 'Priv', 1)\nA.f()\n",
+        "def _install():\n    global vars\n    from ._compat import vars\n"
+        + "class A:\n    def f(self):\n        vars(self)['Priv'] = 1\n",
+        "def _install():\n    global setattr\nclass A:\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "def outer():\n    def setattr(*a):\n        pass\n    class A:\n"
+        + "        def f(self):\n            setattr(self, 'Priv', 1)\n",
     ],
     ids=[
         "alias-exec",
@@ -861,6 +869,10 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "accessor-on-foreign-receiver",
         "nested-lambda-parameter-shadows-setattr",
         "del-all",
+        "self-has-default",
+        "global-vars-in-function",
+        "global-setattr-in-function",
+        "enclosing-function-binds-setattr",
     ],
 )
 def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(

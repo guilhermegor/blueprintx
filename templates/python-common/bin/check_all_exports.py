@@ -547,9 +547,11 @@ def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set
     set of int
         ``id()`` of each exempt ``Name`` node; empty when the method gets no exemption.
     """
-    str_param = [*cls_fn.args.posonlyargs, *cls_fn.args.args][0].arg
+    list_positional = [*cls_fn.args.posonlyargs, *cls_fn.args.args]
+    str_param = list_positional[0].arg
     if (
         str_param not in {"self", "cls"}
+        or len(cls_fn.args.defaults) >= len(list_positional)
         or _loses_exemption(cls_fn)
         or _rebinds(cls_fn, str_param)
         or _shadows_writer(cls_fn)
@@ -743,6 +745,35 @@ def _module_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
         _bound_name(cls_sub) in {"setattr", "vars"}
         and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
         for cls_sub in _scope_nodes(list_nodes)
+    ) or _function_shadows_writer(list_nodes)
+
+
+def _function_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
+    """Return whether a ``global`` or a non-method def can rebind ``setattr`` or ``vars``.
+
+    A ``global`` statement rebinds the module name from inside a function, and a def that
+    binds either name locally shadows the builtin for a class nested in it.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Returns
+    -------
+    bool
+        ``True`` when either route is found anywhere in the tree.
+    """
+    set_methods = {id(cls_fn) for cls_fn in _methods(list_nodes)}
+    return any(
+        (isinstance(cls_sub, ast.Global) and {"setattr", "vars"} & set(cls_sub.names))
+        or (
+            isinstance(cls_sub, ast.FunctionDef | ast.AsyncFunctionDef)
+            and id(cls_sub) not in set_methods
+            and _shadows_writer(cls_sub)
+        )
+        for cls_node in list_nodes
+        for cls_sub in ast.walk(cls_node)
     )
 
 
