@@ -538,6 +538,7 @@ def test_internal_all_extended_after_assignment_is_not_trusted(tmp_path: Path) -
         "with open('x') as Priv:\n    pass\n",
         "Other, Priv = 1, 2\n",
         "(Priv := 1)\n",
+        "[(Priv := x) for x in ()]\n",
         "try:\n    pass\nexcept ValueError as Priv:\n    pass\n",
         "globals()['Priv'] = 1\n",
         "locals()['Priv'] = 1\n",
@@ -551,6 +552,7 @@ def test_internal_all_extended_after_assignment_is_not_trusted(tmp_path: Path) -
         "with",
         "unpack",
         "walrus",
+        "walrus-in-comprehension",
         "except",
         "globals",
         "locals",
@@ -779,6 +781,9 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "import pkg._internal.config as me\nclass A:\n    @(lambda fn: fn(me))\n    def f(self):\n"
         + "        setattr(self, 'Priv', 1)\n",
         "import pkg._internal.config as me\nclass M:\n    pass\nme.__class__ = M\n",
+        "import pkg._internal.config as me\nclass M:\n    pass\nself = me\nself.__class__ = M\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self):\n        self = me\n"
+        + "        self.__class__ = A\n",
         "class A:\n    def f(self, vars=lambda _: 1):\n        vars(self)\n",
         "class A:\n    def f(self):\n        def setattr(*a):\n            pass\n"
         + "        setattr(self, 'Priv', 1)\n",
@@ -825,6 +830,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "writer-name-used-from-first-party-module",
         "decorator-invokes-method",
         "module-class-swap",
+        "class-swap-through-rebound-module-self",
+        "class-swap-through-rebound-method-self",
         "param-shadows-vars",
         "nested-def-shadows-setattr",
         "attribute-decorator-unknown-receiver",
@@ -875,6 +882,10 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "class A:\n    @f.deleter\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
         "class A:\n    def vars(self):\n        setattr(self, 'Priv', 1)\n",
         "class A:\n    def f(self):\n        self.__class__ = A\n",
+        "import typing\nclass A:\n    @typing.final\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "from typing import overload\nclass A:\n    @overload\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
         "import builtins\nclass A:\n    @builtins.classmethod\n"
         + "    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
         "from typing import override\nclass A:\n    @override\n    def f(self):\n"
@@ -902,6 +913,8 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "deleter-decorator",
         "method-named-vars",
         "class-store-on-self",
+        "final-decorator",
+        "overload-decorator",
         "builtins-classmethod",
         "override-decorator",
         "typing-extensions-override-decorator",

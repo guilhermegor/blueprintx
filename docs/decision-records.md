@@ -175,7 +175,7 @@ test suite keep the contract; this section records the reasoning that lived besi
     from `builtins`, `sys` or `inspect` (`from builtins import exec as run`), anywhere in the file. The one exemption is
     `setattr(self|cls, ...)` / `vars(self|cls)` on the first parameter of a method that is not a
     `staticmethod` (nor the implicit one, `__new__`), is decorated only with `classmethod`,
-    `property`, `abstractmethod`, `override`, `cached_property` or `.setter`/`.getter`/`.deleter`
+    `property`, `abstractmethod`, `override`, `cached_property`, `final`, `overload` or `.setter`/`.getter`/`.deleter`
     (any other decorator could call the method with another object, so it removes the
     exemption and over-charges, e.g. `@contextmanager` or `@pytest.fixture`; the safe names
     count bare or on `abc`, `typing`, `typing_extensions`, `functools` and `builtins`, so
@@ -184,7 +184,7 @@ test suite keep the contract; this section records the reasoning that lived besi
     has no nested def or lambda taking that name as a parameter, and never rebinds
     it (assignment, `del`, `import ... as`, `match`
     capture, `except ... as`, `type`, or a nested `def`/`class` of that name). The call may sit
-    anywhere in the method, closures over `self` included. A store to `__class__` is charged like a writer, except on `self`/`cls` (a module whose class is swapped makes `self` the module). An `__all__` that is not one literal list of
+    anywhere in the method, closures over `self` included. A store to `__class__` is charged like a writer, except `self.__class__ = x` on the same never-rebound first parameter that qualifies for the `setattr` exemption (a module whose class is swapped makes `self` the module, so a rebound `self` or a module-level `self` is charged). An `__all__` that is not one literal list of
     strings (second assignment, `+=`, `.append`, `.extend`, subscript write, `[*x]`, `del __all__`)
     is assumed to provide the name. A loop, `with`, unpacking, walrus (in a default, decorator or
     class base or annotation too), `match` capture, `except ... as` or a function's `global` counts as

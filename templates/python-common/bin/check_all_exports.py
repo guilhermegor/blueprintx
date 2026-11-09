@@ -247,7 +247,15 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
 
 _SET_WRITER_MODULES = frozenset({"builtins", "sys", "inspect"})
 _SET_SAFE_DECORATORS = frozenset(
-    {"classmethod", "property", "abstractmethod", "override", "cached_property"}
+    {
+        "classmethod",
+        "property",
+        "abstractmethod",
+        "override",
+        "cached_property",
+        "final",
+        "overload",
+    }
 )
 _SET_ACCESSORS = frozenset({"setter", "getter", "deleter"})
 _SET_SAFE_MODULES = frozenset({"abc", "typing", "typing_extensions", "functools", "builtins"})
@@ -501,16 +509,14 @@ def _names_writer(cls_sub: ast.AST) -> bool:
     Returns
     -------
     bool
-        ``True`` for a bare or attribute writer name, a ``__class__`` store (not on
-        ``self``/``cls``), or ``from x import <writer> as y``.
+        ``True`` for a bare or attribute writer name, a ``__class__`` store, or
+        ``from x import <writer> as y``.
     """
     if isinstance(cls_sub, ast.Name):
         return cls_sub.id in _SET_DYNAMIC_WRITERS
     if isinstance(cls_sub, ast.Attribute):
         return cls_sub.attr in _SET_DYNAMIC_WRITERS or (
-            cls_sub.attr == "__class__"
-            and isinstance(cls_sub.ctx, ast.Store)
-            and not (isinstance(cls_sub.value, ast.Name) and cls_sub.value.id in {"self", "cls"})
+            cls_sub.attr == "__class__" and isinstance(cls_sub.ctx, ast.Store)
         )
     return (
         isinstance(cls_sub, ast.ImportFrom)
@@ -547,16 +553,39 @@ def _own_parameter_writes(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set
     ):
         return set()
     return {
-        id(cls_call.func)
+        id(cls_hit)
         for cls_stmt in cls_fn.body
-        for cls_call in ast.walk(cls_stmt)
-        if isinstance(cls_call, ast.Call)
-        and isinstance(cls_call.func, ast.Name)
-        and cls_call.func.id in {"setattr", "vars"}
-        and cls_call.args
-        and isinstance(cls_call.args[0], ast.Name)
-        and cls_call.args[0].id == str_param
+        for cls_sub in ast.walk(cls_stmt)
+        for cls_hit in [_own_write_node(cls_sub, str_param)]
+        if cls_hit is not None
     }
+
+
+def _own_write_node(cls_sub: ast.AST, str_param: str) -> ast.AST | None:
+    """Return the node to exempt when ``cls_sub`` writes through the parameter, else ``None``.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node under a method body.
+    str_param : str
+        The method's first parameter name.
+
+    Returns
+    -------
+    ast.AST or None
+        The ``setattr``/``vars`` name of a call on the parameter, or the ``__class__``
+        attribute of a store to it.
+    """
+    if isinstance(cls_sub, ast.Attribute):
+        is_own = isinstance(cls_sub.value, ast.Name) and cls_sub.value.id == str_param
+        return cls_sub if is_own and cls_sub.attr == "__class__" else None
+    if not (isinstance(cls_sub, ast.Call) and isinstance(cls_sub.func, ast.Name)):
+        return None
+    is_own = bool(cls_sub.args) and (
+        isinstance(cls_sub.args[0], ast.Name) and cls_sub.args[0].id == str_param
+    )
+    return cls_sub.func if is_own and cls_sub.func.id in {"setattr", "vars"} else None
 
 
 def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> bool:
@@ -584,8 +613,9 @@ def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_para
 def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Return whether a def gets no ``self``/``cls`` exemption (``__new__``, unknown decorator).
 
-    Only ``classmethod``, ``property``, ``abstractmethod``, ``override`` and ``cached_property``
-    (bare, or on ``abc``/``typing``/``typing_extensions``/``functools``/``builtins``) and
+    Only ``classmethod``, ``property``, ``abstractmethod``, ``override``, ``cached_property``,
+    ``final`` and ``overload`` (bare, or on ``abc``/``typing``/``typing_extensions``/
+    ``functools``/``builtins``) and
     ``*.setter``/``getter``/``deleter`` keep the exemption. ``staticmethod`` and any
     decorator that could call the method with another object (``@(lambda fn: fn(me))``)
     lose it.
