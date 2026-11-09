@@ -2,6 +2,7 @@
 
 import csv
 from pathlib import Path
+import time
 
 import pytest
 
@@ -493,3 +494,37 @@ def test_column_names_colliding_after_trimming_are_rejected(tmp_path: Path) -> N
     cls_contract = FileContract("data", "data", ("code",), ())
     with pytest.raises(ContractError, match="collide after trimming"):
         read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_column_names_both_padded_and_colliding_after_trimming_are_rejected(
+    tmp_path: Path,
+) -> None:
+    """Two labels that are BOTH padded still collide once trimmed.
+
+    The neighbouring case pads only one of the pair; a check that compared the raw label
+    against a trimmed one would catch that and miss ``" code"`` beside ``"code "``.
+    """
+    path_csv = tmp_path / "collide_both.csv"
+    path_csv.write_text(" code;code ;amount\nABC;DEF;10\n", encoding="utf-8")
+    cls_contract = FileContract("data", "data", ("code",), ())
+    with pytest.raises(ContractError, match="collide after trimming"):
+        read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_read_table_with_many_unique_columns_checks_collisions_in_linear_time(
+    tmp_path: Path,
+) -> None:
+    """The collision check stays cheap on a very wide header with no collision.
+
+    A ``list.count`` per column name is O(n^2) in the column count, paid on every read,
+    against one linear ``Counter`` pass. The ceiling sits far above the linear cost and
+    far below the quadratic one at this width.
+    """
+    int_cols = 20_000
+    list_names = [f"c{int_idx}" for int_idx in range(int_cols)]
+    path_csv = tmp_path / "wide.csv"
+    path_csv.write_text(";".join(list_names) + "\n" + ";".join(["1"] * int_cols) + "\n")
+    cls_contract = FileContract("data", "data", ("c0",), ())
+    float_start = time.perf_counter()
+    read_table(path_csv, "", {"c0": "str"}, cls_contract)
+    assert time.perf_counter() - float_start < 3.0
