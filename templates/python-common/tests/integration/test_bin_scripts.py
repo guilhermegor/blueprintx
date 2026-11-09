@@ -2841,7 +2841,7 @@ def _stage_poetry_exec(path_root: Path, str_dry_run_output: str) -> tuple[Path, 
 
     Returns
     -------
-    tuple of (pathlib.Path, dict of str to str)
+    tuple[Path, dict[str, str]]
         The staged script and the environment that puts the stub first on ``PATH``.
     """
     path_bin = path_root / "bin"
@@ -2852,7 +2852,8 @@ def _stage_poetry_exec(path_root: Path, str_dry_run_output: str) -> tuple[Path, 
     path_stubs.mkdir()
     path_poetry = path_stubs / "poetry"
     path_poetry.write_text(
-        '#!/bin/bash\n[ "$1" = "install" ] && printf \'%s\' "$DRY_RUN_OUT"\n'
+        '#!/bin/bash\n[[ "$*" == *missing_deps.py* ]] && '
+        "{ printf '%s' \"$DRY_RUN_OUT\"; exit 0; }\n"
         '[ "$1" = "run" ] && echo RAN\nexit 0\n',
         encoding="utf-8",
     )
@@ -2863,14 +2864,16 @@ def _stage_poetry_exec(path_root: Path, str_dry_run_output: str) -> tuple[Path, 
     return path_bin / "poetry_exec.sh", dict_env
 
 
-def _run_staged_poetry_exec(path_script: Path, dict_env: dict[str, str]) -> subprocess.CompletedProcess:
+def _run_staged_poetry_exec(
+    path_script: Path, dict_env: dict[str, str]
+) -> subprocess.CompletedProcess:
     """Run the staged ``poetry_exec.sh run python gate.py`` and capture its output.
 
     Parameters
     ----------
     path_script : pathlib.Path
         The staged script.
-    dict_env : dict of str to str
+    dict_env : dict[str, str]
         Environment from ``_stage_poetry_exec``.
 
     Returns
@@ -2890,9 +2893,7 @@ def _run_staged_poetry_exec(path_script: Path, dict_env: dict[str, str]) -> subp
 
 def test_poetry_run_with_missing_locked_deps_fails_with_one_install_line(tmp_path: Path) -> None:
     """A venv lacking locked packages must not reach the gate and die in a traceback."""
-    path_script, dict_env = _stage_poetry_exec(
-        tmp_path, "  - Installing pyyaml (6.0.2)\n  - Installing defusedxml (0.7.1)\n"
-    )
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "pyyaml\ndefusedxml\n")
 
     cls_run = _run_staged_poetry_exec(path_script, dict_env)
 
