@@ -43,6 +43,11 @@ write_spec() {
     echo "$file"
 }
 
+rm_temp_root() {
+    [[ "$1" == "$WORK_DIR"/?* ]] && rm -rf "$1"
+    return 0
+}
+
 run_blueprintx() {
     (cd "$WORK_DIR" && TMPDIR="$WORK_DIR" bash "$REPO_ROOT/bin/blueprintx.sh" "$@" 2>&1 </dev/null)
 }
@@ -199,7 +204,7 @@ spec_docs_language() {
     out="$(run_blueprintx new --spec "$file" --dev)"
     str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
     sed -n 's/^  language: //p' "$str_temp/spec-probe/mkdocs.yml" 2>/dev/null
-    rm -rf "$str_temp"
+    rm_temp_root "$str_temp"
 }
 
 test_docs_locale_reaches_the_scaffold() {
@@ -237,7 +242,7 @@ test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate() {
     else
         fail "pt-BR e2e" "pages=$int_pages marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
     fi
-    rm -rf "$str_temp"
+    rm_temp_root "$str_temp"
 }
 
 test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate() {
@@ -251,7 +256,7 @@ test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate() {
     else
         fail "en e2e" "marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
     fi
-    rm -rf "$str_temp"
+    rm_temp_root "$str_temp"
 }
 
 test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton() {
