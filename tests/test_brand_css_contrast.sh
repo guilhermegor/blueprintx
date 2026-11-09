@@ -42,6 +42,8 @@ list_blocks = re.findall(r'\[data-md-color-scheme="slate"\]\s*\{([^}]*)\}', str_
 if not list_blocks:
     refuse("no slate block")
 str_block = list_blocks[-1]
+if re.search(r"@(import|layer)\b[^{;]*;", str_css):
+    refuse("statement at-rule (@import/@layer) can reorder or replace the slate block")
 if "--md-hue" in str_css or "--md-default-bg-color" in str_css:
     refuse("--md-hue or --md-default-bg-color overridden: background unresolved")
 
@@ -70,6 +72,34 @@ contrast_report() {
 	python3 -I -c "$PY_CHECK" "$1"
 }
 
+read -r -d '' PY_YML <<'PY'
+import sys
+
+import yaml
+
+dict_cfg = yaml.safe_load(open(sys.argv[1])) or {}
+dict_theme = dict_cfg.get("theme") or {}
+list_palette = dict_theme.get("palette") or []
+list_css = dict_cfg.get("extra_css") or []
+list_features = dict_theme.get("features") or []
+list_why = []
+if not list_css or list_css[-1] != "stylesheets/brand.css":
+    list_why.append("stylesheets/brand.css must be the last extra_css entry")
+if not list_palette or any(
+    not isinstance(d, dict) or d.get("primary") != "custom" or "accent" in d for d in list_palette
+):
+    list_why.append("needs primary: custom on every palette entry and no accent:")
+list_bad = {"navigation.top", "content.code.annotate"} & {str(f) for f in list_features}
+if list_bad:
+    list_why.append(f"enables {sorted(list_bad)}: the brand.css gate does not cover them")
+print("; ".join(list_why))
+sys.exit(1 if list_why else 0)
+PY
+
+yml_problem() {
+	python3 -I -c "$PY_YML" "$1"
+}
+
 check() {
 	local str_name="$1" str_css="$2" str_expect="$3" str_out int_rc str_got
 	str_out="$(contrast_report "$str_css")"
@@ -90,6 +120,29 @@ check() {
 	fi
 }
 
+NL=$'\n'
+
+mutate() {
+	local str_src="$1" str_dst="$2"
+	shift 2
+	sed "$@" "$str_src" >"$str_dst"
+	if cmp -s "$str_src" "$str_dst"; then
+		echo "FAIL: mutation produced no change: $str_dst"
+		int_failures=$((int_failures + 1))
+	fi
+}
+
+yml_expect() {
+	local str_name="$1" str_yml="$2" str_want="$3" str_got=ok
+	yml_problem "$str_yml" >/dev/null || str_got=refuse
+	if [ "$str_got" = "$str_want" ]; then
+		echo "ok: $str_name ($str_got)"
+	else
+		echo "FAIL: $str_name expected $str_want, got $str_got"
+		int_failures=$((int_failures + 1))
+	fi
+}
+
 shopt -s nullglob
 list_ymls=("$REPO_ROOT"/templates/*/mkdocs.yml)
 shopt -u nullglob
@@ -98,16 +151,7 @@ if [ "${#list_ymls[@]}" -eq 0 ]; then
 	int_failures=$((int_failures + 1))
 fi
 for str_yml in "${list_ymls[@]}"; do
-	int_primary=$(grep -cE '^\s*primary:\s*custom\s*$' "$str_yml")
-	int_scheme=$(grep -cE '^\s*-\s*scheme:' "$str_yml")
-	if ! grep -qE '^\s*-\s*stylesheets/brand\.css\s*$' "$str_yml"; then
-		echo "FAIL: $str_yml does not list stylesheets/brand.css in extra_css"
-		int_failures=$((int_failures + 1))
-	fi
-	if grep -qE '^\s*accent:' "$str_yml" || [ "$int_primary" -ne "$int_scheme" ] || [ "$int_scheme" -eq 0 ]; then
-		echo "FAIL: $str_yml needs primary: custom on every palette entry and no accent:"
-		int_failures=$((int_failures + 1))
-	fi
+	str_problem="$(yml_problem "$str_yml")" || { echo "FAIL: $str_yml: $str_problem"; int_failures=$((int_failures + 1)); }
 done
 
 TMP="$(mktemp -d)"
@@ -124,21 +168,46 @@ cat >"$TMP/old.css" <<'EOF'
   --md-primary-fg-color--dark: #06142a;
 }
 EOF
-sed 's/--md-accent-fg-color:[^;]*;//' "$CSS" >"$TMP/no-accent.css"
-sed 's/--md-typeset-a-color:[^;]*;//' "$CSS" >"$TMP/no-link.css"
+mutate "$CSS" "$TMP/no-accent.css" 's/--md-accent-fg-color:[^;]*;//'
+mutate "$CSS" "$TMP/no-link.css" 's/--md-typeset-a-color:[^;]*;//'
+
+GOOD_YML="${list_ymls[0]}"
+if [ -n "${GOOD_YML:-}" ]; then
+	yml_expect "template mkdocs.yml passes the yml gate" "$GOOD_YML" ok
+	mutate "$GOOD_YML" "$TMP/late.yml" -e "s|^  - stylesheets/brand.css\$|  - stylesheets/brand.css\\${NL}  - stylesheets/later.css|"
+	yml_expect "should-fail: a later extra_css entry follows brand.css" "$TMP/late.yml" refuse
+	mutate "$GOOD_YML" "$TMP/flow.yml" -e "s|^    - navigation.tabs\$|    - navigation.tabs\\${NL}    - \"navigation.top\" # flow|"
+	yml_expect "should-fail: quoted feature with a trailing comment" "$TMP/flow.yml" refuse
+	mutate "$GOOD_YML" "$TMP/accent-top.yml" -e "s|^extra_css:\$|extra:\\${NL}  accent: red\\${NL}extra_css:|"
+	yml_expect "accent: outside palette is not a palette accent" "$TMP/accent-top.yml" ok
+	mutate "$GOOD_YML" "$TMP/accent-pal.yml" -e "s|^      primary: custom\$|      primary: custom\\${NL}      accent: red|"
+	yml_expect "should-fail: accent: under a palette entry" "$TMP/accent-pal.yml" refuse
+	printf 'theme:\n  features: [content.code.annotate]\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/flowlist.yml"
+	yml_expect "should-fail: flow-style feature list" "$TMP/flowlist.yml" refuse
+	before=$int_failures
+	mutate "$GOOD_YML" "$TMP/noop.yml" -e 's|no-such-text-anywhere|x|' >/dev/null
+	if [ "$int_failures" -eq $((before + 1)) ]; then
+		int_failures=$before
+		echo "ok: should-fail: no-op mutation is detected"
+	else
+		echo "FAIL: no-op mutation went unnoticed"
+	fi
+fi
 
 check "template slate links and hover meet 4.5:1" "$CSS" pass
 check "should-fail: old slate block (link falls back to navy primary)" "$TMP/old.css" contrast
 check "should-fail: slate block without a hover colour (Material accent)" "$TMP/no-accent.css" contrast
-sed -E 's|(--md-typeset-a-color:[^;]*;)|/* \1 */|' "$CSS" >"$TMP/no-link-commented.css"
+mutate "$CSS" "$TMP/no-link-commented.css" -E 's|(--md-typeset-a-color:[^;]*;)|/* \1 */|'
 check "should-fail: commented-out link colour is not live" "$TMP/no-link-commented.css" contrast
 check "should-fail: slate block without a link colour" "$TMP/no-link.css" contrast
 printf ':root {\n  --md-primary-fg-color: #0d2c54;\n}\n' >"$TMP/no-slate.css"
 check "should-fail: no slate block" "$TMP/no-slate.css" refuse
 { cat "$CSS"; printf '\n[data-md-color-scheme="slate"] {\n  --md-hue: 200;\n}\n'; } >"$TMP/hue.css"
 check "should-fail: --md-hue override" "$TMP/hue.css" refuse
-sed -E 's|(--md-typeset-a-color:)[^;]*;|\1 rgb(1, 2, 3);|' "$CSS" >"$TMP/unparseable.css"
+mutate "$CSS" "$TMP/unparseable.css" -E 's|(--md-typeset-a-color:)[^;]*;|\1 rgb(1, 2, 3);|'
 check "should-fail: unparseable link value" "$TMP/unparseable.css" refuse
+{ cat "$CSS"; printf '@import "later.css";\n'; } >"$TMP/import.css"
+check "should-fail: statement at-rule @import" "$TMP/import.css" refuse
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
 echo "all cases passed"
