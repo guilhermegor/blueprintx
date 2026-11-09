@@ -59,7 +59,9 @@ Further rules:
   PyPI where relative links break, and the structure gate reports a footer without it.
   A missing footer passes by default, because the READMEs without one are deliberate; pass
   `--require-footer` to fail a README with no `<sub>Generated from` line or whose footer has
-  no `---` rule above it.
+  no `---` rule above it. `bin/ci/check_readme_structure.sh` passes it for
+  `README.template.md`, `python-common/README.md` and every generated project whose skeleton
+  has no `templates/<name>/README.md` of its own.
   Disclaimers go here, not in the body.
 - Every list item under `authors` carries a `github.com/<user>` link and a
   `linkedin.com/in/<handle>` link, and none uses the placeholder
