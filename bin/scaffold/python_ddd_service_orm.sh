@@ -415,6 +415,7 @@ copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review-retry.yml" "$project_path/.github/workflows/review-retry.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yml" "$project_path/.github/workflows/pr-gate.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yml" "$project_path/.github/workflows/pr-reconcile.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/docstring-urls.yml" "$project_path/.github/workflows/docstring-urls.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/contract-drift.yml" "$project_path/.github/workflows/contract-drift.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/release.yml" "$project_path/.github/workflows/release.yml"
     cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yml" "$project_path/.github/workflows/docs.yml"

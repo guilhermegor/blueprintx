@@ -312,6 +312,7 @@ lib_minimal_copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review-retry.yml" "$project_path/.github/workflows/review-retry.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yml" "$project_path/.github/workflows/pr-gate.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yml" "$project_path/.github/workflows/pr-reconcile.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/docstring-urls.yml" "$project_path/.github/workflows/docstring-urls.yml"
     if [[ "$PUBLISH_PYPI" == "true" ]]; then
         envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
             < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release-pypi.yaml" \
