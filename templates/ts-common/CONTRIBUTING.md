@@ -69,7 +69,11 @@ commit, and the env var is not stored, so only the trailer carries the justifica
 Matching is by matcher multiset within a test (same-named tests only): a test that loses a
 `toBe` and gains an unrelated `toBeGreaterThan` is reported, and a loosening masked by another
 `toBe` added in the same test is not. The justification covers the first case. A failing `git`
-call makes the gate fail rather than pass.
+call makes the gate fail rather than pass. Two limits: matching is by test name, so renaming a
+test in the same change as weakening it escapes the gate (review renames by hand); and the base
+is the first of `origin/$GITHUB_BASE_REF`, `origin/HEAD`, `origin/main`, `origin/master`, `main`,
+`master` that exists, so a repo whose default branch has another name and no `origin/HEAD` fails
+every commit after the first until you create one (for example `git branch main`).
 
 ## Pull requests
 

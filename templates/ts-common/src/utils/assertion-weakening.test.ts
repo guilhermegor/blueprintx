@@ -207,3 +207,47 @@ describe('assertion weakening gate as a command, edge cases', () => {
     }
   });
 });
+
+describe('assertion weakening gate fails closed', () => {
+  it('refuses to pass when git is unusable', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-'));
+    const env = { ...GATE_ENV, GIT_CEILING_DIRECTORIES: path.dirname(dir) };
+    try {
+      expect(spawnSync('node', [GATE], { cwd: dir, env, encoding: 'utf8' }).status).toBe(1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to the commit trailer when the PR body holds a placeholder', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-'));
+    const event = `${dir}-event.json`;
+    fs.writeFileSync(event, JSON.stringify({ pull_request: { body: 'test-change-ok: <reason>' } }));
+    const run = (...args: string[]): Buffer =>
+      execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', ...args], {
+        cwd: dir,
+        stdio: 'ignore',
+        env: CLEAN_ENV,
+      });
+    try {
+      run('init', '-q');
+      run('checkout', '-q', '-b', 'main');
+      run('config', 'user.email', 'a@b');
+      run('config', 'user.name', 't');
+      fs.writeFileSync(path.join(dir, 'a.test.ts'), spec('toBe'));
+      run('add', '.');
+      run('commit', '-qm', 'init');
+      run('checkout', '-q', '-b', 'feat');
+      fs.writeFileSync(path.join(dir, 'a.test.ts'), spec('toBeGreaterThan'));
+      run('add', '.');
+      run('commit', '-qm', 'weaken', '-m', 'test-change-ok: the old value was wrong');
+      fs.writeFileSync(path.join(dir, 'b.txt'), 'x');
+      run('add', '.');
+      const env = { ...GATE_ENV, GITHUB_EVENT_PATH: event };
+      expect(spawnSync('node', [GATE], { cwd: dir, env, encoding: 'utf8' }).status).toBe(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(event, { force: true });
+    }
+  });
+});

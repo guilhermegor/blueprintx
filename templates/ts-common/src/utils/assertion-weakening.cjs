@@ -95,9 +95,8 @@ function justification(base) {
   if (fromEnv) return fromEnv;
   const eventPath = process.env.GITHUB_EVENT_PATH;
   const trailers = git(['log', `${base}..HEAD`, '--format=%B']);
-  const match = RE_JUSTIFICATION.exec(prBody(eventPath)) ?? RE_JUSTIFICATION.exec(trailers);
-  const reason = match ? match[1].trim() : '';
-  return RE_PLACEHOLDER.test(reason) ? '' : reason;
+  const reasons = [prBody(eventPath), trailers].map((text) => RE_JUSTIFICATION.exec(text)?.[1].trim() ?? '');
+  return reasons.find((reason) => reason && !RE_PLACEHOLDER.test(reason)) ?? '';
 }
 
 function changedPaths(output) {
@@ -125,11 +124,23 @@ function collect(base) {
 }
 
 function hasCommits() {
+  gitStrict(['rev-parse', '--git-dir']);
   return Boolean(git(['rev-parse', '--verify', '--quiet', 'HEAD']).trim());
 }
 
+function repoHasCommits() {
+  try {
+    return hasCommits();
+  } catch (error) {
+    console.error(`git is unusable here - refusing to pass blind: ${error.message}`);
+    return null;
+  }
+}
+
 function main() {
-  if (!hasCommits()) return 0;
+  const committed = repoHasCommits();
+  if (committed === null) return 1;
+  if (!committed) return 0;
   const ref = defaultBranch();
   const base = ref ? git(['merge-base', ref, 'HEAD']).trim() : '';
   if (!base) {
