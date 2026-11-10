@@ -489,3 +489,26 @@ def test_list_pages_prints_the_gates_own_page_set(
     int_rc = cls_gate.main(["--root", str(tmp_path), "--list-pages"])
     list_names = [Path(str_line).name for str_line in capsys.readouterr().out.splitlines()]
     assert (int_rc, sorted(list_names)) == (0, ["README.md", "index.md"])
+
+
+def test_main_foreign_footnote_body_is_still_scored(tmp_path: Path) -> None:
+    """A footnote definition is prose, not a link definition, so its body is read."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", STR_EN + "\n[^1]: " + STR_PT)
+    assert _run(tmp_path) == 1
+
+
+def test_main_definition_continuation_title_is_not_prose(tmp_path: Path) -> None:
+    """A title on the line after ``[ref]: url`` belongs to the definition."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    str_def = '\n[ref]: https://a.b\n    "' + STR_FOREIGN_BLOCK.strip() + '"\n'
+    _write(tmp_path / "docs" / "index.md", STR_EN + str_def)
+    assert _run(tmp_path) == 0
+
+
+def test_main_prose_after_a_definition_title_is_still_scored(tmp_path: Path) -> None:
+    """Only the one title line is masked; the paragraph after it is still read."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    str_def = '\n[ref]: https://a.b\n    "title"\n\n'
+    _write(tmp_path / "docs" / "index.md", STR_EN + str_def + STR_PT)
+    assert _run(tmp_path) == 1

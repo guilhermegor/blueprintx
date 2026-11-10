@@ -233,10 +233,13 @@ test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate() {
     local str_temp int_pages int_marked str_gate int_rc=0
     require_gate_deps "pt-BR e2e" || return 0
     str_temp="$(spec_scaffold_root docs-pt-e2e "docs_locale=pt-BR")"
-    local str_list
+    local str_list str_page
     str_list="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" --list-pages)"
     int_pages="$(grep -c '/docs/' <<<"$str_list")"
-    int_marked="$(grep '/docs/' <<<"$str_list" | xargs grep -lx '<!-- docs-lang:untranslated -->' | wc -l)"
+    int_marked=0
+    while IFS= read -r str_page; do
+        grep -qxF '<!-- docs-lang:untranslated -->' "$str_page" && int_marked=$((int_marked + 1))
+    done < <(grep '/docs/' <<<"$str_list")
     str_gate="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" 2>&1)" || int_rc=$?
     grep -qxF '<!-- docs-lang:untranslated -->' "$str_temp/spec-probe/README.md" || int_rc=99
     if [ "$int_pages" -gt 0 ] && [ "$int_pages" = "$int_marked" ] && [ "$int_rc" -eq 0 ]; then
@@ -257,7 +260,8 @@ test_marker_step_uses_the_gates_page_set() {
     printf '# T\n' | tee "$str_proj/README.md" "$str_proj/docs/index.md" >"$str_proj/docs/internal.md"
     DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_mark_untranslated "$2"' _ \
         "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_proj"
-    if grep -q 'docs-lang:untranslated' "$str_proj/docs/index.md" "$str_proj/README.md" \
+    if grep -q 'docs-lang:untranslated' "$str_proj/docs/index.md" \
+        && grep -q 'docs-lang:untranslated' "$str_proj/README.md" \
         && ! grep -q 'docs-lang:untranslated' "$str_proj/docs/internal.md"; then
         pass "marker step marks the gate's page set and leaves an excluded page alone"
     else
