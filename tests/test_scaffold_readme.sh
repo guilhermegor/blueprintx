@@ -212,6 +212,17 @@ test_ptbr_readme_reports_a_checker_that_cannot_run() {
     rm -f "$path_out"
 }
 
+test_ptbr_readme_check_runs_without_the_gate_dependencies() {
+    local path_out path_block str_description="Esta biblioteca é uma ferramenta que lê os arquivos."
+    path_out="$(mktemp)"
+    path_block="$(mktemp -d)"
+    printf 'raise ImportError("blocked")\n' >"$path_block/pathspec.py"
+    printf 'raise ImportError("blocked")\n' >"$path_block/yaml.py"
+    PYTHONPATH="$path_block" render_ptbr_readme "$str_description" "$path_out"
+    expect "pt-BR check runs with pathspec and yaml absent" "1" "$(grep -cxF "$str_description" "$path_out" || true)"
+    rm -rf "$path_out" "$path_block"
+}
+
 test_ptbr_readme_keeps_a_short_ptbr_description() {
     local path_out str_description="Utilitários para CNPJ"
     path_out="$(mktemp)"
