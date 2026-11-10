@@ -201,9 +201,11 @@ no comments apart from QA suppressions.
   in the 3.14 job of the `tests.yml` matrix. Assert the exception type, or match a token the
   test itself injected: plant `from os import no_such_name`, then `match="no_such_name"`,
   not the `ImportError` sentence around it. A bare `pytest.raises(ValueError)` is ruff
-  `PT011` (the template selects `PT`), so for `ValueError` and the other broad types assert a
-  narrower subclass, or enter the block as `excinfo` and assert on its attributes
-  (`excinfo.value.name` for `ImportError`) rather than on its text. `match=` is a regex (`re.search`), so a token
+  `PT011` (the template selects `PT`), with or without `as excinfo`, so for `ValueError` and
+  the other broad types take a narrower subclass where one exists and otherwise a
+  `# noqa: PT011`. The planted token is `ModuleNotFoundError.name` only for
+  `import no_such_module`; for `from os import no_such_name` that attribute is `"os"`.
+  `match=` is a regex (`re.search`), so a token
   with `.` or other metacharacters goes through `re.escape(str_token)`. A shared validator owns its
   message only when it composes that message itself; one that re-raises `str(exc)` from the
   stdlib or a vendor is vendor wording again, so its callers assert the type.
