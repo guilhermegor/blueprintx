@@ -4,30 +4,30 @@ Hash: SHA512
 Architectures: all
 Codename: stable
 Components: main
-Date: Tue, 10 Nov 2026 06:48:45 +0000
+Date: Tue, 10 Nov 2026 11:28:25 +0000
 Label: blueprintx
 Origin: blueprintx
 Suite: stable
 MD5Sum:
- 69ecec750663ce27b4a47dffe41ba9eb              142 Release
- cead9d5905f3acd0817e46e4bc6b4386              667 main/binary-all/Packages
- 9f3b1fa66c915bc3c2439daa9528d0bc              478 main/binary-all/Packages.gz
+ 6af26e692440b0f9ab5a270d5df153f0              142 Release
+ fc5fbaf2fa2168d2ecf9dfe0b51a627f              667 main/binary-all/Packages
+ 221943dffe2dc1524e2a50aa48a97a61              480 main/binary-all/Packages.gz
 SHA1:
- 3d601e9bb9a4b96a8af29badd1798c20cd5f3392              142 Release
- 0a1ea5d1d49b2a089e2be510afc5a3c6c31943bd              667 main/binary-all/Packages
- cfb16660781456edfec557712ca9574fcecb3344              478 main/binary-all/Packages.gz
+ 81c1e92b98ac32390d77e15851a4465cdcdbad28              142 Release
+ 3bd20e535d9455705b5c317fe50ece9ad65eb43a              667 main/binary-all/Packages
+ 8262c2ac4c9bb107e042213ebd6d49e011de34aa              480 main/binary-all/Packages.gz
 SHA256:
- 877961782aa6f6fce5eceea575d29a44281f36b71f24607dde85a4d35b0ce173              142 Release
- 7a2d5ea5c21f7f2bb0a8bf0704dd47ead37904504f9842e94781df1122b0316b              667 main/binary-all/Packages
- 5a38bd68556eb5b49b76550abd99f3d21969a02e2c2b72b7fc0e9b318574ede7              478 main/binary-all/Packages.gz
+ 88bafb9af16ffc31308f3dc360181d05318eff25f6ebd8cc8cea45bf8792269d              142 Release
+ ed4706d18001d71d7a6f8e3cb4b3234bf9cf34fd8c6c7b361aedb74b8390294e              667 main/binary-all/Packages
+ c7ad123308cac0346bf14bcf00ce3cbbfafb6034f67c4312df8f6ec5db21471c              480 main/binary-all/Packages.gz
 SHA512:
- 5836e04dcf889e6473e42b993892fd08816ca328cd6c2d2216ae4788a59f5e5dc67f16ca954ebaae63e8f5709b2104adfc159de88160011600fc1484ea95e0ff              142 Release
- b94fb7933b2e97a85c204f8be920ae4965be52e8ee51dd6466bfb4e5d92c5ad4be574482f82ee859fc38d3d8c03a2b71bcebd315ea449b83475b9804c6dd3a0d              667 main/binary-all/Packages
- bcfb59311b315a59768ea06c4d66e6a6ce0fe7fe3f85fb375e53cc298aca8e443547d1c8ac2ce40f985e33bde4da99f85e6f4953115ac9b14d738f545e4993d3              478 main/binary-all/Packages.gz
+ bac6d83345113565d8b00cb4e4d1c2d872f2440c2b9fbdbbb95a8543d3e356633f6d70b46f25e3cbb4b2a388d1bbd8e9ccd4dc95df3e758a720593e02d8b5633              142 Release
+ e1efe6e8852e655479ddf9782de5ab5085168a0cf172d734a704e09711014fcb5fef461911d78eec42766858c23badcc484f270e1ec71f92f7f060ceb97350f8              667 main/binary-all/Packages
+ 4f41fed3d0e9925ca4ffbb03037e350ff7d70ace4150d01e2e4a15c78039d2b8f685253d6c35071445b14e9f5bb1f079af22e687b199e996e034bcd895bf12d3              480 main/binary-all/Packages.gz
 -----BEGIN PGP SIGNATURE-----
 
-iHUEARYKAB0WIQTqd9qg++ShoaHw2V2MdtoB/lK0RAUCavK+TQAKCRCMdtoB/lK0
-RNIfAP9JNVUOWRFxm3u5NxBqs7SZg6u2L4nyaRQLk1w4dj773AD/artcI9qIHvRY
-eveLI4hxNtRgI6qB1Vk8ffQ1/MZt5AY=
-=TSVr
+iHUEARYKAB0WIQTqd9qg++ShoaHw2V2MdtoB/lK0RAUCavL/2QAKCRCMdtoB/lK0
+RBgmAP0ceWVSam8XOqagB5BSEz5LaJaJOqmWtAudEBrqWUslDAEArJCdMzVDti4z
+UAoxhuFMtjvJcT0MNwyUBF9dJIJHwwI=
+=zUu5
 -----END PGP SIGNATURE-----
