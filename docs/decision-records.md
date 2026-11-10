@@ -193,9 +193,9 @@ test suite keep the contract; this section records the reasoning that lived besi
     *Remaining limits* (an AST-only reader): a name rebound by assignment (`Doc = _internal_doc`),
     a class built by `create_model(...)`, a `pydantic.dataclasses` decorator, an import through
     `importlib` / `__getattr__`, a method called through its class with another object
-    (`A.f(me)`), a `staticmethod` spelled other than as a plain decorator (`f = staticmethod(f)`,
-    `sm = staticmethod`, `@wrapper(staticmethod)`), a writer re-exported by a first-party module
-    (`from ._compat import exec_ as run`), a plain attribute store on a module alias (`me.Priv = 1`, `me.__dict__["Priv"] = 1`), a module written through `__setattr__` (`object.__setattr__(me, "Priv", 1)`; not a charged writer, since `super().__setattr__` is routine in frozen classes), a safe-set decorator name that is not the real one (a local `def setter(fn): fn(me)` used as `@setter`; the set is matched by name, not by origin), a writer reached through a
+    (`A.f(me)`, `types.MethodType(A.f, me)()`, `A.f.__get__(me)()`), a `staticmethod` rebound after
+    the def (`f = staticmethod(f)`; `@sm` and `@wrapper(staticmethod)` are charged), a writer re-exported by a first-party module
+    (`from ._compat import exec_ as run`), a plain attribute store on a module alias (`me.Priv = 1`, `me.__dict__["Priv"] = 1`, `me.__dict__.update(...)`), a module written through `__setattr__` (`object.__setattr__(me, "Priv", 1)`; not a charged writer, since `super().__setattr__` is routine in frozen classes), a safe-set decorator name that is not the real one (a local `def setter(fn): fn(me)` used as `@setter`; the set is matched by name, not by origin), a writer reached through a
     string constant (`getattr(builtins, "exec")(...)`, `getattr(sys, "modules")`,
     `__builtins__["exec"]`), and an absolute import of another top-level
     package.

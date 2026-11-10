@@ -727,7 +727,7 @@ def _shadows_writer(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 def _module_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
     """Return whether the module namespace binds ``setattr`` or ``vars`` by any statement.
 
-    An import, ``def``, ``class``, ``except ... as`` or ``match`` capture all count; a plain
+    A star import counts as a possible binding. An import, ``def``, ``class``, ``except ... as`` or ``match`` capture all count; a plain
     assignment is a ``Name`` the writer scan already charges. Class bodies are not entered, so a
     method named ``vars`` does not shadow the builtin its sibling methods call.
 
@@ -742,17 +742,18 @@ def _module_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
         ``True`` when a call to either name in a method may not reach the builtin.
     """
     return any(
-        _bound_name(cls_sub) in {"setattr", "vars"}
+        _bound_name(cls_sub) in {"setattr", "vars", "*"}
         and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
         for cls_sub in _scope_nodes(list_nodes)
     ) or _function_shadows_writer(list_nodes)
 
 
 def _function_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
-    """Return whether a ``global`` or a non-method def can rebind ``setattr`` or ``vars``.
+    """Return whether a ``global`` or any def can rebind ``setattr`` or ``vars``.
 
-    A ``global`` statement rebinds the module name from inside a function, and a def that
-    binds either name locally shadows the builtin for a class nested in it.
+    A ``global`` statement rebinds the module name from inside a function, and a def, method
+    included, that binds either name locally shadows the builtin for a class nested in it.
+    The scan covers the whole file, so it can only over-charge.
 
     Parameters
     ----------
@@ -764,12 +765,10 @@ def _function_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
     bool
         ``True`` when either route is found anywhere in the tree.
     """
-    set_methods = {id(cls_fn) for cls_fn in _methods(list_nodes)}
     return any(
         (isinstance(cls_sub, ast.Global) and {"setattr", "vars"} & set(cls_sub.names))
         or (
             isinstance(cls_sub, ast.FunctionDef | ast.AsyncFunctionDef)
-            and id(cls_sub) not in set_methods
             and _shadows_writer(cls_sub)
         )
         for cls_node in list_nodes

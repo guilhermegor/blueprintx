@@ -823,6 +823,11 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         + "        setattr(self, 'Priv', 1)\n",
         "def outer():\n    def setattr(*a):\n        pass\n    class A:\n"
         + "        def f(self):\n            setattr(self, 'Priv', 1)\n",
+        "from ._compat import *\nclass A:\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class Outer:\n    def m(self):\n        from ._compat import setattr\n"
+        + "        class Inner:\n            def f(self):\n"
+        + "                setattr(self, 'Priv', 1)\n",
     ],
     ids=[
         "alias-exec",
@@ -873,6 +878,8 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "global-vars-in-function",
         "global-setattr-in-function",
         "enclosing-function-binds-setattr",
+        "star-import-may-shadow-setattr",
+        "enclosing-method-binds-setattr",
     ],
 )
 def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
