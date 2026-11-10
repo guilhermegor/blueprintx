@@ -80,6 +80,12 @@ function defaultBranch() {
   return candidates.find((ref) => git(['rev-parse', '--verify', '--quiet', ref]).trim()) ?? '';
 }
 
+function mergeHeads() {
+  const gitPath = git(['rev-parse', '--git-path', 'MERGE_HEAD']).trim();
+  if (!gitPath || !fs.existsSync(gitPath)) return [];
+  return fs.readFileSync(gitPath, 'utf8').split(/\s+/).filter(Boolean);
+}
+
 function prBody(eventPath) {
   if (!eventPath) return '';
   try {
@@ -144,7 +150,7 @@ function main() {
   if (committed === null) return 1;
   if (!committed) return 0;
   const ref = defaultBranch();
-  const base = ref ? git(['merge-base', ref, 'HEAD']).trim() : '';
+  const base = ref ? git(['merge-base', ref, 'HEAD', ...mergeHeads()]).trim() : '';
   if (!base) {
     console.error('could not resolve a merge-base against the default branch - refusing to pass blind.');
     return 1;
