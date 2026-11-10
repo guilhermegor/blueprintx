@@ -156,7 +156,7 @@ check_urls_in_line() {
 	local str_file="$1" int_line_num="$2" str_line="$3"
 	local str_url str_status_code
 
-	while [[ "$str_line" =~ (https?://[a-zA-Z0-9./?=_%:-]+[a-zA-Z0-9./?=_%:-]) ]]; do
+	while [[ "$str_line" =~ (https?://[a-zA-Z0-9./?=_%:-]+[a-zA-Z0-9/?=_%-]) ]]; do
 		str_url="${BASH_REMATCH[1]}"
 		str_line="${str_line#*"$str_url"}"
 

@@ -2847,6 +2847,24 @@ def test_check_urls_reprobes_an_unstable_answer_already_cached(
     assert (path_cache / str_key).read_text(encoding="utf-8").strip() == "200"
 
 
+@pytest.mark.parametrize("str_punct", [".", ":", ".."])
+def test_check_urls_drops_sentence_punctuation_after_a_url(tmp_path: Path, str_punct: str) -> None:
+    """A URL ending a sentence is probed and cached without the trailing punctuation."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text("#!/bin/bash\nprintf 200\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404}{str_punct}"""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+
+    _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    str_key = hashlib.md5(_URL_404.encode(), usedforsecurity=False).hexdigest()
+    assert [path.name for path in path_cache.iterdir()] == [str_key]
+
+
 def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
     """A typo'd explicit path must fail, never report ``All docstring URLs are reachable``."""
     cls_result = _run_url_hook_with_stub_curl(
