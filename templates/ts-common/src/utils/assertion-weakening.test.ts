@@ -260,6 +260,49 @@ describe('assertion weakening gate as a command, edge cases', () => {
   });
 });
 
+describe('assertion weakening gate in the middle of a merge', () => {
+  const gateAfterMerge = (mainMatcher: string, featMatcher: string): number | null => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-'));
+    const run = (...args: string[]): Buffer =>
+      execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', ...args], {
+        cwd: dir,
+        stdio: 'ignore',
+        env: CLEAN_ENV,
+      });
+    const commitFile = (name: string, content: string): void => {
+      fs.writeFileSync(path.join(dir, name), content);
+      run('add', '.');
+      run('commit', '-qm', `edit ${name}`);
+    };
+    try {
+      run('init', '-q');
+      run('checkout', '-q', '-b', 'main');
+      run('config', 'user.email', 'a@b');
+      run('config', 'user.name', 't');
+      commitFile('a.test.ts', spec('toBe'));
+      run('checkout', '-q', '-b', 'feat');
+      commitFile('own.txt', 'own');
+      if (featMatcher !== 'toBe') commitFile('a.test.ts', spec(featMatcher));
+      run('checkout', '-q', 'main');
+      commitFile('theirs.txt', 'theirs');
+      if (mainMatcher !== 'toBe') commitFile('a.test.ts', spec(mainMatcher));
+      run('checkout', '-q', 'feat');
+      run('merge', '-q', '--no-commit', '--no-ff', 'main');
+      return spawnSync('node', [GATE], { cwd: dir, env: GATE_ENV, encoding: 'utf8' }).status;
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it('does not charge a weakening merged in from main to the branch', () => {
+    expect(gateAfterMerge('toBeGreaterThan', 'toBe')).toBe(0);
+  });
+
+  it('still blocks a weakening the branch itself authored', () => {
+    expect(gateAfterMerge('toBe', 'toBeGreaterThan')).toBe(1);
+  });
+});
+
 describe('assertion weakening gate fails closed', () => {
   it('refuses to pass when git is unusable', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-'));
