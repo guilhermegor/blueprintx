@@ -148,7 +148,8 @@ echo "The project's docs/ gate passes its skeleton and rejects docs/backlog/."
 
 bash "$PROJECT_PATH/bin/check_readme_structure.sh" "$PROJECT_PATH/README.md"
 str_probe="$(mktemp -d)"
-sed 's/^## Overview$/## 🚀 Overview/' "$PROJECT_PATH/README.md" >"$str_probe/emoji.md"
+awk '/^<!-- slug: overview -->$/ { str_next = 1; print; next } str_next { sub(/^## /, "## 🚀 "); str_next = 0 } { print }' \
+    "$PROJECT_PATH/README.md" >"$str_probe/emoji.md"
 grep -vF '<!-- slug: license -->' "$PROJECT_PATH/README.md" >"$str_probe/no-license.md"
 for str_broken in emoji no-license; do
     if bash "$PROJECT_PATH/bin/check_readme_structure.sh" "$str_probe/$str_broken.md" >/dev/null 2>&1; then

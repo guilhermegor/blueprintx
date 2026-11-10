@@ -35,11 +35,22 @@ excludes is never read. Fenced code, YAML front matter, multi-line HTML comments
 ignored, and a `docs-lang:ok` marker in a paragraph (outside inline code) skips it. A `theme.language` other than `en` or `pt-BR`
 fails closed. Its Portuguese function words are the ones `check_comment_language.py` uses.
 
-⚠️ The shipped templates are English, so a project scaffolded as `pt-BR` gets
-`<!-- docs-lang:untranslated -->` appended to every shipped page. The gate skips a marked page
-and counts it in its summary line (`N skipped as docs-lang:untranslated`), so the first lint is
-green and the untranslated pages stay visible. Delete the marker from a page once it is
-translated; from then on the gate checks it.
+`lib-minimal` ships pt-BR pages: for `DOCS_LOCALE=pt-BR` the scaffold overwrites the English
+`README.md`, every page it publishes (`index`, `usage`, `examples`, `faq`, `contributing`, `api/*`,
+`changelog`, `releasing-1-0-0`) and the `mkdocs.yml` nav labels (`Início`, `Uso`, `Exemplos`,
+`Referência da API`) with the translations kept under `templates/lib-minimal/docs/pt-BR/`,
+`templates/python-common/docs/pt-BR/` and `templates/lib-minimal/README.pt-BR.md`. The README keeps
+its `<!-- slug: -->` comments, so `check_readme_structure.sh` has no locale logic, and the docs
+gate checks every translated page from the first commit. Nav labels live in
+`templates/lib-minimal/docs/pt-BR/nav-labels.tsv`. codespell has no Portuguese dictionary, so the
+generated project's `.codespellrc` skips `docs/` and `README.md` for `pt-BR`, and this repository's
+skips the translations.
+
+⚠️ The other Python skeletons still ship English pages. A project scaffolded as `pt-BR` from one of
+them gets `<!-- docs-lang:untranslated -->` appended to every page that was not translated. The gate
+skips a marked page and counts it in its summary line (`N skipped as docs-lang:untranslated`), so
+the first lint is green and the untranslated pages stay visible. Delete the marker from a page once
+it is translated; from then on the gate checks it.
 
 A `--spec` file must carry `docs_locale` on an MkDocs skeleton. An omitted key used to become
 `en` silently; it is now refused, naming the key, before anything is created. Skeletons that

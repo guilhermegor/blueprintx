@@ -6,6 +6,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$REPO_ROOT/bin/lib/common.sh"
 
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
+
 int_failures=0
 
 fail() {
@@ -121,7 +123,66 @@ test_marker_step_is_idempotent() {
     rm -rf "$str_dir"
 }
 
+scaffold_docs_probe() {
+    local str_locale="$1" str_dir="$2"
+    (
+        # shellcheck source=bin/lib/spec.sh
+        source "$REPO_ROOT/bin/lib/spec.sh"
+        spec_stdin_for_skeleton lib-minimal "" \
+            | DOCS_LOCALE="$str_locale" BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot \
+                LINKEDIN_URL=https://www.linkedin.com/in/ci-bot \
+                bash "$REPO_ROOT/bin/scaffold/python_lib_minimal.sh" \
+                "$str_dir" docs-probe "Docs probe" "0.0.1"
+    ) >"$str_dir/scaffold.log" 2>&1
+}
+
+test_scaffold_passes_docs_gate() {
+    local str_locale="$1" str_dir str_out int_rc=0
+    str_dir="$(mktemp -d)"
+    if ! scaffold_docs_probe "$str_locale" "$str_dir"; then
+        fail "lib-minimal $str_locale scaffold failed: $(tail -3 "$str_dir/scaffold.log")"
+        rm -rf "$str_dir"
+        return
+    fi
+    str_out="$(python3 "$str_dir/docs-probe/bin/check_docs_language.py" \
+        --root "$str_dir/docs-probe" 2>&1)" || int_rc=$?
+    if [ "$int_rc" -eq 0 ] && grep -Eq '\([1-9][0-9] page\(s\) checked\)$' <<<"$str_out"; then
+        pass "$str_locale scaffold passes the docs-language gate: $str_out"
+    else
+        fail "$str_locale scaffold, gate rc=$int_rc: $str_out"
+    fi
+    rm -rf "$str_dir"
+}
+
+test_ptbr_twins_cover_shipped_pages() {
+    local str_rel str_lib="$REPO_ROOT/templates/lib-minimal/docs" str_common="$REPO_ROOT/templates/python-common/docs"
+    for str_rel in index.md usage.md examples.md faq.md contributing.md api/index.md api/reference.md; do
+        [ -f "$str_lib/pt-BR/$str_rel" ] && pass "pt-BR twin of lib-minimal docs/$str_rel" \
+            || fail "no pt-BR twin of lib-minimal docs/$str_rel"
+    done
+    for str_rel in changelog.md releasing-1-0-0.md; do
+        [ -f "$str_common/pt-BR/$str_rel" ] && pass "pt-BR twin of shipped docs/$str_rel" \
+            || fail "no pt-BR twin of shipped docs/$str_rel"
+    done
+}
+
+test_ptbr_readme_keeps_slugs() {
+    local str_want str_got
+    # shellcheck source=bin/lib/scaffold_readme.sh
+    source "$REPO_ROOT/bin/lib/scaffold_readme.sh"
+    str_want="$(scaffold_filter_archetype_blocks library <"$REPO_ROOT/templates/python-common/README.md" \
+        | grep -o '<!-- slug: [a-z-]* -->')"
+    str_got="$(grep -o '<!-- slug: [a-z-]* -->' "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md")"
+    [ "$str_want" = "$str_got" ] \
+        && pass "pt-BR README carries the library slug comments unchanged" \
+        || fail "pt-BR README slugs differ from the library README: $(diff <(echo "$str_want") <(echo "$str_got"))"
+}
+
 main() {
+    test_ptbr_twins_cover_shipped_pages
+    test_ptbr_readme_keeps_slugs
+    test_scaffold_passes_docs_gate en
+    test_scaffold_passes_docs_gate pt-BR
     test_marker_step_is_idempotent
     test_marker_step_tolerates_missing_docs_dir
     test_prompt_mapping
