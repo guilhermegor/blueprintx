@@ -176,20 +176,20 @@ def default_branch() -> str:
     A pull-request checkout (``actions/checkout``) holds a detached ``HEAD`` and only
     ``origin/*`` remote-tracking refs: no local ``main`` and no ``origin/HEAD``. The candidates
     therefore keep the ``origin/`` prefix (stripping it leaves a name nothing backs) and the PR's
-    own target, ``GITHUB_BASE_REF``, comes first, so a PR aimed at a release branch is diffed
-    against that branch (blueprintx#1069).
+    own target, ``GITHUB_BASE_REF``, is the only candidate when set, so a PR aimed at a release
+    branch is diffed against that branch or not at all: falling back to another branch would
+    judge it against the wrong base (blueprintx#1069).
 
     Returns
     -------
     str
-        The first candidate that resolves; ``""`` when none does, which ``main`` reports as a
-        failure rather than reading as "nothing to diff".
+        The resolvable ref; ``""`` when none does, which ``locate_base`` reports as a failure
+        rather than reading as "nothing to diff".
     """
     str_pr_base = os.environ.get("GITHUB_BASE_REF", "")
-    list_candidates = [f"origin/{str_pr_base}"] if str_pr_base else []
-    list_candidates.append(
-        _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
-    )
+    if str_pr_base:
+        return f"origin/{str_pr_base}" if _resolves(f"origin/{str_pr_base}") else ""
+    list_candidates = [_git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])]
     list_candidates += [
         f"{str_prefix}{str_name}"
         for str_name in ("main", "master")

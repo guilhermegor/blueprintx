@@ -240,12 +240,24 @@ def test_default_branch_prefers_the_pull_request_base_ref(
     assert ledger.default_branch() == "origin/develop"
 
 
-def test_default_branch_ignores_an_unresolvable_base_ref(
+def test_default_branch_refuses_to_fall_back_from_an_unresolvable_base_ref(
     path_ci: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A ``GITHUB_BASE_REF`` naming a branch that was not fetched falls through to main."""
+    """A known PR base that was not fetched must not be swapped for another branch."""
     monkeypatch.setenv("GITHUB_BASE_REF", "does-not-exist")
-    assert ledger.default_branch() == "origin/main"
+    assert ledger.default_branch() == ""
+
+
+def test_main_unresolvable_pull_request_base_fails(
+    path_ci: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A narrow fetch that lacks the PR base is reported, never judged against ``origin/main``.
+
+    HEAD sits at ``origin/main`` so a silent fallback would read "HEAD is the base" and pass.
+    """
+    _git_in(path_ci, "checkout", "-q", "--detach", "origin/main")
+    monkeypatch.setenv("GITHUB_BASE_REF", "does-not-exist")
+    assert ledger.main() == 1
 
 
 def test_main_unresolvable_base_on_a_feature_branch_fails(path_no_default: Path) -> None:
