@@ -2948,10 +2948,48 @@ test suite keep the contract; this section records the reasoning that lived besi
 </ul>
 <h3 id="per-gate-notes">Per-gate notes<a class="headerlink" href="#per-gate-notes" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>check_all_exports.py</code>.</strong> <code>__all__</code> may be a list or a tuple; accepting only a list made a
+<li>
+<p><strong><code>check_all_exports.py</code>.</strong> <code>__all__</code> may be a list or a tuple; accepting only a list made a
   complete tuple read as empty and every public member as missing, a gate that fails loudest on
-  correct code. Vendored and generated trees are skipped.</li>
-<li><strong><code>check_assertion_weakening.py</code></strong> (#289, #324, #590). Comparison operators weaker than <code>==</code>
+  correct code. Vendored and generated trees are skipped.</p>
+<p><em><code>_internal</code> tracer</em> (#950, #993): follows a name through relative and absolute first-party
+imports (dotted paths and <code>member/__init__.py</code> included), through imports under a module-level
+<code>try:</code> / <code>with</code> / <code>if</code>, through <code>from x import *</code>, and through <code>from . import _internal</code> and
+<code>from pkg import _internal as Doc</code>. A <code>from ._internal... import *</code> is charged only the names
+that file provides (its definitions, imports and nested star imports, limited by its
+<code>__all__</code>). The star form is a fallback, used only when nothing in the module binds the name.
+A followed file that is not valid Python is reported as a finding naming it; invalid UTF-8 or a
+broken <code>__init__.py</code> still fails with a traceback.</p>
+<p><em>Dynamic bindings</em> (#1011, #1024): a name is assumed provided when the file names a writer
+(<code>globals</code>, <code>locals</code>, <code>vars</code>, <code>setattr</code>, <code>exec</code>, <code>eval</code>, <code>__import__</code>, <code>modules</code>, <code>f_globals</code>,
+<code>_getframe</code>, <code>currentframe</code>, <code>__globals__</code>, <code>f_locals</code>), as a bare name, an attribute (<code>builtins.exec</code>) or an import alias
+from <code>builtins</code>, <code>sys</code> or <code>inspect</code> (<code>from builtins import exec as run</code>), anywhere in the file. The one exemption is
+<code>setattr(self|cls, ...)</code> / <code>vars(self|cls)</code> on the first parameter of a method that is not a
+<code>staticmethod</code> (nor the implicit one, <code>__new__</code>), is decorated with nothing or only with <code>classmethod</code>,
+<code>property</code>, <code>abstractmethod</code>, <code>override</code>, <code>cached_property</code>, <code>final</code>, <code>overload</code> or <code>.setter</code>/<code>.getter</code>/<code>.deleter</code>
+(any other decorator could call the method with another object, so it removes the
+exemption and over-charges, e.g. <code>@contextmanager</code> or <code>@pytest.fixture</code>; the safe names
+count bare or on <code>abc</code>, <code>typing</code>, <code>typing_extensions</code>, <code>functools</code> and <code>builtins</code>, so
+<code>@evil.classmethod</code> is charged, and <code>.setter</code>/<code>.getter</code>/<code>.deleter</code> count only on the
+method's own name, as in <code>@x.setter def x</code>), does not rebind or take <code>setattr</code>/<code>vars</code> as a parameter (nor does the file bind either name at module level, as <code>from ._compat import vars</code> or a <code>def setattr</code> does),
+has no nested def or lambda taking that name as a parameter, and never rebinds
+it (assignment, <code>del</code>, <code>import ... as</code>, <code>match</code>
+capture, <code>except ... as</code>, <code>type</code>, or a nested <code>def</code>/<code>class</code> of that name). The call may sit
+anywhere in the method, closures over <code>self</code> included. A store to <code>__class__</code> is charged like a writer, except <code>self.__class__ = x</code> on the same never-rebound first parameter that qualifies for the <code>setattr</code> exemption (a module whose class is swapped makes <code>self</code> the module, so a rebound <code>self</code> or a module-level <code>self</code> is charged). An <code>__all__</code> that is not one literal list of
+strings (second assignment, <code>+=</code>, <code>.append</code>, <code>.extend</code>, subscript write, <code>[*x]</code>, <code>del __all__</code>)
+is assumed to provide the name. A loop, <code>with</code>, unpacking, walrus (in a default, decorator or
+class base or annotation too), <code>match</code> capture, <code>except ... as</code> or a function's <code>global</code> counts as
+binding. A walrus in an annotation binds at module level through 3.13 (measured on 3.12 and 3.13). On 3.14 <code>ast.parse</code> still accepts it and only <code>compile</code> refuses it (<code>named expression cannot be used within an annotation</code>, measured), so the gate charges the name on every version, and <code>from __future__ import annotations</code> does not make it legal.</p>
+<p><em>Remaining limits</em> (an AST-only reader): a name rebound by assignment (<code>Doc = _internal_doc</code>),
+a class built by <code>create_model(...)</code>, a <code>pydantic.dataclasses</code> decorator, an import through
+<code>importlib</code> / <code>__getattr__</code>, a method called through its class with another object
+(<code>A.f(me)</code>, <code>types.MethodType(A.f, me)()</code>, <code>A.f.__get__(me)()</code>), a <code>staticmethod</code> rebound after
+the def (<code>f = staticmethod(f)</code>; <code>@sm</code> and <code>@wrapper(staticmethod)</code> are charged), a writer re-exported by a first-party module
+(<code>from ._compat import exec_ as run</code>), a plain attribute store on a module alias (<code>me.Priv = 1</code>, <code>me.__dict__["Priv"] = 1</code>, <code>me.__dict__.update(...)</code>), a module written through <code>__setattr__</code> (<code>object.__setattr__(me, "Priv", 1)</code>; not a charged writer, since <code>super().__setattr__</code> is routine in frozen classes), a safe-set decorator name that is not the real one (a local <code>def setter(fn): fn(me)</code> used as <code>@setter</code>; the set is matched by name, not by origin), a writer reached through a
+string constant (<code>getattr(builtins, "exec")(...)</code>, <code>getattr(sys, "modules")</code>,
+<code>__builtins__["exec"]</code>), and an absolute import of another top-level
+package.
+- <strong><code>check_assertion_weakening.py</code></strong> (#289, #324, #590). Comparison operators weaker than <code>==</code>
   include the <code>in</code> example and <code>&gt;=</code>; <code>Gt</code> and <code>Lt</code> are excluded because swapping equality for a
   strict inequality still excludes the old value, so it stays out of the decidable core. The
   unittest-style call list is the measured, decidable subset, with only exact equivalences paired
@@ -2967,8 +3005,8 @@ test suite keep the contract; this section records the reasoning that lived besi
   gate off the staged-diff stage the rest of the family shares. Like <code>GATE_CHANGE_OK</code> it is
   ignored under CI; <code>GITHUB_ACTIONS</code> counts when set at all (a runner never sets it falsy),
   while <code>CI</code> counts unless <code>""</code>, <code>0</code>, <code>false</code> or <code>no</code>, so a local <code>CI=false</code> does not disable it.
-  <code>GATE_CHANGE_OK</code> still uses a presence check; aligning it is tracked in #981. <code>is_ci()</code> is the one seam for both the verdict and the advice.</li>
-<li><strong><code>check_backlog_ledger.py</code></strong> (#123). The risk classes that require a ledger are kept narrow:
+  <code>GATE_CHANGE_OK</code> still uses a presence check; aligning it is tracked in #981. <code>is_ci()</code> is the one seam for both the verdict and the advice.
+- <strong><code>check_backlog_ledger.py</code></strong> (#123). The risk classes that require a ledger are kept narrow:
   docs, deps and tests-only branches are routine and a ledger for them would be noise nobody
   reads. The author is read from the event payload: once <code>GITHUB_EVENT_PATH</code> is set the payload
   is the only authority, and every failure to use it (missing file, bad bytes, malformed JSON, no
@@ -2978,8 +3016,8 @@ test suite keep the contract; this section records the reasoning that lived besi
   Keyed on the author, never the path, so a human branch touching the same files still owes the
   ledger; the exemption is announced. Risk is judged per path: <code>classify_risk</code> over the whole list
   answers a different question and lets a mixed branch escape. On the default branch or with no
-  merge base there is nothing branch-scoped to enforce.</li>
-<li><strong><code>check_comment_language.py</code>.</strong> The Portuguese function-word list holds only words that are not
+  merge base there is nothing branch-scoped to enforce.
+- <strong><code>check_comment_language.py</code>.</strong> The Portuguese function-word list holds only words that are not
   also English; "ver" and "dar" are absent (they collide with the abbreviation "ver" and a
   Danish/Dutch reading), as is every 1 or 2 letter word. Terms of art with no English equivalent
   are redacted whole before matching. The whitelist is deliberately empty, the stricter
@@ -2999,8 +3037,8 @@ test suite keep the contract; this section records the reasoning that lived besi
   would silence its neighbours. Comments come from <code>tokenize</code> and docstrings from the AST as two
   independent extractions (they were one body, so a tokenize failure skipped the docstrings too).
   <code>.env.example</code> is picked up through the <code>.example</code> suffix with no special case. Audit mode
-  fails on zero files; success reports the file count.</li>
-<li><strong><code>check_contract_drift.py</code>.</strong> <code>src</code> is put on <code>sys.path</code> so the driver can import the
+  fails on zero files; success reports the file count.
+- <strong><code>check_contract_drift.py</code>.</strong> <code>src</code> is put on <code>sys.path</code> so the driver can import the
   project's <code>config.contracts</code> and <code>utils.*</code> when run from the project root as the workflow does;
   the import order is stable only because <code>ruff.toml</code> declares <code>known-first-party</code>, since left to
   inference different ruff versions make <code>poe lint</code> modify a fresh scaffold. <code>timeout_s:</code> is a
@@ -3013,21 +3051,21 @@ test suite keep the contract; this section records the reasoning that lived besi
   contract does not list) is gated on a full-header pinned-oracle contract. The all-clear line is
   never printed when anything went unchecked, and skipped sources stay out of the report body
   because the report opens an issue and "the source is down" must not look like "our contract is
-  wrong".</li>
-<li><strong><code>check_coverage_floor.py</code></strong> (#149). A whole-capability omission (such as
+  wrong".
+- <strong><code>check_coverage_floor.py</code></strong> (#149). A whole-capability omission (such as
   <code>src/capabilities/example_feature/*</code>) is matched against the omit list itself, never
   hardcoded. Patterns are expanded exactly as Coverage.py expands them before applying <code>omit</code>
   (<code>${PWD}/src/...</code>), or comparing against the raw text would never match a real module path and
   the omission would be real while the gate reported clean: logic dropped from the denominator,
   silently. Both spellings are matched because an expanded pattern is absolute and the module
-  path is relative to the project root.</li>
-<li><strong><code>check_dead_code.py</code>.</strong> The skip list mirrors <code>check_function_length.py</code>. A half-removed
+  path is relative to the project root.
+- <strong><code>check_dead_code.py</code>.</strong> The skip list mirrors <code>check_function_length.py</code>. A half-removed
   vulture install still reports <code>name == "vulture"</code>, and the metadata probe separates "never
   installed" from "installed but its package is gone". Parts are compared relative to <code>path_src</code>
   (#331). vulture is handed the explicit filtered file list, not the directory, because its own
   <code>exclude</code> matches against the full, often absolute, path, so a <code>.claude</code> pattern would match
-  every real file under a worktree checkout.</li>
-<li><strong><code>check_docs_code_refs.py</code></strong> (#159). The root defaults to the project root and is overridable
+  every real file under a worktree checkout.
+- <strong><code>check_docs_code_refs.py</code></strong> (#159). The root defaults to the project root and is overridable
   with <code>--root</code>. The layer-name vocabulary is the one every skeleton uses (DDD hexagonal,
   <code>utils</code>/<code>config</code>, <code>app</code>, MVC), unioned with whatever really exists under <code>src/</code>, never in place
   of it, so a whole top-level rename is still caught: <code>core</code> was a real historical name for what
@@ -3038,19 +3076,19 @@ test suite keep the contract; this section records the reasoning that lived besi
   where the reader has less context, and is treated like a relative import (out of scope). Each
   fragment's comment is stripped before testing for the closing <code>)</code> and before joining; a <code>)</code> in a
   comment used to end the scan early and a <code>#</code> swallowed every later name, silent misses where
-  the gate passed having looked at less than it reported.</li>
-<li><strong><code>check_docs_gap.py</code>.</strong> Matching uses the same engine MkDocs 1.6 builds with
+  the gate passed having looked at less than it reported.
+- <strong><code>check_docs_gap.py</code>.</strong> Matching uses the same engine MkDocs 1.6 builds with
   (<code>mkdocs/structure/files.py</code>): a hand-rolled matcher diverged on basename-at-any-depth,
   anchored <code>/x</code>, <code>**</code> and <code>!</code>. A heading followed only by prose is not a table, or enabling
   Layer 2 on it would report every page missing from an index that was never a table. A relative
   <code>docs_dir</code> resolves against <code>mkdocs.yml</code>'s folder and <code>/</code> on an absolute right-hand side keeps
   the absolute path, so both documented forms land. An empty <code>mkdocs.yml</code> or a scan that found
-  nothing has failed to run: 0 errors over 0 pages is a gate declaring its own blindness as OK.</li>
-<li><strong><code>check_docs_sections.py</code>.</strong> The canonical skeleton is English slugs present in every tier; a
+  nothing has failed to run: 0 errors over 0 pages is a gate declaring its own blindness as OK.
+- <strong><code>check_docs_sections.py</code>.</strong> The canonical skeleton is English slugs present in every tier; a
   repo replaces it with <code>required_pages:</code> in <code>docs/.docs-skeleton.yaml</code>. The loader is
   SafeLoader-derived: unknown tags (including <code>!!python/object</code>) hit a catch-all constructor and
-  resolve to <code>None</code>, so it never constructs arbitrary Python and is safe despite <code>yaml.load</code>.</li>
-<li><strong><code>check_docstrings.py</code>.</strong> A NumPy parameter line is one name or several comma-separated names
+  resolve to <code>None</code>, so it never constructs arbitrary Python and is safe despite <code>yaml.load</code>.
+- <strong><code>check_docstrings.py</code>.</strong> A NumPy parameter line is one name or several comma-separated names
   followed by <code>: &lt;type&gt;</code>; the combined form (<code>a, b : dict</code>) documents every listed name.
   Connector and filler words carry no type identity, so prose like <code>pathlib.Path or None</code> or
   <code>list of dict</code> or <code>str, optional</code> reads naturally and still matches the bare annotation;
@@ -3060,17 +3098,17 @@ test suite keep the contract; this section records the reasoning that lived besi
   Optional arm), so a documented token set that is a subset of the annotation's is accepted;
   exact equality is the common case. Finding the Raises section and interpreting one entry are
   kept apart: they were one loop, so a change to either had to be made inside the other. Both
-  globs are cwd-relative, and every tier ships both trees, so zero is always a broken invocation.</li>
-<li><strong><code>check_dtypes.py</code>.</strong> Matching is text-based, not AST: the target is a string literal in a
+  globs are cwd-relative, and every tier ships both trees, so zero is always a broken invocation.
+- <strong><code>check_dtypes.py</code>.</strong> Matching is text-based, not AST: the target is a string literal in a
   class-level dict (<code>"COL": "float64"</code>) or a bare pandas/numpy spelling, which an AST walk
   complicates without buying accuracy. The opt-out marker takes a reason after the colon. Exempt
   trees are the runtime type-checking engine (which names float as a type, not a dtype) and the
-  gate's own documentation of the banned spellings.</li>
-<li><strong><code>check_fixture_scope.py</code></strong> (#442). Widening any of the listed scopes away from the implicit
+  gate's own documentation of the banned spellings.
+- <strong><code>check_fixture_scope.py</code></strong> (#442). Widening any of the listed scopes away from the implicit
   <code>function</code> shares the fixture's instance across more than one test, the shape the gate exists
   to catch. The marker mirrors <code>complexity-ok:</code> and <code>test-change-ok:</code>. Zero discovered files in
-  audit mode fails, since a renamed <code>tests/</code> layout or a wrong <code>--root</code> would report clean forever.</li>
-<li><strong><code>check_function_length.py</code>.</strong> One ceiling for Python and shell on purpose: two numbers for
+  audit mode fails, since a renamed <code>tests/</code> layout or a wrong <code>--root</code> would report clean forever.
+- <strong><code>check_function_length.py</code>.</strong> One ceiling for Python and shell on purpose: two numbers for
   one rule is the shape that rots, and once shell gets a bigger allowance nobody remembers which
   applies where. Directories skipped hold code we did not write or generated code; <code>typing</code> is
   not among them, since the runtime type-checking engine is exempt from type analysis but a long
@@ -3078,8 +3116,8 @@ test suite keep the contract; this section records the reasoning that lived besi
   fixed to <code>templates/python-common</code>, this one needs the <code>.claude</code> entry because <code>--root</code> can
   point at a real repo root. <code>PLW0603</code> (a module-level default set once by the entrypoint) is
   accepted with its upgrade path: threading the root through every signature is the proper fix
-  and a wider change than this one.</li>
-<li><strong><code>check_gate_integrity.py</code></strong> (#309, #310, #312, #313, #337). The reason is required.
+  and a wider change than this one.
+- <strong><code>check_gate_integrity.py</code></strong> (#309, #310, #312, #313, #337). The reason is required.
   <code>!=</code> belongs in the weakening set and is the weakest of it: <code>assert actual != expected</code> accepts
   every value except one, so a concurrent code-plus-test change could flip <code>==</code> to <code>!=</code> and keep a
   green test that asserts almost nothing. Git output is read as bytes, not <code>text=True</code>: with
@@ -3091,13 +3129,13 @@ test suite keep the contract; this section records the reasoning that lived besi
   asks the blob itself. For <code>mypy.ini</code> the effective value is compared, not section presence: a
   pre-existing <code>[mypy-&lt;module&gt;]</code> that flips <code>ignore_errors</code> from false or absent to true is as
   much a weakening as a new section carrying it (#313). <code>CI</code> and <code>GITHUB_ACTIONS</code> exist to make
-  the <code>GATE_CHANGE_OK</code> hatch local-only (see <code>env_reason</code>).</li>
-<li><strong><code>check_identifier_masking.py</code>.</strong> The 11-digit CPF mask is <code>123.456.789-01</code>. The 2026 CNPJ is
+  the <code>GATE_CHANGE_OK</code> hatch local-only (see <code>env_reason</code>).
+- <strong><code>check_identifier_masking.py</code>.</strong> The 11-digit CPF mask is <code>123.456.789-01</code>. The 2026 CNPJ is
   alphanumeric in the base (the mod-11 check digits stay numeric, see <code>br_identifiers.py</code>), so
   the pattern accepts letters in every group but the trailing check-digit pair. A column-ish
   token followed by an equality against a quoted value is matched against SQL text (a Python
-  string or f-string segment, or a raw <code>.sql</code> file), not Python syntax.</li>
-<li><strong><code>check_layer_imports.py</code></strong> (#139, #140, #224). Modules directly under <code>src/</code> (an entrypoint
+  string or f-string segment, or a raw <code>.sql</code> file), not Python syntax.
+- <strong><code>check_layer_imports.py</code></strong> (#139, #140, #224). Modules directly under <code>src/</code> (an entrypoint
   such as <code>src/main.py</code>) get their own layer name so the policy can speak about them;
   skipping them would let <code>main.py</code> import any vendor and bypass the policy. A layer is matched
   against every ancestor of the file's directory, deepest first: <code>fnmatch</code>'s <code>*</code> does not stop at
@@ -3117,30 +3155,30 @@ test suite keep the contract; this section records the reasoning that lived besi
   the layer. A malformed policy is a failure with a readable message, not a traceback, because
   the reader is looking at CI output. <code>lib-minimal</code> nests its layers inside the distributable
   package (<code>src/&lt;pkg&gt;/_internal/&lt;layer&gt;/...</code>) and strips two leading components, so one engine
-  serves both shapes instead of the layer resolving to the package name and matching no entry.</li>
-<li><strong><code>check_migration_graph.py</code></strong> (#308). A <code>down_revision</code> has three states the gate must not
+  serves both shapes instead of the layer resolving to the package name and matching no entry.
+- <strong><code>check_migration_graph.py</code></strong> (#308). A <code>down_revision</code> has three states the gate must not
   collapse: a genuine root (<code>None</code>), the key absent, and a value this reader cannot evaluate (a
   name, a call, an f-string). <code>.get()</code> returns <code>None</code> for all three, which reads as root, so an
   unverifiable file would silently become a head and the head count would be wrong either way.
-  Distinct sentinels keep them apart.</li>
-<li><strong><code>check_one_assert.py</code></strong> (#431, #544). The unit suite's cap of one is blocking by default;
+  Distinct sentinels keep them apart.
+- <strong><code>check_one_assert.py</code></strong> (#431, #544). The unit suite's cap of one is blocking by default;
   <code>--max-per-test 0</code> turns the cap off and leaves the zero-assertion check alone, since 0 cannot
   mean "cap at zero" (a test with zero sites is already the unconditional finding). Every flag
   takes a value, so one table handles them all: adding a flag is adding a key, not a branch,
   which keeps the file under <code>bin/</code>'s complexity ceiling of 8. <code>pytest.raises</code> and <code>warns</code> are the
   context-manager form of a check, not its absence; bare <code>ast.Assert</code> alone misreads them as
   zero. A trailing hatch past the last statement's column, which <code>ast.get_source_segment</code> would
-  cut off, is still found because tokens carry the whole physical line's comments.</li>
-<li><strong><code>check_orm_model_guards.py</code>.</strong> A later declarer that maps its own table (<code>__tablename__</code>) is
+  cut off, is still found because tokens carry the whole physical line's comments.
+- <strong><code>check_orm_model_guards.py</code>.</strong> A later declarer that maps its own table (<code>__tablename__</code>) is
   a parent in a joined or concrete inheritance chain: its <code>__table_args__</code> applies to its own table
-  and is not discarded. Only table-less mixins are truly shadowed.</li>
-<li><strong><code>check_provenance.py</code>.</strong> The read is the call form (<code>read_table(</code>), so the trailing paren
+  and is not discarded. Only table-less mixins are truly shadowed.
+- <strong><code>check_provenance.py</code>.</strong> The read is the call form (<code>read_table(</code>), so the trailing paren
   matters; the stamp is the marker that must accompany it. Excluded directories mirror
   <code>check_typing.py</code>: <code>typing</code> (the engine), <code>chassis</code> (cross-cutting reference scaffolding) and
   <code>example_feature</code> (the DDD example capability). The seam files that define the markers are
   exempt from pairing. Every tier inherits <code>utils/</code> and <code>config/</code>, so a real project can never
-  legitimately reach zero.</li>
-<li><strong><code>check_quality_rules.py</code></strong> (#503). The only <code>status:</code> value that waives the tool-plus-rule
+  legitimately reach zero.
+- <strong><code>check_quality_rules.py</code></strong> (#503). The only <code>status:</code> value that waives the tool-plus-rule
   requirement is matched exactly, never by truthiness: any non-empty string would otherwise
   satisfy coverage, so a typo (<code>not_implemented</code>) or an invented value (<code>planned</code>) would buy an
   exemption the registry never granted, the gate failing open on the one field that waives the
@@ -3150,16 +3188,16 @@ test suite keep the contract; this section records the reasoning that lived besi
   is "# reason"; returning the raw text let a comment satisfy the non-empty check and take the
   hatch with the explanation unwritten. A quoted value is untouched. An empty value in a
   language block opens a list; one after <code>key:</code> only opens a nested language block in this file's
-  restricted schema.</li>
-<li><strong><code>check_rmw_race.py</code></strong> (#385, #392). <code>.first()</code> and <code>.one()</code> alone are not signal, since they
+  restricted schema.
+- <strong><code>check_rmw_race.py</code></strong> (#385, #392). <code>.first()</code> and <code>.one()</code> alone are not signal, since they
   exist on plenty of non-ORM objects; the read is pinned to a model only when the same chain also
   calls <code>.query(Model)</code>. Every binding that can reach the write counts and the unlocked one
   decides: <code>if cond: row = get(..., with_for_update=True)</code> / <code>else: row = get(...)</code> gives two
   definitions of one name, and keeping the last seen suppressed the finding whenever the locked
   branch came second, a race hidden by source order. <code>x.qty -= n</code> is <code>x.qty = x.qty - n</code>, so the
   target is the self-reference. The S608 <code>noqa</code> is a false positive: it builds a remedy message
-  containing SQL vocabulary, never a query that reaches a cursor.</li>
-<li><strong><code>check_sql_guards.py</code></strong> (#355). <code>WITH (NOLOCK)</code> is MSSQL-only syntax and a very specific
+  containing SQL vocabulary, never a query that reaches a cursor.
+- <strong><code>check_sql_guards.py</code></strong> (#355). <code>WITH (NOLOCK)</code> is MSSQL-only syntax and a very specific
   token, so a plain keyword search has near-zero false positives. The module alias is recorded,
   not just the import: <code>import sqlalchemy as sa</code> makes <code>sa.delete(t)</code> a Core builder call, but
   it reaches the classifier as an attribute call, the same shape as <code>dict.update()</code>. The
@@ -3176,18 +3214,18 @@ test suite keep the contract; this section records the reasoning that lived besi
   opening line. NOLOCK is searched as one text stream, never line by line, because the pattern
   tolerates whitespace and in SQL that whitespace is routinely a newline (<code>WITH\n(NOLOCK)</code>); a
   per-line search can never match across the break and reports clean. The reported line is where
-  the match starts, which is where a deliberate hint needs its hatch.</li>
-<li><strong><code>check_typing.py</code>.</strong> The checked metaclasses come from <code>_internal.utils.typing</code>. Metaclasses
+  the match starts, which is where a deliberate hint needs its hatch.
+- <strong><code>check_typing.py</code>.</strong> The checked metaclasses come from <code>_internal.utils.typing</code>. Metaclasses
   are inherited, so only a hierarchy root (no base) must declare one. The excluded directories
   are <code>typing</code>, <code>chassis</code> and <code>example_feature</code>, mirroring the <code>ruff.toml</code> and <code>mypy.ini</code> excludes;
   keeping the three boundaries identical avoids a file that ruff and mypy ignore tripping this
-  hook.</li>
-<li><strong><code>lib/ca_bundle.py</code>.</strong> The bundle variables tools consult are listed in the order they consult
+  hook.
+- <strong><code>lib/ca_bundle.py</code>.</strong> The bundle variables tools consult are listed in the order they consult
   them; a corporate image often provisions one, and replacing it is how a working box stops
   working. A bundle generated on a previous run is skipped, or the union grows forever.
   Certificates are deduplicated on the base64 body, never on the <code>BEGIN</code> line every certificate
-  shares.</li>
-<li><strong><code>lib/pip_requirements.py</code>.</strong> Poetry's caret and tilde grammar has no pip equivalent, so it is
+  shares.
+- <strong><code>lib/pip_requirements.py</code>.</strong> Poetry's caret and tilde grammar has no pip equivalent, so it is
   expanded to an explicit range and everything pip understands passes through. A dependency
   declared by path, git or url cannot be a plain requirement line without reproducing Poetry's
   resolution, so it refuses loudly instead of emitting something that installs the wrong thing.
@@ -3196,13 +3234,13 @@ test suite keep the contract; this section records the reasoning that lived besi
   interpreter, which Poetry declares as a dependency, has no pip concept and is dropped. Zero
   requirements for a non-empty group request is a symptom, not an answer: the caller writes them
   to <code>requirements-lock.txt</code>, an empty file reads as "no dependencies", and the hosts that reach
-  this code are constrained boxes where nobody watches closely.</li>
-<li><strong><code>lib/verify_venv_imports.py</code>.</strong> Some wheel-built distributions omit <code>top_level.txt</code>. The
+  this code are constrained boxes where nobody watches closely.
+- <strong><code>lib/verify_venv_imports.py</code>.</strong> Some wheel-built distributions omit <code>top_level.txt</code>. The
   candidates are derived from the files the distribution installed rather than guessed from its
   name: a guess that misses rejects a correctly installed package, and the normalised-name rule
   is wrong for every distribution whose module differs from its PyPI name. <code>argv</code> is the script
-  path plus one requirement-file argument.</li>
-<li><strong><code>lib/wheelhouse_select.py</code></strong> (#299). <code>"3.11"</code> needs a <code>.0</code> appended before it can stand in for
+  path plus one requirement-file argument.
+- <strong><code>lib/wheelhouse_select.py</code></strong> (#299). <code>"3.11"</code> needs a <code>.0</code> appended before it can stand in for
   <code>python_full_version</code> in a marker environment. <code>pip download</code> without <code>--only-binary</code> falls
   back to an sdist for a package with no matching wheel, and zipping only <code>*.whl</code> would drop it
   silently, so the offline install would fail. <code>read(0)</code> returns <code>b""</code> at once: no parts, a
@@ -3212,8 +3250,8 @@ test suite keep the contract; this section records the reasoning that lived besi
   and the basename also rules out a path-traversal member. The reassembled archive is written
   then unlinked so it is not an input it reads; extraction happens only after verification, so a
   failed one leaves the existing wheels untouched, and a failed archive left behind could later be
-  extracted as "unverified".</li>
-<li><strong><code>pr_gate.py</code>.</strong> The sticky comment carries a hidden marker so it finds itself and updates in
+  extracted as "unverified".
+- <strong><code>pr_gate.py</code>.</strong> The sticky comment carries a hidden marker so it finds itself and updates in
   place instead of stacking. The <code>do-not-merge</code> label is the opt-out, present means never
   auto-merge whatever the classification says. The lockfile name is one constant because it is
   both a <code>deps</code> trigger path and the size-veto exemption, and two literals would drift; change it
@@ -3231,36 +3269,36 @@ test suite keep the contract; this section records the reasoning that lived besi
   and adding it to <code>on:</code> makes GitHub reject the whole file. The CodeQL axis matches the
   analyses, not the umbrella check. A poll count below one observes nothing and <code>gate_state({})</code>
   is "success", which would label a PR green having read no check run, so it is clamped rather than
-  trusted from the environment. A check still pending is pending, not a failure.</li>
-<li><strong><code>retry_rate_limited_review.py</code>.</strong> The <code>review_retry.yml</code> record in
+  trusted from the environment. A check still pending is pending, not a failure.
+- <strong><code>retry_rate_limited_review.py</code>.</strong> The <code>review_retry.yml</code> record in
   <a href="#root-workflows-why-each-is-shaped-as-it-is">Root workflows</a> covers the workflow; the points that
-  lived in this file:<ul>
-<li>The marker is an HTML comment (renders as nothing) that makes our own request recognisable,
-  so a scheduled run asks once per window instead of every tick.</li>
-<li>The command is <code>@coderabbitai full review</code>, not a plain <code>review</code>: an incremental reviewer
+  lived in this file:
+- The marker is an HTML comment (renders as nothing) that makes our own request recognisable,
+  so a scheduled run asks once per window instead of every tick.
+- The command is <code>@coderabbitai full review</code>, not a plain <code>review</code>: an incremental reviewer
   answers "already reviewed" for commits it has seen, and only the full form disregards that.
-  Keep the spelling identical to the gate's own remedy text.</li>
-<li>The rate-limit pattern is deliberately broad: any spelling of the reviewer saying it is
-  throttled; being generous is the safe direction, the cost being one extra request.</li>
-<li>The reviewer declares its own wait ("Your next included review will be available in 35
+  Keep the spelling identical to the gate's own remedy text.
+- The rate-limit pattern is deliberately broad: any spelling of the reviewer saying it is
+  throttled; being generous is the safe direction, the cost being one extra request.
+- The reviewer declares its own wait ("Your next included review will be available in 35
   minutes"), so read it instead of guessing. A hardcoded cooldown is a guess about someone
   else's quota and was measured wrong three times (31, 34 and 35 minutes against a constant of
-  30), and since a refused request still counts as traffic, guessing pushes the window out.</li>
-<li>Two states wear the same words and want opposite behaviour: a transient throttle (retry
+  30), and since a refused request still counts as traffic, guessing pushes the window out.
+- Two states wear the same words and want opposite behaviour: a transient throttle (retry
   soon) and the included-quota state under Fair Usage, an account-level budget ("may still
   proceed through usage-based billing if eligible"). The pattern cannot tell them apart, so
   the declared wait is the only reliable signal and wins over any local constant. The
   fallback, for a refusal that declares no wait, sits above every window measured (31, 34,
   35 minutes): asking early buys a declined request, an ack comment and a pushed-out window,
-  asking late only delays a PR that is already waiting.</li>
-<li>Skip-after-N over strict FIFO (#280): strict FIFO re-picks a permanently unreviewable
+  asking late only delays a PR that is already waiting.
+- Skip-after-N over strict FIFO (#280): strict FIFO re-picks a permanently unreviewable
   oldest PR forever and every younger PR starves. 18 of 19 rate-limited PRs were eventually
   reviewed, so one still stuck after several genuine retries is the 1-in-19 case, worth
   surfacing to a human. Five attempts at <code>*/10</code> is most of an hour, past every declared window
-  measured (20 to 35 minutes), so it does not fire on a PR merely waiting out a normal window.</li>
-<li>Never decide from a display string: <code>summarise_reviewer_notice</code> truncates to 200 characters
-  after stripping markup and can cut the very sentence being matched.</li>
-<li>The digits come from an external service, so they are untrusted. <code>int()</code> raises <code>ValueError</code>
+  measured (20 to 35 minutes), so it does not fire on a PR merely waiting out a normal window.
+- Never decide from a display string: <code>summarise_reviewer_notice</code> truncates to 200 characters
+  after stripping markup and can cut the very sentence being matched.
+- The digits come from an external service, so they are untrusted. <code>int()</code> raises <code>ValueError</code>
   above <code>sys.get_int_max_str_digits()</code> (4300, the CVE-2020-10735 mitigation) first, and
   <code>timedelta(minutes=...)</code> then raises <code>OverflowError</code> for a value that converts but is not
   representable. Guarding only the deeper one leaves the shallower live. The first guard
@@ -3269,8 +3307,8 @@ test suite keep the contract; this section records the reasoning that lived besi
   thought of, never the boundary you did not (raised by review on #278, twice). A wait that
   is not representable is not a wait: fall through to the marker cooldown. A wait we cannot
   anchor in time falls through too; returning True would stall the retry on one unreadable
-  timestamp.</li>
-<li>A cooldown, not an ordering test: the first implementation asked whether our marker was
+  timestamp.
+- A cooldown, not an ordering test: the first implementation asked whether our marker was
   newer than the reviewer's newest notice, which reads as right and loops. Measured on #270,
   the reviewer acknowledges every request within seconds (13 seconds later), and that ack is
   a roster comment newer than our marker; the newest-first scan met the ack first, concluded
@@ -3279,49 +3317,48 @@ test suite keep the contract; this section records the reasoning that lived besi
   from the same mental model: it asserted the roster notice after our marker means a new
   window, which is precisely the case the ack occupies. A test built on the code's assumption
   is the assumption agreeing with itself. Time cannot be confused this way, we asked recently
-  or we did not, and an unreadable timestamp on our own marker is treated as recent.</li>
-<li>Comments come from REST, not the gate's GraphQL query, which returns <code>{author, body}</code> with
+  or we did not, and an unreadable timestamp on our own marker is treated as recent.
+- Comments come from REST, not the gate's GraphQL query, which returns <code>{author, body}</code> with
   no timestamps because it never needed them; rather than widen a shared query for one
   consumer, the retry reads what it needs. The reviewer's deadline comes first (the only
   statement about the quota by the thing that owns it) and the marker cooldown is the second
-  guard, answering a different question (did we ask recently).</li>
-<li>The author type is the whole point: a <code>Bot</code> comment is silently ignored, so posting one and
+  guard, answering a different question (did we ask recently).
+- The author type is the whole point: a <code>Bot</code> comment is silently ignored, so posting one and
   reporting success would be a no-op wearing a success message. The PAT's identity is resolved
   from the token, not configured, so the two cannot disagree after the PAT is reissued on
-  another account.</li>
-<li><code>--slurp</code> yields a list of pages, so flattening goes one level deeper than the obvious
+  another account.
+- <code>--slurp</code> yields a list of pages, so flattening goes one level deeper than the obvious
   comprehension, which would iterate pages and yield nothing; it is a pure function so the
   multi-page shape is testable without a network. It sorts by <code>created_at</code> (REST's field,
   ISO-8601, lexically chronological) because FIFO ordering is a guarantee, not an assumption
   left to the caller. <code>--paginate</code>, not a bare <code>per_page=100</code>, or a rate-limited PR on page
   two is never retried. No <code>--jq</code> there, measured on gh 2.96.0: <code>--slurp</code> is rejected with
   <code>--jq</code>, and <code>--paginate</code> alone emits one array per page, which does not parse, so the
-  function would take its early return and the janitor would quietly do nothing every tick.</li>
-<li>One PR's failure must not end the sweep: <code>fetch_pull_request</code> raises on an API failure (four
+  function would take its early return and the janitor would quietly do nothing every tick.
+- One PR's failure must not end the sweep: <code>fetch_pull_request</code> raises on an API failure (four
   <code>raise RuntimeError</code> sites) and indexes a <code>pullRequest</code> node that can be null, so one
   deleted, transferred or transiently-500ing PR would abort the loop and leave every later PR
   unexamined, silently. The catch is deliberately broad. The setup step raises too and looks
   like configuration: <code>exec_module</code> propagates any import-time error from the gate and
   <code>load_roster</code> raises on a malformed roster (an unknown or missing <code>posts:</code>, only status
   members). An absent roster is fine, the gate self-skips; a broken one would end the job with
-  a traceback on every tick for ever.</li>
-<li>Whether a PR is structurally waiting is decided apart from whether to ask it now (#280):
+  a traceback on every tick for ever.
+- Whether a PR is structurally waiting is decided apart from whether to ask it now (#280):
   the cooldown and declared-wait gating needs the whole open-PR set first, because the
-  account-level quota means one PR's declared wait binds every other PR too.</li>
-<li>Account level, not per PR (#280): six PRs asked inside four minutes after a quota reset
+  account-level quota means one PR's declared wait binds every other PR too.
+- Account level, not per PR (#280): six PRs asked inside four minutes after a quota reset
   were all rate limited, because the quota is shared. The newest refusal across every waiting
   PR is read, and when it declares a wait not yet elapsed it binds every other PR. The latest
   deadline wins, never the deadline of the latest notice: across PRs these are independent
   statements about one shared quota, so the binding moment is the furthest out; taking the
   newest <code>created_at</code> and reading only that notice loses the window whenever the newest
-  refusal names no number.</li>
-<li>One ask per run, ever (#280): the old loop asked every eligible PR, which at <code>*/10</code> against N
+  refusal names no number.
+- One ask per run, ever (#280): the old loop asked every eligible PR, which at <code>*/10</code> against N
   open PRs is <code>6*N</code> requests an hour against about one of quota (96:1 at N=16), so the retry
-  that exists to unblock the queue kept it blocked. The schedule is the only rate limiter left.</li>
-<li>The helper that owns every reason to ask nobody this run (no candidate, an open
+  that exists to unblock the queue kept it blocked. The schedule is the only rate limiter left.
+- The helper that owns every reason to ask nobody this run (no candidate, an open
   account-level block, every candidate cooling down or exhausted) was split out of <code>main</code> to
-  stay under the PLR0911 return-count ceiling.</li>
-</ul>
+  stay under the PLR0911 return-count ceiling.</p>
 </li>
 </ul>
 <h2 id="the-comment-budget-gate-and-its-data-files-templatespython-commonbin">The comment-budget gate and its data files (<code>templates/python-common/bin</code>)<a class="headerlink" href="#the-comment-budget-gate-and-its-data-files-templatespython-commonbin" title="Permanent link">&para;</a></h2>
