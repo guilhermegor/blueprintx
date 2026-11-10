@@ -2,13 +2,17 @@
 
 import csv
 from pathlib import Path
+import time
 
+import pandas as pd
 import pytest
+from pytest_mock import MockerFixture
 
 from src.utils.tabular_reader import (
     ContractError,
     FileContract,
     ProblemReport,
+    _read_raw,
     find_file_problems,
     read_table,
 )
@@ -493,3 +497,54 @@ def test_column_names_colliding_after_trimming_are_rejected(tmp_path: Path) -> N
     cls_contract = FileContract("data", "data", ("code",), ())
     with pytest.raises(ContractError, match="collide after trimming"):
         read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def test_column_names_both_padded_and_colliding_after_trimming_are_rejected(
+    tmp_path: Path,
+) -> None:
+    """Two labels that are BOTH padded still collide once trimmed.
+
+    The neighbouring case pads only one of the pair; a check that compared the raw label
+    against a trimmed one would catch that and miss ``" code"`` beside ``"code "``.
+    """
+    path_csv = tmp_path / "collide_both.csv"
+    path_csv.write_text(" code;code ;amount\nABC;DEF;10\n", encoding="utf-8")
+    cls_contract = FileContract("data", "data", ("code",), ())
+    with pytest.raises(ContractError, match="collide after trimming"):
+        read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+
+
+def _time_collision_check(mocker: MockerFixture, int_cols: int) -> float:
+    """Time ``_read_raw`` rejecting a header of ``int_cols`` columns holding one collision.
+
+    Parameters
+    ----------
+    mocker : pytest_mock.MockerFixture
+        Patches the format-specific read, so only the collision check is timed.
+    int_cols : int
+        Number of distinct column names, before the one padded duplicate is appended.
+
+    Returns
+    -------
+    float
+        Seconds taken to raise the collision error.
+    """
+    list_names = [f"c{int_idx}" for int_idx in range(int_cols)] + ["c0 "]
+    df_wide = pd.DataFrame(columns=list_names)
+    mocker.patch("src.utils.tabular_reader._read_raw_dispatch", return_value=df_wide)
+    float_start = time.perf_counter()
+    with pytest.raises(ContractError, match="collide after trimming"):
+        _read_raw(Path("wide.csv"), "", None, ";")
+    return time.perf_counter() - float_start
+
+
+def test_read_raw_collision_check_on_a_very_wide_header_runs_in_linear_time(
+    mocker: MockerFixture,
+) -> None:
+    """The collision check stays cheap however many columns the source publishes.
+
+    A ``list.count`` per column name is O(n^2) in the column count, paid on every read,
+    against one linear ``Counter`` pass. The ceiling sits far above the linear cost and
+    far below the quadratic one at this width.
+    """
+    assert _time_collision_check(mocker, 20_000) < 1.0
