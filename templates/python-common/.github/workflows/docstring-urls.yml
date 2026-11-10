@@ -40,7 +40,8 @@ jobs:
                 open_issues=""
               }
               for n in $open_issues; do
-                gh issue close "$n" --comment "All docstring URLs are reachable again."
+                gh issue close "$n" --comment "All docstring URLs are reachable again." ||
+                  echo "::warning::Could not close #$n; the next scan retries."
               done
             else
               echo "::error::Docstring URL scan produced no verdict."
@@ -63,7 +64,8 @@ jobs:
             gh issue comment "$existing" --body-file docstring_urls_body.md
             for n in $open_issues; do
               [ "$n" = "$existing" ] || gh issue close "$n" --reason "not planned" \
-                --comment "Duplicate of #$existing."
+                --comment "Duplicate of #$existing." ||
+                echo "::warning::Could not close duplicate #$n; the next scan retries."
             done
           else
             gh issue create --title "Dead docstring URLs" \

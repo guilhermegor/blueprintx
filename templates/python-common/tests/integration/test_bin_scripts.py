@@ -2805,7 +2805,7 @@ def test_check_urls_cache_defaults_to_the_git_common_dir(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize("str_status", ["000", "403", "408", "429", "503"])
-def test_check_urls_does_not_cache_a_transient_failure(tmp_path: Path, str_status: str) -> None:
+def test_check_urls_does_not_cache_an_unstable_answer(tmp_path: Path, str_status: str) -> None:
     """No HTTP answer, a bot block, a timeout, a rate limit or a 5xx must never be cached."""
     path_bin = tmp_path / "stubs"
     path_bin.mkdir()
@@ -2856,7 +2856,9 @@ def _tracker_step_script() -> str:
 _STR_OPEN_TRACKERS_NEWEST_FIRST = '[{"number": 9}, {"number": 7}]'
 
 
-def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[str]:
+def _run_tracker_step(
+    path_root: Path, str_report: str, str_open: str, str_fail_close: str = ""
+) -> list[str]:
     """Run the tracking step against a stub ``gh`` and return the ``gh`` calls it made.
 
     Parameters
@@ -2867,11 +2869,13 @@ def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[s
         Content of ``docstring_urls_report.txt``.
     str_open : str
         JSON the stub serves for ``gh issue list``; the step's own ``--jq`` runs over it.
+    str_fail_close : str
+        Issue number whose ``gh issue close`` the stub fails; empty fails none.
 
     Returns
     -------
     list[str]
-        One line per ``gh`` invocation.
+        One line per ``gh`` invocation, ``issue list`` calls excluded.
     """
     _skip_unless(shutil.which("jq") is not None, "jq is needed to apply the step's --jq")
     path_bin = path_root / "stubs"
@@ -2880,7 +2884,8 @@ def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[s
     path_json = path_root / "issues.json"
     path_json.write_text(str_open, encoding="utf-8")
     (path_bin / "gh").write_text(
-        f'#!/bin/bash\necho "$*" >> "{path_log}"\n[ "$2" = list ] || exit 0\n'
+        f'#!/bin/bash\necho "$*" >> "{path_log}"\n'
+        f'[ "$2 $3" = "close {str_fail_close}" ] && exit 1\n[ "$2" = list ] || exit 0\n'
         'while [ $# -gt 0 ]; do [ "$1" = --jq ] && str_jq="$2"; shift; done\n'
         f'jq -r "$str_jq" "{path_json}"\n',
         encoding="utf-8",
@@ -2896,19 +2901,29 @@ def _run_tracker_step(path_root: Path, str_report: str, str_open: str) -> list[s
         check=False,
     )
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
-    return path_log.read_text(encoding="utf-8").splitlines() if path_log.exists() else []
+    list_lines = path_log.read_text(encoding="utf-8").splitlines()
+    return [str_line for str_line in list_lines if not str_line.startswith("issue list")]
 
 
 def test_docstring_urls_workflow_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None:
-    """A clean scan must close every open tracking issue, not leave it open forever."""
+    """A clean scan must close every open tracking issue and do nothing else."""
     list_calls = _run_tracker_step(
         tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
     )
 
-    assert [str_call for str_call in list_calls if str_call.startswith("issue close")] == [
+    assert list_calls == [
         "issue close 7 --comment All docstring URLs are reachable again.",
         "issue close 9 --comment All docstring URLs are reachable again.",
     ]
+
+
+def test_docstring_urls_workflow_keeps_closing_after_one_close_fails(tmp_path: Path) -> None:
+    """One failed close must not abort the step or skip the remaining trackers."""
+    list_calls = _run_tracker_step(
+        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST, "7"
+    )
+
+    assert list_calls[-1] == "issue close 9 --comment All docstring URLs are reachable again."
 
 
 def test_docstring_urls_workflow_dedupes_to_one_open_tracker(tmp_path: Path) -> None:
@@ -2921,6 +2936,18 @@ def test_docstring_urls_workflow_dedupes_to_one_open_tracker(tmp_path: Path) -> 
         "issue comment 7 --body-file docstring_urls_body.md",
         "issue close 9 --reason not planned --comment Duplicate of #7.",
     ]
+
+
+def test_docstring_urls_workflow_dedupe_survives_a_failed_close(tmp_path: Path) -> None:
+    """A failed duplicate close must not abort the step or skip later duplicates."""
+    list_calls = _run_tracker_step(
+        tmp_path,
+        "URL issue (404) in a.py (line 1): u\n",
+        '[{"number": 11}, {"number": 9}, {"number": 7}]',
+        "9",
+    )
+
+    assert list_calls[-1] == "issue close 11 --reason not planned --comment Duplicate of #7."
 
 
 def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
