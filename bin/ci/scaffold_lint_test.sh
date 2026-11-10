@@ -206,22 +206,20 @@ if ! git ls-files --error-unmatch poetry.lock >/dev/null 2>&1; then
 fi
 echo "The generated project tracks poetry.lock."
 
-str_ignore_probe="$(mktemp -d)"
+str_ignore_probe="$(mktemp -d -p "$WORK_DIR")"
 git init -q "$str_ignore_probe"
 cp .gitignore "$str_ignore_probe/.gitignore"
-for str_venv_name in .venv venv; do
+for str_venv_name in .venv venv env; do
     ln -s /nonexistent "$str_ignore_probe/$str_venv_name"
     if ! git -C "$str_ignore_probe" check-ignore -q "$str_venv_name"; then
         echo "ERROR: [$SKELETON] .gitignore does not ignore a SYMLINKED $str_venv_name." >&2
         echo "       A trailing slash matches directories only, and git sees a" >&2
         echo "       symlink as a file, so a venv linked to a shared env would" >&2
         echo "       show as untracked and could be committed (blueprintx#1070)." >&2
-        rm -rf "$str_ignore_probe"
         exit 1
     fi
 done
-rm -rf "$str_ignore_probe"
-echo "The generated project's .gitignore ignores a symlinked .venv and venv."
+echo "The generated project's .gitignore ignores a symlinked .venv, venv and env."
 
 str_cz_version="$(poetry run cz version --project 2>/dev/null || true)"
 case "$str_cz_version" in
