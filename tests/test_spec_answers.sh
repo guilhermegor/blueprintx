@@ -229,23 +229,17 @@ require_gate_deps() {
     return 1
 }
 
-test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate() {
-    local str_temp int_pages int_marked str_gate int_rc=0
+test_pt_br_scaffold_ships_translated_pages_and_passes_its_own_gate() {
+    local str_temp int_marked str_gate int_rc=0
     require_gate_deps "pt-BR e2e" || return 0
     str_temp="$(spec_scaffold_root docs-pt-e2e "docs_locale=pt-BR")"
-    local str_list str_page
-    str_list="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" --list-pages)"
-    int_pages="$(grep -c '/docs/' <<<"$str_list")"
-    int_marked=0
-    while IFS= read -r str_page; do
-        grep -qxF '<!-- docs-lang:untranslated -->' "$str_page" && int_marked=$((int_marked + 1))
-    done < <(grep '/docs/' <<<"$str_list")
+    int_marked="$(grep -rlx '<!-- docs-lang:untranslated -->' "$str_temp/spec-probe/docs" "$str_temp/spec-probe/README.md" | grep -vc '/docs/\(CLAUDE\|AGENTS\)\.md$' || true)"
     str_gate="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" 2>&1)" || int_rc=$?
-    grep -qxF '<!-- docs-lang:untranslated -->' "$str_temp/spec-probe/README.md" || int_rc=99
-    if [ "$int_pages" -gt 0 ] && [ "$int_pages" = "$int_marked" ] && [ "$int_rc" -eq 0 ]; then
-        pass "pt-BR scaffold marks README and all $int_pages docs pages and its own gate passes"
+    if [ "$int_marked" = "0" ] && [ "$int_rc" -eq 0 ] && ! grep -q 'skipped' <<<"$str_gate" \
+        && grep -Eq 'docs language is pt-BR \([1-9][0-9]* page' <<<"$str_gate"; then
+        pass "pt-BR scaffold ships translated pages and its own gate checks them: $str_gate"
     else
-        fail "pt-BR e2e" "pages=$int_pages marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
+        fail "pt-BR e2e" "marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
     fi
     rm_temp_root "$str_temp"
 }
@@ -967,7 +961,7 @@ main() {
     test_a_failed_answer_stream_stops_the_scaffold_flow
     test_bad_docs_locale_stops_before_anything_is_created
     test_docs_locale_reaches_the_scaffold
-    test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate
+    test_pt_br_scaffold_ships_translated_pages_and_passes_its_own_gate
     test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate
     test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton
     test_absent_docs_locale_is_refused_on_every_python_tier

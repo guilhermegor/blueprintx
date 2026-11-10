@@ -193,7 +193,7 @@ The **dependabot guard** (`bin/ci/check_dependabot_shipped.sh --static`, hook an
 
 The **README structure gate** follows the one-implementation rule too:
 `templates/common/bin/check_readme_structure.sh` (slug-marked sections, per-archetype extras,
-plain-text headings, Authors with GitHub and LinkedIn links), built on the heading parser
+plain-text headings, Authors with GitHub and LinkedIn links, and `--require-footer` for READMEs that must end in a footer), built on the heading parser
 `templates/common/bin/lib/md_structure.sh` that `bin/ci/check_pr_template.sh` also sources.
 `bin/ci/check_readme_structure.sh` runs it over the root README and, with `--template`, every
 template README; `--generated` scaffolds every skeleton and runs the copy each generated project

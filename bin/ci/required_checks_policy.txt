@@ -23,3 +23,5 @@ optional|Scaffold + lint + test (pt-BR docs locale) — lib-minimal|new job; req
 optional|tests clear inherited GIT_* env|new gate (blueprintx#901); require once it has a green record on main
 optional|Template workflow filenames|new gate (blueprintx#947); require once it has run green on recent PRs
 optional|Python scaffolds refuse an explicit Any|new job (blueprintx#1022); require once it has a green record on main
+optional|Generated TS project - npm ci, lint, jest (react-spa-webpack)|new job; require once it has a green record on main
+optional|Generated TS project - npm ci, lint, jest (ts-lib)|new job; require once it has a green record on main

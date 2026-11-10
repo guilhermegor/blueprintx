@@ -28,11 +28,12 @@ STR_ARCHETYPE=""
 STR_HEADINGS=""
 STR_EXTRA=""
 BOOL_TEMPLATE=0
+BOOL_REQUIRE_FOOTER=0
 
 problem() { ARR_PROBLEMS+=("$1: $2"); }
 
 usage() {
-	echo "usage: check_readme_structure.sh [--template | --list-archetypes] [README.md ...]" >&2
+	echo "usage: check_readme_structure.sh [--template] [--require-footer] [--list-archetypes] [README.md ...]" >&2
 	exit 2
 }
 
@@ -120,12 +121,27 @@ check_authors() {
 	[ "$i_count" -gt 0 ] || problem "$path_file" "the Authors section lists no one"
 }
 
+footer_rule_missing() {
+	md_strip_fences <"$1" | awk '
+		{ sub(/[ \t\r]+$/, "") }
+		/^<sub>Generated from/ { if (prev != "---") bad = 1 }
+		NF { prev = $0 }
+		END { exit !bad }'
+}
+
 check_footer() {
-	local path_file="$1" str_line
+	local path_file="$1" str_line int_count=0
 	while IFS= read -r str_line; do
+		int_count=$((int_count + 1))
 		[[ "$str_line" == *"[BlueprintX]($STR_BLUEPRINTX_URL)"* ]] ||
 			problem "$path_file" "footer does not link BlueprintX: use [BlueprintX]($STR_BLUEPRINTX_URL)"
 	done < <(md_strip_fences <"$path_file" | grep -E '^<sub>Generated from' || true)
+	[ "$BOOL_REQUIRE_FOOTER" -eq 1 ] || return 0
+	if [ "$int_count" -eq 0 ]; then
+		problem "$path_file" "README has no footer: end it with a '---' rule and a '<sub>Generated from ...' line"
+	elif footer_rule_missing "$path_file"; then
+		problem "$path_file" "footer is not preceded by a '---' rule"
+	fi
 }
 
 check_placeholders() {
@@ -156,6 +172,10 @@ main() {
 		case "$1" in
 		--template)
 			BOOL_TEMPLATE=1
+			shift
+			;;
+		--require-footer)
+			BOOL_REQUIRE_FOOTER=1
 			shift
 			;;
 		--list-archetypes)
