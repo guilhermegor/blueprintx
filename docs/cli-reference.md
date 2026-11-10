@@ -43,7 +43,7 @@ fails closed. Its Portuguese function words are the ones `check_comment_language
 its `<!-- slug: -->` comments, so `check_readme_structure.sh` has no locale logic, and the docs
 gate checks every translated page from the first commit. Nav labels live in
 `templates/lib-minimal/docs/pt-BR/nav-labels.tsv`. codespell has no Portuguese dictionary, so the
-generated project's `.codespellrc` skips `docs/` and `README.md` for `pt-BR`, and this repository's
+generated project's `.codespellrc` skips `docs/`, `README.md` and `mkdocs.yml` for `pt-BR`, and this repository's
 skips the translations.
 
 ⚠️ The other Python skeletons still ship English pages. A project scaffolded as `pt-BR` from one of
