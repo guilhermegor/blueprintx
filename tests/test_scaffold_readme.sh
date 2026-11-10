@@ -221,35 +221,42 @@ test_ptbr_readme_keeps_a_short_ptbr_description() {
 }
 
 test_ptbr_readme_refuses_an_empty_answer_at_eof() {
+    local path_out int_rc=0 str_err
+    path_out="$(mktemp)"
+    str_err="$(
+        BLUEPRINTX_ROOT="$REPO_ROOT" BLUEPRINTX_STDIN_ANSWERS=1
+        PROJECT_NAME=acme PROJECT_DESCRIPTION="This library is a tool that can parse the files. It is not for the users." PROJECT_DISPLAY_NAME=Acme
+        GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL="https://www.linkedin.com/in/ci-bot"
+        scaffold_render_readme lib-minimal "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md" "$path_out" 2>&1 >/dev/null </dev/null
+    )" || int_rc=$?
+    expect "an empty answer at EOF is refused" "1" "$int_rc"
+    expect "the refusal names the missing description" "1" "$(grep -c 'No pt-BR description' <<<"$str_err" || true)"
+    rm -f "$path_out"
+}
+
+test_ptbr_readme_refuses_a_whitespace_answer() {
     local path_out int_rc=0
     path_out="$(mktemp)"
     (
         BLUEPRINTX_ROOT="$REPO_ROOT" BLUEPRINTX_STDIN_ANSWERS=1
         PROJECT_NAME=acme PROJECT_DESCRIPTION="This library is a tool that can parse the files. It is not for the users." PROJECT_DISPLAY_NAME=Acme
         GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL="https://www.linkedin.com/in/ci-bot"
-        scaffold_render_readme lib-minimal "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md" "$path_out" >/dev/null 2>&1 </dev/null
+        scaffold_render_readme lib-minimal "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md" "$path_out" >/dev/null 2>&1 <<<"   "
     ) || int_rc=$?
-    expect "an empty answer at EOF is refused" "1" "$int_rc"
-    rm -f "$path_out"
-}
-
-test_ptbr_readme_keeps_a_ptbr_description() {
-    local path_out str_description="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários, e será rápida."
-    path_out="$(mktemp)"
-    render_ptbr_readme "$str_description" "$path_out"
-    expect "pt-BR description is rendered unchanged" "1" "$(grep -cxF "$str_description" "$path_out" || true)"
+    expect "a whitespace-only answer is refused" "1" "$int_rc"
     rm -f "$path_out"
 }
 
 test_ptbr_readme_reprompts_in_interactive_mode() {
-    local path_out str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
+    local path_out int_rc=0 str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
     path_out="$(mktemp)"
     (
         BLUEPRINTX_ROOT="$REPO_ROOT" BLUEPRINTX_STDIN_ANSWERS=1
         PROJECT_NAME=acme PROJECT_DESCRIPTION="This library is a tool that can parse the files. It is not for the users." PROJECT_DISPLAY_NAME=Acme
         GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL="https://www.linkedin.com/in/ci-bot"
         scaffold_render_readme lib-minimal "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md" "$path_out" >/dev/null 2>&1 <<<"$str_ptbr"
-    )
+    ) || int_rc=$?
+    expect "interactive render succeeds after the re-prompt" "0" "$int_rc"
     expect "interactive mode takes the replacement pt-BR description" "1" "$(grep -cxF "$str_ptbr" "$path_out" || true)"
     rm -f "$path_out"
 }

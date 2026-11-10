@@ -75,7 +75,7 @@ scaffold_require_ptbr_description() {
         fi
         print_status "warning" "The description does not read as pt-BR."
         prompt_read PROJECT_DESCRIPTION "$(prompt_main "Project description in pt-BR: ")"
-        if [ -z "$PROJECT_DESCRIPTION" ]; then
+        if [ -z "${PROJECT_DESCRIPTION//[[:space:]]/}" ]; then
             print_status "error" "No pt-BR description was given."
             return 1
         fi
