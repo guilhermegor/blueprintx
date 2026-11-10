@@ -202,7 +202,8 @@ test suite keep the contract; this section records the reasoning that lived besi
 - **`check_assertion_weakening.py`** (#289, #324, #590). Comparison operators weaker than `==`
   include the `in` example, `>=`, `>` and `<` (#1053: `==` is not implied by any inequality, so
   `Gt`/`Lt` accept infinitely many values the old assertion rejected, and the earlier
-  "decidable core" exclusion was wrong). The
+  "decidable core" exclusion was wrong). Mid-merge the base includes `MERGE_HEAD` in both
+  languages (#1060), so the incoming side's test changes are not charged to the branch. The
   unittest-style call list is the measured, decidable subset, with only exact equivalences paired
   with a bare `assert`. A rename removes its source, so a production file moved into `tests/`
   still counts; a non-test source moved into `tests/` defines no baseline and is newly added.

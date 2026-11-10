@@ -56,7 +56,9 @@ every changed `*.test.*` / `*.spec.*` file against the merge-base and fails when
 `toEqual` or `toStrictEqual` in a test became `toBeGreaterThan`, `toBeLessThan`,
 `toBeGreaterThanOrEqual` or `toBeLessThanOrEqual`. It checks `*.{test,spec}.{ts,tsx,js,jsx}` files only (not `.mts`/`.cjs` variants or `__tests__/` files). It judges a change from
 equality, so assertions that were always inequalities (thresholds, budgets) are untouched, and
-strengthening an inequality to equality passes. It runs in `.husky/pre-commit` and in the lint
+strengthening an inequality to equality passes. While a merge is in progress the merge-base is
+taken against `MERGE_HEAD` too, so a weakening that arrived from the base branch is not charged
+to yours. It runs in `.husky/pre-commit` and in the lint
 workflow, which checks out full history.
 
 When the expectation was provably wrong, justify the change: put `test-change-ok: <reason>` in the

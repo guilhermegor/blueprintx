@@ -653,6 +653,67 @@ _STR_STRONG = _STR_PAD + "def test_v() -> None:\n    assert f() == 1\n"
 _STR_WEAK = _STR_PAD + "def test_v() -> None:\n    assert f() in (1, 2)\n"
 
 
+def _gate_after_merge(
+    path_repo: Path, monkeypatch: pytest.MonkeyPatch, str_main_body: str, str_feat_body: str
+) -> int:
+    """Run the gate mid-merge, after ``main`` and ``feature`` each moved on from the fork.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        An empty directory to turn into the repository.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate inside the repo.
+    str_main_body : str
+        The test file's content as committed on ``main`` after the fork.
+    str_feat_body : str
+        The test file's content as committed on ``feature`` after the fork.
+
+    Returns
+    -------
+    int
+        The gate's exit code.
+    """
+    path_test = path_repo / "tests" / "test_a.py"
+    path_test.parent.mkdir()
+    _git_in(path_repo, "init", "-q", "--initial-branch=main")
+    _git_in(path_repo, "config", "user.email", "t@example.com")
+    _git_in(path_repo, "config", "user.name", "t")
+    _git_in(path_repo, "config", "commit.gpgsign", "false")
+    path_test.write_text(_STR_STRONG, encoding="utf-8")
+    _git_in(path_repo, "add", ".")
+    _git_in(path_repo, "commit", "-q", "-m", "seed")
+    _git_in(path_repo, "checkout", "-q", "-b", "feature")
+    (path_repo / "own").write_text("own", encoding="utf-8")
+    path_test.write_text(str_feat_body, encoding="utf-8")
+    _git_in(path_repo, "add", ".")
+    _git_in(path_repo, "commit", "-q", "-m", "own")
+    _git_in(path_repo, "checkout", "-q", "main")
+    (path_repo / "theirs").write_text("theirs", encoding="utf-8")
+    path_test.write_text(str_main_body, encoding="utf-8")
+    _git_in(path_repo, "add", ".")
+    _git_in(path_repo, "commit", "-q", "-m", "theirs")
+    _git_in(path_repo, "checkout", "-q", "feature")
+    _git_in(path_repo, "merge", "-q", "--no-commit", "--no-ff", "main")
+    monkeypatch.chdir(path_repo)
+    monkeypatch.setattr(gate, "PATH_ROOT", path_repo)
+    return gate.main([])
+
+
+def test_a_weakening_merged_in_from_main_is_not_charged_to_the_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Should-fail witness for #1060: main's own weakening must not block the branch."""
+    assert _gate_after_merge(tmp_path, monkeypatch, _STR_WEAK, _STR_STRONG) == 0
+
+
+def test_a_weakening_authored_on_the_branch_still_fails_after_the_merge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other direction: narrowing the base must not blind the gate to the branch's own work."""
+    assert _gate_after_merge(tmp_path, monkeypatch, _STR_STRONG, _STR_WEAK) == 1
+
+
 @pytest.fixture
 def path_renamed_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Return a repo on ``feature`` holding ``tests/test_old.py`` committed on ``main``.
