@@ -32,7 +32,7 @@ printf '\n%.0s' {1..80} \
 echo "::endgroup::"
 
 if [ -n "${SCAFFOLD_TS_SABOTAGE:-}" ]; then
-    str_victim="$(find "$PROJECT_PATH" -path '*/node_modules' -prune -o -name '*.test.ts*' -print | sort | head -1)"
+    str_victim="$(find "$PROJECT_PATH" -path '*/node_modules' -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | LC_ALL=C sort | head -1)"
     [ -n "$str_victim" ] || { echo "ERROR: no shipped jest test to sabotage" >&2; exit 1; }
     printf "\nit('sabotage', () => { expect(1).toBe(2); });\n" >>"$str_victim"
     echo "Sabotaged $str_victim"
