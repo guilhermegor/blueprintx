@@ -2990,8 +2990,9 @@ string constant (<code>getattr(builtins, "exec")(...)</code>, <code>getattr(sys,
 <code>__builtins__["exec"]</code>), and an absolute import of another top-level
 package.
 - <strong><code>check_assertion_weakening.py</code></strong> (#289, #324, #590). Comparison operators weaker than <code>==</code>
-  include the <code>in</code> example and <code>&gt;=</code>; <code>Gt</code> and <code>Lt</code> are excluded because swapping equality for a
-  strict inequality still excludes the old value, so it stays out of the decidable core. The
+  include the <code>in</code> example, <code>&gt;=</code>, <code>&gt;</code> and <code>&lt;</code> (#1053: <code>==</code> is not implied by any inequality, so
+  <code>Gt</code>/<code>Lt</code> accept infinitely many values the old assertion rejected, and the earlier
+  "decidable core" exclusion was wrong). The
   unittest-style call list is the measured, decidable subset, with only exact equivalences paired
   with a bare <code>assert</code>. A rename removes its source, so a production file moved into <code>tests/</code>
   still counts; a non-test source moved into <code>tests/</code> defines no baseline and is newly added.
