@@ -2992,7 +2992,8 @@ package.
 - <strong><code>check_assertion_weakening.py</code></strong> (#289, #324, #590). Comparison operators weaker than <code>==</code>
   include the <code>in</code> example, <code>&gt;=</code>, <code>&gt;</code> and <code>&lt;</code> (#1053: <code>==</code> is not implied by any inequality, so
   <code>Gt</code>/<code>Lt</code> accept infinitely many values the old assertion rejected, and the earlier
-  "decidable core" exclusion was wrong). The
+  "decidable core" exclusion was wrong). Mid-merge the base includes <code>MERGE_HEAD</code> in both
+  languages (#1060), so the incoming side's test changes are not charged to the branch. The
   unittest-style call list is the measured, decidable subset, with only exact equivalences paired
   with a bare <code>assert</code>. A rename removes its source, so a production file moved into <code>tests/</code>
   still counts; a non-test source moved into <code>tests/</code> defines no baseline and is newly added.
