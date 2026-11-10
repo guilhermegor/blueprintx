@@ -727,9 +727,10 @@ def _shadows_writer(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
 def _module_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
     """Return whether the module namespace binds ``setattr`` or ``vars`` by any statement.
 
-    A star import counts as a possible binding. An import, ``def``, ``class``, ``except ... as`` or ``match`` capture all count; a plain
-    assignment is a ``Name`` the writer scan already charges. Class bodies are not entered, so a
-    method named ``vars`` does not shadow the builtin its sibling methods call.
+    A star import counts as a possible binding. An import, ``def``, ``class``,
+    ``except ... as`` or ``match`` capture all count; a plain assignment is a ``Name`` the
+    writer scan already charges. Class bodies are not entered, so a method named
+    ``vars`` does not shadow the builtin its sibling methods call.
 
     Parameters
     ----------
