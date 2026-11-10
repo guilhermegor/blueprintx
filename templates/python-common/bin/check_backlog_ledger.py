@@ -24,7 +24,10 @@ Four design points that are easy to get wrong, all deliberate here:
 
 2. **Diff-based, not per-commit.** The ledger is a per-*branch* artifact, so a later source-only
    commit on a branch that already has one must pass. Diff against ``merge-base(HEAD, <default>)``.
-   Off a feature branch the merge-base is HEAD, the diff is empty, and this is a no-op.
+   Off a feature branch the merge-base is HEAD, the diff is empty, and this is a no-op. A base
+   that cannot be resolved at all is a FAILURE, never that no-op: a PR checkout has no local
+   ``main`` and no ``origin/HEAD``, so the gate resolves ``origin/<GITHUB_BASE_REF>`` or
+   ``origin/<default>`` instead (blueprintx#1069).
 
 3. **Diff the INDEX (``git diff --cached <base>``), not the working tree.** pre-commit runs on
    *staged* content and plain ``git diff`` ignores untracked files, so a brand-new-but-unstaged
@@ -151,21 +154,48 @@ def _git(list_args: list) -> str:
     return cls_proc.stdout.strip()
 
 
+def _resolves(str_ref: str) -> bool:
+    """Return whether a ref names a commit in this repository.
+
+    Parameters
+    ----------
+    str_ref : str
+        Any ref git can resolve, e.g. ``origin/main``.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``str_ref`` resolves to a commit.
+    """
+    return bool(_git(["rev-parse", "--verify", "--quiet", f"{str_ref}^{{commit}}"]))
+
+
 def default_branch() -> str:
-    """Return the repository's default branch name (``main``/``master``, else ``main``).
+    """Return a resolvable ref for the branch this one is compared against.
+
+    A pull-request checkout (``actions/checkout``) holds a detached ``HEAD`` and only
+    ``origin/*`` remote-tracking refs: no local ``main`` and no ``origin/HEAD``. The candidates
+    therefore keep the ``origin/`` prefix (stripping it leaves a name nothing backs) and the PR's
+    own target, ``GITHUB_BASE_REF``, is the only candidate when set, so a PR aimed at a release
+    branch is diffed against that branch or not at all: falling back to another branch would
+    judge it against the wrong base (blueprintx#1069).
 
     Returns
     -------
     str
-        The default branch name.
+        The resolvable ref; ``""`` when none does, which ``locate_base`` reports as a failure
+        rather than reading as "nothing to diff".
     """
-    str_ref = _git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
-    if str_ref:
-        return str_ref.rsplit("/", 1)[-1]
-    for str_candidate in ("main", "master"):
-        if _git(["rev-parse", "--verify", "--quiet", str_candidate]):
-            return str_candidate
-    return "main"
+    str_pr_base = os.environ.get("GITHUB_BASE_REF", "")
+    if str_pr_base:
+        return f"origin/{str_pr_base}" if _resolves(f"origin/{str_pr_base}") else ""
+    list_candidates = [_git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])]
+    list_candidates += [
+        f"{str_prefix}{str_name}"
+        for str_name in ("main", "master")
+        for str_prefix in ("origin/", "")
+    ]
+    return next((str_ref for str_ref in list_candidates if str_ref and _resolves(str_ref)), "")
 
 
 def merge_heads() -> list:
@@ -192,9 +222,11 @@ def resolve_base() -> str:
     Returns
     -------
     str
-        The base commit; empty when none resolves.
+        The base commit; empty when no default branch resolves or it shares no history with
+        HEAD.
     """
-    return _git(["merge-base", default_branch(), "HEAD", *merge_heads()])
+    str_ref = default_branch()
+    return _git(["merge-base", str_ref, "HEAD", *merge_heads()]) if str_ref else ""
 
 
 def changed_paths(str_base: str) -> list:
@@ -270,6 +302,31 @@ def find_ledger_problems(list_paths: list) -> list:
     return [] if len(list_problems) < len(list_ledgers) else list_problems
 
 
+def locate_base() -> tuple:
+    """Resolve the base to diff against, or the verdict that ends the run before any diff.
+
+    Returns
+    -------
+    tuple
+        ``(None, base)`` when there is a branch to diff. ``(0, "")`` when there is nothing to
+        compare: no commit yet, or HEAD already is the base. ``(1, "")`` when no base resolves
+        on a repository that has commits — reported, never passed (blueprintx#1069).
+    """
+    str_head = _git(["rev-parse", "--verify", "--quiet", "HEAD"])
+    if not str_head:
+        return 0, ""
+    str_base = resolve_base()
+    if not str_base:
+        print(
+            "❌ could not resolve a base to diff against (no origin/<default> or local default "
+            "branch shares history with HEAD) — refusing to pass blind. "
+            "Locally: run 'git fetch origin', or create the default branch (e.g. 'git branch "
+            "main <commit>'). In CI: check out with fetch-depth: 0."
+        )
+        return 1, ""
+    return (0, "") if str_base == str_head else (None, str_base)
+
+
 def main() -> int:
     """Check the branch's ledger requirement.
 
@@ -288,10 +345,9 @@ def main() -> int:
         print("bin/pr_gate.py absent — skipping the work-ledger check.")
         return 0
 
-    str_base = resolve_base()
-    str_head = _git(["rev-parse", "HEAD"])
-    if not str_base or str_base == str_head:
-        return 0
+    int_verdict, str_base = locate_base()
+    if int_verdict is not None:
+        return int_verdict
 
     list_paths = changed_paths(str_base)
     if not list_paths or not needs_ledger(list_paths, cls_gate):
