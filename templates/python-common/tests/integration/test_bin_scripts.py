@@ -15,8 +15,8 @@ work tree instead of aborting ``init``).
 """
 
 from collections.abc import Mapping
+import hashlib
 import importlib.util
-import itertools
 import os
 from pathlib import Path
 import re
@@ -27,6 +27,7 @@ import time
 from types import MappingProxyType
 
 import pytest
+import yaml
 
 
 _STR_GIT = shutil.which("git")
@@ -2823,6 +2824,29 @@ def test_check_urls_does_not_cache_an_unstable_answer(tmp_path: Path, str_status
     assert not list(path_cache.iterdir())
 
 
+@pytest.mark.parametrize("str_status", ["403", "408", "429"])
+def test_check_urls_reprobes_an_unstable_answer_already_cached(
+    tmp_path: Path, str_status: str
+) -> None:
+    """An unstable answer cached by an older script is a miss: the URL is probed again."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text("#!/bin/bash\nprintf 200\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404} for details"""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+    path_cache.mkdir()
+    str_key = hashlib.md5(_URL_404.encode(), usedforsecurity=False).hexdigest()
+    (path_cache / str_key).write_text(f"{str_status}\n", encoding="utf-8")
+
+    cls_result = _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert (path_cache / str_key).read_text(encoding="utf-8").strip() == "200"
+
+
 def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
     """A typo'd explicit path must fail, never report ``All docstring URLs are reachable``."""
     cls_result = _run_url_hook_with_stub_curl(
@@ -2840,17 +2864,22 @@ def _tracker_step_script() -> str:
     Returns
     -------
     str
-        The dedented ``run:`` block of the ``Open or Update Tracking Issue`` step.
+        The ``run:`` block of the ``Open or Update Tracking Issue`` step.
     """
     path_workflow = (
         Path(__file__).resolve().parents[2] / ".github" / "workflows" / "docstring-urls.yml"
     )
     _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
-    str_after = path_workflow.read_text(encoding="utf-8").split("Open or Update Tracking Issue")[1]
-    list_lines = str_after.split("run: |\n")[1].splitlines()
-    fn_indented = lambda str_line: not str_line.strip() or str_line.startswith(" " * 10)  # noqa: E731
-    list_body = list(itertools.takewhile(fn_indented, list_lines))
-    return "\n".join(str_line[10:] for str_line in list_body).rstrip("\n") + "\n"
+    dict_workflow = yaml.safe_load(path_workflow.read_text(encoding="utf-8"))
+    list_runs = [
+        dict_step.get("run")
+        for dict_job in dict_workflow["jobs"].values()
+        for dict_step in dict_job["steps"]
+        if dict_step.get("name") == "Open or Update Tracking Issue"
+    ]
+    assert len(list_runs) == 1, f"expected one 'Open or Update Tracking Issue' step: {list_runs}"
+    assert list_runs[0], "the 'Open or Update Tracking Issue' step has no run: block"
+    return list_runs[0]
 
 
 _STR_OPEN_TRACKERS_NEWEST_FIRST = '[{"number": 9}, {"number": 7}]'
@@ -2954,8 +2983,14 @@ def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
     """The hook must filter on ``.py`` like the script, not on ``types: python``."""
     path_config = Path(__file__).resolve().parents[2] / ".pre-commit-config.yaml"
     _skip_unless(path_config.is_file(), "no pre-commit config in this tree")
-    str_hook = path_config.read_text(encoding="utf-8").split("id: check-urls\n")[1]
-    str_hook = str_hook.split("stages:")[0]
+    dict_config = yaml.safe_load(path_config.read_text(encoding="utf-8"))
+    list_hooks = [
+        dict_hook
+        for dict_repo in dict_config["repos"]
+        for dict_hook in dict_repo["hooks"]
+        if dict_hook["id"] == "check-urls"
+    ]
 
-    assert "files: \\.py$" in str_hook
-    assert "types:" not in str_hook
+    assert len(list_hooks) == 1
+    assert list_hooks[0].get("files") == r"\.py$"
+    assert "types" not in list_hooks[0]

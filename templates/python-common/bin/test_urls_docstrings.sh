@@ -26,7 +26,7 @@ get_cache() {
 	local str_cache_file
 	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
 
-	if [[ -f "$str_cache_file" ]]; then
+	if [[ -f "$str_cache_file" && ! "$(cat "$str_cache_file")" =~ ^(403|408|429)$ ]]; then
 		local int_timestamp int_ttl=$CACHE_FAIL_TTL
 		[[ "$(cat "$str_cache_file")" =~ ^2 ]] && int_ttl=$CACHE_TTL
 		int_timestamp=$(stat -c %Y "$str_cache_file")
