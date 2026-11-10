@@ -94,7 +94,36 @@ test_render_falls_back_to_en() {
         || fail "DOCS_LOCALE=pt-BR did not render language: pt-BR"
 }
 
+test_marker_step_tolerates_missing_docs_dir() {
+    local str_dir str_err
+    str_dir="$(mktemp -d)"
+    str_err="$(DOCS_LOCALE=pt-BR bash -c \
+        'source "$1"; scaffold_mark_untranslated "$2"' _ \
+        "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_dir" 2>&1)" \
+        && [ -z "$str_err" ] \
+        && pass "marker step is silent on a tree without docs/" \
+        || fail "marker step failed or wrote errors without docs/: $str_err"
+    rm -rf "$str_dir"
+}
+
+test_marker_step_is_idempotent() {
+    local str_dir int_count
+    str_dir="$(mktemp -d)"
+    mkdir -p "$str_dir/docs"
+    printf '# T\n' >"$str_dir/docs/index.md"
+    DOCS_LOCALE=pt-BR bash -c \
+        'source "$1"; scaffold_mark_untranslated "$2"; scaffold_mark_untranslated "$2"' _ \
+        "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_dir"
+    int_count="$(grep -c 'docs-lang:untranslated' "$str_dir/docs/index.md")"
+    [ "$int_count" = "1" ] \
+        && pass "marker step run twice leaves one marker" \
+        || fail "marker step run twice left $int_count markers"
+    rm -rf "$str_dir"
+}
+
 main() {
+    test_marker_step_is_idempotent
+    test_marker_step_tolerates_missing_docs_dir
     test_prompt_mapping
     test_templates_and_scaffolds_wired
     test_render_falls_back_to_en
