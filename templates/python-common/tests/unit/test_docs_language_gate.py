@@ -437,7 +437,7 @@ def test_main_non_mapping_mkdocs_fails_with_a_message(
     "str_text",
     [
         STR_EN + '\n<div\n  title="' + STR_FOREIGN_BLOCK.strip() + '">\n',
-        STR_EN + "\n<img\n  alt='" + STR_FOREIGN_BLOCK.strip() + "'\n  src=\"a.png\" />\n",
+        STR_EN + "\n<img\n  alt='" + STR_FOREIGN_BLOCK.strip() + '\'\n  src="a.png" />\n',
         STR_EN + '\n[ref]: https://a.b "' + STR_FOREIGN_BLOCK.strip() + '"\n',
     ],
 )

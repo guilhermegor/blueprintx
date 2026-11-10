@@ -2,7 +2,7 @@
 
 scaffold_docs_pages() {
     local project_path="$1" str_gate="$1/bin/check_docs_language.py" str_pages
-    if [ -f "$str_gate" ] && str_pages="$(python3 "$str_gate" --root "$project_path" --list-pages 2>/dev/null)"; then
+    if [ -f "$str_gate" ] && str_pages="$(PYTHONDONTWRITEBYTECODE=1 python3 "$str_gate" --root "$project_path" --list-pages 2>/dev/null)"; then
         printf '%s\n' "$str_pages"
         return 0
     fi
