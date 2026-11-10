@@ -38,66 +38,65 @@ def refuse(str_why):
     sys.exit(INT_REFUSED)
 
 
-list_blocks = re.findall(r'\[data-md-color-scheme="slate"\]\s*\{([^}]*)\}', str_css)
-if not list_blocks:
-    refuse("no slate block")
-str_block = list_blocks[-1]
-if re.search(r"@(import|layer)\b[^{;]*;", str_css):
-    refuse("statement at-rule (@import/@layer) can reorder or replace the slate block")
+RE_BARE = re.compile(
+    r"\s*(:root|\[data-md-color-scheme\s*=\s*[\"']?(slate|default)[\"']?\s*\])\s*"
+)
+RE_GATED = re.compile(
+    r"(?<![\w-])--md-(accent-fg|primary-fg|typeset-a)-color\s*:"
+)
+if re.search(r"@(media|supports|container|layer)\b", str_css):
+    refuse("a conditional at-rule wraps rules: the cascade is unresolved")
+if re.search(r"@import\b", str_css):
+    refuse("statement at-rule (@import) can reorder or replace the slate block")
+for str_prelude, str_body in re.findall(r"([^{}]+)\{([^}]*)\}", str_css):
+    if RE_BARE.fullmatch(str_prelude):
+        continue
+    if re.search(r":root|data-md-color-scheme", str_prelude):
+        refuse("selector on :root or a colour scheme other than the bare default or slate: unresolved")
+    if RE_GATED.search(str_body):
+        refuse("a gated colour variable is set outside the :root, default and slate blocks: unresolved")
+
+
+def block(str_selector,str_name, is_optional=False):
+    list_blocks = re.findall(str_selector + r"\s*\{([^}]*)\}", str_css)
+    if not list_blocks and not is_optional:
+        refuse(f"no {str_name} block")
+    return ";\n".join(list_blocks)
+
+
+str_slate = block(r"\[data-md-color-scheme\s*=\s*[\"']?slate[\"']?\s*\]", "slate")
+str_root = block(r"(?<![\w-]):root", "root")
+str_light = block(r"\[data-md-color-scheme\s*=\s*[\"']?default[\"']?\s*\]", "default", True)
 if "--md-hue" in str_css or "--md-default-bg-color" in str_css:
     refuse("--md-hue or --md-default-bg-color overridden: background unresolved")
 
 
-def var(str_name):
-    list_found = re.findall(rf"{str_name}:\s*([^;]+);", str_block)
+def var(str_block, str_name):
+    list_found = re.findall(rf"(?<![\w-]){str_name}\s*:\s*([^;]+)", str_block)
     if not list_found:
         return None
     match_hex = re.fullmatch(r"#[0-9a-fA-F]{6}", list_found[-1].strip())
     return match_hex.group(0).lower() if match_hex else refuse(f"{str_name}: unparseable value")
 
 
-str_link = var("--md-typeset-a-color") or var("--md-primary-fg-color")
-str_hover = var("--md-accent-fg-color") or MATERIAL_DEFAULT_ACCENT
 int_bad = 0
-for str_label, str_color in (("link", str_link), ("hover", str_hover)):
-    if str_color is None:
-        refuse(f"{str_label}: unresolved")
-    float_ratio = ratio(str_color, str_bg)
-    print(f"{str_label} {str_color} on {str_bg} = {float_ratio:.2f}")
-    int_bad += float_ratio < FLOAT_MIN
+for str_scheme, str_block, str_accent, str_page, str_link_src in (
+    ("slate", str_slate, str_slate, str_bg, str_slate),
+    ("light", str_root + ";\n" + str_light, str_light, "#ffffff", str_light),
+):
+    str_link = var(str_link_src, "--md-typeset-a-color") or var(str_block, "--md-primary-fg-color")
+    str_hover = var(str_accent, "--md-accent-fg-color") or MATERIAL_DEFAULT_ACCENT
+    for str_label, str_color in (("link", str_link), ("hover", str_hover)):
+        if str_color is None:
+            refuse(f"{str_scheme} {str_label}: unresolved")
+        float_ratio = ratio(str_color, str_page)
+        print(f"{str_scheme} {str_label} {str_color} on {str_page} = {float_ratio:.2f}")
+        int_bad += float_ratio < FLOAT_MIN
 sys.exit(INT_GATE_FAIL if int_bad else 0)
 PY
 
 contrast_report() {
 	python3 -I -c "$PY_CHECK" "$1"
-}
-
-read -r -d '' PY_YML <<'PY'
-import sys
-
-import yaml
-
-dict_cfg = yaml.safe_load(open(sys.argv[1])) or {}
-dict_theme = dict_cfg.get("theme") or {}
-list_palette = dict_theme.get("palette") or []
-list_css = dict_cfg.get("extra_css") or []
-list_features = dict_theme.get("features") or []
-list_why = []
-if not list_css or list_css[-1] != "stylesheets/brand.css":
-    list_why.append("stylesheets/brand.css must be the last extra_css entry")
-if not list_palette or any(
-    not isinstance(d, dict) or d.get("primary") != "custom" or "accent" in d for d in list_palette
-):
-    list_why.append("needs primary: custom on every palette entry and no accent:")
-list_bad = {"navigation.top", "content.code.annotate"} & {str(f) for f in list_features}
-if list_bad:
-    list_why.append(f"enables {sorted(list_bad)}: the brand.css gate does not cover them")
-print("; ".join(list_why))
-sys.exit(1 if list_why else 0)
-PY
-
-yml_problem() {
-	python3 -I -c "$PY_YML" "$1"
 }
 
 check() {
@@ -120,7 +119,39 @@ check() {
 	fi
 }
 
-NL=$'\n'
+read -r -d '' PY_YML <<'PY'
+import sys
+
+import yaml
+
+dict_cfg = yaml.safe_load(open(sys.argv[1])) or {}
+dict_theme = dict_cfg.get("theme") or {}
+list_palette = dict_theme.get("palette") or []
+list_css = dict_cfg.get("extra_css") or []
+list_features = dict_theme.get("features") or []
+list_dicts = [d for d in list_palette if isinstance(d, dict) and "scheme" in d]
+list_why = []
+if "stylesheets/brand.css" not in list_css:
+    list_why.append("no stylesheets/brand.css in extra_css")
+elif list_css[-1] != "stylesheets/brand.css":
+    list_why.append("stylesheets/brand.css must be the last extra_css entry")
+if any("accent" in d for d in list_dicts):
+    list_why.append("accent: set")
+if not list_dicts:
+    list_why.append("no palette entries (- scheme:) in mkdocs.yml")
+elif any(d.get("primary") != "custom" for d in list_dicts):
+    list_why.append("primary: custom missing on a palette entry")
+for str_feature in ("navigation.top", "content.code.annotate"):
+    if str_feature in {str(f) for f in list_features}:
+        list_why.append(f"{str_feature} enabled")
+print("; ".join(list_why))
+sys.exit(1 if list_why else 0)
+PY
+
+yml_problem() {
+	python3 -I -c "$PY_YML" "$1"
+	return 0
+}
 
 mutate() {
 	local str_src="$1" str_dst="$2"
@@ -132,27 +163,41 @@ mutate() {
 	fi
 }
 
-yml_expect() {
-	local str_name="$1" str_yml="$2" str_want="$3" str_got=ok
-	yml_problem "$str_yml" >/dev/null || str_got=refuse
-	if [ "$str_got" = "$str_want" ]; then
-		echo "ok: $str_name ($str_got)"
+check_yml() {
+	local str_name="$1" str_yml="$2" str_expect="$3" str_reason="${4:-}" str_why
+	str_why="$(yml_problem "$str_yml")"
+	if { [ -z "$str_why" ] && [ "$str_expect" = pass ]; } || { [ -n "$str_why" ] && [ "$str_expect" = refuse ] && [[ "$str_why" == *"$str_reason"* ]]; }; then
+		echo "ok: $str_name (${str_expect})"
 	else
-		echo "FAIL: $str_name expected $str_want, got $str_got"
+		echo "FAIL: $str_name expected $str_expect, got: ${str_why:-pass}"
 		int_failures=$((int_failures + 1))
 	fi
 }
 
 shopt -s nullglob
 list_ymls=("$REPO_ROOT"/templates/*/mkdocs.yml)
+list_docs=("$REPO_ROOT"/templates/*/docs)
 shopt -u nullglob
 if [ "${#list_ymls[@]}" -eq 0 ]; then
 	echo "FAIL: no templates/*/mkdocs.yml found"
 	int_failures=$((int_failures + 1))
 fi
 for str_yml in "${list_ymls[@]}"; do
-	str_problem="$(yml_problem "$str_yml")" || { echo "FAIL: $str_yml: $str_problem"; int_failures=$((int_failures + 1)); }
+	check_yml "$str_yml invariants" "$str_yml" pass
 done
+md_button_users() {
+	local str_hits
+	[ "$#" -gt 0 ] || return 0
+	str_hits="$(grep -rl 'md-button' "$@" 2>&1)"
+	[ $? -le 1 ] || { echo "grep failed: $str_hits"; return 2; }
+	printf '%s' "$str_hits" | grep -v '/python-common/docs/contributing\.md$'
+	return 0
+}
+str_hits="$(md_button_users "${list_docs[@]}" "${list_ymls[@]}")"
+if [ -n "$str_hits" ]; then
+	echo "FAIL: md-button used or grep failed; contributing.md says the template has none: $str_hits"
+	int_failures=$((int_failures + 1))
+fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -168,46 +213,95 @@ cat >"$TMP/old.css" <<'EOF'
   --md-primary-fg-color--dark: #06142a;
 }
 EOF
-mutate "$CSS" "$TMP/no-accent.css" 's/--md-accent-fg-color:[^;]*;//'
-mutate "$CSS" "$TMP/no-link.css" 's/--md-typeset-a-color:[^;]*;//'
-
-GOOD_YML="${list_ymls[0]}"
-if [ -n "${GOOD_YML:-}" ]; then
-	yml_expect "template mkdocs.yml passes the yml gate" "$GOOD_YML" ok
-	mutate "$GOOD_YML" "$TMP/late.yml" -e "s|^  - stylesheets/brand.css\$|  - stylesheets/brand.css\\${NL}  - stylesheets/later.css|"
-	yml_expect "should-fail: a later extra_css entry follows brand.css" "$TMP/late.yml" refuse
-	mutate "$GOOD_YML" "$TMP/flow.yml" -e "s|^    - navigation.tabs\$|    - navigation.tabs\\${NL}    - \"navigation.top\" # flow|"
-	yml_expect "should-fail: quoted feature with a trailing comment" "$TMP/flow.yml" refuse
-	mutate "$GOOD_YML" "$TMP/accent-top.yml" -e "s|^extra_css:\$|extra:\\${NL}  accent: red\\${NL}extra_css:|"
-	yml_expect "accent: outside palette is not a palette accent" "$TMP/accent-top.yml" ok
-	mutate "$GOOD_YML" "$TMP/accent-pal.yml" -e "s|^      primary: custom\$|      primary: custom\\${NL}      accent: red|"
-	yml_expect "should-fail: accent: under a palette entry" "$TMP/accent-pal.yml" refuse
-	printf 'theme:\n  features: [content.code.annotate]\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/flowlist.yml"
-	yml_expect "should-fail: flow-style feature list" "$TMP/flowlist.yml" refuse
-	before=$int_failures
-	mutate "$GOOD_YML" "$TMP/noop.yml" -e 's|no-such-text-anywhere|x|' >/dev/null
-	if [ "$int_failures" -eq $((before + 1)) ]; then
-		int_failures=$before
-		echo "ok: should-fail: no-op mutation is detected"
-	else
-		echo "FAIL: no-op mutation went unnoticed"
-	fi
-fi
+sed 's/--md-accent-fg-color:[^;]*;//' "$CSS" >"$TMP/no-accent.css"
+sed 's/--md-typeset-a-color:[^;]*;//' "$CSS" >"$TMP/no-link.css"
 
 check "template slate links and hover meet 4.5:1" "$CSS" pass
 check "should-fail: old slate block (link falls back to navy primary)" "$TMP/old.css" contrast
 check "should-fail: slate block without a hover colour (Material accent)" "$TMP/no-accent.css" contrast
-mutate "$CSS" "$TMP/no-link-commented.css" -E 's|(--md-typeset-a-color:[^;]*;)|/* \1 */|'
+sed -E 's|(--md-typeset-a-color:[^;]*;)|/* \1 */|' "$CSS" >"$TMP/no-link-commented.css"
 check "should-fail: commented-out link colour is not live" "$TMP/no-link-commented.css" contrast
 check "should-fail: slate block without a link colour" "$TMP/no-link.css" contrast
 printf ':root {\n  --md-primary-fg-color: #0d2c54;\n}\n' >"$TMP/no-slate.css"
 check "should-fail: no slate block" "$TMP/no-slate.css" refuse
 { cat "$CSS"; printf '\n[data-md-color-scheme="slate"] {\n  --md-hue: 200;\n}\n'; } >"$TMP/hue.css"
 check "should-fail: --md-hue override" "$TMP/hue.css" refuse
-mutate "$CSS" "$TMP/unparseable.css" -E 's|(--md-typeset-a-color:)[^;]*;|\1 rgb(1, 2, 3);|'
+sed -E 's|(--md-typeset-a-color:)[^;]*;|\1 rgb(1, 2, 3);|' "$CSS" >"$TMP/unparseable.css"
 check "should-fail: unparseable link value" "$TMP/unparseable.css" refuse
+
+YML="$REPO_ROOT/templates/lib-minimal/mkdocs.yml"
+sed 's/^\(\s*\)- scheme: default/&\n\1  accent: indigo/' "$YML" >"$TMP/accent.yml"
+check_yml "should-fail: accent: set in mkdocs.yml" "$TMP/accent.yml" refuse "accent: set"
+sed '0,/primary: custom/{/primary: custom/d}' "$YML" >"$TMP/no-primary.yml"
+check_yml "should-fail: primary: custom missing" "$TMP/no-primary.yml" refuse "primary: custom missing"
+sed '/^\s*-\s*scheme:/d' "$YML" >"$TMP/no-palette.yml"
+check_yml "should-fail: no palette entries" "$TMP/no-palette.yml" refuse "no palette entries"
+sed '/stylesheets\/brand\.css/d' "$YML" >"$TMP/no-css.yml"
+check_yml "should-fail: brand.css not in extra_css" "$TMP/no-css.yml" refuse "no stylesheets/brand.css"
+sed 's/^\(\s*\)- navigation\.tabs$/&\n\1- navigation.top/' "$YML" >"$TMP/nav-top.yml"
+check_yml "should-fail: navigation.top enabled" "$TMP/nav-top.yml" refuse "navigation.top"
+sed 's/^\(\s*\)- navigation\.tabs$/&\n\1- content.code.annotate/' "$YML" >"$TMP/annotate.yml"
+check_yml "should-fail: content.code.annotate enabled" "$TMP/annotate.yml" refuse "content.code.annotate"
+NL=$'\n'
+mutate "$YML" "$TMP/late.yml" -e "s|^  - stylesheets/brand.css\$|  - stylesheets/brand.css\\${NL}  - stylesheets/later.css|"
+check_yml "should-fail: a later extra_css entry follows brand.css" "$TMP/late.yml" refuse "last extra_css"
+mutate "$YML" "$TMP/flow.yml" -e "s|^    - navigation.tabs\$|    - navigation.tabs\\${NL}    - \"navigation.top\" # flow|"
+check_yml "should-fail: quoted feature with a trailing comment" "$TMP/flow.yml" refuse "navigation.top"
+printf 'theme:\n  features: [content.code.annotate]\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/flowlist.yml"
+check_yml "should-fail: flow-style feature list" "$TMP/flowlist.yml" refuse "content.code.annotate"
 { cat "$CSS"; printf '@import "later.css";\n'; } >"$TMP/import.css"
 check "should-fail: statement at-rule @import" "$TMP/import.css" refuse
+
+sed "s/\"slate\"/slate/" "$CSS" >"$TMP/unquoted.css"
+check "slate selector unquoted" "$TMP/unquoted.css" pass
+sed "s/\"slate\"/'slate'/" "$CSS" >"$TMP/single.css"
+check "slate selector single-quoted" "$TMP/single.css" pass
+sed -E 's|(--md-accent-fg-color--transparent:[^;]*);|\1|' "$CSS" >"$TMP/no-semi.css"
+check "last declaration without trailing semicolon" "$TMP/no-semi.css" pass
+sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS" >"$TMP/no-light-accent.css"
+check "should-fail: light scheme without a hover colour (Material accent 4.25:1)" "$TMP/no-light-accent.css" contrast
+sed '0,/--md-accent-fg-color:[^;]*;/s//--md-accent-fg-color: #526cfe;/' "$CSS" >"$TMP/root-default.css"
+check "should-fail: light hover is the Material default" "$TMP/root-default.css" contrast
+sed -E 's|(--md-accent-fg-color:)[^;]*;|\1 #8c9eff;|' "$CSS" >"$TMP/root-pale.css"
+check "should-fail: light hover too pale for white" "$TMP/root-pale.css" contrast
+
+{ cat "$CSS"; printf '\n[data-md-color-scheme="slate"] {\n  --md-primary-fg-color: #0b2140;\n}\n'; } >"$TMP/split-slate-ok.css"
+check "split slate block keeps the earlier link colour (cascade)" "$TMP/split-slate-ok.css" pass
+{ printf '[data-md-color-scheme="slate"] {\n  --md-typeset-a-color: #102030;\n}\n'; grep -v -- '--md-typeset-a-color: #8ab4f8' "$CSS"; } >"$TMP/split-slate-dark.css"
+check "should-fail: split slate block, earlier block holds a dark link colour" "$TMP/split-slate-dark.css" contrast
+{ printf '[data-md-color-scheme="default"] {\n  --md-accent-fg-color: #3f51b5;\n}\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/split-light.css"
+check "split light block resolves across both blocks" "$TMP/split-light.css" pass
+{ printf '[data-md-color-scheme="default"] { --md-accent-fg-color: #3f51b5 }\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/split-light-nosemi.css"
+check "split light block, earlier block without a final semicolon" "$TMP/split-light-nosemi.css" pass
+{ printf ':root {\n  --md-accent-fg-color: #3f51b5;\n}\n'; sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS"; } >"$TMP/root-accent-only.css"
+check "should-fail: a :root hover colour loses to Material's body accent rule" "$TMP/root-accent-only.css" contrast
+{ cat "$CSS"; printf '\n[data-md-color-scheme="default"] {\n  --md-typeset-a-color: #aaaaaa;\n}\n'; } >"$TMP/light-link.css"
+check "should-fail: low-contrast light link colour in the default block" "$TMP/light-link.css" contrast
+{ cat "$CSS"; printf '\n[data-md-color-scheme="default"], [data-md-color-scheme="slate"] {\n  --md-accent-fg-color: #8c9eff;\n}\n'; } >"$TMP/grouped.css"
+check "should-fail: grouped scheme selector is refused, not half-parsed" "$TMP/grouped.css" refuse
+{ cat "$CSS"; printf '\n:root, [data-md-color-scheme="default"] {\n  --md-accent-fg-color: #8c9eff;\n}\n'; } >"$TMP/grouped-root.css"
+check "should-fail: grouped :root selector is refused" "$TMP/grouped-root.css" refuse
+{ cat "$CSS"; printf '\n:root {\n  --md-primary-fg-color: #cccccc;\n  --md-typeset-a-color: #0d2c54;\n}\n'; } >"$TMP/root-link.css"
+check "should-fail: a :root link colour is shadowed, the real link is the pale primary" "$TMP/root-link.css" contrast
+{ cat "$CSS"; printf '\n[data-md-color-scheme="default"] .md-typeset {\n  --md-typeset-a-color: #aaaaaa;\n}\n'; } >"$TMP/descendant.css"
+check "should-fail: descendant scheme selector is refused, not skipped" "$TMP/descendant.css" refuse
+{ cat "$CSS"; printf '\n[data-md-color-scheme="default"][data-md-color-primary="custom"] {\n  --md-typeset-a-color: #aaaaaa;\n}\n'; } >"$TMP/compound.css"
+check "should-fail: compound scheme selector is refused, not skipped" "$TMP/compound.css" refuse
+{ printf '/* :root, then slate */\n'; cat "$CSS"; } >"$TMP/comment.css"
+check "a comment naming :root and a comma does not trip the selector scan" "$TMP/comment.css" pass
+for str_sel in '[data-md-color-accent="indigo"]' '[data-md-color-primary="custom"]' '.md-typeset'; do
+	str_file="$TMP/outside-${str_sel//[^a-z]/}.css"
+	{ cat "$CSS"; printf '\n%s {\n  --md-accent-fg-color: #8c9eff;\n  --md-typeset-a-color: #aaaaaa;\n}\n' "$str_sel"; } >"$str_file"
+	check "should-fail: gated variable set under $str_sel is refused" "$str_file" refuse
+done
+{ cat "$CSS"; printf '\n.x {\n  --md-primary-fg-color--light: #aaaaaa;\n}\n'; } >"$TMP/ungated.css"
+check "an ungated variable outside the scheme blocks passes" "$TMP/ungated.css" pass
+{ cat "$CSS"; printf '\n@media (min-width: 60em) {\n  [data-md-color-scheme="default"] {\n    --md-accent-fg-color: #8c9eff;\n  }\n}\n'; } >"$TMP/media.css"
+check "should-fail: a rule inside @media is refused, not read as unconditional" "$TMP/media.css" refuse
+mkdir "$TMP/docs"
+printf '[x](y){ .md-button }\n' >"$TMP/docs/page.md"
+[ -n "$(md_button_users "$TMP/docs")" ] && echo "ok: md-button in a docs page is detected" || { echo "FAIL: md-button not detected"; int_failures=$((int_failures + 1)); }
+md_button_users "$TMP/missing" >/dev/null && { echo "FAIL: grep read error swallowed"; int_failures=$((int_failures + 1)); } || echo "ok: grep read error is reported"
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
 echo "all cases passed"

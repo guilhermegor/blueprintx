@@ -26,13 +26,31 @@ into `theme.language` in the project's `mkdocs.yml`, so Material's search and UI
 follow the pages. Running a `bin/scaffold/*.sh` script directly, without the menu, falls back
 to `en`.
 
-Three things the choice does **not** change:
+The locale is **checked**, not just recorded: the generated project's
+`bin/check_docs_language.py` (pre-commit `check-docs-language`, the `tests.yml` step, and
+`poe lint`) reads `theme.language` from `mkdocs.yml` and fails, naming the file and line, when a
+prose paragraph of `README.md` or of a page under `docs_dir` is written in the other locale. The
+page set comes from `mkdocs.yml` (`docs_dir`, `exclude_docs`), so a tree that config already
+excludes is never read. Fenced code, YAML front matter, multi-line HTML comments, inline code, links and tables are
+ignored, and a `docs-lang:ok` marker in a paragraph (outside inline code) skips it. A `theme.language` other than `en` or `pt-BR`
+fails closed. Its Portuguese function words are the ones `check_comment_language.py` uses.
 
-- **The shipped page text.** The templates are English; `pt-BR` sets the MkDocs UI language
-  and the project's declared locale, and translating the pages is left to the project.
+⚠️ The shipped templates are English, so a project scaffolded as `pt-BR` gets
+`<!-- docs-lang:untranslated -->` appended to every shipped page. The gate skips a marked page
+and counts it in its summary line (`N skipped as docs-lang:untranslated`), so the first lint is
+green and the untranslated pages stay visible. Delete the marker from a page once it is
+translated; from then on the gate checks it.
+
+A `--spec` file must carry `docs_locale` on an MkDocs skeleton. An omitted key used to become
+`en` silently; it is now refused, naming the key, before anything is created. Skeletons that
+ignore the locale (every one without an `mkdocs.yml`: `ts-lib`, `react-spa-webpack`,
+`bash-cli`, `etcher-chromeos`, `ventoy-usb`) still default to `en`.
+
+Two things the choice does **not** change:
+
 - **Code stays English in every locale.** Comments and docstrings are English whether the
-  docs are `en` or `pt-BR`; the generated project's `bin/check_comment_language.py` enforces
-  that boundary and never reads `docs/`, which is why it needs no locale setting of its own.
+  docs are `en` or `pt-BR`; `bin/check_comment_language.py` enforces that and never reads
+  `docs/`, which is why it needs no locale setting of its own.
 - **BlueprintX's own prose.** This repository is en-US with no exceptions (blueprintx#194).
   The prompt describes the project being created, not the tool creating it.
 
