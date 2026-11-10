@@ -1045,3 +1045,29 @@ jobs:
         env:
           MARKDOWNLINT_REQUIRED: "1"
         run: bash bin/ci/check_markdown.sh
+
+  ts-scaffold-jest:
+    name: Generated TS project - npm ci, lint, jest (${{ matrix.skeleton }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        skeleton:
+          - ts-lib
+          - react-spa-webpack
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Scaffold offline, then npm ci, npm run lint, npm test
+        run: bash bin/ci/scaffold_ts_test.sh "${{ matrix.skeleton }}"
+
+      - name: Should-fail witness - a broken shipped jest test turns this red
+        if: matrix.skeleton == 'ts-lib'
+        run: bash tests/test_scaffold_ts_test.sh
