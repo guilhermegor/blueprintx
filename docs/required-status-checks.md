@@ -67,12 +67,12 @@ Measured 2026-09-26 by reading `jobs.*.name` and `on:` in every
 | Emitted check name | Workflow | Trigger | Qualifies? |
 |---|---|---|---|
 | `Review threads answered` | `review-threads.yml` | `pull_request` (+ `_review`, `_review_comment`), no filter | **yes** |
-| `webpack` | `build.yml` | `push`, `pull_request: branches: [main]` | not required today — no TS tier ships `enable_repo_rules.sh` (rule 4, finding 1); rule 2 no longer disqualifies it |
-| `eslint`, `stylelint` | `lint.yml` | `push`, `pull_request: branches: [main]` | not required today — no TS tier ships `enable_repo_rules.sh` (rule 4, finding 1); rule 2 no longer disqualifies it |
-| `jest` | `test.yml` | `push`, `pull_request: branches: [main]` | not required today — no TS tier ships `enable_repo_rules.sh` (rule 4, finding 1); rule 2 no longer disqualifies it |
-| `type-check` | `type-check.yml` | `push`, `pull_request: branches: [main]` | not required today — no TS tier ships `enable_repo_rules.sh` (rule 4, finding 1); rule 2 no longer disqualifies it |
-| `build` | `docs.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | no — rule 4, `ts-lib` only (rule 2 no longer disqualifies it) |
-| `pack-smoke`, `verdaccio-rehearsal` | `pack-smoke.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | no — rule 4, `ts-lib` only (rule 2 no longer disqualifies it) |
+| `webpack` | `build.yml` | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; required by nothing, see finding 1 |
+| `eslint`, `stylelint` | `lint.yml` | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; required by nothing, see finding 1 |
+| `jest` | `test.yml` | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; required by nothing, see finding 1 |
+| `type-check` | `type-check.yml` | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; required by nothing, see finding 1 |
+| `build` | `docs.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; `ts-lib` only; required by nothing, see finding 1 |
+| `pack-smoke`, `verdaccio-rehearsal` | `pack-smoke.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; `ts-lib` only; required by nothing, see finding 1 |
 
 `verdaccio-rehearsal` publishes a throwaway
 `<version>-rehearsal.<run id>.<attempt>` prerelease (`--tag rehearsal`) and
@@ -109,9 +109,9 @@ Three findings, in descending order of cost:
    three non-Python tiers get no branch-protection provisioning at all — for
    them `REQUIRED_CHECKS` is not one entry, it is zero, and the one-to-two
    qualifying names above are required by nothing (`Review threads answered`
-   alone for the TypeScript tiers, since their build/lint/test/type-check/docs/
-   pack-smoke workflows are not provisioned by any TS tier, and several are
-   `ts-lib` only, which fails rule 4). `templates/ts-common/.github/.review-bots.yaml`
+   alone for the TypeScript tiers, since the only name verified against every rule is
+   `Review threads answered`; the build/lint/test/type-check/docs/pack-smoke
+   workflows now pass rule 2 but their rules 1 and 3 have not been re-measured). `templates/ts-common/.github/.review-bots.yaml`
    already notes in passing that the script is "for the Python tiers"; the gap
    was documented as a property, never as a defect. Tracked as a follow-up.
 2. **Python deserves exactly one more entry: `Classify and gate this PR`.** It

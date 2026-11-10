@@ -159,7 +159,7 @@ expect "a scalar branches value naming the base is unconditional" 0 "findings=0"
 fixture
 printf 'name: k\non:\n  pull_request_target:\n    branches: [main]\njobs:\n  t:\n    name: Base gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/k.yml"
 expected '"Lint gate", "App check", "Base gate"' ''
-expect "a base branches filter on pull_request_target stays conditional" 1 "Base gate"
+expect "pull_request_target is never counted, whatever its branches filter" 1 "Base gate"
 
 fixture
 printf 'name: k\non:\n  pull_request:\n    branches: [main, "!main"]\njobs:\n  t:\n    name: Base gate\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/k.yml"
