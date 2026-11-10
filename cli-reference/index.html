@@ -2903,11 +2903,21 @@ page set comes from <code>mkdocs.yml</code> (<code>docs_dir</code>, <code>exclud
 excludes is never read. Fenced code, YAML front matter, multi-line HTML comments, inline code, links and tables are
 ignored, and a <code>docs-lang:ok</code> marker in a paragraph (outside inline code) skips it. A <code>theme.language</code> other than <code>en</code> or <code>pt-BR</code>
 fails closed. Its Portuguese function words are the ones <code>check_comment_language.py</code> uses.</p>
-<p>⚠️ The shipped templates are English, so a project scaffolded as <code>pt-BR</code> gets
-<code>&lt;!-- docs-lang:untranslated --&gt;</code> appended to every shipped page. The gate skips a marked page
-and counts it in its summary line (<code>N skipped as docs-lang:untranslated</code>), so the first lint is
-green and the untranslated pages stay visible. Delete the marker from a page once it is
-translated; from then on the gate checks it.</p>
+<p><code>lib-minimal</code> ships pt-BR pages: for <code>DOCS_LOCALE=pt-BR</code> the scaffold overwrites the English
+<code>README.md</code>, every page it publishes (<code>index</code>, <code>usage</code>, <code>examples</code>, <code>faq</code>, <code>contributing</code>, <code>api/*</code>,
+<code>changelog</code>, <code>releasing-1-0-0</code>) and the <code>mkdocs.yml</code> nav labels (<code>Início</code>, <code>Uso</code>, <code>Exemplos</code>,
+<code>Referência da API</code>) with the translations kept under <code>templates/lib-minimal/docs/pt-BR/</code>,
+<code>templates/python-common/docs/pt-BR/</code> and <code>templates/lib-minimal/README.pt-BR.md</code>. The README keeps
+its <code>&lt;!-- slug: --&gt;</code> comments, so <code>check_readme_structure.sh</code> has no locale logic, and the docs
+gate checks every translated page from the first commit. Nav labels live in
+<code>templates/lib-minimal/docs/pt-BR/nav-labels.tsv</code>. codespell has no Portuguese dictionary, so the
+generated project's <code>.codespellrc</code> skips <code>docs/</code>, <code>README.md</code> and <code>mkdocs.yml</code> for <code>pt-BR</code>, and this repository's
+skips the translations.</p>
+<p>⚠️ The other Python skeletons still ship English pages. A project scaffolded as <code>pt-BR</code> from one of
+them gets <code>&lt;!-- docs-lang:untranslated --&gt;</code> appended to every page that was not translated. The gate
+skips a marked page and counts it in its summary line (<code>N skipped as docs-lang:untranslated</code>), so
+the first lint is green and the untranslated pages stay visible. Delete the marker from a page once
+it is translated; from then on the gate checks it.</p>
 <p>A <code>--spec</code> file must carry <code>docs_locale</code> on an MkDocs skeleton. An omitted key used to become
 <code>en</code> silently; it is now refused, naming the key, before anything is created. Skeletons that
 ignore the locale (every one without an <code>mkdocs.yml</code>: <code>ts-lib</code>, <code>react-spa-webpack</code>,
