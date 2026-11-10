@@ -269,6 +269,21 @@ test_marker_step_uses_the_gates_page_set() {
     fi
 }
 
+test_marker_step_warns_when_the_gate_cannot_list_pages() {
+    local str_proj="$WORK_DIR/marker-fallback" str_err
+    mkdir -p "$str_proj/bin" "$str_proj/docs"
+    printf 'import sys\nsys.exit(1)\n' >"$str_proj/bin/check_docs_language.py"
+    printf '# T\n' | tee "$str_proj/README.md" >"$str_proj/docs/index.md"
+    str_err="$(DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_mark_untranslated "$2"' _ \
+        "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_proj" 2>&1 >/dev/null)"
+    if [[ "$str_err" == *"could not list the docs pages"* ]] \
+        && grep -q 'docs-lang:untranslated' "$str_proj/docs/index.md"; then
+        pass "marker step warns, then still marks, when the gate cannot list pages"
+    else
+        fail "marker fallback" "no warning, or the fallback marked nothing: ${str_err: -200}"
+    fi
+}
+
 test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate() {
     local str_temp int_marked str_gate int_rc=0
     require_gate_deps "en e2e" || return 0
@@ -908,6 +923,7 @@ test_first_commit_works_without_a_git_identity() {
 
 main() {
     test_marker_step_uses_the_gates_page_set
+    test_marker_step_warns_when_the_gate_cannot_list_pages
     test_ventoy_usb_answer_stream_order
     test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes
     test_ventoy_usb_bad_persistence_size_stops_before_anything_is_created

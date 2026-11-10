@@ -107,12 +107,16 @@ TUPLE_BLANKINGS = (
     re.compile(r"<!--.*?-->", re.DOTALL),
     re.compile(r"!?\[[^\]\n]*\]\([^)\n]*\)"),
     re.compile(r"https?://\S+"),
-    re.compile(r"</?[A-Za-z][^>]*>"),
+    re.compile(
+        r"""</?[A-Za-z][\w:-]*(?:\s+[A-Za-z_:][\w:.-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'<>=]+))?)*\s*/?>"""
+    ),
 )
 
 RE_TABLE_ROW = re.compile(r"^[ \t]*\|")
 
-RE_LINK_DEFINITION = re.compile(r"^[ \t]*\[(?!\^)[^\]\n]+\]:[ \t]")
+RE_LINK_DEFINITION = re.compile(
+    r"""^[ \t]*\[(?!\^)[^\]\n]+\]:[ \t]*\S+(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$"""
+)
 
 RE_DEFINITION_TITLE = re.compile(r"""^[ \t]*(?:"[^"]*"|'[^']*'|\([^)]*\))[ \t]*$""")
 
@@ -411,13 +415,15 @@ def _load_config(path_root: pathlib.Path) -> tuple:
     return dict_mkdocs, ""
 
 
-def _resolve(path_root: pathlib.Path) -> tuple:
+def _resolve(path_root: pathlib.Path, bool_check_locale: bool = True) -> tuple:
     """Load the config and the page set, or say why the gate cannot run.
 
     Parameters
     ----------
     path_root : pathlib.Path
         The project root.
+    bool_check_locale : bool
+        False for ``--list-pages``, which names pages and needs no word set for the locale.
 
     Returns
     -------
@@ -427,7 +433,7 @@ def _resolve(path_root: pathlib.Path) -> tuple:
     """
     dict_mkdocs, str_error = _load_config(path_root)
     str_declared = declared_locale(dict_mkdocs)
-    if not str_error and str_declared not in DICT_LOCALE_WORDS:
+    if bool_check_locale and not str_error and str_declared not in DICT_LOCALE_WORDS:
         str_error = (
             f"theme.language '{str_declared}' has no function-word set; add one to this gate"
         )
@@ -462,7 +468,7 @@ def main(list_argv: list) -> int:
     if list_rest and not bool_list:
         print("❌ usage: check_docs_language.py [--root <dir>] [--list-pages]")
         return 1
-    str_declared, list_pages, str_error = _resolve(path_root)
+    str_declared, list_pages, str_error = _resolve(path_root, not bool_list)
     if str_error:
         print(f"❌ {str_error}")
         return 1

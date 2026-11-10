@@ -487,8 +487,10 @@ def test_list_pages_prints_the_gates_own_page_set(
     _write(tmp_path / "docs" / "index.md", STR_EN)
     _write(tmp_path / "docs" / "backlog" / "plan.md", STR_EN)
     int_rc = cls_gate.main(["--root", str(tmp_path), "--list-pages"])
-    list_names = [Path(str_line).name for str_line in capsys.readouterr().out.splitlines()]
-    assert (int_rc, sorted(list_names)) == (0, ["README.md", "index.md"])
+    list_lines = capsys.readouterr().out.splitlines()
+    list_names = [Path(str_line).name for str_line in list_lines]
+    bool_anchored = all(str_line.startswith(str(tmp_path)) for str_line in list_lines)
+    assert (int_rc, sorted(list_names), bool_anchored) == (0, ["README.md", "index.md"], True)
 
 
 def test_main_foreign_footnote_body_is_still_scored(tmp_path: Path) -> None:
@@ -512,3 +514,26 @@ def test_main_prose_after_a_definition_title_is_still_scored(tmp_path: Path) -> 
     str_def = '\n[ref]: https://a.b\n    "title"\n\n'
     _write(tmp_path / "docs" / "index.md", STR_EN + str_def + STR_PT)
     assert _run(tmp_path) == 1
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        "\nx <y " + STR_PT.strip() + " -> fim\n",
+        "\n[Nota]: " + STR_PT,
+    ],
+)
+def test_main_prose_shaped_like_a_tag_or_definition_is_still_scored(
+    tmp_path: Path, str_text: str
+) -> None:
+    """An unclosed ``<y`` or a ``[Nota]:`` line that is not a valid definition hides nothing."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", STR_EN + str_text)
+    assert _run(tmp_path) == 1
+
+
+def test_list_pages_does_not_depend_on_the_locale(tmp_path: Path) -> None:
+    """Listing pages has nothing to do with the locale, so an unsupported one still lists."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_ES)
+    _write(tmp_path / "docs" / "index.md", STR_EN)
+    assert cls_gate.main(["--root", str(tmp_path), "--list-pages"]) == 0
