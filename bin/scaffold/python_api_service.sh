@@ -334,6 +334,7 @@ copy_global_config() {
         cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" "$project_path/tests/unit/test_env_config.py"
     fi
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_import_root.py" "$project_path/tests/unit/test_import_root.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_migration_graph_gate.py" "$project_path/tests/unit/test_migration_graph_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" "$project_path/tests/unit/test_quality_rules_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
@@ -734,6 +735,7 @@ main() {
     copy_mkdocs_templates "$PROJECT_PATH"
     scaffold_purge_caches "$PROJECT_PATH"
     scaffold_comment_budget "$PROJECT_PATH"
+    scaffold_mark_untranslated "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
     finalize_github_or_offline "$PROJECT_PATH"
