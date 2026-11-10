@@ -23,18 +23,19 @@ CACHE_DIR="$(resolve_cache_dir)"
 
 get_cache() {
 	local url="$1"
-	local str_cache_file
+	local str_cache_file str_cached=""
 	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
+	[[ -f "$str_cache_file" ]] && str_cached=$(<"$str_cache_file")
 
-	if [[ -f "$str_cache_file" && ! "$(cat "$str_cache_file")" =~ ^(403|408|429)$ ]]; then
+	if [[ -n "$str_cached" && ! "$str_cached" =~ ^(403|408|429)$ ]]; then
 		local int_timestamp int_ttl=$CACHE_FAIL_TTL
-		[[ "$(cat "$str_cache_file")" =~ ^2 ]] && int_ttl=$CACHE_TTL
+		[[ "$str_cached" =~ ^2 ]] && int_ttl=$CACHE_TTL
 		int_timestamp=$(stat -c %Y "$str_cache_file")
 		local int_now
 		int_now=$(date +%s)
 
 		if ((int_now - int_timestamp < int_ttl)); then
-			cat "$str_cache_file"
+			echo "$str_cached"
 			return 0
 		fi
 	fi
@@ -156,7 +157,7 @@ check_urls_in_line() {
 	local str_file="$1" int_line_num="$2" str_line="$3"
 	local str_url str_status_code
 
-	while [[ "$str_line" =~ (https?://[a-zA-Z0-9./?=_%:-]+[a-zA-Z0-9/?=_%-]) ]]; do
+	while [[ "$str_line" =~ (https?://[a-zA-Z0-9./?=_%:-]+[a-zA-Z0-9/=_%-]) ]]; do
 		str_url="${BASH_REMATCH[1]}"
 		str_line="${str_line#*"$str_url"}"
 

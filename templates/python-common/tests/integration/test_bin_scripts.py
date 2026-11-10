@@ -2847,7 +2847,7 @@ def test_check_urls_reprobes_an_unstable_answer_already_cached(
     assert (path_cache / str_key).read_text(encoding="utf-8").strip() == "200"
 
 
-@pytest.mark.parametrize("str_punct", [".", ":", ".."])
+@pytest.mark.parametrize("str_punct", [".", ":", "..", "?"])
 def test_check_urls_drops_sentence_punctuation_after_a_url(tmp_path: Path, str_punct: str) -> None:
     """A URL ending a sentence is probed and cached without the trailing punctuation."""
     path_bin = tmp_path / "stubs"
@@ -2857,12 +2857,13 @@ def test_check_urls_drops_sentence_punctuation_after_a_url(tmp_path: Path, str_p
     (tmp_path / "mod.py").write_text(f'"""See {_URL_404}{str_punct}"""\n', encoding="utf-8")
     path_cache = tmp_path / "cache"
 
-    _run_url_hook_with_stub_curl(
+    cls_result = _run_url_hook_with_stub_curl(
         tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
     )
 
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     str_key = hashlib.md5(_URL_404.encode(), usedforsecurity=False).hexdigest()
-    assert [path.name for path in path_cache.iterdir()] == [str_key]
+    assert [path_entry.name for path_entry in path_cache.iterdir()] == [str_key]
 
 
 def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
@@ -2892,7 +2893,7 @@ def _tracker_step_script() -> str:
     list_runs = [
         dict_step.get("run")
         for dict_job in dict_workflow["jobs"].values()
-        for dict_step in dict_job["steps"]
+        for dict_step in dict_job.get("steps", [])
         if dict_step.get("name") == "Open or Update Tracking Issue"
     ]
     assert len(list_runs) == 1, f"expected one 'Open or Update Tracking Issue' step: {list_runs}"
@@ -2949,6 +2950,9 @@ def _run_tracker_step(
     )
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     list_lines = path_log.read_text(encoding="utf-8").splitlines()
+    list_reads = [str_line for str_line in list_lines if str_line.startswith("issue list")]
+    assert list_reads, "the step never listed open trackers"
+    assert all("--label docstring-urls --state open" in str_line for str_line in list_reads)
     return [str_line for str_line in list_lines if not str_line.startswith("issue list")]
 
 

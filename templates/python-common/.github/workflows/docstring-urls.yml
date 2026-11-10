@@ -9,6 +9,10 @@ permissions:
   contents: read
   issues: write
 
+concurrency:
+  group: docstring-urls
+  cancel-in-progress: false
+
 jobs:
   urls:
     name: Docstring URL check
@@ -59,7 +63,7 @@ jobs:
             printf '```\n'
           } > docstring_urls_body.md
           open_issues=$(list_open)
-          existing=$(echo "$open_issues" | head -n 1)
+          existing=${open_issues%%$'\n'*}
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body-file docstring_urls_body.md
             for n in $open_issues; do
