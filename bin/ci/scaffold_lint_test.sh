@@ -69,8 +69,13 @@ done
     exit 1
 }
 
+export DOCS_LOCALE="${DOCS_LOCALE:-en}"
+case "$DOCS_LOCALE" in
+    en|pt-BR) ;;
+    *) echo "ERROR: DOCS_LOCALE must be en or pt-BR, got '$DOCS_LOCALE'" >&2; exit 1 ;;
+esac
 str_opt_label="${SCAFFOLD_SPEC_FILE:+opt-ins from $SCAFFOLD_SPEC_FILE}"
-echo "::group::Scaffold $SKELETON (offline, ${str_opt_label:-no opt-ins})"
+echo "::group::Scaffold $SKELETON (offline, docs_locale=$DOCS_LOCALE, ${str_opt_label:-no opt-ins})"
 spec_skeleton_supported "$SKELETON" || {
     echo "ERROR: bin/lib/spec.sh has no named-key prompt map for '$SKELETON'" >&2
     exit 1
@@ -85,6 +90,16 @@ spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
         bash "$REPO_ROOT/$str_scaffold_rel" \
         "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
+
+[[ -f "$PROJECT_PATH/mkdocs.yml" ]] || {
+    echo "ERROR: the scaffold did not generate $PROJECT_PATH/mkdocs.yml" >&2
+    exit 1
+}
+if ! grep -Eq "^[[:space:]]+language:[[:space:]]*[\"']?${DOCS_LOCALE}[\"']?[[:space:]]*(#.*)?$" "$PROJECT_PATH/mkdocs.yml"; then
+    echo "ERROR: DOCS_LOCALE=$DOCS_LOCALE did not reach the generated mkdocs.yml (language:)" >&2
+    exit 1
+fi
+echo "Generated mkdocs.yml carries language: $DOCS_LOCALE."
 
 str_leaked="$(find "$PROJECT_PATH" \
     \( -type d \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.ruff_cache' \
