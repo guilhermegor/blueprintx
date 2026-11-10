@@ -6,6 +6,7 @@ shape produced as "nothing to diff" and exit 0 (blueprintx#1069).
 """
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -96,13 +97,15 @@ def _commit_file(path_repo: Path, str_name: str) -> None:
 
 @pytest.fixture(autouse=True)
 def _neutral_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove the CI variables that would change who the gate thinks the author is.
+    """Remove the CI variables that change the gate's author, and the host's git config.
 
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
-        Used to clear the variables.
+        Used to clear and set the variables.
     """
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
     monkeypatch.delenv("GITHUB_ACTOR", raising=False)
     monkeypatch.delenv("GITHUB_BASE_REF", raising=False)
@@ -163,6 +166,26 @@ def path_ci(tmp_path: Path, path_origin: Path, monkeypatch: pytest.MonkeyPatch) 
     _git_in(path_checkout, "checkout", "-q", "--detach", "origin/feature")
     monkeypatch.chdir(path_checkout)
     return path_checkout
+
+
+@pytest.fixture
+def path_ci_merge(path_ci: Path) -> Path:
+    """Return the real ``pull_request`` checkout: ``HEAD`` on the merge of the PR into its base.
+
+    Parameters
+    ----------
+    path_ci : pathlib.Path
+        The detached checkout at ``origin/feature``.
+
+    Returns
+    -------
+    pathlib.Path
+        The checkout, ``HEAD`` detached at a merge commit whose parents are ``origin/main``
+        and ``origin/feature`` (what ``refs/pull/N/merge`` is).
+    """
+    _git_in(path_ci, "checkout", "-q", "--detach", "origin/main")
+    _git_in(path_ci, "merge", "-q", "--no-ff", "-m", "merge", "origin/feature")
+    return path_ci
 
 
 @pytest.fixture
@@ -236,6 +259,24 @@ def test_main_unresolvable_base_says_it_could_not_resolve(
     """The failure names the cause so the reader is not left guessing."""
     ledger.main()
     assert "could not resolve a base" in capsys.readouterr().out
+
+
+def test_main_pull_request_merge_commit_demands_a_ledger(path_ci_merge: Path) -> None:
+    """The ``refs/pull/N/merge`` shape is the one the workflow really checks out."""
+    assert ledger.main() == 1
+
+
+def test_main_unresolvable_base_names_a_local_remedy(
+    path_no_default: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A developer with no CI to reconfigure is told to fetch or create the default branch."""
+    ledger.main()
+    assert "git fetch origin" in capsys.readouterr().out
+
+
+def test_fixture_repos_ignore_the_host_global_git_config(path_ci: Path) -> None:
+    """A developer's global ``core.hooksPath`` or templates must not reach the fixture repos."""
+    assert _git_in(path_ci, "config", "--global", "--list") == ""
 
 
 def test_main_on_the_default_branch_is_still_a_no_op(path_ci: Path) -> None:

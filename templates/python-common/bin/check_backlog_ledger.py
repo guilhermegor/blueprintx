@@ -320,7 +320,8 @@ def locate_base() -> tuple:
         print(
             "❌ could not resolve a base to diff against (no origin/<default> or local default "
             "branch shares history with HEAD) — refusing to pass blind. "
-            "In CI, check out with fetch-depth: 0."
+            "Locally: run 'git fetch origin', or create the default branch (e.g. 'git branch "
+            "main <commit>'). In CI: check out with fetch-depth: 0."
         )
         return 1, ""
     return (0, "") if str_base == str_head else (None, str_base)
