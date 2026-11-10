@@ -288,6 +288,7 @@ machine-decidable — it is a review question, so it stays prose reviewed by a h
 | Barrel / registry export order — row added 2026-11-07 | ✅ `check_registry_order.py` over `__all__` (blueprintx#959) | ✅ `perfectionist/sort-exports` on `templates/ts-lib/src/index.ts` (blueprintx#1015); an existing lint rule, so no gate script |
 | Required status checks provisioned on the default branch — row added 2026-09-20 | ✅ `bin/enable_repo_rules.sh` seeds `REQUIRED_CHECKS=("Review threads answered")` and provisions the `pr-quality-gate` ruleset from it | ❌ none — the script ships only from `templates/python-common/`, so the check names `ts-common`/`ts-lib` emit (`webpack`, `eslint`, `stylelint`, `jest`, `type-check`, `Review threads answered`) are required by nothing. Same for the `bash-cli` tier, which additionally ships no review-threads workflow at all (blueprintx#164; per-tier inventory and the four-rule qualification test in `docs/required-status-checks.md`) |
 | Explicit `any` and lint warnings refused — row added 2026-11-07 | 🔧 in flight — the Python half of blueprintx#1022 (ruff `ANN401`) | ✅ `@typescript-eslint/no-explicit-any` at `error` in both tiers' ESLint configs, and `npm run lint` runs `--max-warnings 0` so no rule left at `warn` passes. `tests/test_explicit_any_refused_ts.sh` plants one `any` (checked with `eslint --quiet`, so only an `error` severity fails it) and one real warning (`no-unused-vars`, which must pass plain `eslint` yet fail `npm run lint`); reverting either edit turns the matching case red (blueprintx#1022) |
+| Assertion weakening (`==` loosened to `in`, `>`, `<`, `>=`, `<=`, `!=`; a matcher or exception made broader) — row added 2026-11-08 | ✅ `check_assertion_weakening.py` (Gt/Lt added in blueprintx#1053); escape hatch `test-change-ok:` | 🔧 partial — only the equality-to-inequality half; no broadened-matcher, deleted-test or trivialised-assertion check: `src/utils/assertion-weakening.cjs` (`toBe`/`toEqual`/`toStrictEqual` to `toBeGreaterThan`/`toBeLessThan`/`...OrEqual`), same `test-change-ok:` hatch, wired in `.husky/pre-commit` and `lint.yml` (blueprintx#1053) |
 
 Re-measure before trusting this table on a later read — it is a snapshot, not a standing fact.
 The heading date covers the table as a whole; a row re-measured later carries its own date in
@@ -2003,6 +2004,10 @@ grouped by what they guard.
   machine-decidable, so a gate, while the quality of the mention stays a human call. A missing
   key under `set -euo pipefail` used to kill the gate inside its own `grep` pipeline with exit
   1 and no message, which every should-fail test read as proof the check ran; hence `|| true`.
+  It also maps every `language=` to its assertion-weakening gate file and fails on a language
+  with no entry, or on an entry whose file is gone (#1053). That is the test that turns red
+  when a new language template ships without the gate. `bash` is mapped to "none" on purpose:
+  its tiers predate #1053, which scoped the gate to Python and TypeScript.
 - **Shell helper scripts.** `check_docs_build.sh` builds MkDocs `--strict`, preferring `poetry
   run` and falling back to `mkdocs` on `PATH`; `check_spelling.sh` runs codespell over `docs/`
   and `templates/` with the root `.codespellrc`; neither inlines flags, so CI and pre-commit

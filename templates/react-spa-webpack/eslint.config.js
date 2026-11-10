@@ -29,6 +29,18 @@ export default [
 
   js.configs.recommended,
   ...tseslint.configs.recommended,
+
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: globals.node,
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+
   { files: ['**/*.{jsx,tsx}'], ...eslintReact.configs['recommended-typescript'] },
 
   {
