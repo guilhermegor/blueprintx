@@ -713,6 +713,17 @@ Configuration files in this repository carry no comments, so the reasoning lives
   uses `exec` so `BASH_SOURCE` resolves to `libexec/bin`. Each package stamps the release
   version into the fallback literal, since none has a `.git`.
 
+### TypeScript scaffold jest gate - blueprintx#1109
+
+The Python tiers run the generated project's own lint and tests in CI through
+`bin/ci/scaffold_lint_test.sh`. The TypeScript skeletons had no equivalent, so a regression in
+a jest test shipped by `ts-lib` or `react-spa-webpack` merged green: the only run was an
+agent's local scaffold. The `ts-scaffold-jest` job in `scaffold_checks.yml` closes that gap.
+`bin/ci/scaffold_ts_test.sh <skeleton>` scaffolds offline with default answers, then runs
+`npm ci`, `npm run lint` and `npm test` inside the generated project. Setting
+`SCAFFOLD_TS_SABOTAGE=1` appends a failing test first; `tests/test_scaffold_ts_test.sh` uses
+it to prove the script exits non-zero and reports the jest failure for both skeletons.
+
 ## Shell test suites under `tests/`
 
 Each `tests/test_*.sh` is a should-fail regression suite for a gate or script. Shared
