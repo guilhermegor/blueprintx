@@ -9,6 +9,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/bin/lib/common.sh"
 # shellcheck source=bin/lib/scaffold_readme.sh
 source "$REPO_ROOT/bin/lib/scaffold_readme.sh"
+# shellcheck source=bin/lib/spec.sh
+source "$REPO_ROOT/bin/lib/spec.sh"
 
 GATE="$REPO_ROOT/templates/common/bin/check_readme_structure.sh"
 int_failures=0
@@ -270,6 +272,74 @@ test_ptbr_readme_reprompts_in_interactive_mode() {
     expect "interactive render succeeds after the re-prompt" "0" "$int_rc"
     expect "interactive mode takes the replacement pt-BR description" "1" "$(grep -cxF "$str_ptbr" "$path_out" || true)"
     rm -f "$path_out"
+}
+
+drive_create_flow() {
+    local str_description="$1" str_locale="$2" path_root="$3" str_stdin="$4" str_real="${5:-}"
+    (
+        set --
+        export GITHUB_USERNAME=ci-bot LINKEDIN_URL=https://www.linkedin.com/in/ci-bot
+        LOG_FILE=/dev/null
+        # shellcheck source=bin/blueprintx.sh
+        source "$REPO_ROOT/bin/blueprintx.sh"
+        prompt_project_name() { echo acme; }
+        prompt_project_description() { echo "$str_description"; }
+        prompt_project_root() { echo "$path_root"; }
+        prompt_language() { echo python; }
+        prompt_skeleton() { echo lib-minimal; }
+        prompt_license() { echo MIT; }
+        prompt_docs_locale() { echo "$str_locale"; }
+        if [ -z "$str_real" ]; then
+            create_project() { printf '%s' "$3" >"$path_root/description.seen"; }
+        fi
+        if [ -n "$str_stdin" ]; then
+            printf '%s\n' "$str_stdin" | BLUEPRINTX_STDIN_ANSWERS=1 run_create_flow
+        else
+            run_create_flow </dev/null
+        fi
+    ) >"$path_root/flow.log" 2>&1
+}
+
+test_ptbr_description_is_validated_before_any_file_is_rendered() {
+    local path_root str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
+    local str_en="This library is a tool that can parse the files. It is not for the users, and it will be fast."
+    path_root="$(mktemp -d)"
+    drive_create_flow "$str_en" pt-BR "$path_root" "$str_ptbr"
+    expect "the project is created from the replacement description" "$str_ptbr" "$(cat "$path_root/description.seen")"
+    rm -rf "$path_root"
+}
+
+test_ptbr_locale_with_english_description_is_refused_when_not_interactive() {
+    local path_root int_rc=0
+    local str_en="This library is a tool that can parse the files. It is not for the users, and it will be fast."
+    path_root="$(mktemp -d)"
+    drive_create_flow "$str_en" pt-BR "$path_root" "" || int_rc=$?
+    expect "a non-interactive English description is refused" "1" "$int_rc"
+    expect "no project is created after the refusal" "0" "$(find "$path_root" -name description.seen | wc -l)"
+    expect "the refusal names the pt-BR requirement" "1" "$(grep -c 'other than pt-BR' "$path_root/flow.log" || true)"
+    rm -rf "$path_root"
+}
+
+test_english_locale_leaves_the_description_alone() {
+    local path_root str_en="This library is a tool that can parse the files. It is not for the users."
+    path_root="$(mktemp -d)"
+    drive_create_flow "$str_en" en "$path_root" ""
+    expect "an English description is kept for the en locale" "$str_en" "$(cat "$path_root/description.seen")"
+    rm -rf "$path_root"
+}
+
+test_ptbr_replacement_reaches_pyproject_and_readme() {
+    local path_root str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
+    local str_en="This library is a tool that can parse the files. It is not for the users, and it will be fast."
+    path_root="$(mktemp -d)"
+    drive_create_flow "$str_en" pt-BR "$path_root" "$(printf '%s\n%s' "$str_ptbr" "$(spec_stdin_for_skeleton lib-minimal "")")" real || true
+    expect "pyproject.toml carries the replacement description" "1" \
+        "$(grep -cxF "description = \"$str_ptbr\"" "$path_root/acme/pyproject.toml" || true)"
+    expect "README.md carries the replacement description" "1" \
+        "$(grep -cF "$str_ptbr" "$path_root/acme/README.md" || true)"
+    expect "no generated file keeps the English description" "0" \
+        "$(grep -rlF "$str_en" "$path_root/acme" | wc -l)"
+    rm -rf "$path_root"
 }
 
 main() {

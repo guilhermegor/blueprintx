@@ -19,6 +19,8 @@ TEMPLATES_ROOT="$BLUEPRINTX_ROOT/templates"
 source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=bin/lib/spec.sh
 source "$SCRIPT_DIR/lib/spec.sh"
+# shellcheck source=bin/lib/scaffold_readme.sh
+source "$SCRIPT_DIR/lib/scaffold_readme.sh"
 
 print_usage() {
     echo "Usage: blueprintx [subcommand] [options]"
@@ -526,6 +528,12 @@ is_valid_docs_locale() {
     esac
 }
 
+require_ptbr_description_at_input() {
+    [ "$DOCS_LOCALE" = "pt-BR" ] || return 0
+    [ -f "$TEMPLATES_ROOT/$SKELETON_CHOICE/README.pt-BR.md" ] || return 0
+    scaffold_require_ptbr_description || exit 1
+}
+
 create_project() {
     local project_root="$1"
     local project_name="$2"
@@ -739,6 +747,7 @@ run_create_flow() {
         exit 0
     fi
 
+    require_ptbr_description_at_input
     create_project "$PROJECT_ROOT" "$PROJECT_NAME" "$PROJECT_DESCRIPTION" "$LANG_CHOICE" "$SKELETON_CHOICE" "$LICENSE_CHOICE" "$DOCS_LOCALE"
 
     echo
