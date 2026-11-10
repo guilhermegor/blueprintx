@@ -36,6 +36,9 @@ $POETRY run python bin/check_orm_model_guards.py
 print_status info "comment language boundary"
 $POETRY run python bin/check_comment_language.py
 
+print_status info "docs language"
+$POETRY run python bin/check_docs_language.py
+
 print_status info "comment budget"
 $POETRY run python bin/check_comment_budget.py --require-baseline
 
