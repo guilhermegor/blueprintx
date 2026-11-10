@@ -155,12 +155,65 @@ def test_equality_weakened_to_membership_is_reported(str_fragment: str) -> None:
     )
 
 
-def test_a_stricter_operator_swap_is_not_flagged() -> None:
-    """``==`` tightened to a strict inequality is out of the decidable core, by design."""
-    str_old = "def test_x() -> None:\n\tassert compute() == 5\n"
-    str_new = "def test_x() -> None:\n\tassert compute() > 5\n"
+@pytest.mark.parametrize(
+    ("str_symbol", "str_fragment"),
+    [
+        (">", "operator weakened from == to >"),
+        ("<", "operator weakened from == to <"),
+        (">=", "operator weakened from == to >="),
+        ("<=", "operator weakened from == to <="),
+    ],
+)
+def test_equality_loosened_to_an_inequality_is_reported(
+    str_symbol: str, str_fragment: str
+) -> None:
+    """``x == 5`` does not imply ``x > 5``: any inequality accepts values the equality rejected."""
+    assert str_fragment in _sole_finding(
+        "def test_x() -> None:\n\tassert compute() == 5\n",
+        f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n",
+    )
 
-    assert _findings(str_old, str_new) == []
+
+@pytest.mark.parametrize("str_symbol", [">", "<"])
+def test_equality_loosened_to_an_inequality_in_a_call_rewrite_is_reported(
+    str_symbol: str,
+) -> None:
+    """``self.assertEqual(a, b)`` rewritten as a bare ``a > b`` is the same loosening."""
+    assert "weakened to a bare assert with " + str_symbol in _sole_finding(
+        "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n",
+        f"class T:\n\tdef test_x(self) -> None:\n\t\tassert compute() {str_symbol} 5\n",
+    )
+
+
+@pytest.mark.parametrize("str_symbol", [">", "<"])
+def test_an_assert_that_was_always_an_inequality_is_clean(str_symbol: str) -> None:
+    """The gate judges a CHANGE from ``==``, so a pre-existing inequality is untouched."""
+    str_src = f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n"
+
+    assert _findings(str_src, str_src) == []
+
+
+@pytest.mark.parametrize("str_symbol", [">", "<"])
+def test_an_inequality_tightened_to_equality_is_clean(str_symbol: str) -> None:
+    """Strengthening ``x > 5`` to ``x == 5`` pins more, not less, so it is not a finding."""
+    assert (
+        _findings(
+            f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n",
+            "def test_x() -> None:\n\tassert compute() == 5\n",
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    "str_call", ["assertGreater", "assertLess", "assertGreaterEqual", "assertLessEqual"]
+)
+def test_assert_equal_loosened_to_an_inequality_call_is_reported(str_call: str) -> None:
+    """``assertEqual`` swapped for an inequality call is the unittest twin of ``== -> >``."""
+    assert f"assertEqual() weakened to {str_call}()" in _sole_finding(
+        "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n",
+        f"class T:\n\tdef test_x(self) -> None:\n\t\tself.{str_call}(compute(), 5)\n",
+    )
 
 
 def test_assert_equal_weakened_to_assert_true_is_reported() -> None:
@@ -482,8 +535,8 @@ def test_a_unittest_call_rewritten_as_an_equivalent_bare_assert_is_clean() -> No
 
 def test_a_unittest_call_rewritten_as_a_stricter_bare_assert_is_clean() -> None:
     """A stricter operator after the rewrite is a strengthening, not a weakening."""
-    str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
-    str_new = "class T:\n\tdef test_v(self) -> None:\n\t\tassert a() > 5\n"
+    str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertIn(a(), [5])\n"
+    str_new = "class T:\n\tdef test_v(self) -> None:\n\t\tassert a() == 5\n"
     assert _findings(str_old, str_new) == []
 
 
