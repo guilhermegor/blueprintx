@@ -577,6 +577,11 @@ validate_spec_answers() {
         || exit_error "--spec: skeleton '$SKELETON_CHOICE' is a '$skeleton_language' skeleton, not '$LANG_CHOICE'."
     [ -f "$TEMPLATES_ROOT/licenses/$LICENSE_CHOICE" ] \
         || exit_error "--spec: unknown license '$LICENSE_CHOICE' (no templates/licenses/$LICENSE_CHOICE)."
+    if [ -z "$DOCS_LOCALE" ]; then
+        [ ! -f "$TEMPLATES_ROOT/$SKELETON_CHOICE/mkdocs.yml" ] \
+            || exit_error "--spec: 'docs_locale' is required for the MkDocs skeleton '$SKELETON_CHOICE' (en or pt-BR); an omitted key would silently scaffold English."
+        DOCS_LOCALE="en"
+    fi
     is_valid_docs_locale "$DOCS_LOCALE" \
         || exit_error "--spec: 'docs_locale' must be en or pt-BR, got '$DOCS_LOCALE'."
     if spec_skeleton_supported "$SKELETON_CHOICE"; then
@@ -662,7 +667,7 @@ run_create_flow_from_spec() {
     [ -f "$TEMPLATES_ROOT/$SKELETON_CHOICE/skeleton.meta" ] \
         || exit_error "--spec: unknown skeleton '$SKELETON_CHOICE'."
     LICENSE_CHOICE=$(spec_get "$SPEC_FILE" license MIT)
-    DOCS_LOCALE=$(spec_get "$SPEC_FILE" docs_locale en)
+    DOCS_LOCALE=$(spec_get "$SPEC_FILE" docs_locale)
 
     validate_spec_answers
 
