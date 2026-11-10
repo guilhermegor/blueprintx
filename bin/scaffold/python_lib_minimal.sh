@@ -106,6 +106,7 @@ create_python_files() {
 
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_import_root.py" "$project_path/tests/unit/test_import_root.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dynamic_version_stub_gate.py" "$project_path/tests/unit/test_dynamic_version_stub_gate.py"
 
@@ -343,6 +344,8 @@ lib_minimal_copy_gate_tests() {
 
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
         "$project_path/tests/unit/test_layer_imports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_language_gate.py" \
+        "$project_path/tests/unit/test_docs_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
         "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_sql_guards_gate.py" \
@@ -405,6 +408,8 @@ lib_minimal_copy_project_scaffolding() {
         "$project_path/tests/unit/test_pr_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_check_backlog_ledger.py" \
+        "$project_path/tests/unit/test_check_backlog_ledger.py"
     lib_minimal_copy_gate_tests "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
         "$project_path/tests/unit/test_pip_requirements.py"
@@ -840,6 +845,7 @@ main() {
     copy_mkdocs_templates "$PROJECT_PATH"
     scaffold_purge_caches "$PROJECT_PATH"
     scaffold_comment_budget "$PROJECT_PATH"
+    scaffold_mark_untranslated "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 

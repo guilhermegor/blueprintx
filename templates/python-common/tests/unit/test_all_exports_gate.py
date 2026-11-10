@@ -10,6 +10,7 @@ from functools import partial
 import importlib.util
 from itertools import starmap
 from pathlib import Path
+import sys
 from types import ModuleType
 
 import pytest
@@ -537,6 +538,7 @@ def test_internal_all_extended_after_assignment_is_not_trusted(tmp_path: Path) -
         "with open('x') as Priv:\n    pass\n",
         "Other, Priv = 1, 2\n",
         "(Priv := 1)\n",
+        "[(Priv := x) for x in ()]\n",
         "try:\n    pass\nexcept ValueError as Priv:\n    pass\n",
         "globals()['Priv'] = 1\n",
         "locals()['Priv'] = 1\n",
@@ -550,6 +552,7 @@ def test_internal_all_extended_after_assignment_is_not_trusted(tmp_path: Path) -
         "with",
         "unpack",
         "walrus",
+        "walrus-in-comprehension",
         "except",
         "globals",
         "locals",
@@ -619,6 +622,8 @@ def test_internal_all_changed_after_assignment_is_not_trusted(
         ("import os\nif os.environ.get('X'):\n    globals()['Priv'] = 1\n", True),
         ('class A:\n    def __init__(self):\n        setattr(self, "Priv", 1)\n', False),
         ("class A:\n    def d(self):\n        return vars(self)\n", False),
+        ("class A:\n    async def d(self):\n        setattr(self, 'Priv', 1)\n", False),
+        ("def f():\n    (Priv := 1)\n    return lambda: (Priv := 2)\n", False),
     ],
     ids=[
         "module",
@@ -639,6 +644,8 @@ def test_internal_all_changed_after_assignment_is_not_trusted(
         "dynamic-in-if",
         "setattr-self",
         "vars-self",
+        "async-setattr-self",
+        "walrus-in-body",
     ],
 )
 def test_dynamic_write_anywhere_is_charged_except_on_self(
@@ -724,3 +731,287 @@ def test_relative_internal_package_keeps_its_leading_dot(tmp_path: Path) -> None
         {"sub/__init__.py": "", "sub/_internal/__init__.py": ""},
     )
     assert "(.sub._internal)" in _sole(_load_gate().check_package(path_init))
+
+
+_STR_SELF_MODULE = "import pkg._internal.config as me\n"
+
+
+@pytest.mark.parametrize(
+    "str_config",
+    [
+        "from builtins import exec as run\nrun('Priv = 1')\n",
+        "from builtins import globals as gl\ngl()['Priv'] = 1\n",
+        "from sys import _getframe as g\ng(0).f_globals['Priv'] = 1\n",
+        "from inspect import currentframe as c\nc().f_globals['Priv'] = 1\n",
+        "def _f():\n    pass\n_f.__globals__['Priv'] = 1\n",
+        "import inspect\ninspect.stack()[0].frame.f_locals['Priv'] = 1\n",
+        "from sys import modules as m\nm[__name__].Priv = 1\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        self = me\n        setattr(self, 'Priv', 1)\n"
+        + "A().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        def inner(self):\n"
+        + "            setattr(self, 'Priv', 1)\n        inner(me)\nA().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    @staticmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n"
+        + "A.f(me)\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        import pkg._internal.config as self\n"
+        + "        setattr(self, 'Priv', 1)\nA().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        match me:\n            case self:\n"
+        + "                setattr(self, 'Priv', 1)\nA().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def f(self):\n        try:\n            pass\n"
+        + "        except Exception as self:\n            pass\n        setattr(self, 'Priv', 1)\n"
+        + "A().f()\n",
+        _STR_SELF_MODULE
+        + "class A:\n    def __new__(cls):\n        setattr(cls, 'Priv', 1)\nA.__new__(me)\n",
+        "def f(x=(Priv := 1)):\n    pass\n",
+        "def f(*, x=(Priv := 1)):\n    pass\n",
+        "g = lambda x=(Priv := 1): x\n",
+        "class B(metaclass=(Priv := type)):\n    pass\n",
+        "async def f(x=(Priv := 1)):\n    pass\n",
+        _STR_SELF_MODULE
+        + "class A:\n    @builtins.staticmethod\n    def f(cls):\n"
+        + "        setattr(cls, 'Priv', 1)\nA.f(me)\n",
+        "def d(v):\n    return lambda f: f\n\n\n@d(Priv := 1)\ndef g():\n    pass\n",
+        "class B((Priv := 1).__class__):\n    pass\n",
+        "from mypkg import modules\nmodules.foo\n",
+        "import pkg._internal.config as me\nclass A:\n    @(lambda fn: fn(me))\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "import pkg._internal.config as me\nclass M:\n    pass\nme.__class__ = M\n",
+        "import pkg._internal.config as me\nclass M:\n    pass\nself = me\nself.__class__ = M\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self):\n        self = me\n"
+        + "        self.__class__ = A\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self):\n        def g():\n"
+        + "            global self\n"
+        + "        setattr(self, 'Priv', 1)\nself = me\nA().f()\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self):\n        def g():\n"
+        + "            nonlocal self\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self):\n        def g():\n"
+        + "            nonlocal self\n            self = me\n        g()\n"
+        + "        setattr(self, 'Priv', 1)\nA().f()\n",
+        "from ._compat import vars\nclass A:\n    def f(self):\n        vars(self)['Priv'] = 1\n",
+        "def setattr(o, n, v):\n    pass\nclass A:\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self, vars=lambda _: 1):\n        vars(self)\n",
+        "class A:\n    def f(self):\n        def setattr(*a):\n            pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @evil.classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        for self in ():\n            pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        with open('x') as self:\n            pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        del self\n" + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        (self := 1)\n" + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self, v):\n"
+        + "        match v:\n            case {**self}:\n                pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self, v):\n"
+        + "        match v:\n            case [*self]:\n                pass\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @evil.setter\n    def f(self, v):\n        setattr(self, 'Priv', v)\n",
+        "class A:\n    def f(self, w):\n        (lambda setattr: setattr(self, 'Priv', 1))(w)\n",
+        "__all__ = ['Other']\ndel __all__\nPriv = 1\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self=me):\n"
+        + "        setattr(self, 'Priv', 1)\nA.f()\n",
+        "def _install():\n    global vars\n    from ._compat import vars\n"
+        + "class A:\n    def f(self):\n        vars(self)['Priv'] = 1\n",
+        "def _install():\n    global setattr\nclass A:\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "def outer():\n    def setattr(*a):\n        pass\n    class A:\n"
+        + "        def f(self):\n            setattr(self, 'Priv', 1)\n",
+        "from ._compat import *\nclass A:\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class Outer:\n    def m(self):\n        from ._compat import setattr\n"
+        + "        class Inner:\n            def f(self):\n"
+        + "                setattr(self, 'Priv', 1)\n",
+    ],
+    ids=[
+        "alias-exec",
+        "alias-globals",
+        "alias-getframe",
+        "alias-currentframe",
+        "function-globals",
+        "frame-locals",
+        "alias-sys-modules",
+        "self-reassigned",
+        "nested-def-self",
+        "staticmethod-cls",
+        "import-as-self",
+        "match-capture-self",
+        "except-as-self",
+        "implicit-staticmethod-new",
+        "walrus-default",
+        "walrus-kwonly-default",
+        "walrus-lambda-default",
+        "walrus-class-keyword",
+        "walrus-async-default",
+        "staticmethod-attribute",
+        "walrus-decorator",
+        "walrus-class-base",
+        "writer-name-used-from-first-party-module",
+        "decorator-invokes-method",
+        "module-class-swap",
+        "class-swap-through-rebound-module-self",
+        "class-swap-through-rebound-method-self",
+        "global-self-in-nested-def",
+        "nonlocal-self-in-nested-def",
+        "nonlocal-self-rebound-and-called",
+        "module-import-shadows-vars",
+        "module-def-shadows-setattr",
+        "param-shadows-vars",
+        "nested-def-shadows-setattr",
+        "attribute-decorator-unknown-receiver",
+        "for-self",
+        "with-as-self",
+        "del-self",
+        "walrus-self",
+        "match-mapping-rest-self",
+        "match-star-self",
+        "accessor-on-foreign-receiver",
+        "nested-lambda-parameter-shadows-setattr",
+        "del-all",
+        "self-has-default",
+        "global-vars-in-function",
+        "global-setattr-in-function",
+        "enclosing-function-binds-setattr",
+        "star-import-may-shadow-setattr",
+        "enclosing-method-binds-setattr",
+    ],
+)
+def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
+    tmp_path: Path, str_config: str
+) -> None:
+    """An aliased writer, a rebound ``self``, an outside walrus or ``del __all__`` is charged.
+
+    Some ids pin a deliberate over-charge rather than a leak: ``global``/``nonlocal`` in a nested
+    def that never rebinds, and ``del``/``except ... as``/walrus on ``self``. Narrowing
+    ``_rebinds`` past them is a decision, so it has to turn these red first.
+    """
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_config",
+    [
+        "class A:\n    def f(self):\n        self.x = 1\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
+        "from builtins import print as p\np('Priv')\n",
+        "from mypkg import modules\n",
+        "class A:\n    def f(self, ks):\n        list(map(lambda k: setattr(self, k, 1), ks))\n",
+        "class A:\n    def f(self):\n        def helper():\n            setattr(self, 'Priv', 1)\n"
+        + "        helper()\n",
+        "from .sys import modules\n",
+        "class A:\n    def f(self):\n        def g(x=setattr(self, 'Priv', 1)):\n"
+        + "            pass\n",
+        "class A:\n    def f(self):\n        @setattr(self, 'Priv', 1)\n        def g():\n"
+        + "            pass\n",
+        "class A:\n    def f(self, /):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @property\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "import abc\nclass A:\n    @abc.abstractmethod\n"
+        + "    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @f.setter\n    def f(self, v):\n        setattr(self, 'Priv', v)\n",
+        "class A:\n    @f.getter\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    @f.deleter\n    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def vars(self):\n        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def f(self):\n        self.__class__ = A\n",
+        "import typing\nclass A:\n    @typing.final\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "from typing import overload\nclass A:\n    @overload\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "import builtins\nclass A:\n    @builtins.classmethod\n"
+        + "    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
+        "from typing import override\nclass A:\n    @override\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "import typing_extensions\nclass A:\n    @typing_extensions.override\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "import functools\nclass A:\n    @functools.cached_property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+    ],
+    ids=[
+        "attribute-store-on-self",
+        "classmethod-cls",
+        "unrelated-builtins-alias",
+        "writer-name-imported-only-from-first-party-module",
+        "lambda-closure-over-self",
+        "def-closure-over-self",
+        "writer-name-from-relative-sys-module",
+        "own-self-in-nested-default",
+        "own-self-in-nested-decorator",
+        "positional-only-self",
+        "property-decorator",
+        "abstractmethod-decorator",
+        "setter-decorator",
+        "getter-decorator",
+        "deleter-decorator",
+        "method-named-vars",
+        "class-store-on-self",
+        "final-decorator",
+        "overload-decorator",
+        "builtins-classmethod",
+        "override-decorator",
+        "typing-extensions-override-decorator",
+        "cached-property-decorator",
+    ],
+)
+def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
+    tmp_path: Path, str_config: str
+) -> None:
+    """A method writing its own ``self``/``cls``, or a harmless builtin alias, stays clean."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="type statement needs 3.12")
+def test_type_alias_rebinding_self_is_charged(tmp_path: Path) -> None:
+    """``type self = int`` rebinds the name, so the method gets no exemption."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {
+            "_internal/__init__.py": "",
+            "_internal/config.py": _STR_SELF_MODULE
+            + "class A:\n    def f(self):\n        type self = int\n"
+            + "        setattr(self, 'Priv', 1)\nA().f()\n",
+        },
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_config",
+    ["def f(x: (Priv := 1)):\n    pass\n", "def f() -> (Priv := 1):\n    pass\n"],
+    ids=["walrus-param-annotation", "walrus-return-annotation"],
+)
+def test_walrus_in_an_annotation_is_charged_where_it_is_legal(
+    tmp_path: Path, str_config: str
+) -> None:
+    """The name is charged on every version, including 3.14 where only ``compile`` refuses it."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_comprehension_target_in_the_package_does_not_provide_the_name(tmp_path: Path) -> None:
+    """A comprehension variable is local to it, so it must not hide an ``_internal`` leak."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n[Priv for Priv in ()]\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": "Priv = 1\n"},
+    )
+    assert "'Priv'" in _sole(_load_gate().check_package(path_init))
