@@ -200,8 +200,9 @@ test suite keep the contract; this section records the reasoning that lived besi
     `__builtins__["exec"]`), and an absolute import of another top-level
     package.
 - **`check_assertion_weakening.py`** (#289, #324, #590). Comparison operators weaker than `==`
-  include the `in` example and `>=`; `Gt` and `Lt` are excluded because swapping equality for a
-  strict inequality still excludes the old value, so it stays out of the decidable core. The
+  include the `in` example, `>=`, `>` and `<` (#1053: `==` is not implied by any inequality, so
+  `Gt`/`Lt` accept infinitely many values the old assertion rejected, and the earlier
+  "decidable core" exclusion was wrong). The
   unittest-style call list is the measured, decidable subset, with only exact equivalences paired
   with a bare `assert`. A rename removes its source, so a production file moved into `tests/`
   still counts; a non-test source moved into `tests/` defines no baseline and is newly added.
@@ -784,7 +785,10 @@ interchangeable until a class crosses between them. Affected modules: `test_dail
       live upstream sources; a weekly `docstring-urls.yml` run opens one tracking issue instead,
       since a dead link has no mechanical fix. A filename-scoped scan reads every path passed,
       never the first as a `find` root. The cache lives in the git common dir so worktrees share
-      it, and failures expire after 6 hours against 7 days for a 2xx.
+      it, and failures expire after 6 hours against 7 days for a 2xx. 403, 408 and 429 are
+      never cached (a bot block or timeout clears), the hook selects files with `files: \.py$`
+      exactly as the script does, and the workflow closes the tracking issue when the scan is
+      clean and closes duplicates when several are open (#1058).
     - `check-urls` (#206, #224): every docstring shape must actually be scanned. The three shapes
       each hold the same unreachable URL, so a shape that reports clean is a check nobody ran.
       The third (a closing delimiter sharing a line with text) was never blind, since the URL was
