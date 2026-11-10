@@ -49,6 +49,36 @@ scaffold_filter_archetype_blocks() {
     '
 }
 
+description_reads_as_ptbr() {
+    python3 -I -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+from check_docs_language import paragraph_locale, prose_paragraphs
+list_paragraphs = prose_paragraphs(sys.argv[2] + "\n")
+sys.exit(3 if any(paragraph_locale(str_p, "pt-BR") != "pt-BR" for _, str_p in list_paragraphs) else 0)
+' "$BLUEPRINTX_ROOT/templates/python-common/bin" "$1"
+}
+
+scaffold_require_ptbr_description() {
+    local int_rc=0
+
+    while true; do
+        description_reads_as_ptbr "$PROJECT_DESCRIPTION" || int_rc=$?
+        case "$int_rc" in
+            0) return 0 ;;
+            3) ;;
+            *) print_status "error" "docs-language check could not run (python3 exit $int_rc)"; return 1 ;;
+        esac
+        if ! prompt_can_read; then
+            print_status "error" "PROJECT_DESCRIPTION reads as a language other than pt-BR; the generated docs-language gate would reject README.md. Provide a pt-BR description."
+            return 1
+        fi
+        print_status "warning" "The description does not read as pt-BR."
+        prompt_read PROJECT_DESCRIPTION "$(prompt_main "Project description in pt-BR: ")"
+        int_rc=0
+    done
+}
+
 scaffold_render_readme() {
     local str_skeleton_dir="$1"
     local path_template="$2"
@@ -61,6 +91,9 @@ scaffold_render_readme() {
         print_status "error" "templates/$str_skeleton_dir/skeleton.meta has no readme_archetype="
         return 1
     fi
+    case "$path_template" in
+        *.pt-BR.md) scaffold_require_ptbr_description || return 1 ;;
+    esac
     resolve_linkedin_url
     LINKEDIN_URL="${LINKEDIN_URL//(/%28}"
     LINKEDIN_URL="${LINKEDIN_URL//)/%29}"

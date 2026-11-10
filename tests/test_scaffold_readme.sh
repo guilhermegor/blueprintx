@@ -173,6 +173,45 @@ test_service_readme_has_no_documentation_or_pypi() {
     rm -f "$path_out"
 }
 
+render_ptbr_readme() {
+    local str_description="$1" path_out="$2"
+    (
+        BLUEPRINTX_ROOT="$REPO_ROOT"
+        PROJECT_NAME=acme PROJECT_DESCRIPTION="$str_description" PROJECT_DISPLAY_NAME=Acme
+        GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL="https://www.linkedin.com/in/ci-bot"
+        scaffold_render_readme lib-minimal "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md" "$path_out" >/dev/null 2>&1 </dev/null
+    )
+}
+
+test_ptbr_readme_refuses_an_english_description() {
+    local path_out int_rc=0
+    path_out="$(mktemp)"
+    render_ptbr_readme "This library is a tool that can parse the files. It is not for the users, and it will be fast." "$path_out" || int_rc=$?
+    expect "English description is refused for a pt-BR README" "1" "$int_rc"
+    rm -f "$path_out"
+}
+
+test_ptbr_readme_keeps_a_ptbr_description() {
+    local path_out str_description="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários, e será rápida."
+    path_out="$(mktemp)"
+    render_ptbr_readme "$str_description" "$path_out"
+    expect "pt-BR description is rendered unchanged" "1" "$(grep -cxF "$str_description" "$path_out" || true)"
+    rm -f "$path_out"
+}
+
+test_ptbr_readme_reprompts_in_interactive_mode() {
+    local path_out str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
+    path_out="$(mktemp)"
+    (
+        BLUEPRINTX_ROOT="$REPO_ROOT" BLUEPRINTX_STDIN_ANSWERS=1
+        PROJECT_NAME=acme PROJECT_DESCRIPTION="This library is a tool that can parse the files. It is not for the users." PROJECT_DISPLAY_NAME=Acme
+        GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL="https://www.linkedin.com/in/ci-bot"
+        scaffold_render_readme lib-minimal "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md" "$path_out" >/dev/null 2>&1 <<<"$str_ptbr"
+    )
+    expect "interactive mode takes the replacement pt-BR description" "1" "$(grep -cxF "$str_ptbr" "$path_out" || true)"
+    rm -f "$path_out"
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do
