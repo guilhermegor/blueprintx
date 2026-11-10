@@ -146,12 +146,23 @@ test_scaffold_passes_docs_gate() {
     fi
     str_out="$(python3 "$str_dir/docs-probe/bin/check_docs_language.py" \
         --root "$str_dir/docs-probe" 2>&1)" || int_rc=$?
-    if [ "$int_rc" -eq 0 ] && grep -Eq '\([1-9][0-9] page\(s\) checked\)$' <<<"$str_out"; then
+    if [ "$int_rc" -eq 0 ] && grep -Eq '\([1-9][0-9]* page\(s\) checked\)$' <<<"$str_out"; then
         pass "$str_locale scaffold passes the docs-language gate: $str_out"
     else
         fail "$str_locale scaffold, gate rc=$int_rc: $str_out"
     fi
+    [ "$str_locale" = "pt-BR" ] && check_codespell_skips_relative_docs "$str_dir/docs-probe"
     rm -rf "$str_dir"
+}
+
+check_codespell_skips_relative_docs() {
+    python3 - "$1/.codespellrc" <<'PY' \
+        && pass "pt-BR .codespellrc skips the repo-relative path docs/index.md" \
+        || fail "pt-BR .codespellrc skip does not match docs/index.md (pre-commit passes relative paths)"
+import fnmatch, sys
+str_skip = next(l for l in open(sys.argv[1]) if l.startswith("skip = "))[7:].strip()
+sys.exit(0 if any(fnmatch.fnmatch("docs/index.md", g) for g in str_skip.split(",")) else 1)
+PY
 }
 
 test_ptbr_twins_cover_shipped_pages() {
