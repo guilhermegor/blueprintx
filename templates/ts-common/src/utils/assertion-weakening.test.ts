@@ -272,7 +272,7 @@ describe('assertion weakening gate in the middle of a merge', () => {
     const commitFile = (name: string, content: string): void => {
       fs.writeFileSync(path.join(dir, name), content);
       run('add', '.');
-      run('commit', '-qm', `edit ${name}`);
+      run('commit', '-qm', `edit ${name}`, '--allow-empty');
     };
     try {
       run('init', '-q');
@@ -282,10 +282,10 @@ describe('assertion weakening gate in the middle of a merge', () => {
       commitFile('a.test.ts', spec('toBe'));
       run('checkout', '-q', '-b', 'feat');
       commitFile('own.txt', 'own');
-      if (featMatcher !== 'toBe') commitFile('a.test.ts', spec(featMatcher));
+      commitFile('a.test.ts', spec(featMatcher));
       run('checkout', '-q', 'main');
       commitFile('theirs.txt', 'theirs');
-      if (mainMatcher !== 'toBe') commitFile('a.test.ts', spec(mainMatcher));
+      commitFile('a.test.ts', spec(mainMatcher));
       run('checkout', '-q', 'feat');
       run('merge', '-q', '--no-commit', '--no-ff', 'main');
       return spawnSync('node', [GATE], { cwd: dir, env: GATE_ENV, encoding: 'utf8' }).status;
