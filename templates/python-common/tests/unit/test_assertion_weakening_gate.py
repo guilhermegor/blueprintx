@@ -155,12 +155,65 @@ def test_equality_weakened_to_membership_is_reported(str_fragment: str) -> None:
     )
 
 
-def test_a_stricter_operator_swap_is_not_flagged() -> None:
-    """``==`` tightened to a strict inequality is out of the decidable core, by design."""
-    str_old = "def test_x() -> None:\n\tassert compute() == 5\n"
-    str_new = "def test_x() -> None:\n\tassert compute() > 5\n"
+@pytest.mark.parametrize(
+    ("str_symbol", "str_fragment"),
+    [
+        (">", "operator weakened from == to >"),
+        ("<", "operator weakened from == to <"),
+        (">=", "operator weakened from == to >="),
+        ("<=", "operator weakened from == to <="),
+    ],
+)
+def test_equality_loosened_to_an_inequality_is_reported(
+    str_symbol: str, str_fragment: str
+) -> None:
+    """``x == 5`` does not imply ``x > 5``: any inequality accepts values the equality rejected."""
+    assert str_fragment in _sole_finding(
+        "def test_x() -> None:\n\tassert compute() == 5\n",
+        f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n",
+    )
 
-    assert _findings(str_old, str_new) == []
+
+@pytest.mark.parametrize("str_symbol", [">", "<"])
+def test_equality_loosened_to_an_inequality_in_a_call_rewrite_is_reported(
+    str_symbol: str,
+) -> None:
+    """``self.assertEqual(a, b)`` rewritten as a bare ``a > b`` is the same loosening."""
+    assert "weakened to a bare assert with " + str_symbol in _sole_finding(
+        "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n",
+        f"class T:\n\tdef test_x(self) -> None:\n\t\tassert compute() {str_symbol} 5\n",
+    )
+
+
+@pytest.mark.parametrize("str_symbol", [">", "<"])
+def test_an_assert_that_was_always_an_inequality_is_clean(str_symbol: str) -> None:
+    """The gate judges a CHANGE from ``==``, so a pre-existing inequality is untouched."""
+    str_src = f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n"
+
+    assert _findings(str_src, str_src) == []
+
+
+@pytest.mark.parametrize("str_symbol", [">", "<"])
+def test_an_inequality_tightened_to_equality_is_clean(str_symbol: str) -> None:
+    """Strengthening ``x > 5`` to ``x == 5`` pins more, not less, so it is not a finding."""
+    assert (
+        _findings(
+            f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n",
+            "def test_x() -> None:\n\tassert compute() == 5\n",
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    "str_call", ["assertGreater", "assertLess", "assertGreaterEqual", "assertLessEqual"]
+)
+def test_assert_equal_loosened_to_an_inequality_call_is_reported(str_call: str) -> None:
+    """``assertEqual`` swapped for an inequality call is the unittest twin of ``== -> >``."""
+    assert f"assertEqual() weakened to {str_call}()" in _sole_finding(
+        "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n",
+        f"class T:\n\tdef test_x(self) -> None:\n\t\tself.{str_call}(compute(), 5)\n",
+    )
 
 
 def test_assert_equal_weakened_to_assert_true_is_reported() -> None:
@@ -482,8 +535,8 @@ def test_a_unittest_call_rewritten_as_an_equivalent_bare_assert_is_clean() -> No
 
 def test_a_unittest_call_rewritten_as_a_stricter_bare_assert_is_clean() -> None:
     """A stricter operator after the rewrite is a strengthening, not a weakening."""
-    str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
-    str_new = "class T:\n\tdef test_v(self) -> None:\n\t\tassert a() > 5\n"
+    str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertIn(a(), [5])\n"
+    str_new = "class T:\n\tdef test_v(self) -> None:\n\t\tassert a() == 5\n"
     assert _findings(str_old, str_new) == []
 
 
@@ -598,6 +651,67 @@ _STR_PAD = "".join(
 )
 _STR_STRONG = _STR_PAD + "def test_v() -> None:\n    assert f() == 1\n"
 _STR_WEAK = _STR_PAD + "def test_v() -> None:\n    assert f() in (1, 2)\n"
+
+
+def _gate_after_merge(
+    path_repo: Path, monkeypatch: pytest.MonkeyPatch, str_main_body: str, str_feat_body: str
+) -> int:
+    """Run the gate mid-merge, after ``main`` and ``feature`` each moved on from the fork.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        An empty directory to turn into the repository.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate inside the repo.
+    str_main_body : str
+        The test file's content as committed on ``main`` after the fork.
+    str_feat_body : str
+        The test file's content as committed on ``feature`` after the fork.
+
+    Returns
+    -------
+    int
+        The gate's exit code.
+    """
+    path_test = path_repo / "tests" / "test_a.py"
+    path_test.parent.mkdir()
+    _git_in(path_repo, "init", "-q", "--initial-branch=main")
+    _git_in(path_repo, "config", "user.email", "t@example.com")
+    _git_in(path_repo, "config", "user.name", "t")
+    _git_in(path_repo, "config", "commit.gpgsign", "false")
+    path_test.write_text(_STR_STRONG, encoding="utf-8")
+    _git_in(path_repo, "add", ".")
+    _git_in(path_repo, "commit", "-q", "-m", "seed")
+    _git_in(path_repo, "checkout", "-q", "-b", "feature")
+    (path_repo / "own").write_text("own", encoding="utf-8")
+    path_test.write_text(str_feat_body, encoding="utf-8")
+    _git_in(path_repo, "add", ".")
+    _git_in(path_repo, "commit", "-q", "-m", "own")
+    _git_in(path_repo, "checkout", "-q", "main")
+    (path_repo / "theirs").write_text("theirs", encoding="utf-8")
+    path_test.write_text(str_main_body, encoding="utf-8")
+    _git_in(path_repo, "add", ".")
+    _git_in(path_repo, "commit", "-q", "-m", "theirs")
+    _git_in(path_repo, "checkout", "-q", "feature")
+    _git_in(path_repo, "merge", "-q", "--no-commit", "--no-ff", "main")
+    monkeypatch.chdir(path_repo)
+    monkeypatch.setattr(gate, "PATH_ROOT", path_repo)
+    return gate.main([])
+
+
+def test_a_weakening_merged_in_from_main_is_not_charged_to_the_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Should-fail witness for #1060: main's own weakening must not block the branch."""
+    assert _gate_after_merge(tmp_path, monkeypatch, _STR_WEAK, _STR_STRONG) == 0
+
+
+def test_a_weakening_authored_on_the_branch_still_fails_after_the_merge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other direction: narrowing the base must not blind the gate to the branch's own work."""
+    assert _gate_after_merge(tmp_path, monkeypatch, _STR_STRONG, _STR_WEAK) == 1
 
 
 @pytest.fixture

@@ -75,8 +75,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
       - name: Install pathspec and pyyaml
-        run: python3 -m pip install pathspec pyyaml
+        run: python3 -m pip install pathspec==1.1.1 pyyaml==6.0.3
 
       - name: Check every published docs page reaches mkdocs nav and the docs/CLAUDE.md index
         run: python3 templates/python-common/bin/check_docs_gap.py --root .
@@ -379,6 +383,13 @@ jobs:
       - name: Should-fail regression tests for validate_meta.sh
         run: bash tests/test_validate_meta.sh
 
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pathspec and pyyaml
+        run: python3 -m pip install pathspec==1.1.1 pyyaml==6.0.3
+
       - name: Should-fail regression tests for the docs-locale prompt
         run: bash tests/test_docs_locale_prompt.sh
 
@@ -423,6 +434,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pathspec and pyyaml
+        run: python3 -m pip install pathspec==1.1.1 pyyaml==6.0.3
 
       - name: Run the --spec should-fail suite (blueprintx#629)
         run: bash tests/test_spec_answers.sh
@@ -846,6 +864,45 @@ jobs:
           SCAFFOLD_SPEC_FILE: bin/ci/optin_specs/otel.answers
         run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
 
+  scaffold-lint-test-ptbr:
+    name: Scaffold + lint + test (pt-BR docs locale) — ${{ matrix.skeleton }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        skeleton:
+          - ddd-service-orm-db
+          - lib-minimal
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pip
+          key: pip-poetry-${{ hashFiles('templates/*/pyproject.toml') }}
+          restore-keys: pip-poetry-
+
+      - name: Install scaffold tooling (envsubst)
+        run: command -v envsubst >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext-base; }
+
+      - name: Install Poetry
+        run: python -m pip install poetry
+
+      - name: Real scaffold with docs_locale=pt-BR, then lint + tests
+        env:
+          GITHUB_USERNAME: ci-bot
+          SKELETON: ${{ matrix.skeleton }}
+          DOCS_LOCALE: pt-BR
+        run: bash bin/ci/scaffold_lint_test.sh "$SKELETON"
+
   typecheck-ts:
     name: TypeScript build + lint — ${{ matrix.skeleton }} template
     runs-on: ubuntu-latest
@@ -988,3 +1045,29 @@ jobs:
         env:
           MARKDOWNLINT_REQUIRED: "1"
         run: bash bin/ci/check_markdown.sh
+
+  ts-scaffold-jest:
+    name: Generated TS project - npm ci, lint, jest (${{ matrix.skeleton }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        skeleton:
+          - ts-lib
+          - react-spa-webpack
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Scaffold offline, then npm ci, npm run lint, npm test
+        run: bash bin/ci/scaffold_ts_test.sh "${{ matrix.skeleton }}"
+
+      - name: Should-fail witness - a broken shipped jest test turns this red
+        if: matrix.skeleton == 'ts-lib'
+        run: bash tests/test_scaffold_ts_test.sh
