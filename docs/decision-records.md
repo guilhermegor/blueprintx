@@ -784,7 +784,10 @@ interchangeable until a class crosses between them. Affected modules: `test_dail
       live upstream sources; a weekly `docstring-urls.yml` run opens one tracking issue instead,
       since a dead link has no mechanical fix. A filename-scoped scan reads every path passed,
       never the first as a `find` root. The cache lives in the git common dir so worktrees share
-      it, and failures expire after 6 hours against 7 days for a 2xx.
+      it, and failures expire after 6 hours against 7 days for a 2xx. 403, 408 and 429 are
+      never cached (a bot block or timeout clears), the hook selects files with `files: \.py$`
+      exactly as the script does, and the workflow closes the tracking issue when the scan is
+      clean and closes duplicates when several are open (#1058).
     - `check-urls` (#206, #224): every docstring shape must actually be scanned. The three shapes
       each hold the same unreachable URL, so a shape that reports clean is a check nobody ran.
       The third (a closing delimiter sharing a line with text) was never blind, since the URL was
