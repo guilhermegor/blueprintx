@@ -60,16 +60,16 @@ pessoas usuárias executam primeiro.
 
 ```text
 ${PROJECT_NAME}/
-├── .github/        workflows, CODEOWNERS, PR template
-├── .specs/         feature specs and backlog trackers
-├── bin/            gate scripts and helpers
-├── docs/           published documentation
-├── src/            application code
+├── .github/        workflows, CODEOWNERS e template de PR
+├── .specs/         specs de funcionalidades e trackers de backlog
+├── bin/            scripts de gate e utilitários
+├── docs/           documentação publicada
+├── src/            código da aplicação
 ├── tests/
 │   ├── unit/
 │   └── integration/
 ├── pyproject.toml
-└── poe_tasks.toml  task runner entry points
+└── poe_tasks.toml  pontos de entrada do task runner
 ```
 
 <!-- slug: development -->

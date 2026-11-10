@@ -17,8 +17,8 @@ Uma biblioteca Python mínima, com empacotamento, testes, CI e lint já configur
 
 ```bash
 bash bin/venv.sh   # cria o venv (o poe vive dentro dele, então o bootstrap é em shell)
-poe unit_tests    # roda a suíte de testes
-poe docs_serve   # serve esta documentação em http://0.0.0.0:8000
+bash bin/poe_exec.sh unit_tests    # roda a suíte de testes
+bash bin/poe_exec.sh docs_serve   # serve esta documentação em http://0.0.0.0:8000
 ```
 
 ---
