@@ -383,6 +383,13 @@ jobs:
       - name: Should-fail regression tests for validate_meta.sh
         run: bash tests/test_validate_meta.sh
 
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pathspec and pyyaml
+        run: python3 -m pip install pathspec==1.1.1 pyyaml==6.0.3
+
       - name: Should-fail regression tests for the docs-locale prompt
         run: bash tests/test_docs_locale_prompt.sh
 
