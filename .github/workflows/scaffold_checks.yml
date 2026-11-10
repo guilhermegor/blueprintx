@@ -75,8 +75,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
       - name: Install pathspec and pyyaml
-        run: python3 -m pip install pathspec pyyaml
+        run: python3 -m pip install pathspec==1.1.1 pyyaml==6.0.3
 
       - name: Check every published docs page reaches mkdocs nav and the docs/CLAUDE.md index
         run: python3 templates/python-common/bin/check_docs_gap.py --root .
@@ -426,6 +430,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pathspec and pyyaml
+        run: python3 -m pip install pathspec==1.1.1 pyyaml==6.0.3
 
       - name: Run the --spec should-fail suite (blueprintx#629)
         run: bash tests/test_spec_answers.sh

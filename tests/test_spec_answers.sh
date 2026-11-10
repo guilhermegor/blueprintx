@@ -37,9 +37,15 @@ write_spec() {
     {
         printf 'project_name=spec-probe\nproject_description=probe\nlanguage=%s\n' "${SPEC_LANGUAGE:-python}"
         printf 'skeleton=%s\nlicense=MIT\ngithub_username=ci-bot\n' "$skeleton"
+        [[ " $* " == *" docs_locale="* || -n "${SPEC_NO_DOCS_LOCALE:-}" ]] || printf 'docs_locale=en\n'
         printf '%s\n' "$@"
     } >"$file"
     echo "$file"
+}
+
+rm_temp_root() {
+    [[ "$1" == "$WORK_DIR"/?* ]] && rm -rf "$1"
+    return 0
 }
 
 run_blueprintx() {
@@ -198,6 +204,7 @@ spec_docs_language() {
     out="$(run_blueprintx new --spec "$file" --dev)"
     str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
     sed -n 's/^  language: //p' "$str_temp/spec-probe/mkdocs.yml" 2>/dev/null
+    rm_temp_root "$str_temp"
 }
 
 test_docs_locale_reaches_the_scaffold() {
@@ -210,13 +217,89 @@ test_docs_locale_reaches_the_scaffold() {
     fi
 }
 
-test_absent_docs_locale_defaults_to_en() {
-    local str_got
-    str_got="$(spec_docs_language docs-default)"
-    if [ "$str_got" = "en" ]; then
-        pass "a spec with no docs_locale renders language: en, the prompt's default"
+spec_scaffold_root() {
+    local out
+    out="$(run_blueprintx new --spec "$(write_spec "$1" lib-minimal "${@:2}")" --dev)"
+    sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1
+}
+
+require_gate_deps() {
+    python3 -c 'import pathspec, yaml' 2>/dev/null && return 0
+    fail "$1" "missing test dependency, not a gate failure: pip install pathspec pyyaml"
+    return 1
+}
+
+test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate() {
+    local str_temp int_pages int_marked str_gate int_rc=0
+    require_gate_deps "pt-BR e2e" || return 0
+    str_temp="$(spec_scaffold_root docs-pt-e2e "docs_locale=pt-BR")"
+    int_pages="$(find "$str_temp/spec-probe/docs" -name '*.md' | wc -l)"
+    int_marked="$(grep -rlx '<!-- docs-lang:untranslated -->' "$str_temp/spec-probe/docs" | wc -l)"
+    str_gate="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" 2>&1)" || int_rc=$?
+    grep -qxF '<!-- docs-lang:untranslated -->' "$str_temp/spec-probe/README.md" || int_rc=99
+    if [ "$int_pages" -gt 0 ] && [ "$int_pages" = "$int_marked" ] && [ "$int_rc" -eq 0 ]; then
+        pass "pt-BR scaffold marks README and all $int_pages docs pages and its own gate passes"
     else
-        fail "docs_locale default" "generated mkdocs.yml language='$str_got' (expected en)"
+        fail "pt-BR e2e" "pages=$int_pages marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
+    fi
+    rm_temp_root "$str_temp"
+}
+
+test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate() {
+    local str_temp int_marked str_gate int_rc=0
+    require_gate_deps "en e2e" || return 0
+    str_temp="$(spec_scaffold_root docs-en-e2e "docs_locale=en")"
+    int_marked="$(grep -rl 'docs-lang:untranslated' "$str_temp/spec-probe/docs" | wc -l)"
+    str_gate="$(python3 "$str_temp/spec-probe/bin/check_docs_language.py" --root "$str_temp/spec-probe" 2>&1)" || int_rc=$?
+    if [ "$int_marked" -eq 0 ] && [ "$int_rc" -eq 0 ]; then
+        pass "en scaffold leaves pages unmarked and its own gate passes"
+    else
+        fail "en e2e" "marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
+    fi
+    rm_temp_root "$str_temp"
+}
+
+test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton() {
+    local file root out int_rc
+    root="$WORK_DIR/no-locale-root"
+    file="$(SPEC_NO_DOCS_LOCALE=1 write_spec no-locale lib-minimal "project_root=$root")"
+    out="$(run_blueprintx new --spec "$file")"
+    int_rc=$?
+    if [ "$int_rc" -ne 0 ] && [[ "$out" == *"'docs_locale' is required for the MkDocs skeleton 'lib-minimal'"* && ! -e "$root" ]]; then
+        pass "a spec with no docs_locale is refused on an MkDocs skeleton and creates nothing"
+    else
+        fail "absent docs_locale refusal" "rc=$int_rc, root exists or message missing: ${out: -300}"
+    fi
+}
+
+test_absent_docs_locale_is_refused_on_every_python_tier() {
+    local meta skeleton file out int_rc str_bad="" int_tiers=0
+    for meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
+        grep -q '^language=python$' "$meta" || continue
+        int_tiers=$((int_tiers + 1))
+        skeleton="$(basename "$(dirname "$meta")")"
+        file="$(SPEC_NO_DOCS_LOCALE=1 write_spec "tier-$skeleton" "$skeleton" "project_root=$WORK_DIR/tier-$skeleton-root")"
+        out="$(run_blueprintx new --spec "$file" --dry-run)"
+        int_rc=$?
+        { [ "$int_rc" -ne 0 ] && [[ "$out" == *"'docs_locale' is required"* ]]; } || str_bad="$str_bad $skeleton"
+    done
+    [ "$int_tiers" -gt 0 ] || str_bad=" (no Python tier found)"
+    if [ -z "$str_bad" ]; then
+        pass "a spec with no docs_locale is refused on every Python tier"
+    else
+        fail "absent docs_locale on every Python tier" "not refused:$str_bad"
+    fi
+}
+
+test_absent_docs_locale_is_accepted_on_a_skeleton_without_mkdocs() {
+    local file out
+    file="$(SPEC_LANGUAGE=typescript SPEC_NO_DOCS_LOCALE=1 write_spec ts-no-locale ts-lib "project_root=$WORK_DIR/ts-no-locale-root")"
+    out="$(run_blueprintx new --spec "$file" --dry-run)"
+    local int_rc=$?
+    if [ "$int_rc" -eq 0 ] && [[ "$out" == *"docs_locale=en"* && "$out" != *"'docs_locale' is required"* ]]; then
+        pass "a spec with no docs_locale still resolves to en on a skeleton that ignores it"
+    else
+        fail "absent docs_locale on non-mkdocs" "${out: -300}"
     fi
 }
 
@@ -843,7 +926,11 @@ main() {
     test_a_failed_answer_stream_stops_the_scaffold_flow
     test_bad_docs_locale_stops_before_anything_is_created
     test_docs_locale_reaches_the_scaffold
-    test_absent_docs_locale_defaults_to_en
+    test_pt_br_scaffold_marks_every_page_and_passes_its_own_gate
+    test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate
+    test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton
+    test_absent_docs_locale_is_refused_on_every_python_tier
+    test_absent_docs_locale_is_accepted_on_a_skeleton_without_mkdocs
 
     if [ "$int_failures" -eq 0 ]; then
         echo "All --spec regression tests passed."
