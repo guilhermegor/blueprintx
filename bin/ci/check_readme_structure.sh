@@ -8,11 +8,15 @@ GATE="$REPO_ROOT/templates/common/bin/check_readme_structure.sh"
 source "$REPO_ROOT/bin/lib/spec.sh"
 
 check_static() {
-    local int_rc=0
+    local int_rc=0 path_readme
+    local -a arr_rest=()
     cd "$REPO_ROOT"
     bash "$GATE" README.md || int_rc=1
     bash "$GATE" --template --require-footer templates/common/README.template.md templates/python-common/README.md || int_rc=1
-    bash "$GATE" --template templates/*/README.md || int_rc=1
+    for path_readme in templates/*/README.md; do
+        [ "$path_readme" = templates/python-common/README.md ] || arr_rest+=("$path_readme")
+    done
+    bash "$GATE" --template "${arr_rest[@]}" || int_rc=1
     return "$int_rc"
 }
 

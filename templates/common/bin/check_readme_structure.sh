@@ -123,6 +123,7 @@ check_authors() {
 
 footer_rule_missing() {
 	md_strip_fences <"$1" | awk '
+		{ sub(/[ \t\r]+$/, "") }
 		/^<sub>Generated from/ { if (prev != "---") bad = 1 }
 		NF { prev = $0 }
 		END { exit !bad }'
