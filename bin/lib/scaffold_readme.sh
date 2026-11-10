@@ -50,7 +50,7 @@ scaffold_filter_archetype_blocks() {
 }
 
 description_reads_as_ptbr() {
-    python3 -I -c '
+    python3 -c '
 import sys
 sys.path.insert(0, sys.argv[1])
 from check_docs_language import paragraph_locale, prose_paragraphs
@@ -75,6 +75,10 @@ scaffold_require_ptbr_description() {
         fi
         print_status "warning" "The description does not read as pt-BR."
         prompt_read PROJECT_DESCRIPTION "$(prompt_main "Project description in pt-BR: ")"
+        if [ -z "$PROJECT_DESCRIPTION" ]; then
+            print_status "error" "No pt-BR description was given."
+            return 1
+        fi
         int_rc=0
     done
 }

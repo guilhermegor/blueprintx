@@ -184,10 +184,52 @@ render_ptbr_readme() {
 }
 
 test_ptbr_readme_refuses_an_english_description() {
+    local path_out int_rc=0 str_err
+    path_out="$(mktemp)"
+    str_err="$(
+        BLUEPRINTX_ROOT="$REPO_ROOT"
+        PROJECT_NAME=acme PROJECT_DESCRIPTION="This library is a tool that can parse the files. It is not for the users, and it will be fast." PROJECT_DISPLAY_NAME=Acme
+        GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL="https://www.linkedin.com/in/ci-bot"
+        scaffold_render_readme lib-minimal "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md" "$path_out" 2>&1 >/dev/null </dev/null
+    )" || int_rc=$?
+    expect "English description is refused for a pt-BR README" "1" "$int_rc"
+    expect "refusal names the pt-BR requirement" "1" "$(grep -c 'other than pt-BR' <<<"$str_err" || true)"
+    rm -f "$path_out"
+}
+
+test_ptbr_readme_reports_a_checker_that_cannot_run() {
+    local path_out int_rc=0 str_err
+    path_out="$(mktemp)"
+    str_err="$(
+        BLUEPRINTX_ROOT="$REPO_ROOT"
+        PROJECT_NAME=acme PROJECT_DESCRIPTION="Texto qualquer." PROJECT_DISPLAY_NAME=Acme
+        GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL="https://www.linkedin.com/in/ci-bot"
+        description_reads_as_ptbr() { return 127; }
+        scaffold_render_readme lib-minimal "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md" "$path_out" 2>&1 >/dev/null </dev/null
+    )" || int_rc=$?
+    expect "a checker that cannot run fails the render" "1" "$int_rc"
+    expect "that failure is told apart from a language refusal" "1" "$(grep -c 'could not run' <<<"$str_err" || true)"
+    rm -f "$path_out"
+}
+
+test_ptbr_readme_keeps_a_short_ptbr_description() {
+    local path_out str_description="Utilitários para CNPJ"
+    path_out="$(mktemp)"
+    render_ptbr_readme "$str_description" "$path_out"
+    expect "short pt-BR description is rendered" "1" "$(grep -cxF "$str_description" "$path_out" || true)"
+    rm -f "$path_out"
+}
+
+test_ptbr_readme_refuses_an_empty_answer_at_eof() {
     local path_out int_rc=0
     path_out="$(mktemp)"
-    render_ptbr_readme "This library is a tool that can parse the files. It is not for the users, and it will be fast." "$path_out" || int_rc=$?
-    expect "English description is refused for a pt-BR README" "1" "$int_rc"
+    (
+        BLUEPRINTX_ROOT="$REPO_ROOT" BLUEPRINTX_STDIN_ANSWERS=1
+        PROJECT_NAME=acme PROJECT_DESCRIPTION="This library is a tool that can parse the files. It is not for the users." PROJECT_DISPLAY_NAME=Acme
+        GITHUB_USERNAME=ci-bot LICENSE_CHOICE=MIT LINKEDIN_URL="https://www.linkedin.com/in/ci-bot"
+        scaffold_render_readme lib-minimal "$REPO_ROOT/templates/lib-minimal/README.pt-BR.md" "$path_out" >/dev/null 2>&1 </dev/null
+    ) || int_rc=$?
+    expect "an empty answer at EOF is refused" "1" "$int_rc"
     rm -f "$path_out"
 }
 
