@@ -305,6 +305,7 @@ copy_global_config() {
         cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_env_config.py" "$project_path/tests/unit/test_env_config.py"
     fi
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_import_root.py" "$project_path/tests/unit/test_import_root.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" "$project_path/tests/unit/test_quality_rules_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
@@ -415,6 +416,7 @@ copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review-retry.yml" "$project_path/.github/workflows/review-retry.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yml" "$project_path/.github/workflows/pr-gate.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yml" "$project_path/.github/workflows/pr-reconcile.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/docstring-urls.yml" "$project_path/.github/workflows/docstring-urls.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/contract-drift.yml" "$project_path/.github/workflows/contract-drift.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/release.yml" "$project_path/.github/workflows/release.yml"
     cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yml" "$project_path/.github/workflows/docs.yml"
@@ -730,6 +732,7 @@ main() {
     copy_mkdocs_templates "$PROJECT_PATH"
     scaffold_purge_caches "$PROJECT_PATH"
     scaffold_comment_budget "$PROJECT_PATH"
+    scaffold_mark_untranslated "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
     finalize_github_or_offline "$PROJECT_PATH"

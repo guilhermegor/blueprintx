@@ -780,6 +780,11 @@ interchangeable until a class crosses between them. Affected modules: `test_dail
     - `export_deps.sh`: Poetry's own words survive to the operator, and the remedy names the
       resolved binary, not a bare `poetry`. `print_status`: an unknown status must not look like
       ordinary output.
+    - `check-urls` (#1045): the hook is manual-stage because every commit would otherwise probe
+      live upstream sources; a weekly `docstring-urls.yml` run opens one tracking issue instead,
+      since a dead link has no mechanical fix. A filename-scoped scan reads every path passed,
+      never the first as a `find` root. The cache lives in the git common dir so worktrees share
+      it, and failures expire after 6 hours against 7 days for a 2xx.
     - `check-urls` (#206, #224): every docstring shape must actually be scanned. The three shapes
       each hold the same unreachable URL, so a shape that reports clean is a check nobody ran.
       The third (a closing delimiter sharing a line with text) was never blind, since the URL was
@@ -2366,3 +2371,15 @@ ignore a red release. The owner removed the channel on 2026-11-07: `release_snap
 store token behind it must still be deleted and revoked by the owner. Existing Snap
 installs keep their last version and should move to Homebrew, Chocolatey or apt. The old
 plan under `.specs/features/snap-publishing/` stays as a record.
+
+## The docs-language gate passes when every page is untranslated (`check_docs_language.py`, #1035)
+
+A fresh `pt-BR` project ships English pages, and the scaffold marks each one
+`<!-- docs-lang:untranslated -->`. The gate skips marked pages, so on day one it reads nothing
+and exits 0 with a ⚠️ summary line that names the skip count, not the ✅ success mark. Failing
+there would make every new `pt-BR` project red before its owner had written a single page,
+and the only way out would be deleting the markers, which hides the untranslated pages
+instead of listing them. The marker is the record: each page stays visible in every run's
+summary until someone translates it and removes the marker, and from then on that page is
+checked. The `test_main_all_pages_skipped_does_not_report_success` unit test pins the ⚠️
+line.

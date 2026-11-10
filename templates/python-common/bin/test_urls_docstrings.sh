@@ -5,8 +5,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
-CACHE_DIR=".url_check_cache"
 CACHE_TTL=$((60 * 60 * 24 * 7))
+CACHE_FAIL_TTL=$((60 * 60 * 6))
+
+resolve_cache_dir() {
+	local str_common_dir
+	if [[ -n "${URL_CHECK_CACHE_DIR:-}" ]]; then
+		echo "$URL_CHECK_CACHE_DIR"
+	elif str_common_dir=$(git rev-parse --git-common-dir 2>/dev/null); then
+		echo "${str_common_dir}/url_check_cache"
+	else
+		echo ".url_check_cache"
+	fi
+}
+
+CACHE_DIR="$(resolve_cache_dir)"
 
 get_cache() {
 	local url="$1"
@@ -14,12 +27,13 @@ get_cache() {
 	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
 
 	if [[ -f "$str_cache_file" ]]; then
-		local int_timestamp
+		local int_timestamp int_ttl=$CACHE_FAIL_TTL
+		[[ "$(cat "$str_cache_file")" =~ ^2 ]] && int_ttl=$CACHE_TTL
 		int_timestamp=$(stat -c %Y "$str_cache_file")
 		local int_now
 		int_now=$(date +%s)
 
-		if ((int_now - int_timestamp < CACHE_TTL)); then
+		if ((int_now - int_timestamp < int_ttl)); then
 			cat "$str_cache_file"
 			return 0
 		fi
@@ -32,7 +46,8 @@ set_cache() {
 	local str_status="$2"
 	local str_cache_file
 	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
-	echo "$str_status" >"$str_cache_file"
+	echo "$str_status" >"${str_cache_file}.$$"
+	mv -f "${str_cache_file}.$$" "$str_cache_file"
 }
 
 clean_cache() {
@@ -115,9 +130,7 @@ check_url() {
 	fi
 
 	str_status_code=$(probe_url_status "$str_url")
-	if [[ "$str_status_code" =~ ^2 ]]; then
-		set_cache "$str_url" "$str_status_code"
-	fi
+	[[ "$str_status_code" =~ ^[1-4][0-9][0-9]$ && "$str_status_code" != 429 ]] && set_cache "$str_url" "$str_status_code"
 	echo "$str_status_code"
 }
 
@@ -197,16 +210,26 @@ scan_file_for_urls() {
 process_python_files() {
 	clean_cache
 
-	local str_root_dir="${1:-.}"
-	local str_file
+	local -a list_targets=("$@")
+	local str_target str_file
 	DICT_PROCESSED_URLS=()
 	INT_URL_ERRORS=0
+	[[ ${#list_targets[@]} -eq 0 ]] && list_targets=(.)
 
-	print_status "info" "Scanning Python docstrings for URLs in '$str_root_dir'..."
+	print_status "info" "Scanning Python docstrings for URLs in: ${list_targets[*]}"
 
-	while IFS= read -r -d '' str_file; do
-		scan_file_for_urls "$str_file"
-	done < <(find "$str_root_dir" -type f -name "*.py" -print0)
+	for str_target in "${list_targets[@]}"; do
+		if [[ -d "$str_target" ]]; then
+			while IFS= read -r -d '' str_file; do
+				scan_file_for_urls "$str_file"
+			done < <(find "$str_target" -type f -name "*.py" -print0)
+		elif [[ -f "$str_target" && "$str_target" == *.py ]]; then
+			scan_file_for_urls "$str_target"
+		elif [[ ! -e "$str_target" ]]; then
+			print_status "error" "Path not found: $str_target"
+			INT_URL_ERRORS=1
+		fi
+	done
 
 	if [[ $INT_URL_ERRORS -eq 0 ]]; then
 		print_status "success" "All docstring URLs are reachable"
@@ -216,8 +239,12 @@ process_python_files() {
 }
 
 main() {
-	mkdir -p "$CACHE_DIR"
-	process_python_files "${1:-.}" || exit 1
+	if ! mkdir -p "$CACHE_DIR" 2>/dev/null || [[ ! -w "$CACHE_DIR" ]]; then
+		CACHE_DIR="$(mktemp -d)"
+		trap 'rm -rf "$CACHE_DIR"' EXIT
+		print_status "warning" "Cache dir not writable; using ${CACHE_DIR}"
+	fi
+	process_python_files "$@" || exit 1
 }
 
 main "$@"
