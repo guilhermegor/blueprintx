@@ -33,16 +33,19 @@ the project: two other code files import it. Remove these three together:
 | 2 | `tests/unit/test_main.py` | Delete the file (it imports `main`) |
 | 3 | `src/<package_name>/__init__.py` | Delete `from .main import main` and the `"main"` entry in `__all__` (`"__version__"` stays); without this, `import <package_name>` fails |
 
-Three docs still show `main` afterwards. They do not break the build, but they
-document a function that no longer exists:
+Docs still show `main` afterwards, in English and in `docs/pt-BR/`. They do not
+break the build (the "Module: `main`" section is a plain code block, not a
+mkdocstrings `:::` directive), but they document a function that no longer
+exists:
 
 | # | File | What to change |
 |---|------|----------------|
-| 4 | `docs/usage.md` | Replace the "Basic usage" example (`from <package_name>.main import main`) with one of your own public functions |
-| 5 | `docs/examples.md` | Replace the first recipe, which imports `main` from the package |
-| 6 | `docs/api/reference.md` | Delete the "Module: `main`" section above and this section |
+| 4 | `docs/usage.md` and `docs/pt-BR/usage.md` | Replace the "Basic usage" example (`from <package_name>.main import main`) with one of your own public functions |
+| 5 | `docs/examples.md` and `docs/pt-BR/examples.md` | Replace the first recipe, which imports `main` from the package |
+| 6 | `docs/api/reference.md` and `docs/pt-BR/api/reference.md` | Delete the "Module: `main`" section and this section, plus one of the two `---` rules around them so no doubled separator remains |
+| 7 | `AGENTS.md` | Update the layout tree and the "example boilerplate" note that name `main.py` |
 
-Nothing else references `main`: `pyproject.toml` has no `[project.scripts]`
+No other code file references `main`: `pyproject.toml` has no `[project.scripts]`
 entry, and neither `poe_tasks.toml` nor `.coveragerc` names it.
 
 ---
