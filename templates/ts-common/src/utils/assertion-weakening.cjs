@@ -62,7 +62,7 @@ function gitStrict(args) {
   return execFileSync('git', args, {
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'ignore'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 }
 

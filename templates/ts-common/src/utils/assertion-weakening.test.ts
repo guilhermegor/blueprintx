@@ -8,6 +8,9 @@ import { collect, fileFindings, justification } from './assertion-weakening.cjs'
 const spec = (matcher: string): string =>
   `it('computes', () => {\n  expect(compute()).${matcher}(5);\n});\n`;
 
+const UNCHANGED_LINES = 20;
+const UNCHANGED = 'const unchanged = 1;\n'.repeat(UNCHANGED_LINES);
+
 const GATE = path.join(__dirname, 'assertion-weakening.cjs');
 const CLEAN_ENV = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')),
@@ -191,6 +194,32 @@ describe('assertion weakening gate as a command', () => {
     }
   });
 
+  it('checks a renamed test file under its new path', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-'));
+    const run = (...args: string[]): Buffer =>
+      execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', ...args], {
+        cwd: dir,
+        stdio: 'ignore',
+        env: CLEAN_ENV,
+      });
+    try {
+      run('init', '-q');
+      run('checkout', '-q', '-b', 'main');
+      run('config', 'user.email', 'a@b');
+      run('config', 'user.name', 't');
+      fs.writeFileSync(path.join(dir, 'a.test.ts'), UNCHANGED + spec('toBe'));
+      run('add', '.');
+      run('commit', '-qm', 'init');
+      run('mv', 'a.test.ts', 'b.test.ts');
+      fs.writeFileSync(path.join(dir, 'b.test.ts'), UNCHANGED + spec('toBeGreaterThan'));
+      run('add', '.');
+      const result = spawnSync('node', [GATE], { cwd: dir, env: GATE_ENV, encoding: 'utf8' });
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('b.test.ts: computes: toBe loosened to toBeGreaterThan');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('assertion weakening gate as a command, edge cases', () => {

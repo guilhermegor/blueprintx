@@ -2004,6 +2004,10 @@ grouped by what they guard.
   machine-decidable, so a gate, while the quality of the mention stays a human call. A missing
   key under `set -euo pipefail` used to kill the gate inside its own `grep` pipeline with exit
   1 and no message, which every should-fail test read as proof the check ran; hence `|| true`.
+  It also maps every `language=` to its assertion-weakening gate file and fails on a language
+  with no entry, or on an entry whose file is gone (#1053). That is the test that turns red
+  when a new language template ships without the gate. `bash` is mapped to "none" on purpose:
+  its tiers predate #1053, which scoped the gate to Python and TypeScript.
 - **Shell helper scripts.** `check_docs_build.sh` builds MkDocs `--strict`, preferring `poetry
   run` and falling back to `mkdocs` on `PATH`; `check_spelling.sh` runs codespell over `docs/`
   and `templates/` with the root `.codespellrc`; neither inlines flags, so CI and pre-commit
