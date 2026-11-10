@@ -134,6 +134,10 @@ jobs:
         if: runner.os == 'Linux'
         run: poetry run python bin/check_comment_language.py
 
+      - name: Run Docs Language Enforcement
+        if: runner.os == 'Linux'
+        run: poetry run python bin/check_docs_language.py
+
       - name: Run Comment Budget Ratchet
         if: runner.os == 'Linux'
         run: poetry run python bin/check_comment_budget.py --require-baseline
