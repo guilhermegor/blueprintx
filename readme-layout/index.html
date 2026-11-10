@@ -2918,6 +2918,11 @@ heading (blank lines between are fine): <code>&lt;!-- slug: install --&gt;</code
   <a href="https://github.com/guilhermegor/blueprintx">BlueprintX</a>" (<code>README_TIER</code>) followed by
   any project disclaimer. The link is absolute, like the images, because the README ships to
   PyPI where relative links break, and the structure gate reports a footer without it.
+  A missing footer passes by default, because the READMEs without one are deliberate; pass
+  <code>--require-footer</code> to fail a README with no <code>&lt;sub&gt;Generated from</code> line or whose footer has
+  no <code>---</code> rule above it. <code>bin/ci/check_readme_structure.sh</code> passes it for
+  <code>README.template.md</code>, <code>python-common/README.md</code> and every generated project whose skeleton
+  has no <code>templates/&lt;name&gt;/README.md</code> of its own.
   Disclaimers go here, not in the body.</li>
 <li>Every list item under <code>authors</code> carries a <code>github.com/&lt;user&gt;</code> link and a
   <code>linkedin.com/in/&lt;handle&gt;</code> link, and none uses the placeholder
