@@ -155,7 +155,11 @@ venv_missing_deps() {
 ensure_venv_deps() {
 	local str_missing
 
-	str_missing="$(venv_missing_deps | tr '\n' ' ')"
+	if ! str_missing="$(venv_missing_deps)"; then
+		print_status "error" "Could not check the venv's dependencies — see the error above, or run 'poetry install --with dev'"
+		return 1
+	fi
+	str_missing="${str_missing//$'\n'/ }"
 	[[ -z "${str_missing// /}" ]] && return 0
 	print_status "error" "The venv is missing dependencies: ${str_missing% } — run 'poetry install --with dev'"
 	return 1

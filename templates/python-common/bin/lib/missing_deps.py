@@ -53,8 +53,8 @@ def declared_names(dict_toml: dict) -> list[str]:
     ]
     list_names = [
         str_name
-        for dict_t in list_tables
-        for str_name, spec in dict_t.items()
+        for dict_table in list_tables
+        for str_name, spec in dict_table.items()
         if _is_required(spec)
     ]
     list_pep621 = [

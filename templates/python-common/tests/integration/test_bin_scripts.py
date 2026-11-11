@@ -2875,15 +2875,15 @@ def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
     assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
 
 
-def _stage_poetry_exec(path_root: Path, str_dry_run_output: str) -> tuple[Path, dict[str, str]]:
-    """Copy ``poetry_exec.sh`` beside a stub ``poetry`` whose dry-run reports a given state.
+def _stage_poetry_exec(path_root: Path, str_missing_output: str) -> tuple[Path, dict[str, str]]:
+    """Copy ``poetry_exec.sh`` beside a stub ``poetry`` whose dep check reports a given state.
 
     Parameters
     ----------
     path_root : pathlib.Path
         Throwaway project root.
-    str_dry_run_output : str
-        What ``poetry install --dry-run`` prints; empty means nothing is missing.
+    str_missing_output : str
+        What the pyproject dependency check prints; empty means nothing is missing.
 
     Returns
     -------
@@ -2899,7 +2899,7 @@ def _stage_poetry_exec(path_root: Path, str_dry_run_output: str) -> tuple[Path, 
     path_poetry = path_stubs / "poetry"
     path_poetry.write_text(
         '#!/bin/bash\n[[ "$*" == *missing_deps.py* ]] && '
-        "{ printf '%s' \"$DRY_RUN_OUT\"; exit 0; }\n"
+        '{ printf \'%s\' "$MISSING_OUT"; exit "${CHECK_EXIT:-0}"; }\n'
         '[ "$1" = "run" ] && echo RAN\nexit 0\n',
         encoding="utf-8",
     )
@@ -2910,7 +2910,7 @@ def _stage_poetry_exec(path_root: Path, str_dry_run_output: str) -> tuple[Path, 
     dict_env.pop("CLICOLOR_FORCE", None)
     dict_env.pop("NO_COLOR", None)
     dict_env["PATH"] = f"{path_stubs}{os.pathsep}{dict_env['PATH']}"
-    dict_env["DRY_RUN_OUT"] = str_dry_run_output
+    dict_env["MISSING_OUT"] = str_missing_output
     return path_bin / "poetry_exec.sh", dict_env
 
 
@@ -2941,8 +2941,8 @@ def _run_staged_poetry_exec(
     )
 
 
-def test_poetry_run_with_missing_locked_deps_fails_with_one_install_line(tmp_path: Path) -> None:
-    """A venv lacking locked packages must not reach the gate and die in a traceback."""
+def test_poetry_run_with_missing_declared_deps_fails_with_one_install_line(tmp_path: Path) -> None:
+    """A venv lacking declared packages must not reach the gate and die in a traceback."""
     path_script, dict_env = _stage_poetry_exec(tmp_path, "pyyaml\ndefusedxml\n")
 
     cls_run = _run_staged_poetry_exec(path_script, dict_env)
@@ -2951,6 +2951,18 @@ def test_poetry_run_with_missing_locked_deps_fails_with_one_install_line(tmp_pat
     assert "RAN" not in cls_run.stdout
     assert "pyyaml" in cls_run.stderr
     assert "poetry install --with dev" in cls_run.stderr
+
+
+def test_poetry_run_with_failing_dependency_check_explains_itself(tmp_path: Path) -> None:
+    """A checker that crashes must stop the run with a line saying so, never a bare abort."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+    dict_env["CHECK_EXIT"] = "1"
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode != 0, cls_run.stdout
+    assert "RAN" not in cls_run.stdout
+    assert "Could not check the venv's dependencies" in cls_run.stderr
 
 
 def test_poetry_run_with_complete_venv_still_runs(tmp_path: Path) -> None:
