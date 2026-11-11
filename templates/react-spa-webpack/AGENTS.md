@@ -409,8 +409,10 @@ Tests live in `src/capabilities/<feature>/__tests__/`.
 (`jest/no-disabled-tests`), which also covers `.skip.each`, `x*.each`
 and callback-less tests: a skipped or focused block leaves
 every CI signal green while silently running fewer tests. Delete the test or fix
-it. A skip that must stay carries its issue in the disable reason, on the line
-above it: `// eslint-disable-next-line jest/no-disabled-tests -- #123`.
+it. A skip that must stay needs a disable on the line above it that names its
+issue: `// eslint-disable-next-line jest/no-disabled-tests -- #123`. Lint
+requires the disable but not the issue reference, so reviewers enforce that.
+`it.todo` is not flagged by the rule and is an accepted gap.
 
 For a stub that is not built yet, `throw new Error('not implemented')` rather
 than returning a well-typed constant: a constant passes its own test and hides
