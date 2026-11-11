@@ -602,10 +602,10 @@ def _funcs(*tuple_names: str, str_body: str = "assert f() == 1") -> dict:
 def test_pairing_is_independent_of_input_order() -> None:
     """Two renames that each clear the threshold against both candidates pair the same way."""
     dict_expected = {"test_parse_v1": "test_parse_w1", "test_parse_v2": "test_parse_w2"}
-    str_fwd, str_rev = ("test_parse_v1", "test_parse_v2"), ("test_parse_v2", "test_parse_v1")
+    tuple_fwd, tuple_rev = ("test_parse_v1", "test_parse_v2"), ("test_parse_v2", "test_parse_v1")
     dict_added = _funcs("test_parse_w1", "test_parse_w2")
-    assert gate_rename.rename_pairs(_funcs(*str_fwd), dict_added) == dict_expected
-    assert gate_rename.rename_pairs(_funcs(*str_rev), dict_added) == dict_expected
+    assert gate_rename.rename_pairs(_funcs(*tuple_fwd), dict_added) == dict_expected
+    assert gate_rename.rename_pairs(_funcs(*tuple_rev), dict_added) == dict_expected
 
 
 def test_a_better_later_match_is_not_stolen_by_an_earlier_name() -> None:
@@ -650,3 +650,20 @@ def test_weakening_finding_names_the_renamed_test() -> None:
     assert list_problems == [
         "x: test_rejects_negative_amount() lost 1 assertion(s) (had 2, now 1)"
     ]
+
+
+def test_a_sibling_differing_only_in_a_literal_is_not_paired() -> None:
+    """NEGATIVE CONTROL: v1 replaced by v2 with other inputs is a deletion, not a rename."""
+    dict_old = _funcs("test_parse_v1", str_body="assert parse('a') == 1")
+    dict_new = _funcs("test_parse_v2", str_body="assert parse('b') == 2")
+    assert gate_rename.rename_pairs(dict_old, dict_new) == {}
+
+
+def test_a_long_renamed_body_still_pairs() -> None:
+    """A ten-statement body renamed unchanged pairs, so #1073 holds beyond tiny tests."""
+    str_body = "\n    ".join(f"assert parse({int_i}) == {int_i}" for int_i in range(10))
+    dict_old = _funcs("test_has_six_pages", str_body=str_body)
+    dict_new = _funcs("test_has_seven_pages", str_body=str_body)
+    assert gate_rename.rename_pairs(dict_old, dict_new) == {
+        "test_has_six_pages": "test_has_seven_pages"
+    }

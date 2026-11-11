@@ -26,6 +26,26 @@ def _ratio(str_a: str, str_b: str) -> float:
     return difflib.SequenceMatcher(None, str_a, str_b).ratio()
 
 
+def _statements(cls_func: ast.FunctionDef) -> list:
+    """Return the source text of each body statement, docstring excluded.
+
+    Parameters
+    ----------
+    cls_func : ast.FunctionDef
+        A parsed test function.
+
+    Returns
+    -------
+    list of str
+        One ``ast.unparse`` string per statement, so a changed literal or argument makes the
+        statement differ instead of hiding inside shared node boilerplate.
+    """
+    list_body = cls_func.body
+    if ast.get_docstring(cls_func, clean=False) is not None:
+        list_body = list_body[1:]
+    return [ast.unparse(cls_stmt) for cls_stmt in list_body]
+
+
 def rename_pairs(dict_removed: dict, dict_added: dict) -> dict:
     """Pair each removed test with the added one that is a plausible rename of it.
 
@@ -44,9 +64,8 @@ def rename_pairs(dict_removed: dict, dict_added: dict) -> dict:
         best name score first, ties broken by name, so the result never depends on source
         order; each added name is used once.
     """
-    dict_dump = {
-        str_n: "".join(ast.dump(cls_stmt) for cls_stmt in cls_node.body)
-        for str_n, cls_node in (dict_removed | dict_added).items()
+    dict_stmts = {
+        str_n: _statements(cls_node) for str_n, cls_node in (dict_removed | dict_added).items()
     }
     list_scored = sorted(
         (-_ratio(str_old, str_new), str_old, str_new)
@@ -60,7 +79,10 @@ def rename_pairs(dict_removed: dict, dict_added: dict) -> dict:
             break
         if str_old in dict_pairs or str_new in set_used:
             continue
-        if _ratio(dict_dump[str_old], dict_dump[str_new]) >= FLOAT_BODY_SIMILARITY:
+        matcher = difflib.SequenceMatcher(
+            None, dict_stmts[str_old], dict_stmts[str_new], autojunk=False
+        )
+        if matcher.ratio() >= FLOAT_BODY_SIMILARITY:
             dict_pairs[str_old] = str_new
             set_used.add(str_new)
     return dict_pairs
