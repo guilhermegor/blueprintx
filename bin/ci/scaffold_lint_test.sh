@@ -261,7 +261,9 @@ poetry run mkdocs build --strict -d "$(mktemp -d)"
 git add -A
 git diff --cached --quiet \
     || { echo "ERROR: [$SKELETON] the tree has uncommitted changes after the run:" >&2; git status --short >&2; exit 1; }
+str_pushed_note="push check skipped (no origin remote)"
 if git remote get-url origin >/dev/null 2>&1; then
+    str_pushed_note="pushed"
     git rev-parse --verify -q main >/dev/null \
         || { echo "ERROR: [$SKELETON] local branch main is missing; cannot prove it was pushed." >&2; exit 1; }
     git rev-parse --verify -q origin/main >/dev/null \
@@ -271,7 +273,7 @@ if git remote get-url origin >/dev/null 2>&1; then
 fi
 [ ! -e .specs/.specs ] \
     || { echo "ERROR: [$SKELETON] nested .specs/.specs was scaffolded." >&2; exit 1; }
-echo "Final tree: committed, pushed (when a remote exists), no nested .specs, mkdocs --strict builds."
+echo "Final tree: committed, $str_pushed_note, no nested .specs, mkdocs --strict builds."
 echo "::endgroup::"
 
 if [ "$SKELETON" = "lib-minimal" ]; then
