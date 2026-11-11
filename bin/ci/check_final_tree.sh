@@ -18,14 +18,14 @@ str_pushed_note="push check skipped (no origin remote)"
 if git remote get-url origin >/dev/null 2>&1; then
     str_pushed_note="pushed"
     git rev-parse --verify -q refs/heads/main >/dev/null \
-        || fail "local branch main is missing; cannot prove it was pushed."
+        || fail "local branch main is missing; cannot compare it with origin/main."
     git rev-parse --verify -q refs/remotes/origin/main >/dev/null \
-        || fail "origin is set but origin/main is missing; cannot prove main was pushed."
+        || fail "origin is set but origin/main is missing; cannot compare main with it."
     str_ahead="$(git rev-list --oneline refs/remotes/origin/main..refs/heads/main)"
     [ -z "$str_ahead" ] || { echo "$str_ahead" >&2; fail "local main has commits origin/main lacks."; }
 fi
 
-[ ! -d .specs ] || [ -z "$(find .specs -mindepth 1 -name .specs)" ] \
+[ ! -d .specs ] || [ -z "$(find .specs -mindepth 1 -type d -name .specs)" ] \
     || fail "a nested .specs directory was scaffolded inside .specs/."
 
 echo "Final tree: committed, $str_pushed_note, no nested .specs."

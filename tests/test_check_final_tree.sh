@@ -93,6 +93,18 @@ git -C "$dir" commit -q -m ahead
 check "local main ahead of origin/main fails" 1 "$(run_check "$dir")"
 check_msg "local main ahead of origin/main fails" "local main has commits"
 
+git -C "$dir" push -q origin main
+git -C "$dir" reset -q --hard HEAD^
+check "origin/main ahead of local main passes" 0 "$(run_check "$dir")"
+
+dir="$(new_repo filespecs)"
+: >"$dir/.specs-file"
+mkdir "$dir/.specs"
+: >"$dir/.specs/.specs"
+git -C "$dir" add -A
+git -C "$dir" commit -q -m filespecs
+check "a regular file named .specs inside .specs/ passes" 0 "$(run_check "$dir")"
+
 dir="$(new_repo master)"
 with_remote master "$dir"
 git -C "$dir" push -q origin main
