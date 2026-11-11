@@ -11,7 +11,7 @@ uma única pessoa — o conhecimento que a equipe já pagou uma vez não deveria
 Um **ADR** registra uma decisão tomada *antes* de algo dar errado. Um registro de incidente
 documenta uma decisão tomada *porque* algo já deu errado — gatilho diferente, público diferente.
 Se este projeto adotar ADRs no futuro, mantenha os dois separados em vez de misturá-los num
-mesmo saco de gatos.
+mesmo balaio.
 
 Também não é uma cópia do repositório de "lições aprendidas" de uma ferramenta de scaffolding.
 Esse tipo de repositório responde "o que todo projeto gerado no futuro deve herdar" — esta
