@@ -260,6 +260,8 @@ git add -A
 git diff --cached --quiet \
     || { echo "ERROR: [$SKELETON] the tree has uncommitted changes after the run:" >&2; git status --short >&2; exit 1; }
 if git remote get-url origin >/dev/null 2>&1; then
+    git rev-parse --verify -q origin/main >/dev/null \
+        || { echo "ERROR: [$SKELETON] origin is set but origin/main is missing; cannot prove main was pushed." >&2; exit 1; }
     [ -z "$(git rev-list origin/main..main)" ] \
         || { echo "ERROR: [$SKELETON] local main has commits origin/main lacks:" >&2; git rev-list --oneline origin/main..main >&2; exit 1; }
 fi
