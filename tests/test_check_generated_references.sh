@@ -60,13 +60,13 @@ expect_dir "empty project dir fails" "$str_empty"
 rm -rf "$str_empty"
 
 expect_extra() {
-    local str_desc="$1" str_want="$2" str_file="$3" str_body="$4" str_dir str_got="pass" str_out
+    local str_desc="$1" str_want="$2" str_file="$3" str_body="$4" str_needle="${5:-nope.sh}" str_dir str_got="pass" str_out
     str_dir="$(make_project)"
     mkdir -p "$(dirname "$str_dir/$str_file")"
     printf '%s' "$str_body" >"$str_dir/$str_file"
     str_out="$(bash "$CHECK" --project "$str_dir" 2>&1)" || str_got="fail"
     rm -rf "$str_dir"
-    if [ "$str_got" = "fail" ] && ! printf '%s' "$str_out" | grep -qE 'ERROR: .*(never copied|nothing was checked)'; then
+    if [ "$str_got" = "fail" ] && ! printf '%s' "$str_out" | grep -qE "ERROR: .*$str_needle.*never copied"; then
         echo "FAIL: $str_desc -> failed without a gate message: $str_out" >&2
         int_failures=$((int_failures + 1))
     elif [ "$str_got" = "$str_want" ]; then
@@ -84,7 +84,8 @@ expect_extra "composite action reference to a missing script fails" fail .github
 expect_extra ".yaml workflow reference to a missing script fails" fail .github/workflows/y.yaml 'run: bash bin/nope.sh'
 expect_extra "Makefile recipe tab form is scanned" fail Makefile $'a:\n\tbin/nope.sh\n'
 expect_extra "commented-out reference is ignored" pass Makefile $'# bin/nope.sh\n'
-expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n'
+expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n' site/index.md
+expect_extra ".vscode/tasks.json reference to a missing script is scanned" fail .vscode/tasks.json '{"command":"bash bin/nope.sh"}'
 
 str_site="$(make_project)"
 mkdir -p "$str_site/site" && touch "$str_site/site/index.md" "$str_site/site/incidents.md"

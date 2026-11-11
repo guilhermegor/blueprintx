@@ -59,11 +59,12 @@ check_project() {
         done < <(nav_pages "$str_project/mkdocs.yml")
     fi
     for str_file in "$str_project/poe_tasks.toml" "$str_project/.pre-commit-config.yaml" \
-        "$str_project/package.json" "$str_project/Makefile" "$str_project"/make/*.mk \
+        "$str_project/package.json" "$str_project/.vscode/tasks.json" "$str_project/Makefile" \
+        "$str_project"/make/*.mk \
         "$str_project"/.github/workflows/*.y*ml "$str_project"/.github/actions/*/action.y*ml; do
         [ -f "$str_file" ] && list_sources+=("$str_file")
     done
-    for str_file in "${list_sources[@]}"; do
+    for str_file in ${list_sources[@]+"${list_sources[@]}"}; do
         while IFS= read -r str_ref; do
             int_refs=$((int_refs + 1))
             [ -e "$str_project/$str_ref" ] \
