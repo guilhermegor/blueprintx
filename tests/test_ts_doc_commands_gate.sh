@@ -68,6 +68,14 @@ expect "CONTRIBUTING.md citing a missing script after a flag fails" 1 "$?"
 printf 'Run `npm run --workspace=app ghost`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "a flag with =value before a missing script fails" 1 "$?"
+for str_form in '-w app' '--workspace app' '--prefix app'; do
+	printf 'Run `npm run %s ghost`.\n' "$str_form" >"$str_proj/CONTRIBUTING.md"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "a missing script after '$str_form' fails" 1 "$?"
+	printf 'Run `npm run %s build`.\n' "$str_form" >"$str_proj/CONTRIBUTING.md"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "an existing script after '$str_form' passes" 0 "$?"
+done
 printf 'Run `npm run build.prod` then `npm run build:`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "a dotted missing script fails, trailing colon is prose" 1 "$?"
@@ -75,6 +83,12 @@ printf 'Run `npm run build:`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "trailing punctuation is not part of the script name" 0 "$?"
 rm "$str_proj/CONTRIBUTING.md"
+
+mkdir -p "$str_proj/docs/node_modules/pkg"
+printf 'Run `npm run vendored-ghost`.\n' >"$str_proj/docs/node_modules/pkg/README.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "vendored docs under node_modules are not scanned" 0 "$?"
+rm -rf "$str_proj/docs/node_modules"
 
 printf 'Try `npm run serve`.\n' >"$str_proj/docs/usage.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1

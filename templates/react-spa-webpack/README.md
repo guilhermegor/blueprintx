@@ -187,8 +187,7 @@ consumer with no TS toolchain.
 
 ```bash
 npm run js-copy:build   # strips types with @babel/preset-typescript → js-copy/ # doc-commands:optional
-npm run js-copy:verify  # fails loudly if any .ts(x)/tsconfig, or a mention # doc-commands:optional
-                         # of TypeScript in a generated .md/.txt/.html, survived
+npm run js-copy:verify  # fails loudly if any TypeScript survived # doc-commands:optional
 npm run js-copy          # both, in order # doc-commands:optional
 ```
 
