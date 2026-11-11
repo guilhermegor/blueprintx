@@ -288,7 +288,7 @@ BlueprintX/
 
 ## Discovery system
 
-`bin/blueprintx.sh` builds the language and skeleton menus at runtime by scanning every `templates/*/skeleton.meta` file. A `skeleton.meta` is a shell-sourceable KEY=VALUE file with five fields (`ships_docs` is required; `readme_archetype` stays optional):
+`bin/blueprintx.sh` builds the language and skeleton menus at runtime by scanning every `templates/*/skeleton.meta` file. A `skeleton.meta` is a shell-sourceable KEY=VALUE file with five required fields plus the optional `readme_archetype`:
 
 ```
 language=<python|typescript|…>

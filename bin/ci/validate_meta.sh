@@ -42,10 +42,17 @@ for meta in "$TEMPLATES_DIR"/*/skeleton.meta; do
         errors=$((errors + 1))
     fi
 
-    str_ships_docs="$(grep '^ships_docs=' "$meta" | cut -d= -f2- | tr -d '[:space:]' || true)"
+    str_ships_docs="$(grep -m1 '^ships_docs=' "$meta" | cut -d= -f2- || true)"
     if [ -n "$str_ships_docs" ] && [ "$str_ships_docs" != "true" ] && [ "$str_ships_docs" != "false" ]; then
-        echo "  ERROR: ships_docs '$str_ships_docs' must be true or false" >&2
+        echo "  ERROR: ships_docs '$str_ships_docs' must be exactly true or false" >&2
         errors=$((errors + 1))
+    elif [ -n "$str_ships_docs" ] && [ -f "$REPO_ROOT/$scaffold_rel" ]; then
+        str_actual=false
+        grep -qE 'mkdocs\.yml|docusaurus\.config' "$REPO_ROOT/$scaffold_rel" && str_actual=true
+        if [ "$str_actual" != "$str_ships_docs" ]; then
+            echo "  ERROR: ships_docs=$str_ships_docs but the scaffold script implies $str_actual" >&2
+            errors=$((errors + 1))
+        fi
     fi
 
     str_archetype="$(grep '^readme_archetype=' "$meta" | cut -d= -f2- | tr -d '[:space:]' || true)"

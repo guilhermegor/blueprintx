@@ -15,7 +15,7 @@ base_value() {
         display_name) echo "Fake Skeleton" ;;
         description) echo "A fake skeleton for testing" ;;
         scaffold) echo "bin/scaffold/fake.sh" ;;
-        ships_docs) echo "true" ;;
+        ships_docs) echo "false" ;;
     esac
 }
 
@@ -146,7 +146,7 @@ test_ships_docs_must_be_boolean() {
         "scaffold=$(base_value scaffold)" \
         "ships_docs=maybe"
     expect_gate "ships_docs outside true/false" "$str_root" "fail" \
-        "ships_docs 'maybe' must be true or false"
+        "ships_docs 'maybe' must be exactly true or false"
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/bin/scaffold"
     : > "$str_root/bin/scaffold/fake.sh"
@@ -157,6 +157,38 @@ test_ships_docs_must_be_boolean() {
         "scaffold=$(base_value scaffold)" \
         "ships_docs=false"
     expect_gate "ships_docs=false" "$str_root" "pass"
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    : > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=true"
+    expect_gate "ships_docs=true without a docs config in the scaffold" "$str_root" "fail" \
+        "ships_docs=true but the scaffold script implies false"
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    echo 'cp mkdocs.yml "$project_path"' > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=true"
+    expect_gate "ships_docs=true with a docs config in the scaffold" "$str_root" "pass"
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    : > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs= true"
+    expect_gate "whitespace-padded ships_docs" "$str_root" "fail" \
+        "must be exactly true or false"
 }
 
 test_readme_archetype() {

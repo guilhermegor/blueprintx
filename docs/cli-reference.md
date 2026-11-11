@@ -96,7 +96,8 @@ Create `templates/<name>/` with a `skeleton.meta`, write a scaffold script under
 
 Besides `language`, `display_name`, `description` and `scaffold`, every `skeleton.meta`
 must carry `ships_docs=true` or `ships_docs=false`: whether the generated project ships a
-documentation site. The key names the fact for any documentation engine (MkDocs or Docusaurus), so a future
-consumer such as a docs-locale gate can read it instead of guessing from the presence of
-`mkdocs.yml`; no gate reads it yet. `bin/ci/validate_meta.sh` rejects a missing
-key or any other value.
+documentation site. The key names the fact for any documentation engine (MkDocs or
+Docusaurus), so a future consumer such as a docs-locale gate can read it instead of
+guessing from the presence of `mkdocs.yml`; no gate reads it yet.
+`bin/ci/validate_meta.sh` rejects a missing key, any value but exactly `true` or `false`,
+and a value that disagrees with whether the scaffold script references a docs config.
