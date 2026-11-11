@@ -2875,6 +2875,132 @@ def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
     assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
 
 
+def _stage_poetry_exec(path_root: Path, str_missing_output: str) -> tuple[Path, dict[str, str]]:
+    """Copy ``poetry_exec.sh`` beside a stub ``poetry`` whose dep check reports a given state.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Throwaway project root.
+    str_missing_output : str
+        What the pyproject dependency check prints; empty means nothing is missing.
+
+    Returns
+    -------
+    tuple[Path, dict[str, str]]
+        The staged script and the environment that puts the stub first on ``PATH``.
+    """
+    path_bin = path_root / "bin"
+    path_bin.mkdir()
+    shutil.copy(_bin_script("poetry_exec.sh"), path_bin / "poetry_exec.sh")
+    _materialise_bin_lib(path_bin)
+    path_stubs = path_root / "_stubs"
+    path_stubs.mkdir()
+    path_poetry = path_stubs / "poetry"
+    path_poetry.write_text(
+        '#!/bin/bash\n[[ "$*" == *missing_deps.py* ]] && '
+        '{ printf \'%s\' "$MISSING_OUT"; exit "${CHECK_EXIT:-0}"; }\n'
+        '[ "$1" = "run" ] && echo RAN\nexit 0\n',
+        encoding="utf-8",
+    )
+    path_poetry.chmod(0o755)
+    dict_env = dict(os.environ)
+    dict_env.pop("LOG_FILE", None)
+    dict_env.pop("FORCE_COLOR", None)
+    dict_env.pop("CLICOLOR_FORCE", None)
+    dict_env.pop("NO_COLOR", None)
+    dict_env["PATH"] = f"{path_stubs}{os.pathsep}{dict_env['PATH']}"
+    dict_env["MISSING_OUT"] = str_missing_output
+    return path_bin / "poetry_exec.sh", dict_env
+
+
+def _run_staged_poetry_exec(
+    path_script: Path, dict_env: dict[str, str]
+) -> subprocess.CompletedProcess:
+    """Run the staged ``poetry_exec.sh run python gate.py`` and capture its output.
+
+    Parameters
+    ----------
+    path_script : pathlib.Path
+        The staged script.
+    dict_env : dict[str, str]
+        Environment from ``_stage_poetry_exec``.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The finished run.
+    """
+    return subprocess.run(  # noqa: S603
+        [_STR_BASH, str(path_script), "run", "python", "gate.py"],
+        env=dict_env,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+
+def test_poetry_run_with_missing_declared_deps_fails_with_one_install_line(tmp_path: Path) -> None:
+    """A venv lacking declared packages must not reach the gate and die in a traceback."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "missing: pyyaml\nmissing: defusedxml\n")
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode != 0, cls_run.stdout
+    assert "RAN" not in cls_run.stdout
+    assert "pyyaml" in cls_run.stderr
+    assert "poetry install --with dev" in cls_run.stderr
+
+
+def test_poetry_run_with_failing_dependency_check_explains_itself(tmp_path: Path) -> None:
+    """A checker that crashes must stop the run with a line saying so, never a bare abort."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+    dict_env["CHECK_EXIT"] = "1"
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode != 0, cls_run.stdout
+    assert "RAN" not in cls_run.stdout
+    assert "Could not check the venv's dependencies" in cls_run.stderr
+
+
+def test_poetry_run_ignores_poetry_notices_on_stdout(tmp_path: Path) -> None:
+    """A notice Poetry prints to stdout is not a dependency name and must not block the run."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "Creating virtualenv demo in /x\n")
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode == 0, cls_run.stderr
+    assert "RAN" in cls_run.stdout
+
+
+def test_poetry_run_checks_with_the_project_venv_interpreter_not_poetry(tmp_path: Path) -> None:
+    """The check must not pay a second Poetry start-up when the in-project venv exists."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+    dict_env["CHECK_EXIT"] = "9"
+    path_python = tmp_path / ".venv" / "bin" / "python"
+    path_python.parent.mkdir(parents=True)
+    path_python.write_text("#!/bin/bash\necho 'missing: pyyaml'\n", encoding="utf-8")
+    path_python.chmod(0o755)
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert "pyyaml" in cls_run.stderr, cls_run.stderr
+    assert "Could not check" not in cls_run.stderr
+    assert "RAN" not in cls_run.stdout
+
+
+def test_poetry_run_with_complete_venv_still_runs(tmp_path: Path) -> None:
+    """The guard must be invisible when nothing is missing."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode == 0, cls_run.stderr
+    assert "RAN" in cls_run.stdout
+
+
 def _tracker_step_script() -> str:
     """Return the shell of the workflow's tracking-issue step.
 
