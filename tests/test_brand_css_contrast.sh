@@ -140,7 +140,9 @@ list_css = dict_cfg.get("extra_css") or []
 if isinstance(list_css, str):
     list_css = [list_css]
 list_features = dict_theme.get("features") or []
-list_dicts = [d for d in list_palette if isinstance(d, dict) and "scheme" in d]
+if isinstance(list_features, str):
+    list_features = [list_features]
+list_dicts = [d for d in list_palette if isinstance(d, dict)]
 list_why = []
 if "stylesheets/brand.css" not in list_css:
     list_why.append("no stylesheets/brand.css in extra_css")
@@ -148,7 +150,7 @@ elif list_css[-1] != "stylesheets/brand.css":
     list_why.append("stylesheets/brand.css must be the last extra_css entry")
 if any("accent" in d for d in list_dicts):
     list_why.append("accent: set")
-if not list_dicts:
+if not any("scheme" in d for d in list_dicts):
     list_why.append("no palette entries (- scheme:) in mkdocs.yml")
 elif any(d.get("primary") != "custom" for d in list_dicts):
     list_why.append("primary: custom missing on a palette entry")
@@ -250,6 +252,10 @@ check_yml "should-fail: accent: set in mkdocs.yml" "$TMP/accent.yml" refuse "acc
 sed '0,/primary: custom/{/primary: custom/d}' "$YML" >"$TMP/no-primary.yml"
 check_yml "should-fail: primary: custom missing" "$TMP/no-primary.yml" refuse "primary: custom missing"
 sed '/^\s*-\s*scheme:/d' "$YML" >"$TMP/no-palette.yml"
+printf 'theme:\n  palette:\n    - media: "(prefers-color-scheme)"\n      primary: custom\n      accent: red\n    - scheme: default\n      primary: custom\nextra_css: [stylesheets/brand.css]\n' >"$TMP/media-accent.yml"
+check_yml "should-fail: accent on a scheme-less palette entry" "$TMP/media-accent.yml" refuse "accent: set"
+printf 'theme:\n  features: navigation.top\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/scalar-feat.yml"
+check_yml "should-fail: scalar features value" "$TMP/scalar-feat.yml" refuse "navigation.top"
 check_yml "should-fail: no palette entries" "$TMP/no-palette.yml" refuse "no palette entries"
 sed '/stylesheets\/brand\.css/d' "$YML" >"$TMP/no-css.yml"
 check_yml "should-fail: brand.css not in extra_css" "$TMP/no-css.yml" refuse "no stylesheets/brand.css"
