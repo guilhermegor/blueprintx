@@ -790,6 +790,12 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "import pkg._internal.config as me\nclass A:\n    def f(self):\n        def g():\n"
         + "            nonlocal self\n"
         + "        setattr(self, 'Priv', 1)\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self):\n        def g():\n"
+        + "            nonlocal self\n            self = me\n        g()\n"
+        + "        setattr(self, 'Priv', 1)\nA().f()\n",
+        "from ._compat import vars\nclass A:\n    def f(self):\n        vars(self)['Priv'] = 1\n",
+        "def setattr(o, n, v):\n    pass\nclass A:\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
         "class A:\n    def f(self, vars=lambda _: 1):\n        vars(self)\n",
         "class A:\n    def f(self):\n        def setattr(*a):\n            pass\n"
         + "        setattr(self, 'Priv', 1)\n",
@@ -809,6 +815,19 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "class A:\n    @evil.setter\n    def f(self, v):\n        setattr(self, 'Priv', v)\n",
         "class A:\n    def f(self, w):\n        (lambda setattr: setattr(self, 'Priv', 1))(w)\n",
         "__all__ = ['Other']\ndel __all__\nPriv = 1\n",
+        "import pkg._internal.config as me\nclass A:\n    def f(self=me):\n"
+        + "        setattr(self, 'Priv', 1)\nA.f()\n",
+        "def _install():\n    global vars\n    from ._compat import vars\n"
+        + "class A:\n    def f(self):\n        vars(self)['Priv'] = 1\n",
+        "def _install():\n    global setattr\nclass A:\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "def outer():\n    def setattr(*a):\n        pass\n    class A:\n"
+        + "        def f(self):\n            setattr(self, 'Priv', 1)\n",
+        "from ._compat import *\nclass A:\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class Outer:\n    def m(self):\n        from ._compat import setattr\n"
+        + "        class Inner:\n            def f(self):\n"
+        + "                setattr(self, 'Priv', 1)\n",
     ],
     ids=[
         "alias-exec",
@@ -840,6 +859,9 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "class-swap-through-rebound-method-self",
         "global-self-in-nested-def",
         "nonlocal-self-in-nested-def",
+        "nonlocal-self-rebound-and-called",
+        "module-import-shadows-vars",
+        "module-def-shadows-setattr",
         "param-shadows-vars",
         "nested-def-shadows-setattr",
         "attribute-decorator-unknown-receiver",
@@ -852,12 +874,23 @@ _STR_SELF_MODULE = "import pkg._internal.config as me\n"
         "accessor-on-foreign-receiver",
         "nested-lambda-parameter-shadows-setattr",
         "del-all",
+        "self-has-default",
+        "global-vars-in-function",
+        "global-setattr-in-function",
+        "enclosing-function-binds-setattr",
+        "star-import-may-shadow-setattr",
+        "enclosing-method-binds-setattr",
     ],
 )
 def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
     tmp_path: Path, str_config: str
 ) -> None:
-    """An aliased writer, a rebound ``self``, a walrus outside a body or ``del __all__`` leaks."""
+    """An aliased writer, a rebound ``self``, an outside walrus or ``del __all__`` is charged.
+
+    Some ids pin a deliberate over-charge rather than a leak: ``global``/``nonlocal`` in a nested
+    def that never rebinds, and ``del``/``except ... as``/walrus on ``self``. Narrowing
+    ``_rebinds`` past them is a decision, so it has to turn these red first.
+    """
     path_init = _tree(
         tmp_path,
         'from ._internal.config import *\n__all__ = ["Priv"]\n',

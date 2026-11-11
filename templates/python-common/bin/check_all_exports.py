@@ -476,7 +476,7 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
     A writer name counts as a bare name or as an attribute (``builtins.exec``, ``sys.modules``).
     The one exemption is ``setattr(x, ...)`` or ``vars(x)`` inside a method body, where ``x`` is
     that method's own first parameter: a caller can still pass a module there, so a lambda or a
-    plain function never qualifies.
+    plain function never qualifies. A file that binds ``setattr`` or ``vars`` itself gets none.
 
     Parameters
     ----------
@@ -489,11 +489,15 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
         ``True`` when a dynamic writer is named outside that exemption.
     """
     set_bound = _bound_names(list_nodes)
-    set_exempt = {
-        int_id
-        for cls_fn in _methods(list_nodes)
-        for int_id in _own_parameter_writes(cls_fn, set_bound)
-    }
+    set_exempt = (
+        set()
+        if _module_shadows_writer(list_nodes)
+        else {
+            int_id
+            for cls_fn in _methods(list_nodes)
+            for int_id in _own_parameter_writes(cls_fn, set_bound)
+        }
+    )
     return any(
         _names_writer(cls_sub) and id(cls_sub) not in set_exempt
         for cls_node in list_nodes
@@ -550,9 +554,11 @@ def _own_parameter_writes(
     set of int
         ``id()`` of each exempt ``Name`` node; empty when the method gets no exemption.
     """
-    str_param = [*cls_fn.args.posonlyargs, *cls_fn.args.args][0].arg
+    list_positional = [*cls_fn.args.posonlyargs, *cls_fn.args.args]
+    str_param = list_positional[0].arg
     if (
         str_param not in {"self", "cls"}
+        or len(cls_fn.args.defaults) >= len(list_positional)
         or _loses_exemption(cls_fn, set_bound)
         or _rebinds(cls_fn, str_param)
         or _shadows_writer(cls_fn)
@@ -728,6 +734,59 @@ def _shadows_writer(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         isinstance(cls_sub, ast.arg) and cls_sub.arg in {"setattr", "vars"}
         for cls_sub in ast.walk(cls_fn)
     ) or any(_rebinds(cls_fn, str_writer) for str_writer in ("setattr", "vars"))
+
+
+def _module_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
+    """Return whether the module namespace binds ``setattr`` or ``vars`` by any statement.
+
+    A star import counts as a possible binding. An import, ``def``, ``class``,
+    ``except ... as`` or ``match`` capture all count; a plain assignment is a ``Name`` the
+    writer scan already charges. Class bodies are not entered, so a method named
+    ``vars`` does not shadow the builtin its sibling methods call.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Returns
+    -------
+    bool
+        ``True`` when a call to either name in a method may not reach the builtin.
+    """
+    return any(
+        _bound_name(cls_sub) in {"setattr", "vars", "*"}
+        and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
+        for cls_sub in _scope_nodes(list_nodes)
+    ) or _function_shadows_writer(list_nodes)
+
+
+def _function_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
+    """Return whether a ``global`` or any def can rebind ``setattr`` or ``vars``.
+
+    A ``global`` statement rebinds the module name from inside a function, and a def, method
+    included, that binds either name locally shadows the builtin for a class nested in it.
+    The scan covers the whole file, so it can only over-charge.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Returns
+    -------
+    bool
+        ``True`` when either route is found anywhere in the tree.
+    """
+    return any(
+        (isinstance(cls_sub, ast.Global) and {"setattr", "vars"} & set(cls_sub.names))
+        or (
+            isinstance(cls_sub, ast.FunctionDef | ast.AsyncFunctionDef)
+            and _shadows_writer(cls_sub)
+        )
+        for cls_node in list_nodes
+        for cls_sub in ast.walk(cls_node)
+    )
 
 
 def _bound_name(cls_node: ast.AST) -> str | None:

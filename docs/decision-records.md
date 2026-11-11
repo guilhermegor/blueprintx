@@ -174,13 +174,13 @@ test suite keep the contract; this section records the reasoning that lived besi
     `_getframe`, `currentframe`, `__globals__`, `f_locals`), as a bare name, an attribute (`builtins.exec`) or an import alias
     from `builtins`, `sys` or `inspect` (`from builtins import exec as run`), anywhere in the file. The one exemption is
     `setattr(self|cls, ...)` / `vars(self|cls)` on the first parameter of a method that is not a
-    `staticmethod` (nor the implicit one, `__new__`), is decorated only with `classmethod`,
+    `staticmethod` (nor the implicit one, `__new__`), is decorated with nothing or only with `classmethod`,
     `property`, `abstractmethod`, `override`, `cached_property`, `final`, `overload` or `.setter`/`.getter`/`.deleter`
     (any other decorator could call the method with another object, so it removes the
     exemption and over-charges, e.g. `@contextmanager` or `@pytest.fixture`; the safe names
     count bare or on `abc`, `typing`, `typing_extensions`, `functools` and `builtins`, so
     `@evil.classmethod` is charged, and `.setter`/`.getter`/`.deleter` count only on the
-    method's own name, as in `@x.setter def x`), does not rebind or take `setattr`/`vars` as a parameter,
+    method's own name, as in `@x.setter def x`), does not rebind or take `setattr`/`vars` as a parameter (nor does the file bind either name at module level, as `from ._compat import vars` or a `def setattr` does),
     has no nested def or lambda taking that name as a parameter, and never rebinds
     it (assignment, `del`, `import ... as`, `match`
     capture, `except ... as`, `type`, or a nested `def`/`class` of that name). The call may sit
@@ -193,15 +193,17 @@ test suite keep the contract; this section records the reasoning that lived besi
     *Remaining limits* (an AST-only reader): a name rebound by assignment (`Doc = _internal_doc`),
     a class built by `create_model(...)`, a `pydantic.dataclasses` decorator, an import through
     `importlib` / `__getattr__`, a method called through its class with another object
-    (`A.f(me)`), a `staticmethod` spelled other than as a plain decorator (`f = staticmethod(f)`,
-    `sm = staticmethod`, `@wrapper(staticmethod)`), a writer re-exported by a first-party module
-    (`from ._compat import exec_ as run`), a plain attribute store on a module alias (`me.Priv = 1`, `me.__dict__["Priv"] = 1`), a module written through `__setattr__` (`object.__setattr__(me, "Priv", 1)`; not a charged writer, since `super().__setattr__` is routine in frozen classes), a safe-set decorator name that is not the real one (a local `def setter(fn): fn(me)` used as `@setter`; the set is matched by name, not by origin), a writer reached through a
+    (`A.f(me)`, `types.MethodType(A.f, me)()`, `A.f.__get__(me)()`), a `staticmethod` rebound after
+    the def (`f = staticmethod(f)`; `@sm` and `@wrapper(staticmethod)` are charged), a writer re-exported by a first-party module
+    (`from ._compat import exec_ as run`), a plain attribute store on a module alias (`me.Priv = 1`, `me.__dict__["Priv"] = 1`, `me.__dict__.update(...)`), a module written through `__setattr__` (`object.__setattr__(me, "Priv", 1)`; not a charged writer, since `super().__setattr__` is routine in frozen classes), a safe-set decorator name that is not the real one and that the module does not define itself (a local `def setter(fn): fn(me)` used as `@setter`; the set is matched by name, not by origin, so a module-level def, assignment or loop target of `property`, `classmethod` or of the `abc`/`typing`/`functools` module it hangs on loses the exemption), a writer reached through a
     string constant (`getattr(builtins, "exec")(...)`, `getattr(sys, "modules")`,
     `__builtins__["exec"]`), and an absolute import of another top-level
     package.
 - **`check_assertion_weakening.py`** (#289, #324, #590). Comparison operators weaker than `==`
-  include the `in` example and `>=`; `Gt` and `Lt` are excluded because swapping equality for a
-  strict inequality still excludes the old value, so it stays out of the decidable core. The
+  include the `in` example, `>=`, `>` and `<` (#1053: `==` is not implied by any inequality, so
+  `Gt`/`Lt` accept infinitely many values the old assertion rejected, and the earlier
+  "decidable core" exclusion was wrong). Mid-merge the base includes `MERGE_HEAD` in both
+  languages (#1060), so the incoming side's test changes are not charged to the branch. The
   unittest-style call list is the measured, decidable subset, with only exact equivalences paired
   with a bare `assert`. A rename removes its source, so a production file moved into `tests/`
   still counts; a non-test source moved into `tests/` defines no baseline and is newly added.
@@ -784,7 +786,10 @@ interchangeable until a class crosses between them. Affected modules: `test_dail
       live upstream sources; a weekly `docstring-urls.yml` run opens one tracking issue instead,
       since a dead link has no mechanical fix. A filename-scoped scan reads every path passed,
       never the first as a `find` root. The cache lives in the git common dir so worktrees share
-      it, and failures expire after 6 hours against 7 days for a 2xx.
+      it, and failures expire after 6 hours against 7 days for a 2xx. 403, 408 and 429 are
+      never cached (a bot block or timeout clears), the hook selects files with `files: \.py$`
+      exactly as the script does, and the workflow closes the tracking issue when the scan is
+      clean and closes duplicates when several are open (#1058).
     - `check-urls` (#206, #224): every docstring shape must actually be scanned. The three shapes
       each hold the same unreachable URL, so a shape that reports clean is a check nobody ran.
       The third (a closing delimiter sharing a line with text) was never blind, since the URL was
