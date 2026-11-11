@@ -147,6 +147,16 @@ test_ships_docs_must_be_boolean() {
         "ships_docs=maybe"
     expect_gate "ships_docs outside true/false" "$str_root" "fail" \
         "ships_docs 'maybe' must be true or false"
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    : > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=false"
+    expect_gate "ships_docs=false" "$str_root" "pass"
 }
 
 test_readme_archetype() {
@@ -187,7 +197,8 @@ test_assertion_weakening_gate() {
         "language=cobol" \
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)"
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)"
     expect_gate "a language with no assertion-weakening gate" "$str_root" "fail" \
         "language 'cobol' ships no assertion-weakening gate"
     str_root="$(make_sandbox)"
@@ -198,7 +209,8 @@ test_assertion_weakening_gate() {
         "language=$(base_value language)" \
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)"
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)"
     expect_gate "a python template whose gate file is gone" "$str_root" "fail" \
         "assertion-weakening gate missing: templates/python-common/bin/check_assertion_weakening.py"
 }

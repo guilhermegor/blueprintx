@@ -2010,7 +2010,7 @@ grouped by what they guard.
   context is deliberately distinct from the PR job's check name: a status and a check run
   sharing a name are ambiguous for branch protection. It fails the job too, since a red
   status on someone else's PR is easy to miss from the issue timeline. See `docs/issue-scope.md`.
-- **`validate_meta.sh` (#407, #478).** Every `skeleton.meta` has all four fields non-empty, a
+- **`validate_meta.sh` (#407, #478).** Every `skeleton.meta` has all five required fields non-empty (`ships_docs` must be `true` or `false`), a
   `scaffold=` path that exists, and the skeleton directory named in the root `CLAUDE.md`:
   machine-decidable, so a gate, while the quality of the mention stays a human call. A missing
   key under `set -euo pipefail` used to kill the gate inside its own `grep` pipeline with exit
