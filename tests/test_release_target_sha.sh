@@ -13,7 +13,7 @@ pins_every_release() {
 		$0 ~ use_re { if (pending) bad = 1; pending = 1; inwith = 0; uses++; col = indent() - ($0 ~ /^[[:space:]]*-/ ? 0 : 2); next }
 		pending && NF && !/^[[:space:]]*#/ && indent() <= col { bad = 1; pending = 0 }
 		pending && /^[[:space:]]*with:[[:space:]]*$/ { inwith = 1; wcol = indent(); next }
-		pending && inwith && NF && indent() <= wcol { inwith = 0 }
+		pending && inwith && NF && !/^[[:space:]]*#/ && indent() <= wcol { inwith = 0 }
 		pending && inwith && $0 ~ pin_re { pending = 0 }
 		END { exit !(uses > 0 && !pending && !bad) }
 	' "$1"
@@ -49,9 +49,13 @@ fi
 
 str_use='      - uses: softprops/action-gh-release@v2
         with:'
+str_hash="#"
 str_pin="          target_commitish: \${{ github.sha }}"
 expect_witness "commented-out pin" "$str_use
-${str_pin/ target/ \# target}" reject
+          ${str_hash} target_commitish: \${{ github.sha }}" reject
+expect_witness "low-indent comment before the pin is skipped" "$str_use
+${str_hash} note
+$str_pin" accept
 expect_witness "two steps, one pin" "$str_use
 $str_pin
 $str_use" reject
