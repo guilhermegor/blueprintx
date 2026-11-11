@@ -56,7 +56,7 @@ source "$SCRIPT_DIR/lib/bootstrap.sh"
 
 ### The lib's Python companions — and why they are files
 
-`bin/lib/` holds three `.py` helpers beside the shell libs that invoke them:
+`bin/lib/` holds `.py` helpers beside the shell libs that invoke them:
 
 | File | Invoked by | Interface |
 |------|-----------|-----------|
@@ -64,6 +64,7 @@ source "$SCRIPT_DIR/lib/bootstrap.sh"
 | `lib/pip_requirements.py` | `pip_fallback.sh::pip_fallback_emit_pip_requirements_from_pyproject` | `PROJECT_ROOT` + `BX_GROUPS` in; one pip requirement per line out |
 | `lib/wheelhouse_select.py` | `build_wheelhouse.sh` (the `wheelhouse` tasks, service tiers only) | subcommands `select`/`pack`/`assemble` — see `docs/offline-wheelhouse.md` |
 | `lib/description_sources.py` | `check_description_sync.sh` | subcommands `manifest ROOT` / `mkdocs FILE`; description on stdout; exit 3/4 when the source is absent, 5 when it is present but unreadable |
+| `lib/missing_deps.py` | `bootstrap.sh::venv_missing_deps` (via `poetry_exec.sh run`) | `pyproject.toml` path in; one `missing: <name>` line per declared dependency the interpreter cannot see; non-sentinel stdout is ignored, so a Poetry notice never reads as a package. Reads the main table and every non-optional Poetry group (what `poetry install` installs by default) plus PEP 621 and PEP 735 entries; marker-, `python`- or `optional`-gated entries are skipped. Runs through the in-project `.venv` interpreter when present (a measured 3x cheaper than a second `poetry run` start-up), else `poetry run python` |
 
 `ca_bundle.py` and `pip_requirements.py` were `"$PYTHON" - <<'PYEOF'` heredocs inside their shell functions — 151 and 66
 lines of Python that **no Python tool could see**: ruff never linted them, mypy never
@@ -105,7 +106,7 @@ must route through the resolver.** How each surface routes:
 
 | Surface | How it calls Poetry |
 |---------|---------------------|
-| a `poe_tasks.toml` task / `.pre-commit-config.yaml` | `bash bin/poetry_exec.sh <args>` — the wrapper resolves+`exec`s Poetry, routing resolution status to **stderr** so `$(… version -s)` stays clean |
+| a `poe_tasks.toml` task / `.pre-commit-config.yaml` | `bash bin/poetry_exec.sh <args>` — the wrapper resolves+`exec`s Poetry, routing resolution status to **stderr** so `$(… version -s)` stays clean; for `run` it first checks installed distributions against the dependencies declared in `pyproject.toml` (not the lock) and fails with one line naming `poetry install --with dev` instead of a gate's `ModuleNotFoundError` |
 | sourcing `bin/*.sh` that needs Poetry (`db.sh`, `fix_playwright.sh`, `precommit.sh`) | source `lib/bootstrap.sh`, `bootstrap_init` + `ensure_poetry`, then `run_poetry run …` |
 | optional-linter `bin/*.sh` (`lint_sql.sh`, `lint_yaml.sh`, `lint_shell.sh`) | **resolve, don't install**: `resolve_python` → `resolve_poetry \|\| skip (exit 0)` → `run_poetry run …`. Never guard on `command -v poetry` (it misses a `python -m poetry`-only box and skips silently) |
 
