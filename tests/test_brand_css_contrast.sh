@@ -131,8 +131,16 @@ class Loader(yaml.SafeLoader):
 
 
 Loader.add_multi_constructor("", lambda loader, suffix, node: None)
-dict_cfg = yaml.load(open(sys.argv[1], encoding="utf-8").read(), Loader=Loader) or {}
-dict_theme = dict_cfg.get("theme") or {}
+try:
+    dict_cfg = yaml.load(open(sys.argv[1], encoding="utf-8").read(), Loader=Loader) or {}
+except yaml.YAMLError as err:
+    print(f"unparseable yml: {type(err).__name__}")
+    sys.exit(3)
+if not isinstance(dict_cfg, dict):
+    dict_cfg = {}
+dict_theme = dict_cfg.get("theme")
+if not isinstance(dict_theme, dict):
+    dict_theme = {}
 list_palette = dict_theme.get("palette") or []
 if isinstance(list_palette, dict):
     list_palette = [list_palette]
@@ -183,6 +191,11 @@ mutate() {
 check_yml() {
 	local str_name="$1" str_yml="$2" str_expect="$3" str_reason="${4:-}" str_why
 	str_why="$(yml_problem "$str_yml")"
+	if [[ "$str_why" == "yml gate crashed"* ]]; then
+		echo "FAIL: $str_name: $str_why"
+		int_failures=$((int_failures + 1))
+		return
+	fi
 	if { [ -z "$str_why" ] && [ "$str_expect" = pass ]; } || { [ -n "$str_why" ] && [ "$str_expect" = refuse ] && [[ "$str_why" == *"$str_reason"* ]]; }; then
 		echo "ok: $str_name (${str_expect})"
 	else
@@ -279,7 +292,9 @@ check "an @import inside a comment is not a statement" "$TMP/import-comment.css"
 printf 'theme:\n  palette: {scheme: default, primary: custom}\nextra_css: [stylesheets/brand.css]\n' >"$TMP/dictpal.yml"
 check_yml "a single-mapping palette is accepted" "$TMP/dictpal.yml" pass
 printf 'theme: [unclosed\n' >"$TMP/broken.yml"
-check_yml "should-fail: unparseable yml is refused, never green" "$TMP/broken.yml" refuse "ParserError"
+printf 'theme: material\nextra_css: [stylesheets/brand.css]\n' >"$TMP/theme-str.yml"
+check_yml "should-fail: string theme is refused, not a crash" "$TMP/theme-str.yml" refuse "no palette entries"
+check_yml "should-fail: unparseable yml is refused, never green" "$TMP/broken.yml" refuse "unparseable yml"
 printf 'markdown_extensions:\n  - x: !!python/name:a.b.c\ntheme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tag.yml"
 check_yml "a !!python/name tag does not crash the gate" "$TMP/tag.yml" pass
 
