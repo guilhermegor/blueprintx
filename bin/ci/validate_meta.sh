@@ -52,7 +52,7 @@ for meta in "$TEMPLATES_DIR"/*/skeleton.meta; do
         errors=$((errors + 1))
     elif [ -n "$str_ships_docs" ] && [ -f "$REPO_ROOT/$scaffold_rel" ]; then
         str_actual=false
-        str_code="$(grep -vE '^[[:space:]]*#' "$REPO_ROOT/$scaffold_rel" || true)"
+        str_code="$(grep -vE '^[[:space:]]*#' "$REPO_ROOT/$scaffold_rel" | sed -E 's/[[:space:]]+#.*$//' || true)"
         grep -qE 'mkdocs\.yml|docusaurus\.config' <<< "$str_code" && str_actual=true
         if [ "$str_actual" != "$str_ships_docs" ]; then
             echo "  ERROR: ships_docs=$str_ships_docs but the scaffold script implies $str_actual" >&2

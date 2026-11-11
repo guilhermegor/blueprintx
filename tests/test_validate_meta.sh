@@ -155,6 +155,8 @@ test_ships_docs_values() {
     run_ships_docs_case "whitespace-padded ships_docs" " true" "" fail \
         "must be exactly true or false"
     run_ships_docs_case "ships_docs=false" "false" "" pass
+    run_ships_docs_case "CRLF-terminated ships_docs" $'true\r' "" fail \
+        "must be exactly true or false"
 }
 
 test_ships_docs_matches_scaffold() {
@@ -166,6 +168,9 @@ test_ships_docs_matches_scaffold() {
         "ships_docs=false but the scaffold script implies true"
     run_ships_docs_case "true with a comment-only mention" "true" "# copy mkdocs.yml later" fail \
         "ships_docs=true but the scaffold script implies false"
+    run_ships_docs_case "true with a docusaurus config" "true" 'cp docusaurus.config.js "$dst"' pass
+    run_ships_docs_case "false with a trailing-comment mention" "false" \
+        'cp foo "$dst"  # not mkdocs.yml' pass
 }
 
 test_ships_docs_duplicate_key() {

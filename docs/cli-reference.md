@@ -102,5 +102,7 @@ guessing from the presence of `mkdocs.yml`; no consumer acts on it yet.
 `bin/ci/validate_meta.sh` rejects a missing key, any value but exactly `true` or `false`,
 and a value that disagrees with whether the scaffold script references a docs config on a
 non-comment line. That grep is static: a docs site shipped through a sourced helper or a
-whole-directory copy is not seen, so the script must name the file, and a duplicate key is
-rejected rather than resolved.
+whole-directory copy is not seen, so the script must name the file, and a non-comment
+mention that only deletes or excludes the file (`rm -f mkdocs.yml`) still counts as
+shipping it. A duplicate key is rejected rather than resolved. Unlike `readme_archetype`,
+the value is not whitespace-trimmed, so a trailing space or CRLF line ending is an error.
