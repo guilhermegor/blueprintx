@@ -33,7 +33,8 @@ done
 
 str_proj="$(mktemp -d)"
 str_spa="$(mktemp -d)"
-trap 'rm -rf "$str_proj" "$str_spa"' EXIT
+str_bad="$(mktemp -d)"
+trap 'rm -rf "$str_proj" "$str_spa" "$str_bad"' EXIT
 has "scaffold_ts_test runs lint:docs in the generated project" 'npm run lint:docs' "$REPO_ROOT/bin/ci/scaffold_ts_test.sh"
 mkdir -p "$str_proj/docs"
 printf '{"scripts":{"build":"x","lint:css":"y"}}\n' >"$str_proj/package.json"
@@ -55,9 +56,15 @@ rm "$str_proj/AGENTS.md"
 printf 'Run `npm run --silent build`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "CONTRIBUTING.md with an npm flag after run passes" 0 "$?"
-printf 'Run `npm run ghost`.\n' >"$str_proj/CONTRIBUTING.md"
+printf 'Run `npm run --silent ghost`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
-expect "CONTRIBUTING.md citing a missing script fails" 1 "$?"
+expect "CONTRIBUTING.md citing a missing script after a flag fails" 1 "$?"
+printf 'Run `npm run build.prod` then `npm run build:`.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a dotted missing script fails, trailing colon is prose" 1 "$?"
+printf 'Run `npm run build:`.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "trailing punctuation is not part of the script name" 0 "$?"
 rm "$str_proj/CONTRIBUTING.md"
 
 printf 'Try `npm run serve`.\n' >"$str_proj/docs/usage.md"
@@ -72,5 +79,19 @@ cp "$REPO_ROOT/templates/ts-common/package.json" "$str_spa/package.json"
 cp "$REPO_ROOT/templates/react-spa-webpack/README.md" "$str_spa/README.md"
 bash "$GATE" "$str_spa" >/dev/null 2>&1
 expect "react-spa README matches ts-common scripts" 0 "$?"
+
+printf '{not json' >"$str_bad/package.json"
+bash "$GATE" "$str_bad" >/dev/null 2>&1
+expect "invalid package.json exits 2, not the doc-failure code" 2 "$?"
+bash "$GATE" "$str_bad/missing" >/dev/null 2>&1
+expect "missing package.json exits 2" 2 "$?"
+
+printf 'Run `npm run build`.\n' >"$str_proj/README.md"
+chmod 000 "$str_proj/README.md"
+if [ "$(id -u)" -ne 0 ]; then
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "an unreadable doc fails instead of passing" 1 "$?"
+fi
+chmod 644 "$str_proj/README.md"
 
 [ "$int_failures" -eq 0 ]

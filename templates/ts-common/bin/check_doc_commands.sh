@@ -19,18 +19,26 @@ list_docs() {
 	return 0
 }
 
-str_scripts="$(node -e 'console.log(Object.keys(require(process.argv[1]).scripts || {}).join("\n"))' "$(cd "$STR_ROOT" && pwd)/package.json")"
+str_scripts="$(node -e 'console.log(Object.keys(require(process.argv[1]).scripts || {}).join("\n"))' "$(cd "$STR_ROOT" && pwd)/package.json")" || {
+	echo "check_doc_commands: $STR_PKG is not valid JSON" >&2
+	exit 2
+}
 
 int_fail=0
 while IFS= read -r str_doc; do
 	[ -n "$str_doc" ] || continue
+	[ -r "$str_doc" ] || {
+		echo "check_doc_commands: cannot read $str_doc" >&2
+		int_fail=1
+		continue
+	}
 	while IFS= read -r str_hit; do
 		str_name="${str_hit##* }"
 		if ! printf '%s\n' "$str_scripts" | grep -qxF -- "$str_name"; then
 			echo "check_doc_commands: $str_doc documents 'npm run $str_name' but package.json has no such script" >&2
 			int_fail=1
 		fi
-	done < <(grep -v 'doc-commands:optional' "$str_doc" | grep -oE 'npm run [a-z0-9][a-z0-9:_-]*' | sort -u || true)
+	done < <(grep -v 'doc-commands:optional' "$str_doc" | grep -oE 'npm run( +--?[A-Za-z][A-Za-z-]*)* +[A-Za-z0-9]([A-Za-z0-9:._-]*[A-Za-z0-9])?' | sort -u || true)
 done < <(list_docs)
 
 exit "$int_fail"
