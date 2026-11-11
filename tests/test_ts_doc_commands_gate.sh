@@ -32,7 +32,9 @@ for str_scaffold in ts_lib ts_react_app; do
 done
 
 str_proj="$(mktemp -d)"
-trap 'rm -rf "$str_proj"' EXIT
+str_spa="$(mktemp -d)"
+trap 'rm -rf "$str_proj" "$str_spa"' EXIT
+has "scaffold_ts_test runs lint:docs in the generated project" 'npm run lint:docs' "$REPO_ROOT/bin/ci/scaffold_ts_test.sh"
 mkdir -p "$str_proj/docs"
 printf '{"scripts":{"build":"x","lint:css":"y"}}\n' >"$str_proj/package.json"
 printf 'Run `npm run build` and `npm run lint:css`.\n' >"$str_proj/README.md"
@@ -45,6 +47,11 @@ bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "CLAUDE.md citing a missing script fails" 1 "$?"
 rm "$str_proj/CLAUDE.md"
 
+printf 'Run `npm run dev`.\n' >"$str_proj/AGENTS.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "AGENTS.md citing a missing script fails" 1 "$?"
+rm "$str_proj/AGENTS.md"
+
 printf 'Try `npm run serve`.\n' >"$str_proj/docs/usage.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "docs/ citing a missing script fails" 1 "$?"
@@ -53,11 +60,9 @@ printf 'Try `npm run serve` # doc-commands:optional\n' >"$str_proj/docs/usage.md
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "a doc-commands:optional line is exempt" 0 "$?"
 
-str_spa="$(mktemp -d)"
 cp "$REPO_ROOT/templates/ts-common/package.json" "$str_spa/package.json"
 cp "$REPO_ROOT/templates/react-spa-webpack/README.md" "$str_spa/README.md"
 bash "$GATE" "$str_spa" >/dev/null 2>&1
 expect "react-spa README matches ts-common scripts" 0 "$?"
-rm -rf "$str_spa"
 
 [ "$int_failures" -eq 0 ]

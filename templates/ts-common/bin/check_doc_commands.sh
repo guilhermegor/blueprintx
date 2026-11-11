@@ -12,7 +12,7 @@ STR_PKG="$STR_ROOT/package.json"
 
 list_docs() {
 	local str_f
-	for str_f in README.md CLAUDE.md CONTRIBUTING.md; do
+	for str_f in README.md CLAUDE.md AGENTS.md CONTRIBUTING.md; do
 		[ -f "$STR_ROOT/$str_f" ] && printf '%s\n' "$STR_ROOT/$str_f"
 	done
 	[ -d "$STR_ROOT/docs" ] && find "$STR_ROOT/docs" -type f -name '*.md' | sort
