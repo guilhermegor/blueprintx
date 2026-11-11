@@ -110,7 +110,7 @@ bash "$CHECK" --generated --skeleton no-such-skeleton >/dev/null 2>&1 || str_got
 str_cwd="$(mktemp -d)"
 touch "$str_cwd/.log"
 str_proj="$(make_project)"
-(cd "$str_cwd" && bash "$CHECK" --project "$str_proj" >/dev/null 2>&1)
+(cd "$str_cwd" && bash "$CHECK" --project "$str_proj" >/dev/null 2>&1) || true
 if [ -e "$str_cwd/.log" ]; then
     echo "ok: --project leaves a .log in the working directory alone"
 else
