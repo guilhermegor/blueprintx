@@ -567,3 +567,56 @@ def test_gate_env_headless_runner_with_pre_commit_is_ci(monkeypatch: pytest.Monk
     monkeypatch.setattr(gate_env, "has_terminal", lambda: False)
 
     assert gate_env.is_ci() is True
+
+
+gate_rename = sys.modules["gate_rename"]
+weakening = _load("check_assertion_weakening")
+
+_STR_RENAME_OLD = "def test_rejects_negative_amounts() -> None:\n    assert f() == 1\n"
+_STR_RENAME_OTHER = "def test_parses_iso_dates() -> None:\n    assert f() == 1\n"
+
+
+def test_pairing_is_independent_of_input_order() -> None:
+    """Two renames resolve to the same pairs however the names are listed."""
+    list_old = ["test_has_six_pages", "test_has_six_pages_total"]
+    list_new = ["test_has_seven_pages", "test_has_seven_pages_total"]
+    dict_expected = {
+        "test_has_six_pages": "test_has_seven_pages",
+        "test_has_six_pages_total": "test_has_seven_pages_total",
+    }
+    assert gate_rename.rename_pairs(list_old, list_new) == dict_expected
+    assert gate_rename.rename_pairs(list_old[::-1], list_new[::-1]) == dict_expected
+
+
+def test_a_better_later_match_is_not_stolen_by_an_earlier_name() -> None:
+    """NEGATIVE CONTROL: best-score-first, not first-come, so the exact-ish match wins."""
+    dict_pairs = gate_rename.rename_pairs(
+        ["test_has_six_pages_total", "test_has_six_pages"], ["test_has_seven_pages_total"]
+    )
+    assert dict_pairs == {"test_has_six_pages_total": "test_has_seven_pages_total"}
+
+
+def test_a_dissimilar_addition_is_not_paired() -> None:
+    """NEGATIVE CONTROL: below the threshold nothing pairs, so the deletion stays visible."""
+    assert gate_rename.rename_pairs(["test_rejects_negative_amounts"], ["test_parses_iso"]) == {}
+
+
+def test_integrity_gate_still_reports_a_deletion_beside_a_dissimilar_addition() -> None:
+    """Deleting a test and adding an unrelated one is a deletion, not a rename."""
+    list_problems = gate.deleted_or_gutted_tests(_STR_RENAME_OLD, _STR_RENAME_OTHER, "x")
+    assert list_problems == ["x: test 'test_rejects_negative_amounts' deleted"]
+
+
+def test_weakening_gate_still_reports_a_deletion_beside_a_dissimilar_addition() -> None:
+    """The weakening gate agrees with the integrity gate on the same diff."""
+    list_problems = weakening._file_findings("x", _STR_RENAME_OLD, _STR_RENAME_OTHER, False)
+    assert list_problems == ["x: test 'test_rejects_negative_amounts' deleted"]
+
+
+def test_weakening_finding_names_the_renamed_test() -> None:
+    """A finding on a renamed test uses the name that exists in the change."""
+    str_new = "def test_rejects_negative_amount() -> None:\n    pass\n"
+    list_problems = weakening._file_findings("x", _STR_RENAME_OLD, str_new, False)
+    assert list_problems == [
+        "x: test_rejects_negative_amount() lost 1 assertion(s) (had 1, now 0)"
+    ]

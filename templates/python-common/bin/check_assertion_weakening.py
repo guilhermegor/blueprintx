@@ -59,7 +59,6 @@ CI must check out with `fetch-depth: 0` — a shallow clone has no common ancest
 """
 
 import ast
-import difflib
 import json
 import os
 import pathlib
@@ -71,6 +70,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from gate_env import is_ci  # noqa: E402
+from gate_rename import rename_pairs  # noqa: E402
 
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -884,39 +884,6 @@ def _function_findings(
     return list_problems
 
 
-RENAME_SIMILARITY = 0.8
-
-
-def rename_pairs(dict_old_funcs: dict, dict_new_funcs: dict) -> dict:
-    """Pair each removed test name with the most similar newly added one.
-
-    Parameters
-    ----------
-    dict_old_funcs : dict
-        ``{name: node}`` at the merge-base.
-    dict_new_funcs : dict
-        ``{name: node}`` in this change.
-
-    Returns
-    -------
-    dict
-        ``{old_name: new_name}``; each added name is used at most once. A pair is a
-        rename candidate, so the caller still compares the two bodies.
-    """
-    list_added = [str_n for str_n in dict_new_funcs if str_n not in dict_old_funcs]
-    dict_pairs = {}
-    for str_old in dict_old_funcs:
-        if str_old in dict_new_funcs or not list_added:
-            continue
-        str_best = max(
-            list_added, key=lambda str_n: difflib.SequenceMatcher(None, str_old, str_n).ratio()
-        )
-        if difflib.SequenceMatcher(None, str_old, str_best).ratio() >= RENAME_SIMILARITY:
-            dict_pairs[str_old] = str_best
-            list_added.remove(str_best)
-    return dict_pairs
-
-
 def _file_findings(
     str_path: str, str_old_text: str, str_new_text: str, bool_prod_changed: bool
 ) -> list:
@@ -945,14 +912,18 @@ def _file_findings(
     if dict_old_funcs is None or dict_new_funcs is None:
         return [f"{str_path}: could not parse — not checked"]
     list_problems = []
-    dict_renames = rename_pairs(dict_old_funcs, dict_new_funcs)
+    dict_renames = rename_pairs(
+        [str_n for str_n in dict_old_funcs if str_n not in dict_new_funcs],
+        [str_n for str_n in dict_new_funcs if str_n not in dict_old_funcs],
+    )
     for str_name, node_old in dict_old_funcs.items():
-        node_new = dict_new_funcs.get(dict_renames.get(str_name, str_name))
+        str_now = dict_renames.get(str_name, str_name)
+        node_new = dict_new_funcs.get(str_now)
         if node_new is None:
             list_problems.append(f"{str_path}: test {str_name!r} deleted")
             continue
         list_problems.extend(
-            _function_findings(str_path, str_name, node_old, node_new, bool_prod_changed)
+            _function_findings(str_path, str_now, node_old, node_new, bool_prod_changed)
         )
     return list_problems
 
