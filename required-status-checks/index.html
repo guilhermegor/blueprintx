@@ -2952,7 +2952,10 @@ PR</em> in every tier the script ships to?"</p>
    string is what gets reported.</li>
 <li>Its workflow triggers on <code>pull_request</code> with <strong>no <code>types:</code> filter</strong>, or with
    a <code>types:</code> list that includes <code>opened</code>, <code>reopened</code>, and <code>synchronize</code>, and
-   with <strong>no <code>branches:</code>/<code>branches-ignore:</code>/<code>paths:</code>/<code>paths-ignore:</code> filter</strong> —
+   with <strong>no <code>branches-ignore:</code>/<code>paths:</code>/<code>paths-ignore:</code> filter and no <code>branches:</code>
+   filter that omits <code>main</code></strong> (a <code>branches:</code> list containing the literal <code>main</code>, with no
+   <code>!</code> entry, always matches a PR into the protected base; globs such as <code>**</code> are not
+   interpreted and stay conditional, and <code>main</code> is assumed to be the only protected base) —
    otherwise the check is simply absent on some PRs, which reads as permanently
    pending.</li>
 <li>No job-level <code>if:</code> can skip it on an otherwise ordinary PR.</li>
@@ -2992,7 +2995,7 @@ reported yet" from "this check will never report."</p>
 <td><code>Run Automated Tests (&lt;os&gt;, py&lt;version&gt;)</code> ×15</td>
 <td><code>tests.yml</code></td>
 <td><code>pull_request:</code> with a <code>branches:</code> filter</td>
-<td>no — rule 2 (branch filter) and the names embed matrix values that drift</td>
+<td>no — rule 1, the names embed matrix values that drift (<code>branches: [main]</code> no longer disqualifies it under rule 2)</td>
 </tr>
 <tr>
 <td><code>Ask CodeRabbit for a review</code></td>
@@ -3053,37 +3056,37 @@ reported yet" from "this check will never report."</p>
 <td><code>webpack</code></td>
 <td><code>build.yml</code></td>
 <td><code>push</code>, <code>pull_request: branches: [main]</code></td>
-<td>no — rule 2 (branch filter)</td>
+<td>rule 2 passes (<code>branches: [main]</code>); rules 1 and 3 not re-measured; required by nothing, see finding 1</td>
 </tr>
 <tr>
 <td><code>eslint</code>, <code>stylelint</code></td>
 <td><code>lint.yml</code></td>
 <td><code>push</code>, <code>pull_request: branches: [main]</code></td>
-<td>no — rule 2 (branch filter)</td>
+<td>rule 2 passes (<code>branches: [main]</code>); rules 1 and 3 not re-measured; required by nothing, see finding 1</td>
 </tr>
 <tr>
 <td><code>jest</code></td>
 <td><code>test.yml</code></td>
 <td><code>push</code>, <code>pull_request: branches: [main]</code></td>
-<td>no — rule 2 (branch filter)</td>
+<td>rule 2 passes (<code>branches: [main]</code>); rules 1 and 3 not re-measured; required by nothing, see finding 1</td>
 </tr>
 <tr>
 <td><code>type-check</code></td>
 <td><code>type-check.yml</code></td>
 <td><code>push</code>, <code>pull_request: branches: [main]</code></td>
-<td>no — rule 2 (branch filter)</td>
+<td>rule 2 passes (<code>branches: [main]</code>); rules 1 and 3 not re-measured; required by nothing, see finding 1</td>
 </tr>
 <tr>
 <td><code>build</code></td>
 <td><code>docs.yml</code> (<code>ts-lib</code> only)</td>
 <td><code>push</code>, <code>pull_request: branches: [main]</code></td>
-<td>no — rule 2 (branch filter), <code>ts-lib</code> only</td>
+<td>rule 2 passes (<code>branches: [main]</code>); rules 1 and 3 not re-measured; <code>ts-lib</code> only; required by nothing, see finding 1</td>
 </tr>
 <tr>
 <td><code>pack-smoke</code>, <code>verdaccio-rehearsal</code></td>
 <td><code>pack-smoke.yml</code> (<code>ts-lib</code> only)</td>
 <td><code>push</code>, <code>pull_request: branches: [main]</code></td>
-<td>no — rule 2 (branch filter), <code>ts-lib</code> only</td>
+<td>rule 2 passes (<code>branches: [main]</code>); rules 1 and 3 not re-measured; <code>ts-lib</code> only; required by nothing, see finding 1</td>
 </tr>
 </tbody>
 </table>
@@ -3137,9 +3140,9 @@ tier has in common does not exist there.</p>
    three non-Python tiers get no branch-protection provisioning at all — for
    them <code>REQUIRED_CHECKS</code> is not one entry, it is zero, and the one-to-two
    qualifying names above are required by nothing (<code>Review threads answered</code>
-   alone for the TypeScript tiers, since their build/lint/test/type-check/docs/
-   pack-smoke workflows all trigger on <code>pull_request: branches: [main]</code> and fail
-   rule 2). <code>templates/ts-common/.github/.review-bots.yaml</code>
+   alone for the TypeScript tiers, since the only name verified against every rule is
+   <code>Review threads answered</code>; the build/lint/test/type-check/docs/pack-smoke
+   workflows now pass rule 2 but their rules 1 and 3 have not been re-measured). <code>templates/ts-common/.github/.review-bots.yaml</code>
    already notes in passing that the script is "for the Python tiers"; the gap
    was documented as a property, never as a defect. Tracked as a follow-up.</li>
 <li><strong>Python deserves exactly one more entry: <code>Classify and gate this PR</code>.</strong> It
@@ -3157,9 +3160,8 @@ tier has in common does not exist there.</p>
 </ol>
 <p>The earlier pass on blueprintx#164 (<code>.specs/backlog/repo-rules-self-audit-164_20260904_062813.md</code>)
 reached "keep one entry" for the Python tiers by reasoning about
-<code>tests.yml</code> alone. That conclusion survives for <code>tests.yml</code> — with a second,
-stronger disqualifier it did not have (the <code>branches:</code> filter, not just matrix
-drift) — but it did not look at <code>pr-gate.yml</code>, and it did not look outside
+<code>tests.yml</code> alone. That conclusion survives for <code>tests.yml</code> — for the reason in rule 1 (matrix
+names that drift); the <code>branches: [main]</code> filter no longer counts against it — but it did not look at <code>pr-gate.yml</code>, and it did not look outside
 Python at all.</p>
 <h2 id="keeping-blueprintxs-own-required-checks-in-sync-blueprintx535">Keeping BlueprintX's own required checks in sync (blueprintx#535)<a class="headerlink" href="#keeping-blueprintxs-own-required-checks-in-sync-blueprintx535" title="Permanent link">&para;</a></h2>
 <p>The tiers above are about generated projects. For this repo, <code>main</code> is protected in two
@@ -3169,8 +3171,10 @@ not enforced.</p>
 <p>The expected contexts per layer are committed in <code>.github/required-checks.json</code>.
 <code>bin/ci/check_required_checks_sync.py</code> compares that file with the jobs that run on every
 PR, with no token and no secret. "Every PR" means the workflow triggers on <code>pull_request</code>
-with no <code>branches:</code>/<code>paths:</code> filter and a <code>types:</code> (a scalar counts
-as a one-item list) covering opened, reopened and synchronize, and the job is unconditional: it has no <code>if:</code>, or its <code>if:</code> (a surrounding
+with no <code>branches-ignore:</code>/<code>paths:</code>/<code>paths-ignore:</code> filter, a <code>branches:</code> filter only if it
+is a string or list of strings containing literal <code>main</code> with no <code>!</code> entry, and either no
+<code>types:</code> or a <code>types:</code> (a scalar counts as a one-item list) covering opened, reopened and
+synchronize, and the job is unconditional: it has no <code>if:</code>, or its <code>if:</code> (a surrounding
 <code>${{ }}</code> is stripped) has a <code>||</code> alternative that is a bare <code>github.event_name ==
 'pull_request'</code> or <code>!= '&lt;other event&gt;'</code> test. Any other <code>if:</code> makes the job conditional,
 and so does a <code>needs:</code> on a conditional job. A job that only <code>uses:</code> a reusable workflow
