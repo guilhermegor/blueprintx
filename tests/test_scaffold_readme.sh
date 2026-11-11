@@ -9,6 +9,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/bin/lib/common.sh"
 # shellcheck source=bin/lib/scaffold_readme.sh
 source "$REPO_ROOT/bin/lib/scaffold_readme.sh"
+# shellcheck source=bin/lib/spec.sh
+source "$REPO_ROOT/bin/lib/spec.sh"
 
 GATE="$REPO_ROOT/templates/common/bin/check_readme_structure.sh"
 int_failures=0
@@ -269,6 +271,130 @@ test_ptbr_readme_reprompts_in_interactive_mode() {
     ) || int_rc=$?
     expect "interactive render succeeds after the re-prompt" "0" "$int_rc"
     expect "interactive mode takes the replacement pt-BR description" "1" "$(grep -cxF "$str_ptbr" "$path_out" || true)"
+    rm -f "$path_out"
+}
+
+drive_create_flow() {
+    local str_description="$1" str_locale="$2" path_root="$3" str_stdin="$4" str_real="${5:-}"
+    (
+        set --
+        export GITHUB_USERNAME=ci-bot LINKEDIN_URL=https://www.linkedin.com/in/ci-bot
+        LOG_FILE=/dev/null
+        # shellcheck source=bin/blueprintx.sh
+        source "$REPO_ROOT/bin/blueprintx.sh"
+        prompt_project_name() { echo acme; }
+        prompt_project_description() { echo "$str_description"; }
+        prompt_project_root() { echo "$path_root"; }
+        prompt_language() { echo python; }
+        prompt_skeleton() { echo lib-minimal; }
+        prompt_license() { echo MIT; }
+        prompt_docs_locale() { echo "$str_locale"; }
+        if [ -z "$str_real" ]; then
+            create_project() { printf '%s' "$3" >"$path_root/description.seen"; }
+        fi
+        if [ -n "$str_stdin" ]; then
+            printf '%s\n' "$str_stdin" | BLUEPRINTX_STDIN_ANSWERS=1 run_create_flow
+        else
+            run_create_flow </dev/null
+        fi
+    ) >"$path_root/flow.log" 2>&1
+}
+
+test_ptbr_replacement_description_reaches_create_project() {
+    local path_root int_rc=0 str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
+    local str_en="This library is a tool that can parse the files. It is not for the users, and it will be fast."
+    path_root="$(mktemp -d)"
+    drive_create_flow "$str_en" pt-BR "$path_root" "$str_ptbr" || int_rc=$?
+    expect "the interactive flow exits cleanly" "0" "$int_rc"
+    [ "$int_rc" -eq 0 ] || tail -n 20 "$path_root/flow.log" >&2
+    expect "the project is created from the replacement description" "$str_ptbr" "$(cat "$path_root/description.seen")"
+    rm -rf "$path_root"
+}
+
+test_ptbr_locale_with_english_description_is_refused_when_not_interactive() {
+    local path_root int_rc=0
+    local str_en="This library is a tool that can parse the files. It is not for the users, and it will be fast."
+    path_root="$(mktemp -d)"
+    drive_create_flow "$str_en" pt-BR "$path_root" "" || int_rc=$?
+    expect "a non-interactive English description is refused" "1" "$int_rc"
+    expect "no project is created after the refusal" "0" "$(find "$path_root" -name description.seen | wc -l)"
+    expect "the refusal names the pt-BR requirement" "1" "$(grep -c 'other than pt-BR' "$path_root/flow.log" || true)"
+    rm -rf "$path_root"
+}
+
+test_english_locale_leaves_the_description_alone() {
+    local path_root int_rc=0 str_en="This library is a tool that can parse the files. It is not for the users."
+    path_root="$(mktemp -d)"
+    drive_create_flow "$str_en" en "$path_root" "" || int_rc=$?
+    expect "the en-locale flow exits cleanly" "0" "$int_rc"
+    [ "$int_rc" -eq 0 ] || tail -n 20 "$path_root/flow.log" >&2
+    expect "an English description is kept for the en locale" "$str_en" "$(cat "$path_root/description.seen")"
+    rm -rf "$path_root"
+}
+
+test_ptbr_replacement_reaches_pyproject_and_readme() {
+    local path_root str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
+    local str_en="This library is a tool that can parse the files. It is not for the users, and it will be fast."
+    path_root="$(mktemp -d)"
+    local int_rc=0
+    set +e
+    drive_create_flow "$str_en" pt-BR "$path_root" "$(printf '%s\n%s' "$str_ptbr" "$(spec_stdin_for_skeleton lib-minimal "")")" real
+    int_rc=$?
+    set -e
+    expect "the real scaffold flow exits cleanly" "0" "$int_rc"
+    expect "the flow reports the project as created" "1" \
+        "$(grep -c 'Project created successfully' "$path_root/flow.log" || true)"
+    [ "$int_rc" -eq 0 ] || tail -n 20 "$path_root/flow.log" >&2
+    expect "pyproject.toml carries the replacement description" "1" \
+        "$(grep -cxF "description = \"$str_ptbr\"" "$path_root/acme/pyproject.toml" || true)"
+    expect "README.md carries the replacement description" "1" \
+        "$(grep -cF "$str_ptbr" "$path_root/acme/README.md" || true)"
+    expect "no generated file keeps the English description" "0" \
+        "$(grep -rlF "$str_en" "$path_root/acme" | wc -l)"
+    rm -rf "$path_root"
+}
+
+spec_description_check() {
+    local str_description="$1" path_out="$2"
+    (
+        set --
+        # shellcheck source=bin/blueprintx.sh
+        source "$REPO_ROOT/bin/blueprintx.sh"
+        DOCS_LOCALE=pt-BR SKELETON_CHOICE=lib-minimal PROJECT_DESCRIPTION="$str_description"
+        require_ptbr_spec_description
+    ) >"$path_out" 2>&1 </dev/null
+}
+
+test_spec_refuses_an_english_description_for_a_ptbr_locale() {
+    local path_out int_rc=0
+    path_out="$(mktemp)"
+    spec_description_check "This library is a tool that can parse the files. It is not for the users, and it will be fast." "$path_out" || int_rc=$?
+    expect "a --spec English description is refused for pt-BR" "1" "$int_rc"
+    expect "the refusal names the spec key" "1" "$(grep -c "'project_description' does not read as pt-BR" "$path_out" || true)"
+    rm -f "$path_out"
+}
+
+test_spec_reports_a_checker_that_cannot_run_apart_from_a_language_refusal() {
+    local path_out int_rc=0
+    path_out="$(mktemp)"
+    (
+        set --
+        # shellcheck source=bin/blueprintx.sh
+        source "$REPO_ROOT/bin/blueprintx.sh"
+        description_reads_as_ptbr() { return 127; }
+        DOCS_LOCALE=pt-BR SKELETON_CHOICE=lib-minimal PROJECT_DESCRIPTION="Texto qualquer."
+        require_ptbr_spec_description
+    ) >"$path_out" 2>&1 </dev/null || int_rc=$?
+    expect "a checker that cannot run refuses the spec" "1" "$int_rc"
+    expect "that failure is told apart from a language refusal" "1" "$(grep -c 'could not run' "$path_out" || true)"
+    rm -f "$path_out"
+}
+
+test_spec_accepts_a_ptbr_description_for_a_ptbr_locale() {
+    local path_out int_rc=0
+    path_out="$(mktemp)"
+    spec_description_check "Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários." "$path_out" || int_rc=$?
+    expect "a --spec pt-BR description is accepted" "0" "$int_rc"
     rm -f "$path_out"
 }
 
