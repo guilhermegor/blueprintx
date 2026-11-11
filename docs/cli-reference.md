@@ -98,6 +98,9 @@ Besides `language`, `display_name`, `description` and `scaffold`, every `skeleto
 must carry `ships_docs=true` or `ships_docs=false`: whether the generated project ships a
 documentation site. The key names the fact for any documentation engine (MkDocs or
 Docusaurus), so a future consumer such as a docs-locale gate can read it instead of
-guessing from the presence of `mkdocs.yml`; no gate reads it yet.
+guessing from the presence of `mkdocs.yml`; no consumer acts on it yet.
 `bin/ci/validate_meta.sh` rejects a missing key, any value but exactly `true` or `false`,
-and a value that disagrees with whether the scaffold script references a docs config.
+and a value that disagrees with whether the scaffold script references a docs config on a
+non-comment line. That grep is static: a docs site shipped through a sourced helper or a
+whole-directory copy is not seen, so the script must name the file, and a duplicate key is
+rejected rather than resolved.

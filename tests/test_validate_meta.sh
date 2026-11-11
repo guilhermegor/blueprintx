@@ -134,7 +134,41 @@ test_skeleton_not_documented_in_claude_md() {
         "skeleton 'fake-skeleton' is not mentioned in CLAUDE.md"
 }
 
-test_ships_docs_must_be_boolean() {
+run_ships_docs_case() {
+    local str_label="$1" str_value="$2" str_script="$3" str_expect="$4" str_needle="${5:-}" str_root
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    printf '%s\n' "$str_script" > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$str_value"
+    expect_gate "$str_label" "$str_root" "$str_expect" "$str_needle"
+}
+
+test_ships_docs_values() {
+    run_ships_docs_case "ships_docs outside true/false" "maybe" "" fail \
+        "ships_docs maybe must be exactly true or false"
+    run_ships_docs_case "ships_docs capitalized" "True" "" fail "must be exactly true or false"
+    run_ships_docs_case "whitespace-padded ships_docs" " true" "" fail \
+        "must be exactly true or false"
+    run_ships_docs_case "ships_docs=false" "false" "" pass
+}
+
+test_ships_docs_matches_scaffold() {
+    local str_cp='cp mkdocs.yml "$project_path"'
+    run_ships_docs_case "true without a docs config" "true" "" fail \
+        "ships_docs=true but the scaffold script implies false"
+    run_ships_docs_case "true with a docs config" "true" "$str_cp" pass
+    run_ships_docs_case "false with a docs config" "false" "$str_cp" fail \
+        "ships_docs=false but the scaffold script implies true"
+    run_ships_docs_case "true with a comment-only mention" "true" "# copy mkdocs.yml later" fail \
+        "ships_docs=true but the scaffold script implies false"
+}
+
+test_ships_docs_duplicate_key() {
     local str_root
     str_root="$(make_sandbox)"
     mkdir -p "$str_root/bin/scaffold"
@@ -144,51 +178,10 @@ test_ships_docs_must_be_boolean() {
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
         "scaffold=$(base_value scaffold)" \
-        "ships_docs=maybe"
-    expect_gate "ships_docs outside true/false" "$str_root" "fail" \
-        "ships_docs 'maybe' must be exactly true or false"
-    str_root="$(make_sandbox)"
-    mkdir -p "$str_root/bin/scaffold"
-    : > "$str_root/bin/scaffold/fake.sh"
-    write_meta "$str_root" \
-        "language=$(base_value language)" \
-        "display_name=$(base_value display_name)" \
-        "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)" \
-        "ships_docs=false"
-    expect_gate "ships_docs=false" "$str_root" "pass"
-    str_root="$(make_sandbox)"
-    mkdir -p "$str_root/bin/scaffold"
-    : > "$str_root/bin/scaffold/fake.sh"
-    write_meta "$str_root" \
-        "language=$(base_value language)" \
-        "display_name=$(base_value display_name)" \
-        "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)" \
+        "ships_docs=false" \
         "ships_docs=true"
-    expect_gate "ships_docs=true without a docs config in the scaffold" "$str_root" "fail" \
-        "ships_docs=true but the scaffold script implies false"
-    str_root="$(make_sandbox)"
-    mkdir -p "$str_root/bin/scaffold"
-    echo 'cp mkdocs.yml "$project_path"' > "$str_root/bin/scaffold/fake.sh"
-    write_meta "$str_root" \
-        "language=$(base_value language)" \
-        "display_name=$(base_value display_name)" \
-        "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)" \
-        "ships_docs=true"
-    expect_gate "ships_docs=true with a docs config in the scaffold" "$str_root" "pass"
-    str_root="$(make_sandbox)"
-    mkdir -p "$str_root/bin/scaffold"
-    : > "$str_root/bin/scaffold/fake.sh"
-    write_meta "$str_root" \
-        "language=$(base_value language)" \
-        "display_name=$(base_value display_name)" \
-        "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)" \
-        "ships_docs= true"
-    expect_gate "whitespace-padded ships_docs" "$str_root" "fail" \
-        "must be exactly true or false"
+    expect_gate "ships_docs declared twice" "$str_root" "fail" \
+        "ships_docs is declared more than once"
 }
 
 test_readme_archetype() {
@@ -253,7 +246,9 @@ main() {
     test_empty_value
     test_missing_scaffold_path
     test_skeleton_not_documented_in_claude_md
-    test_ships_docs_must_be_boolean
+    test_ships_docs_values
+    test_ships_docs_matches_scaffold
+    test_ships_docs_duplicate_key
     test_readme_archetype
     test_assertion_weakening_gate
 

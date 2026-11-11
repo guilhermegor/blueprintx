@@ -42,13 +42,18 @@ for meta in "$TEMPLATES_DIR"/*/skeleton.meta; do
         errors=$((errors + 1))
     fi
 
+    if [ "$(grep -c '^ships_docs=' "$meta" || true)" -gt 1 ]; then
+        echo "  ERROR: ships_docs is declared more than once" >&2
+        errors=$((errors + 1))
+    fi
     str_ships_docs="$(grep -m1 '^ships_docs=' "$meta" | cut -d= -f2- || true)"
     if [ -n "$str_ships_docs" ] && [ "$str_ships_docs" != "true" ] && [ "$str_ships_docs" != "false" ]; then
-        echo "  ERROR: ships_docs '$str_ships_docs' must be exactly true or false" >&2
+        echo "  ERROR: ships_docs $(printf '%q' "$str_ships_docs") must be exactly true or false" >&2
         errors=$((errors + 1))
     elif [ -n "$str_ships_docs" ] && [ -f "$REPO_ROOT/$scaffold_rel" ]; then
         str_actual=false
-        grep -qE 'mkdocs\.yml|docusaurus\.config' "$REPO_ROOT/$scaffold_rel" && str_actual=true
+        str_code="$(grep -vE '^[[:space:]]*#' "$REPO_ROOT/$scaffold_rel" || true)"
+        grep -qE 'mkdocs\.yml|docusaurus\.config' <<< "$str_code" && str_actual=true
         if [ "$str_actual" != "$str_ships_docs" ]; then
             echo "  ERROR: ships_docs=$str_ships_docs but the scaffold script implies $str_actual" >&2
             errors=$((errors + 1))

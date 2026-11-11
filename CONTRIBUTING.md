@@ -2014,8 +2014,9 @@ grouped by what they guard.
   sharing a name are ambiguous for branch protection. It fails the job too, since a red
   status on someone else's PR is easy to miss from the issue timeline. See `docs/issue-scope.md`.
 - **`validate_meta.sh` (#407, #478).** Every `skeleton.meta` has all five required fields non-empty (`ships_docs` must be exactly `true` or
-  `false`, and must match whether the scaffold script references `mkdocs.yml` or
-  `docusaurus.config`), a `scaffold=` path that exists, and the skeleton directory named in the root `CLAUDE.md`:
+  `false`, declared once, and must match whether the scaffold script references
+  `mkdocs.yml` or `docusaurus.config` on a non-comment line), a `scaffold=` path that
+  exists, and the skeleton directory named in the root `CLAUDE.md`:
   machine-decidable, so a gate, while the quality of the mention stays a human call. A missing
   key under `set -euo pipefail` used to kill the gate inside its own `grep` pipeline with exit
   1 and no message, which every should-fail test read as proof the check ran; hence `|| true`.
