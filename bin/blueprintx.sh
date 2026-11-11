@@ -542,8 +542,11 @@ require_ptbr_spec_description() {
 
     ptbr_readme_is_rendered || return 0
     description_reads_as_ptbr "$PROJECT_DESCRIPTION" || int_rc=$?
-    [ "$int_rc" -eq 0 ] \
-        || exit_error "--spec: 'project_description' does not read as pt-BR (check exit $int_rc) but 'docs_locale' is pt-BR; the generated docs-language gate would reject README.md. Write the description in pt-BR."
+    case "$int_rc" in
+        0) ;;
+        3) exit_error "--spec: 'project_description' does not read as pt-BR but 'docs_locale' is pt-BR; the generated docs-language gate would reject README.md. Write the description in pt-BR." ;;
+        *) exit_error "--spec: the pt-BR description check could not run (python3 exit $int_rc)." ;;
+    esac
 }
 
 create_project() {

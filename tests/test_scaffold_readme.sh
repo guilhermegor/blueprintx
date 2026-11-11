@@ -300,11 +300,13 @@ drive_create_flow() {
     ) >"$path_root/flow.log" 2>&1
 }
 
-test_ptbr_description_is_validated_before_any_file_is_rendered() {
-    local path_root str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
+test_ptbr_replacement_description_reaches_create_project() {
+    local path_root int_rc=0 str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
     local str_en="This library is a tool that can parse the files. It is not for the users, and it will be fast."
     path_root="$(mktemp -d)"
-    drive_create_flow "$str_en" pt-BR "$path_root" "$str_ptbr"
+    drive_create_flow "$str_en" pt-BR "$path_root" "$str_ptbr" || int_rc=$?
+    expect "the interactive flow exits cleanly" "0" "$int_rc"
+    [ "$int_rc" -eq 0 ] || tail -n 20 "$path_root/flow.log" >&2
     expect "the project is created from the replacement description" "$str_ptbr" "$(cat "$path_root/description.seen")"
     rm -rf "$path_root"
 }
@@ -321,9 +323,11 @@ test_ptbr_locale_with_english_description_is_refused_when_not_interactive() {
 }
 
 test_english_locale_leaves_the_description_alone() {
-    local path_root str_en="This library is a tool that can parse the files. It is not for the users."
+    local path_root int_rc=0 str_en="This library is a tool that can parse the files. It is not for the users."
     path_root="$(mktemp -d)"
-    drive_create_flow "$str_en" en "$path_root" ""
+    drive_create_flow "$str_en" en "$path_root" "" || int_rc=$?
+    expect "the en-locale flow exits cleanly" "0" "$int_rc"
+    [ "$int_rc" -eq 0 ] || tail -n 20 "$path_root/flow.log" >&2
     expect "an English description is kept for the en locale" "$str_en" "$(cat "$path_root/description.seen")"
     rm -rf "$path_root"
 }
@@ -367,6 +371,22 @@ test_spec_refuses_an_english_description_for_a_ptbr_locale() {
     spec_description_check "This library is a tool that can parse the files. It is not for the users, and it will be fast." "$path_out" || int_rc=$?
     expect "a --spec English description is refused for pt-BR" "1" "$int_rc"
     expect "the refusal names the spec key" "1" "$(grep -c "'project_description' does not read as pt-BR" "$path_out" || true)"
+    rm -f "$path_out"
+}
+
+test_spec_reports_a_checker_that_cannot_run_apart_from_a_language_refusal() {
+    local path_out int_rc=0
+    path_out="$(mktemp)"
+    (
+        set --
+        # shellcheck source=bin/blueprintx.sh
+        source "$REPO_ROOT/bin/blueprintx.sh"
+        description_reads_as_ptbr() { return 127; }
+        DOCS_LOCALE=pt-BR SKELETON_CHOICE=lib-minimal PROJECT_DESCRIPTION="Texto qualquer."
+        require_ptbr_spec_description
+    ) >"$path_out" 2>&1 </dev/null || int_rc=$?
+    expect "a checker that cannot run refuses the spec" "1" "$int_rc"
+    expect "that failure is told apart from a language refusal" "1" "$(grep -c 'could not run' "$path_out" || true)"
     rm -f "$path_out"
 }
 
