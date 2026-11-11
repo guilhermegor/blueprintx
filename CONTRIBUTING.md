@@ -2197,8 +2197,8 @@ script but no hook.
 ## Release tag targets the built SHA (#1065)
 
 Every template workflow using `softprops/action-gh-release` must pin `target_commitish:
-${{ github.sha }}` on each such step (a pin must sit between that step's `uses:` and the next step), so the tag lands on the commit that was built rather
-than the branch tip. The gate is `tests/test_release_target_sha.sh` (pre-commit hook
+${{ github.sha }}` on each such step, inside its `with:` block, so the tag lands on the commit that was built
+rather than the branch tip. The gate is `tests/test_release_target_sha.sh` (pre-commit hook
 `release-target-sha` and a step of the `workflow-names` job in `scaffold_checks.yml`); it
 discovers workflows by grep and carries should-fail witnesses. The root repo's own workflows
 do not use `action-gh-release`, so they are out of scope.

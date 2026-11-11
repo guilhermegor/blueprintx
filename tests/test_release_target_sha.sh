@@ -7,10 +7,14 @@ str_use_re='^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*["'"'"']?softprops/actio
 str_pin_re='^[[:space:]]+target_commitish:[[:space:]]*["'"'"']?\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}'
 
 pins_every_release() {
-	awk -v use_re="$str_use_re" -v pin_re="$str_pin_re" '
-		$0 ~ use_re { if (pending) bad = 1; pending = 1; uses++; next }
-		/^[[:space:]]*-[[:space:]]/ { if (pending) bad = 1; pending = 0 }
-		pending && $0 ~ pin_re { pending = 0 }
+	USE_RE="$str_use_re" PIN_RE="$str_pin_re" awk '
+		function indent() { match($0, /^ */); return RLENGTH }
+		BEGIN { use_re = ENVIRON["USE_RE"]; pin_re = ENVIRON["PIN_RE"] }
+		$0 ~ use_re { if (pending) bad = 1; pending = 1; inwith = 0; uses++; col = indent() - ($0 ~ /^[[:space:]]*-/ ? 0 : 2); next }
+		pending && /^[[:space:]]*-[[:space:]]/ && indent() <= col { bad = 1; pending = 0 }
+		pending && /^[[:space:]]*with:[[:space:]]*$/ { inwith = 1; wcol = indent(); next }
+		pending && inwith && NF && indent() <= wcol { inwith = 0 }
+		pending && inwith && $0 ~ pin_re { pending = 0 }
 		END { exit !(uses > 0 && !pending && !bad) }
 	' "$1"
 }
@@ -43,8 +47,9 @@ if [ "$int_checked" -eq 0 ]; then
 	exit 1
 fi
 
-str_use='      - uses: softprops/action-gh-release@v2'
-str_pin="        target_commitish: \${{ github.sha }}"
+str_use='      - uses: softprops/action-gh-release@v2
+        with:'
+str_pin="          target_commitish: \${{ github.sha }}"
 expect_witness "commented-out pin" "$str_use
 ${str_pin/ target/ \# target}" reject
 expect_witness "two steps, one pin" "$str_use
@@ -57,6 +62,14 @@ expect_witness "pin on an unrelated step" "$str_use
       - uses: other/action@v1
         with:
 $str_pin" reject
+expect_witness "pin under env, not with" "$str_use
+          x: y
+        env:
+$str_pin" reject
+expect_witness "list item before the pin is not a boundary" "$str_use
+          body: |
+            - item
+$str_pin" accept
 expect_witness "double pin hides an unpinned step" "$str_use
 $str_pin
 $str_pin
@@ -64,7 +77,7 @@ $str_use" reject
 expect_witness "pinned step" "$str_use
 $str_pin" accept
 expect_witness "quoted pin" "$str_use
-        target_commitish: \"\${{ github.sha }}\"" accept
+          target_commitish: \"\${{ github.sha }}\"" accept
 
 echo "checked $int_checked release workflow(s), $int_failures failure(s)"
 exit $((int_failures > 0))
