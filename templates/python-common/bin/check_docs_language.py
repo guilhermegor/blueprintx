@@ -115,7 +115,8 @@ TUPLE_BLANKINGS = (
 RE_TABLE_ROW = re.compile(r"^[ \t]*\|")
 
 RE_LINK_DEFINITION = re.compile(
-    r"""^[ \t]*\[(?!\^)[^\]\n]+\]:[ \t]*\S+(?P<title>[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$"""
+    r"""^[ \t]*\[(?!\^)[^\]\n]+\]:[ \t]*\S+"""
+    r"""(?P<title>[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$"""
 )
 
 RE_DEFINITION_TITLE = re.compile(r"""^[ \t]*(?:"[^"]*"|'[^']*'|\([^)]*\))[ \t]*$""")
