@@ -66,17 +66,20 @@ expect "CONTRIBUTING.md with an npm flag after run passes" 0 "$?"
 printf 'Run `npm run --silent ghost`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "CONTRIBUTING.md citing a missing script after a flag fails" 1 "$?"
-printf 'Run `npm run --workspace=app ghost`.\n' >"$str_proj/CONTRIBUTING.md"
-bash "$GATE" "$str_proj" >/dev/null 2>&1
-expect "a flag with =value before a missing script fails" 1 "$?"
-for str_form in '-w app' '--workspace app' '--prefix app' '--loglevel warn'; do
+for str_form in '-w app' '--workspace app' '--workspace=app' '--prefix app'; do
 	printf 'Run `npm run %s ghost`.\n' "$str_form" >"$str_proj/CONTRIBUTING.md"
 	bash "$GATE" "$str_proj" >/dev/null 2>&1
-	expect "a missing script after '$str_form' fails" 1 "$?"
-	printf 'Run `npm run %s build`.\n' "$str_form" >"$str_proj/CONTRIBUTING.md"
-	bash "$GATE" "$str_proj" >/dev/null 2>&1
-	expect "an existing script after '$str_form' passes" 0 "$?"
+	expect "'$str_form' targets another manifest, so the root is not checked" 0 "$?"
 done
+printf 'Run `npm run --loglevel warn ghost`.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a missing script after --loglevel warn fails" 1 "$?"
+printf 'Run `npm run --loglevel warn build`.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "an existing script after --loglevel warn passes" 0 "$?"
+printf 'Run `pnpm run ghost`.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "pnpm run is not an npm run command" 0 "$?"
 printf 'Run `npm run build.prod` then `npm run build:`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "a dotted missing script fails, trailing colon is prose" 1 "$?"
