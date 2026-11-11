@@ -13,10 +13,11 @@ STR_PKG="$STR_ROOT/package.json"
 list_docs() {
 	local str_f
 	for str_f in README.md CLAUDE.md AGENTS.md CONTRIBUTING.md; do
-		[ -f "$STR_ROOT/$str_f" ] && printf '%s\n' "$STR_ROOT/$str_f"
+		if [ -f "$STR_ROOT/$str_f" ]; then printf '%s\n' "$STR_ROOT/$str_f"; fi
 	done
-	[ -d "$STR_ROOT/docs" ] && find "$STR_ROOT/docs" -type f -name '*.md' -not -path '*/node_modules/*' | sort
-	return 0
+	if [ -d "$STR_ROOT/docs" ]; then
+		find "$STR_ROOT/docs" -type f -name '*.md' -not -path '*/node_modules/*' | sort
+	fi
 }
 
 command -v node >/dev/null || {
@@ -26,6 +27,11 @@ command -v node >/dev/null || {
 
 str_scripts="$(node -e 'console.log(Object.keys(require(process.argv[1]).scripts || {}).join("\n"))' "$(cd "$STR_ROOT" && pwd)/package.json")" || {
 	echo "check_doc_commands: $STR_PKG is not valid JSON" >&2
+	exit 2
+}
+
+str_docs="$(list_docs)" || {
+	echo "check_doc_commands: document discovery failed under $STR_ROOT/docs" >&2
 	exit 2
 }
 
@@ -43,7 +49,7 @@ while IFS= read -r str_doc; do
 			echo "check_doc_commands: $str_doc documents 'npm run $str_name' but package.json has no such script" >&2
 			int_fail=1
 		fi
-	done < <(grep -v 'doc-commands:optional' "$str_doc" | sed -E 's/npm run +(-w|--workspace|--prefix)[ =]+[^ ]+( +[^ ]+)?//g' | grep -oE '(^|[^[:alnum:]])npm run( +--loglevel +[^ ]+| +--?[A-Za-z][A-Za-z-]*(=[^ ]*)?)* +[A-Za-z0-9]([A-Za-z0-9:._-]*[A-Za-z0-9])?' | sort -u || true)
-done < <(list_docs)
+	done < <(grep -v 'doc-commands:optional' "$str_doc" | sed -E '/npm run( +([^- ][^ ]*|-[^- ][^ ]*|--[^ ]+))* +(-w|--workspaces?|--prefix)([ =]|$)/s/npm run//g' | grep -oE '(^|[^[:alnum:]])npm run( +--loglevel +[^ ]+| +--?[A-Za-z][A-Za-z-]*(=[^ ]*)?)* +[A-Za-z0-9]([A-Za-z0-9:._-]*[A-Za-z0-9])?' | sort -u || true)
+done <<<"$str_docs"
 
 exit "$int_fail"

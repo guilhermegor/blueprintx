@@ -126,4 +126,17 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 chmod 644 "$str_proj/README.md"
 
+printf 'Run `npm run ghost -w app` or `npm run ghost --workspace=app`.\n' >"$str_proj/README.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a workspace selector after the script name is skipped" 0 "$?"
+printf 'Run `npm run build`.\n' >"$str_proj/README.md"
+
+if [ "$(id -u)" -ne 0 ]; then
+	mkdir -p "$str_proj/docs/locked"
+	chmod 000 "$str_proj/docs/locked"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "a docs directory that cannot be traversed exits 2" 2 "$?"
+	chmod 755 "$str_proj/docs/locked"
+fi
+
 [ "$int_failures" -eq 0 ]
