@@ -25,7 +25,7 @@ if git remote get-url origin >/dev/null 2>&1; then
     [ -z "$str_ahead" ] || { echo "$str_ahead" >&2; fail "local main has commits origin/main lacks."; }
 fi
 
-[ -z "$(find .specs -mindepth 1 -name .specs 2>/dev/null)" ] \
-    || fail "a nested .specs directory was scaffolded."
+[ ! -d .specs ] || [ -z "$(find .specs -mindepth 1 -name .specs)" ] \
+    || fail "a nested .specs directory was scaffolded inside .specs/."
 
 echo "Final tree: committed, $str_pushed_note, no nested .specs."

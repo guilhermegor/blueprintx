@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -uo pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
@@ -35,29 +35,43 @@ run_check() {
     echo $?
 }
 
+check_msg() {
+    grep -q "$2" "$WORK_DIR/out"
+    check "$1 names its cause ($2)" 0 $?
+}
+
 dir="$(new_repo clean)"
 check "clean repo without origin passes" 0 "$(run_check "$dir")"
 grep -q "push check skipped" "$WORK_DIR/out"
 check "no origin reports the push check as skipped" 0 $?
 
+dir="$(new_repo modified)"
+echo x >"$dir/f.txt"
+check "modified tracked file fails" 1 "$(run_check "$dir")"
+check_msg "modified tracked file fails" "uncommitted or untracked"
+
 dir="$(new_repo dirty)"
 : >"$dir/untracked.txt"
 check "untracked file fails" 1 "$(run_check "$dir")"
+check_msg "untracked file fails" "uncommitted or untracked"
 
 dir="$(new_repo nested)"
 mkdir -p "$dir/.specs/features/.specs"
 : >"$dir/.specs/features/.specs/x.md"
 git -C "$dir" add -A
 git -C "$dir" commit -q -m nested
-check "nested .specs at any depth fails" 1 "$(run_check "$dir")"
+check "nested .specs inside .specs/ fails" 1 "$(run_check "$dir")"
+check_msg "nested .specs inside .specs/ fails" "nested .specs directory"
 
 dir="$(new_repo subdir)"
 mkdir "$dir/sub"
 check "run from a subdirectory of a repo fails" 1 "$(run_check "$dir/sub")"
+check_msg "run from a subdirectory of a repo fails" "not the root"
 
 dir="$(new_repo nofetch)"
 with_remote nofetch "$dir"
 check "origin set but origin/main never created fails" 1 "$(run_check "$dir")"
+check_msg "origin set but origin/main never created fails" "origin/main is missing"
 
 dir="$(new_repo pushed)"
 with_remote pushed "$dir"
@@ -70,12 +84,14 @@ check "pushed repo reports the push check as run" 0 $?
 git -C "$dir" add -A
 git -C "$dir" commit -q -m ahead
 check "local main ahead of origin/main fails" 1 "$(run_check "$dir")"
+check_msg "local main ahead of origin/main fails" "local main has commits"
 
 dir="$(new_repo master)"
-git -C "$dir" branch -m master
 with_remote master "$dir"
-git -C "$dir" push -q origin master
+git -C "$dir" push -q origin main
+git -C "$dir" branch -m master
 check "origin set but local main missing fails" 1 "$(run_check "$dir")"
+check_msg "origin set but local main missing fails" "local branch main is missing"
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures failure(s)"; exit 1; }
 echo "OK: all final-tree checks behave."
