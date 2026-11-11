@@ -42,7 +42,7 @@ exists:
 |---|------|----------------|
 | 4 | `docs/usage.md` and `docs/pt-BR/usage.md` | Replace the "Basic usage" example (`from <package_name>.main import main`) with one of your own public functions |
 | 5 | `docs/examples.md` and `docs/pt-BR/examples.md` | Replace the first recipe, which imports `main` from the package |
-| 6 | `docs/api/reference.md` and `docs/pt-BR/api/reference.md` | Delete the "Module: `main`" section and this section, plus one of the two `---` rules around them so no doubled separator remains |
+| 6 | `docs/api/reference.md` and `docs/pt-BR/api/reference.md` | In the English page delete the "Module: `main`" section and this section; in the pt-BR page delete only "Módulo: `main`" (it has no removal section). In both, delete the `---` rules between the removed sections too, leaving exactly one `---` between the preceding section and "Adding new modules" |
 | 7 | `AGENTS.md` | Update the layout tree and the "example boilerplate" note that name `main.py` |
 
 No other code file references `main`: `pyproject.toml` has no `[project.scripts]`
