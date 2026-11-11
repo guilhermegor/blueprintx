@@ -3005,7 +3005,11 @@ _STR_OPEN_TRACKERS_NEWEST_FIRST = '[{"number": 9}, {"number": 7}]'
 
 
 def _run_track_mode(
-    path_root: Path, str_report: str, str_open: str, str_fail_close: str = ""
+    path_root: Path,
+    str_report: str,
+    str_open: str,
+    str_fail_close: str = "",
+    bool_fail_list: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     """Run ``test_urls_docstrings.sh --track`` against a stub ``gh``.
 
@@ -3019,6 +3023,8 @@ def _run_track_mode(
         JSON the stub serves for ``gh issue list``; the script's own ``--jq`` runs over it.
     str_fail_close : str
         Issue number whose ``gh issue close`` the stub fails; empty fails none.
+    bool_fail_list : bool
+        Whether the stub's ``gh issue list`` exits non-zero.
 
     Returns
     -------
@@ -3034,6 +3040,7 @@ def _run_track_mode(
     (path_bin / "gh").write_text(
         f'#!/bin/bash\necho "$*" >> "{path_log}"\n'
         f'[ "$2 $3" = "close {str_fail_close}" ] && exit 1\n[ "$2" = list ] || exit 0\n'
+        f"{'exit 1' if bool_fail_list else ':'}\n"
         'while [ $# -gt 0 ]; do [ "$1" = --jq ] && str_jq="$2"; shift; done\n'
         f'jq -r "$str_jq" "{path_json}"\n',
         encoding="utf-8",
@@ -3077,8 +3084,9 @@ def test_track_mode_opens_a_tracker_for_a_dead_url(tmp_path: Path) -> None:
 
 def test_track_mode_lists_only_open_docstring_url_trackers(tmp_path: Path) -> None:
     """The tracker lookup must carry the label and state filters, and must happen."""
-    _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]")
+    cls_result, _ = _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]")
 
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     list_lines = (tmp_path / "gh.log").read_text(encoding="utf-8").splitlines()
     list_reads = [str_line for str_line in list_lines if str_line.startswith("issue list")]
     assert len(list_reads) == 1
@@ -3086,15 +3094,35 @@ def test_track_mode_lists_only_open_docstring_url_trackers(tmp_path: Path) -> No
 
 
 def test_docstring_urls_workflow_calls_track_mode_on_the_scan_report() -> None:
-    """The step must call ``--track`` on the file the scan step writes, so a rename shows."""
+    """The tracking step must run ``--track`` on the scan step's report, with the token set."""
     path_workflow = (
         Path(__file__).resolve().parents[2] / ".github" / "workflows" / "docstring-urls.yml"
     )
     _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
-    str_workflow = path_workflow.read_text(encoding="utf-8")
+    dict_workflow = yaml.safe_load(path_workflow.read_text(encoding="utf-8"))
+    dict_steps = {
+        dict_step["name"]: dict_step
+        for dict_job in dict_workflow["jobs"].values()
+        for dict_step in dict_job["steps"]
+        if "name" in dict_step
+    }
+    dict_track = dict_steps["Open or Update Tracking Issue"]
 
-    assert "> docstring_urls_report.txt" in str_workflow
-    assert "bin/test_urls_docstrings.sh --track docstring_urls_report.txt" in str_workflow
+    assert "docstring_urls_report.txt" in dict_steps["Scan Docstring URLs"]["run"]
+    assert (
+        dict_track["run"] == "bash bin/test_urls_docstrings.sh --track docstring_urls_report.txt"
+    )
+    assert "GH_TOKEN" in dict_track["env"]
+
+
+def test_track_mode_does_not_open_a_duplicate_when_listing_trackers_fails(tmp_path: Path) -> None:
+    """A failed tracker lookup must fail the step, never fall through to ``issue create``."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]", bool_fail_list=True
+    )
+
+    assert cls_result.returncode != 0
+    assert not [str_call for str_call in list_calls if str_call.startswith("issue c")]
 
 
 def test_track_mode_fails_when_the_scan_gave_no_verdict(tmp_path: Path) -> None:
