@@ -332,7 +332,15 @@ test_ptbr_replacement_reaches_pyproject_and_readme() {
     local path_root str_ptbr="Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários."
     local str_en="This library is a tool that can parse the files. It is not for the users, and it will be fast."
     path_root="$(mktemp -d)"
-    drive_create_flow "$str_en" pt-BR "$path_root" "$(printf '%s\n%s' "$str_ptbr" "$(spec_stdin_for_skeleton lib-minimal "")")" real || true
+    local int_rc=0
+    set +e
+    drive_create_flow "$str_en" pt-BR "$path_root" "$(printf '%s\n%s' "$str_ptbr" "$(spec_stdin_for_skeleton lib-minimal "")")" real
+    int_rc=$?
+    set -e
+    expect "the real scaffold flow exits cleanly" "0" "$int_rc"
+    expect "the flow reports the project as created" "1" \
+        "$(grep -c 'Project created successfully' "$path_root/flow.log" || true)"
+    [ "$int_rc" -eq 0 ] || tail -n 20 "$path_root/flow.log" >&2
     expect "pyproject.toml carries the replacement description" "1" \
         "$(grep -cxF "description = \"$str_ptbr\"" "$path_root/acme/pyproject.toml" || true)"
     expect "README.md carries the replacement description" "1" \
