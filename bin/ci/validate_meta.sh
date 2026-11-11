@@ -9,6 +9,15 @@ REQUIRED_FIELDS=(language display_name description scaffold)
 CHECK_README="$REPO_ROOT/templates/common/bin/check_readme_structure.sh"
 errors=0
 
+weakening_gate_for() {
+    case "$1" in
+        python) echo "templates/python-common/bin/check_assertion_weakening.py" ;;
+        typescript) echo "templates/ts-common/src/utils/assertion-weakening.cjs" ;;
+        bash) echo "-" ;;
+        *) echo "" ;;
+    esac
+}
+
 if [ ! -f "$CLAUDE_MD" ]; then
     echo "ERROR: $CLAUDE_MD not found — cannot check skeleton documentation" >&2
     errors=$((errors + 1))
@@ -36,6 +45,16 @@ for meta in "$TEMPLATES_DIR"/*/skeleton.meta; do
     str_archetype="$(grep '^readme_archetype=' "$meta" | cut -d= -f2- | tr -d '[:space:]' || true)"
     if [ -n "$str_archetype" ] && ! bash "$CHECK_README" --list-archetypes | grep -qxF -- "$str_archetype"; then
         echo "  ERROR: readme_archetype '$str_archetype' is not one of: $(bash "$CHECK_README" --list-archetypes | tr '\n' ' ')" >&2
+        errors=$((errors + 1))
+    fi
+
+    str_language="$(grep '^language=' "$meta" | cut -d= -f2- | tr -d '[:space:]' || true)"
+    str_gate="$(weakening_gate_for "$str_language")"
+    if [ -n "$str_language" ] && [ -z "$str_gate" ]; then
+        echo "  ERROR: language '$str_language' ships no assertion-weakening gate" >&2
+        errors=$((errors + 1))
+    elif [ -n "$str_gate" ] && [ "$str_gate" != "-" ] && [ ! -f "$REPO_ROOT/$str_gate" ]; then
+        echo "  ERROR: assertion-weakening gate missing: $str_gate" >&2
         errors=$((errors + 1))
     fi
 
