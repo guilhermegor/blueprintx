@@ -23,7 +23,7 @@ tempo de vida diferente.
 Esta página vai para o site de documentação publicado, assim como [Uso](usage.md). Um incidente
 pode carregar detalhes de produção (um nome de servidor, uma consulta, um sintoma visível ao
 cliente) que não devem chegar a um site público. Oculte ou generalize esses detalhes antes de
-confirmar a entrada, como um postmortem externo omite os detalhes internos. Se o site deste
+fazer o commit da entrada, como um postmortem externo omite os detalhes internos. Se o site deste
 projeto for de fato público e as entradas não puderem ficar ocultadas, exclua `incidents.md`
 via `exclude_docs` no `mkdocs.yml` em vez de deixá-lo pela metade.
 

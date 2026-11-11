@@ -45,12 +45,14 @@ script_refs() {
 
 check_project() {
     local str_project="$1" str_ref str_file
+    local int_refs=0
     local -a list_sources=()
     local str_docs
     [ -d "$str_project" ] || { fail "no project directory at $str_project"; return 0; }
     if [ -f "$str_project/mkdocs.yml" ]; then
         str_docs="$(docs_dir "$str_project/mkdocs.yml")"
         while IFS= read -r str_ref; do
+            int_refs=$((int_refs + 1))
             [ -e "$str_project/$str_docs/$str_ref" ] \
                 || fail "mkdocs.yml nav lists $str_docs/$str_ref, which the scaffold never copied"
         done < <(nav_pages "$str_project/mkdocs.yml")
@@ -60,29 +62,26 @@ check_project() {
         "$str_project"/.github/workflows/*.y*ml "$str_project"/.github/actions/*/action.y*ml; do
         [ -f "$str_file" ] && list_sources+=("$str_file")
     done
-    if [ "${#list_sources[@]}" -eq 0 ] && [ ! -f "$str_project/mkdocs.yml" ]; then
-        fail "$str_project has no mkdocs.yml and no task, hook, package.json, Makefile or workflow file; nothing was checked"
-        return 0
-    fi
-    [ "${#list_sources[@]}" -gt 0 ] || return 0
     for str_file in "${list_sources[@]}"; do
         while IFS= read -r str_ref; do
+            int_refs=$((int_refs + 1))
             [ -e "$str_project/$str_ref" ] \
                 || fail "${str_file#"$str_project"/} runs $str_ref, which the scaffold never copied"
         done < <(script_refs "$str_file")
     done
+    [ "$int_refs" -gt 0 ] || fail "no nav page or bin/ script reference found in $str_project; nothing was checked"
 }
 
 scaffold_skeleton() {
     local str_name="$1" str_scaffold="$2" str_work="$3"
     if spec_skeleton_supported "$str_name"; then
-        spec_stdin_for_skeleton "$str_name" "" \
-            | BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold" \
-                "$str_work" ci-scaffold "CI reference check" "0.0.1" >>"$str_work.log"
+        BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold" \
+            "$str_work" ci-scaffold "CI reference check" "0.0.1" \
+            <<<"$(spec_stdin_for_skeleton "$str_name" "")" >>"$str_work.log" 2>&1
     else
         GITHUB_USERNAME=ci-bot bash "$REPO_ROOT/$str_scaffold" \
             "$str_work" ci-scaffold "CI reference check" "0.0.1" \
-            < <(printf '\n%.0s' {1..100}) >>"$str_work.log"
+            < <(printf '\n%.0s' {1..100}) >>"$str_work.log" 2>&1
     fi
 }
 
