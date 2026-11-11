@@ -271,9 +271,12 @@ echo "::group::poe integration_tests"
 bash bin/poe_exec.sh integration_tests || [ $? -eq 5 ]
 echo "::endgroup::"
 
-echo "::group::final tree is self-consistent"
+echo "::group::mkdocs --strict builds"
 poetry install --only docs --no-root --no-interaction --no-ansi
 poetry run mkdocs build --strict -d "$WORK_DIR/site"
+echo "::endgroup::"
+
+echo "::group::final tree is self-consistent"
 bash "$REPO_ROOT/bin/ci/check_final_tree.sh" "$SKELETON"
 echo "::endgroup::"
 

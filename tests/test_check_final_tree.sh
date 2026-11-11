@@ -36,7 +36,7 @@ run_check() {
 }
 
 check_msg() {
-    grep -q "$2" "$WORK_DIR/out"
+    grep -qF "$2" "$WORK_DIR/out"
     check "$1 names its cause ($2)" 0 $?
 }
 
@@ -44,6 +44,13 @@ dir="$(new_repo clean)"
 check "clean repo without origin passes" 0 "$(run_check "$dir")"
 grep -q "push check skipped" "$WORK_DIR/out"
 check "no origin reports the push check as skipped" 0 $?
+
+dir="$(new_repo specs)"
+mkdir -p "$dir/.specs/features/x"
+: >"$dir/.specs/features/x/tasks.md"
+git -C "$dir" add -A
+git -C "$dir" commit -q -m specs
+check "populated non-nested .specs passes" 0 "$(run_check "$dir")"
 
 dir="$(new_repo modified)"
 echo x >"$dir/f.txt"
