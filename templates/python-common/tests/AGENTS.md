@@ -195,6 +195,20 @@ no comments apart from QA suppressions.
   collaborator is expected — `Mock(spec=DatabaseHandler)` is the form that passes, and it is
   also the one that fails when the real class loses the method you are calling.
 - **Deterministic.** No real network, no real clock dependence, no unseeded randomness.
+- **A `match=` names a message this project raises, never one the stdlib or a vendor raises.**
+  Their wording is not a contract: Python 3.14 reworded `strptime`'s out-of-range-day error, so
+  a `pytest.raises(ValueError, match=<3.13 wording>)` passed on 3.11 to 3.13 and failed only
+  in the 3.14 job of the `tests.yml` matrix. Assert the exception type, or match a token the
+  test itself injected: plant `from os import no_such_name`, then `match="no_such_name"`,
+  not the `ImportError` sentence around it. A bare `pytest.raises(ValueError)` is ruff
+  `PT011` (the template selects `PT`), with or without `as excinfo`, so for `ValueError` and
+  the other broad types take a narrower subclass where one exists and otherwise a
+  `# noqa: PT011`. The planted token is `ModuleNotFoundError.name` only for
+  `import no_such_module`; for `from os import no_such_name` that attribute is `"os"`.
+  `match=` is a regex (`re.search`), so a token
+  with `.` or other metacharacters goes through `re.escape(str_token)`. A shared validator owns its
+  message only when it composes that message itself; one that re-raises `str(exc)` from the
+  stdlib or a vendor is vendor wording again, so its callers assert the type.
 
 ### The network guard is not advisory
 

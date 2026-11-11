@@ -15,6 +15,7 @@ work tree instead of aborting ``init``).
 """
 
 from collections.abc import Mapping
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -26,6 +27,7 @@ import time
 from types import MappingProxyType
 
 import pytest
+import yaml
 
 
 _STR_GIT = shutil.which("git")
@@ -2803,13 +2805,15 @@ def test_check_urls_cache_defaults_to_the_git_common_dir(tmp_path: Path) -> None
     assert list((tmp_path / ".git" / "url_check_cache").iterdir())
 
 
-@pytest.mark.parametrize("str_status", ["000", "429", "503"])
-def test_check_urls_does_not_cache_a_transient_failure(tmp_path: Path, str_status: str) -> None:
-    """No HTTP answer, a rate limit or a 5xx must never enter the shared cache."""
+@pytest.mark.parametrize("str_status", ["000", "403", "408", "429", "503"])
+def test_check_urls_does_not_cache_an_unstable_answer(tmp_path: Path, str_status: str) -> None:
+    """No HTTP answer, a bot block, a timeout, a rate limit or a 5xx must never be cached."""
     path_bin = tmp_path / "stubs"
     path_bin.mkdir()
     (path_bin / "curl").write_text(f"#!/bin/bash\nprintf {str_status}\n", encoding="utf-8")
     (path_bin / "curl").chmod(0o755)
+    (path_bin / "wget").write_text("#!/bin/bash\nexit 1\n", encoding="utf-8")
+    (path_bin / "wget").chmod(0o755)
     (tmp_path / "mod.py").write_text(f'"""See {_URL_404}."""\n', encoding="utf-8")
     path_cache = tmp_path / "cache"
 
@@ -2818,6 +2822,48 @@ def test_check_urls_does_not_cache_a_transient_failure(tmp_path: Path, str_statu
     )
 
     assert not list(path_cache.iterdir())
+
+
+@pytest.mark.parametrize("str_status", ["403", "408", "429"])
+def test_check_urls_reprobes_an_unstable_answer_already_cached(
+    tmp_path: Path, str_status: str
+) -> None:
+    """An unstable answer cached by an older script is a miss: the URL is probed again."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text("#!/bin/bash\nprintf 200\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404} for details"""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+    path_cache.mkdir()
+    str_key = hashlib.md5(_URL_404.encode(), usedforsecurity=False).hexdigest()
+    (path_cache / str_key).write_text(f"{str_status}\n", encoding="utf-8")
+
+    cls_result = _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert (path_cache / str_key).read_text(encoding="utf-8").strip() == "200"
+
+
+@pytest.mark.parametrize("str_punct", [".", ":", "..", "?"])
+def test_check_urls_drops_sentence_punctuation_after_a_url(tmp_path: Path, str_punct: str) -> None:
+    """A URL ending a sentence is probed and cached without the trailing punctuation."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text("#!/bin/bash\nprintf 200\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404}{str_punct}"""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+
+    cls_result = _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    str_key = hashlib.md5(_URL_404.encode(), usedforsecurity=False).hexdigest()
+    assert [path_entry.name for path_entry in path_cache.iterdir()] == [str_key]
 
 
 def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
@@ -2915,3 +2961,146 @@ def test_poetry_run_with_complete_venv_still_runs(tmp_path: Path) -> None:
 
     assert cls_run.returncode == 0, cls_run.stderr
     assert "RAN" in cls_run.stdout
+
+
+def _tracker_step_script() -> str:
+    """Return the shell of the workflow's tracking-issue step.
+
+    Skips when the workflow is not shipped (it needs a GitHub remote).
+
+    Returns
+    -------
+    str
+        The ``run:`` block of the ``Open or Update Tracking Issue`` step.
+    """
+    path_workflow = (
+        Path(__file__).resolve().parents[2] / ".github" / "workflows" / "docstring-urls.yml"
+    )
+    _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
+    dict_workflow = yaml.safe_load(path_workflow.read_text(encoding="utf-8"))
+    list_runs = [
+        dict_step.get("run")
+        for dict_job in dict_workflow["jobs"].values()
+        for dict_step in dict_job.get("steps", [])
+        if dict_step.get("name") == "Open or Update Tracking Issue"
+    ]
+    assert len(list_runs) == 1, f"expected one 'Open or Update Tracking Issue' step: {list_runs}"
+    assert list_runs[0], "the 'Open or Update Tracking Issue' step has no run: block"
+    return list_runs[0]
+
+
+_STR_OPEN_TRACKERS_NEWEST_FIRST = '[{"number": 9}, {"number": 7}]'
+
+
+def _run_tracker_step(
+    path_root: Path, str_report: str, str_open: str, str_fail_close: str = ""
+) -> list[str]:
+    """Run the tracking step against a stub ``gh`` and return the ``gh`` calls it made.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Scratch directory used as the step's CWD.
+    str_report : str
+        Content of ``docstring_urls_report.txt``.
+    str_open : str
+        JSON the stub serves for ``gh issue list``; the step's own ``--jq`` runs over it.
+    str_fail_close : str
+        Issue number whose ``gh issue close`` the stub fails; empty fails none.
+
+    Returns
+    -------
+    list[str]
+        One line per ``gh`` invocation, ``issue list`` calls excluded.
+    """
+    _skip_unless(shutil.which("jq") is not None, "jq is needed to apply the step's --jq")
+    path_bin = path_root / "stubs"
+    path_bin.mkdir()
+    path_log = path_root / "gh.log"
+    path_json = path_root / "issues.json"
+    path_json.write_text(str_open, encoding="utf-8")
+    (path_bin / "gh").write_text(
+        f'#!/bin/bash\necho "$*" >> "{path_log}"\n'
+        f'[ "$2 $3" = "close {str_fail_close}" ] && exit 1\n[ "$2" = list ] || exit 0\n'
+        'while [ $# -gt 0 ]; do [ "$1" = --jq ] && str_jq="$2"; shift; done\n'
+        f'jq -r "$str_jq" "{path_json}"\n',
+        encoding="utf-8",
+    )
+    (path_bin / "gh").chmod(0o755)
+    (path_root / "docstring_urls_report.txt").write_text(str_report, encoding="utf-8")
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, "-eo", "pipefail", "-c", _tracker_step_script()],
+        cwd=path_root,
+        env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    list_lines = path_log.read_text(encoding="utf-8").splitlines()
+    list_reads = [str_line for str_line in list_lines if str_line.startswith("issue list")]
+    assert list_reads, "the step never listed open trackers"
+    assert all("--label docstring-urls --state open" in str_line for str_line in list_reads)
+    return [str_line for str_line in list_lines if not str_line.startswith("issue list")]
+
+
+def test_docstring_urls_workflow_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None:
+    """A clean scan must close every open tracking issue and do nothing else."""
+    list_calls = _run_tracker_step(
+        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+    )
+
+    assert list_calls == [
+        "issue close 7 --comment All docstring URLs are reachable again.",
+        "issue close 9 --comment All docstring URLs are reachable again.",
+    ]
+
+
+def test_docstring_urls_workflow_keeps_closing_after_one_close_fails(tmp_path: Path) -> None:
+    """One failed close must not abort the step or skip the remaining trackers."""
+    list_calls = _run_tracker_step(
+        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST, "7"
+    )
+
+    assert list_calls[-1] == "issue close 9 --comment All docstring URLs are reachable again."
+
+
+def test_docstring_urls_workflow_dedupes_to_one_open_tracker(tmp_path: Path) -> None:
+    """With duplicates open, a failing scan updates the oldest and closes the rest."""
+    list_calls = _run_tracker_step(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+    )
+
+    assert [str_call for str_call in list_calls if str_call.startswith("issue c")] == [
+        "issue comment 7 --body-file docstring_urls_body.md",
+        "issue close 9 --reason not planned --comment Duplicate of #7.",
+    ]
+
+
+def test_docstring_urls_workflow_dedupe_survives_a_failed_close(tmp_path: Path) -> None:
+    """A failed duplicate close must not abort the step or skip later duplicates."""
+    list_calls = _run_tracker_step(
+        tmp_path,
+        "URL issue (404) in a.py (line 1): u\n",
+        '[{"number": 11}, {"number": 9}, {"number": 7}]',
+        "9",
+    )
+
+    assert list_calls[-1] == "issue close 11 --reason not planned --comment Duplicate of #7."
+
+
+def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
+    """The hook must filter on ``.py`` like the script, not on ``types: python``."""
+    path_config = Path(__file__).resolve().parents[2] / ".pre-commit-config.yaml"
+    _skip_unless(path_config.is_file(), "no pre-commit config in this tree")
+    dict_config = yaml.safe_load(path_config.read_text(encoding="utf-8"))
+    list_hooks = [
+        dict_hook
+        for dict_repo in dict_config["repos"]
+        for dict_hook in dict_repo["hooks"]
+        if dict_hook["id"] == "check-urls"
+    ]
+
+    assert len(list_hooks) == 1
+    assert list_hooks[0].get("files") == r"\.py$"
+    assert "types" not in list_hooks[0]
