@@ -125,7 +125,7 @@ repos:
         entry: bash tests/test_release_target_sha.sh
         language: system
         pass_filenames: false
-        files: ^(templates/.*\.github/workflows/|tests/test_release_target_sha\.sh)
+        files: ^(templates/.*\.ya?ml$|tests/test_release_target_sha\.sh)
 
       - id: docs-gap
         name: docs gap (published pages registered in mkdocs nav + docs/CLAUDE.md index, blueprintx#340)

@@ -6,15 +6,13 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 str_use_re='^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*["'"'"']?softprops/action-gh-release'
 str_pin_re='^[[:space:]]+target_commitish:[[:space:]]*["'"'"']?\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}'
 
-count_matches() {
-	grep -Ec "$1" "$2" || true
-}
-
 pins_every_release() {
-	local int_uses int_pins
-	int_uses="$(count_matches "$str_use_re" "$1")"
-	int_pins="$(count_matches "$str_pin_re" "$1")"
-	[ "$int_uses" -gt 0 ] && [ "$int_uses" -eq "$int_pins" ]
+	awk -v use_re="$str_use_re" -v pin_re="$str_pin_re" '
+		$0 ~ use_re { if (pending) bad = 1; pending = 1; uses++; next }
+		/^[[:space:]]*-[[:space:]]/ { if (pending) bad = 1; pending = 0 }
+		pending && $0 ~ pin_re { pending = 0 }
+		END { exit !(uses > 0 && !pending && !bad) }
+	' "$1"
 }
 
 expect_witness() {
@@ -52,7 +50,17 @@ ${str_pin/ target/ \# target}" reject
 expect_witness "two steps, one pin" "$str_use
 $str_pin
 $str_use" reject
-expect_witness "quoted uses is discovered" "      - uses: \"softprops/action-gh-release@v2\"" reject
+expect_witness "quoted unpinned uses is counted" "$str_use
+$str_pin
+      - uses: \"softprops/action-gh-release@v2\"" reject
+expect_witness "pin on an unrelated step" "$str_use
+      - uses: other/action@v1
+        with:
+$str_pin" reject
+expect_witness "double pin hides an unpinned step" "$str_use
+$str_pin
+$str_pin
+$str_use" reject
 expect_witness "pinned step" "$str_use
 $str_pin" accept
 expect_witness "quoted pin" "$str_use
