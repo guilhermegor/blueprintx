@@ -108,6 +108,7 @@ create_python_files() {
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_import_root.py" "$project_path/tests/unit/test_import_root.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_missing_deps.py" "$project_path/tests/unit/test_missing_deps.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dynamic_version_stub_gate.py" "$project_path/tests/unit/test_dynamic_version_stub_gate.py"
 
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
