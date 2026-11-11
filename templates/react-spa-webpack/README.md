@@ -183,7 +183,8 @@ To pin the build to the Node version in `.nvmrc`, add
 If you scaffolded with the JS-copy option, `scripts/emit-js-copy.mjs` and
 `scripts/verify-js-copy.mjs` are present. Use this when a delivery must not
 contain TypeScript at all — a course submission, a client handoff, a
-consumer with no TS toolchain.
+consumer with no TS toolchain. The verify step fails if any `.ts(x)` file, `tsconfig`,
+or a mention of TypeScript in a generated `.md`, `.txt` or `.html` file survived.
 
 ```bash
 npm run js-copy:build   # strips types with @babel/preset-typescript → js-copy/ # doc-commands:optional

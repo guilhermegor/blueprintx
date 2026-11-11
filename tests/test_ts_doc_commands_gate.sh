@@ -40,7 +40,8 @@ done
 str_proj="$(mktemp -d)"
 str_spa="$(mktemp -d)"
 str_bad="$(mktemp -d)"
-trap 'rm -rf "$str_proj" "$str_spa" "$str_bad"' EXIT
+str_nonode="$(mktemp -d)"
+trap 'rm -rf "$str_proj" "$str_spa" "$str_bad" "$str_nonode"' EXIT
 has "scaffold_ts_test runs lint:docs in the generated project" 'npm run lint:docs' "$REPO_ROOT/bin/ci/scaffold_ts_test.sh"
 mkdir -p "$str_proj/docs"
 printf '{"scripts":{"build":"x","lint:css":"y"}}\n' >"$str_proj/package.json"
@@ -68,7 +69,7 @@ expect "CONTRIBUTING.md citing a missing script after a flag fails" 1 "$?"
 printf 'Run `npm run --workspace=app ghost`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "a flag with =value before a missing script fails" 1 "$?"
-for str_form in '-w app' '--workspace app' '--prefix app'; do
+for str_form in '-w app' '--workspace app' '--prefix app' '--loglevel warn'; do
 	printf 'Run `npm run %s ghost`.\n' "$str_form" >"$str_proj/CONTRIBUTING.md"
 	bash "$GATE" "$str_proj" >/dev/null 2>&1
 	expect "a missing script after '$str_form' fails" 1 "$?"
@@ -103,12 +104,10 @@ cp "$REPO_ROOT/templates/react-spa-webpack/README.md" "$str_spa/README.md"
 bash "$GATE" "$str_spa" >/dev/null 2>&1
 expect "react-spa README matches ts-common scripts" 0 "$?"
 
-str_nonode="$(mktemp -d)"
 ln -s "$(command -v bash)" "$str_nonode/bash"
 str_out="$(PATH="$str_nonode" "$str_nonode/bash" "$GATE" "$str_proj" 2>&1)"
 expect "a missing node binary exits 2" 2 "$?"
 has_text "a missing node binary is named as such" "node is required" "$str_out"
-rm -rf "$str_nonode"
 
 printf '{not json' >"$str_bad/package.json"
 bash "$GATE" "$str_bad" >/dev/null 2>&1
