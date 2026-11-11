@@ -408,6 +408,8 @@ lib_minimal_copy_project_scaffolding() {
         "$project_path/tests/unit/test_pr_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_check_backlog_ledger.py" \
+        "$project_path/tests/unit/test_check_backlog_ledger.py"
     lib_minimal_copy_gate_tests "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
         "$project_path/tests/unit/test_pip_requirements.py"
@@ -816,6 +818,37 @@ conditional_copy_docker_compose() {
 }
 
 
+apply_docs_locale_pages() {
+    local project_path="$1" path_lib="$BLUEPRINTX_ROOT/templates/lib-minimal"
+    local path_src str_rel path_tmp
+
+    [ "${DOCS_LOCALE:-en}" = "pt-BR" ] || return 0
+    print_status "info" "Applying pt-BR pages..."
+    for path_src in "$path_lib/docs/pt-BR" "$COMMON_TEMPLATE_ROOT/docs/pt-BR"; do
+        while IFS= read -r str_rel; do
+            mkdir -p "$project_path/docs/$(dirname "$str_rel")"
+            envsubst '${PROJECT_DISPLAY_NAME}' <"$path_src/$str_rel" >"$project_path/docs/$str_rel"
+        done < <(cd "$path_src" && find . -type f -name '*.md' | sed 's|^\./||')
+    done
+    scaffold_render_readme lib-minimal "$path_lib/README.pt-BR.md" "$project_path/README.md"
+    path_tmp="$(mktemp)"
+    awk -F'\t' 'NR == FNR { dict_label[$1] = $2; next }
+        match($0, /^ *- [^:]+:/) {
+            str_key = substr($0, RSTART, RLENGTH); sub(/^ *- /, "", str_key); sub(/:$/, "", str_key)
+            if (str_key in dict_label) sub(/- [^:]+:/, "- " dict_label[str_key] ":")
+        }
+        match($0, /^ +name: /) {
+            str_key = $0; sub(/^ +name: /, "", str_key)
+            if (str_key in dict_label) sub(/name: .*/, "name: " dict_label[str_key])
+        }
+        { print }' "$path_lib/docs/pt-BR/nav-labels.tsv" "$project_path/mkdocs.yml" >"$path_tmp"
+    cat "$path_tmp" >"$project_path/mkdocs.yml"
+    sed 's|^skip = |skip = */docs/*,docs/*,README.md,mkdocs.yml,|' "$project_path/.codespellrc" >"$path_tmp"
+    cat "$path_tmp" >"$project_path/.codespellrc"
+    rm -f "$path_tmp"
+    print_status "success" "pt-BR pages, README, nav labels and codespell skip applied"
+}
+
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
 
@@ -844,6 +877,7 @@ main() {
     scaffold_purge_caches "$PROJECT_PATH"
     scaffold_comment_budget "$PROJECT_PATH"
     scaffold_mark_untranslated "$PROJECT_PATH"
+    apply_docs_locale_pages "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 

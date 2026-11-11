@@ -283,7 +283,8 @@ repos:
       - id: docs-locale-prompt-tests
         name: docs-locale prompt should-fail regression tests (blueprintx#247)
         entry: bash tests/test_docs_locale_prompt.sh
-        language: system
+        language: python
+        additional_dependencies: [pathspec, pyyaml]
         pass_filenames: false
         files: ^(bin/blueprintx\.sh|bin/lib/scaffold_docs_locale\.sh|bin/scaffold/python_[^/]+\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
 

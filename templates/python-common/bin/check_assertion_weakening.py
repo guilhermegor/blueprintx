@@ -29,7 +29,7 @@ and the index (staged/HEAD) version, for a function whose name is unchanged, cat
 - a test function DELETED, or a whole test file deleted
 - a test's assertion COUNT decreased (an assertion removed) between old and new
 - an assertion trivialised to a bare truthy constant (`assert True`)
-- an `==` comparison weakened by OPERATOR to `in` / `not in` / `>=` / `<=` / `!=`
+- an `==` comparison weakened by OPERATOR to `in` / `not in` / `>` / `<` / `>=` / `<=` / `!=`
   (blueprintx#289's live example)
 - a `self.assertEqual`-family call weakened to a looser call (`assertTrue`,
   `assertIsNotNone`, `assertIn`, ...)
@@ -84,8 +84,16 @@ STR_INDEX_REF = ""
 _INT_MIN_FIELDS = 2
 _MIN_EQ_ARGS = 2
 
-_WEAK_FROM_EQ = frozenset({"In", "NotIn", "GtE", "LtE", "NotEq"})
-_OP_SYMBOLS = {"In": "in", "NotIn": "not in", "GtE": ">=", "LtE": "<=", "NotEq": "!="}
+_OP_SYMBOLS = {
+    "In": "in",
+    "NotIn": "not in",
+    "Gt": ">",
+    "Lt": "<",
+    "GtE": ">=",
+    "LtE": "<=",
+    "NotEq": "!=",
+}
+_WEAK_FROM_EQ = frozenset(_OP_SYMBOLS)
 
 _WEAKER_ASSERT_CALLS = {
     "assertEqual": frozenset(
@@ -96,6 +104,10 @@ _WEAKER_ASSERT_CALLS = {
             "assertIsInstance",
             "assertFalse",
             "assertIsNone",
+            "assertGreater",
+            "assertLess",
+            "assertGreaterEqual",
+            "assertLessEqual",
         }
     ),
     "assertIs": frozenset({"assertIsNotNone", "assertTrue"}),
