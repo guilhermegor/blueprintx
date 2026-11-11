@@ -406,8 +406,10 @@ Tests live in `src/capabilities/<feature>/__tests__/`.
 
 `npm run lint` fails on a committed `it.only`/`fit`/`describe.only`
 (`jest/no-focused-tests`) and on `it.skip`/`xit`/`describe.skip`
-(`jest/no-disabled-tests`): a skipped or focused block leaves every CI signal
-green while silently running fewer tests. Delete the test or fix it.
+(a `no-restricted-syntax` selector): a skipped or focused block leaves every CI
+signal green while silently running fewer tests. A skip passes only when its
+name carries an issue reference such as `it.skip('flaky #123', ...)`; otherwise
+delete the test or fix it.
 
 For a stub that is not built yet, `throw new Error('not implemented')` rather
 than returning a well-typed constant: a constant passes its own test and hides
