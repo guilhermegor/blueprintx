@@ -5,7 +5,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CSS="$REPO_ROOT/templates/python-common/docs/stylesheets/brand.css"
 int_failures=0
 
-read -r -d '' PY_CHECK <<'PY'
+read -r -d '' PY_CHECK <<'PY' || true
 import colorsys
 import re
 import sys
@@ -30,7 +30,7 @@ str_bg = "#" + "".join(f"{round(c * 255):02x}" for c in tuple_bg)
 INT_GATE_FAIL = 3
 INT_REFUSED = 4
 
-str_css = re.sub(r"/\*.*?\*/", "", open(sys.argv[1]).read(), flags=re.S)
+str_css = re.sub(r"/\*.*?\*/", "", open(sys.argv[1], encoding="utf-8").read(), flags=re.S)
 
 
 def refuse(str_why):
@@ -44,9 +44,9 @@ RE_BARE = re.compile(
 RE_GATED = re.compile(
     r"(?<![\w-])--md-(accent-fg|primary-fg|typeset-a)-color\s*:"
 )
-if re.search(r"@(media|supports|container|layer)\b", str_css):
+if re.search(r"@(media|supports|container|layer)\b", str_css, re.I):
     refuse("a conditional at-rule wraps rules: the cascade is unresolved")
-if re.search(r"@import\b", str_css):
+if re.search(r"@import\b", str_css, re.I):
     refuse("statement at-rule (@import) can reorder or replace the slate block")
 for str_prelude, str_body in re.findall(r"([^{}]+)\{([^}]*)\}", str_css):
     if RE_BARE.fullmatch(str_prelude):
@@ -119,7 +119,7 @@ check() {
 	fi
 }
 
-read -r -d '' PY_YML <<'PY'
+read -r -d '' PY_YML <<'PY' || true
 import sys
 
 import yaml
@@ -131,12 +131,14 @@ class Loader(yaml.SafeLoader):
 
 
 Loader.add_multi_constructor("", lambda loader, suffix, node: None)
-dict_cfg = yaml.load(open(sys.argv[1]), Loader=Loader) or {}
+dict_cfg = yaml.load(open(sys.argv[1], encoding="utf-8").read(), Loader=Loader) or {}
 dict_theme = dict_cfg.get("theme") or {}
 list_palette = dict_theme.get("palette") or []
 if isinstance(list_palette, dict):
     list_palette = [list_palette]
 list_css = dict_cfg.get("extra_css") or []
+if isinstance(list_css, str):
+    list_css = [list_css]
 list_features = dict_theme.get("features") or []
 list_dicts = [d for d in list_palette if isinstance(d, dict) and "scheme" in d]
 list_why = []
@@ -264,14 +266,14 @@ printf 'theme:\n  features: [content.code.annotate]\n  palette: [{scheme: defaul
 check_yml "should-fail: flow-style feature list" "$TMP/flowlist.yml" refuse "content.code.annotate"
 { cat "$CSS"; printf '@import "later.css";\n'; } >"$TMP/import.css"
 check "should-fail: statement at-rule @import" "$TMP/import.css" refuse
-{ printf '@import "later.css";\n'; cat "$CSS"; } >"$TMP/import-top.css"
+{ printf '@IMPORT "later.css";\n'; cat "$CSS"; } >"$TMP/import-top.css"
 check "should-fail: @import at the top of the file" "$TMP/import-top.css" refuse
 { printf '/* @import "x.css"; */\n'; cat "$CSS"; } >"$TMP/import-comment.css"
 check "an @import inside a comment is not a statement" "$TMP/import-comment.css" pass
 printf 'theme:\n  palette: {scheme: default, primary: custom}\nextra_css: [stylesheets/brand.css]\n' >"$TMP/dictpal.yml"
 check_yml "a single-mapping palette is accepted" "$TMP/dictpal.yml" pass
 printf 'theme: [unclosed\n' >"$TMP/broken.yml"
-check_yml "should-fail: unparseable yml is refused, never green" "$TMP/broken.yml" refuse "crashed"
+check_yml "should-fail: unparseable yml is refused, never green" "$TMP/broken.yml" refuse "ParserError"
 printf 'markdown_extensions:\n  - x: !!python/name:a.b.c\ntheme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tag.yml"
 check_yml "a !!python/name tag does not crash the gate" "$TMP/tag.yml" pass
 
