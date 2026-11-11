@@ -935,6 +935,9 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         + "        setattr(self, 'Priv', 1)\n",
         "import functools\nclass A:\n    @functools.cached_property\n    def f(self):\n"
         + "        setattr(self, 'Priv', 1)\n",
+        "from functools import cached_property\nfrom typing import final, override\nclass A:\n"
+        + "    @cached_property\n    def f(self):\n        setattr(self, 'Priv', 1)\n"
+        + "    @final\n    @override\n    def g(self):\n        setattr(self, 'Priv', 1)\n",
     ],
     ids=[
         "attribute-store-on-self",
@@ -960,6 +963,7 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "override-decorator",
         "typing-extensions-override-decorator",
         "cached-property-decorator",
+        "several-imported-safe-decorators",
     ],
 )
 def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
@@ -983,8 +987,30 @@ def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
         + "        setattr(self, 'Priv', 1)\n",
         "classmethod = lambda fn: fn\nclass A:\n    @classmethod\n    def f(cls):\n"
         + "        setattr(cls, 'Priv', 1)\n",
+        "class property:\n    pass\n\nclass A:\n    @property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "async def property(fn):\n    return fn\n\nclass A:\n    @property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "with open('x') as property:\n    pass\nclass A:\n    @property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "(property := print)\nclass A:\n    @property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "def g():\n    global classmethod\n    classmethod = print\nclass A:\n"
+        + "    @classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
+        "try:\n    pass\nexcept OSError as abc:\n    pass\nclass A:\n    @abc.abstractmethod\n"
+        + "    def f(self):\n        setattr(self, 'Priv', 1)\n",
     ],
-    ids=["local-property-def", "rebound-abc-module", "local-classmethod-assign"],
+    ids=[
+        "local-property-def",
+        "rebound-abc-module",
+        "local-classmethod-assign",
+        "local-property-class",
+        "local-property-async-def",
+        "with-target-property",
+        "walrus-property",
+        "global-classmethod",
+        "except-target-abc",
+    ],
 )
 def test_decorator_rebound_in_the_module_is_not_the_builtin(
     tmp_path: Path, str_config: str
