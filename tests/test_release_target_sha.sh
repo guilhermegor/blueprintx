@@ -11,7 +11,7 @@ pins_every_release() {
 		function indent() { match($0, /^ */); return RLENGTH }
 		BEGIN { use_re = ENVIRON["USE_RE"]; pin_re = ENVIRON["PIN_RE"] }
 		$0 ~ use_re { if (pending) bad = 1; pending = 1; inwith = 0; uses++; col = indent() - ($0 ~ /^[[:space:]]*-/ ? 0 : 2); next }
-		pending && /^[[:space:]]*-[[:space:]]/ && indent() <= col { bad = 1; pending = 0 }
+		pending && NF && !/^[[:space:]]*#/ && indent() <= col { bad = 1; pending = 0 }
 		pending && /^[[:space:]]*with:[[:space:]]*$/ { inwith = 1; wcol = indent(); next }
 		pending && inwith && NF && indent() <= wcol { inwith = 0 }
 		pending && inwith && $0 ~ pin_re { pending = 0 }
@@ -70,6 +70,21 @@ expect_witness "list item before the pin is not a boundary" "$str_use
           body: |
             - item
 $str_pin" accept
+expect_witness "name form, unpinned, next step pinned" "      - name: x
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1
+      - name: y
+        uses: softprops/action-gh-release@v2
+        with:
+$str_pin" reject
+expect_witness "dedent to job level ends the step" "$str_use
+          tag_name: v1
+  other:
+    steps:
+        - uses: softprops/action-gh-release@v2
+          with:
+$str_pin" reject
 expect_witness "double pin hides an unpinned step" "$str_use
 $str_pin
 $str_pin
