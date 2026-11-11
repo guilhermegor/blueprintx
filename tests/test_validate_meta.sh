@@ -28,6 +28,8 @@ make_sandbox() {
     cp "$REPO_ROOT/templates/common/bin/check_readme_structure.sh" "$str_root/templates/common/bin/"
     cp "$REPO_ROOT/templates/common/bin/lib/md_structure.sh" "$str_root/templates/common/bin/lib/"
     printf '# CLAUDE.md\n\nfake-skeleton is documented here.\n' > "$str_root/CLAUDE.md"
+    mkdir -p "$str_root/templates/python-common/bin"
+    : > "$str_root/templates/python-common/bin/check_assertion_weakening.py"
     printf '%s' "$str_root"
 }
 
@@ -176,6 +178,31 @@ test_readme_archetype() {
         "readme_archetype 'monolith' is not one of"
 }
 
+test_assertion_weakening_gate() {
+    local str_root
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    : > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=cobol" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)"
+    expect_gate "a language with no assertion-weakening gate" "$str_root" "fail" \
+        "language 'cobol' ships no assertion-weakening gate"
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    : > "$str_root/bin/scaffold/fake.sh"
+    rm "$str_root/templates/python-common/bin/check_assertion_weakening.py"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)"
+    expect_gate "a python template whose gate file is gone" "$str_root" "fail" \
+        "assertion-weakening gate missing: templates/python-common/bin/check_assertion_weakening.py"
+}
+
 main() {
     test_valid_meta_passes
     test_missing_key
@@ -184,13 +211,14 @@ main() {
     test_skeleton_not_documented_in_claude_md
     test_ships_docs_must_be_boolean
     test_readme_archetype
+    test_assertion_weakening_gate
 
     if [ "$int_failures" -ne 0 ]; then
         print_status "error" "$int_failures validate_meta.sh regression assertion(s) failed"
         exit 1
     fi
     print_status "success" \
-        "validate_meta.sh rejects missing keys, empty values, dead scaffold paths, undocumented skeletons, and unknown readme archetypes"
+        "validate_meta.sh rejects missing keys, empty values, dead scaffold paths, undocumented skeletons, unknown readme archetypes, and languages without an assertion-weakening gate"
 }
 
 main "$@"

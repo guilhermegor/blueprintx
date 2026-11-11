@@ -133,6 +133,8 @@ def isolate_git_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     Applied automatically to every test. Under pre-commit, ``GIT_DIR`` and
     ``GIT_INDEX_FILE`` name the calling repository, so a test that runs ``git init`` or
     ``git commit`` would otherwise write there instead of in its temporary directory.
+    ``GITHUB_BASE_REF`` is dropped too: a ``pull_request`` run sets it, and the ledger gate then
+    accepts no other base, so a fixture repo without that ``origin`` branch would resolve none.
 
     Parameters
     ----------
@@ -140,3 +142,4 @@ def isolate_git_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         Pytest's patcher; restores the variables at teardown.
     """
     list(map(partial(monkeypatch.delenv, raising=False), LIST_GIT_REPOSITORY_POINTERS))
+    monkeypatch.delenv("GITHUB_BASE_REF", raising=False)
