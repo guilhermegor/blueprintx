@@ -3050,6 +3050,8 @@ def _run_track_mode(
     )
     path_log.touch()
     list_lines = path_log.read_text(encoding="utf-8").splitlines()
+    list_reads = [str_line for str_line in list_lines if str_line.startswith("issue list")]
+    assert all("--label docstring-urls --state open" in str_line for str_line in list_reads)
     return cls_result, [
         str_line for str_line in list_lines if not str_line.startswith("issue list")
     ]
@@ -3062,7 +3064,37 @@ def test_track_mode_opens_a_tracker_for_a_dead_url(tmp_path: Path) -> None:
     )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
-    assert [str_call for str_call in list_calls if str_call.startswith("issue create")]
+    assert list_calls == [
+        "label create docstring-urls --color fbca04 "
+        "--description A docstring URL no longer resolves --force",
+        "issue create --title Dead docstring URLs --label docstring-urls "
+        "--body-file docstring_urls_body.md",
+    ]
+    str_body = (tmp_path / "docstring_urls_body.md").read_text(encoding="utf-8")
+    assert "<!-- docstring-urls-tracker -->" in str_body
+    assert "URL issue (404) in a.py (line 1): u" in str_body
+
+
+def test_track_mode_lists_only_open_docstring_url_trackers(tmp_path: Path) -> None:
+    """The tracker lookup must carry the label and state filters, and must happen."""
+    _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]")
+
+    list_lines = (tmp_path / "gh.log").read_text(encoding="utf-8").splitlines()
+    list_reads = [str_line for str_line in list_lines if str_line.startswith("issue list")]
+    assert len(list_reads) == 1
+    assert "--label docstring-urls --state open" in list_reads[0]
+
+
+def test_docstring_urls_workflow_calls_track_mode_on_the_scan_report() -> None:
+    """The step must call ``--track`` on the file the scan step writes, so a rename shows."""
+    path_workflow = (
+        Path(__file__).resolve().parents[2] / ".github" / "workflows" / "docstring-urls.yml"
+    )
+    _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
+    str_workflow = path_workflow.read_text(encoding="utf-8")
+
+    assert "> docstring_urls_report.txt" in str_workflow
+    assert "bin/test_urls_docstrings.sh --track docstring_urls_report.txt" in str_workflow
 
 
 def test_track_mode_fails_when_the_scan_gave_no_verdict(tmp_path: Path) -> None:
@@ -3070,6 +3102,7 @@ def test_track_mode_fails_when_the_scan_gave_no_verdict(tmp_path: Path) -> None:
     cls_result, list_calls = _run_track_mode(tmp_path, "curl: not found\n", "[]")
 
     assert cls_result.returncode != 0
+    assert "produced no verdict" in cls_result.stdout
     assert not list_calls
 
 

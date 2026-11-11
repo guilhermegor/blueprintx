@@ -248,7 +248,7 @@ track_dead_urls() {
 	local str_report="$1"
 	local str_pattern='URL (issue|problem)|Failed to access URL'
 	local str_marker='<!-- docstring-urls-tracker -->'
-	local str_body="docstring_urls_body.md" str_open="" str_existing str_num
+	local str_body="docstring_urls_body.md" str_open="" str_existing int_num
 
 	if ! grep -qE "$str_pattern" "$str_report"; then
 		if ! grep -qF 'All docstring URLs are reachable' "$str_report"; then
@@ -261,9 +261,9 @@ track_dead_urls() {
 			echo "::warning::Could not list open docstring-urls issues; stale trackers stay open."
 			str_open=""
 		}
-		for str_num in $str_open; do
-			gh issue close "$str_num" --comment "All docstring URLs are reachable again." ||
-				echo "::warning::Could not close #${str_num}; the next scan retries."
+		for int_num in $str_open; do
+			gh issue close "$int_num" --comment "All docstring URLs are reachable again." ||
+				echo "::warning::Could not close #${int_num}; the next scan retries."
 		done
 		return 0
 	fi
@@ -283,10 +283,10 @@ track_dead_urls() {
 		return 0
 	fi
 	gh issue comment "$str_existing" --body-file "$str_body"
-	for str_num in $str_open; do
-		[[ "$str_num" == "$str_existing" ]] || gh issue close "$str_num" --reason "not planned" \
+	for int_num in $str_open; do
+		[[ "$int_num" == "$str_existing" ]] || gh issue close "$int_num" --reason "not planned" \
 			--comment "Duplicate of #${str_existing}." ||
-			echo "::warning::Could not close duplicate #${str_num}; the next scan retries."
+			echo "::warning::Could not close duplicate #${int_num}; the next scan retries."
 	done
 }
 
