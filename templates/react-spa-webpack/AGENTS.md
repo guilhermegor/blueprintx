@@ -409,6 +409,10 @@ Tests live in `src/capabilities/<feature>/__tests__/`.
 (`jest/no-disabled-tests`): a skipped or focused block leaves every CI signal
 green while silently running fewer tests. Delete the test or fix it.
 
+For a stub that is not built yet, `throw new Error('not implemented')` rather
+than returning a well-typed constant: a constant passes its own test and hides
+that the behavior is missing, while the throw fails loudly the first time it runs.
+
 ## CSS conventions
 
 Global design tokens live in `shared/styles/foundations/` — import via
