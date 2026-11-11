@@ -24,5 +24,6 @@ optional|tests clear inherited GIT_* env|new gate (blueprintx#901); require once
 optional|Template workflow filenames|new gate (blueprintx#947); require once it has run green on recent PRs
 optional|Python scaffolds refuse an explicit Any|new job (blueprintx#1022); require once it has a green record on main
 optional|Every generated project ships the files it references|new gate (blueprintx#1094); require once it has a green record on main
+optional|PR body matches the template layout (blueprintx#587)|runs on every PR into main (branches: [main]); not required yet, owner decision pending
 optional|Generated TS project - npm ci, lint, jest (react-spa-webpack)|new job; require once it has a green record on main
 optional|Generated TS project - npm ci, lint, jest (ts-lib)|new job; require once it has a green record on main
