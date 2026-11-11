@@ -23,18 +23,19 @@ CACHE_DIR="$(resolve_cache_dir)"
 
 get_cache() {
 	local url="$1"
-	local str_cache_file
+	local str_cache_file str_cached=""
 	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
+	[[ -f "$str_cache_file" ]] && str_cached=$(<"$str_cache_file")
 
-	if [[ -f "$str_cache_file" ]]; then
+	if [[ -n "$str_cached" && ! "$str_cached" =~ ^(403|408|429)$ ]]; then
 		local int_timestamp int_ttl=$CACHE_FAIL_TTL
-		[[ "$(cat "$str_cache_file")" =~ ^2 ]] && int_ttl=$CACHE_TTL
+		[[ "$str_cached" =~ ^2 ]] && int_ttl=$CACHE_TTL
 		int_timestamp=$(stat -c %Y "$str_cache_file")
 		local int_now
 		int_now=$(date +%s)
 
 		if ((int_now - int_timestamp < int_ttl)); then
-			cat "$str_cache_file"
+			echo "$str_cached"
 			return 0
 		fi
 	fi
@@ -130,7 +131,7 @@ check_url() {
 	fi
 
 	str_status_code=$(probe_url_status "$str_url")
-	[[ "$str_status_code" =~ ^[1-4][0-9][0-9]$ && "$str_status_code" != 429 ]] && set_cache "$str_url" "$str_status_code"
+	[[ "$str_status_code" =~ ^[1-4][0-9][0-9]$ && ! "$str_status_code" =~ ^(403|408|429)$ ]] && set_cache "$str_url" "$str_status_code"
 	echo "$str_status_code"
 }
 
@@ -156,7 +157,7 @@ check_urls_in_line() {
 	local str_file="$1" int_line_num="$2" str_line="$3"
 	local str_url str_status_code
 
-	while [[ "$str_line" =~ (https?://[a-zA-Z0-9./?=_%:-]+[a-zA-Z0-9./?=_%:-]) ]]; do
+	while [[ "$str_line" =~ (https?://[a-zA-Z0-9./?=_%:-]+[a-zA-Z0-9/=_%-]) ]]; do
 		str_url="${BASH_REMATCH[1]}"
 		str_line="${str_line#*"$str_url"}"
 
@@ -238,20 +239,33 @@ process_python_files() {
 	return 1
 }
 
+list_open_trackers() {
+	gh issue list --label docstring-urls --state open --limit 100 \
+		--json number --jq 'sort_by(.number) | .[].number'
+}
+
 track_dead_urls() {
 	local str_report="$1"
 	local str_pattern='URL (issue|problem)|Failed to access URL'
 	local str_marker='<!-- docstring-urls-tracker -->'
-	local str_body="docstring_urls_body.md" str_existing
+	local str_body="docstring_urls_body.md" str_open="" str_existing str_num
 
 	if ! grep -qE "$str_pattern" "$str_report"; then
-		if grep -qF 'All docstring URLs are reachable' "$str_report"; then
-			echo "No dead docstring URLs."
-			return 0
+		if ! grep -qF 'All docstring URLs are reachable' "$str_report"; then
+			echo "::error::Docstring URL scan produced no verdict."
+			cat "$str_report"
+			return 1
 		fi
-		echo "::error::Docstring URL scan produced no verdict."
-		cat "$str_report"
-		return 1
+		echo "No dead docstring URLs."
+		str_open=$(list_open_trackers) || {
+			echo "::warning::Could not list open docstring-urls issues; stale trackers stay open."
+			str_open=""
+		}
+		for str_num in $str_open; do
+			gh issue close "$str_num" --comment "All docstring URLs are reachable again." ||
+				echo "::warning::Could not close #${str_num}; the next scan retries."
+		done
+		return 0
 	fi
 
 	gh label create docstring-urls --color fbca04 \
@@ -261,14 +275,19 @@ track_dead_urls() {
 		grep -E "$str_pattern" "$str_report"
 		printf '```\n'
 	} >"$str_body"
-	str_existing=$(gh issue list --label docstring-urls --state open \
-		--json number --jq '.[0].number // empty')
-	if [[ -n "$str_existing" ]]; then
-		gh issue comment "$str_existing" --body-file "$str_body"
-	else
+	str_open=$(list_open_trackers)
+	str_existing=${str_open%%$'\n'*}
+	if [[ -z "$str_existing" ]]; then
 		gh issue create --title "Dead docstring URLs" \
 			--label docstring-urls --body-file "$str_body"
+		return 0
 	fi
+	gh issue comment "$str_existing" --body-file "$str_body"
+	for str_num in $str_open; do
+		[[ "$str_num" == "$str_existing" ]] || gh issue close "$str_num" --reason "not planned" \
+			--comment "Duplicate of #${str_existing}." ||
+			echo "::warning::Could not close duplicate #${str_num}; the next scan retries."
+	done
 }
 
 main() {

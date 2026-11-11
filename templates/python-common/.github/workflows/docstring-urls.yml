@@ -9,6 +9,10 @@ permissions:
   contents: read
   issues: write
 
+concurrency:
+  group: docstring-urls
+  cancel-in-progress: false
+
 jobs:
   urls:
     name: Docstring URL check

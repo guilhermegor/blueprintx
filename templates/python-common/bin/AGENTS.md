@@ -267,8 +267,9 @@ examples as bare hosts (`https://hooks.slack.com`) and refresh any stale doc
 URL to its current 200 home.
 
 `bin/test_urls_docstrings.sh --track <report>` is the tracking-issue step of
-`docstring-urls.yml` (open or comment on one `docstring-urls` issue; exit 1 when
-the report has no verdict). It lives in the script, not the workflow, so
+`docstring-urls.yml` (comment on the oldest open `docstring-urls` issue and close
+duplicates, or open one; close every tracker on a clean scan; exit 1 when the report has
+no verdict). It lives in the script, not the workflow, so
 `tests/integration/test_bin_scripts.py` witnesses it with a stub `gh` in every
 generated project, including those without a GitHub remote.
 

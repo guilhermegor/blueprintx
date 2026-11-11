@@ -15,6 +15,7 @@ work tree instead of aborting ``init``).
 """
 
 from collections.abc import Mapping
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -26,6 +27,7 @@ import time
 from types import MappingProxyType
 
 import pytest
+import yaml
 
 
 _STR_GIT = shutil.which("git")
@@ -2803,13 +2805,15 @@ def test_check_urls_cache_defaults_to_the_git_common_dir(tmp_path: Path) -> None
     assert list((tmp_path / ".git" / "url_check_cache").iterdir())
 
 
-@pytest.mark.parametrize("str_status", ["000", "429", "503"])
-def test_check_urls_does_not_cache_a_transient_failure(tmp_path: Path, str_status: str) -> None:
-    """No HTTP answer, a rate limit or a 5xx must never enter the shared cache."""
+@pytest.mark.parametrize("str_status", ["000", "403", "408", "429", "503"])
+def test_check_urls_does_not_cache_an_unstable_answer(tmp_path: Path, str_status: str) -> None:
+    """No HTTP answer, a bot block, a timeout, a rate limit or a 5xx must never be cached."""
     path_bin = tmp_path / "stubs"
     path_bin.mkdir()
     (path_bin / "curl").write_text(f"#!/bin/bash\nprintf {str_status}\n", encoding="utf-8")
     (path_bin / "curl").chmod(0o755)
+    (path_bin / "wget").write_text("#!/bin/bash\nexit 1\n", encoding="utf-8")
+    (path_bin / "wget").chmod(0o755)
     (tmp_path / "mod.py").write_text(f'"""See {_URL_404}."""\n', encoding="utf-8")
     path_cache = tmp_path / "cache"
 
@@ -2818,6 +2822,48 @@ def test_check_urls_does_not_cache_a_transient_failure(tmp_path: Path, str_statu
     )
 
     assert not list(path_cache.iterdir())
+
+
+@pytest.mark.parametrize("str_status", ["403", "408", "429"])
+def test_check_urls_reprobes_an_unstable_answer_already_cached(
+    tmp_path: Path, str_status: str
+) -> None:
+    """An unstable answer cached by an older script is a miss: the URL is probed again."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text("#!/bin/bash\nprintf 200\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404} for details"""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+    path_cache.mkdir()
+    str_key = hashlib.md5(_URL_404.encode(), usedforsecurity=False).hexdigest()
+    (path_cache / str_key).write_text(f"{str_status}\n", encoding="utf-8")
+
+    cls_result = _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert (path_cache / str_key).read_text(encoding="utf-8").strip() == "200"
+
+
+@pytest.mark.parametrize("str_punct", [".", ":", "..", "?"])
+def test_check_urls_drops_sentence_punctuation_after_a_url(tmp_path: Path, str_punct: str) -> None:
+    """A URL ending a sentence is probed and cached without the trailing punctuation."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text("#!/bin/bash\nprintf 200\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404}{str_punct}"""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+
+    cls_result = _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    str_key = hashlib.md5(_URL_404.encode(), usedforsecurity=False).hexdigest()
+    assert [path_entry.name for path_entry in path_cache.iterdir()] == [str_key]
 
 
 def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
@@ -2829,8 +2875,11 @@ def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
     assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
 
 
+_STR_OPEN_TRACKERS_NEWEST_FIRST = '[{"number": 9}, {"number": 7}]'
+
+
 def _run_track_mode(
-    path_root: Path, str_report: str, str_open: str
+    path_root: Path, str_report: str, str_open: str, str_fail_close: str = ""
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     """Run ``test_urls_docstrings.sh --track`` against a stub ``gh``.
 
@@ -2839,21 +2888,28 @@ def _run_track_mode(
     path_root : pathlib.Path
         Scratch directory used as CWD.
     str_report : str
-        Content of ``docstring_urls_report.txt``.
+        Content of the scan report.
     str_open : str
-        What the stub prints for ``gh issue list`` (the open tracker number, or empty).
+        JSON the stub serves for ``gh issue list``; the script's own ``--jq`` runs over it.
+    str_fail_close : str
+        Issue number whose ``gh issue close`` the stub fails; empty fails none.
 
     Returns
     -------
     tuple[subprocess.CompletedProcess[str], list[str]]
-        The finished process and one line per ``gh`` invocation.
+        The finished process and one line per ``gh`` invocation, ``issue list`` excluded.
     """
+    _skip_unless(shutil.which("jq") is not None, "jq is needed to apply the script's --jq")
     path_bin = path_root / "stubs"
     path_bin.mkdir()
     path_log = path_root / "gh.log"
+    path_json = path_root / "issues.json"
+    path_json.write_text(str_open, encoding="utf-8")
     (path_bin / "gh").write_text(
         f'#!/bin/bash\necho "$*" >> "{path_log}"\n'
-        f'[ "$2" = list ] && printf "%s" "{str_open}"\nexit 0\n',
+        f'[ "$2 $3" = "close {str_fail_close}" ] && exit 1\n[ "$2" = list ] || exit 0\n'
+        'while [ $# -gt 0 ]; do [ "$1" = --jq ] && str_jq="$2"; shift; done\n'
+        f'jq -r "$str_jq" "{path_json}"\n',
         encoding="utf-8",
     )
     (path_bin / "gh").chmod(0o755)
@@ -2867,36 +2923,91 @@ def _run_track_mode(
         check=False,
     )
     path_log.touch()
-    return cls_result, path_log.read_text(encoding="utf-8").splitlines()
+    list_lines = path_log.read_text(encoding="utf-8").splitlines()
+    return cls_result, [
+        str_line for str_line in list_lines if not str_line.startswith("issue list")
+    ]
 
 
 def test_track_mode_opens_a_tracker_for_a_dead_url(tmp_path: Path) -> None:
     """A failing scan with no open tracker creates one; runs in any generated project."""
-    cls_result, list_calls = _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "")
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]"
+    )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     assert [str_call for str_call in list_calls if str_call.startswith("issue create")]
 
 
-def test_track_mode_comments_on_the_open_tracker(tmp_path: Path) -> None:
-    """With a tracker already open, the failure is a comment, not a second issue."""
-    _, list_calls = _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "7")
-
-    assert "issue comment 7 --body-file docstring_urls_body.md" in list_calls
-    assert not [str_call for str_call in list_calls if str_call.startswith("issue create")]
-
-
 def test_track_mode_fails_when_the_scan_gave_no_verdict(tmp_path: Path) -> None:
     """A report with neither a failure nor the success line must fail, never pass silently."""
-    cls_result, list_calls = _run_track_mode(tmp_path, "curl: not found\n", "")
+    cls_result, list_calls = _run_track_mode(tmp_path, "curl: not found\n", "[]")
 
     assert cls_result.returncode != 0
     assert not list_calls
 
 
-def test_track_mode_is_quiet_when_every_url_is_reachable(tmp_path: Path) -> None:
-    """A clean scan touches no issue."""
-    cls_result, list_calls = _run_track_mode(tmp_path, "All docstring URLs are reachable\n", "7")
+def test_track_mode_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None:
+    """A clean scan must close every open tracking issue and do nothing else."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+    )
 
-    assert cls_result.returncode == 0
-    assert not list_calls
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert list_calls == [
+        "issue close 7 --comment All docstring URLs are reachable again.",
+        "issue close 9 --comment All docstring URLs are reachable again.",
+    ]
+
+
+def test_track_mode_keeps_closing_after_one_close_fails(tmp_path: Path) -> None:
+    """One failed close must not abort the step or skip the remaining trackers."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST, "7"
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert list_calls[-1] == "issue close 9 --comment All docstring URLs are reachable again."
+
+
+def test_track_mode_dedupes_to_one_open_tracker(tmp_path: Path) -> None:
+    """With duplicates open, a failing scan updates the oldest and closes the rest."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert [str_call for str_call in list_calls if str_call.startswith("issue c")] == [
+        "issue comment 7 --body-file docstring_urls_body.md",
+        "issue close 9 --reason not planned --comment Duplicate of #7.",
+    ]
+
+
+def test_track_mode_dedupe_survives_a_failed_close(tmp_path: Path) -> None:
+    """A failed duplicate close must not abort the step or skip later duplicates."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path,
+        "URL issue (404) in a.py (line 1): u\n",
+        '[{"number": 11}, {"number": 9}, {"number": 7}]',
+        "9",
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert list_calls[-1] == "issue close 11 --reason not planned --comment Duplicate of #7."
+
+
+def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
+    """The hook must filter on ``.py`` like the script, not on ``types: python``."""
+    path_config = Path(__file__).resolve().parents[2] / ".pre-commit-config.yaml"
+    _skip_unless(path_config.is_file(), "no pre-commit config in this tree")
+    dict_config = yaml.safe_load(path_config.read_text(encoding="utf-8"))
+    list_hooks = [
+        dict_hook
+        for dict_repo in dict_config["repos"]
+        for dict_hook in dict_repo["hooks"]
+        if dict_hook["id"] == "check-urls"
+    ]
+
+    assert len(list_hooks) == 1
+    assert list_hooks[0].get("files") == r"\.py$"
+    assert "types" not in list_hooks[0]
