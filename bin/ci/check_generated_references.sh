@@ -7,6 +7,7 @@ source "$REPO_ROOT/bin/lib/no_background_git.sh"
 
 int_failures=0
 str_current_work=""
+trap 'rm -rf "${str_current_work:-}" "${str_current_work:-}.log"' EXIT
 
 fail() {
     echo "ERROR: $*" >&2
@@ -39,8 +40,8 @@ docs_dir() {
 
 script_refs() {
     { grep -hvE '^[[:space:]]*#' "$@" || true; } \
-        | { grep -oE '(^|[ "'\''=(])(\./)?bin/[A-Za-z0-9_./-]+\.(sh|py)' || true; } \
-        | sed -E 's#^[ "'\''=(]##; s#^\./##' | sort -u
+        | { grep -oE '(^|[ "'\''=(;&`[:space:]])(\./)?bin/[A-Za-z0-9_./-]+\.(sh|py)' || true; } \
+        | sed -E 's#^[ "'\''=(;&`[:space:]]+##; s#^\./##' | sort -u
 }
 
 check_project() {
@@ -96,7 +97,6 @@ check_generated() {
         int_seen=$((int_seen + 1))
         str_work="$(mktemp -d)"
         str_current_work="$str_work"
-        trap 'rm -rf "${str_current_work:-}" "${str_current_work:-}.log"' EXIT
         int_before=$int_failures
         if scaffold_skeleton "$str_name" "$(meta_field "$str_meta" scaffold)" "$str_work"; then
             check_project "$str_work/ci-scaffold"

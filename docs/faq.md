@@ -350,12 +350,13 @@ no gate noticed. Each scaffold keeps its own copy list, and the lists drift apar
 `templates/*/skeleton.meta` and fails when a `mkdocs.yml` nav page is missing under its `docs_dir`, or
 a `bin/*.sh` / `bin/*.py` path named in `poe_tasks.toml`, `.pre-commit-config.yaml`,
 `package.json`, `Makefile`, `make/*.mk`, a workflow or a composite action is missing from the
-tree. A project from which no reference can be extracted fails, so a broken extractor is red. `--project <dir>` checks one tree.
+tree. A project from which no reference can be extracted fails, so a broken extractor is red.
+Only the default-answer scaffold is checked, so online-only and locale variants are not.
+`--project <dir>` checks one tree.
 `tests/test_check_generated_references.sh` deletes one file per reference kind and shows the
 gate naming it. The scaffold takes about 95 seconds, so the pre-commit hook runs on the
 `manual` stage (`pre-commit run generated-references --hook-stage manual`); CI runs it on
-every pull request. lib-minimal now copies shared docs through `scaffold_copy_docs_extras`,
-as the other Python tiers do.
+every pull request.
 
 ## Why must a test clear the GIT_* environment before running git?
 

@@ -45,8 +45,9 @@ expect "missing pre-commit script fails" fail "bin/b.py" bin/b.py
 expect "missing workflow script fails" fail "bin/c.sh" bin/c.sh
 
 expect_dir() {
-    local str_desc="$1" str_dir="$2" str_got="pass"
-    bash "$CHECK" --project "$str_dir" >/dev/null 2>&1 || str_got="fail"
+    local str_desc="$1" str_dir="$2" str_got="pass" str_out
+    str_out="$(bash "$CHECK" --project "$str_dir" 2>&1)" || str_got="fail"
+    printf '%s' "$str_out" | grep -qE 'ERROR: .*(no project directory|nothing was checked)' || str_got="pass"
     [ "$str_got" = "fail" ] && echo "ok: $str_desc" || {
         echo "FAIL: $str_desc -> pass (expected fail)" >&2
         int_failures=$((int_failures + 1))
@@ -59,13 +60,16 @@ expect_dir "empty project dir fails" "$str_empty"
 rm -rf "$str_empty"
 
 expect_extra() {
-    local str_desc="$1" str_want="$2" str_file="$3" str_body="$4" str_dir str_got="pass"
+    local str_desc="$1" str_want="$2" str_file="$3" str_body="$4" str_dir str_got="pass" str_out
     str_dir="$(make_project)"
     mkdir -p "$(dirname "$str_dir/$str_file")"
     printf '%s' "$str_body" >"$str_dir/$str_file"
-    bash "$CHECK" --project "$str_dir" >/dev/null 2>&1 || str_got="fail"
+    str_out="$(bash "$CHECK" --project "$str_dir" 2>&1)" || str_got="fail"
     rm -rf "$str_dir"
-    if [ "$str_got" = "$str_want" ]; then
+    if [ "$str_got" = "fail" ] && ! printf '%s' "$str_out" | grep -qE 'ERROR: .*(never copied|nothing was checked)'; then
+        echo "FAIL: $str_desc -> failed without a gate message: $str_out" >&2
+        int_failures=$((int_failures + 1))
+    elif [ "$str_got" = "$str_want" ]; then
         echo "ok: $str_desc"
     else
         echo "FAIL: $str_desc -> $str_got (expected $str_want)" >&2
@@ -78,8 +82,18 @@ expect_extra "Makefile reference to a missing script fails" fail Makefile $'a:\n
 expect_extra "make/*.mk reference to a missing script fails" fail make/x.mk $'a:\n\tbash bin/nope.sh\n'
 expect_extra "composite action reference to a missing script fails" fail .github/actions/x/action.yml 'run: bash bin/nope.sh'
 expect_extra ".yaml workflow reference to a missing script fails" fail .github/workflows/y.yaml 'run: bash bin/nope.sh'
+expect_extra "Makefile recipe tab form is scanned" fail Makefile $'a:\n\tbin/nope.sh\n'
 expect_extra "commented-out reference is ignored" pass Makefile $'# bin/nope.sh\n'
-expect_extra "nav page under a non-default docs_dir is found" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n'
+expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n'
+
+str_site="$(make_project)"
+mkdir -p "$str_site/site" && touch "$str_site/site/index.md" "$str_site/site/incidents.md"
+printf 'docs_dir: site\nnav:\n  - A: index.md\n  - B: incidents.md\n' >"$str_site/mkdocs.yml"
+bash "$CHECK" --project "$str_site" >/dev/null 2>&1 && echo "ok: nav pages found under a non-default docs_dir pass" || {
+    echo "FAIL: non-default docs_dir positive case failed" >&2
+    int_failures=$((int_failures + 1))
+}
+rm -rf "$str_site"
 
 str_noref="$(mktemp -d)"
 printf 'site_name: x\n' >"$str_noref/mkdocs.yml"
