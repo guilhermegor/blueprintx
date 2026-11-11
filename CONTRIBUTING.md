@@ -1586,7 +1586,10 @@ grouped by what they guard.
 - **Documentation locale** is the locale of the generated project's published pages only.
   It says nothing about this repository's prose (en-US) or about code: comments and
   docstrings stay English in every locale, enforced in the generated project by
-  `bin/check_comment_language.py`.
+  `bin/check_comment_language.py`. The docs-language check (`check_docs_language.py`) fails
+  closed: when run with the system `python3`, it needs the `pathspec` and `yaml` modules
+  (the `pathspec` and `PyYAML` packages) importable, and errors out rather than skipping
+  when either is missing.
 - **`--spec`** (#481) answers prompts by name instead of stdin position. Resolve the answers
   before the scaffold starts, into a file rather than `$(...)`, which strips trailing empty
   (accept-default) lines; no pipe also means no SIGPIPE status when the scaffold finishes
