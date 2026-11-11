@@ -462,8 +462,7 @@ repos:
         entry: bash bin/test_urls_docstrings.sh
         language: system
         require_serial: true
-        types:
-          - python
+        files: \.py$
         verbose: true
         stages:
           - manual
