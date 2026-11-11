@@ -913,8 +913,8 @@ def _file_findings(
         return [f"{str_path}: could not parse — not checked"]
     list_problems = []
     dict_renames = rename_pairs(
-        [str_n for str_n in dict_old_funcs if str_n not in dict_new_funcs],
-        [str_n for str_n in dict_new_funcs if str_n not in dict_old_funcs],
+        {str_n: cls_f for str_n, cls_f in dict_old_funcs.items() if str_n not in dict_new_funcs},
+        {str_n: cls_f for str_n, cls_f in dict_new_funcs.items() if str_n not in dict_old_funcs},
     )
     for str_name, node_old in dict_old_funcs.items():
         str_now = dict_renames.get(str_name, str_name)

@@ -569,45 +569,74 @@ def test_gate_env_headless_runner_with_pre_commit_is_ci(monkeypatch: pytest.Monk
     assert gate_env.is_ci() is True
 
 
-gate_rename = sys.modules["gate_rename"]
+gate_rename = _load("gate_rename")
 weakening = _load("check_assertion_weakening")
 
 _STR_RENAME_OLD = "def test_rejects_negative_amounts() -> None:\n    assert f() == 1\n"
-_STR_RENAME_OTHER = "def test_parses_iso_dates() -> None:\n    assert f() == 1\n"
+_STR_RENAME_OTHER = (
+    "def test_rejects_negative_dates() -> None:\n"
+    "    list_rows = [load(str_p) for str_p in PATHS]\n"
+    "    assert sorted(list_rows) == list_rows\n"
+)
+
+
+def _funcs(*tuple_names: str, str_body: str = "assert f() == 1") -> dict:
+    """Parse one ``test_*`` function per name, all sharing ``str_body``.
+
+    Parameters
+    ----------
+    *tuple_names : str
+        Function names.
+    str_body : str
+        The single-statement body each function gets.
+
+    Returns
+    -------
+    dict
+        ``{name: ast.FunctionDef}``.
+    """
+    str_src = "".join(f"def {str_n}() -> None:\n    {str_body}\n" for str_n in tuple_names)
+    return gate.test_functions(str_src)
 
 
 def test_pairing_is_independent_of_input_order() -> None:
-    """Two renames resolve to the same pairs however the names are listed."""
-    list_old = ["test_has_six_pages", "test_has_six_pages_total"]
-    list_new = ["test_has_seven_pages", "test_has_seven_pages_total"]
-    dict_expected = {
-        "test_has_six_pages": "test_has_seven_pages",
-        "test_has_six_pages_total": "test_has_seven_pages_total",
-    }
-    assert gate_rename.rename_pairs(list_old, list_new) == dict_expected
-    assert gate_rename.rename_pairs(list_old[::-1], list_new[::-1]) == dict_expected
+    """Two renames that each clear the threshold against both candidates pair the same way."""
+    dict_expected = {"test_parse_v1": "test_parse_w1", "test_parse_v2": "test_parse_w2"}
+    str_fwd, str_rev = ("test_parse_v1", "test_parse_v2"), ("test_parse_v2", "test_parse_v1")
+    dict_added = _funcs("test_parse_w1", "test_parse_w2")
+    assert gate_rename.rename_pairs(_funcs(*str_fwd), dict_added) == dict_expected
+    assert gate_rename.rename_pairs(_funcs(*str_rev), dict_added) == dict_expected
 
 
 def test_a_better_later_match_is_not_stolen_by_an_earlier_name() -> None:
-    """NEGATIVE CONTROL: best-score-first, not first-come, so the exact-ish match wins."""
+    """NEGATIVE CONTROL: both old names clear 0.8; the weaker one listed first must lose."""
     dict_pairs = gate_rename.rename_pairs(
-        ["test_has_six_pages_total", "test_has_six_pages"], ["test_has_seven_pages_total"]
+        _funcs("test_parse_v10", "test_parse_v1"), _funcs("test_parse_v11")
     )
-    assert dict_pairs == {"test_has_six_pages_total": "test_has_seven_pages_total"}
+    assert dict_pairs == {"test_parse_v1": "test_parse_v11"}
 
 
-def test_a_dissimilar_addition_is_not_paired() -> None:
-    """NEGATIVE CONTROL: below the threshold nothing pairs, so the deletion stays visible."""
-    assert gate_rename.rename_pairs(["test_rejects_negative_amounts"], ["test_parses_iso"]) == {}
+def test_a_dissimilar_name_is_not_paired() -> None:
+    """NEGATIVE CONTROL: below the name threshold nothing pairs, so the deletion stays visible."""
+    assert (
+        gate_rename.rename_pairs(_funcs("test_rejects_negative_amounts"), _funcs("test_x")) == {}
+    )
 
 
-def test_integrity_gate_still_reports_a_deletion_beside_a_dissimilar_addition() -> None:
-    """Deleting a test and adding an unrelated one is a deletion, not a rename."""
+def test_a_similar_name_with_an_unrelated_body_is_not_paired() -> None:
+    """NEGATIVE CONTROL: sibling names alone never absorb a deletion; the bodies must agree too."""
+    dict_old = _funcs("test_parse_v1", str_body="assert f() == 1")
+    dict_new = _funcs("test_parse_v2", str_body="assert sorted(load(path)) == [3, 4, 5, 6, 7]")
+    assert gate_rename.rename_pairs(dict_old, dict_new) == {}
+
+
+def test_integrity_gate_reports_a_deletion_beside_a_similarly_named_unrelated_test() -> None:
+    """Delete one test, add a near-named test with a different body: still a deletion."""
     list_problems = gate.deleted_or_gutted_tests(_STR_RENAME_OLD, _STR_RENAME_OTHER, "x")
     assert list_problems == ["x: test 'test_rejects_negative_amounts' deleted"]
 
 
-def test_weakening_gate_still_reports_a_deletion_beside_a_dissimilar_addition() -> None:
+def test_weakening_gate_reports_a_deletion_beside_a_similarly_named_unrelated_test() -> None:
     """The weakening gate agrees with the integrity gate on the same diff."""
     list_problems = weakening._file_findings("x", _STR_RENAME_OLD, _STR_RENAME_OTHER, False)
     assert list_problems == ["x: test 'test_rejects_negative_amounts' deleted"]
@@ -615,8 +644,9 @@ def test_weakening_gate_still_reports_a_deletion_beside_a_dissimilar_addition() 
 
 def test_weakening_finding_names_the_renamed_test() -> None:
     """A finding on a renamed test uses the name that exists in the change."""
-    str_new = "def test_rejects_negative_amount() -> None:\n    pass\n"
-    list_problems = weakening._file_findings("x", _STR_RENAME_OLD, str_new, False)
+    str_old = "def test_rejects_negative_amounts() -> None:\n    assert f() == 1\n    assert g()\n"
+    str_new = "def test_rejects_negative_amount() -> None:\n    assert f() == 1\n"
+    list_problems = weakening._file_findings("x", str_old, str_new, False)
     assert list_problems == [
-        "x: test_rejects_negative_amount() lost 1 assertion(s) (had 1, now 0)"
+        "x: test_rejects_negative_amount() lost 1 assertion(s) (had 2, now 1)"
     ]

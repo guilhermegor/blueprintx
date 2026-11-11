@@ -738,13 +738,14 @@ def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
         One message per deleted or gutted test.
     """
     dict_old, dict_new = test_functions(str_old), test_functions(str_new)
-    list_removed = sorted(set(dict_old) - set(dict_new))
-    dict_pairs = rename_pairs(list_removed, sorted(set(dict_new) - set(dict_old)))
-    dict_old_of = {str_new: dict_old[str_old] for str_old, str_new in dict_pairs.items()}
+    dict_gone = {str_n: cls_f for str_n, cls_f in dict_old.items() if str_n not in dict_new}
+    dict_added = {str_n: cls_f for str_n, cls_f in dict_new.items() if str_n not in dict_old}
+    dict_pairs = rename_pairs(dict_gone, dict_added)
+    dict_old_of = {str_to: dict_old[str_from] for str_from, str_to in dict_pairs.items()}
     list_problems = [
-        f"{str_shown}: test {str_name!r} deleted"
-        for str_name in list_removed
-        if str_name not in dict_pairs
+        f"{str_shown}: test {str_gone!r} deleted"
+        for str_gone in sorted(dict_gone)
+        if str_gone not in dict_pairs
     ]
     for str_name, cls_new_node in dict_new.items():
         cls_old_node = dict_old.get(str_name) or dict_old_of.get(str_name)

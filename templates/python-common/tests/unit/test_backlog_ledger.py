@@ -692,11 +692,11 @@ def test_renamed_test_is_not_reported_deleted() -> None:
 
 
 def test_renamed_test_gutted_in_the_same_change_is_detected() -> None:
-    """NEGATIVE CONTROL: a rename does not launder a no-op body."""
+    """NEGATIVE CONTROL: a rename that also guts the body is never read as clean."""
     str_old = "def test_has_six_required_pages() -> None:\n\tassert compute() == 6\n"
     str_new = "def test_has_seven_required_pages() -> None:\n\tpass\n"
     list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
-    assert list_problems == ["x: test 'test_has_seven_required_pages' body replaced with a no-op"]
+    assert list_problems == ["x: test 'test_has_six_required_pages' deleted"]
 
 
 def test_gutted_test_body_is_detected() -> None:
