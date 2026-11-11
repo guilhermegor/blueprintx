@@ -239,7 +239,7 @@ test_pt_br_scaffold_ships_translated_pages_and_passes_its_own_gate() {
         && grep -Eq 'docs language is pt-BR \([1-9][0-9]* page' <<<"$str_gate"; then
         pass "pt-BR scaffold ships translated pages and its own gate checks them: $str_gate"
     else
-        fail "pt-BR e2e" "marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
+        fail "pt-BR e2e" "marked=$int_marked gate_rc=$int_rc: $(printf %s "$str_gate" | tail -c 200)"
     fi
     rm_temp_root "$str_temp"
 }
@@ -266,15 +266,16 @@ test_marker_step_uses_the_gates_page_set() {
 test_marker_step_warns_when_the_gate_cannot_list_pages() {
     local str_proj="$WORK_DIR/marker-fallback" str_err
     mkdir -p "$str_proj/bin" "$str_proj/docs"
-    printf 'import sys\nsys.exit(1)\n' >"$str_proj/bin/check_docs_language.py"
+    printf 'import sys\nprint("boom", file=sys.stderr)\nsys.exit(1)\n' >"$str_proj/bin/check_docs_language.py"
     printf '# T\n' | tee "$str_proj/README.md" >"$str_proj/docs/index.md"
     str_err="$(DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_mark_untranslated "$2"' _ \
         "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_proj" 2>&1 >/dev/null)"
-    if [[ "$str_err" == *"could not list the docs pages"* ]] \
-        && grep -q 'docs-lang:untranslated' "$str_proj/docs/index.md"; then
+    if [[ "$str_err" == *"with the gate (boom"* ]] \
+        && grep -q 'docs-lang:untranslated' "$str_proj/docs/index.md" \
+        && grep -q 'docs-lang:untranslated' "$str_proj/README.md"; then
         pass "marker step warns, then still marks, when the gate cannot list pages"
     else
-        fail "marker fallback" "no warning, or the fallback marked nothing: ${str_err: -200}"
+        fail "marker fallback" "no warning, or the fallback marked nothing: $(printf %s "$str_err" | tail -c 200)"
     fi
 }
 
@@ -287,7 +288,7 @@ test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate() {
     if [ "$int_marked" -eq 0 ] && [ "$int_rc" -eq 0 ]; then
         pass "en scaffold leaves pages unmarked and its own gate passes"
     else
-        fail "en e2e" "marked=$int_marked gate_rc=$int_rc: ${str_gate: -200}"
+        fail "en e2e" "marked=$int_marked gate_rc=$int_rc: $(printf %s "$str_gate" | tail -c 200)"
     fi
     rm_temp_root "$str_temp"
 }
