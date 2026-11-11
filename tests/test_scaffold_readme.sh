@@ -342,6 +342,34 @@ test_ptbr_replacement_reaches_pyproject_and_readme() {
     rm -rf "$path_root"
 }
 
+spec_description_check() {
+    local str_description="$1" path_out="$2"
+    (
+        set --
+        # shellcheck source=bin/blueprintx.sh
+        source "$REPO_ROOT/bin/blueprintx.sh"
+        DOCS_LOCALE=pt-BR SKELETON_CHOICE=lib-minimal PROJECT_DESCRIPTION="$str_description"
+        require_ptbr_spec_description
+    ) >"$path_out" 2>&1 </dev/null
+}
+
+test_spec_refuses_an_english_description_for_a_ptbr_locale() {
+    local path_out int_rc=0
+    path_out="$(mktemp)"
+    spec_description_check "This library is a tool that can parse the files. It is not for the users, and it will be fast." "$path_out" || int_rc=$?
+    expect "a --spec English description is refused for pt-BR" "1" "$int_rc"
+    expect "the refusal names the spec key" "1" "$(grep -c "'project_description' does not read as pt-BR" "$path_out" || true)"
+    rm -f "$path_out"
+}
+
+test_spec_accepts_a_ptbr_description_for_a_ptbr_locale() {
+    local path_out int_rc=0
+    path_out="$(mktemp)"
+    spec_description_check "Esta biblioteca é uma ferramenta que lê os arquivos. Ela não é para os usuários." "$path_out" || int_rc=$?
+    expect "a --spec pt-BR description is accepted" "0" "$int_rc"
+    rm -f "$path_out"
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do

@@ -528,10 +528,22 @@ is_valid_docs_locale() {
     esac
 }
 
+ptbr_readme_is_rendered() {
+    [ "$DOCS_LOCALE" = "pt-BR" ] && [ -f "$TEMPLATES_ROOT/$SKELETON_CHOICE/README.pt-BR.md" ]
+}
+
 require_ptbr_description_at_input() {
-    [ "$DOCS_LOCALE" = "pt-BR" ] || return 0
-    [ -f "$TEMPLATES_ROOT/$SKELETON_CHOICE/README.pt-BR.md" ] || return 0
+    ptbr_readme_is_rendered || return 0
     scaffold_require_ptbr_description || exit 1
+}
+
+require_ptbr_spec_description() {
+    local int_rc=0
+
+    ptbr_readme_is_rendered || return 0
+    description_reads_as_ptbr "$PROJECT_DESCRIPTION" || int_rc=$?
+    [ "$int_rc" -eq 0 ] \
+        || exit_error "--spec: 'project_description' does not read as pt-BR (check exit $int_rc) but 'docs_locale' is pt-BR; the generated docs-language gate would reject README.md. Write the description in pt-BR."
 }
 
 create_project() {
@@ -592,6 +604,7 @@ validate_spec_answers() {
     fi
     is_valid_docs_locale "$DOCS_LOCALE" \
         || exit_error "--spec: 'docs_locale' must be en or pt-BR, got '$DOCS_LOCALE'."
+    require_ptbr_spec_description
     if spec_skeleton_supported "$SKELETON_CHOICE"; then
         spec_validate_answers "$SKELETON_CHOICE" "$SPEC_FILE" \
             || exit_error "--spec: fix the y/n value(s) above before scaffolding."
