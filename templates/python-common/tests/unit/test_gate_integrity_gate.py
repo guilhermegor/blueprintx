@@ -684,3 +684,19 @@ def test_a_rename_that_also_edits_a_literal_is_a_hinted_deletion() -> None:
         "x: test 'test_has_six_pages' deleted"
         " (possible rename to 'test_has_seven_pages', bodies differ)"
     ]
+
+
+def test_a_renamed_test_newly_marked_skip_is_detected() -> None:
+    """NEGATIVE CONTROL: renaming a test and skipping it in one change is still a finding."""
+    str_old = "def test_has_six_pages() -> None:\n    assert count() == 6\n"
+    str_new = "@pytest.mark.skip\ndef test_has_seven_pages() -> None:\n    assert count() == 6\n"
+    assert gate.newly_skipped_tests(str_old, str_new, "x") == [
+        "x: test 'test_has_seven_pages' newly decorated @pytest.mark.skip"
+    ]
+
+
+def test_a_renamed_test_keeping_its_xfail_is_not_flagged() -> None:
+    """A marker already present on the old test is not new after a rename."""
+    str_old = "@pytest.mark.xfail\ndef test_has_six_pages() -> None:\n    assert count() == 6\n"
+    str_new = "@pytest.mark.xfail\ndef test_has_seven_pages() -> None:\n    assert count() == 6\n"
+    assert gate.newly_skipped_tests(str_old, str_new, "x") == []
