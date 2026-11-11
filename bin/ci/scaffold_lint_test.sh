@@ -256,10 +256,14 @@ bash bin/poe_exec.sh integration_tests || [ $? -eq 5 ]
 echo "::endgroup::"
 
 echo "::group::final tree is self-consistent"
+poetry install --only docs --no-root --no-interaction --no-ansi
+poetry run mkdocs build --strict -d "$(mktemp -d)"
 git add -A
 git diff --cached --quiet \
     || { echo "ERROR: [$SKELETON] the tree has uncommitted changes after the run:" >&2; git status --short >&2; exit 1; }
 if git remote get-url origin >/dev/null 2>&1; then
+    git rev-parse --verify -q main >/dev/null \
+        || { echo "ERROR: [$SKELETON] local branch main is missing; cannot prove it was pushed." >&2; exit 1; }
     git rev-parse --verify -q origin/main >/dev/null \
         || { echo "ERROR: [$SKELETON] origin is set but origin/main is missing; cannot prove main was pushed." >&2; exit 1; }
     [ -z "$(git rev-list origin/main..main)" ] \
@@ -267,8 +271,6 @@ if git remote get-url origin >/dev/null 2>&1; then
 fi
 [ ! -e .specs/.specs ] \
     || { echo "ERROR: [$SKELETON] nested .specs/.specs was scaffolded." >&2; exit 1; }
-poetry install --only docs --no-root --no-interaction --no-ansi
-poetry run mkdocs build --strict -d "$(mktemp -d)"
 echo "Final tree: committed, pushed (when a remote exists), no nested .specs, mkdocs --strict builds."
 echo "::endgroup::"
 
