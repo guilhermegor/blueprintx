@@ -44,4 +44,18 @@ expect "missing poe script fails" fail "bin/a.sh" bin/a.sh
 expect "missing pre-commit script fails" fail "bin/b.py" bin/b.py
 expect "missing workflow script fails" fail "bin/c.sh" bin/c.sh
 
+expect_dir() {
+    local str_desc="$1" str_dir="$2" str_got="pass"
+    bash "$CHECK" --project "$str_dir" >/dev/null 2>&1 || str_got="fail"
+    [ "$str_got" = "fail" ] && echo "ok: $str_desc" || {
+        echo "FAIL: $str_desc -> pass (expected fail)" >&2
+        int_failures=$((int_failures + 1))
+    }
+}
+
+str_empty="$(mktemp -d)"
+expect_dir "missing project dir fails" "$str_empty/nonexistent"
+expect_dir "empty project dir fails" "$str_empty"
+rm -rf "$str_empty"
+
 [ "$int_failures" -eq 0 ]
