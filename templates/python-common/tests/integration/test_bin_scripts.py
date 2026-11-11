@@ -2943,7 +2943,7 @@ def _run_staged_poetry_exec(
 
 def test_poetry_run_with_missing_declared_deps_fails_with_one_install_line(tmp_path: Path) -> None:
     """A venv lacking declared packages must not reach the gate and die in a traceback."""
-    path_script, dict_env = _stage_poetry_exec(tmp_path, "pyyaml\ndefusedxml\n")
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "missing: pyyaml\nmissing: defusedxml\n")
 
     cls_run = _run_staged_poetry_exec(path_script, dict_env)
 
@@ -2963,6 +2963,32 @@ def test_poetry_run_with_failing_dependency_check_explains_itself(tmp_path: Path
     assert cls_run.returncode != 0, cls_run.stdout
     assert "RAN" not in cls_run.stdout
     assert "Could not check the venv's dependencies" in cls_run.stderr
+
+
+def test_poetry_run_ignores_poetry_notices_on_stdout(tmp_path: Path) -> None:
+    """A notice Poetry prints to stdout is not a dependency name and must not block the run."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "Creating virtualenv demo in /x\n")
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode == 0, cls_run.stderr
+    assert "RAN" in cls_run.stdout
+
+
+def test_poetry_run_checks_with_the_project_venv_interpreter_not_poetry(tmp_path: Path) -> None:
+    """The check must not pay a second Poetry start-up when the in-project venv exists."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+    dict_env["CHECK_EXIT"] = "9"
+    path_python = tmp_path / ".venv" / "bin" / "python"
+    path_python.parent.mkdir(parents=True)
+    path_python.write_text("#!/bin/bash\necho 'missing: pyyaml'\n", encoding="utf-8")
+    path_python.chmod(0o755)
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert "pyyaml" in cls_run.stderr, cls_run.stderr
+    assert "Could not check" not in cls_run.stderr
+    assert "RAN" not in cls_run.stdout
 
 
 def test_poetry_run_with_complete_venv_still_runs(tmp_path: Path) -> None:

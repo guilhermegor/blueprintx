@@ -2,7 +2,6 @@
 
 import importlib.util
 from pathlib import Path
-import sys
 from types import ModuleType
 
 import pytest
@@ -19,7 +18,6 @@ def _load() -> ModuleType:
     path_script = Path(__file__).resolve().parents[2] / "bin" / "lib" / "missing_deps.py"
     cls_spec = importlib.util.spec_from_file_location("missing_deps", path_script)
     cls_module = importlib.util.module_from_spec(cls_spec)
-    sys.modules["missing_deps"] = cls_module
     cls_spec.loader.exec_module(cls_module)
     return cls_module
 
@@ -37,7 +35,20 @@ _MODULE = _load()
         ),
         (
             {"tool": {"poetry": {"group": {"docs": {"dependencies": {"mkdocs": "^1"}}}}}},
+            ["mkdocs"],
+        ),
+        (
+            {"tool": {"poetry": {"group": {"x": {"optional": True, "dependencies": {"y": "1"}}}}}},
             [],
+        ),
+        ({"dependency-groups": {"test": ["pytest>=8", {"include-group": "lint"}]}}, ["pytest"]),
+        ({"project": {"dependencies": ["  requests>=2"]}}, ["requests"]),
+        (
+            {
+                "project": {"dependencies": ["PyYAML>=6"]},
+                "tool": {"poetry": {"dependencies": {"pyyaml": "^6"}}},
+            },
+            ["pyyaml"],
         ),
         ({"tool": {"poetry": {"dependencies": {"x": {"version": "1", "optional": True}}}}}, []),
         ({"tool": {"poetry": {"dependencies": {"x": {"version": "1", "markers": "a"}}}}}, []),
@@ -58,7 +69,11 @@ _MODULE = _load()
     ids=[
         "main-skips-python",
         "dev-group-read",
-        "docs-group-ignored",
+        "docs-group-required",
+        "optional-group-skipped",
+        "pep735-strings-kept-includes-dropped",
+        "pep621-leading-whitespace-kept",
+        "declared-twice-reported-once",
         "optional-skipped",
         "markers-skipped",
         "python-key-skipped",
@@ -76,3 +91,21 @@ def test_declared_names_selects_unconditional_main_and_dev_deps(
 def test_missing_matches_installed_distributions_case_insensitively() -> None:
     """An installed distribution resolves whatever the case it is declared in."""
     assert _MODULE.missing(["PYTEST", "no-such-distribution-xyz"]) == ["no-such-distribution-xyz"]
+
+
+def test_main_prints_one_sentinel_line_per_missing_dependency(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The shell reads ``missing: <name>`` lines, so nothing else may look like a name."""
+    path_toml = tmp_path / "pyproject.toml"
+    path_toml.write_text(
+        '[project]\ndependencies = ["no-such-distribution-xyz"]\n', encoding="utf-8"
+    )
+    _MODULE.main([str(path_toml)])
+
+    assert capsys.readouterr().out == "missing: no-such-distribution-xyz\n"
+
+
+def test_main_without_a_path_is_a_usage_error() -> None:
+    """A missing argument is reported as usage, never an ``IndexError`` traceback."""
+    assert _MODULE.main([]) == 2
