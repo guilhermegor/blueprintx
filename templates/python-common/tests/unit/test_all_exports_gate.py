@@ -938,6 +938,10 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "from functools import cached_property\nfrom typing import final, override\nclass A:\n"
         + "    @cached_property\n    def f(self):\n        setattr(self, 'Priv', 1)\n"
         + "    @final\n    @override\n    def g(self):\n        setattr(self, 'Priv', 1)\n",
+        "import abc\ndef g(abc):\n    return abc\nclass A:\n    @abc.abstractmethod\n"
+        + "    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "class B:\n    def final(self):\n        return 1\nclass A:\n    @property\n"
+        + "    def f(self):\n        setattr(self, 'Priv', 1)\n",
     ],
     ids=[
         "attribute-store-on-self",
@@ -964,6 +968,8 @@ def test_dynamic_binding_shape_beyond_the_plain_forms_is_charged(
         "typing-extensions-override-decorator",
         "cached-property-decorator",
         "several-imported-safe-decorators",
+        "function-parameter-named-like-a-safe-decorator",
+        "method-named-like-a-safe-decorator",
     ],
 )
 def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
@@ -999,6 +1005,18 @@ def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
         + "    @classmethod\n    def f(cls):\n        setattr(cls, 'Priv', 1)\n",
         "try:\n    pass\nexcept OSError as abc:\n    pass\nclass A:\n    @abc.abstractmethod\n"
         + "    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "for property in (print,):\n    pass\nclass A:\n    @property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "match 1:\n    case property:\n        pass\nclass A:\n    @property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "typing = object()\nclass A:\n    @typing.final\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "typing_extensions = object()\nclass A:\n    @typing_extensions.override\n"
+        + "    def f(self):\n        setattr(self, 'Priv', 1)\n",
+        "functools = object()\nclass A:\n    @functools.cached_property\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "builtins = object()\nclass A:\n    @builtins.classmethod\n    def f(cls):\n"
+        + "        setattr(cls, 'Priv', 1)\n",
     ],
     ids=[
         "local-property-def",
@@ -1010,6 +1028,12 @@ def test_dynamic_binding_exemption_still_holds_for_the_plain_forms(
         "walrus-property",
         "global-classmethod",
         "except-target-abc",
+        "for-target-property",
+        "match-capture-property",
+        "rebound-typing-module",
+        "rebound-typing-extensions-module",
+        "rebound-functools-module",
+        "rebound-builtins-module",
     ],
 )
 def test_decorator_rebound_in_the_module_is_not_the_builtin(
@@ -1022,6 +1046,28 @@ def test_decorator_rebound_in_the_module_is_not_the_builtin(
         {"_internal/__init__.py": "", "_internal/config.py": str_config},
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_config",
+    [
+        "from ._compat import classmethod\nclass A:\n    @classmethod\n    def f(cls):\n"
+        + "        setattr(cls, 'Priv', 1)\n",
+        "import mylib as abc\nclass A:\n    @abc.abstractmethod\n    def f(self):\n"
+        + "        setattr(self, 'Priv', 1)\n",
+        "class A:\n    def property(fn):\n        return fn\n\n    @property\n"
+        + "    def f(self):\n        setattr(self, 'Priv', 1)\n",
+    ],
+    ids=["import-alias-classmethod", "import-alias-abc-module", "class-body-property"],
+)
+def test_documented_rebinding_limits_keep_the_exemption(tmp_path: Path, str_config: str) -> None:
+    """The import-alias and class-body forms are documented limits; this pins them."""
+    path_init = _tree(
+        tmp_path,
+        'from ._internal.config import *\n__all__ = ["Priv"]\n',
+        {"_internal/__init__.py": "", "_internal/config.py": str_config},
+    )
+    assert _load_gate().check_package(path_init) == []
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="type statement needs 3.12")
