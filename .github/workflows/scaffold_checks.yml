@@ -577,11 +577,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Scaffold every skeleton and assert each nav page and bin/ script exists (blueprintx#1094)
-        run: bash bin/ci/check_generated_references.sh --generated
-
       - name: Should-fail regression tests for the reference guard
         run: bash tests/test_check_generated_references.sh
+
+      - name: Scaffold every skeleton and assert each nav page and bin/ script exists (blueprintx#1094)
+        run: bash bin/ci/check_generated_references.sh --generated
 
   dependabot-shipped:
     name: Every skeleton ships dependabot.yml with a cooldown

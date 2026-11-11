@@ -107,4 +107,16 @@ bash "$CHECK" --generated --skeleton no-such-skeleton >/dev/null 2>&1 || str_got
     int_failures=$((int_failures + 1))
 }
 
+str_cwd="$(mktemp -d)"
+touch "$str_cwd/.log"
+str_proj="$(make_project)"
+(cd "$str_cwd" && bash "$CHECK" --project "$str_proj" >/dev/null 2>&1)
+if [ -e "$str_cwd/.log" ]; then
+    echo "ok: --project leaves a .log in the working directory alone"
+else
+    echo "FAIL: --project deleted ./.log" >&2
+    int_failures=$((int_failures + 1))
+fi
+rm -rf "$str_cwd" "$str_proj"
+
 [ "$int_failures" -eq 0 ]

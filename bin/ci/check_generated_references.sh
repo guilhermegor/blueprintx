@@ -7,7 +7,7 @@ source "$REPO_ROOT/bin/lib/no_background_git.sh"
 
 int_failures=0
 str_current_work=""
-trap 'rm -rf "${str_current_work:-}" "${str_current_work:-}.log"' EXIT
+trap '[ -z "$str_current_work" ] || rm -rf "$str_current_work" "$str_current_work.log"' EXIT
 
 fail() {
     echo "ERROR: $*" >&2
