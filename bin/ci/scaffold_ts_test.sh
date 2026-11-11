@@ -43,4 +43,4 @@ npm ci --no-audit --no-fund
 npm run lint
 npm run lint:docs
 npm test
-echo "OK: $SKELETON scaffold passes npm ci, lint and jest."
+echo "OK: $SKELETON scaffold passes npm ci, lint, lint:docs and jest."

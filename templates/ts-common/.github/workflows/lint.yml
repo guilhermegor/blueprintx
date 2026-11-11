@@ -21,12 +21,12 @@ jobs:
         run: python3 bin/check_comment_budget.py --require-baseline
       - name: AGENTS.md pairing gate
         run: bash bin/check_agents_md_pairs.sh --root .
-      - name: Documented npm commands exist
-        run: bash bin/check_doc_commands.sh .
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+      - name: Documented npm commands exist
+        run: bash bin/check_doc_commands.sh .
       - run: npm ci
       - name: Assertion weakening gate
         run: |

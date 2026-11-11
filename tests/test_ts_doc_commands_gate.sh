@@ -52,6 +52,14 @@ bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "AGENTS.md citing a missing script fails" 1 "$?"
 rm "$str_proj/AGENTS.md"
 
+printf 'Run `npm run --silent build`.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "CONTRIBUTING.md with an npm flag after run passes" 0 "$?"
+printf 'Run `npm run ghost`.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "CONTRIBUTING.md citing a missing script fails" 1 "$?"
+rm "$str_proj/CONTRIBUTING.md"
+
 printf 'Try `npm run serve`.\n' >"$str_proj/docs/usage.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "docs/ citing a missing script fails" 1 "$?"

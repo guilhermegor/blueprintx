@@ -30,7 +30,7 @@ while IFS= read -r str_doc; do
 			echo "check_doc_commands: $str_doc documents 'npm run $str_name' but package.json has no such script" >&2
 			int_fail=1
 		fi
-	done < <(grep -v 'doc-commands:optional' "$str_doc" | grep -oE 'npm run [a-z0-9:_-]+' | sort -u || true)
+	done < <(grep -v 'doc-commands:optional' "$str_doc" | grep -oE 'npm run [a-z0-9][a-z0-9:_-]*' | sort -u || true)
 done < <(list_docs)
 
 exit "$int_fail"
