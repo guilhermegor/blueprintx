@@ -271,7 +271,7 @@ test_marker_warning_names_the_real_gates_stdout_error() {
     printf '# T\n' >"$str_proj/README.md"
     str_err="$(DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_mark_untranslated "$2"' _ \
         "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_proj" 2>&1 >/dev/null)"
-    if [[ "$str_err" == *"with the gate ("[!\)]* ]]; then
+    if [[ "$str_err" == *"with the gate ("*mkdocs.yml*")"* ]]; then
         pass "warning carries the real gate's stdout error"
     else
         fail "real gate warning" "empty reason: $str_err"

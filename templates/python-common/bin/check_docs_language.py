@@ -115,7 +115,7 @@ TUPLE_BLANKINGS = (
 RE_TABLE_ROW = re.compile(r"^[ \t]*\|")
 
 RE_LINK_DEFINITION = re.compile(
-    r"""^[ \t]*\[(?!\^)[^\]\n]+\]:[ \t]*\S+(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$"""
+    r"""^[ \t]*\[(?!\^)[^\]\n]+\]:[ \t]*\S+(?P<title>[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$"""
 )
 
 RE_DEFINITION_TITLE = re.compile(r"""^[ \t]*(?:"[^"]*"|'[^']*'|\([^)]*\))[ \t]*$""")
@@ -221,9 +221,10 @@ def _mask_lines(str_text: str) -> list:
         bool_toggle = _fence_toggles(str_open, str_marker, str_info)
         if bool_toggle:
             str_open = "" if str_open else str_marker
-        bool_definition = not str_open and bool(RE_LINK_DEFINITION.match(str_line))
+        re_definition = None if str_open else RE_LINK_DEFINITION.match(str_line)
+        bool_definition = bool(re_definition)
         bool_title = bool_after_definition and bool(RE_DEFINITION_TITLE.match(str_line))
-        bool_after_definition = bool_definition
+        bool_after_definition = bool_definition and not re_definition.group("title")
         bool_blank = (
             bool_toggle
             or bool(str_open)

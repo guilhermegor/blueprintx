@@ -508,6 +508,14 @@ def test_main_definition_continuation_title_is_not_prose(tmp_path: Path) -> None
     assert _run(tmp_path) == 0
 
 
+def test_main_parenthesised_prose_after_a_titled_definition_is_scored(tmp_path: Path) -> None:
+    """A definition that already has a title cannot take a continuation title."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    str_def = '\n[ref]: https://a.b "t"\n(' + STR_PT.strip() + ")\n"
+    _write(tmp_path / "docs" / "index.md", STR_EN + str_def)
+    assert _run(tmp_path) == 1
+
+
 def test_main_prose_after_a_definition_title_is_still_scored(tmp_path: Path) -> None:
     """Only the one title line is masked; the paragraph after it is still read."""
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
