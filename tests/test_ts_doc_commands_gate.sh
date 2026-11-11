@@ -22,6 +22,12 @@ has() {
 	expect "$1" yes "$str_got"
 }
 
+has_text() {
+	local str_got="no"
+	case "$3" in *"$2"*) str_got="yes" ;; esac
+	expect "$1" yes "$str_got"
+}
+
 for str_pkg in templates/ts-common/package.json templates/ts-lib/package.json; do
 	has "$str_pkg wires lint:docs" '"lint:docs": "bash bin/check_doc_commands.sh ."' "$REPO_ROOT/$str_pkg"
 done
@@ -59,6 +65,9 @@ expect "CONTRIBUTING.md with an npm flag after run passes" 0 "$?"
 printf 'Run `npm run --silent ghost`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "CONTRIBUTING.md citing a missing script after a flag fails" 1 "$?"
+printf 'Run `npm run --workspace=app ghost`.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a flag with =value before a missing script fails" 1 "$?"
 printf 'Run `npm run build.prod` then `npm run build:`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "a dotted missing script fails, trailing colon is prose" 1 "$?"
@@ -79,6 +88,13 @@ cp "$REPO_ROOT/templates/ts-common/package.json" "$str_spa/package.json"
 cp "$REPO_ROOT/templates/react-spa-webpack/README.md" "$str_spa/README.md"
 bash "$GATE" "$str_spa" >/dev/null 2>&1
 expect "react-spa README matches ts-common scripts" 0 "$?"
+
+str_nonode="$(mktemp -d)"
+ln -s "$(command -v bash)" "$str_nonode/bash"
+str_out="$(PATH="$str_nonode" "$str_nonode/bash" "$GATE" "$str_proj" 2>&1)"
+expect "a missing node binary exits 2" 2 "$?"
+has_text "a missing node binary is named as such" "node is required" "$str_out"
+rm -rf "$str_nonode"
 
 printf '{not json' >"$str_bad/package.json"
 bash "$GATE" "$str_bad" >/dev/null 2>&1
