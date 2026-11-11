@@ -633,13 +633,19 @@ def test_a_similar_name_with_an_unrelated_body_is_not_paired() -> None:
 def test_integrity_gate_reports_a_deletion_beside_a_similarly_named_unrelated_test() -> None:
     """Delete one test, add a near-named test with a different body: still a deletion."""
     list_problems = gate.deleted_or_gutted_tests(_STR_RENAME_OLD, _STR_RENAME_OTHER, "x")
-    assert list_problems == ["x: test 'test_rejects_negative_amounts' deleted"]
+    assert list_problems == [
+        "x: test 'test_rejects_negative_amounts' deleted"
+        " (possible rename to 'test_rejects_negative_dates', bodies differ)"
+    ]
 
 
 def test_weakening_gate_reports_a_deletion_beside_a_similarly_named_unrelated_test() -> None:
     """The weakening gate agrees with the integrity gate on the same diff."""
     list_problems = weakening._file_findings("x", _STR_RENAME_OLD, _STR_RENAME_OTHER, False)
-    assert list_problems == ["x: test 'test_rejects_negative_amounts' deleted"]
+    assert list_problems == [
+        "x: test 'test_rejects_negative_amounts' deleted"
+        " (possible rename to 'test_rejects_negative_dates', bodies differ)"
+    ]
 
 
 def test_weakening_finding_names_the_renamed_test() -> None:
@@ -667,3 +673,14 @@ def test_a_long_renamed_body_still_pairs() -> None:
     assert gate_rename.rename_pairs(dict_old, dict_new) == {
         "test_has_six_pages": "test_has_seven_pages"
     }
+
+
+def test_a_rename_that_also_edits_a_literal_is_a_hinted_deletion() -> None:
+    """The #1073 shape with a changed literal stays a finding but names the likely target."""
+    str_old = "def test_has_six_pages() -> None:\n    assert count() == 6\n"
+    str_new = "def test_has_seven_pages() -> None:\n    assert count() == 7\n"
+    list_problems = gate.deleted_or_gutted_tests(str_old, str_new, "x")
+    assert list_problems == [
+        "x: test 'test_has_six_pages' deleted"
+        " (possible rename to 'test_has_seven_pages', bodies differ)"
+    ]

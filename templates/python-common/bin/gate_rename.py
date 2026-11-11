@@ -79,10 +79,36 @@ def rename_pairs(dict_removed: dict, dict_added: dict) -> dict:
             break
         if str_old in dict_pairs or str_new in set_used:
             continue
-        matcher = difflib.SequenceMatcher(
+        cls_matcher = difflib.SequenceMatcher(
             None, dict_stmts[str_old], dict_stmts[str_new], autojunk=False
         )
-        if matcher.ratio() >= FLOAT_BODY_SIMILARITY:
+        if cls_matcher.ratio() >= FLOAT_BODY_SIMILARITY:
             dict_pairs[str_old] = str_new
             set_used.add(str_new)
     return dict_pairs
+
+
+def deleted_message(str_shown: str, str_name: str, list_unpaired_added: list) -> str:
+    """Return the ``deleted`` finding, naming a likely rename target when one exists.
+
+    Parameters
+    ----------
+    str_shown : str
+        Path to show in the message.
+    str_name : str
+        The removed test name.
+    list_unpaired_added : list of str
+        Added test names that no removed test was paired with.
+
+    Returns
+    -------
+    str
+        ``<path>: test '<name>' deleted``, plus ``(possible rename of ...)`` when an unpaired
+        added name is at least as similar as a rename needs. It stays a finding: the bodies
+        differ too much to prove the rename, so a human judges it.
+    """
+    list_close = difflib.get_close_matches(
+        str_name, list_unpaired_added, n=1, cutoff=FLOAT_RENAME_SIMILARITY
+    )
+    str_hint = f" (possible rename to {list_close[0]!r}, bodies differ)" if list_close else ""
+    return f"{str_shown}: test {str_name!r} deleted{str_hint}"

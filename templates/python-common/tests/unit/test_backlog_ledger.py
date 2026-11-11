@@ -696,7 +696,10 @@ def test_renamed_test_gutted_in_the_same_change_is_detected() -> None:
     str_old = "def test_has_six_required_pages() -> None:\n\tassert compute() == 6\n"
     str_new = "def test_has_seven_required_pages() -> None:\n\tpass\n"
     list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
-    assert list_problems == ["x: test 'test_has_six_required_pages' deleted"]
+    assert list_problems == [
+        "x: test 'test_has_six_required_pages' deleted"
+        " (possible rename to 'test_has_seven_required_pages', bodies differ)"
+    ]
 
 
 def test_gutted_test_body_is_detected() -> None:

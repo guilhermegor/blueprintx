@@ -129,7 +129,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from gate_env import is_ci  # noqa: E402
-from gate_rename import rename_pairs  # noqa: E402
+from gate_rename import deleted_message, rename_pairs  # noqa: E402
 
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -742,8 +742,9 @@ def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
     dict_added = {str_n: cls_f for str_n, cls_f in dict_new.items() if str_n not in dict_old}
     dict_pairs = rename_pairs(dict_gone, dict_added)
     dict_old_of = {str_to: dict_old[str_from] for str_from, str_to in dict_pairs.items()}
+    list_free = sorted(set(dict_added) - set(dict_pairs.values()))
     list_problems = [
-        f"{str_shown}: test {str_gone!r} deleted"
+        deleted_message(str_shown, str_gone, list_free)
         for str_gone in sorted(dict_gone)
         if str_gone not in dict_pairs
     ]

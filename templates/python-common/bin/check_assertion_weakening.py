@@ -70,7 +70,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from gate_env import is_ci  # noqa: E402
-from gate_rename import rename_pairs  # noqa: E402
+from gate_rename import deleted_message, rename_pairs  # noqa: E402
 
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -912,15 +912,17 @@ def _file_findings(
     if dict_old_funcs is None or dict_new_funcs is None:
         return [f"{str_path}: could not parse — not checked"]
     list_problems = []
+    list_free = [str_n for str_n in dict_new_funcs if str_n not in dict_old_funcs]
     dict_renames = rename_pairs(
         {str_n: cls_f for str_n, cls_f in dict_old_funcs.items() if str_n not in dict_new_funcs},
-        {str_n: cls_f for str_n, cls_f in dict_new_funcs.items() if str_n not in dict_old_funcs},
+        {str_n: dict_new_funcs[str_n] for str_n in list_free},
     )
+    list_free = [str_n for str_n in list_free if str_n not in dict_renames.values()]
     for str_name, node_old in dict_old_funcs.items():
         str_now = dict_renames.get(str_name, str_name)
         node_new = dict_new_funcs.get(str_now)
         if node_new is None:
-            list_problems.append(f"{str_path}: test {str_name!r} deleted")
+            list_problems.append(deleted_message(str_path, str_name, list_free))
             continue
         list_problems.extend(
             _function_findings(str_path, str_now, node_old, node_new, bool_prod_changed)
