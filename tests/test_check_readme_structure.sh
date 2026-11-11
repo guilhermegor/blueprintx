@@ -185,6 +185,22 @@ test_footer_without_heading_is_optional() {
         "$(good_readme; echo '<sub>Generated from the cli template via BlueprintX.</sub>')" fail "footer does not link BlueprintX"
 }
 
+test_require_footer_fails_without_footer() {
+    expect_gate "--require-footer on a README with no footer" \
+        "$(good_readme | sed '/^---$/,$d')" fail "README has no footer" --require-footer
+    expect_gate "--require-footer on a footer with no rule above it" \
+        "$(good_readme | sed '/^---$/d')" fail "footer is not preceded by a '---' rule" --require-footer
+    expect_gate "--require-footer on a complete footer" "$(good_readme)" pass "" --require-footer
+    expect_gate "--require-footer accepts blank lines between the rule and the footer" \
+        "$(good_readme | sed 's/^---$/---\n/')" pass "" --require-footer
+    expect_gate "--require-footer accepts a rule with trailing whitespace" \
+        "$(good_readme | sed 's/^---$/--- /')" pass "" --require-footer
+    expect_gate "--require-footer accepts CRLF line endings" \
+        "$(good_readme | sed 's/$/\r/')" pass "" --require-footer
+    expect_gate "--require-footer still rejects a footer under another rule" \
+        "$(good_readme | sed 's/^---$/----/')" fail "footer is not preceded by a '---' rule" --require-footer
+}
+
 test_other_archetype_slug_is_required() {
     expect_gate "cli README with library sections but no releasing" \
         "$(good_readme | sed '1s/library/cli/')" fail "missing section 'releasing'"
