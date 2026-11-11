@@ -612,7 +612,7 @@ jobs:
         run: command -v envsubst >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext-base; }
 
       - name: Install Poetry
-        run: python -m pip install poetry
+        run: python -m pip install poetry pyyaml
 
       - name: Plant a nested explicit Any and expect mypy to refuse it (blueprintx#1022)
         run: bash tests/test_explicit_any_refused_py.sh

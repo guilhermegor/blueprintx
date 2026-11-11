@@ -124,9 +124,18 @@ import sys
 
 import yaml
 
-dict_cfg = yaml.safe_load(open(sys.argv[1])) or {}
+
+
+class Loader(yaml.SafeLoader):
+    pass
+
+
+Loader.add_multi_constructor("", lambda loader, suffix, node: None)
+dict_cfg = yaml.load(open(sys.argv[1]), Loader=Loader) or {}
 dict_theme = dict_cfg.get("theme") or {}
 list_palette = dict_theme.get("palette") or []
+if isinstance(list_palette, dict):
+    list_palette = [list_palette]
 list_css = dict_cfg.get("extra_css") or []
 list_features = dict_theme.get("features") or []
 list_dicts = [d for d in list_palette if isinstance(d, dict) and "scheme" in d]
@@ -145,12 +154,16 @@ for str_feature in ("navigation.top", "content.code.annotate"):
     if str_feature in {str(f) for f in list_features}:
         list_why.append(f"{str_feature} enabled")
 print("; ".join(list_why))
-sys.exit(1 if list_why else 0)
+sys.exit(3 if list_why else 0)
 PY
 
 yml_problem() {
-	python3 -I -c "$PY_YML" "$1"
-	return 0
+	local str_out int_rc
+	str_out="$(python3 -I -c "$PY_YML" "$1" 2>&1)"
+	int_rc=$?
+	[ "$int_rc" -eq 0 ] && return 0
+	[ "$int_rc" -eq 3 ] && { echo "$str_out"; return 0; }
+	echo "yml gate crashed (exit $int_rc): $str_out"
 }
 
 mutate() {
@@ -251,6 +264,16 @@ printf 'theme:\n  features: [content.code.annotate]\n  palette: [{scheme: defaul
 check_yml "should-fail: flow-style feature list" "$TMP/flowlist.yml" refuse "content.code.annotate"
 { cat "$CSS"; printf '@import "later.css";\n'; } >"$TMP/import.css"
 check "should-fail: statement at-rule @import" "$TMP/import.css" refuse
+{ printf '@import "later.css";\n'; cat "$CSS"; } >"$TMP/import-top.css"
+check "should-fail: @import at the top of the file" "$TMP/import-top.css" refuse
+{ printf '/* @import "x.css"; */\n'; cat "$CSS"; } >"$TMP/import-comment.css"
+check "an @import inside a comment is not a statement" "$TMP/import-comment.css" pass
+printf 'theme:\n  palette: {scheme: default, primary: custom}\nextra_css: [stylesheets/brand.css]\n' >"$TMP/dictpal.yml"
+check_yml "a single-mapping palette is accepted" "$TMP/dictpal.yml" pass
+printf 'theme: [unclosed\n' >"$TMP/broken.yml"
+check_yml "should-fail: unparseable yml is refused, never green" "$TMP/broken.yml" refuse "crashed"
+printf 'markdown_extensions:\n  - x: !!python/name:a.b.c\ntheme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tag.yml"
+check_yml "a !!python/name tag does not crash the gate" "$TMP/tag.yml" pass
 
 sed "s/\"slate\"/slate/" "$CSS" >"$TMP/unquoted.css"
 check "slate selector unquoted" "$TMP/unquoted.css" pass
