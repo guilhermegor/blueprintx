@@ -273,23 +273,8 @@ echo "::endgroup::"
 
 echo "::group::final tree is self-consistent"
 poetry install --only docs --no-root --no-interaction --no-ansi
-poetry run mkdocs build --strict -d "$(mktemp -d)"
-git add -A
-git diff --cached --quiet \
-    || { echo "ERROR: [$SKELETON] the tree has uncommitted changes after the run:" >&2; git status --short >&2; exit 1; }
-str_pushed_note="push check skipped (no origin remote)"
-if git remote get-url origin >/dev/null 2>&1; then
-    str_pushed_note="pushed"
-    git rev-parse --verify -q main >/dev/null \
-        || { echo "ERROR: [$SKELETON] local branch main is missing; cannot prove it was pushed." >&2; exit 1; }
-    git rev-parse --verify -q origin/main >/dev/null \
-        || { echo "ERROR: [$SKELETON] origin is set but origin/main is missing; cannot prove main was pushed." >&2; exit 1; }
-    [ -z "$(git rev-list origin/main..main)" ] \
-        || { echo "ERROR: [$SKELETON] local main has commits origin/main lacks:" >&2; git rev-list --oneline origin/main..main >&2; exit 1; }
-fi
-[ ! -e .specs/.specs ] \
-    || { echo "ERROR: [$SKELETON] nested .specs/.specs was scaffolded." >&2; exit 1; }
-echo "Final tree: committed, $str_pushed_note, no nested .specs, mkdocs --strict builds."
+poetry run mkdocs build --strict -d "$WORK_DIR/site"
+bash "$REPO_ROOT/bin/ci/check_final_tree.sh" "$SKELETON"
 echo "::endgroup::"
 
 if [ "$SKELETON" = "lib-minimal" ]; then
