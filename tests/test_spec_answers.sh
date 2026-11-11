@@ -263,6 +263,21 @@ test_marker_step_uses_the_gates_page_set() {
     fi
 }
 
+test_marker_warning_names_the_real_gates_stdout_error() {
+    local str_proj="$WORK_DIR/marker-real-gate" str_err
+    require_gate_deps "real gate warning" || return 0
+    mkdir -p "$str_proj/bin" "$str_proj/docs"
+    cp "$REPO_ROOT/templates/python-common/bin/"check_docs_*.py "$REPO_ROOT/templates/python-common/bin/check_comment_language.py" "$str_proj/bin/"
+    printf '# T\n' >"$str_proj/README.md"
+    str_err="$(DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_mark_untranslated "$2"' _ \
+        "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_proj" 2>&1 >/dev/null)"
+    if [[ "$str_err" == *"with the gate ("[!\)]* ]]; then
+        pass "warning carries the real gate's stdout error"
+    else
+        fail "real gate warning" "empty reason: $str_err"
+    fi
+}
+
 test_marker_step_warns_when_the_gate_cannot_list_pages() {
     local str_proj="$WORK_DIR/marker-fallback" str_err
     mkdir -p "$str_proj/bin" "$str_proj/docs"
@@ -270,7 +285,7 @@ test_marker_step_warns_when_the_gate_cannot_list_pages() {
     printf '# T\n' | tee "$str_proj/README.md" >"$str_proj/docs/index.md"
     str_err="$(DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_mark_untranslated "$2"' _ \
         "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_proj" 2>&1 >/dev/null)"
-    if [[ "$str_err" == *"with the gate (boom"* ]] \
+    if [[ "$str_err" == *"with the gate ("*boom* ]] \
         && grep -q 'docs-lang:untranslated' "$str_proj/docs/index.md" \
         && grep -q 'docs-lang:untranslated' "$str_proj/README.md"; then
         pass "marker step warns, then still marks, when the gate cannot list pages"
@@ -919,6 +934,7 @@ test_first_commit_works_without_a_git_identity() {
 main() {
     test_marker_step_uses_the_gates_page_set
     test_marker_step_warns_when_the_gate_cannot_list_pages
+    test_marker_warning_names_the_real_gates_stdout_error
     test_ventoy_usb_answer_stream_order
     test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes
     test_ventoy_usb_bad_persistence_size_stops_before_anything_is_created

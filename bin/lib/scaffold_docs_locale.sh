@@ -11,7 +11,7 @@ scaffold_docs_pages() {
         printf '%s\n' "$str_pages"
         return 0
     else
-        echo "warning: could not list the docs pages with the gate ($(tr '\n' ' ' <"$str_err" | tail -c 160)); marking every docs/*.md and README.md instead" >&2
+        echo "warning: could not list the docs pages with the gate ($(printf '%s %s' "$str_pages" "$(cat "${str_err:-/dev/null}")" | tr '\n' ' ' | tail -c 160)); marking every docs/*.md and README.md instead" >&2
         rm -f "$str_err"
     fi
     [ -d "$project_path/docs" ] && find "$project_path/docs" -type f -name '*.md'
