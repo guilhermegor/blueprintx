@@ -29,7 +29,10 @@ A name belongs in `REQUIRED_CHECKS` only if all four hold:
    string is what gets reported.
 2. Its workflow triggers on `pull_request` with **no `types:` filter**, or with
    a `types:` list that includes `opened`, `reopened`, and `synchronize`, and
-   with **no `branches:`/`branches-ignore:`/`paths:`/`paths-ignore:` filter** —
+   with **no `branches-ignore:`/`paths:`/`paths-ignore:` filter and no `branches:`
+   filter that omits `main`** (a `branches:` list containing the literal `main`, with no
+   `!` entry, always matches a PR into the protected base; globs such as `**` are not
+   interpreted and stay conditional, and `main` is assumed to be the only protected base) —
    otherwise the check is simply absent on some PRs, which reads as permanently
    pending.
 3. No job-level `if:` can skip it on an otherwise ordinary PR.
@@ -51,7 +54,7 @@ Measured 2026-09-26 by reading `jobs.*.name` and `on:` in every
 |---|---|---|---|
 | `Review threads answered` | `review-threads.yml` | `pull_request` (+ `_review`, `_review_comment`), no filter | **yes** — seeded today |
 | `Classify and gate this PR` | `pr-gate.yml` | `pull_request: types: [opened, synchronize, reopened, labeled, unlabeled]` | **yes** — not seeded |
-| `Run Automated Tests (<os>, py<version>)` ×15 | `tests.yml` | `pull_request:` with a `branches:` filter | no — rule 2 (branch filter) and the names embed matrix values that drift |
+| `Run Automated Tests (<os>, py<version>)` ×15 | `tests.yml` | `pull_request:` with a `branches:` filter | no — rule 1, the names embed matrix values that drift (`branches: [main]` no longer disqualifies it under rule 2) |
 | `Ask CodeRabbit for a review` | `coderabbit-trigger.yml` | `pull_request`, job `if: draft == false` | no — rule 3, never reports on a draft PR |
 | `Close linked issues of merged PRs` | `pr-reconcile.yml` | `pull_request: types: [closed]` | no — rule 2, *never* reports on an open PR |
 | `GitGuardian — secret scan` | `secret-scan.yml` | `pull_request` | no — rule 4, copied only when `GITGUARDIAN_API_KEY` was exported at scaffold time |
@@ -64,12 +67,12 @@ Measured 2026-09-26 by reading `jobs.*.name` and `on:` in every
 | Emitted check name | Workflow | Trigger | Qualifies? |
 |---|---|---|---|
 | `Review threads answered` | `review-threads.yml` | `pull_request` (+ `_review`, `_review_comment`), no filter | **yes** |
-| `webpack` | `build.yml` | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter) |
-| `eslint`, `stylelint` | `lint.yml` | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter) |
-| `jest` | `test.yml` | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter) |
-| `type-check` | `type-check.yml` | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter) |
-| `build` | `docs.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter), `ts-lib` only |
-| `pack-smoke`, `verdaccio-rehearsal` | `pack-smoke.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | no — rule 2 (branch filter), `ts-lib` only |
+| `webpack` | `build.yml` | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; required by nothing, see finding 1 |
+| `eslint`, `stylelint` | `lint.yml` | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; required by nothing, see finding 1 |
+| `jest` | `test.yml` | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; required by nothing, see finding 1 |
+| `type-check` | `type-check.yml` | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; required by nothing, see finding 1 |
+| `build` | `docs.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; `ts-lib` only; required by nothing, see finding 1 |
+| `pack-smoke`, `verdaccio-rehearsal` | `pack-smoke.yml` (`ts-lib` only) | `push`, `pull_request: branches: [main]` | rule 2 passes (`branches: [main]`); rules 1 and 3 not re-measured; `ts-lib` only; required by nothing, see finding 1 |
 
 `verdaccio-rehearsal` publishes a throwaway
 `<version>-rehearsal.<run id>.<attempt>` prerelease (`--tag rehearsal`) and
@@ -106,9 +109,9 @@ Three findings, in descending order of cost:
    three non-Python tiers get no branch-protection provisioning at all — for
    them `REQUIRED_CHECKS` is not one entry, it is zero, and the one-to-two
    qualifying names above are required by nothing (`Review threads answered`
-   alone for the TypeScript tiers, since their build/lint/test/type-check/docs/
-   pack-smoke workflows all trigger on `pull_request: branches: [main]` and fail
-   rule 2). `templates/ts-common/.github/.review-bots.yaml`
+   alone for the TypeScript tiers, since the only name verified against every rule is
+   `Review threads answered`; the build/lint/test/type-check/docs/pack-smoke
+   workflows now pass rule 2 but their rules 1 and 3 have not been re-measured). `templates/ts-common/.github/.review-bots.yaml`
    already notes in passing that the script is "for the Python tiers"; the gap
    was documented as a property, never as a defect. Tracked as a follow-up.
 2. **Python deserves exactly one more entry: `Classify and gate this PR`.** It
@@ -126,9 +129,8 @@ Three findings, in descending order of cost:
 
 The earlier pass on blueprintx#164 (`.specs/backlog/repo-rules-self-audit-164_20260904_062813.md`)
 reached "keep one entry" for the Python tiers by reasoning about
-`tests.yml` alone. That conclusion survives for `tests.yml` — with a second,
-stronger disqualifier it did not have (the `branches:` filter, not just matrix
-drift) — but it did not look at `pr-gate.yml`, and it did not look outside
+`tests.yml` alone. That conclusion survives for `tests.yml` — for the reason in rule 1 (matrix
+names that drift); the `branches: [main]` filter no longer counts against it — but it did not look at `pr-gate.yml`, and it did not look outside
 Python at all.
 
 ## Keeping BlueprintX's own required checks in sync (blueprintx#535)
@@ -141,8 +143,10 @@ not enforced.
 The expected contexts per layer are committed in `.github/required-checks.json`.
 `bin/ci/check_required_checks_sync.py` compares that file with the jobs that run on every
 PR, with no token and no secret. "Every PR" means the workflow triggers on `pull_request`
-with no `branches:`/`paths:` filter and a `types:` (a scalar counts
-as a one-item list) covering opened, reopened and synchronize, and the job is unconditional: it has no `if:`, or its `if:` (a surrounding
+with no `branches-ignore:`/`paths:`/`paths-ignore:` filter, a `branches:` filter only if it
+is a string or list of strings containing literal `main` with no `!` entry, and either no
+`types:` or a `types:` (a scalar counts as a one-item list) covering opened, reopened and
+synchronize, and the job is unconditional: it has no `if:`, or its `if:` (a surrounding
 `${{ }}` is stripped) has a `||` alternative that is a bare `github.event_name ==
 'pull_request'` or `!= '<other event>'` test. Any other `if:` makes the job conditional,
 and so does a `needs:` on a conditional job. A job that only `uses:` a reusable workflow
