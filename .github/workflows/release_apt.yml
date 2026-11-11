@@ -29,7 +29,9 @@ jobs:
           ref: main
 
       - name: Install packaging tools
-        run: sudo apt-get install -y dpkg-dev apt-utils
+        run: |
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y -o Acquire::Retries=3 dpkg-dev apt-utils
 
       - name: Download release tarball
         env:
