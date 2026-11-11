@@ -75,20 +75,7 @@ export default [
     rules: {
       'no-console': 'off',
       'jest/no-export': 'error',
-      'jest/no-disabled-tests': 'off',
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector:
-            "CallExpression[callee.object.name=/^(it|test|describe)$/][callee.property.name='skip']:not([arguments.0.value=/#[0-9]+/])",
-          message: 'A skipped test must name its issue, e.g. it.skip("flaky #123", ...).',
-        },
-        {
-          selector:
-            'CallExpression[callee.name=/^x(it|describe|test)$/]:not([arguments.0.value=/#[0-9]+/])',
-          message: 'A skipped test must name its issue, e.g. xit("flaky #123", ...).',
-        },
-      ],
+      'jest/no-disabled-tests': 'error',
       'jest/no-focused-tests': 'error',
     },
   },
