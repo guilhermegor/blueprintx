@@ -30,7 +30,7 @@ const skipIssue = {
               }
               const rules = (d[2] ?? '').split(/(?:^|\s)-{2,}(?:\s|$)/)[0].trim();
               const hasIssue = d[1] && /#\d+/.test(c.value);
-              return /no-focused-tests/.test(rules) || (/^$|no-disabled-tests/.test(rules) && !hasIssue);
+              return !rules || /no-focused-tests/.test(rules) || (/no-disabled-tests/.test(rules) && !hasIssue);
             })
             .forEach((c) => context.report({ loc: c.loc, messageId: 'missing' }));
         },
