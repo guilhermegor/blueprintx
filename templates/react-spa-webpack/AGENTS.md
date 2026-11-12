@@ -411,7 +411,7 @@ and callback-less tests: a skipped or focused block leaves
 every CI signal green while silently running fewer tests. Delete the test or fix
 it. A skip that must stay needs a disable on the line above it that names its
 issue: `// eslint-disable-next-line jest/no-disabled-tests -- #123`. Lint
-requires the disable but not the issue reference, so reviewers enforce that.
+(`skip/require-issue`) fails a disable of that rule that carries no `#<number>`.
 `it.todo` is not flagged by the rule and is an accepted gap.
 
 For a stub that is not built yet, `throw new Error('not implemented')` rather

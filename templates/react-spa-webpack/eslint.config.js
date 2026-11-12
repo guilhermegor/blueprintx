@@ -11,6 +11,27 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+const skipIssue = {
+  rules: {
+    'require-issue': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: { missing: 'A disabled test needs an issue reference, e.g. `-- #123`.' },
+      },
+      create: (context) => ({
+        Program: () => {
+          context.sourceCode
+            .getAllComments()
+            .filter((c) => /eslint-disable[\s\S]*jest\/no-disabled-tests/.test(c.value))
+            .filter((c) => !/#\d+/.test(c.value))
+            .forEach((c) => context.report({ loc: c.loc, messageId: 'missing' }));
+        },
+      }),
+    },
+  },
+};
+
 export default [
   {
     ignores: [
@@ -71,9 +92,10 @@ export default [
 
   {
     files: ['**/*.{test,spec}.{ts,tsx,js,jsx}'],
-    plugins: { jest },
+    plugins: { jest, skip: skipIssue },
     rules: {
       'no-console': 'off',
+      'skip/require-issue': 'error',
       'jest/no-export': 'error',
       'jest/no-disabled-tests': 'error',
       'jest/no-focused-tests': 'error',
