@@ -108,7 +108,7 @@ TUPLE_BLANKINGS = (
     re.compile(r"!?\[[^\]\n]*\]\([^)\n]*\)"),
     re.compile(r"https?://\S+"),
     re.compile(
-        r"""</?[A-Za-z][\w:-]*(?:\s+[A-Za-z_:][\w:.-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s"'<>=]+))?)*\s*/?>"""
+        r"""</?[A-Za-z][\w:-]*(?:\s+[A-Za-z_:][\w:.-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'<>=]+))?)*\s*/?>"""
     ),
 )
 
@@ -287,7 +287,8 @@ def prose_paragraphs(str_text: str) -> list:
         if list_block and STR_ESCAPE not in str_para:
             for re_span in TUPLE_BLANKINGS:
                 str_para = re_span.sub(" ", str_para)
-            list_out.append((int_start, str_para))
+            if str_para.strip():
+                list_out.append((int_start, str_para))
         list_block, int_start = [], 0
     return list_out
 

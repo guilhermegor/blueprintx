@@ -160,6 +160,14 @@ def test_main_empty_page_set_exits_one(tmp_path: Path) -> None:
     assert _run(tmp_path) == 1
 
 
+@pytest.mark.parametrize("str_text", ["<br>\n", "https://a.b\n"])
+def test_main_a_page_of_only_markup_or_a_url_scores_nothing(tmp_path: Path, str_text: str) -> None:
+    """Paragraphs blank after masking are not scored, so such a page cannot pass the floor."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", str_text)
+    assert _run(tmp_path) == 1
+
+
 def test_main_custom_docs_dir_is_read(tmp_path: Path) -> None:
     """Pages under a custom ``docs_dir`` are part of the page set."""
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN + "docs_dir: manual\n")
@@ -439,6 +447,7 @@ def test_main_non_mapping_mkdocs_fails_with_a_message(
         STR_EN + '\n<div\n  title="' + STR_FOREIGN_BLOCK.strip() + '">\n',
         STR_EN + "\n<img\n  alt='" + STR_FOREIGN_BLOCK.strip() + '\'\n  src="a.png" />\n',
         STR_EN + '\n[ref]: https://a.b "' + STR_FOREIGN_BLOCK.strip() + '"\n',
+        STR_EN + '\n<div title="x\n' + STR_FOREIGN_BLOCK.strip() + '">\n',
     ],
 )
 def test_main_multiline_html_tags_and_link_definitions_are_not_prose(
