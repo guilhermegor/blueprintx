@@ -353,7 +353,8 @@ a `bin/*.sh` / `bin/*.py` path named in `poe_tasks.toml`, `.pre-commit-config.ya
 tree. A project from which no reference can be extracted fails, so a broken extractor is red.
 Only the default-answer scaffold is checked, so online-only and locale variants are not.
 `--project <dir>` checks one tree.
-`tests/test_check_generated_references.sh` deletes one file per reference kind and shows the
+`tests/test_check_generated_references.sh` plants a missing reference per kind (a deleted file or a
+reference to `bin/nope.sh`) and shows the
 gate naming it. The scaffold takes about 95 seconds, so the pre-commit hook runs on the
 `manual` stage (`pre-commit run generated-references --hook-stage manual`); CI runs it on
 every pull request.
