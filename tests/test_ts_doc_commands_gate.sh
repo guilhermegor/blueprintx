@@ -169,10 +169,11 @@ fi
 str_badperl="$(mktemp -d)"
 printf '#!/bin/sh\nexit 3\n' >"$str_badperl/perl"
 chmod +x "$str_badperl/perl"
-for str_t in bash node grep sort; do ln -s "$(command -v "$str_t")" "$str_badperl/$str_t"; done
+for str_t in bash node grep sort find; do ln -s "$(command -v "$str_t")" "$str_badperl/$str_t"; done
 printf 'Run `npm run build`.\n' >"$str_proj/README.md"
-PATH="$str_badperl" "$str_badperl/bash" "$GATE" "$str_proj" >/dev/null 2>&1
+str_out="$(PATH="$str_badperl" "$str_badperl/bash" "$GATE" "$str_proj" 2>&1)"
 expect "a failing perl stage exits 2 instead of passing" 2 "$?"
+has_text "a failing perl stage is reported as an extraction failure" "extracting npm commands" "$str_out"
 rm -rf "$str_badperl"
 
 [ "$int_failures" -eq 0 ]
