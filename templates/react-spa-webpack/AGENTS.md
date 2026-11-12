@@ -404,6 +404,22 @@ export function noteFromCreateDTO(dto: NoteCreateDTO): Note {
 
 Tests live in `src/capabilities/<feature>/__tests__/`.
 
+`npm run lint` fails on a committed `it.only`/`fit`/`describe.only`
+(`jest/no-focused-tests`) and on `it.skip`/`xit`/`describe.skip`
+(`jest/no-disabled-tests`), which also covers `.skip.each`, `x*.each`
+and callback-less tests: a skipped or focused block leaves
+every CI signal green while silently running fewer tests. Delete the test or fix
+it. A skip that must stay needs a disable on the line above it that names its
+issue: `// eslint-disable-next-line jest/no-disabled-tests -- #123`. Lint
+(`skip/require-issue`) accepts only a `-next-line` or `-line` disable of that
+rule with a `#<number>`, and fails any bare disable, any file-wide disable,
+any inline `eslint` config of it, and any disable of `jest/no-focused-tests`.
+`it.todo` is not flagged by the rule and is an accepted gap.
+
+For a stub that is not built yet, `throw new Error('not implemented')` rather
+than returning a well-typed constant: a constant passes its own test and hides
+that the behavior is missing, while the throw fails loudly the first time it runs.
+
 ## CSS conventions
 
 Global design tokens live in `shared/styles/foundations/` — import via
