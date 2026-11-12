@@ -3001,57 +3001,37 @@ def test_poetry_run_with_complete_venv_still_runs(tmp_path: Path) -> None:
     assert "RAN" in cls_run.stdout
 
 
-def _tracker_step_script() -> str:
-    """Return the shell of the workflow's tracking-issue step.
-
-    Skips when the workflow is not shipped (it needs a GitHub remote).
-
-    Returns
-    -------
-    str
-        The ``run:`` block of the ``Open or Update Tracking Issue`` step.
-    """
-    path_workflow = (
-        Path(__file__).resolve().parents[2] / ".github" / "workflows" / "docstring-urls.yml"
-    )
-    _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
-    dict_workflow = yaml.safe_load(path_workflow.read_text(encoding="utf-8"))
-    list_runs = [
-        dict_step.get("run")
-        for dict_job in dict_workflow["jobs"].values()
-        for dict_step in dict_job.get("steps", [])
-        if dict_step.get("name") == "Open or Update Tracking Issue"
-    ]
-    assert len(list_runs) == 1, f"expected one 'Open or Update Tracking Issue' step: {list_runs}"
-    assert list_runs[0], "the 'Open or Update Tracking Issue' step has no run: block"
-    return list_runs[0]
-
-
 _STR_OPEN_TRACKERS_NEWEST_FIRST = '[{"number": 9}, {"number": 7}]'
 
 
-def _run_tracker_step(
-    path_root: Path, str_report: str, str_open: str, str_fail_close: str = ""
-) -> list[str]:
-    """Run the tracking step against a stub ``gh`` and return the ``gh`` calls it made.
+def _run_track_mode(
+    path_root: Path,
+    str_report: str,
+    str_open: str,
+    str_fail_close: str = "",
+    bool_fail_list: bool = False,
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    """Run ``test_urls_docstrings.sh --track`` against a stub ``gh``.
 
     Parameters
     ----------
     path_root : pathlib.Path
-        Scratch directory used as the step's CWD.
+        Scratch directory used as CWD.
     str_report : str
-        Content of ``docstring_urls_report.txt``.
+        Content of the scan report.
     str_open : str
-        JSON the stub serves for ``gh issue list``; the step's own ``--jq`` runs over it.
+        JSON the stub serves for ``gh issue list``; the script's own ``--jq`` runs over it.
     str_fail_close : str
         Issue number whose ``gh issue close`` the stub fails; empty fails none.
+    bool_fail_list : bool
+        Whether the stub's ``gh issue list`` exits non-zero.
 
     Returns
     -------
-    list[str]
-        One line per ``gh`` invocation, ``issue list`` calls excluded.
+    tuple[subprocess.CompletedProcess[str], list[str]]
+        The finished process and one line per ``gh`` invocation, ``issue list`` excluded.
     """
-    _skip_unless(shutil.which("jq") is not None, "jq is needed to apply the step's --jq")
+    _skip_unless(shutil.which("jq") is not None, "jq is needed to apply the script's --jq")
     path_bin = path_root / "stubs"
     path_bin.mkdir()
     path_log = path_root / "gh.log"
@@ -3060,70 +3040,146 @@ def _run_tracker_step(
     (path_bin / "gh").write_text(
         f'#!/bin/bash\necho "$*" >> "{path_log}"\n'
         f'[ "$2 $3" = "close {str_fail_close}" ] && exit 1\n[ "$2" = list ] || exit 0\n'
+        f"{'exit 1' if bool_fail_list else ':'}\n"
         'while [ $# -gt 0 ]; do [ "$1" = --jq ] && str_jq="$2"; shift; done\n'
         f'jq -r "$str_jq" "{path_json}"\n',
         encoding="utf-8",
     )
     (path_bin / "gh").chmod(0o755)
-    (path_root / "docstring_urls_report.txt").write_text(str_report, encoding="utf-8")
+    (path_root / "report.txt").write_text(str_report, encoding="utf-8")
     cls_result = subprocess.run(  # noqa: S603
-        [_STR_BASH, "-eo", "pipefail", "-c", _tracker_step_script()],
+        [_STR_BASH, str(_bin_script("test_urls_docstrings.sh")), "--track", "report.txt"],
         cwd=path_root,
         env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
         capture_output=True,
         text=True,
         check=False,
     )
-    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    path_log.touch()
     list_lines = path_log.read_text(encoding="utf-8").splitlines()
     list_reads = [str_line for str_line in list_lines if str_line.startswith("issue list")]
-    assert list_reads, "the step never listed open trackers"
     assert all("--label docstring-urls --state open" in str_line for str_line in list_reads)
-    return [str_line for str_line in list_lines if not str_line.startswith("issue list")]
+    return cls_result, [
+        str_line for str_line in list_lines if not str_line.startswith("issue list")
+    ]
 
 
-def test_docstring_urls_workflow_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None:
+def test_track_mode_opens_a_tracker_for_a_dead_url(tmp_path: Path) -> None:
+    """A failing scan with no open tracker creates one; runs in any generated project."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]"
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert list_calls == [
+        "label create docstring-urls --color fbca04 "
+        "--description A docstring URL no longer resolves --force",
+        "issue create --title Dead docstring URLs --label docstring-urls "
+        "--body-file docstring_urls_body.md",
+    ]
+    str_body = (tmp_path / "docstring_urls_body.md").read_text(encoding="utf-8")
+    assert "<!-- docstring-urls-tracker -->" in str_body
+    assert "URL issue (404) in a.py (line 1): u" in str_body
+
+
+def test_track_mode_lists_only_open_docstring_url_trackers(tmp_path: Path) -> None:
+    """The tracker lookup must carry the label and state filters, and must happen."""
+    cls_result, _ = _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]")
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    list_lines = (tmp_path / "gh.log").read_text(encoding="utf-8").splitlines()
+    list_reads = [str_line for str_line in list_lines if str_line.startswith("issue list")]
+    assert len(list_reads) == 1
+    assert "--label docstring-urls --state open" in list_reads[0]
+
+
+def test_docstring_urls_workflow_calls_track_mode_on_the_scan_report() -> None:
+    """The tracking step must run ``--track`` on the scan step's report, with the token set."""
+    path_workflow = (
+        Path(__file__).resolve().parents[2] / ".github" / "workflows" / "docstring-urls.yml"
+    )
+    _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
+    dict_workflow = yaml.safe_load(path_workflow.read_text(encoding="utf-8"))
+    dict_steps = {
+        dict_step["name"]: dict_step
+        for dict_job in dict_workflow["jobs"].values()
+        for dict_step in dict_job["steps"]
+        if "name" in dict_step
+    }
+    dict_track = dict_steps["Open or Update Tracking Issue"]
+
+    assert "docstring_urls_report.txt" in dict_steps["Scan Docstring URLs"]["run"]
+    assert (
+        dict_track["run"] == "bash bin/test_urls_docstrings.sh --track docstring_urls_report.txt"
+    )
+    assert "GH_TOKEN" in dict_track["env"]
+
+
+def test_track_mode_does_not_open_a_duplicate_when_listing_trackers_fails(tmp_path: Path) -> None:
+    """A failed tracker lookup must fail the step, never fall through to ``issue create``."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]", bool_fail_list=True
+    )
+
+    assert cls_result.returncode != 0
+    assert not [str_call for str_call in list_calls if str_call.startswith("issue c")]
+
+
+def test_track_mode_fails_when_the_scan_gave_no_verdict(tmp_path: Path) -> None:
+    """A report with neither a failure nor the success line must fail, never pass silently."""
+    cls_result, list_calls = _run_track_mode(tmp_path, "curl: not found\n", "[]")
+
+    assert cls_result.returncode != 0
+    assert "produced no verdict" in cls_result.stdout
+    assert not list_calls
+
+
+def test_track_mode_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None:
     """A clean scan must close every open tracking issue and do nothing else."""
-    list_calls = _run_tracker_step(
+    cls_result, list_calls = _run_track_mode(
         tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
     )
 
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     assert list_calls == [
         "issue close 7 --comment All docstring URLs are reachable again.",
         "issue close 9 --comment All docstring URLs are reachable again.",
     ]
 
 
-def test_docstring_urls_workflow_keeps_closing_after_one_close_fails(tmp_path: Path) -> None:
+def test_track_mode_keeps_closing_after_one_close_fails(tmp_path: Path) -> None:
     """One failed close must not abort the step or skip the remaining trackers."""
-    list_calls = _run_tracker_step(
+    cls_result, list_calls = _run_track_mode(
         tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST, "7"
     )
 
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     assert list_calls[-1] == "issue close 9 --comment All docstring URLs are reachable again."
 
 
-def test_docstring_urls_workflow_dedupes_to_one_open_tracker(tmp_path: Path) -> None:
+def test_track_mode_dedupes_to_one_open_tracker(tmp_path: Path) -> None:
     """With duplicates open, a failing scan updates the oldest and closes the rest."""
-    list_calls = _run_tracker_step(
+    cls_result, list_calls = _run_track_mode(
         tmp_path, "URL issue (404) in a.py (line 1): u\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
     )
 
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     assert [str_call for str_call in list_calls if str_call.startswith("issue c")] == [
         "issue comment 7 --body-file docstring_urls_body.md",
         "issue close 9 --reason not planned --comment Duplicate of #7.",
     ]
 
 
-def test_docstring_urls_workflow_dedupe_survives_a_failed_close(tmp_path: Path) -> None:
+def test_track_mode_dedupe_survives_a_failed_close(tmp_path: Path) -> None:
     """A failed duplicate close must not abort the step or skip later duplicates."""
-    list_calls = _run_tracker_step(
+    cls_result, list_calls = _run_track_mode(
         tmp_path,
         "URL issue (404) in a.py (line 1): u\n",
         '[{"number": 11}, {"number": 9}, {"number": 7}]',
         "9",
     )
 
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     assert list_calls[-1] == "issue close 11 --reason not planned --comment Duplicate of #7."
 
 

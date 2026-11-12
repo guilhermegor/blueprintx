@@ -3,3 +3,4 @@ display_name=DDD Service (ORM)
 description=Hexagonal DDD service with SQLAlchemy ORM (PostgreSQL, MySQL, SQLite, Oracle, MSSQL)
 scaffold=bin/scaffold/python_ddd_service_orm.sh
 readme_archetype=service
+ships_docs=true
