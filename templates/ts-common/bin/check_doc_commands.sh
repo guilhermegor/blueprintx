@@ -22,7 +22,7 @@ list_docs() {
 
 extract_hits() {
 	local -a list_status=()
-	grep -v 'doc-commands:optional' "$1" | perl -pe 's/npm run(?= +(?:(?!npm run)(?:[^- `][^ `]*|-[^- `][^ `]*|--[^ `]+) +)*?(?:-w|-ws|--workspaces?|--prefix)(?:[ =`]|$))//g' | grep -oE '(^|[^[:alnum:]])npm run( +--loglevel +[^ ]+| +--?[A-Za-z][A-Za-z-]*(=[^ ]*)?)* +[A-Za-z0-9]([A-Za-z0-9:._-]*[A-Za-z0-9])?' | sort -u || list_status=("${PIPESTATUS[@]}")
+	grep -v 'doc-commands:optional' "$1" | perl -pe 's/npm run(?= +(?:(?!npm run)(?:[^- `][^ `]*|-[^- `][^ `]*|--[^ `]+) +)*?(?:-w|-ws|--workspaces?|--prefix)(?:[ =`]|$))//g' | grep -oE '(^|[^[:alnum:]])npm run( +--loglevel +[^ ]+| +--?[A-Za-z][A-Za-z-]*(=[^ ]*)?)* +[A-Za-z0-9_]([A-Za-z0-9:._-]*[A-Za-z0-9])?' | sort -u || list_status=("${PIPESTATUS[@]}")
 	[ "${#list_status[@]}" -eq 0 ] && return 0
 	[ "${list_status[0]}" -le 1 ] && [ "${list_status[1]}" -eq 0 ] &&
 		[ "${list_status[2]}" -le 1 ] && [ "${list_status[3]}" -eq 0 ]

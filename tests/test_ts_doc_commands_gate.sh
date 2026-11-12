@@ -60,6 +60,13 @@ bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "AGENTS.md citing a missing script fails" 1 "$?"
 rm "$str_proj/AGENTS.md"
 
+printf 'Run `npm run _ghost`.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a missing underscore-prefixed script fails" 1 "$?"
+printf 'Run _npm run build_ in italics.\n' >"$str_proj/CONTRIBUTING.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "an italic closing underscore is not part of the name" 0 "$?"
+
 printf 'Run `npm run --silent build`.\n' >"$str_proj/CONTRIBUTING.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "CONTRIBUTING.md with an npm flag after run passes" 0 "$?"
