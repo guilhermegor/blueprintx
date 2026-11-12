@@ -159,4 +159,13 @@ if [ "$(id -u)" -ne 0 ]; then
 	chmod 755 "$str_proj/docs/locked"
 fi
 
+str_badperl="$(mktemp -d)"
+printf '#!/bin/sh\nexit 3\n' >"$str_badperl/perl"
+chmod +x "$str_badperl/perl"
+for str_t in bash node grep sort; do ln -s "$(command -v "$str_t")" "$str_badperl/$str_t"; done
+printf 'Run `npm run build`.\n' >"$str_proj/README.md"
+PATH="$str_badperl" "$str_badperl/bash" "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a failing perl stage exits 2 instead of passing" 2 "$?"
+rm -rf "$str_badperl"
+
 [ "$int_failures" -eq 0 ]
