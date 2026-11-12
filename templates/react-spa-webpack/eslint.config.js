@@ -17,15 +17,17 @@ const skipIssue = {
       meta: {
         type: 'problem',
         schema: [],
-        messages: { missing: 'A disabled test needs an issue reference, e.g. `-- #123`.' },
+        messages: { missing: 'A disabled or focused test rule needs an issue reference, e.g. `-- #123`.' },
       },
       create: (context) => ({
         Program: () => {
           context.sourceCode
             .getAllComments()
             .map((c) => [c, /^\s*eslint-disable(?:-next-line|-line)?(?:\s([\s\S]*))?$/.exec(c.value)])
-            .filter(([, m]) => m && /^$|jest\/no-disabled-tests/.test(
-              (m[1] ?? '').split(/(?:^|\s)-{2,}(?:\s|$)/)[0].trim()))
+            .filter(([c, m]) => m
+              ? /^$|jest\/no-(?:disabled|focused)-tests/.test(
+                (m[1] ?? '').split(/(?:^|\s)-{2,}(?:\s|$)/)[0].trim())
+              : /^\s*eslint\s[^]*jest\/no-(?:disabled|focused)-tests/.test(c.value))
             .map(([c]) => c)
             .filter((c) => !/#\d+/.test(c.value))
             .forEach((c) => context.report({ loc: c.loc, messageId: 'missing' }));
