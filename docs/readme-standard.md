@@ -62,9 +62,9 @@ done
 Replace a file whose diff is non-empty, then run the gate. Never edit a vendored copy in place:
 fix the gate in BlueprintX and re-sync.
 
-## Worked example: filings-rfb
+## Worked example: opendata-rfb
 
-`guilhermegor/filings-rfb#33` is the reference adoption. Its README opens with the archetype
+`guilhermegor/opendata-rfb#33` is the reference adoption. Its README opens with the archetype
 marker, the centered logo and the canonical badge row, carries a `documentation` section that
 points to the docs site and the local serve command, ends with the `<sub>` footer, and passes
 `bash bin/check_readme_structure.sh README.md` in both pre-commit and CI.

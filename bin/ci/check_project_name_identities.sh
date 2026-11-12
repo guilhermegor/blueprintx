@@ -19,11 +19,11 @@ assert_eq() {
         fail "$str_what: expected '$str_expected', got '$str_actual'"
 }
 
-assert_eq "$(to_import_package_name "filings-b3")" "filings_b3" "hyphen becomes underscore"
+assert_eq "$(to_import_package_name "opendata-b3")" "opendata_b3" "hyphen becomes underscore"
 assert_eq "$(to_import_package_name "duskko")" "duskko" "a clean name is untouched"
 assert_eq "$(to_import_package_name "a-b-c")" "a_b_c" "every hyphen, not just the first"
 
-for str_good in duskko filings-b3 my_lib _private a1; do
+for str_good in duskko opendata-b3 my_lib _private a1; do
     is_valid_project_name "$str_good" || fail "'$str_good' should be accepted"
 done
 for str_bad in "1lib" "my.lib" "my lib" "my/lib" ""; do
@@ -36,7 +36,7 @@ else
     str_tmp="$(mktemp -d)"
     trap 'rm -rf "$str_tmp"' EXIT
 
-    str_dist="filings-b3"
+    str_dist="opendata-b3"
     str_pkg="$(to_import_package_name "$str_dist")"
     int_rendered=0
 
