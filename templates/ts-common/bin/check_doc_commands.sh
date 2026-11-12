@@ -25,6 +25,11 @@ command -v node >/dev/null || {
 	exit 2
 }
 
+command -v perl >/dev/null || {
+	echo "check_doc_commands: perl is required to parse npm commands" >&2
+	exit 2
+}
+
 str_scripts="$(node -e 'console.log(Object.keys(require(process.argv[1]).scripts || {}).join("\n"))' "$(cd "$STR_ROOT" && pwd)/package.json")" || {
 	echo "check_doc_commands: $STR_PKG is not valid JSON" >&2
 	exit 2
@@ -49,7 +54,7 @@ while IFS= read -r str_doc; do
 			echo "check_doc_commands: $str_doc documents 'npm run $str_name' but package.json has no such script" >&2
 			int_fail=1
 		fi
-	done < <(grep -v 'doc-commands:optional' "$str_doc" | perl -pe 's/npm run(?= +(?:(?!npm run)(?:[^- `][^ `]*|-[^- `][^ `]*|--[^ `]+) +)*?(?:-w|--workspaces?|--prefix)(?:[ =]|\$))//g' | grep -oE '(^|[^[:alnum:]])npm run( +--loglevel +[^ ]+| +--?[A-Za-z][A-Za-z-]*(=[^ ]*)?)* +[A-Za-z0-9]([A-Za-z0-9:._-]*[A-Za-z0-9])?' | sort -u || true)
+	done < <(grep -v 'doc-commands:optional' "$str_doc" | perl -pe 's/npm run(?= +(?:(?!npm run)(?:[^- `][^ `]*|-[^- `][^ `]*|--[^ `]+) +)*?(?:-w|-ws|--workspaces?|--prefix)(?:[ =`]|$))//g' | grep -oE '(^|[^[:alnum:]])npm run( +--loglevel +[^ ]+| +--?[A-Za-z][A-Za-z-]*(=[^ ]*)?)* +[A-Za-z0-9]([A-Za-z0-9:._-]*[A-Za-z0-9])?' | sort -u || true)
 done <<<"$str_docs"
 
 exit "$int_fail"

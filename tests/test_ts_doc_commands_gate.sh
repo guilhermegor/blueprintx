@@ -112,6 +112,14 @@ str_out="$(PATH="$str_nonode" "$str_nonode/bash" "$GATE" "$str_proj" 2>&1)"
 expect "a missing node binary exits 2" 2 "$?"
 has_text "a missing node binary is named as such" "node is required" "$str_out"
 
+str_noperl="$(mktemp -d)"
+ln -s "$(command -v bash)" "$str_noperl/bash"
+ln -s "$(command -v node)" "$str_noperl/node"
+str_out="$(PATH="$str_noperl" "$str_noperl/bash" "$GATE" "$str_proj" 2>&1)"
+expect "a missing perl binary exits 2" 2 "$?"
+has_text "a missing perl binary is named as such" "perl is required" "$str_out"
+rm -rf "$str_noperl"
+
 printf '{not json' >"$str_bad/package.json"
 bash "$GATE" "$str_bad" >/dev/null 2>&1
 expect "invalid package.json exits 2, not the doc-failure code" 2 "$?"
@@ -138,6 +146,9 @@ expect "a selector in the next backticked command does not exempt this one" 1 "$
 printf 'Run `npm run ghost -w app` and `npm run build -w app`.\n' >"$str_proj/README.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "two backticked commands each with their own selector are skipped" 0 "$?"
+printf 'Run `npm run ghost --workspaces` and `npm run ghost -ws`.\n' >"$str_proj/README.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a selector at the end of a command is skipped" 0 "$?"
 printf 'Run `npm run build`.\n' >"$str_proj/README.md"
 
 if [ "$(id -u)" -ne 0 ]; then
