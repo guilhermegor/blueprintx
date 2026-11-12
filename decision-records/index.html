@@ -5175,6 +5175,20 @@ instead of listing them. The marker is the record: each page stays visible in ev
 summary until someone translates it and removes the marker, and from then on that page is
 checked. The <code>test_main_all_pages_skipped_does_not_report_success</code> unit test pins the ⚠️
 line.</p>
+<h2 id="a-renamed-test-is-paired-not-read-as-a-deletion-gate_renamepy-1073">A renamed test is paired, not read as a deletion (<code>gate_rename.py</code>, #1073)<a class="headerlink" href="#a-renamed-test-is-paired-not-read-as-a-deletion-gate_renamepy-1073" title="Permanent link">&para;</a></h2>
+<p><code>check_assertion_weakening.py</code> and <code>check_gate_integrity.py</code> key tests by function name, so
+renaming <code>test_has_six_pages</code> to <code>test_has_seven_pages</code> used to report a deletion. <code>gate_rename.py</code>
+pairs a removed name with an added one in the same file when the names are at least 0.8 similar
+AND the body statements are at least 0.6 similar (statement lists, docstring excluded; two
+empty bodies never pair). A paired rename is judged under its new name by both gates.</p>
+<p>Scope, stated so it is not mistaken for more: a rename that also edits a literal in a short
+test (one changed statement out of one or two) does not clear the body threshold. It stays a
+finding, but the message now names the probable target (<code>possible rename to '&lt;new&gt;', bodies
+differ</code>), so the human sees what to confirm instead of a bare deletion. Loosening the body
+threshold would let <code>v1</code> replaced by an unrelated <code>v2</code> pass, which is the deletion the gates
+exist to catch. Because a pair also suppresses the deletion finding, a rename that drops some
+statements but keeps 0.6 of them is accepted by the integrity gate; lost assertions are still
+counted by the weakening gate, so the two gates are meant to run together.</p>
 
 
 
