@@ -12,7 +12,7 @@ pins_every_release() {
 		BEGIN { use_re = ENVIRON["USE_RE"]; pin_re = ENVIRON["PIN_RE"] }
 		$0 ~ use_re { if (pending) bad = 1; pending = 1; inwith = 0; uses++; col = indent() - ($0 ~ /^[[:space:]]*-/ ? 0 : 2); next }
 		pending && NF && !/^[[:space:]]*#/ && indent() <= col { bad = 1; pending = 0 }
-		pending && /^[[:space:]]*with:[[:space:]]*$/ { inwith = 1; kcol = -1; wcol = indent(); next }
+		pending && /^[[:space:]]*with:[[:space:]]*$/ && indent() == col + 2 { inwith = 1; kcol = -1; wcol = indent(); next }
 		pending && inwith && NF && !/^[[:space:]]*#/ && indent() <= wcol { inwith = 0 }
 		pending && inwith && kcol < 0 && NF && !/^[[:space:]]*#/ { kcol = indent() }
 		pending && inwith && indent() == kcol && $0 ~ pin_re { pending = 0 }
@@ -96,7 +96,11 @@ $str_pin
 $str_use" reject
 expect_witness "pin text inside a block scalar" "$str_use
           body: |
-  $str_pin" reject
+    $str_pin" reject
+expect_witness "nested with inside a block scalar" "$str_use
+          body: |
+            with:
+    $str_pin" reject
 expect_witness "pin with a trailing suffix" "$str_use
 $str_pin-rc" reject
 expect_witness "pinned step" "$str_use
