@@ -26,9 +26,22 @@ meta_field() {
     grep "^$2=" "$1" | cut -d= -f2-
 }
 
+strip_inline_comment() {
+    awk '{
+        str_q = ""
+        for (int_i = 1; int_i <= length($0); int_i++) {
+            str_c = substr($0, int_i, 1)
+            if (str_q != "") { if (str_c == str_q) str_q = ""; continue }
+            if (str_c == "\"" || str_c == "\047") { str_q = str_c; continue }
+            if (str_c == "#" && (int_i == 1 || substr($0, int_i - 1, 1) ~ /[ \t]/)) { $0 = substr($0, 1, int_i - 1); break }
+        }
+        print
+    }'
+}
+
 nav_pages() {
     awk '/^nav:/ { in_nav = 1; next } /^[A-Za-z_]/ { in_nav = 0 } in_nav' "$1" \
-        | sed -E 's/[[:space:]]+#.*$//' \
+        | strip_inline_comment \
         | { grep -vE '^[[:space:]]*#|^[[:space:]]*-?[[:space:]]*[^:]*:[[:space:]]*https?://' || true; } \
         | { grep -oE '[A-Za-z0-9_./-]+\.md' || true; } | sort -u
 }
@@ -41,7 +54,7 @@ docs_dir() {
 
 script_refs() {
     { grep -hvE '^[[:space:]]*#' "$@" || true; } \
-        | sed -E 's/[[:space:]]+#.*$//' \
+        | strip_inline_comment \
         | { grep -oE '(^|[ "'\''=(;&`[:space:]])(\./)?bin/[A-Za-z0-9_./-]+\.(sh|py)' || true; } \
         | sed -E 's#^[ "'\''=(;&`[:space:]]+##; s#^\./##' | sort -u
 }
