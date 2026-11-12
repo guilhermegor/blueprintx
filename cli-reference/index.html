@@ -2998,6 +2998,18 @@ ignore the locale (every one without an <code>mkdocs.yml</code>: <code>ts-lib</c
 <p>Create <code>templates/&lt;name&gt;/</code> with a <code>skeleton.meta</code>, write a scaffold script under
 <code>bin/scaffold/</code>, and the menu updates automatically — no change to <code>blueprintx.sh</code>. See
 <a href="../contributing/">Contributing</a>.</p>
+<p>Besides <code>language</code>, <code>display_name</code>, <code>description</code> and <code>scaffold</code>, every <code>skeleton.meta</code>
+must carry <code>ships_docs=true</code> or <code>ships_docs=false</code>: whether the generated project ships a
+documentation site. The key names the fact for any documentation engine (MkDocs or
+Docusaurus), so a future consumer such as a docs-locale gate can read it instead of
+guessing from the presence of <code>mkdocs.yml</code>; no consumer acts on it yet.
+<code>bin/ci/validate_meta.sh</code> rejects a missing key, any value but exactly <code>true</code> or <code>false</code>,
+and a value that disagrees with whether the scaffold script references a docs config on a
+non-comment line. That grep is static: a docs site shipped through a sourced helper or a
+whole-directory copy is not seen, so the script must name the file, and a non-comment
+mention that only deletes or excludes the file (<code>rm -f mkdocs.yml</code>) still counts as
+shipping it. A duplicate key is rejected rather than resolved. Unlike <code>readme_archetype</code>,
+the value is not whitespace-trimmed, so a trailing space or CRLF line ending is an error.</p>
 
 
 
