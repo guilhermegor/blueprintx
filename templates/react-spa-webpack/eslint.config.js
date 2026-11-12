@@ -17,19 +17,21 @@ const skipIssue = {
       meta: {
         type: 'problem',
         schema: [],
-        messages: { missing: 'A disabled or focused test rule needs an issue reference, e.g. `-- #123`.' },
+        messages: { missing: 'Disable a test rule only with -next-line or -line and an issue, e.g. `-- #123`; never for a focused test.' },
       },
       create: (context) => ({
         Program: () => {
           context.sourceCode
             .getAllComments()
-            .map((c) => [c, /^\s*eslint-disable(?:-next-line|-line)?(?:\s([\s\S]*))?$/.exec(c.value)])
-            .filter(([c, m]) => m
-              ? /^$|jest\/no-(?:disabled|focused)-tests/.test(
-                (m[1] ?? '').split(/(?:^|\s)-{2,}(?:\s|$)/)[0].trim())
-              : /^\s*eslint\s[^]*jest\/no-(?:disabled|focused)-tests/.test(c.value))
-            .map(([c]) => c)
-            .filter((c) => !/#\d+/.test(c.value))
+            .filter((c) => {
+              const d = /^\s*eslint-disable(-next-line|-line)?(?:\s([\s\S]*))?$/.exec(c.value);
+              if (!d) {
+                return c.type === 'Block' && /^\s*eslint\s[^]*jest\/no-(?:disabled|focused)-tests/.test(c.value);
+              }
+              const rules = (d[2] ?? '').split(/(?:^|\s)-{2,}(?:\s|$)/)[0].trim();
+              const hasIssue = d[1] && /#\d+/.test(c.value);
+              return /no-focused-tests/.test(rules) || (/^$|no-disabled-tests/.test(rules) && !hasIssue);
+            })
             .forEach((c) => context.report({ loc: c.loc, messageId: 'missing' }));
         },
       }),
