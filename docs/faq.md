@@ -349,7 +349,7 @@ no gate noticed. Each scaffold keeps its own copy list, and the lists drift apar
 `bin/ci/check_generated_references.sh --generated` scaffolds every skeleton found through
 `templates/*/skeleton.meta` and fails when a `mkdocs.yml` nav page is missing under its `docs_dir`, or
 a `bin/*.sh` / `bin/*.py` path named in `poe_tasks.toml`, `.pre-commit-config.yaml`,
-`package.json`, `Makefile`, `make/*.mk`, a workflow or a composite action is missing from the
+`package.json`, `.vscode/tasks.json`, `Makefile`, `make/*.mk`, a workflow or a composite action is missing from the
 tree. A project from which no reference can be extracted fails, so a broken extractor is red.
 Only the default-answer scaffold is checked, so online-only and locale variants are not.
 `--project <dir>` checks one tree.
