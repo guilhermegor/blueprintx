@@ -239,7 +239,62 @@ process_python_files() {
 	return 1
 }
 
+list_open_trackers() {
+	gh issue list --label docstring-urls --state open --limit 100 \
+		--json number --jq 'sort_by(.number) | .[].number'
+}
+
+track_dead_urls() {
+	local str_report="$1"
+	local str_pattern='URL (issue|problem)|Failed to access URL'
+	local str_marker='<!-- docstring-urls-tracker -->'
+	local str_body="docstring_urls_body.md" str_open="" str_existing int_num
+
+	if ! grep -qE "$str_pattern" "$str_report"; then
+		if ! grep -qF 'All docstring URLs are reachable' "$str_report"; then
+			echo "::error::Docstring URL scan produced no verdict."
+			cat "$str_report"
+			return 1
+		fi
+		echo "No dead docstring URLs."
+		str_open=$(list_open_trackers) || {
+			echo "::warning::Could not list open docstring-urls issues; stale trackers stay open."
+			str_open=""
+		}
+		for int_num in $str_open; do
+			gh issue close "$int_num" --comment "All docstring URLs are reachable again." ||
+				echo "::warning::Could not close #${int_num}; the next scan retries."
+		done
+		return 0
+	fi
+
+	gh label create docstring-urls --color fbca04 \
+		--description "A docstring URL no longer resolves" --force || true
+	{
+		printf '%s\n\nDead docstring URLs (status, file, line):\n\n```\n' "$str_marker"
+		grep -E "$str_pattern" "$str_report"
+		printf '```\n'
+	} >"$str_body"
+	str_open=$(list_open_trackers)
+	str_existing=${str_open%%$'\n'*}
+	if [[ -z "$str_existing" ]]; then
+		gh issue create --title "Dead docstring URLs" \
+			--label docstring-urls --body-file "$str_body"
+		return 0
+	fi
+	gh issue comment "$str_existing" --body-file "$str_body"
+	for int_num in $str_open; do
+		[[ "$int_num" == "$str_existing" ]] || gh issue close "$int_num" --reason "not planned" \
+			--comment "Duplicate of #${str_existing}." ||
+			echo "::warning::Could not close duplicate #${int_num}; the next scan retries."
+	done
+}
+
 main() {
+	if [[ "${1:-}" == "--track" ]]; then
+		track_dead_urls "${2:?--track needs the report file}"
+		return
+	fi
 	if ! mkdir -p "$CACHE_DIR" 2>/dev/null || [[ ! -w "$CACHE_DIR" ]]; then
 		CACHE_DIR="$(mktemp -d)"
 		trap 'rm -rf "$CACHE_DIR"' EXIT

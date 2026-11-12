@@ -83,6 +83,8 @@ expect_extra "make/*.mk reference to a missing script fails" fail make/x.mk $'a:
 expect_extra "composite action reference to a missing script fails" fail .github/actions/x/action.yml 'run: bash bin/nope.sh'
 expect_extra ".yaml workflow reference to a missing script fails" fail .github/workflows/y.yaml 'run: bash bin/nope.sh'
 expect_extra "Makefile recipe tab form is scanned" fail Makefile $'a:\n\tbin/nope.sh\n'
+expect_extra "inline comment naming a missing script is ignored" pass poe_tasks.toml $'[tool.poe.tasks.a]\ncmd = "bash bin/a.sh" # replaces bin/old.sh\n'
+expect_extra "URL in a nav inline comment does not hide a missing page" fail mkdocs.yml $'nav:\n  - Incidents: gone.md # https://example.com/x\n' gone.md
 expect_extra "commented-out reference is ignored" pass Makefile $'# bin/nope.sh\n'
 expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n' site/index.md
 expect_extra ".vscode/tasks.json reference to a missing script is scanned" fail .vscode/tasks.json '{"command":"bash bin/nope.sh"}'

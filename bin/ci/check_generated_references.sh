@@ -28,7 +28,8 @@ meta_field() {
 
 nav_pages() {
     awk '/^nav:/ { in_nav = 1; next } /^[A-Za-z_]/ { in_nav = 0 } in_nav' "$1" \
-        | { grep -vE '^[[:space:]]*#|https?://' || true; } \
+        | sed -E 's/[[:space:]]+#.*$//' \
+        | { grep -vE '^[[:space:]]*#|^[[:space:]]*-?[[:space:]]*[^:]*:[[:space:]]*https?://' || true; } \
         | { grep -oE '[A-Za-z0-9_./-]+\.md' || true; } | sort -u
 }
 
@@ -40,6 +41,7 @@ docs_dir() {
 
 script_refs() {
     { grep -hvE '^[[:space:]]*#' "$@" || true; } \
+        | sed -E 's/[[:space:]]+#.*$//' \
         | { grep -oE '(^|[ "'\''=(;&`[:space:]])(\./)?bin/[A-Za-z0-9_./-]+\.(sh|py)' || true; } \
         | sed -E 's#^[ "'\''=(;&`[:space:]]+##; s#^\./##' | sort -u
 }

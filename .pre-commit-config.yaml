@@ -309,6 +309,13 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/(scaffold_lint_test|check_review_config_shipped)\.sh|bin/lib/no_background_git\.sh|tests/test_scaffold_lint_test_cleanup\.sh)$
 
+      - id: check-final-tree-tests
+        name: check_final_tree.sh should-fail tests (blueprintx#1077)
+        entry: bash tests/test_check_final_tree.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/check_final_tree\.sh|tests/test_check_final_tree\.sh)$
+
       - id: spec-answers-tests
         name: --spec regression tests (blueprintx#629)
         entry: bash tests/test_spec_answers.sh
