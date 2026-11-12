@@ -31,6 +31,9 @@ expect "Refs-only body does not close the branch issue" "fix/1123-x" "Refs #1123
 expect "Refs plus Closes for the same number closes" "fix/1123-x" $'Refs #1123\nCloses #1123' "1123"
 expect "Refs of another number keeps the branch issue" "fix/1123-x" "Refs #5" "1123"
 expect "Refs-only still honours other Closes" "fix/1123-x" $'Refs #1123\nCloses #7' "7"
+expect "Refs mid-sentence still opts out" "fix/1123-x" "this work refs #1123" ""
+expect "Refs after prose and a newline" "fix/1123-x" $'Some prose.\nRefs #1123' ""
+expect "Refs with a colon" "fix/1123-x" "Refs: #1123" ""
 expect "leading zeros normalised" "fix/007-x" "" "7"
 
 expect "hotfix #5 is not a keyword" "chore/x" "hotfix #5" ""

@@ -57,7 +57,7 @@ issues_from_body() {
 
 refs_from_body() {
 	printf '%s\n' "$1" | strip_non_prose | tr '\n' ' ' | tr '[:upper:]' '[:lower:]' \
-		| { grep -owE '(^|[^[:alnum:]_])refs?:?[[:space:]]+#[0-9]+' || true; } \
+		| { grep -oE '(^|[^[:alnum:]_])refs?:?[[:space:]]+#[0-9]+' || true; } \
 		| { grep -oE '[0-9]+$' || true; } | sed -E 's/^0+//'
 }
 
