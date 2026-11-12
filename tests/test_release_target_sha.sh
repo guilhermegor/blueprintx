@@ -4,7 +4,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 str_use_re='^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*["'"'"']?softprops/action-gh-release'
-str_pin_re='^[[:space:]]+target_commitish:[[:space:]]*["'"'"']?\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}'
+str_pin_re='^[[:space:]]+target_commitish:[[:space:]]*["'"'"']?\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}[[:space:]]*["'"'"']?[[:space:]]*(#.*)?$'
 
 pins_every_release() {
 	USE_RE="$str_use_re" PIN_RE="$str_pin_re" awk '
@@ -12,9 +12,10 @@ pins_every_release() {
 		BEGIN { use_re = ENVIRON["USE_RE"]; pin_re = ENVIRON["PIN_RE"] }
 		$0 ~ use_re { if (pending) bad = 1; pending = 1; inwith = 0; uses++; col = indent() - ($0 ~ /^[[:space:]]*-/ ? 0 : 2); next }
 		pending && NF && !/^[[:space:]]*#/ && indent() <= col { bad = 1; pending = 0 }
-		pending && /^[[:space:]]*with:[[:space:]]*$/ { inwith = 1; wcol = indent(); next }
+		pending && /^[[:space:]]*with:[[:space:]]*$/ { inwith = 1; kcol = -1; wcol = indent(); next }
 		pending && inwith && NF && !/^[[:space:]]*#/ && indent() <= wcol { inwith = 0 }
-		pending && inwith && $0 ~ pin_re { pending = 0 }
+		pending && inwith && kcol < 0 && NF && !/^[[:space:]]*#/ { kcol = indent() }
+		pending && inwith && indent() == kcol && $0 ~ pin_re { pending = 0 }
 		END { exit !(uses > 0 && !pending && !bad) }
 	' "$1"
 }
@@ -93,6 +94,11 @@ expect_witness "double pin hides an unpinned step" "$str_use
 $str_pin
 $str_pin
 $str_use" reject
+expect_witness "pin text inside a block scalar" "$str_use
+          body: |
+  $str_pin" reject
+expect_witness "pin with a trailing suffix" "$str_use
+$str_pin-rc" reject
 expect_witness "pinned step" "$str_use
 $str_pin" accept
 expect_witness "quoted pin" "$str_use
