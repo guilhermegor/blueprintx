@@ -195,7 +195,7 @@ test suite keep the contract; this section records the reasoning that lived besi
     `importlib` / `__getattr__`, a method called through its class with another object
     (`A.f(me)`, `types.MethodType(A.f, me)()`, `A.f.__get__(me)()`), a `staticmethod` rebound after
     the def (`f = staticmethod(f)`; `@sm` and `@wrapper(staticmethod)` are charged), a writer re-exported by a first-party module
-    (`from ._compat import exec_ as run`), a plain attribute store on a module alias (`me.Priv = 1`, `me.__dict__["Priv"] = 1`, `me.__dict__.update(...)`), a module written through `__setattr__` (`object.__setattr__(me, "Priv", 1)`; not a charged writer, since `super().__setattr__` is routine in frozen classes), a safe-set decorator name that is not the real one (a local `def setter(fn): fn(me)` used as `@setter`; the set is matched by name, not by origin), a writer reached through a
+    (`from ._compat import exec_ as run`), a plain attribute store on a module alias (`me.Priv = 1`, `me.__dict__["Priv"] = 1`, `me.__dict__.update(...)`), a module written through `__setattr__` (`object.__setattr__(me, "Priv", 1)`; not a charged writer, since `super().__setattr__` is routine in frozen classes), a safe-set decorator name that is not the real one when the module does not define that name itself at module level (a local `def setter(fn): fn(me)` used as `@setter`; the set is matched by name, not by origin, so a module-level def, class, assignment, loop, `with`, walrus, `except ... as`, `match` or `global` binding of `property`, `classmethod` or of the `abc`/`typing`/`typing_extensions`/`functools`/`builtins` module it hangs on loses the exemption, but an import alias such as `from ._compat import classmethod` or `import mylib as abc`, and a rebinding inside a class body, do not), a writer reached through a
     string constant (`getattr(builtins, "exec")(...)`, `getattr(sys, "modules")`,
     `__builtins__["exec"]`), and an absolute import of another top-level
     package.
@@ -2388,3 +2388,20 @@ instead of listing them. The marker is the record: each page stays visible in ev
 summary until someone translates it and removes the marker, and from then on that page is
 checked. The `test_main_all_pages_skipped_does_not_report_success` unit test pins the ⚠️
 line.
+
+## A renamed test is paired, not read as a deletion (`gate_rename.py`, #1073)
+
+`check_assertion_weakening.py` and `check_gate_integrity.py` key tests by function name, so
+renaming `test_has_six_pages` to `test_has_seven_pages` used to report a deletion. `gate_rename.py`
+pairs a removed name with an added one in the same file when the names are at least 0.8 similar
+AND the body statements are at least 0.6 similar (statement lists, docstring excluded; two
+empty bodies never pair). A paired rename is judged under its new name by both gates.
+
+Scope, stated so it is not mistaken for more: a rename that also edits a literal in a short
+test (one changed statement out of one or two) does not clear the body threshold. It stays a
+finding, but the message now names the probable target (`possible rename to '<new>', bodies
+differ`), so the human sees what to confirm instead of a bare deletion. Loosening the body
+threshold would let `v1` replaced by an unrelated `v2` pass, which is the deletion the gates
+exist to catch. Because a pair also suppresses the deletion finding, a rename that drops some
+statements but keeps 0.6 of them is accepted by the integrity gate; lost assertions are still
+counted by the weakening gate, so the two gates are meant to run together.

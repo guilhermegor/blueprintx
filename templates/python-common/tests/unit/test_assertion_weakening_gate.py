@@ -117,6 +117,20 @@ def test_a_deleted_test_function_is_reported(str_fragment: str) -> None:
     )
 
 
+def test_a_renamed_test_with_the_same_assertions_is_clean() -> None:
+    """Renaming ``..._six_...`` to ``..._seven_...`` is not a deletion (#1073)."""
+    str_old = "def test_has_six_required_pages() -> None:\n\tassert 1 == 1\n"
+    str_new = "def test_has_seven_required_pages() -> None:\n\tassert 1 == 1\n"
+    assert _findings(str_old, str_new) == []
+
+
+def test_a_renamed_test_that_lost_an_assertion_is_still_reported() -> None:
+    """NEGATIVE CONTROL: a rename does not launder a weakened body."""
+    str_old = "def test_has_six_required_pages() -> None:\n\tassert 1 == 1\n\tassert 2 == 2\n"
+    str_new = "def test_has_seven_required_pages() -> None:\n\tassert 1 == 1\n"
+    assert "lost 1 assertion" in _sole_finding(str_old, str_new)
+
+
 def test_an_unrelated_new_test_alongside_the_old_one_is_clean() -> None:
     """Adding a sibling test while keeping the original one intact is not a finding."""
     str_old = "def test_x() -> None:\n\tassert 1 == 1\n"

@@ -481,6 +481,8 @@ copy_mkdocs_templates() {
         "$project_path/docs/contributing.md"
     cp "$COMMON_TEMPLATE_ROOT/docs/changelog.md" \
         "$project_path/docs/changelog.md"
+    cp "$COMMON_TEMPLATE_ROOT/docs/incidents.md" \
+        "$project_path/docs/incidents.md"
     cp "$SHARED_TEMPLATE_ROOT/docs/releasing-1-0-0.md" \
         "$project_path/docs/releasing-1-0-0.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
