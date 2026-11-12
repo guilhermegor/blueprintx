@@ -23,7 +23,9 @@ const skipIssue = {
         Program: () => {
           context.sourceCode
             .getAllComments()
-            .filter((c) => /eslint-disable[\s\S]*jest\/no-disabled-tests/.test(c.value))
+            .map((c) => [c, /^\s*eslint-disable(?:-next-line|-line)?\s([\s\S]*)$/.exec(c.value)])
+            .filter(([, m]) => m && /jest\/no-disabled-tests/.test(m[1].split(/\s-{2,}\s/)[0]))
+            .map(([c]) => c)
             .filter((c) => !/#\d+/.test(c.value))
             .forEach((c) => context.report({ loc: c.loc, messageId: 'missing' }));
         },
