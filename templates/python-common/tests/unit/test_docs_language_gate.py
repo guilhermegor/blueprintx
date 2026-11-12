@@ -529,6 +529,7 @@ def test_main_prose_after_a_definition_title_is_still_scored(tmp_path: Path) -> 
     [
         "\nx <y " + STR_PT.strip() + " -> fim\n",
         "\n[Nota]: " + STR_PT,
+        '\nx <a title="\n\n' + STR_PT + '\n\n">fim\n',
     ],
 )
 def test_main_prose_shaped_like_a_tag_or_definition_is_still_scored(
