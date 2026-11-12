@@ -302,6 +302,9 @@ jobs:
       - name: Should-fail regression tests
         run: bash tests/test_check_workflow_names.sh
 
+      - name: Release tag targets the built SHA
+        run: bash tests/test_release_target_sha.sh
+
   secret-scan:
     name: GitGuardian — secret scan
     runs-on: ubuntu-latest

@@ -120,6 +120,13 @@ repos:
         pass_filenames: false
         files: ^(templates/.*\.github/workflows/|bin/ci/check_workflow_names\.sh|tests/test_check_workflow_names\.sh)
 
+      - id: release-target-sha
+        name: release tag targets the built SHA (blueprintx#1065)
+        entry: bash tests/test_release_target_sha.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/.*\.ya?ml$|tests/test_release_target_sha\.sh)
+
       - id: docs-gap
         name: docs gap (published pages registered in mkdocs nav + docs/CLAUDE.md index, blueprintx#340)
         entry: python templates/python-common/bin/check_docs_gap.py --root .
