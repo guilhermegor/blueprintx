@@ -49,7 +49,7 @@ while IFS= read -r str_doc; do
 			echo "check_doc_commands: $str_doc documents 'npm run $str_name' but package.json has no such script" >&2
 			int_fail=1
 		fi
-	done < <(grep -v 'doc-commands:optional' "$str_doc" | perl -pe 's/npm run(?= +(?:(?!npm run)(?:[^- ][^ ]*|-[^- ][^ ]*|--[^ ]+) +)*?(?:-w|--workspaces?|--prefix)(?:[ =]|\$))//g' | grep -oE '(^|[^[:alnum:]])npm run( +--loglevel +[^ ]+| +--?[A-Za-z][A-Za-z-]*(=[^ ]*)?)* +[A-Za-z0-9]([A-Za-z0-9:._-]*[A-Za-z0-9])?' | sort -u || true)
+	done < <(grep -v 'doc-commands:optional' "$str_doc" | perl -pe 's/npm run(?= +(?:(?!npm run)(?:[^- `][^ `]*|-[^- `][^ `]*|--[^ `]+) +)*?(?:-w|--workspaces?|--prefix)(?:[ =]|\$))//g' | grep -oE '(^|[^[:alnum:]])npm run( +--loglevel +[^ ]+| +--?[A-Za-z][A-Za-z-]*(=[^ ]*)?)* +[A-Za-z0-9]([A-Za-z0-9:._-]*[A-Za-z0-9])?' | sort -u || true)
 done <<<"$str_docs"
 
 exit "$int_fail"

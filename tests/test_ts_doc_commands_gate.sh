@@ -132,6 +132,12 @@ expect "a workspace selector after the script name is skipped" 0 "$?"
 printf 'Run `npm run ghost -- -w app` and `npm run build -w app`.\n' >"$str_proj/README.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "a workspace command does not hide a root command on the same line" 1 "$?"
+printf 'Run `npm run ghost` and `npm run build -w app`.\n' >"$str_proj/README.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a selector in the next backticked command does not exempt this one" 1 "$?"
+printf 'Run `npm run ghost -w app` and `npm run build -w app`.\n' >"$str_proj/README.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "two backticked commands each with their own selector are skipped" 0 "$?"
 printf 'Run `npm run build`.\n' >"$str_proj/README.md"
 
 if [ "$(id -u)" -ne 0 ]; then
