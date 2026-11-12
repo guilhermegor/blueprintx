@@ -64,6 +64,8 @@ def _load(str_name: str) -> ModuleType:
 
 gate = _load("check_gate_integrity")
 gate_env = sys.modules["gate_env"]
+gate_rename = _load("gate_rename")
+weakening = _load("check_assertion_weakening")
 
 
 def _local_shell(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -569,9 +571,6 @@ def test_gate_env_headless_runner_with_pre_commit_is_ci(monkeypatch: pytest.Monk
     assert gate_env.is_ci() is True
 
 
-gate_rename = _load("gate_rename")
-weakening = _load("check_assertion_weakening")
-
 _STR_RENAME_OLD = "def test_rejects_negative_amounts() -> None:\n    assert f() == 1\n"
 _STR_RENAME_OTHER = (
     "def test_rejects_negative_dates() -> None:\n"
@@ -684,6 +683,25 @@ def test_a_rename_that_also_edits_a_literal_is_a_hinted_deletion() -> None:
         "x: test 'test_has_six_pages' deleted"
         " (possible rename to 'test_has_seven_pages', bodies differ)"
     ]
+
+
+def test_a_docstring_only_test_is_never_paired() -> None:
+    """NEGATIVE CONTROL: two bodies with no statements are not evidence of a rename."""
+    str_src = 'def test_a_{s}() -> None:\n    """Doc."""\n'
+    dict_old = gate.test_functions(str_src.format(s="v1"))
+    dict_new = gate.test_functions(str_src.format(s="v2"))
+    assert gate_rename.rename_pairs(dict_old, dict_new) == {}
+
+
+def test_a_docstring_does_not_count_as_a_statement_when_pairing() -> None:
+    """A renamed test that also gained a docstring still pairs on its real statements."""
+    dict_old = gate.test_functions("def test_has_six_pages() -> None:\n    assert count() == 6\n")
+    dict_new = gate.test_functions(
+        'def test_has_seven_pages() -> None:\n    """Doc."""\n    assert count() == 6\n'
+    )
+    assert gate_rename.rename_pairs(dict_old, dict_new) == {
+        "test_has_six_pages": "test_has_seven_pages"
+    }
 
 
 def test_a_renamed_test_newly_marked_skip_is_detected() -> None:

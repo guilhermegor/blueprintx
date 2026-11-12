@@ -26,7 +26,7 @@ def _ratio(str_a: str, str_b: str) -> float:
     return difflib.SequenceMatcher(None, str_a, str_b).ratio()
 
 
-def _statements(cls_func: ast.FunctionDef) -> list:
+def _statements(cls_func: ast.FunctionDef | ast.AsyncFunctionDef) -> list:
     """Return the source text of each body statement, docstring excluded.
 
     Parameters
@@ -79,6 +79,8 @@ def rename_pairs(dict_removed: dict, dict_added: dict) -> dict:
             break
         if str_old in dict_pairs or str_new in set_used:
             continue
+        if not dict_stmts[str_old] or not dict_stmts[str_new]:
+            continue
         cls_matcher = difflib.SequenceMatcher(
             None, dict_stmts[str_old], dict_stmts[str_new], autojunk=False
         )
@@ -103,7 +105,8 @@ def deleted_message(str_shown: str, str_name: str, list_unpaired_added: list) ->
     Returns
     -------
     str
-        ``<path>: test '<name>' deleted``, plus ``(possible rename of ...)`` when an unpaired
+        ``<path>: test '<name>' deleted``, plus ``(possible rename to '<new>', bodies differ)``
+        when an unpaired
         added name is at least as similar as a rename needs. It stays a finding: the bodies
         differ too much to prove the rename, so a human judges it.
     """
