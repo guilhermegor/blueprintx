@@ -10,7 +10,7 @@ sibling contracts: confirming one member of a batch does not confirm the rest.
 **Why blocking, not advisory.** A source chosen silently poisons every column downstream, and
 the reader stays perfectly self-consistent with the wrong document — the suite goes green
 while the data is wrong, discovered only far from where the choice was made. Measured in
-filings-b3: the owner had to interrupt mid-implementation, after **8 readers + 8 contracts**
+opendata-b3: the owner had to interrupt mid-implementation, after **8 readers + 8 contracts**
 were already derived from a document nobody had confirmed.
 
 **Not decidable by a gate.** "Is this the right document" is a judgment call the owner makes,
