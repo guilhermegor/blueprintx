@@ -93,3 +93,16 @@ Only MkDocs skeletons consume the value today; `ts-lib` (Docusaurus), `react-spa
 Create `templates/<name>/` with a `skeleton.meta`, write a scaffold script under
 `bin/scaffold/`, and the menu updates automatically — no change to `blueprintx.sh`. See
 [Contributing](contributing.md).
+
+Besides `language`, `display_name`, `description` and `scaffold`, every `skeleton.meta`
+must carry `ships_docs=true` or `ships_docs=false`: whether the generated project ships a
+documentation site. The key names the fact for any documentation engine (MkDocs or
+Docusaurus), so a future consumer such as a docs-locale gate can read it instead of
+guessing from the presence of `mkdocs.yml`; no consumer acts on it yet.
+`bin/ci/validate_meta.sh` rejects a missing key, any value but exactly `true` or `false`,
+and a value that disagrees with whether the scaffold script references a docs config on a
+non-comment line. That grep is static: a docs site shipped through a sourced helper or a
+whole-directory copy is not seen, so the script must name the file, and a non-comment
+mention that only deletes or excludes the file (`rm -f mkdocs.yml`) still counts as
+shipping it. A duplicate key is rejected rather than resolved. Unlike `readme_archetype`,
+the value is not whitespace-trimmed, so a trailing space or CRLF line ending is an error.
