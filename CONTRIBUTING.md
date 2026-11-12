@@ -1332,7 +1332,7 @@ either layout (blueprintx#360). A few modules stub the metaclass shape instead o
   zipping fails, with the path expanded into the trap at definition time.
 - **`close_linked_issues.sh`** (blueprintx#604) is strict because a wrong closure is worse than
   a missed one: a number is taken only from a leading `<type>/<N>-<slug>` branch or from
-  `Closes|Fixes|Resolves #N`, with a date-like prefix (`2026-10`) not read as an issue, negated
+  `Closes|Fixes|Resolves #N` (a branch number the body names only as `Refs #N` is not closed, blueprintx#1123), with a date-like prefix (`2026-10`) not read as an issue, negated
   uses skipped, fenced code, quotes, HTML comments and inline code ignored, and bot branches
   skipped because their bodies quote another repository's notes. The workflow cannot close
   anything from a fork PR (read-only token) or a PR merged into a non-default branch, and it
