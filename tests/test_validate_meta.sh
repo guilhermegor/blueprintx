@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$REPO_ROOT/bin/lib/common.sh"
 
-REQUIRED_FIELDS=(language display_name description scaffold)
+REQUIRED_FIELDS=(language display_name description scaffold ships_docs)
 int_failures=0
 
 base_value() {
@@ -15,6 +15,7 @@ base_value() {
         display_name) echo "Fake Skeleton" ;;
         description) echo "A fake skeleton for testing" ;;
         scaffold) echo "bin/scaffold/fake.sh" ;;
+        ships_docs) echo "false" ;;
     esac
 }
 
@@ -63,7 +64,8 @@ test_valid_meta_passes() {
         "language=$(base_value language)" \
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)"
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)"
     expect_gate "a fully valid skeleton.meta" "$str_root" "pass"
 }
 
@@ -125,10 +127,66 @@ test_skeleton_not_documented_in_claude_md() {
         "language=$(base_value language)" \
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)"
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)"
     printf '# CLAUDE.md\n\nNothing about this skeleton here.\n' > "$str_root/CLAUDE.md"
     expect_gate "skeleton undocumented in CLAUDE.md" "$str_root" "fail" \
         "skeleton 'fake-skeleton' is not mentioned in CLAUDE.md"
+}
+
+run_ships_docs_case() {
+    local str_label="$1" str_value="$2" str_script="$3" str_expect="$4" str_needle="${5:-}" str_root
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    printf '%s\n' "$str_script" > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$str_value"
+    expect_gate "$str_label" "$str_root" "$str_expect" "$str_needle"
+}
+
+test_ships_docs_values() {
+    run_ships_docs_case "ships_docs outside true/false" "maybe" "" fail \
+        "ships_docs maybe must be exactly true or false"
+    run_ships_docs_case "ships_docs capitalized" "True" "" fail "must be exactly true or false"
+    run_ships_docs_case "whitespace-padded ships_docs" " true" "" fail \
+        "must be exactly true or false"
+    run_ships_docs_case "ships_docs=false" "false" "" pass
+    run_ships_docs_case "CRLF-terminated ships_docs" $'true\r' "" fail \
+        "must be exactly true or false"
+}
+
+test_ships_docs_matches_scaffold() {
+    local str_cp='cp mkdocs.yml "$project_path"'
+    run_ships_docs_case "true without a docs config" "true" "" fail \
+        "ships_docs=true but the scaffold script implies false"
+    run_ships_docs_case "true with a docs config" "true" "$str_cp" pass
+    run_ships_docs_case "false with a docs config" "false" "$str_cp" fail \
+        "ships_docs=false but the scaffold script implies true"
+    run_ships_docs_case "true with a comment-only mention" "true" "# copy mkdocs.yml later" fail \
+        "ships_docs=true but the scaffold script implies false"
+    run_ships_docs_case "true with a docusaurus config" "true" 'cp docusaurus.config.js "$dst"' pass
+    run_ships_docs_case "false with a trailing-comment mention" "false" \
+        'cp foo "$dst"  # not mkdocs.yml' pass
+}
+
+test_ships_docs_duplicate_key() {
+    local str_root
+    str_root="$(make_sandbox)"
+    mkdir -p "$str_root/bin/scaffold"
+    : > "$str_root/bin/scaffold/fake.sh"
+    write_meta "$str_root" \
+        "language=$(base_value language)" \
+        "display_name=$(base_value display_name)" \
+        "description=$(base_value description)" \
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=false" \
+        "ships_docs=true"
+    expect_gate "ships_docs declared twice" "$str_root" "fail" \
+        "ships_docs is declared more than once"
 }
 
 test_readme_archetype() {
@@ -142,6 +200,7 @@ test_readme_archetype() {
             "display_name=$(base_value display_name)" \
             "description=$(base_value description)" \
             "scaffold=$(base_value scaffold)" \
+            "ships_docs=$(base_value ships_docs)" \
             "readme_archetype=$str_value"
         expect_gate "readme_archetype=$str_value" "$str_root" "pass"
     done
@@ -153,6 +212,7 @@ test_readme_archetype() {
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
         "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)" \
         "readme_archetype=monolith"
     expect_gate "readme_archetype outside the allowed set" "$str_root" "fail" \
         "readme_archetype 'monolith' is not one of"
@@ -167,7 +227,8 @@ test_assertion_weakening_gate() {
         "language=cobol" \
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)"
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)"
     expect_gate "a language with no assertion-weakening gate" "$str_root" "fail" \
         "language 'cobol' ships no assertion-weakening gate"
     str_root="$(make_sandbox)"
@@ -178,7 +239,8 @@ test_assertion_weakening_gate() {
         "language=$(base_value language)" \
         "display_name=$(base_value display_name)" \
         "description=$(base_value description)" \
-        "scaffold=$(base_value scaffold)"
+        "scaffold=$(base_value scaffold)" \
+        "ships_docs=$(base_value ships_docs)"
     expect_gate "a python template whose gate file is gone" "$str_root" "fail" \
         "assertion-weakening gate missing: templates/python-common/bin/check_assertion_weakening.py"
 }
@@ -189,6 +251,9 @@ main() {
     test_empty_value
     test_missing_scaffold_path
     test_skeleton_not_documented_in_claude_md
+    test_ships_docs_values
+    test_ships_docs_matches_scaffold
+    test_ships_docs_duplicate_key
     test_readme_archetype
     test_assertion_weakening_gate
 

@@ -288,13 +288,15 @@ BlueprintX/
 
 ## Discovery system
 
-`bin/blueprintx.sh` builds the language and skeleton menus at runtime by scanning every `templates/*/skeleton.meta` file. A `skeleton.meta` is a shell-sourceable KEY=VALUE file with four fields:
+`bin/blueprintx.sh` builds the language and skeleton menus at runtime by scanning every `templates/*/skeleton.meta` file. A `skeleton.meta` is a shell-sourceable KEY=VALUE file with five required fields plus the optional `readme_archetype`:
 
 ```
 language=<python|typescript|…>
 display_name=<Human-readable name shown in the menu>
 description=<One-line description shown in previews>
 scaffold=<relative path from repo root, e.g. bin/scaffold/ts_react_app.sh>
+readme_archetype=<optional: library|cli|spa|service|usb-tool>
+ships_docs=<true|false: whether the generated project ships a documentation site>
 ```
 
 - `prompt_language` de-duplicates `language=` values across all discovered metas.
