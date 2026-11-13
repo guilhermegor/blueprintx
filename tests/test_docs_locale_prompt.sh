@@ -171,7 +171,7 @@ test_ptbr_twins_cover_shipped_pages() {
         [ -f "$str_lib/pt-BR/$str_rel" ] && pass "pt-BR twin of lib-minimal docs/$str_rel" \
             || fail "no pt-BR twin of lib-minimal docs/$str_rel"
     done
-    for str_rel in changelog.md releasing-1-0-0.md; do
+    for str_rel in changelog.md releasing-1-0-0.md incidents.md; do
         [ -f "$str_common/pt-BR/$str_rel" ] && pass "pt-BR twin of shipped docs/$str_rel" \
             || fail "no pt-BR twin of shipped docs/$str_rel"
     done
