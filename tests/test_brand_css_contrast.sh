@@ -145,19 +145,25 @@ if not isinstance(dict_cfg, dict):
 dict_theme = dict_cfg.get("theme")
 if not isinstance(dict_theme, dict):
     dict_theme = {}
+list_why = []
 list_palette = dict_theme.get("palette") or []
 if isinstance(list_palette, dict):
     list_palette = [list_palette]
+if not isinstance(list_palette, list) or any(isinstance(d, Tagged) for d in list_palette):
+    list_why.append("tagged or non-list palette cannot be checked")
+    list_palette = []
 list_css = dict_cfg.get("extra_css") or []
 if isinstance(list_css, str):
     list_css = [list_css]
+if not isinstance(list_css, list) or any(isinstance(c, Tagged) for c in list_css):
+    list_why.append("tagged or non-list extra_css cannot be checked")
+    list_css = []
 list_features = dict_theme.get("features") or []
 if isinstance(list_features, str):
     list_features = [list_features]
 if not isinstance(list_features, list):
     list_features = []
 list_dicts = [d for d in list_palette if isinstance(d, dict)]
-list_why = []
 if "stylesheets/brand.css" not in list_css:
     list_why.append("no stylesheets/brand.css in extra_css")
 elif list_css[-1] != "stylesheets/brand.css":
@@ -198,12 +204,13 @@ mutate() {
 
 check_mutate_guard() {
 	local int_before="$int_failures"
-	mutate "$1" "$TMP/unmatched.out" 's/this-pattern-never-matches/x/' >/dev/null
+	mutate "$1" "$TMP/unmatched.out" "${2:-s/this-pattern-never-matches/x/}" >/dev/null
 	if [ "$int_failures" -eq $((int_before + 1)) ]; then
 		int_failures="$int_before"
 		echo "ok: should-fail: an unmatched mutation is flagged (refuse)"
 	else
 		echo "FAIL: an unmatched mutation went unflagged"
+		int_failures=$((int_failures + 1))
 	fi
 }
 
@@ -315,6 +322,25 @@ check_yml "should-fail: tagged features value is refused, not read as empty" "$T
 printf 'theme:\n  features: [!ENV X, content.tabs]\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tagged-item.yml"
 check_yml "should-fail: tagged feature item is refused" "$TMP/tagged-item.yml" refuse "tagged features"
 check_mutate_guard "$CSS"
+int_saved="$int_failures"
+check_mutate_guard "$CSS" 's/slate/slat3/' >/dev/null
+if [ "$int_failures" -eq $((int_saved + 1)) ]; then
+	int_failures="$int_saved"
+	echo "ok: should-fail: a guard that sees a matching mutation counts a failure"
+else
+	echo "FAIL: guard failure not counted"
+	int_failures=$((int_failures + 1))
+fi
+printf 'theme:\n  palette: [!ENV X, {scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tagged-pal-item.yml"
+check_yml "should-fail: tagged palette entry is refused, not dropped" "$TMP/tagged-pal-item.yml" refuse "palette cannot be checked"
+printf 'theme:\n  palette: !ENV X\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tagged-pal.yml"
+check_yml "should-fail: tagged palette value is refused, not a crash" "$TMP/tagged-pal.yml" refuse "palette cannot be checked"
+printf 'theme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: !ENV X\n' >"$TMP/tagged-css.yml"
+check_yml "should-fail: tagged extra_css is refused, not a crash" "$TMP/tagged-css.yml" refuse "extra_css cannot be checked"
+printf 'theme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: 5\n' >"$TMP/int-css.yml"
+check_yml "should-fail: scalar non-string extra_css is refused, not a crash" "$TMP/int-css.yml" refuse "extra_css cannot be checked"
+printf 'theme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: {a: b}\n' >"$TMP/dict-css.yml"
+check_yml "should-fail: mapping extra_css is refused, not a crash" "$TMP/dict-css.yml" refuse "extra_css cannot be checked"
 printf 'theme: [unclosed\n' >"$TMP/broken.yml"
 printf 'theme: material\nextra_css: [stylesheets/brand.css]\n' >"$TMP/theme-str.yml"
 check_yml "should-fail: string theme is refused, not a crash" "$TMP/theme-str.yml" refuse "no palette entries"
