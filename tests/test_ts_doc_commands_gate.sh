@@ -156,6 +156,11 @@ expect "two backticked commands each with their own selector are skipped" 0 "$?"
 printf 'Run `npm run ghost --workspaces` and `npm run ghost -ws`.\n' >"$str_proj/README.md"
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "a selector at the end of a command is skipped" 0 "$?"
+for str_form in '--workspaces=false' '--no-workspaces'; do
+	printf 'Run `npm run %s ghost`.\n' "$str_form" >"$str_proj/README.md"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "a disabled workspace flag ($str_form) still checks the root script" 1 "$?"
+done
 printf 'Run `npm run build`.\n' >"$str_proj/README.md"
 
 if [ "$(id -u)" -ne 0 ]; then
