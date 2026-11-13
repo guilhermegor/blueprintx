@@ -388,7 +388,9 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
                 f"❌ {str_rel}:{int_line}: paragraph reads as "
                 f"{str_read} but theme.language is {str_declared} -- {str_excerpt}"
             )
-    int_scored = sum(bool(RE_WORD.search(str_para)) for _, str_para in list_paras)
+    int_scored = sum(
+        any(str_char.isalnum() for str_char in str_para) for _, str_para in list_paras
+    )
     return list_out, False, int_scored
 
 

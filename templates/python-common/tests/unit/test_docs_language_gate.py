@@ -591,6 +591,7 @@ def test_main_punctuation_only_residue_is_not_scored(tmp_path: Path) -> None:
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
     _write(tmp_path / "README.md", "<br/>.\n")
     _write(tmp_path / "docs" / "index.md", "—\n")
+    _write(tmp_path / "docs" / "rule.md", "___\n")
     assert _run(tmp_path) == 1
 
 
