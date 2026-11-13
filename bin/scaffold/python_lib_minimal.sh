@@ -10,6 +10,8 @@ source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
 source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
 # shellcheck source=bin/lib/scaffold_provenance.sh
 source "$SCRIPT_DIR/../lib/scaffold_provenance.sh"
+# shellcheck source=bin/lib/scaffold_docs_extras.sh
+source "$SCRIPT_DIR/../lib/scaffold_docs_extras.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -481,12 +483,14 @@ copy_mkdocs_templates() {
         "$project_path/docs/contributing.md"
     cp "$COMMON_TEMPLATE_ROOT/docs/changelog.md" \
         "$project_path/docs/changelog.md"
+    cp "$COMMON_TEMPLATE_ROOT/docs/incidents.md" \
+        "$project_path/docs/incidents.md"
     cp "$SHARED_TEMPLATE_ROOT/docs/releasing-1-0-0.md" \
         "$project_path/docs/releasing-1-0-0.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/AGENTS.md" "$project_path/docs/AGENTS.md"
-
+    scaffold_copy_docs_extras "$project_path"
 
     print_status "success" "MkDocs templates copied"
 }

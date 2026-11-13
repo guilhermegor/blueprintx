@@ -189,6 +189,8 @@ The manifest file itself is the list (per-skeleton `.greptile/rules.md` and `fil
 `docs/faq.md`. Root-repo-only, like `check_makefile_pairing.sh`. ⚠️ The manifest needs the
 `!templates/common/review-config.manifest` line in `.gitignore`, because `*.manifest` is ignored.
 
+The **generated-references gate** (`bin/ci/check_generated_references.sh --generated`, CI job `generated-references`) scaffolds every skeleton and fails when a `mkdocs.yml` nav page, or a `bin/` script named by `poe_tasks.toml`, the pre-commit config, `package.json`, `.vscode/tasks.json`, a `Makefile`, `make/*.mk`, a workflow or a composite action, is missing from the generated tree. A project with nothing to check fails rather than passing. It scaffolds with default answers only, so workflows and actions that exist only with a GitHub remote, and locale variants, are not scanned (blueprintx#1094).
+
 The **dependabot guard** (`bin/ci/check_dependabot_shipped.sh --static`, hook and CI job `dependabot-shipped`) fails when a skeleton stops copying a `dependabot.yml` with a `cooldown`; there is no `--generated` mode because default answers scaffold offline. See `docs/dependabot-config.md`.
 
 The **README structure gate** follows the one-implementation rule too:
@@ -288,13 +290,15 @@ BlueprintX/
 
 ## Discovery system
 
-`bin/blueprintx.sh` builds the language and skeleton menus at runtime by scanning every `templates/*/skeleton.meta` file. A `skeleton.meta` is a shell-sourceable KEY=VALUE file with four fields:
+`bin/blueprintx.sh` builds the language and skeleton menus at runtime by scanning every `templates/*/skeleton.meta` file. A `skeleton.meta` is a shell-sourceable KEY=VALUE file with five required fields plus the optional `readme_archetype`:
 
 ```
 language=<python|typescript|…>
 display_name=<Human-readable name shown in the menu>
 description=<One-line description shown in previews>
 scaffold=<relative path from repo root, e.g. bin/scaffold/ts_react_app.sh>
+readme_archetype=<optional: library|cli|spa|service|usb-tool>
+ships_docs=<true|false: whether the generated project ships a documentation site>
 ```
 
 - `prompt_language` de-duplicates `language=` values across all discovered metas.

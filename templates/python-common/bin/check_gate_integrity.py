@@ -129,6 +129,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from gate_env import is_ci  # noqa: E402
+from gate_rename import deleted_message, rename_pairs  # noqa: E402
 
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -737,12 +738,18 @@ def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
         One message per deleted or gutted test.
     """
     dict_old, dict_new = test_functions(str_old), test_functions(str_new)
+    dict_gone = {str_n: cls_f for str_n, cls_f in dict_old.items() if str_n not in dict_new}
+    dict_added = {str_n: cls_f for str_n, cls_f in dict_new.items() if str_n not in dict_old}
+    dict_pairs = rename_pairs(dict_gone, dict_added)
+    dict_old_of = {str_to: dict_old[str_from] for str_from, str_to in dict_pairs.items()}
+    list_free = sorted(set(dict_added) - set(dict_pairs.values()))
     list_problems = [
-        f"{str_shown}: test {str_name!r} deleted"
-        for str_name in sorted(set(dict_old) - set(dict_new))
+        deleted_message(str_shown, str_gone, list_free)
+        for str_gone in sorted(dict_gone)
+        if str_gone not in dict_pairs
     ]
     for str_name, cls_new_node in dict_new.items():
-        cls_old_node = dict_old.get(str_name)
+        cls_old_node = dict_old.get(str_name) or dict_old_of.get(str_name)
         if cls_old_node and not is_gutted_body(cls_old_node) and is_gutted_body(cls_new_node):
             list_problems.append(f"{str_shown}: test {str_name!r} body replaced with a no-op")
     return list_problems
@@ -766,9 +773,15 @@ def newly_skipped_tests(str_old: str, str_new: str, str_shown: str) -> list:
         One message per test newly decorated.
     """
     dict_old, dict_new = test_functions(str_old), test_functions(str_new)
+    dict_gone = {str_n: cls_f for str_n, cls_f in dict_old.items() if str_n not in dict_new}
+    dict_added = {str_n: cls_f for str_n, cls_f in dict_new.items() if str_n not in dict_old}
+    dict_old_of = {
+        str_to: dict_old[str_from]
+        for str_from, str_to in rename_pairs(dict_gone, dict_added).items()
+    }
     list_problems = []
     for str_name, cls_new_node in dict_new.items():
-        cls_old_node = dict_old.get(str_name)
+        cls_old_node = dict_old.get(str_name) or dict_old_of.get(str_name)
         if cls_old_node is None:
             continue
         for str_mark in sorted(skip_marks(cls_new_node) - skip_marks(cls_old_node)):

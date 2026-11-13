@@ -1332,7 +1332,7 @@ either layout (blueprintx#360). A few modules stub the metaclass shape instead o
   zipping fails, with the path expanded into the trap at definition time.
 - **`close_linked_issues.sh`** (blueprintx#604) is strict because a wrong closure is worse than
   a missed one: a number is taken only from a leading `<type>/<N>-<slug>` branch or from
-  `Closes|Fixes|Resolves #N`, with a date-like prefix (`2026-10`) not read as an issue, negated
+  `Closes|Fixes|Resolves #N` (a branch number the body names only as `Refs #N` is not closed, blueprintx#1123), with a date-like prefix (`2026-10`) not read as an issue, negated
   uses skipped, fenced code, quotes, HTML comments and inline code ignored, and bot branches
   skipped because their bodies quote another repository's notes. The workflow cannot close
   anything from a fork PR (read-only token) or a PR merged into a non-default branch, and it
@@ -2013,8 +2013,10 @@ grouped by what they guard.
   context is deliberately distinct from the PR job's check name: a status and a check run
   sharing a name are ambiguous for branch protection. It fails the job too, since a red
   status on someone else's PR is easy to miss from the issue timeline. See `docs/issue-scope.md`.
-- **`validate_meta.sh` (#407, #478).** Every `skeleton.meta` has all four fields non-empty, a
-  `scaffold=` path that exists, and the skeleton directory named in the root `CLAUDE.md`:
+- **`validate_meta.sh` (#407, #478).** Every `skeleton.meta` has all five required fields non-empty (`ships_docs` must be exactly `true` or
+  `false`, declared once, and must match whether the scaffold script references
+  `mkdocs.yml` or `docusaurus.config` on a non-comment line), a `scaffold=` path that
+  exists, and the skeleton directory named in the root `CLAUDE.md`:
   machine-decidable, so a gate, while the quality of the mention stays a human call. A missing
   key under `set -euo pipefail` used to kill the gate inside its own `grep` pipeline with exit
   1 and no message, which every should-fail test read as proof the check ran; hence `|| true`.
@@ -2193,3 +2195,12 @@ from CI too. `templates/common/CLAUDE.md` is exempt: it ships as `.claude/CLAUDE
 template whose name differs from its deployed name (`utils_CLAUDE.md`) pairs with the same prefix
 (`utils_AGENTS.md`). The TypeScript tiers ship no `.pre-commit-config.yaml`, so they carry the
 script but no hook.
+
+## Release tag targets the built SHA (#1065)
+
+Every template workflow using `softprops/action-gh-release` must pin `target_commitish:
+${{ github.sha }}` on each such step, inside its `with:` block, so the tag lands on the commit that was built
+rather than the branch tip. The gate is `tests/test_release_target_sha.sh` (pre-commit hook
+`release-target-sha` and a step of the `workflow-names` job in `scaffold_checks.yml`); it
+discovers workflows by grep and carries should-fail witnesses. The root repo's own workflows
+do not use `action-gh-release`, so they are out of scope.
