@@ -557,3 +557,30 @@ def test_list_pages_does_not_depend_on_the_locale(tmp_path: Path) -> None:
     _write(tmp_path / "mkdocs.yml", STR_MKDOCS_ES)
     _write(tmp_path / "docs" / "index.md", STR_EN)
     assert cls_gate.main(["--root", str(tmp_path), "--list-pages"]) == 0
+
+
+def test_main_quoted_url_attribute_does_not_expose_the_next_attribute(tmp_path: Path) -> None:
+    """A tag whose URL attribute is quoted is blanked whole, later attributes included."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    str_tag = f'\n<a href="https://a.b/c" title="{STR_FOREIGN_BLOCK.strip()}">x</a>\n'
+    _write(tmp_path / "docs" / "index.md", STR_EN + str_tag)
+    assert _run(tmp_path) == 0
+
+
+def test_main_zero_scored_failure_reports_the_skipped_pages(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The vacuous-pass failure carries the skipped-page note, like the violation branch."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", "| a | b |\n|---|---|\n")
+    _write(tmp_path / "docs" / "other.md", "<!-- docs-lang:untranslated -->\n" + STR_PT)
+    _run(tmp_path)
+    assert "1 skipped as docs-lang:untranslated" in capsys.readouterr().out
+
+
+def test_main_footnote_with_url_and_foreign_title_is_still_scored(tmp_path: Path) -> None:
+    """Footnote prose stays scoreable even when its body opens with a URL and a title."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    str_note = f'\n[^ref]: https://a.b/c "{STR_PT.strip()}"\n'
+    _write(tmp_path / "docs" / "index.md", STR_EN + str_note)
+    assert _run(tmp_path) == 1

@@ -106,10 +106,10 @@ RE_MULTILINE_BLANK = re.compile(
 TUPLE_BLANKINGS = (
     re.compile(r"<!--.*?-->", re.DOTALL),
     re.compile(r"!?\[[^\]\n]*\]\([^)\n]*\)"),
-    re.compile(r"https?://\S+"),
     re.compile(
         r"""</?[A-Za-z][\w:-]*(?:\s+[A-Za-z_:][\w:.-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'<>=]+))?)*\s*/?>"""
     ),
+    re.compile(r"https?://\S+"),
 )
 
 RE_TABLE_ROW = re.compile(r"^[ \t]*\|")
@@ -512,13 +512,13 @@ def _report(list_results: list, str_declared: str) -> int:
             + (f" ({str_note})" if int_skipped else "")
         )
         return 1
+    str_tail = f", {str_note}" if int_skipped else ""
     if int_checked == 0:
         print(f"⚠️ docs language: 0 page(s) checked, all {int_skipped} marked {STR_UNTRANSLATED}")
         return 0
     if not sum(int_scored for _, _, int_scored in list_results):
-        print(f"❌ {int_checked} page(s) checked but no prose paragraph scored; vacuous pass")
+        print(f"❌ {int_checked} page(s) checked but no prose scored; vacuous pass{str_tail}")
         return 1
-    str_tail = f", {str_note}" if int_skipped else ""
     print(f"✅ docs language is {str_declared} ({int_checked} page(s) checked{str_tail})")
     return 0
 
