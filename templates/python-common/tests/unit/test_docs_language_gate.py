@@ -584,3 +584,21 @@ def test_main_footnote_with_url_and_foreign_title_is_still_scored(tmp_path: Path
     str_note = f'\n[^ref]: https://a.b/c "{STR_PT.strip()}"\n'
     _write(tmp_path / "docs" / "index.md", STR_EN + str_note)
     assert _run(tmp_path) == 1
+
+
+def test_main_punctuation_only_residue_is_not_scored(tmp_path: Path) -> None:
+    """A run whose only residue is stray punctuation is a vacuous pass, not a clean one."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "README.md", "<br/>.\n")
+    _write(tmp_path / "docs" / "index.md", "—\n")
+    assert _run(tmp_path) == 1
+
+
+def test_main_escaped_only_run_names_the_escape_in_its_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """When every paragraph carries the escape, the failure says why nothing was scored."""
+    _write(tmp_path / "mkdocs.yml", STR_MKDOCS_EN)
+    _write(tmp_path / "docs" / "index.md", f"docs-lang:ok {STR_PT}")
+    int_rc = _run(tmp_path)
+    assert (int_rc, "docs-lang:ok" in capsys.readouterr().out) == (1, True)

@@ -28,8 +28,8 @@ How it decides:
    A scaffold whose locale is not ``en`` appends it to every shipped page, which the English
    templates would otherwise fail on the first lint; deleting it is the act of declaring the
    page translated.
-5. **Never vacuous.** A run whose unskipped pages hold no scoreable paragraph fails; a run where
-   every page is marked untranslated only warns, since that is a fresh non-English scaffold.
+5. **Never vacuous.** A run whose unskipped pages hold no paragraph with a word fails; a run
+   where every page is marked untranslated only warns, since that is a fresh non-English scaffold.
    ``--list-pages`` prints the page set so a caller never has to redefine it.
 
 A locale outside ``DICT_LOCALE_WORDS`` fails closed: the gate cannot say what it would be
@@ -369,7 +369,8 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
     -------
     tuple of (list of str, bool, int)
         ``path:line`` messages naming the locale the paragraph reads as and an excerpt, whether
-        the page was skipped as untranslated, then how many paragraphs were scored.
+        the page was skipped as untranslated, then how many paragraphs were scored, a
+        paragraph counting only when it holds a word, so punctuation residue is not prose.
     """
     list_out: list = []
     str_text = path_page.read_text(encoding="utf-8")
@@ -387,7 +388,8 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
                 f"❌ {str_rel}:{int_line}: paragraph reads as "
                 f"{str_read} but theme.language is {str_declared} -- {str_excerpt}"
             )
-    return list_out, False, len(list_paras)
+    int_scored = sum(bool(RE_WORD.search(str_para)) for _, str_para in list_paras)
+    return list_out, False, int_scored
 
 
 def _load_config(path_root: pathlib.Path) -> tuple:
@@ -497,7 +499,7 @@ def _report(list_results: list, str_declared: str) -> int:
     Returns
     -------
     int
-        1 on a violation or when no paragraph was scored in a page that was not skipped, else 0.
+        1 on a violation or when no paragraph was scored across the run's unskipped pages, else 0.
     """
     list_problems = [str_found for list_found, _, _ in list_results for str_found in list_found]
     int_skipped = sum(bool_skipped for _, bool_skipped, _ in list_results)
@@ -517,7 +519,10 @@ def _report(list_results: list, str_declared: str) -> int:
         print(f"⚠️ docs language: 0 page(s) checked, all {int_skipped} marked {STR_UNTRANSLATED}")
         return 0
     if not sum(int_scored for _, _, int_scored in list_results):
-        print(f"❌ {int_checked} page(s) checked but no prose scored; vacuous pass{str_tail}")
+        print(
+            f"❌ {int_checked} page(s) checked but no prose scored (punctuation-only residue and "
+            f"paragraphs carrying {STR_ESCAPE} do not count); vacuous pass{str_tail}"
+        )
         return 1
     print(f"✅ docs language is {str_declared} ({int_checked} page(s) checked{str_tail})")
     return 0
