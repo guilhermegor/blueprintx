@@ -1004,6 +1004,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-does-ci-scaffold-every-skeleton-and-look-for-dangling-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does CI scaffold every skeleton and look for dangling references?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-must-a-test-clear-the-git_-environment-before-running-git" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3130,6 +3141,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-does-ci-scaffold-every-skeleton-and-look-for-dangling-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does CI scaffold every skeleton and look for dangling references?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-must-a-test-clear-the-git_-environment-before-running-git" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3476,6 +3498,22 @@ to the manifest in the same pull request. <code>check_content</code> in the scri
 content checks, such as keeping Greptile queue-only. <code>tests/test_check_review_config_shipped.sh</code>
 removes a <code>cp</code> line, a manifest file and an unshipped entry from a copy of the tree and shows
 the gate going red in both modes.</p>
+<h2 id="why-does-ci-scaffold-every-skeleton-and-look-for-dangling-references">Why does CI scaffold every skeleton and look for dangling references?<a class="headerlink" href="#why-does-ci-scaffold-every-skeleton-and-look-for-dangling-references" title="Permanent link">&para;</a></h2>
+<p><code>templates/lib-minimal/mkdocs.yml</code> once listed <code>incidents.md</code> in its nav while the scaffold
+script never copied that page, so <code>mkdocs build --strict</code> failed in every generated project and
+no gate noticed. Each scaffold keeps its own copy list, and the lists drift apart.
+<code>bin/ci/check_generated_references.sh --generated</code> scaffolds every skeleton found through
+<code>templates/*/skeleton.meta</code> and fails when a <code>mkdocs.yml</code> nav page is missing under its <code>docs_dir</code>, or
+a <code>bin/*.sh</code> / <code>bin/*.py</code> path named in <code>poe_tasks.toml</code>, <code>.pre-commit-config.yaml</code>,
+<code>package.json</code>, <code>.vscode/tasks.json</code>, <code>Makefile</code>, <code>make/*.mk</code>, a workflow or a composite action is missing from the
+tree. A project from which no reference can be extracted fails, so a broken extractor is red.
+Only the default-answer scaffold is checked, so online-only and locale variants are not.
+<code>--project &lt;dir&gt;</code> checks one tree.
+<code>tests/test_check_generated_references.sh</code> plants a missing reference per kind (a deleted file or a
+reference to <code>bin/nope.sh</code>) and shows the
+gate naming it. The scaffold takes about 95 seconds, so the pre-commit hook runs on the
+<code>manual</code> stage (<code>pre-commit run generated-references --hook-stage manual</code>); CI runs it on
+every pull request.</p>
 <h2 id="why-must-a-test-clear-the-git_-environment-before-running-git">Why must a test clear the GIT_* environment before running git?<a class="headerlink" href="#why-must-a-test-clear-the-git_-environment-before-running-git" title="Permanent link">&para;</a></h2>
 <p>Git exports <code>GIT_DIR</code>, <code>GIT_INDEX_FILE</code> and <code>GIT_WORK_TREE</code> to hooks. A test that runs
 <code>git init</code>, <code>git commit</code> or a real scaffold from a pre-commit hook then acts on the calling
