@@ -31,7 +31,7 @@ strip_inline_comment() {
         str_q = ""
         for (int_i = 1; int_i <= length($0); int_i++) {
             str_c = substr($0, int_i, 1)
-            if (str_q != "") { if (str_c == str_q) str_q = ""; continue }
+            if (str_q != "") { if (str_c == "\\" && str_q == "\"") int_i++; else if (str_c == str_q) str_q = ""; continue }
             if (str_c == "\"" || str_c == "\047") { str_q = str_c; continue }
             if (str_c == "#" && (int_i == 1 || substr($0, int_i - 1, 1) ~ /[ \t]/)) { $0 = substr($0, 1, int_i - 1); break }
         }
@@ -42,7 +42,7 @@ strip_inline_comment() {
 nav_pages() {
     awk '/^nav:/ { in_nav = 1; next } /^[A-Za-z_]/ { in_nav = 0 } in_nav' "$1" \
         | strip_inline_comment \
-        | { grep -vE '^[[:space:]]*#|^[[:space:]]*-?[[:space:]]*[^:]*:[[:space:]]*https?://' || true; } \
+        | { grep -vE '^[[:space:]]*#|^[[:space:]]*-?[[:space:]]*[^:]*:[[:space:]]*["'"'"']?https?://' || true; } \
         | { grep -oE '[A-Za-z0-9_./-]+\.md' || true; } | sort -u
 }
 
@@ -73,7 +73,7 @@ check_project() {
                 || fail "mkdocs.yml nav lists $str_docs/$str_ref, which the scaffold never copied"
         done < <(nav_pages "$str_project/mkdocs.yml")
     fi
-    for str_file in "$str_project/poe_tasks.toml" "$str_project/.pre-commit-config.yaml" \
+    for str_file in "$str_project"/poe_tasks*.toml "$str_project/.pre-commit-config.yaml" \
         "$str_project/package.json" "$str_project/.vscode/tasks.json" "$str_project/Makefile" \
         "$str_project"/make/*.mk \
         "$str_project"/.github/workflows/*.y*ml "$str_project"/.github/actions/*/action.y*ml; do

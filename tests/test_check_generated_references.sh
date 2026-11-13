@@ -86,6 +86,9 @@ expect_extra "Makefile recipe tab form is scanned" fail Makefile $'a:\n\tbin/nop
 expect_extra "inline comment naming a missing script is ignored" pass poe_tasks.toml $'[tool.poe.tasks.a]\ncmd = "bash bin/a.sh" # replaces bin/old.sh\n'
 expect_extra "hash inside a quoted string does not hide a later reference" fail .github/workflows/q.yml $'run: |\n  echo " # label"; bash bin/nope.sh\n'
 expect_extra "URL in a nav inline comment does not hide a missing page" fail mkdocs.yml $'nav:\n  - Incidents: gone.md # https://example.com/x\n' gone.md
+expect_extra "escaped quote does not end a quoted value early" fail .github/workflows/e.yml $'run: |\n  echo "escaped \\" # label"; bash bin/nope.sh\n'
+expect_extra "quoted external nav target is not a local page" pass mkdocs.yml $'nav:\n  - Home: index.md\n  - Source: \'https://example.com/README.md\'\n  - Other: "https://example.com/X.md"\n' index.md
+expect_extra "poe_tasks fragment reference to a missing script fails" fail poe_tasks.test.toml $'[tool.poe.tasks.t]\ncmd = "bash bin/nope.sh"\n'
 expect_extra "commented-out reference is ignored" pass Makefile $'# bin/nope.sh\n'
 expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n' site/index.md
 expect_extra ".vscode/tasks.json reference to a missing script is scanned" fail .vscode/tasks.json '{"command":"bash bin/nope.sh"}'

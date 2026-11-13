@@ -517,6 +517,7 @@ repos:
         entry: bash bin/ci/check_generated_references.sh --generated
         language: system
         pass_filenames: false
+        always_run: true
         stages: [manual]
 
       - id: dependabot-shipped
