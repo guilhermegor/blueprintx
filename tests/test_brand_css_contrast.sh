@@ -130,7 +130,11 @@ class Loader(yaml.SafeLoader):
     pass
 
 
-Loader.add_multi_constructor("", lambda loader, suffix, node: None)
+class Tagged:
+    pass
+
+
+Loader.add_multi_constructor("", lambda loader, suffix, node: Tagged())
 try:
     dict_cfg = yaml.load(open(sys.argv[1], encoding="utf-8").read(), Loader=Loader) or {}
 except yaml.YAMLError as err:
@@ -150,6 +154,8 @@ if isinstance(list_css, str):
 list_features = dict_theme.get("features") or []
 if isinstance(list_features, str):
     list_features = [list_features]
+if not isinstance(list_features, list):
+    list_features = []
 list_dicts = [d for d in list_palette if isinstance(d, dict)]
 list_why = []
 if "stylesheets/brand.css" not in list_css:
@@ -162,6 +168,8 @@ if not any("scheme" in d for d in list_dicts):
     list_why.append("no palette entries (- scheme:) in mkdocs.yml")
 elif any(d.get("primary") != "custom" for d in list_dicts):
     list_why.append("primary: custom missing on a palette entry")
+if isinstance(dict_theme.get("features"), Tagged) or any(isinstance(f, Tagged) for f in list_features):
+    list_why.append("tagged features value cannot be checked")
 for str_feature in ("navigation.top", "content.code.annotate"):
     if str_feature in {str(f) for f in list_features}:
         list_why.append(f"{str_feature} enabled")
@@ -185,6 +193,17 @@ mutate() {
 	if cmp -s "$str_src" "$str_dst"; then
 		echo "FAIL: mutation produced no change: $str_dst"
 		int_failures=$((int_failures + 1))
+	fi
+}
+
+check_mutate_guard() {
+	local int_before="$int_failures"
+	mutate "$1" "$TMP/unmatched.out" 's/this-pattern-never-matches/x/' >/dev/null
+	if [ "$int_failures" -eq $((int_before + 1)) ]; then
+		int_failures="$int_before"
+		echo "ok: should-fail: an unmatched mutation is flagged (refuse)"
+	else
+		echo "FAIL: an unmatched mutation went unflagged"
 	fi
 }
 
@@ -291,6 +310,11 @@ check "should-fail: @import at the top of the file" "$TMP/import-top.css" refuse
 check "an @import inside a comment is not a statement" "$TMP/import-comment.css" pass
 printf 'theme:\n  palette: {scheme: default, primary: custom}\nextra_css: [stylesheets/brand.css]\n' >"$TMP/dictpal.yml"
 check_yml "a single-mapping palette is accepted" "$TMP/dictpal.yml" pass
+printf 'theme:\n  features: !ENV [UNSET, [navigation.top]]\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tagged-feat.yml"
+check_yml "should-fail: tagged features value is refused, not read as empty" "$TMP/tagged-feat.yml" refuse "tagged features"
+printf 'theme:\n  features: [!ENV X, content.tabs]\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tagged-item.yml"
+check_yml "should-fail: tagged feature item is refused" "$TMP/tagged-item.yml" refuse "tagged features"
+check_mutate_guard "$CSS"
 printf 'theme: [unclosed\n' >"$TMP/broken.yml"
 printf 'theme: material\nextra_css: [stylesheets/brand.css]\n' >"$TMP/theme-str.yml"
 check_yml "should-fail: string theme is refused, not a crash" "$TMP/theme-str.yml" refuse "no palette entries"
@@ -298,11 +322,11 @@ check_yml "should-fail: unparseable yml is refused, never green" "$TMP/broken.ym
 printf 'markdown_extensions:\n  - x: !!python/name:a.b.c\ntheme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tag.yml"
 check_yml "a !!python/name tag does not crash the gate" "$TMP/tag.yml" pass
 
-sed "s/\"slate\"/slate/" "$CSS" >"$TMP/unquoted.css"
+mutate "$CSS" "$TMP/unquoted.css" "s/\"slate\"/slate/"
 check "slate selector unquoted" "$TMP/unquoted.css" pass
-sed "s/\"slate\"/'slate'/" "$CSS" >"$TMP/single.css"
+mutate "$CSS" "$TMP/single.css" "s/\"slate\"/'slate'/"
 check "slate selector single-quoted" "$TMP/single.css" pass
-sed -E 's|(--md-accent-fg-color--transparent:[^;]*);|\1|' "$CSS" >"$TMP/no-semi.css"
+mutate "$CSS" "$TMP/no-semi.css" -E 's|(--md-accent-fg-color--transparent:[^;]*);|\1|'
 check "last declaration without trailing semicolon" "$TMP/no-semi.css" pass
 sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS" >"$TMP/no-light-accent.css"
 check "should-fail: light scheme without a hover colour (Material accent 4.25:1)" "$TMP/no-light-accent.css" contrast
