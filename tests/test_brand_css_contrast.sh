@@ -149,8 +149,8 @@ list_why = []
 list_palette = dict_theme.get("palette") or []
 if isinstance(list_palette, dict):
     list_palette = [list_palette]
-if not isinstance(list_palette, list) or any(isinstance(d, Tagged) for d in list_palette):
-    list_why.append("tagged or non-list palette cannot be checked")
+if not isinstance(list_palette, list) or not all(isinstance(d, dict) for d in list_palette):
+    list_why.append("tagged, scalar or non-list palette cannot be checked")
     list_palette = []
 list_css = dict_cfg.get("extra_css") or []
 if isinstance(list_css, str):
@@ -162,6 +162,8 @@ list_features = dict_theme.get("features") or []
 if isinstance(list_features, str):
     list_features = [list_features]
 if not isinstance(list_features, list):
+    if not isinstance(list_features, Tagged):
+        list_why.append("non-list features cannot be checked")
     list_features = []
 list_dicts = [d for d in list_palette if isinstance(d, dict)]
 if "stylesheets/brand.css" not in list_css:
@@ -341,6 +343,10 @@ printf 'theme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: 5\n'
 check_yml "should-fail: scalar non-string extra_css is refused, not a crash" "$TMP/int-css.yml" refuse "extra_css cannot be checked"
 printf 'theme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: {a: b}\n' >"$TMP/dict-css.yml"
 check_yml "should-fail: mapping extra_css is refused, not a crash" "$TMP/dict-css.yml" refuse "extra_css cannot be checked"
+printf 'theme:\n  palette: [foo, {scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/scalar-pal-item.yml"
+check_yml "should-fail: scalar palette entry is refused, not dropped" "$TMP/scalar-pal-item.yml" refuse "palette cannot be checked"
+printf 'theme:\n  features: {navigation.top: true}\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/dict-feat.yml"
+check_yml "should-fail: mapping features is refused, not read as empty" "$TMP/dict-feat.yml" refuse "non-list features"
 printf 'theme: [unclosed\n' >"$TMP/broken.yml"
 printf 'theme: material\nextra_css: [stylesheets/brand.css]\n' >"$TMP/theme-str.yml"
 check_yml "should-fail: string theme is refused, not a crash" "$TMP/theme-str.yml" refuse "no palette entries"
