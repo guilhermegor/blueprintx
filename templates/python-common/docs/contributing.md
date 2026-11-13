@@ -143,7 +143,10 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
    `--md-typeset-a-color` under any other selector, and any `@media`/`@supports` wrapper make
    the gate refuse rather than resolve, a value with `!important` is refused as unparseable,
    and the gate derives the background from Material 9.5's default hue and
-   does not follow a Material version bump that changes it.
+   does not follow a Material version bump that changes it. Keep
+   `stylesheets/brand.css` the **last** `extra_css` entry in `mkdocs.yml` and add no
+   `@import` statement to it; this is a convention your project's own checks do not
+   enforce (BlueprintX's template test does, for the shipped files).
 
 ## Repository protection & security (one-time, scripted)
 

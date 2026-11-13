@@ -5,7 +5,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CSS="$REPO_ROOT/templates/python-common/docs/stylesheets/brand.css"
 int_failures=0
 
-read -r -d '' PY_CHECK <<'PY'
+read -r -d '' PY_CHECK <<'PY' || true
 import colorsys
 import re
 import sys
@@ -30,7 +30,7 @@ str_bg = "#" + "".join(f"{round(c * 255):02x}" for c in tuple_bg)
 INT_GATE_FAIL = 3
 INT_REFUSED = 4
 
-str_css = re.sub(r"/\*.*?\*/", "", open(sys.argv[1]).read(), flags=re.S)
+str_css = re.sub(r"/\*.*?\*/", "", open(sys.argv[1], encoding="utf-8").read(), flags=re.S)
 
 
 def refuse(str_why):
@@ -44,8 +44,10 @@ RE_BARE = re.compile(
 RE_GATED = re.compile(
     r"(?<![\w-])--md-(accent-fg|primary-fg|typeset-a)-color\s*:"
 )
-if re.search(r"@(media|supports|container|layer)\b", str_css):
+if re.search(r"@(media|supports|container|layer)\b", str_css, re.I):
     refuse("a conditional at-rule wraps rules: the cascade is unresolved")
+if re.search(r"@import\b", str_css, re.I):
+    refuse("statement at-rule (@import) can reorder or replace the slate block")
 for str_prelude, str_body in re.findall(r"([^{}]+)\{([^}]*)\}", str_css):
     if RE_BARE.fullmatch(str_prelude):
         continue
@@ -117,21 +119,111 @@ check() {
 	fi
 }
 
+read -r -d '' PY_YML <<'PY' || true
+import sys
+
+import yaml
+
+
+
+class Loader(yaml.SafeLoader):
+    pass
+
+
+class Tagged:
+    pass
+
+
+Loader.add_multi_constructor("", lambda loader, suffix, node: Tagged())
+try:
+    dict_cfg = yaml.load(open(sys.argv[1], encoding="utf-8").read(), Loader=Loader) or {}
+except yaml.YAMLError as err:
+    print(f"unparseable yml: {type(err).__name__}")
+    sys.exit(3)
+if not isinstance(dict_cfg, dict):
+    dict_cfg = {}
+dict_theme = dict_cfg.get("theme")
+if not isinstance(dict_theme, dict):
+    dict_theme = {}
+list_why = []
+list_palette = dict_theme.get("palette") or []
+if isinstance(list_palette, dict):
+    list_palette = [list_palette]
+if not isinstance(list_palette, list) or not all(isinstance(d, dict) for d in list_palette):
+    list_why.append("tagged, scalar or non-list palette cannot be checked")
+    list_palette = []
+list_css = dict_cfg.get("extra_css") or []
+if isinstance(list_css, str):
+    list_css = [list_css]
+if not isinstance(list_css, list) or any(isinstance(c, Tagged) for c in list_css):
+    list_why.append("tagged or non-list extra_css cannot be checked")
+    list_css = []
+list_features = dict_theme.get("features") or []
+if isinstance(list_features, str):
+    list_features = [list_features]
+if not isinstance(list_features, list):
+    if not isinstance(list_features, Tagged):
+        list_why.append("non-list features cannot be checked")
+    list_features = []
+list_dicts = [d for d in list_palette if isinstance(d, dict)]
+if "stylesheets/brand.css" not in list_css:
+    list_why.append("no stylesheets/brand.css in extra_css")
+elif list_css[-1] != "stylesheets/brand.css":
+    list_why.append("stylesheets/brand.css must be the last extra_css entry")
+if any("accent" in d for d in list_dicts):
+    list_why.append("accent: set")
+if not any("scheme" in d for d in list_dicts):
+    list_why.append("no palette entries (- scheme:) in mkdocs.yml")
+elif any(d.get("primary") != "custom" for d in list_dicts):
+    list_why.append("primary: custom missing on a palette entry")
+if isinstance(dict_theme.get("features"), Tagged) or any(isinstance(f, Tagged) for f in list_features):
+    list_why.append("tagged features value cannot be checked")
+for str_feature in ("navigation.top", "content.code.annotate"):
+    if str_feature in {str(f) for f in list_features}:
+        list_why.append(f"{str_feature} enabled")
+print("; ".join(list_why))
+sys.exit(3 if list_why else 0)
+PY
+
 yml_problem() {
-	local str_yml="$1" int_primary int_scheme
-	int_primary=$(grep -cE '^\s*primary:\s*custom\s*$' "$str_yml")
-	int_scheme=$(grep -cE '^\s*-\s*scheme:' "$str_yml")
-	grep -qE '^\s*-\s*stylesheets/brand\.css\s*$' "$str_yml" || { echo "no stylesheets/brand.css in extra_css"; return; }
-	grep -qE '^\s*accent:' "$str_yml" && { echo "accent: set"; return; }
-	[ "$int_scheme" -eq 0 ] && { echo "no palette entries (- scheme:) in mkdocs.yml"; return; }
-	[ "$int_primary" -ne "$int_scheme" ] && { echo "primary: custom missing on a palette entry"; return; }
-	grep -qE '^\s*-\s*(navigation\.top|content\.code\.annotate)\s*$' "$str_yml" && { echo "navigation.top or content.code.annotate enabled"; return; }
-	return 0
+	local str_out int_rc
+	str_out="$(python3 -I -c "$PY_YML" "$1" 2>&1)"
+	int_rc=$?
+	[ "$int_rc" -eq 0 ] && return 0
+	[ "$int_rc" -eq 3 ] && { echo "$str_out"; return 0; }
+	echo "yml gate crashed (exit $int_rc): $str_out"
+}
+
+mutate() {
+	local str_src="$1" str_dst="$2"
+	shift 2
+	sed "$@" "$str_src" >"$str_dst"
+	if cmp -s "$str_src" "$str_dst"; then
+		echo "FAIL: mutation produced no change: $str_dst"
+		int_failures=$((int_failures + 1))
+	fi
+}
+
+check_mutate_guard() {
+	local int_before="$int_failures"
+	mutate "$1" "$TMP/unmatched.out" "${2:-s/this-pattern-never-matches/x/}" >/dev/null
+	if [ "$int_failures" -eq $((int_before + 1)) ]; then
+		int_failures="$int_before"
+		echo "ok: should-fail: an unmatched mutation is flagged (refuse)"
+	else
+		echo "FAIL: an unmatched mutation went unflagged"
+		int_failures=$((int_failures + 1))
+	fi
 }
 
 check_yml() {
 	local str_name="$1" str_yml="$2" str_expect="$3" str_reason="${4:-}" str_why
 	str_why="$(yml_problem "$str_yml")"
+	if [[ "$str_why" == "yml gate crashed"* ]]; then
+		echo "FAIL: $str_name: $str_why"
+		int_failures=$((int_failures + 1))
+		return
+	fi
 	if { [ -z "$str_why" ] && [ "$str_expect" = pass ]; } || { [ -n "$str_why" ] && [ "$str_expect" = refuse ] && [[ "$str_why" == *"$str_reason"* ]]; }; then
 		echo "ok: $str_name (${str_expect})"
 	else
@@ -201,6 +293,10 @@ check_yml "should-fail: accent: set in mkdocs.yml" "$TMP/accent.yml" refuse "acc
 sed '0,/primary: custom/{/primary: custom/d}' "$YML" >"$TMP/no-primary.yml"
 check_yml "should-fail: primary: custom missing" "$TMP/no-primary.yml" refuse "primary: custom missing"
 sed '/^\s*-\s*scheme:/d' "$YML" >"$TMP/no-palette.yml"
+printf 'theme:\n  palette:\n    - media: "(prefers-color-scheme)"\n      primary: custom\n      accent: red\n    - scheme: default\n      primary: custom\nextra_css: [stylesheets/brand.css]\n' >"$TMP/media-accent.yml"
+check_yml "should-fail: accent on a scheme-less palette entry" "$TMP/media-accent.yml" refuse "accent: set"
+printf 'theme:\n  features: navigation.top\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/scalar-feat.yml"
+check_yml "should-fail: scalar features value" "$TMP/scalar-feat.yml" refuse "navigation.top"
 check_yml "should-fail: no palette entries" "$TMP/no-palette.yml" refuse "no palette entries"
 sed '/stylesheets\/brand\.css/d' "$YML" >"$TMP/no-css.yml"
 check_yml "should-fail: brand.css not in extra_css" "$TMP/no-css.yml" refuse "no stylesheets/brand.css"
@@ -208,12 +304,61 @@ sed 's/^\(\s*\)- navigation\.tabs$/&\n\1- navigation.top/' "$YML" >"$TMP/nav-top
 check_yml "should-fail: navigation.top enabled" "$TMP/nav-top.yml" refuse "navigation.top"
 sed 's/^\(\s*\)- navigation\.tabs$/&\n\1- content.code.annotate/' "$YML" >"$TMP/annotate.yml"
 check_yml "should-fail: content.code.annotate enabled" "$TMP/annotate.yml" refuse "content.code.annotate"
+NL=$'\n'
+mutate "$YML" "$TMP/late.yml" -e "s|^  - stylesheets/brand.css\$|  - stylesheets/brand.css\\${NL}  - stylesheets/later.css|"
+check_yml "should-fail: a later extra_css entry follows brand.css" "$TMP/late.yml" refuse "last extra_css"
+mutate "$YML" "$TMP/flow.yml" -e "s|^    - navigation.tabs\$|    - navigation.tabs\\${NL}    - \"navigation.top\" # flow|"
+check_yml "should-fail: quoted feature with a trailing comment" "$TMP/flow.yml" refuse "navigation.top"
+printf 'theme:\n  features: [content.code.annotate]\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/flowlist.yml"
+check_yml "should-fail: flow-style feature list" "$TMP/flowlist.yml" refuse "content.code.annotate"
+{ cat "$CSS"; printf '@import "later.css";\n'; } >"$TMP/import.css"
+check "should-fail: statement at-rule @import" "$TMP/import.css" refuse
+{ printf '@IMPORT "later.css";\n'; cat "$CSS"; } >"$TMP/import-top.css"
+check "should-fail: @import at the top of the file" "$TMP/import-top.css" refuse
+{ printf '/* @import "x.css"; */\n'; cat "$CSS"; } >"$TMP/import-comment.css"
+check "an @import inside a comment is not a statement" "$TMP/import-comment.css" pass
+printf 'theme:\n  palette: {scheme: default, primary: custom}\nextra_css: [stylesheets/brand.css]\n' >"$TMP/dictpal.yml"
+check_yml "a single-mapping palette is accepted" "$TMP/dictpal.yml" pass
+printf 'theme:\n  features: !ENV [UNSET, [navigation.top]]\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tagged-feat.yml"
+check_yml "should-fail: tagged features value is refused, not read as empty" "$TMP/tagged-feat.yml" refuse "tagged features"
+printf 'theme:\n  features: [!ENV X, content.tabs]\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tagged-item.yml"
+check_yml "should-fail: tagged feature item is refused" "$TMP/tagged-item.yml" refuse "tagged features"
+check_mutate_guard "$CSS"
+int_saved="$int_failures"
+check_mutate_guard "$CSS" 's/slate/slat3/' >/dev/null
+if [ "$int_failures" -eq $((int_saved + 1)) ]; then
+	int_failures="$int_saved"
+	echo "ok: should-fail: a guard that sees a matching mutation counts a failure"
+else
+	echo "FAIL: guard failure not counted"
+	int_failures=$((int_failures + 1))
+fi
+printf 'theme:\n  palette: [!ENV X, {scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tagged-pal-item.yml"
+check_yml "should-fail: tagged palette entry is refused, not dropped" "$TMP/tagged-pal-item.yml" refuse "palette cannot be checked"
+printf 'theme:\n  palette: !ENV X\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tagged-pal.yml"
+check_yml "should-fail: tagged palette value is refused, not a crash" "$TMP/tagged-pal.yml" refuse "palette cannot be checked"
+printf 'theme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: !ENV X\n' >"$TMP/tagged-css.yml"
+check_yml "should-fail: tagged extra_css is refused, not a crash" "$TMP/tagged-css.yml" refuse "extra_css cannot be checked"
+printf 'theme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: 5\n' >"$TMP/int-css.yml"
+check_yml "should-fail: scalar non-string extra_css is refused, not a crash" "$TMP/int-css.yml" refuse "extra_css cannot be checked"
+printf 'theme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: {a: b}\n' >"$TMP/dict-css.yml"
+check_yml "should-fail: mapping extra_css is refused, not a crash" "$TMP/dict-css.yml" refuse "extra_css cannot be checked"
+printf 'theme:\n  palette: [foo, {scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/scalar-pal-item.yml"
+check_yml "should-fail: scalar palette entry is refused, not dropped" "$TMP/scalar-pal-item.yml" refuse "palette cannot be checked"
+printf 'theme:\n  features: {navigation.top: true}\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/dict-feat.yml"
+check_yml "should-fail: mapping features is refused, not read as empty" "$TMP/dict-feat.yml" refuse "non-list features"
+printf 'theme: [unclosed\n' >"$TMP/broken.yml"
+printf 'theme: material\nextra_css: [stylesheets/brand.css]\n' >"$TMP/theme-str.yml"
+check_yml "should-fail: string theme is refused, not a crash" "$TMP/theme-str.yml" refuse "no palette entries"
+check_yml "should-fail: unparseable yml is refused, never green" "$TMP/broken.yml" refuse "unparseable yml"
+printf 'markdown_extensions:\n  - x: !!python/name:a.b.c\ntheme:\n  palette: [{scheme: default, primary: custom}]\nextra_css: [stylesheets/brand.css]\n' >"$TMP/tag.yml"
+check_yml "a !!python/name tag does not crash the gate" "$TMP/tag.yml" pass
 
-sed "s/\"slate\"/slate/" "$CSS" >"$TMP/unquoted.css"
+mutate "$CSS" "$TMP/unquoted.css" "s/\"slate\"/slate/"
 check "slate selector unquoted" "$TMP/unquoted.css" pass
-sed "s/\"slate\"/'slate'/" "$CSS" >"$TMP/single.css"
+mutate "$CSS" "$TMP/single.css" "s/\"slate\"/'slate'/"
 check "slate selector single-quoted" "$TMP/single.css" pass
-sed -E 's|(--md-accent-fg-color--transparent:[^;]*);|\1|' "$CSS" >"$TMP/no-semi.css"
+mutate "$CSS" "$TMP/no-semi.css" -E 's|(--md-accent-fg-color--transparent:[^;]*);|\1|'
 check "last declaration without trailing semicolon" "$TMP/no-semi.css" pass
 sed '0,/--md-accent-fg-color:[^;]*;/s///' "$CSS" >"$TMP/no-light-accent.css"
 check "should-fail: light scheme without a hover colour (Material accent 4.25:1)" "$TMP/no-light-accent.css" contrast
