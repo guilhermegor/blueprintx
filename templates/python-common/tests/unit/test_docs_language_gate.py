@@ -538,6 +538,7 @@ def test_main_prose_after_a_definition_title_is_still_scored(tmp_path: Path) -> 
     [
         "\nx <y " + STR_PT.strip() + " -> fim\n",
         "\n[Nota]: " + STR_PT,
+        '\n[Nota [interna]: x "' + STR_PT.strip() + '"\n',
         '\n<div title="' + STR_PT.strip() + ">\n",
         '\n<div title="' + STR_PT.strip() + '> e "citado" aqui\n',
         '\nx <a title="\n\n' + STR_PT + '\n\n">fim\n',
