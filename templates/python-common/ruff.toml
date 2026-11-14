@@ -131,15 +131,11 @@ allow-star-arg-any = false
 "bin/**/*.py" = ["PLC2701"]
 
 "src/chassis/db_wschema/infrastructure/joblib_handler.py" = ["E101"]
-"src/chassis/db_wschema/infrastructure/sanity_check.py" = ["ANN401"]
 
 "tests/**/*.py" = [
     "S101",
     "PLC2701",
     "PLR2004",
 ]
-"src/config/connection_db.py" = ["ANN401"]
-"src/model/example_entity.py" = ["ANN401"]
-"src/chassis/db_schema/infrastructure/*_handler.py" = ["ANN401"]
 "src/utils/xml_reader.py" = ["N813"]
 "src/*/_internal/utils/xml_reader.py" = ["N813"]

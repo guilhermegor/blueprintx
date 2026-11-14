@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Protocol, cast
 
 
 try:
@@ -15,22 +15,31 @@ except ImportError:  # pragma: no cover - optional dependency
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import ensure_id, validate_sql_identifier
+from utils.dbapi import DbManagedConnection
 
 
-def _read_lob(value: Any) -> str:
-    """Return the text of an Oracle CLOB, or the value itself when already a string.
+class _Lob(Protocol):
+    def read(self) -> str:
+        """Return the LOB text."""
+        ...
+
+
+def _read_lob(value: object) -> str | bytes | bytearray:
+    """Return the text of an Oracle CLOB, or the value itself when already a string or bytes.
 
     Parameters
     ----------
-    value : Any
+    value : object
         Column value returned by ``oracledb``; a LOB object or a ``str``.
 
     Returns
     -------
-    str
-        Textual payload of the column.
+    str | bytes | bytearray
+        Textual payload of the column; ``bytes`` and ``bytearray`` pass through.
     """
-    return value.read() if hasattr(value, "read") else value
+    if isinstance(value, str | bytes | bytearray):
+        return value
+    return cast(_Lob, value).read()
 
 
 class OracleDatabaseHandler(DatabaseHandler):
@@ -212,9 +221,12 @@ class OracleDatabaseHandler(DatabaseHandler):
     def close(self) -> None:
         """Release resources (no-op, connections are per-call)."""
 
-    def _connect(self) -> Any:
+    def _connect(self) -> DbManagedConnection:
         """Create an Oracle connection using the configured DSN."""
-        return oracledb.connect(user=self.user, password=self.password, dsn=self.dsn)
+        return cast(
+            DbManagedConnection,
+            oracledb.connect(user=self.user, password=self.password, dsn=self.dsn),
+        )
 
     def _ensure_table(self) -> None:
         """Create the backing table when it does not exist."""
@@ -224,7 +236,8 @@ class OracleDatabaseHandler(DatabaseHandler):
                 "SELECT COUNT(*) FROM user_tables WHERE table_name = :tbl",
                 {"tbl": self.table.upper()},
             )
-            exists = cur.fetchone()[0] > 0
+            tuple_count = cur.fetchone()
+            exists = bool(tuple_count and tuple_count[0])
             if not exists:
                 cur.execute(
                     f"CREATE TABLE {self.table} (\n"

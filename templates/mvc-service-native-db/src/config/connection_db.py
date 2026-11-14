@@ -12,10 +12,11 @@ from collections.abc import Callable
 import os
 from pathlib import Path
 import sqlite3
-from typing import Any
+from typing import cast
 
 from dotenv import load_dotenv
 
+from utils.dbapi import DbConnection
 from utils.typing import type_checker
 
 
@@ -52,7 +53,7 @@ def _compose_dsn(str_backend: str) -> str:
 
 
 @type_checker
-def _connect_sqlite() -> Any:
+def _connect_sqlite() -> object:
     """Open a stdlib ``sqlite3`` connection, creating the parent directory."""
     path_db = Path(os.getenv("DB_PATH", "./data/app.db"))
     path_db.parent.mkdir(parents=True, exist_ok=True)
@@ -60,7 +61,7 @@ def _connect_sqlite() -> Any:
 
 
 @type_checker
-def _connect_postgresql() -> Any:
+def _connect_postgresql() -> object:
     """Open a PostgreSQL connection via ``psycopg``."""
     import psycopg  # noqa: PLC0415 -- optional dependency, imported lazily
 
@@ -77,7 +78,7 @@ def _connect_postgresql() -> Any:
 
 
 @type_checker
-def _connect_mysql() -> Any:
+def _connect_mysql() -> object:
     """Open a MySQL/MariaDB connection via ``mysql.connector``."""
     import mysql.connector  # noqa: PLC0415 -- optional dependency, imported lazily
 
@@ -123,7 +124,7 @@ def _normalize_odbc_bool(str_value: str) -> str:  # complexity-ok: DSN option ma
 
 
 @type_checker
-def _connect_mssql() -> Any:  # complexity-ok: DSN assembly per auth mode
+def _connect_mssql() -> object:  # complexity-ok: DSN assembly per auth mode
     """Open a SQL Server connection via ``pyodbc`` (SQL auth or Azure AD).
 
     ``DB_MSSQL_AUTH`` selects the auth mode: the default ``sql`` uses ``UID``/``PWD``;
@@ -162,7 +163,7 @@ def _connect_mssql() -> Any:  # complexity-ok: DSN assembly per auth mode
 
 
 @type_checker
-def _connect_oracle() -> Any:
+def _connect_oracle() -> object:
     """Open an Oracle connection via ``oracledb``."""
     import oracledb  # noqa: PLC0415 -- optional dependency, imported lazily
 
@@ -174,7 +175,7 @@ def _connect_oracle() -> Any:
     )
 
 
-_DICT_BUILDERS: dict[str, Callable[[], Any]] = {
+_DICT_BUILDERS: dict[str, Callable[[], object]] = {
     "sqlite": _connect_sqlite,
     "postgresql": _connect_postgresql,
     "mariadb": _connect_mysql,
@@ -230,12 +231,12 @@ def active_backend() -> str:
 
 
 @type_checker
-def build_connection() -> Any:
+def build_connection() -> DbConnection:
     """Build a native DB-API connection from environment configuration.
 
     Returns
     -------
-    Any
+    DbConnection
         An open DB-API 2.0 connection for the configured backend.
 
     Notes
@@ -245,4 +246,4 @@ def build_connection() -> Any:
     ``postgresql``, ``mariadb``, ``mysql``, ``mssql``, ``oracle``. SQLite uses ``DB_PATH``;
     the rest read ``DB_DSN`` first, then compose from ``DB_*`` vars.
     """
-    return _DICT_BUILDERS[active_backend()]()
+    return cast(DbConnection, _DICT_BUILDERS[active_backend()]())

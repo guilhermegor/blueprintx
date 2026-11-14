@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
-from typing import Any
+from typing import cast
 from urllib.parse import urlparse
 
 
@@ -18,10 +18,12 @@ except ImportError:  # pragma: no cover - optional dependency
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import (
     DsnParts,
+    decode_record,
     ensure_id,
     validate_not_flag,
     validate_sql_identifier,
 )
+from utils.dbapi import DbManagedConnection
 
 
 class MariaDBDatabaseHandler(DatabaseHandler):
@@ -109,7 +111,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
             tuple_row = cls_cur.fetchone()
         if not tuple_row:
             return None
-        return json.loads(tuple_row[0])
+        return decode_record(tuple_row[0])
 
     def update(self, record_id: str, updates: Record) -> Record | None:
         """Update an existing record atomically.
@@ -139,7 +141,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
             tuple_row = cls_cur.fetchone()
             if tuple_row is None:
                 return None
-            dict_updated = {**json.loads(tuple_row[0]), **updates, self.id_field: record_id}
+            dict_updated = {**decode_record(tuple_row[0]), **updates, self.id_field: record_id}
             cls_cur.execute(
                 f"UPDATE {self.table} SET data = %s WHERE {self.id_field} = %s",  # noqa: S608
                 (json.dumps(dict_updated), record_id),
@@ -226,9 +228,9 @@ class MariaDBDatabaseHandler(DatabaseHandler):
     def close(self) -> None:
         """Release resources (no-op; connections are per-call)."""
 
-    def _connect(self) -> Any:
+    def _connect(self) -> DbManagedConnection:
         """Create a mysql-connector connection using the parsed DSN."""
-        return mysql_connector.connect(**self.connection_kwargs)
+        return cast(DbManagedConnection, mysql_connector.connect(**self.connection_kwargs))
 
     def _ensure_table(self) -> None:
         """Create the backing table when it does not exist."""

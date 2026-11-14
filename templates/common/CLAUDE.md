@@ -184,19 +184,15 @@ violations raise `TypeError` (beartype's own exception is not a `TypeError` subc
 `pytest.raises(TypeError)` breaks). Test note: a bare `Mock` fails a typed parameter — use
 `Mock(spec=...)`; and container checks are **sampled O(1)** (one element per call), not
 exhaustive. `utils/typing/` is the one place `Any` is the honest signature (it inspects values
-of any type) and is ANN401-exempt. The package ships from
+of any type) and is exempt from `disallow_any_explicit`. The package ships from
 `templates/python-common/optional/typing/`.
 
 **Explicit `Any` is refused** (`disallow_any_explicit = True` in `mypy.ini`, plus ruff `ANN401`),
 including nested (`Callable[[Any, str], ...]`) which `ANN401` cannot see. Use `object`, a `TypeVar`,
-a `ParamSpec` or a `Protocol`. Exemptions are `[mypy-<module>]` sections with
-`disallow_any_explicit = False`, mirroring the `ANN401` `per-file-ignores`: the typing engine
-(inspects values of any type), the DB-API handles (`utils/tabular_reader.py`, `utils/frames.py`,
-and the native DB handler modules, module-wide and not only `_connect`; no shared driver type)
-and `SanityCheck` (any joblib payload). Only mvc-native also exempts `config/connection_db.py`,
-`model/example_entity.py` and its controller pipelines: its
-`templates/mvc-service-native-db/mypy.exemptions.ini` is appended to `mypy.ini` at scaffold time,
-so every other tier refuses `Any` there. Bash is out of
+a `ParamSpec` or a `Protocol`. The only exempt module is the typing engine (it inspects
+values of any type): a DB-API connection or cursor is typed by the `utils/dbapi.py` Protocols
+(`DbConnection`, `DbCursor`, `DbManaged*`), a row cell is `object`, and the one driver-to-Protocol
+`cast` sits at each connection seam. Bash is out of
 scope: it has no static types.
 
 The shared `utils/` helpers (`dtypes`, `br_identifiers`, `decimals`, `loggers`, `text`,
