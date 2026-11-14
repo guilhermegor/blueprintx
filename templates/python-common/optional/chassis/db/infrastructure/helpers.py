@@ -66,9 +66,9 @@ def decode_record(cell: object) -> Record:
     Raises
     ------
     TypeError
-        If ``cell`` is neither ``str`` nor ``bytes``.
+        If ``cell`` is none of ``str``, ``bytes`` or ``bytearray``.
     """
-    if not isinstance(cell, str | bytes):
+    if not isinstance(cell, str | bytes | bytearray):
         raise TypeError(f"Expected a JSON text cell, got {type(cell).__name__!r}")
     return json.loads(cell)
 

@@ -95,6 +95,20 @@ if [ -f "$PROJECT_PATH/src/controller/_pipeline.py" ]; then
 	fi
 fi
 
+if [ -f "$PROJECT_PATH/src/utils/frames.py" ]; then
+	printf '\nfrom typing import Any\n\n\ndef planted(x: list[Any]) -> int:\n    """Probe."""\n    return len(x)\n' \
+		>>"$PROJECT_PATH/src/utils/frames.py"
+	str_out="$(run_mypy)"
+	int_rc=$?
+	if [ "$int_rc" -ne 0 ] && grep -q 'utils/frames.py.*\[explicit-any\]' <<<"$str_out"; then
+		echo "ok: an explicit Any in utils/frames.py is refused (blueprintx#1054)"
+	else
+		echo "FAIL: mypy accepted an explicit Any in utils/frames.py (exit $int_rc)"
+		echo "$str_out"
+		int_failures=$((int_failures + 1))
+	fi
+fi
+
 [ "$int_failures" -eq 0 ] || {
 	echo "$int_failures case(s) failed"
 	exit 1

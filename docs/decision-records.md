@@ -1073,7 +1073,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
   per-module `disallow_any_explicit = False`; #1054 removed those too: `utils/dbapi.py` holds the
   structural `DbConnection`/`DbCursor` Protocols, a row cell is `object` (narrowed by
   `decode_record`), and `SanityCheck` takes `object`. The one remaining `cast` per driver sits at
-  `_connect`, because the drivers share no base class and their own stubs disagree.
+  `_connect` (mvc-native: `build_connection`), because the drivers share no base class and their own stubs disagree.
 - **Baseline strictness.** Annotations and obvious type errors are enforced, not `--strict`,
   so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.
   `disallow_any_generics` is the exception (#1054): it is global, so a bare `dict` or `list`

@@ -24,8 +24,8 @@ class _Lob(Protocol):
         ...
 
 
-def _read_lob(value: object) -> str:
-    """Return the text of an Oracle CLOB, or the value itself when already a string.
+def _read_lob(value: object) -> str | bytes | bytearray:
+    """Return the text of an Oracle CLOB, or the value itself when already a string or bytes.
 
     Parameters
     ----------
@@ -34,10 +34,10 @@ def _read_lob(value: object) -> str:
 
     Returns
     -------
-    str
-        Textual payload of the column.
+    str | bytes | bytearray
+        Textual payload of the column; ``bytes`` and ``bytearray`` pass through.
     """
-    if isinstance(value, str):
+    if isinstance(value, str | bytes | bytearray):
         return value
     return cast(_Lob, value).read()
 

@@ -182,7 +182,7 @@ violations raise `TypeError` (beartype's own exception is not a `TypeError` subc
 `pytest.raises(TypeError)` breaks). Test note: a bare `Mock` fails a typed parameter — use
 `Mock(spec=...)`; and container checks are **sampled O(1)** (one element per call), not
 exhaustive. `utils/typing/` is the one place `Any` is the honest signature (it inspects values
-of any type) and is ANN401-exempt. The package ships from
+of any type) and is exempt from `disallow_any_explicit`. The package ships from
 `templates/python-common/optional/typing/`.
 
 **Explicit `Any` is refused** (`disallow_any_explicit = True` in `mypy.ini`, plus ruff `ANN401`),

@@ -274,7 +274,7 @@ def read_query(
     ----------
     cls_connection : DbConnection
         An open DB-API 2.0 connection (e.g. from ``config.connection_db.build_connection``).
-        Opaque by design — any driver's connection object is accepted.
+        Any object with ``cursor``, ``commit`` and ``close`` is accepted (structural).
     str_sql : str
         The SQL query, with ``?``/``%s`` placeholders for any parameters.
     dict_dtypes : dict of {str: str}
