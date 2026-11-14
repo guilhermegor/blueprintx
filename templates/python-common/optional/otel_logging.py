@@ -236,14 +236,14 @@ def _build_otel_handler() -> logging.Handler:
         A handler exporting log records through the configured OTLP collector.
     """
     from opentelemetry._logs import set_logger_provider  # noqa: PLC0415, PLC2701
-    from opentelemetry.exporter.otlp.proto.http._log_exporter import (  # noqa: PLC0415
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import (  # noqa: PLC0415, PLC2701
         OTLPLogExporter,  # noqa: PLC2701
     )
-    from opentelemetry.sdk._logs import (  # noqa: PLC0415
+    from opentelemetry.sdk._logs import (  # noqa: PLC0415, PLC2701
         LoggerProvider,  # noqa: PLC2701
         LoggingHandler,  # noqa: PLC2701
     )
-    from opentelemetry.sdk._logs.export import (  # noqa: PLC0415
+    from opentelemetry.sdk._logs.export import (  # noqa: PLC0415, PLC2701
         BatchLogRecordProcessor,  # noqa: PLC2701
     )
     from opentelemetry.sdk.resources import Resource  # noqa: PLC0415

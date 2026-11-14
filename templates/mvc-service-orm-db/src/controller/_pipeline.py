@@ -279,7 +279,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
             The run summary to serialise.
         """
         log_message(self.logger, "Starting summary-export process")
-        with self.path_json.open("w") as file_write:
+        with self.path_json.open("w", encoding="utf-8") as file_write:
             json.dump(dict_summary, file_write)
         log_message(self.logger, f"Summary exported: {self.path_json}")
 
