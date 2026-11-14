@@ -25,6 +25,8 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
+      - name: Documented npm commands exist
+        run: bash bin/check_doc_commands.sh .
       - run: npm ci
       - name: Assertion weakening gate
         run: |
