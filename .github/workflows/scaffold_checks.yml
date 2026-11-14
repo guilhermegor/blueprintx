@@ -988,6 +988,10 @@ jobs:
           BARREL_PROJECT: ${{ runner.temp }}/ci-scaffold
         run: bash tests/test_ts_lib_barrel.sh
 
+      - name: Doc-commands gate should-fail witness (blueprintx#1079)
+        if: matrix.skeleton == 'ts-lib'
+        run: bash tests/test_ts_doc_commands_gate.sh
+
   spell-check:
     name: Spell check — docs/ and templates/
     runs-on: ubuntu-latest
