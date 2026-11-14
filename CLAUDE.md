@@ -203,6 +203,12 @@ ships. Each `skeleton.meta` carries an optional `readme_archetype=` that `valida
 enforces, and `bin/lib/scaffold_readme.sh` renders the README (archetype blocks, `LINKEDIN_URL`
 resolution) for all 11 scaffolds. Rules and rationale: `docs/readme-layout.md`.
 
+The **TypeScript doc-commands gate** (`templates/ts-common/bin/check_doc_commands.sh`, blueprintx#1079)
+fails a generated project whose `README.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md` or `docs/**/*.md`
+cites an `npm run <x>` that `package.json` does not define. Both `ts_*.sh` scaffolds copy it, and
+`bin/ci/scaffold_ts_test.sh` runs `npm run lint:docs` inside a real generated project, which is the
+oracle; `tests/test_ts_doc_commands_gate.sh` is the should-fail witness. It has no Python twin yet.
+
 ### Releasing / version bump
 **The version is the git tag — there is no hand-bump.** Cut a release from the **`Release`
 GitHub Action** (`release.yml`, `workflow_dispatch` → `version` field): the `tag` job pushes

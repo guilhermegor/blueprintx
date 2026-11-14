@@ -49,5 +49,6 @@ if [ -f bin/check_test_directives.sh ]; then
     fi
     rm -f src/zz-witness.test.ts
 fi
+npm run lint:docs
 npm test
-echo "OK: $SKELETON scaffold passes npm ci, lint and jest."
+echo "OK: $SKELETON scaffold passes npm ci, lint, lint:docs and jest."

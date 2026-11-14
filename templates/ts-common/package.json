@@ -19,6 +19,7 @@
     "lint:css:fix": "stylelint \"src/**/*.css\" --fix",
     "lint:readme": "bash bin/check_readme_structure.sh README.md",
     "lint:agents": "bash bin/check_agents_md_pairs.sh --root .",
+    "lint:docs": "bash bin/check_doc_commands.sh .",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:e2e:frontend": "playwright test",
