@@ -16,17 +16,21 @@ How it decides:
    print success.
 2. **Prose only.** Fenced code (fences at any indent, since MkDocs admonitions and tabs nest
    them), YAML front matter, multi-line HTML comments, inline code, links, bare URLs, HTML
-   tags and table rows are blanked before counting, so quoting a command or naming a
-   Portuguese product proves nothing.
+   tags (also across lines), link definitions and table rows are blanked before counting, so
+   quoting a command or naming a Portuguese product proves nothing.
 3. **One verdict per paragraph.** Each paragraph is scored against every locale's function-word
    set; the paragraph reads as the locale with the most hits, and only when that count reaches
    ``INT_MIN_HITS`` and beats the declared locale's own. The Portuguese set is imported from
    ``check_comment_language`` rather than copied, so the two gates cannot disagree about it.
 4. **Escape.** ``docs-lang:ok`` in a paragraph, outside inline code, skips it.
    ``docs-lang:untranslated`` as its own HTML comment line outside fenced code skips the whole page
-   and is counted in the final line, so skipped pages are never silent. A scaffold whose locale
-   is not ``en`` appends it to every shipped page, which the English templates would otherwise
-   fail on the first lint; deleting it is the act of declaring the page translated.
+   and is counted in the final line, failing runs included, so skipped pages are never silent.
+   A scaffold whose locale is not ``en`` appends it to every shipped page, which the English
+   templates would otherwise fail on the first lint; deleting it is the act of declaring the
+   page translated.
+5. **Never vacuous.** A run whose unskipped pages hold no paragraph with a word fails; a run
+   where every page is marked untranslated only warns, since that is a fresh non-English scaffold.
+   ``--list-pages`` prints the page set so a caller never has to redefine it.
 
 A locale outside ``DICT_LOCALE_WORDS`` fails closed: the gate cannot say what it would be
 checking against.
@@ -102,9 +106,20 @@ RE_MULTILINE_BLANK = re.compile(
 TUPLE_BLANKINGS = (
     re.compile(r"<!--.*?-->", re.DOTALL),
     re.compile(r"!?\[[^\]\n]*\]\([^)\n]*\)"),
+    re.compile(
+        r"""</?[A-Za-z][\w:-]*(?:\s+[A-Za-z_:][\w:.-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'<>=]+))?)*\s*/?>"""
+    ),
     re.compile(r"https?://\S+"),
-    re.compile(r"<[^>\n]+>"),
 )
+
+RE_TABLE_ROW = re.compile(r"^[ \t]*\|")
+
+RE_LINK_DEFINITION = re.compile(
+    r"""^[ \t]*\[(?!\^)(?:\\.|[^\[\]\\\n])+\]:[ \t]*\S+"""
+    r"""(?P<title>[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$"""
+)
+
+RE_DEFINITION_TITLE = re.compile(r"""^[ \t]*(?:"[^"]*"|'[^']*'|\([^)]*\))[ \t]*$""")
 
 RE_UNTRANSLATED = re.compile(rf"^<!--\s*{re.escape(STR_UNTRANSLATED)}\s*-->\s*$", re.MULTILINE)
 
@@ -186,7 +201,7 @@ def _fence_toggles(str_open: str, str_marker: str, str_info: str) -> bool:
 
 
 def _mask_lines(str_text: str) -> list:
-    """Blank every line that is fenced code or a table row, keeping line numbers.
+    """Blank fenced code, table rows and link definitions, keeping line numbers.
 
     Parameters
     ----------
@@ -200,13 +215,24 @@ def _mask_lines(str_text: str) -> list:
     """
     list_out: list = []
     str_open = ""
+    bool_after_definition = False
     for str_line in [*str_text.splitlines(), ""]:
         re_marker = RE_FENCE.match(str_line)
         str_marker, str_info = re_marker.groups() if re_marker else ("", "")
         bool_toggle = _fence_toggles(str_open, str_marker, str_info)
         if bool_toggle:
             str_open = "" if str_open else str_marker
-        bool_blank = bool_toggle or bool(str_open) or str_line.lstrip().startswith("|")
+        re_definition = None if str_open else RE_LINK_DEFINITION.match(str_line)
+        bool_definition = bool(re_definition)
+        bool_title = bool_after_definition and bool(RE_DEFINITION_TITLE.match(str_line))
+        bool_after_definition = bool_definition and not re_definition.group("title")
+        bool_blank = (
+            bool_toggle
+            or bool(str_open)
+            or bool_definition
+            or bool_title
+            or bool(RE_TABLE_ROW.match(str_line))
+        )
         list_out.append("" if bool_blank else str_line)
     return list_out
 
@@ -261,7 +287,8 @@ def prose_paragraphs(str_text: str) -> list:
         if list_block and STR_ESCAPE not in str_para:
             for re_span in TUPLE_BLANKINGS:
                 str_para = re_span.sub(" ", str_para)
-            list_out.append((int_start, str_para))
+            if str_para.strip():
+                list_out.append((int_start, str_para))
         list_block, int_start = [], 0
     return list_out
 
@@ -340,15 +367,17 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
 
     Returns
     -------
-    tuple of (list of str, bool)
-        ``path:line`` messages naming the locale the paragraph reads as and an excerpt, then
-        whether the page was skipped as untranslated.
+    tuple of (list of str, bool, int)
+        ``path:line`` messages naming the locale the paragraph reads as and an excerpt, whether
+        the page was skipped as untranslated, then how many paragraphs were scored, a
+        paragraph counting only when it holds a word, so punctuation residue is not prose.
     """
     list_out: list = []
     str_text = path_page.read_text(encoding="utf-8")
     if is_untranslated(str_text):
-        return list_out, True
-    for int_line, str_para in prose_paragraphs(str_text):
+        return list_out, True, 0
+    list_paras = prose_paragraphs(str_text)
+    for int_line, str_para in list_paras:
         str_read = paragraph_locale(str_para, str_declared)
         if str_read != str_declared:
             str_flat = " ".join(str_para.split())
@@ -359,7 +388,10 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
                 f"❌ {str_rel}:{int_line}: paragraph reads as "
                 f"{str_read} but theme.language is {str_declared} -- {str_excerpt}"
             )
-    return list_out, False
+    int_scored = sum(
+        any(str_char.isalnum() for str_char in str_para) for _, str_para in list_paras
+    )
+    return list_out, False, int_scored
 
 
 def _load_config(path_root: pathlib.Path) -> tuple:
@@ -390,6 +422,34 @@ def _load_config(path_root: pathlib.Path) -> tuple:
     return dict_mkdocs, ""
 
 
+def _resolve(path_root: pathlib.Path, bool_check_locale: bool = True) -> tuple:
+    """Load the config and the page set, or say why the gate cannot run.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The project root.
+    bool_check_locale : bool
+        False for ``--list-pages``, which names pages and needs no word set for the locale.
+
+    Returns
+    -------
+    tuple of (str, list, str)
+        The declared locale, the pages to read, and an error message that is empty when the
+        gate can run.
+    """
+    dict_mkdocs, str_error = _load_config(path_root)
+    str_declared = declared_locale(dict_mkdocs)
+    if bool_check_locale and not str_error and str_declared not in DICT_LOCALE_WORDS:
+        str_error = (
+            f"theme.language '{str_declared}' has no function-word set; add one to this gate"
+        )
+    list_pages = [] if str_error else page_set(path_root, dict_mkdocs)
+    if not str_error and not list_pages:
+        str_error = f"no page found under {path_root}; this gate would pass vacuously"
+    return str_declared, list_pages, str_error
+
+
 def main(list_argv: list) -> int:
     """Check every page against the locale ``mkdocs.yml`` declares.
 
@@ -397,12 +457,13 @@ def main(list_argv: list) -> int:
     ----------
     list_argv : list of str
         Optional leading ``--root <dir>``; defaults to the project the script ships in.
+        ``--list-pages`` prints the page set, one path per line, instead of checking it.
 
     Returns
     -------
     int
         0 when every paragraph reads as the declared locale, 1 on a violation, an unsupported
-        locale, a missing ``mkdocs.yml`` or an empty page set.
+        locale, a missing ``mkdocs.yml``, an empty page set or a run that scored no paragraph.
     """
     try:
         path_arg, list_rest = split_root_option(list_argv)
@@ -410,52 +471,63 @@ def main(list_argv: list) -> int:
         print(f"❌ {cls_err}")
         return 1
     path_root = path_arg or pathlib.Path(__file__).resolve().parent.parent
-    if list_rest:
-        print("❌ usage: check_docs_language.py [--root <dir>]")
+    bool_list = list_rest == ["--list-pages"]
+    if list_rest and not bool_list:
+        print("❌ usage: check_docs_language.py [--root <dir>] [--list-pages]")
         return 1
-    dict_mkdocs, str_error = _load_config(path_root)
-    str_declared = declared_locale(dict_mkdocs)
-    if not str_error and str_declared not in DICT_LOCALE_WORDS:
-        str_error = (
-            f"theme.language '{str_declared}' has no function-word set; add one to this gate"
-        )
-    list_pages = [] if str_error else page_set(path_root, dict_mkdocs)
-    if not str_error and not list_pages:
-        str_error = f"no page found under {path_root}; this gate would pass vacuously"
+    str_declared, list_pages, str_error = _resolve(path_root, not bool_list)
     if str_error:
         print(f"❌ {str_error}")
         return 1
-    list_results = [page_problems(path_page, path_root, str_declared) for path_page in list_pages]
-    list_problems = [str_problem for list_found, _ in list_results for str_problem in list_found]
+    if bool_list:
+        print("\n".join(str(path_page) for path_page in list_pages))
+        return 0
+    return _report(
+        [page_problems(path_page, path_root, str_declared) for path_page in list_pages],
+        str_declared,
+    )
+
+
+def _report(list_results: list, str_declared: str) -> int:
+    """Print the findings and the summary, and return the exit code.
+
+    Parameters
+    ----------
+    list_results : list of tuple
+        One ``(problems, skipped, scored)`` triple per page, from ``page_problems``.
+    str_declared : str
+        The locale the pages were checked against.
+
+    Returns
+    -------
+    int
+        1 on a violation or when no paragraph was scored across the run's unskipped pages, else 0.
+    """
+    list_problems = [str_found for list_found, _, _ in list_results for str_found in list_found]
+    int_skipped = sum(bool_skipped for _, bool_skipped, _ in list_results)
+    int_checked = len(list_results) - int_skipped
+    str_note = f"{int_skipped} skipped as {STR_UNTRANSLATED}"
     for str_problem in list_problems:
         print(str_problem)
     if list_problems:
         print(
             f"\n{len(list_problems)} paragraph(s) are not in {str_declared}. Translate them, "
             f"change theme.language, or add {STR_ESCAPE} to the paragraph."
+            + (f" ({str_note})" if int_skipped else "")
         )
         return 1
-    _print_summary(list_results, str_declared)
-    return 0
-
-
-def _print_summary(list_results: list, str_declared: str) -> None:
-    """Report how many pages were read, never claiming success when none was.
-
-    Parameters
-    ----------
-    list_results : list of tuple
-        One ``(problems, skipped)`` pair per page, from ``page_problems``.
-    str_declared : str
-        The locale the pages were checked against.
-    """
-    int_skipped = sum(bool_skipped for _, bool_skipped in list_results)
-    int_checked = len(list_results) - int_skipped
+    str_tail = f", {str_note}" if int_skipped else ""
     if int_checked == 0:
         print(f"⚠️ docs language: 0 page(s) checked, all {int_skipped} marked {STR_UNTRANSLATED}")
-        return
-    str_note = f", {int_skipped} skipped as {STR_UNTRANSLATED}" if int_skipped else ""
-    print(f"✅ docs language is {str_declared} ({int_checked} page(s) checked{str_note})")
+        return 0
+    if not sum(int_scored for _, _, int_scored in list_results):
+        print(
+            f"❌ {int_checked} page(s) checked but no prose scored (punctuation-only residue and "
+            f"paragraphs carrying {STR_ESCAPE} do not count); vacuous pass{str_tail}"
+        )
+        return 1
+    print(f"✅ docs language is {str_declared} ({int_checked} page(s) checked{str_tail})")
+    return 0
 
 
 if __name__ == "__main__":
