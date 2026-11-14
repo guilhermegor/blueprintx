@@ -640,6 +640,46 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
 
 
 @pytest.mark.parametrize(
+    ("str_stdout", "str_stderr", "int_code"),
+    [
+        ("", "GraphQL: API rate limit already exceeded for user ID 1.", 1),
+        ('{"errors": [{"type": "RATE_LIMITED", "message": "slow down"}]}', "", 0),
+        ("", "gh: HTTP 403: API rate limit exceeded", 1),
+    ],
+    ids=["cli-message", "errors-type", "http-403"],
+)
+def test_fetch_page_names_the_rate_limit(
+    monkeypatch: pytest.MonkeyPatch, str_stdout: str, str_stderr: str, int_code: int
+) -> None:
+    """An exhausted GraphQL budget raises ``RateLimited``, not a bare failure."""
+    cls_gate = _load_gate()
+    cls_run = Mock(returncode=int_code, stdout=str_stdout, stderr=str_stderr)
+    monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
+    with pytest.raises(cls_gate.RateLimited):
+        cls_gate._fetch_page("o", "r", 1, None, None)
+
+
+def test_main_reports_rate_limit_in_one_line_with_distinct_exit(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``main`` prints one explicit line and exits 3 instead of a traceback."""
+    cls_gate = _load_gate()
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    monkeypatch.setattr(cls_gate, "_roster_or_verdict", Mock(return_value=({"x": {}}, None)))
+    monkeypatch.setattr(cls_gate, "reviewer_logins", Mock(return_value=set()))
+    monkeypatch.setattr(cls_gate, "_gh_api_text", Mock(return_value="1700000000\n"))
+    monkeypatch.setattr(cls_gate, "load_marker_posters", Mock(return_value=frozenset()))
+    monkeypatch.setattr(
+        cls_gate, "fetch_pull_request", Mock(side_effect=cls_gate.RateLimited("budget at 0"))
+    )
+    assert cls_gate.main([]) == 3
+    str_out = capsys.readouterr().out.strip()
+    assert len(str_out.splitlines()) == 1
+    assert "rate limit" in str_out.lower()
+
+
+@pytest.mark.parametrize(
     ("str_login", "str_normalised"),
     [
         ("coderabbitai[bot]", "coderabbitai"),

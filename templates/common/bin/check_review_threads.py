@@ -304,6 +304,14 @@ def reviewer_logins(dict_roster: dict[str, str]) -> set[str]:
     return set_reviewers
 
 
+_RE_GRAPHQL_RATE_LIMIT = re.compile(r"rate limit|RATE_LIMITED|HTTP 429", re.IGNORECASE)
+_INT_EXIT_RATE_LIMITED = 3
+
+
+class RateLimited(RuntimeError):
+    """GitHub's GraphQL budget is exhausted, so the PR could not be read."""
+
+
 def _fetch_page(
     str_owner: str,
     str_repo: str,
@@ -344,6 +352,8 @@ def _fetch_page(
         f"cc={str_comment_cursor}" if str_comment_cursor else "cc=",
     ]
     cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
+    if _RE_GRAPHQL_RATE_LIMIT.search(f"{cls_run.stderr}\n{cls_run.stdout}"):
+        raise RateLimited(cls_run.stderr.strip()[:200] or "GraphQL RATE_LIMITED")
     if cls_run.returncode != 0:
         raise RuntimeError(f"GraphQL query failed: {cls_run.stderr.strip()[:400]}")
     dict_out = json.loads(cls_run.stdout)
@@ -2365,6 +2375,20 @@ def _roster_or_verdict(
     return dict_roster, None
 
 
+def _print_rate_limited() -> int:
+    """Print one line naming the GraphQL rate limit and its reset time.
+
+    Returns
+    -------
+    int
+        ``3``, distinct from ``1`` (a real finding): the gate read nothing.
+    """
+    str_reset = (_gh_api_text(["rate_limit", "--jq", ".resources.graphql.reset"]) or "").strip()
+    str_when = f"resets at epoch {str_reset}" if str_reset.isdigit() else "reset time unknown"
+    print(f"UNKNOWN: GitHub GraphQL rate limit exhausted ({str_when}); no review was read.")
+    return _INT_EXIT_RATE_LIMITED
+
+
 def main(list_argv: list[str] | None = None) -> int:
     """Check the current PR's review threads.
 
@@ -2397,12 +2421,15 @@ def main(list_argv: list[str] | None = None) -> int:
     set_reviewers = reviewer_logins(dict_roster)
 
     str_owner, _, str_repo = str_repo_full.partition("/")
-    dict_pr = fetch_pull_request(
-        str_owner,
-        str_repo,
-        int(str_number),
-        frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
-    )
+    try:
+        dict_pr = fetch_pull_request(
+            str_owner,
+            str_repo,
+            int(str_number),
+            frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
+        )
+    except RateLimited:
+        return _print_rate_limited()
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 
