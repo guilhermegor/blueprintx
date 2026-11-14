@@ -572,7 +572,7 @@ def _content_state(
     """
     bytes_ours = path_project_file.read_bytes()
     bytes_theirs = path_theirs.read_bytes()
-    if bytes_theirs in (bytes_ours, bytes_base):
+    if bytes_theirs in {bytes_ours, bytes_base}:
         return "same"
     return "template_changed" if bytes_ours == bytes_base else "both_changed"
 

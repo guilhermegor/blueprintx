@@ -556,9 +556,11 @@ def _own_parameter_writes(
     """
     list_positional = [*cls_fn.args.posonlyargs, *cls_fn.args.args]
     str_param = list_positional[0].arg
+    is_unbound_param = str_param not in {"self", "cls"} or len(cls_fn.args.defaults) >= len(
+        list_positional
+    )
     if (
-        str_param not in {"self", "cls"}
-        or len(cls_fn.args.defaults) >= len(list_positional)
+        is_unbound_param
         or _loses_exemption(cls_fn, set_bound)
         or _rebinds(cls_fn, str_param)
         or _shadows_writer(cls_fn)

@@ -314,7 +314,7 @@ def is_terminator(str_line: str, tuple_open: tuple, str_kind: str) -> bool:
         and Ruby allows an indented terminator, so both ignore surrounding whitespace.
     """
     str_name, str_mode = tuple_open
-    if str_kind in ("yaml", "ruby"):
+    if str_kind in {"yaml", "ruby"}:
         return str_line.strip() == str_name
     return str_line.lstrip("\t") == str_name if str_mode == "-" else str_line == str_name
 

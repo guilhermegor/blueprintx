@@ -32,6 +32,7 @@ from fnmatch import fnmatchcase
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -400,7 +401,7 @@ def collect_axes(list_check_runs: list, dict_axis_rules: dict) -> tuple:
             r.get("name")
             for r in list_mine
             if r.get("status") == "completed"
-            and r.get("conclusion") not in ("success", "neutral", "skipped")
+            and r.get("conclusion") not in {"success", "neutral", "skipped"}
         ]
         if list_failed:
             dict_axes[str_axis] = "failure"
@@ -464,8 +465,6 @@ def poll_axes_until_terminal(
     tuple of dict
         ``(dict_axes, dict_failing)`` as returned by :func:`collect_axes`.
     """
-    import time
-
     dict_axis_rules = {
         "tests": ("Run Automated Tests",),
         "lint": ("Ruff", "mypy", "lint"),
@@ -511,7 +510,8 @@ def sync_gate_labels(str_repo: str, int_pr: int, list_current: list, list_desire
         {"labels": list_desired},
     )
     for str_stale in list_current:
-        if str_stale.split(":")[0] in ("risk", "size", "gate") and str_stale not in list_desired:
+        str_axis = str_stale.split(":", 1)[0]
+        if str_axis in {"risk", "size", "gate"} and str_stale not in list_desired:
             _api("DELETE", f"{API}/repos/{str_repo}/issues/{int_pr}/labels/{str_stale}")
 
 
@@ -536,16 +536,16 @@ def main() -> int:
 
     dict_pr = _api("GET", f"{API}/repos/{str_repo}/pulls/{int_pr}") or {}
     str_head_sha = (dict_pr.get("head") or {}).get("sha", "")
-    int_changed = int(dict_pr.get("additions", 0)) + int(dict_pr.get("deletions", 0))
     list_labels = [lbl["name"] for lbl in dict_pr.get("labels", [])]
 
     list_files = _api("GET", f"{API}/repos/{str_repo}/pulls/{int_pr}/files?per_page=100") or []
     list_paths = [f["filename"] for f in list_files]
 
     str_risk = classify_risk(list_paths)
-    str_size = classify_size(int_changed)
-    bool_lock_only = is_lockfile_only(list_paths)
-    bool_eligible = is_auto_mergeable(str_risk, str_size, list_labels, bool_lock_only)
+    str_size = classify_size(int(dict_pr.get("additions", 0)) + int(dict_pr.get("deletions", 0)))
+    bool_eligible = is_auto_mergeable(
+        str_risk, str_size, list_labels, is_lockfile_only(list_paths)
+    )
 
     dict_axes, dict_failing = poll_axes_until_terminal(
         str_repo, str_head_sha, int_max_polls, int_poll_seconds

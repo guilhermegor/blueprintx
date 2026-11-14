@@ -62,7 +62,7 @@ class PyodbcLikeCursor:
             Bound parameters, ignored.
         """
 
-    def fetchone(self) -> tuple[str]:
+    def fetchone(self) -> tuple[str]:  # noqa: PLR6301 -- fixed foreign/port signature
         """Return the single stored row.
 
         Returns
@@ -90,7 +90,7 @@ class PyodbcLikeConnection:
         """Start open."""
         self.bool_closed = False
 
-    def cursor(self) -> PyodbcLikeCursor:
+    def cursor(self) -> PyodbcLikeCursor:  # noqa: PLR6301 -- fixed foreign/port signature
         """Return a cursor.
 
         Returns

@@ -117,7 +117,8 @@ class SmtpEmailHandler:
             cls_smtp.send_message(cls_message)
         return True
 
-    def _attach_files(self, cls_message: EmailMessage, list_attachments: list[str]) -> None:
+    @staticmethod
+    def _attach_files(cls_message: EmailMessage, list_attachments: list[str]) -> None:
         """Attach each existing file to the message, guessing its MIME type.
 
         Parameters

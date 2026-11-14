@@ -214,7 +214,7 @@ def file_problems(path_file: pathlib.Path) -> list:
     list of str
         Human-readable findings; empty when every function fits.
     """
-    if path_file.suffix not in (".py", ".sh"):
+    if path_file.suffix not in {".py", ".sh"}:
         return []
 
     try:

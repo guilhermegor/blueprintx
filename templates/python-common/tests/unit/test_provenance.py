@@ -11,7 +11,9 @@ from pathlib import Path
 import pytest
 
 from utils.provenance import hash_artifact, resolve_package_version, stamp_provenance
-from utils.tabular_reader import FileContract
+from utils.tabular_reader import (
+    FileContract,  # noqa: TID251 -- constructs a contract to test the seam
+)
 
 
 _CONTRACT = FileContract("Example Source", "example_source", ("code", "amount"), ())

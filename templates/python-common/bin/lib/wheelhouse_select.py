@@ -178,7 +178,7 @@ def requirement_matches_target(str_line: str, dict_env: dict[str, str]) -> bool:
     str_marker = str_line.split(";", 1)[1].strip() if ";" in str_line else ""
     if not str_marker:
         return True
-    from packaging.markers import Marker
+    from packaging.markers import Marker  # noqa: PLC0415 -- optional dependency, imported lazily
 
     return bool(Marker(str_marker).evaluate(environment=dict_env))
 

@@ -1073,10 +1073,18 @@ is shaped as it is; a generated project gets the behavior, not the history.
   per-module `disallow_any_explicit = False`, the same list as the `ANN401` ignores.
 - **Baseline strictness.** Annotations and obvious type errors are enforced, not `--strict`,
   so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.
-- **The one exclude** is the runtime type-checking engine (`utils/typing` or `chassis/typing`,
-  nested at `<pkg>._internal.utils.typing` in `lib-minimal`): intrinsic metaprogramming mypy
-  cannot analyse, the same reason it is ANN401-exempt. It matches `ruff.toml`'s `exclude`
-  (#203). `^chassis/` and `^capabilities/example_feature/` were both removed in #190:
+  `disallow_any_generics` is the exception (#1054): it is global, so a bare `dict` or `list`
+  in a generated project's own `src/` now fails mypy. `bin/` is outside mypy's scope.
+- **No engine exclude** (#1054). The runtime type-checking engine (`utils/typing` or
+  `chassis/typing`, nested at `<pkg>._internal.utils.typing` in `lib-minimal`) was excluded from
+  ruff and mypy, so it was never checked. It is now checked under `disallow_any_explicit` and
+  `disallow_any_generics`: decorators and wrappers are `ParamSpec` + `TypeVar`, the metaclass
+  namespace is `dict[str, object]`, and `value` / `expected_type` are `object`. `TypeForm`
+  (PEP 747) is not supported by mypy yet, so `expected_type` stays `object`. Two
+  `# type: ignore`s remain, each a limit of mypy rather than of the code: `[operator]` on the
+  `BeartypeHintOverrides({...})` call in `policy.py`, and `[misc,valid-type]` on
+  `ProtocolTypeCheckerMeta` in `protocol_type_checker.py`, which mixes two metaclasses.
+- **No `chassis` / `example_feature` mypy exclude** (#190). `^chassis/` and `^capabilities/example_feature/` were both removed in #190:
   `chassis` was unchecked and had accumulated 20 errors in the DB handlers while shipping into
   every DDD project; `example_feature` was excluded yet checked anyway, because `main.py` and
   `app/container.py` import it. Dropping it took the DDD native tier from 58 to 69 checked
@@ -1172,7 +1180,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
 - **`bin/` is linted like the rest** (#207). It was excluded for a hypothetical (ruff-format
   would tabify space-indented helpers and trip E101); the 27 E101s all sat in one genuinely
   mixed file, and the exclude hid the project's own quality machinery, with 73 findings behind
-  it. Two rules are relaxed there: `ERA001` (100% false positives, 0 of 24 true: the gates'
+  it. Two rules were relaxed there (both removed in #1054 after re-measuring 0 findings with the ignore lifted): `ERA001` (as measured when it was introduced: 100% false positives, 0 of 24 true: the gates'
   long wrapped prose comments contain `(`, `:` or `=` and read as code; per-line `noqa` would
   teach authors that `noqa` is how you write a comment; `src/` keeps it, and the global
   decision is open in #169) and `E101` (the 2-space hanging indent of a wrapped Markdown
@@ -1181,18 +1189,39 @@ is shaped as it is; a generated project gets the behavior, not the history.
   carries the same E101 exemption (#203), and `lib-minimal`'s private-package path mirrors every
   exemption (`*` matches the single package segment; without the mirror only that tier goes
   red, #486).
+- **Global `ignore` list, settled rule by rule** (#1054; counts are distinct sites over the six
+  tiers' `src`, `tests` and `bin`, `preview = true`).
+    - `PLC1901` stays ignored: the suggested `not x` is also true for `None`, `0` and `[]`,
+      so `== ""` is the exact test (27 findings).
+    - `S404` stays ignored: the import finds nothing, and the calls are covered by `S603` and
+      `S607` (24 findings).
+    - `PLR0917` stays ignored for now: with `max-positional-args = 1` it reports 1069
+      findings in the templates, nearly all call sites of shipped APIs and tests, so it is a
+      signature change tracked as its own slice, not a lint toggle.
+    - Re-enabled, with the shipped code made clean: `PLR6301` (a method with no `self` use is
+      a `@staticmethod`; an override of a foreign or port signature carries a line-scoped
+      `# noqa: PLR6301`), `PLC0415` (stdlib imports hoisted; a deliberately lazy optional
+      dependency carries `# noqa: PLC0415`), `PLC0207` (`split(..., 1)` / `rsplit`),
+      `PLR0916`, `PLR0914` (a helper extracted) and `PLC2701` (`src` must not import another
+      module's `_private` name; package-internal siblings use a relative import).
+    - `PLR6201` is re-enabled but **never `--fix`**: `x in {...}` raises `TypeError` when the
+      needle or an element is unhashable, so those sites stay tuples with
+      `# noqa: PLR6201` (the contract reader's cell check is one).
+    - The `TID251` whole-file ignores for the seam and contract files became per-line
+      `# noqa: TID251`, so a new `pd.read_*` in the same file fails instead of passing unseen.
 - **Per-file ignores.**
-    - `S101` and the magic-value rule are off in `tests/`: a literal in a test is the case
-      under test (21 of 29 findings were in `tests/`). `TID251` is off there because tests read
-      back outputs with `pd.read_*` to assert on them.
-    - `N802` is off in `tests/`: a mixed-case name where the upper-case word is the point
-      (`..._FAIL_rather_than_pass_silently`) is the behaviour description `tests/CLAUDE.md`
-      asks for (5 findings, #422).
+    - `tests/**` ignores `S101`, `PLC2701` (tests exercise `_internal` on purpose) and
+      `PLR2004`: a literal in a test is the case under test (43 distinct sites, 223 findings
+      across the six tiers when measured on 2026-11-08, #1054). `TID251` and `N802` are
+      enforced in tests (#1054): a read-back via `pd.read_*` carries a line-scoped
+      `# noqa: TID251`, and the five emphatic upper-case test names were lower-cased.
+    - `bin/**` ignores `PLC2701` only. The former `ERA001` and `E101` ignores measured 0
+      findings and were removed (#1054).
     - `ANN401` is ignored for the raw-driver connection factory (`config/connection_db.py`,
       MVC) and the DB handlers' `_connect` (psycopg, mysql-connector, pyodbc, oracledb), which
       have no shared type; `sqlite_handler.py` needs none, `sqlite3.Connection` being real.
-      It is also ignored for the typing engine in both layouts (MVC `utils/typing`, DDD
-      `chassis/typing`, #203) and for `SanityCheck.validate()`, which takes any joblib payload.
+      It is no longer ignored for the typing engine (#1054), which is typed without
+      `Any`; it stays for `SanityCheck.validate()`, which takes any joblib payload.
     - `N813` is ignored for `import defusedxml.ElementTree as defused_et`, a deliberate alias
       for the trust-boundary-safe parser; renaming would only hurt readability (#422).
     - `lib-minimal` mirrors the exemptions for `src/<pkg>/_internal/...`; its typing engine is

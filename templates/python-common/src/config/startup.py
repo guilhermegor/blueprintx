@@ -4,6 +4,7 @@ All module-level names are initialised once at import time. Import this module
 early (before any feature code) so every consumer shares the same instances.
 """
 
+from collections.abc import Mapping
 from datetime import datetime
 from getpass import getuser
 import os
@@ -58,8 +59,8 @@ _DICT_FALLBACK_OUTPUTS: dict[str, str] = {
 }
 
 _str_config_error: str | None = None
-YAML_OUTPUTS: dict = {}
-YAML_INPUTS: dict = {}
+YAML_OUTPUTS: dict[str, str] = {}
+YAML_INPUTS: dict[str, object] = {}
 
 
 @type_checker
@@ -216,7 +217,9 @@ def output_path(str_name_key: str) -> Path:
 
 
 @type_checker
-def resolve_reference_spec(dict_inputs: dict, str_source: str) -> dict | None:
+def resolve_reference_spec(
+    dict_inputs: Mapping[str, object], str_source: str
+) -> Mapping[object, object] | None:
     """Resolve ``str_source``'s reference ("golden copy") spec, override-first then real-input.
 
     Generalises the ``_input_spec_for_source`` pattern (lesson
@@ -238,7 +241,7 @@ def resolve_reference_spec(dict_inputs: dict, str_source: str) -> dict | None:
 
     Returns
     -------
-    dict or None
+    Mapping or None
         The override spec when ``str_source`` is listed under ``reference_files``; otherwise
         the source's own real-input spec, when that key holds a mapping; otherwise ``None`` —
         the source has neither an override nor a real spec to fall back to.

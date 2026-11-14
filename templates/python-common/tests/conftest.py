@@ -57,7 +57,7 @@ def _blocked(*args: object, **kwargs: object) -> NoReturn:
 class _BlockedSocket(socket.socket):
     """A socket whose outbound-connection methods are disabled."""
 
-    def connect(self, *args: object, **kwargs: object) -> NoReturn:
+    def connect(self, *args: object, **kwargs: object) -> NoReturn:  # noqa: PLR6301 -- fixed foreign/port signature
         """Reject ``socket.socket.connect``.
 
         Parameters
@@ -74,7 +74,7 @@ class _BlockedSocket(socket.socket):
         """
         _blocked(*args, **kwargs)
 
-    def connect_ex(self, *args: object, **kwargs: object) -> NoReturn:
+    def connect_ex(self, *args: object, **kwargs: object) -> NoReturn:  # noqa: PLR6301 -- fixed foreign/port signature
         """Reject ``socket.socket.connect_ex``.
 
         Parameters

@@ -28,7 +28,7 @@ policy there; do not bury decisions in this adapter.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import ParamSpec, TypeVar
 
 from beartype import beartype
 from beartype.door import die_if_unbearable
@@ -36,17 +36,20 @@ from beartype.door import die_if_unbearable
 from chassis.typing.policy import CONF
 
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
 _type_check = beartype(conf=CONF)
 
 
-def validate_type(value: Any, expected_type: Any, param_name: str) -> None:
+def validate_type(value: object, expected_type: object, param_name: str) -> None:
     """Raise ``TypeError`` when ``value`` does not satisfy ``expected_type``.
 
     Parameters
     ----------
-    value : Any
+    value : object
         Value to validate.
-    expected_type : Any
+    expected_type : object
         Annotation to check against.
     param_name : str
         Parameter name shown in the error message.
@@ -59,17 +62,17 @@ def validate_type(value: Any, expected_type: Any, param_name: str) -> None:
     die_if_unbearable(value, expected_type, conf=CONF, exception_prefix=f"{param_name} ")
 
 
-def create_type_checked_method(original_method: Callable[..., Any]) -> Callable[..., Any]:
+def create_type_checked_method(original_method: Callable[P, R]) -> Callable[P, R]:
     """Wrap ``original_method`` so each call validates its argument types.
 
     Parameters
     ----------
-    original_method : Callable[..., Any]
+    original_method : Callable[P, R]
         Function or method to wrap.
 
     Returns
     -------
-    Callable[..., Any]
+    Callable[P, R]
         Wrapper that validates argument types before delegating.
     """
     return _type_check(original_method)

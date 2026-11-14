@@ -387,7 +387,7 @@ def parse_br_number_series(series_value: pd.Series) -> pd.Series:
     pandas.Series
         The parsed ``float`` column (``NaN`` where unparsable).
     """
-    import pandas as pd
+    import pandas as pd  # noqa: PLC0415 -- optional dependency, imported lazily
 
     series_str = series_value.astype(str)
     series_has_comma = series_str.str.contains(",", regex=False)

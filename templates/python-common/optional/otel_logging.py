@@ -235,11 +235,18 @@ def _build_otel_handler() -> logging.Handler:
     logging.Handler
         A handler exporting log records through the configured OTLP collector.
     """
-    from opentelemetry._logs import set_logger_provider
-    from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-    from opentelemetry.sdk.resources import Resource
+    from opentelemetry._logs import set_logger_provider  # noqa: PLC0415, PLC2701
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import (  # noqa: PLC0415
+        OTLPLogExporter,  # noqa: PLC2701
+    )
+    from opentelemetry.sdk._logs import (  # noqa: PLC0415
+        LoggerProvider,  # noqa: PLC2701
+        LoggingHandler,  # noqa: PLC2701
+    )
+    from opentelemetry.sdk._logs.export import (  # noqa: PLC0415
+        BatchLogRecordProcessor,  # noqa: PLC2701
+    )
+    from opentelemetry.sdk.resources import Resource  # noqa: PLC0415
 
     cls_exporter = OTLPLogExporter()
     _reject_credential_forwarding_redirects(cls_exporter)

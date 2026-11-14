@@ -230,7 +230,8 @@ class MySQLDatabaseHandler(DatabaseHandler):
             )
             conn.commit()
 
-    def _parse_dsn(self, dsn: str) -> DsnParts:
+    @staticmethod
+    def _parse_dsn(dsn: str) -> DsnParts:
         """Parse a MySQL DSN into keyword arguments for mysql-connector."""
         parsed = urlparse(dsn)
         return {

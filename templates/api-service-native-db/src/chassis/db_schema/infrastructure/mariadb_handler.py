@@ -244,7 +244,8 @@ class MariaDBDatabaseHandler(DatabaseHandler):
             )
             cls_conn.commit()
 
-    def _parse_dsn(self, dsn: str) -> DsnParts:
+    @staticmethod
+    def _parse_dsn(dsn: str) -> DsnParts:
         """Parse a MariaDB DSN into keyword arguments for mysql-connector."""
         cls_parsed = urlparse(dsn)
         return {
