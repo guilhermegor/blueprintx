@@ -234,3 +234,93 @@ def test_a_syntax_error_fails_the_gate(tmp_path: Path) -> None:
     _write(tmp_path, "src/pkg/__init__.py", "def broken(:\n")
 
     assert _run(tmp_path) == 1
+
+
+def test_a_main_module_is_a_root_of_the_walk(tmp_path: Path) -> None:
+    """``__main__`` is run by ``python -m``, so what it imports is reached."""
+    _write(tmp_path, "src/pkg/__init__.py")
+    _write(tmp_path, "src/pkg/__main__.py", "from pkg import _impl\n")
+    _write(tmp_path, "src/pkg/_impl.py")
+
+    assert _run(tmp_path) == 0
+
+
+def test_an_allowlist_comment_line_is_skipped(path_dead_tree: Path) -> None:
+    """A ``#`` line is a comment, not an entry missing its reason.
+
+    Parameters
+    ----------
+    path_dead_tree : pathlib.Path
+        A project with one unreachable module.
+    """
+    _write(
+        path_dead_tree,
+        ".unreachable-modules.txt",
+        "# loaded by entry point\npkg._dead | loaded by entry point\n",
+    )
+
+    assert _run(path_dead_tree) == 0
+
+
+def test_an_allowlist_glob_is_case_sensitive(path_dead_tree: Path) -> None:
+    """``PKG._DEAD`` does not excuse ``pkg._dead``.
+
+    Parameters
+    ----------
+    path_dead_tree : pathlib.Path
+        A project with one unreachable module.
+    """
+    _write(path_dead_tree, ".unreachable-modules.txt", "PKG._DEAD | loaded by entry point\n")
+
+    assert _run(path_dead_tree) == 1
+
+
+def test_a_relative_import_above_the_top_level_package_reaches_nothing(tmp_path: Path) -> None:
+    """``from .. import _impl`` in a top-level package raises in Python, so it is no edge."""
+    _write(tmp_path, "src/pkg/__init__.py")
+    _write(tmp_path, "src/pkg/api.py", "from .. import _impl\n")
+    _write(tmp_path, "src/_impl.py")
+
+    assert _run(tmp_path) == 1
+
+
+def test_an_import_under_type_checking_counts_as_reached(tmp_path: Path) -> None:
+    """A private module imported only for typing is still imported."""
+    _write(tmp_path, "src/pkg/__init__.py")
+    _write(
+        tmp_path,
+        "src/pkg/api.py",
+        "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from pkg import _impl\n",
+    )
+    _write(tmp_path, "src/pkg/_impl.py")
+
+    assert _run(tmp_path) == 0
+
+
+def test_an_import_inside_a_function_counts_as_reached(tmp_path: Path) -> None:
+    """A deferred import reaches its module."""
+    _write(tmp_path, "src/pkg/__init__.py")
+    _write(tmp_path, "src/pkg/api.py", "def load() -> None:\n    from pkg import _impl\n")
+    _write(tmp_path, "src/pkg/_impl.py")
+
+    assert _run(tmp_path) == 0
+
+
+def test_a_file_that_is_not_utf8_fails_with_a_finding(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Undecodable bytes are reported as a finding, not left to a traceback.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture[str]
+        Output capture.
+    """
+    _write(tmp_path, "src/pkg/__init__.py")
+    (tmp_path / "src/pkg/api.py").write_bytes(b"\xff\xfe")
+
+    _run(tmp_path)
+
+    assert "could not parse" in capsys.readouterr().out

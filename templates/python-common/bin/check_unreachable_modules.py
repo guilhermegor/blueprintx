@@ -1,6 +1,7 @@
 """Fail on any ``src/`` module that no public module reaches through imports.
 
-A public module is one whose dotted path has no ``_``-prefixed segment. The gate walks
+A public module is one whose dotted path has no ``_``-prefixed segment, bar ``__main__`` (run
+by ``python -m``, so it is a root, not a dead end). The gate walks
 ``ast.Import`` / ``ast.ImportFrom`` from those roots, resolves relative imports, and makes
 every reached module reach its parent packages.
 """
@@ -14,6 +15,8 @@ import sys
 
 STR_ALLOWLIST_NAME = ".unreachable-modules.txt"
 STR_REASON_SEPARATOR = "|"
+STR_COMMENT_PREFIX = "#"
+STR_ENTRY_MODULE = "__main__"
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -74,14 +77,14 @@ def base_of(cls_node: ast.ImportFrom, str_package: str) -> str | None:
     Returns
     -------
     str or None
-        Absolute dotted name (empty for the source root), or None when the relative import
-        climbs above ``src/``.
+        Absolute dotted name, or None when the relative import climbs above the top-level
+        package (Python raises ``ImportError`` there).
     """
     if cls_node.level == 0:
         return cls_node.module or ""
     list_parts = str_package.split(".") if str_package else []
     int_keep = len(list_parts) - (cls_node.level - 1)
-    if int_keep < 0:
+    if int_keep <= 0:
         return None
     if cls_node.module:
         list_parts = list_parts[:int_keep] + [cls_node.module]
@@ -152,9 +155,12 @@ def is_public(str_module: str) -> bool:
     Returns
     -------
     bool
-        True when no segment of the name starts with an underscore.
+        True when no segment of the name starts with an underscore, except ``__main__``.
     """
-    return not any(str_part.startswith("_") for str_part in str_module.split("."))
+    return not any(
+        str_part.startswith("_") and str_part != STR_ENTRY_MODULE
+        for str_part in str_module.split(".")
+    )
 
 
 def reachable(dict_modules: dict[str, pathlib.Path]) -> set[str]:
@@ -174,6 +180,8 @@ def reachable(dict_modules: dict[str, pathlib.Path]) -> set[str]:
     ------
     SyntaxError
         If a reached module cannot be parsed.
+    UnicodeDecodeError
+        If a reached module is not valid UTF-8.
     """
     set_seen = set()
     list_queue = [str_module for str_module in dict_modules if is_public(str_module)]
@@ -195,7 +203,8 @@ def load_allowlist(path_allowlist: pathlib.Path) -> tuple[list[str], list[str]]:
     Parameters
     ----------
     path_allowlist : pathlib.Path
-        The allowlist file; a missing file is an empty allowlist.
+        The allowlist file; a missing file is an empty allowlist. Blank lines and lines
+        starting with ``#`` are skipped.
 
     Returns
     -------
@@ -208,7 +217,7 @@ def load_allowlist(path_allowlist: pathlib.Path) -> tuple[list[str], list[str]]:
         return list_patterns, list_problems
     list_lines = path_allowlist.read_text(encoding="utf-8").splitlines()
     for int_line, str_line in enumerate(list_lines, 1):
-        if not str_line.strip():
+        if not str_line.strip() or str_line.lstrip().startswith(STR_COMMENT_PREFIX):
             continue
         str_pattern, _, str_reason = str_line.partition(STR_REASON_SEPARATOR)
         if not str_reason.strip():
@@ -242,16 +251,16 @@ def audit(path_root: pathlib.Path, path_allowlist: pathlib.Path) -> tuple[list[s
     list_patterns, list_problems = load_allowlist(path_allowlist)
     try:
         set_reached = reachable(dict_modules)
-    except SyntaxError as cls_error:
+    except (SyntaxError, UnicodeDecodeError) as cls_error:
         return [*list_problems, f"could not parse ({cls_error})"], len(dict_modules)
     list_dead = sorted(set(dict_modules) - set_reached)
     for str_pattern in list_patterns:
-        if not fnmatch.filter(list_dead, str_pattern):
+        if not any(fnmatch.fnmatchcase(str_module, str_pattern) for str_module in list_dead):
             list_problems.append(
                 f"allowlist entry '{str_pattern}' matches no unreachable module: remove it"
             )
     for str_module in list_dead:
-        if not any(fnmatch.fnmatch(str_module, str_pattern) for str_pattern in list_patterns):
+        if not any(fnmatch.fnmatchcase(str_module, str_pattern) for str_pattern in list_patterns):
             list_problems.append(
                 f"{dict_modules[str_module].relative_to(path_root)}: {str_module} is unreachable"
                 " from the public modules"

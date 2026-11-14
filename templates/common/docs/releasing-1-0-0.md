@@ -48,7 +48,8 @@ template seam the package never wired up (`http_downloader`, `daily_cache`, `ret
 stays in `src/`, and a dead module that imports a third-party package keeps that dependency
 "used".
 
-- A module is **public** when no segment of its dotted path starts with `_`. The gate walks
+- A module is **public** when no segment of its dotted path starts with `_`, except `__main__`,
+  which `python -m` runs and which is therefore a root. The gate walks
   `import` and `from ... import` statements (relative imports resolved) from the public modules,
   and a reached module also reaches its parent packages. Any `src/` module left over fails the
   gate, and the output names each one.
@@ -56,11 +57,13 @@ stays in `src/`, and a dead module that imports a third-party package keeps that
   re-running deptry. A module loaded dynamically (`importlib.import_module` with a string, an
   entry point, an engine string) is invisible to the walk: allowlist it in
   `.unreachable-modules.txt` at the project root, one `<module or glob> | <reason>` per line. An
-  entry without a reason, or one that matches no unreachable module, fails the gate.
+  entry without a reason, or one that matches no unreachable module, fails the gate. Lines
+  starting with `#` are comments, and a glob is case-sensitive.
 - It runs in the release gate only, not in CI: a fresh library scaffold ships its template
   seams unwired on purpose, so the check would be red from the first commit.
 - An import under `if TYPE_CHECKING:`, or inside a function, counts as reached. Tests are not
-  roots: a module only its tests import is dead.
+  roots: a module only its tests import is dead. A `from pkg import *` reaches `pkg` but not the
+  submodules its `__all__` names, so allowlist those.
 - A project without the script, such as a TypeScript library, skips the check.
 
 To pass, implement each named issue or label it `post-1.0`, remove or allowlist each reported
