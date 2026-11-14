@@ -206,7 +206,8 @@ def load_allowlist(path_allowlist: pathlib.Path) -> tuple[list[str], list[str]]:
     list_problems = []
     if not path_allowlist.is_file():
         return list_patterns, list_problems
-    for int_line, str_line in enumerate(path_allowlist.read_text(encoding="utf-8").splitlines(), 1):
+    list_lines = path_allowlist.read_text(encoding="utf-8").splitlines()
+    for int_line, str_line in enumerate(list_lines, 1):
         if not str_line.strip():
             continue
         str_pattern, _, str_reason = str_line.partition(STR_REASON_SEPARATOR)
