@@ -1023,17 +1023,17 @@ is shaped as it is; a generated project gets the behavior, not the history.
   per-module `disallow_any_explicit = False`, the same list as the `ANN401` ignores.
 - **Baseline strictness.** Annotations and obvious type errors are enforced, not `--strict`,
   so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.
+  `disallow_any_generics` is the exception (#1054): it is global, so a bare `dict` or `list`
+  in a generated project's own `src/` now fails mypy. `bin/` is outside mypy's scope.
 - **No engine exclude** (#1054). The runtime type-checking engine (`utils/typing` or
   `chassis/typing`, nested at `<pkg>._internal.utils.typing` in `lib-minimal`) was excluded from
   ruff and mypy, so it was never checked. It is now checked under `disallow_any_explicit` and
   `disallow_any_generics`: decorators and wrappers are `ParamSpec` + `TypeVar`, the metaclass
   namespace is `dict[str, object]`, and `value` / `expected_type` are `object`. `TypeForm`
-  (PEP 747) is not supported by mypy yet, so `expected_type` stays `object`. Three
-  `# type: ignore`s remain, each a limit of mypy rather than of the code:
-  `[valid-type]` on `Annotated[<variable>, ...]` in `policy.py` (its first argument is chosen
-  at import time), `[operator]` on the `BeartypeHintOverrides({...})` call in `policy.py`, and
-  `[misc,valid-type]` on `ProtocolTypeCheckerMeta` in `protocol_type_checker.py`, which mixes
-  two metaclasses.
+  (PEP 747) is not supported by mypy yet, so `expected_type` stays `object`. Two
+  `# type: ignore`s remain, each a limit of mypy rather than of the code: `[operator]` on the
+  `BeartypeHintOverrides({...})` call in `policy.py`, and `[misc,valid-type]` on
+  `ProtocolTypeCheckerMeta` in `protocol_type_checker.py`, which mixes two metaclasses.
 - **No `chassis` / `example_feature` mypy exclude** (#190). `^chassis/` and `^capabilities/example_feature/` were both removed in #190:
   `chassis` was unchecked and had accumulated 20 errors in the DB handlers while shipping into
   every DDD project; `example_feature` was excluded yet checked anyway, because `main.py` and

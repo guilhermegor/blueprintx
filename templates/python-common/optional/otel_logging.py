@@ -26,6 +26,7 @@ working handler deliberately (ponytail: known ceiling, not an oversight) — re-
 versions before the next bump and switch once the replacement leaves beta.
 """
 
+# ruff: noqa: PLC0415, PLC2701
 import logging
 import os
 from typing import TYPE_CHECKING
@@ -244,11 +245,11 @@ def _install_otel_handler(logger: logging.Logger) -> None:  # complexity-ok: one
     None
     """
     try:
-        from opentelemetry._logs import set_logger_provider  # noqa: PLC0415 -- optional dependency, imported lazily
-        from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter  # noqa: PLC0415 -- optional dependency, imported lazily
-        from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler  # noqa: PLC0415 -- optional dependency, imported lazily
-        from opentelemetry.sdk._logs.export import BatchLogRecordProcessor  # noqa: PLC0415 -- optional dependency, imported lazily
-        from opentelemetry.sdk.resources import Resource  # noqa: PLC0415 -- optional dependency, imported lazily
+        from opentelemetry._logs import set_logger_provider
+        from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+        from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+        from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+        from opentelemetry.sdk.resources import Resource
 
         cls_exporter = OTLPLogExporter()
         _reject_credential_forwarding_redirects(cls_exporter)

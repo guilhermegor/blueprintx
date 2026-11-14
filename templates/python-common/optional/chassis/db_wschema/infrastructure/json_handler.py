@@ -78,9 +78,7 @@ class JSONDatabaseHandler(DatabaseHandler):
         Record or None
             Updated record when found, otherwise ``None``.
         """
-        list_rows, dict_updated = apply_update(
-            self._read_all(), self.id_field, record_id, updates
-        )
+        list_rows, dict_updated = apply_update(self._read_all(), self.id_field, record_id, updates)
         if dict_updated is not None:
             self._write_all(list_rows)
         return dict_updated

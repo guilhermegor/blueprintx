@@ -64,7 +64,7 @@ class LabelEnricher(metaclass=TypeChecker):
 
         Returns
         -------
-        dict
+        dict of {str: str}
             The parsed label map.
         """
         with self.path_labels.open(encoding="utf-8") as file_labels:
