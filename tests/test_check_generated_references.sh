@@ -60,13 +60,13 @@ expect_dir "empty project dir fails" "$str_empty"
 rm -rf "$str_empty"
 
 expect_extra() {
-    local str_desc="$1" str_want="$2" str_file="$3" str_body="$4" str_needle="${5:-nope.sh}" str_dir str_got="pass" str_out
+    local str_desc="$1" str_want="$2" str_file="$3" str_body="$4" str_needle="${5:-nope.sh}" str_diag="${6:-never copied}" str_dir str_got="pass" str_out
     str_dir="$(make_project)"
     mkdir -p "$(dirname "$str_dir/$str_file")"
     printf '%s' "$str_body" >"$str_dir/$str_file"
     str_out="$(bash "$CHECK" --project "$str_dir" 2>&1)" || str_got="fail"
     rm -rf "$str_dir"
-    if [ "$str_got" = "fail" ] && ! printf '%s' "$str_out" | grep -qE "ERROR: .*$str_needle.*never copied"; then
+    if [ "$str_got" = "fail" ] && ! printf '%s' "$str_out" | grep -qE "ERROR: .*$str_needle.*$str_diag"; then
         echo "FAIL: $str_desc -> failed without a gate message: $str_out" >&2
         int_failures=$((int_failures + 1))
     elif [ "$str_got" = "$str_want" ]; then
@@ -88,6 +88,19 @@ expect_extra "hash inside a quoted string does not hide a later reference" fail 
 expect_extra "URL in a nav inline comment does not hide a missing page" fail mkdocs.yml $'nav:\n  - Incidents: gone.md # https://example.com/x\n' gone.md
 expect_extra "escaped quote does not end a quoted value early" fail .github/workflows/e.yml $'run: |\n  echo "escaped \\" # label"; bash bin/nope.sh\n'
 expect_extra "quoted external nav target is not a local page" pass mkdocs.yml $'nav:\n  - Home: index.md\n  - Source: \'https://example.com/README.md\'\n  - Other: "https://example.com/X.md"\n' index.md
+LC_ALL=C expect_extra "accented nav filename is matched whole" fail mkdocs.yml $'nav:\n  - Guia: guia-avançado.md\n' 'guia-avançado.md'
+expect_extra "spaced nav filename is matched whole" fail mkdocs.yml $'nav:\n  - Guide: my guide.md\n' 'my guide.md'
+expect_extra "apostrophe in prose does not hide the comment strip" pass .github/workflows/p.yml $'jobs:\n  j:\n    steps:\n      - name: Don\x27t skip # see bin/old.sh\n        run: bash bin/a.sh\n' old.sh
+expect_extra "nav extractor matching nothing fails even if scripts match" fail mkdocs.yml $'nav:\n  - Home: ~\n' 'mkdocs.yml' 'nothing was checked'
+expect_extra "quoted local nav page is matched whole" fail mkdocs.yml $'nav:\n  - Home: "gone.md"\n  - Two: \'two.md\'\n' 'gone.md'
+expect_extra "yaml anchor before a nav page is not part of the name" fail mkdocs.yml $'nav:\n  - &home gone.md\n' 'docs/gone.md'
+expect_extra "double quote after a word still opens a quoted span" fail .github/workflows/w.yml $'run: |\n  echo prefix" # text"; bash bin/nope.sh\n'
+expect_extra "anchor before a quoted nav page is consumed" fail mkdocs.yml $'nav:\n  - Home: &home "gone.md"\n' 'docs/gone.md'
+expect_extra "single quote closed later on the line still hides a comment span" fail .github/workflows/s.yml $'run: |\n  echo prefix\x27 # text\x27; bash bin/nope.sh\n'
+expect_extra "colon inside a quoted nav page is kept" fail mkdocs.yml $'nav:\n  - Guide: "part: one.md"\n' 'docs/part: one.md'
+expect_extra "quoted nav title with a colon extracts the exact page" fail mkdocs.yml $'nav:\n  - "Guide: intro": guide.md\n' 'docs/guide.md, which'
+expect_extra "prose apostrophes in a name and a comment leave the comment inert" pass .github/workflows/n.yml $'jobs:\n  j:\n    steps:\n      - name: Don\x27t skip # see Bob\x27s bin/old.sh\n        run: bash bin/a.sh\n' 'old.sh'
+expect_extra "python tag in mkdocs.yml does not break nav extraction" fail mkdocs.yml $'markdown_extensions:\n  - pymdownx.emoji:\n      emoji_index: !!python/name:material.extensions.emoji.twemoji\nnav:\n  - A: gone.md\n' 'docs/gone.md'
 expect_extra "poe_tasks fragment reference to a missing script fails" fail poe_tasks.test.toml $'[tool.poe.tasks.t]\ncmd = "bash bin/nope.sh"\n'
 expect_extra "commented-out reference is ignored" pass Makefile $'# bin/nope.sh\n'
 expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n' site/index.md
@@ -106,6 +119,18 @@ str_noref="$(mktemp -d)"
 printf 'site_name: x\n' >"$str_noref/mkdocs.yml"
 expect_dir "a project with no extracted reference fails" "$str_noref"
 rm -rf "$str_noref"
+str_nobin="$(mktemp -d)"
+mkdir -p "$str_nobin/docs" && touch "$str_nobin/docs/index.md"
+printf 'nav:\n  - Home: index.md\n' >"$str_nobin/mkdocs.yml"
+printf 'a:\n\techo hi\n' >"$str_nobin/Makefile"
+str_out="$(bash "$CHECK" --project "$str_nobin" 2>&1 || true)"
+if printf '%s' "$str_out" | grep -q 'found but no bin/ script reference'; then
+    echo "ok: task files with no bin reference fail even when the nav was checked"
+else
+    echo "FAIL: task files with no bin reference were not flagged" >&2
+    int_failures=$((int_failures + 1))
+fi
+rm -rf "$str_nobin"
 
 str_got="pass"
 bash "$CHECK" --generated --skeleton no-such-skeleton >/dev/null 2>&1 || str_got="fail"
