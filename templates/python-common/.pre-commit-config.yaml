@@ -84,7 +84,7 @@ repos:
     hooks:
       - id: ruff
         name: ruff check
-        entry: bash bin/poetry_exec.sh run ruff check --config=ruff.toml
+        entry: bash bin/poetry_exec.sh run ruff check --force-exclude --config=ruff.toml
         language: system
         types_or:
           - python
@@ -93,7 +93,7 @@ repos:
 
       - id: ruff-format
         name: ruff format
-        entry: bash bin/poetry_exec.sh run ruff format --config=ruff.toml
+        entry: bash bin/poetry_exec.sh run ruff format --force-exclude --config=ruff.toml
         language: system
         types_or:
           - python

@@ -8,7 +8,7 @@ themselves, and it would be self-defeating to reproduce it here.
 
 Scratch tree: `/tmp/.../scratchpad/gate-audit/` (session-local, discarded — not part of this
 repo). Ruff version used: `0.11.13` for the original run; Part 1 was re-measured on 2026-11-14 with
-`0.17.5`, the version the templates now lock (blueprintx#1130).
+`0.17.5`, the measured version and the minimum the templates declare; a generated project may lock a later one (blueprintx#1130).
 
 ## Method
 

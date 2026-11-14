@@ -118,12 +118,12 @@ class FileContract(metaclass=TypeChecker):
 
     @property
     def output_columns(self) -> tuple[str, ...]:
-        """The full output shape: source-required columns then provenance columns.
+        """Required source columns then provenance columns, not the full frame schema.
 
         Returns
         -------
         tuple of str
-            ``tuple_required + PROVENANCE_COLUMNS`` — what a stamped, ingested frame holds.
+            ``tuple_required + PROVENANCE_COLUMNS``; extra source columns may also pass through.
         """
         return self.tuple_required + self.PROVENANCE_COLUMNS
 
