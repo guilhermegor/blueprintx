@@ -295,7 +295,7 @@ def read_query(
     ContractError
         When the result violates ``cls_contract``.
     """
-    df_raw = pd.read_sql_query(str_sql, cls_connection, params=list_params)  # noqa: TID251 -- the one authorised read seam
+    df_raw = pd.read_sql_query(str_sql, cls_connection, params=list_params)  # noqa: TID251 -- the one authorized read seam
     return _finalize(df_raw, dict_dtypes, list_date_cols, cls_contract)
 
 
@@ -504,7 +504,7 @@ def resolve_sheet_name(  # complexity-ok: three documented resolution outcomes, 
     """
     if path_file.suffix.lower() not in {".xlsx", ".xls", ".xlsm"}:
         return ""
-    with pd.ExcelFile(path_file) as cls_excel:  # noqa: TID251 -- the one authorised read seam
+    with pd.ExcelFile(path_file) as cls_excel:  # noqa: TID251 -- the one authorized read seam
         list_sheets = [str(s) for s in cls_excel.sheet_names]
     if len(list_sheets) == 1:
         return list_sheets[0]
@@ -718,7 +718,7 @@ def _read_csv_raw(
         The raw frame.
     """
     dict_header = {"header": None, "names": list(list_columns)} if list_columns is not None else {}
-    return pd.read_csv(  # noqa: TID251 -- the one authorised read seam
+    return pd.read_csv(  # noqa: TID251 -- the one authorized read seam
         path_file,
         dtype=str_dtype,
         sep=str_csv_sep,
@@ -805,7 +805,7 @@ def _read_excel_raw(
         The raw frame.
     """
     sheet_excel: str | int = 0 if str_sheet == "" else str_sheet
-    return pd.read_excel(path_file, sheet_name=sheet_excel, dtype=str_dtype, header=int_header_row)  # noqa: TID251 -- the one authorised read seam
+    return pd.read_excel(path_file, sheet_name=sheet_excel, dtype=str_dtype, header=int_header_row)  # noqa: TID251 -- the one authorized read seam
 
 
 _DICT_RAW_READERS: dict[str, Callable[..., pd.DataFrame]] = {

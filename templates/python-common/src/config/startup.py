@@ -138,7 +138,7 @@ def output_path(str_name_key: str) -> Path:
 @type_checker
 def resolve_reference_spec(
     dict_inputs: Mapping[object, object], str_source: str
-) -> dict[str, object] | None:
+) -> Mapping[object, object] | None:
     """Resolve ``str_source``'s reference ("golden copy") spec, override-first then real-input.
 
     Generalises the ``_input_spec_for_source`` pattern (lesson
@@ -160,7 +160,7 @@ def resolve_reference_spec(
 
     Returns
     -------
-    dict or None
+    Mapping or None
         The override spec when ``str_source`` is listed under ``reference_files``; otherwise
         the source's own real-input spec, when that key holds a mapping; otherwise ``None`` —
         the source has neither an override nor a real spec to fall back to.
