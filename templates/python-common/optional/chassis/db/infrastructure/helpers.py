@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import TypedDict
 import uuid
@@ -46,6 +47,30 @@ class DsnParts(TypedDict):
     host: str | None
     port: int | None
     database: str | None
+
+
+@type_checker
+def decode_record(cell: object) -> Record:
+    """Decode a JSON document column read back from a driver.
+
+    Parameters
+    ----------
+    cell : object
+        The column value; DB-API rows are typed as ``object`` cells, so it is narrowed here.
+
+    Returns
+    -------
+    Record
+        The decoded document.
+
+    Raises
+    ------
+    TypeError
+        If ``cell`` is neither ``str`` nor ``bytes``.
+    """
+    if not isinstance(cell, str | bytes):
+        raise TypeError(f"Expected a JSON text cell, got {type(cell).__name__!r}")
+    return json.loads(cell)
 
 
 @type_checker

@@ -20,10 +20,9 @@ import json
 from logging import Logger
 from pathlib import Path
 from time import time
-from typing import Any
-
 from controller import pipeline_common
 from controller.pipeline_common import EmailHandler, WebhookNotifier
+from utils.dbapi import DbConnection
 from utils.logs import log_message
 from utils.typing import TypeChecker
 
@@ -35,7 +34,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
     ----------
     cls_logger : logging.Logger | None
         The run logger (``None`` prints).
-    fn_build_connection : Callable[[], Any]
+    fn_build_connection : Callable[[], DbConnection]
         Zero-arg callable opening a DB-API connection. Unused by this illustrative read; a
         production reconcile uses it to read the persisted values store (see the module note).
     fn_output_path : Callable[[str], pathlib.Path]
@@ -56,7 +55,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
     def __init__(
         self,
         cls_logger: Logger | None,
-        fn_build_connection: Callable[[], Any],
+        fn_build_connection: Callable[[], DbConnection],
         fn_output_path: Callable[[str], Path],
         path_json: Path,
         dict_context: dict[str, object],

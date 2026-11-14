@@ -14,11 +14,12 @@ from collections.abc import Callable
 from logging import Logger
 from pathlib import Path
 import sys
-from typing import Any, NoReturn
+from typing import NoReturn
 
 from controller.pipeline_common import EmailHandler, Pipeline, WebhookNotifier
 from controller.pipeline_reconcile import ReconcilePipeline
 from controller.pipeline_send import SendPipeline
+from utils.dbapi import DbConnection
 from utils.text import normalize_text
 from utils.typing import type_checker
 
@@ -97,7 +98,7 @@ def resolve_intent(str_raw: str) -> str:
 def build_pipeline(  # noqa: PLR0913
     str_intent: str,
     cls_logger: Logger | None,
-    fn_build_connection: Callable[[], Any],
+    fn_build_connection: Callable[[], DbConnection],
     fn_output_path: Callable[[str], Path],
     path_json: Path,
     dict_context: dict[str, object],
@@ -113,7 +114,7 @@ def build_pipeline(  # noqa: PLR0913
         A canonical intent key (as returned by :func:`resolve_intent`).
     cls_logger : logging.Logger | None
         The run logger.
-    fn_build_connection : Callable[[], Any]
+    fn_build_connection : Callable[[], DbConnection]
         Zero-arg callable opening a DB-API connection.
     fn_output_path : Callable[[str], pathlib.Path]
         Resolver from an ``outputs.yaml`` key to an output path.

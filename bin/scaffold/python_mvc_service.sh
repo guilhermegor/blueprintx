@@ -155,7 +155,6 @@ copy_templates() {
 
 copy_common_templates() {
 	scaffold_copy_common_templates "mvc-service-native-db" "$1"
-	cat "$BLUEPRINTX_ROOT/templates/mvc-service-native-db/mypy.exemptions.ini" >>"$1/mypy.ini"
 }
 
 copy_mkdocs_templates() {
@@ -405,7 +404,7 @@ copy_shared_utils() {
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
     local -a utils=(
         br_identifiers dtypes decimals logs logs_emitter text paths signatures dates
-        tabular_reader xml_reader provenance sidecar_metadata retry http_downloader zip_extractor frames
+        tabular_reader xml_reader provenance sidecar_metadata retry http_downloader zip_extractor frames dbapi
         ms_office email raw_workspace daily_cache queries
         regime_window regime_registry regime_adapter spec_gap_registry
     )

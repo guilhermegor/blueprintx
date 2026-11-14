@@ -13,10 +13,9 @@ direct vendor call, which is the point of a reference example.
 from __future__ import annotations
 
 import re
-from typing import Any
-
 import pandas as pd
 
+from utils.dbapi import DbConnection
 from utils.frames import from_cursor
 from utils.typing import TypeChecker
 
@@ -31,7 +30,7 @@ class ExampleEntity(metaclass=TypeChecker):
 
     Parameters
     ----------
-    cls_connection : Any
+    cls_connection : DbConnection
         An open DB-API 2.0 connection (see :func:`config.connection_db.build_connection`).
     str_table : str, optional
         Table name to operate on, by default ``"example"``.
@@ -42,7 +41,7 @@ class ExampleEntity(metaclass=TypeChecker):
         When ``str_table`` is not ``[A-Za-z_][A-Za-z0-9_]*``.
     """
 
-    def __init__(self, cls_connection: Any, str_table: str = "example") -> None:
+    def __init__(self, cls_connection: DbConnection, str_table: str = "example") -> None:
         if not RE_SQL_IDENTIFIER.fullmatch(str_table):
             raise ValueError(f"str_table must match [A-Za-z_][A-Za-z0-9_]* (got {str_table!r})")
         self.cls_connection = cls_connection

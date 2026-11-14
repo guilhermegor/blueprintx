@@ -20,10 +20,11 @@ import json
 from logging import Logger
 from pathlib import Path
 from time import time
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
+from utils.dbapi import DbConnection
 from model.example_entity import ExampleEntity
 from model.label_enricher import LabelEnricher
 from utils.logs import log_message
@@ -77,7 +78,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
     ----------
     logger : logging.Logger | None
         The run logger (``None`` prints).
-    fn_build_connection : Callable[[], Any]
+    fn_build_connection : Callable[[], DbConnection]
         Zero-arg callable opening a DB-API connection (closed after the read).
     fn_output_path : Callable[[str], pathlib.Path]
         Resolver from an ``outputs.yaml`` key to an output path.
@@ -106,7 +107,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
     def __init__(
         self,
         logger: Logger | None,
-        fn_build_connection: Callable[[], Any],
+        fn_build_connection: Callable[[], DbConnection],
         fn_output_path: Callable[[str], Path],
         path_json: Path,
         dict_context: dict[str, object],
@@ -165,23 +166,23 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         )
         log_message(self.logger, "Finishing variable-definition process")
 
-    def _open_connection(self) -> Any:  # noqa: ANN401 — opaque DB-API connection
+    def _open_connection(self) -> DbConnection:
         """Open the DB-API connection used by the read phase.
 
         Returns
         -------
-        Any
+        DbConnection
             The open DB-API 2.0 connection (closed by :meth:`run` in a ``finally``).
         """
         log_message(self.logger, "Opening DB connection")
         return self.fn_build_connection()
 
-    def _read(self, cls_connection: Any) -> pd.DataFrame:  # noqa: ANN401 — opaque DB-API connection
+    def _read(self, cls_connection: DbConnection) -> pd.DataFrame:
         """Read the source data into a DataFrame via the model.
 
         Parameters
         ----------
-        cls_connection : Any
+        cls_connection : DbConnection
             The open DB-API connection.
 
         Returns

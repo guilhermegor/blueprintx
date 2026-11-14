@@ -13,12 +13,11 @@ from collections.abc import Callable
 from logging import Logger
 from pathlib import Path
 from time import time
-from typing import Any
-
 import pandas as pd
 
 from controller import pipeline_common
 from controller.pipeline_common import EmailHandler, WebhookNotifier
+from utils.dbapi import DbConnection
 from model.example_entity import ExampleEntity
 from utils.logs import log_message
 from utils.typing import TypeChecker
@@ -31,7 +30,7 @@ class SendPipeline(metaclass=TypeChecker):
     ----------
     cls_logger : logging.Logger | None
         The run logger (``None`` prints).
-    fn_build_connection : Callable[[], Any]
+    fn_build_connection : Callable[[], DbConnection]
         Zero-arg callable opening a DB-API connection (closed after the read).
     fn_output_path : Callable[[str], pathlib.Path]
         Resolver from an ``outputs.yaml`` key to an output path.
@@ -51,7 +50,7 @@ class SendPipeline(metaclass=TypeChecker):
     def __init__(
         self,
         cls_logger: Logger | None,
-        fn_build_connection: Callable[[], Any],
+        fn_build_connection: Callable[[], DbConnection],
         fn_output_path: Callable[[str], Path],
         path_json: Path,
         dict_context: dict[str, object],
@@ -99,23 +98,23 @@ class SendPipeline(metaclass=TypeChecker):
         pipeline_common.notify(self.cls_logger, self.cls_webhook, self.str_webhook_message)
         return dict_summary
 
-    def _open_connection(self) -> Any:  # noqa: ANN401 — opaque DB-API connection
+    def _open_connection(self) -> DbConnection:
         """Open the DB-API connection used by the read phase.
 
         Returns
         -------
-        Any
+        DbConnection
             The open DB-API 2.0 connection (closed by :meth:`run` in a ``finally``).
         """
         log_message(self.cls_logger, "Opening DB connection")
         return self.fn_build_connection()
 
-    def _read(self, cls_connection: Any) -> pd.DataFrame:  # noqa: ANN401 — opaque DB-API connection
+    def _read(self, cls_connection: DbConnection) -> pd.DataFrame:
         """Read the source data into a DataFrame via the model.
 
         Parameters
         ----------
-        cls_connection : Any
+        cls_connection : DbConnection
             The open DB-API connection.
 
         Returns

@@ -13,10 +13,11 @@ empty-result edge case.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import pandas as pd
 
+from utils.dbapi import DbCursor
 from utils.dtypes import apply_dtypes
 
 
@@ -73,7 +74,7 @@ def _empty_frame(
 
 @type_checker
 def from_cursor(
-    cls_cursor: Any,  # noqa: ANN401 — opaque DB-API cursor; any driver's object is valid
+    cls_cursor: DbCursor,
     dict_dtypes: dict[str, str],
     list_date_cols: list[str] | None = None,
 ) -> pd.DataFrame:
@@ -92,7 +93,7 @@ def from_cursor(
 
     Parameters
     ----------
-    cls_cursor : Any
+    cls_cursor : DbCursor
         A DB-API 2.0 cursor on which ``execute`` has already been called.
     dict_dtypes : dict of {str: str}
         Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.

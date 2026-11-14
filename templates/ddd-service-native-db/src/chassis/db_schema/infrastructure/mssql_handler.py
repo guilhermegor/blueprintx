@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import closing
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 
 try:
@@ -14,7 +14,8 @@ except ImportError:  # pragma: no cover - optional dependency
     pyodbc = None
 
 from chassis.db.domain.ports import DatabaseHandler, Record
-from chassis.db.infrastructure.helpers import ensure_id, validate_sql_identifier
+from chassis.db.infrastructure.helpers import decode_record, ensure_id, validate_sql_identifier
+from utils.dbapi import DbManagedConnection
 
 
 class MSSQLDatabaseHandler(DatabaseHandler):
@@ -96,7 +97,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
             row = cur.fetchone()
         if not row:
             return None
-        return json.loads(row[0])
+        return decode_record(row[0])
 
     def update(self, record_id: str, updates: Record) -> Record | None:
         """Merge updates into an existing record atomically.
@@ -127,7 +128,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
             tuple_row = cls_cur.fetchone()
             if tuple_row is None:
                 return None
-            dict_updated = {**json.loads(tuple_row[0]), **updates, self.id_field: record_id}
+            dict_updated = {**decode_record(tuple_row[0]), **updates, self.id_field: record_id}
             cls_cur.execute(
                 f"UPDATE {self.table} SET data = ? WHERE {self.id_field} = ?",  # noqa: S608
                 (json.dumps(dict_updated), record_id),
@@ -173,16 +174,16 @@ class MSSQLDatabaseHandler(DatabaseHandler):
         with target.open("w", encoding="utf-8") as handle, closing(self._connect()) as conn, conn:
             cur = conn.cursor()
             cur.execute(f"SELECT data FROM {self.table}")  # noqa: S608
-            rows = (json.loads(row[0]) for row in cur)
+            rows = (decode_record(row[0]) for row in cur)
             handle.write(json.dumps(list(rows), indent=2, ensure_ascii=False))
         return target
 
     def close(self) -> None:
         """Release resources (no-op, connections are per-call)."""
 
-    def _connect(self) -> Any:
+    def _connect(self) -> DbManagedConnection:
         """Create a pyodbc connection using the configured connection string."""
-        return pyodbc.connect(self.connection_string)
+        return cast(DbManagedConnection, pyodbc.connect(self.connection_string))
 
     def _ensure_table(self) -> None:
         """Create the backing table when it does not exist."""
