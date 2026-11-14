@@ -645,8 +645,9 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
         ("", "GraphQL: API rate limit already exceeded for user ID 1.", 1),
         ('{"errors": [{"type": "RATE_LIMITED", "message": "slow down"}]}', "", 0),
         ("", "gh: HTTP 403: API rate limit exceeded", 1),
+        ('{"errors": [{"type": "RATE_LIMITED", "message": "slow down"}]}', "gh: exit 1", 1),
     ],
-    ids=["cli-message", "errors-type", "http-403"],
+    ids=["cli-message", "errors-type", "http-403", "errors-type-failed-call"],
 )
 def test_fetch_page_names_the_rate_limit(
     monkeypatch: pytest.MonkeyPatch, str_stdout: str, str_stderr: str, int_code: int
@@ -696,10 +697,51 @@ def test_fetch_page_keeps_a_non_rate_limit_error_a_failure(
     assert not isinstance(cls_info.value, cls_gate.RateLimitedError)
 
 
+def test_fetch_page_ignores_rate_limit_wording_in_a_failed_calls_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Partial data quoting "rate limit" beside a non-rate-limit error stays a failure."""
+    cls_gate = _load_gate()
+    json_partial = json.dumps(
+        {
+            "data": {"repository": {"pullRequest": {"body": "HTTP 429 rate limit RATE_LIMITED"}}},
+            "errors": [{"type": "FORBIDDEN", "message": "no access to a field"}],
+        }
+    )
+    cls_run = Mock(returncode=1, stdout=json_partial, stderr="gh: forbidden")
+    monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
+    with pytest.raises(RuntimeError) as cls_info:
+        cls_gate._fetch_page("o", "r", 1, None, None)
+    assert not isinstance(cls_info.value, cls_gate.RateLimitedError)
+
+
+def test_main_json_mode_reports_rate_limit_as_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--json`` keeps its contract on a rate limit: one parseable object, exit 3."""
+    cls_gate = _load_gate()
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    monkeypatch.setattr(cls_gate, "_roster_or_verdict", Mock(return_value=({"x": "y"}, None)))
+    monkeypatch.setattr(cls_gate, "reviewer_logins", Mock(return_value=set()))
+    monkeypatch.setattr(cls_gate, "_gh_api_text", Mock(return_value="1700000000\n"))
+    monkeypatch.setattr(cls_gate, "load_marker_posters", Mock(return_value=frozenset()))
+    monkeypatch.setattr(
+        cls_gate, "fetch_pull_request", Mock(side_effect=cls_gate.RateLimitedError("at 0"))
+    )
+    int_code = cls_gate.main(["--json"])
+    dict_out = json.loads(capsys.readouterr().out)
+    assert (int_code, dict_out["status"], dict_out["reset"]) == (
+        3,
+        "rate_limited",
+        "2023-11-14T22:13:20Z",
+    )
+
+
 @pytest.mark.parametrize(
     ("str_reset", "str_expected"),
     [
-        ("1700000000\n", "2023-11-14T22:13:20+00:00"),
+        ("1700000000\n", "2023-11-14T22:13:20Z"),
         (None, "reset time unknown"),
     ],
     ids=["reset-known", "reset-unknown"],

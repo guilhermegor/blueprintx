@@ -73,6 +73,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import time
 import urllib.parse
 
 
@@ -312,6 +313,18 @@ class RateLimitedError(RuntimeError):
     """GitHub's GraphQL budget is exhausted, so the PR could not be read."""
 
 
+def _errors_say_rate_limited(str_stdout: str) -> bool:
+    """Return whether a GraphQL body has an ``errors`` entry typed ``RATE_LIMITED``."""
+    try:
+        list_errors = json.loads(str_stdout).get("errors") or []
+    except (ValueError, AttributeError):
+        return False
+    return any(
+        isinstance(dict_err, dict) and dict_err.get("type") == "RATE_LIMITED"
+        for dict_err in list_errors
+    )
+
+
 def _fetch_page(
     str_owner: str,
     str_repo: str,
@@ -353,12 +366,14 @@ def _fetch_page(
     ]
     cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
     if cls_run.returncode != 0:
-        if _RE_GRAPHQL_RATE_LIMIT.search(f"{cls_run.stderr}\n{cls_run.stdout}"):
+        if _RE_GRAPHQL_RATE_LIMIT.search(cls_run.stderr) or _errors_say_rate_limited(
+            cls_run.stdout
+        ):
             raise RateLimitedError(cls_run.stderr.strip()[:200] or "GraphQL RATE_LIMITED")
         raise RuntimeError(f"GraphQL query failed: {cls_run.stderr.strip()[:400]}")
     dict_out = json.loads(cls_run.stdout)
     if "errors" in dict_out:
-        if any(dict_err.get("type") == "RATE_LIMITED" for dict_err in dict_out["errors"]):
+        if _errors_say_rate_limited(cls_run.stdout):
             raise RateLimitedError("GraphQL RATE_LIMITED")
         raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
     return dict_out["data"]["repository"]["pullRequest"]
@@ -2377,8 +2392,15 @@ def _roster_or_verdict(
     return dict_roster, None
 
 
-def _print_rate_limited(str_detail: str) -> int:
-    """Print one line naming the GraphQL rate limit and its reset time.
+def _print_rate_limited(bool_json: bool, str_detail: str) -> int:
+    """Print the GraphQL rate-limit verdict and its reset time.
+
+    Parameters
+    ----------
+    bool_json : bool
+        Emit a ``{"status": "rate_limited", ...}`` object instead of a text line.
+    str_detail : str
+        The ``gh`` diagnostic, written to stderr so the original message is not lost.
 
     Returns
     -------
@@ -2386,13 +2408,18 @@ def _print_rate_limited(str_detail: str) -> int:
         ``3``, distinct from ``1`` (a real finding): the gate read nothing.
     """
     str_reset = (_gh_api_text(["rate_limit", "--jq", ".resources.graphql.reset"]) or "").strip()
-    dt_reset = (
-        datetime.datetime.fromtimestamp(int(str_reset), tz=datetime.UTC)
+    str_when = (
+        time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(str_reset)))
         if str_reset.isdigit()
-        else None
+        else ""
     )
-    str_when = f"resets at {dt_reset.isoformat()}" if dt_reset else "reset time unknown"
-    print(f"UNKNOWN: GitHub GraphQL rate limit exhausted ({str_when}); no review was read.")
+    str_note = f"resets at {str_when}" if str_when else "reset time unknown"
+    str_line = f"UNKNOWN: GitHub GraphQL rate limit exhausted ({str_note}); no review was read."
+    print(
+        json.dumps({"status": "rate_limited", "reset": str_when or None, "reason": str_line})
+        if bool_json
+        else str_line
+    )
     print(f"gh diagnostic: {str_detail}", file=sys.stderr)
     return _INT_EXIT_RATE_LIMITED
 
@@ -2412,16 +2439,27 @@ def main(list_argv: list[str] | None = None) -> int:
         ``adopted: false``), ``1`` otherwise; a missing roster is ``1``; ``3`` when the GraphQL
         rate limit stopped the read.
     """
-    try:
-        return _check_pull_request(list_argv)
-    except RateLimitedError as err:
-        return _print_rate_limited(str(err))
-
-
-def _check_pull_request(list_argv: list[str] | None) -> int:
-    """Run the gate; a GraphQL rate limit propagates as :class:`RateLimitedError`."""
     bool_json = parse_args(list_argv).json
+    try:
+        return _check_pull_request(bool_json)
+    except RateLimitedError as err:
+        return _print_rate_limited(bool_json, str(err))
 
+
+def _check_pull_request(bool_json: bool) -> int:
+    """Run the gate for the current PR.
+
+    Parameters
+    ----------
+    bool_json : bool
+        Print verdicts as JSON objects instead of prose.
+
+    Returns
+    -------
+    int
+        The exit code :func:`main` documents; a GraphQL rate limit propagates as
+        :class:`RateLimitedError` for :func:`main` to report.
+    """
     str_repo_full = os.environ.get("GITHUB_REPOSITORY", "")
     str_number = os.environ.get("PR_NUMBER", "")
     if not str_repo_full or not str_number.isdigit():
