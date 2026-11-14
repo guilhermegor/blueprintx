@@ -62,6 +62,96 @@ _str_config_error: str | None = None
 YAML_OUTPUTS: dict[str, str] = {}
 YAML_INPUTS: dict[str, object] = {}
 
+
+@type_checker
+def _require_mapping(str_label: str, obj_loaded: object) -> dict[object, object]:
+    """Return a parsed YAML document, rejecting one that is not a mapping.
+
+    Parameters
+    ----------
+    str_label : str
+        The config's name, used in the error message.
+    obj_loaded : object
+        The value ``yaml.safe_load`` returned.
+
+    Returns
+    -------
+    dict
+        ``obj_loaded``, narrowed to the mapping it was checked to be.
+
+    Raises
+    ------
+    TypeError
+        If ``obj_loaded`` is not a ``dict``.
+    """
+    if not isinstance(obj_loaded, dict):
+        raise TypeError(
+            f"{str_label} config must be a YAML mapping, got {type(obj_loaded).__name__}"
+        )
+    return obj_loaded
+
+
+@type_checker
+def _require_string_template(dict_outputs: dict[object, object], str_key: str) -> None:
+    """Reject an outputs mapping whose ``str_key`` is not a string.
+
+    Parameters
+    ----------
+    dict_outputs : dict
+        The parsed ``outputs`` mapping.
+    str_key : str
+        The filename-template key that must hold a string.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If the value under ``str_key`` is not a string.
+    """
+    if not isinstance(dict_outputs.get(str_key), str):
+        raise TypeError(f"outputs config must define {str_key!r} as a string")
+
+
+@type_checker
+def _validate_outputs_templates(dict_outputs: dict[object, object]) -> None:
+    """Require every filename template the run reads to be a string.
+
+    Parameters
+    ----------
+    dict_outputs : dict
+        The parsed ``outputs`` mapping.
+
+    Returns
+    -------
+    None
+    """
+    for str_key in ("log_name", "json_name", "txt_name"):
+        _require_string_template(dict_outputs, str_key)
+
+
+@type_checker
+def _validate_config(obj_outputs: object, obj_inputs: object) -> None:
+    """Reject YAML documents that are not mappings or lack a filename template.
+
+    Parameters
+    ----------
+    obj_outputs : object
+        The parsed ``outputs`` document.
+    obj_inputs : object
+        The parsed ``inputs`` document.
+
+    Returns
+    -------
+    None
+    """
+    dict_checked = _require_mapping("outputs", obj_outputs)
+    _require_mapping("inputs", obj_inputs)
+    _validate_outputs_templates(dict_checked)
+
+
 try:
     YAML_OUTPUTS = yaml.safe_load(
         resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR).read_text(encoding="utf-8")
@@ -69,14 +159,7 @@ try:
     YAML_INPUTS = yaml.safe_load(
         resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
     )
-    for str_label, dict_loaded in (("outputs", YAML_OUTPUTS), ("inputs", YAML_INPUTS)):
-        if not isinstance(dict_loaded, dict):
-            raise TypeError(
-                f"{str_label} config must be a YAML mapping, got {type(dict_loaded).__name__}"
-            )
-    for str_key in ("log_name", "json_name", "txt_name"):
-        if not isinstance(YAML_OUTPUTS.get(str_key), str):
-            raise TypeError(f"outputs config must define {str_key!r} as a string")
+    _validate_config(YAML_OUTPUTS, YAML_INPUTS)
 except Exception as cls_exc:  # noqa: BLE001
     _str_config_error = f"{type(cls_exc).__name__}: {cls_exc}"
     YAML_OUTPUTS = dict(_DICT_FALLBACK_OUTPUTS)

@@ -21,8 +21,6 @@ from utils.dtypes import apply_dtypes
 
 
 if TYPE_CHECKING:
-    from typing import TypeVar
-
     _F = TypeVar("_F")
 
     def type_checker(fn: _F) -> _F:

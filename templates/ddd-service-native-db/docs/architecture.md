@@ -73,6 +73,7 @@ project/
 # enums.py — domain-typed constants
 from enum import Enum
 
+
 class NoteStatus(Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
@@ -86,6 +87,7 @@ from datetime import datetime
 import uuid
 from .enums import NoteStatus
 
+
 @dataclass
 class Note:
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
@@ -98,6 +100,7 @@ class Note:
 # ports.py — Protocol, not ABC: infrastructure satisfies it structurally (no import needed)
 from typing import Iterable, Protocol
 from .entities import Note
+
 
 class NoteRepository(Protocol):
     def add(self, cls_note: Note) -> Note: ...
@@ -114,6 +117,7 @@ class NoteRepository(Protocol):
 from ..domain.dto import NoteCreateDTO, NoteResponseDTO
 from ..domain.entities import Note
 from ..domain.ports import NoteRepository
+
 
 def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:
     cls_note = Note(title=cls_dto.title)
@@ -134,6 +138,7 @@ def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteRespons
 # repositories.py — in-memory starter; replace with a DatabaseHandler-backed impl
 from typing import Iterable
 from ..domain.entities import Note
+
 
 class InMemoryNoteRepository:
     def __init__(self) -> None:

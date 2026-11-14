@@ -152,7 +152,7 @@ def write_summary(
         The run summary to serialise.
     """
     log_message(cls_logger, "Starting summary-export process")
-    with path_json.open("w") as file_write:
+    with path_json.open("w", encoding="utf-8") as file_write:
         json.dump(dict_summary, file_write)
     log_message(cls_logger, f"Summary exported: {path_json}")
 
