@@ -53,11 +53,11 @@ def main(list_args):
     doc = load(path_file)
     if str_mode == "nav":
         doc = doc.get("nav") if isinstance(doc, dict) else None
-        list_out = nav_pages(doc)
-    else:
+        list_out = sorted(set(nav_pages(doc)))
+    elif str_mode == "scalars":
         list_out = scalars(doc)
-    if str_mode == "nav":
-        list_out = sorted(set(list_out))
+    else:
+        raise SystemExit(f"unknown mode: {str_mode}")
     for str_line in list_out:
         print(str_line)
 

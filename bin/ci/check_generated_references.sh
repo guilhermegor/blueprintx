@@ -73,7 +73,7 @@ check_project() {
     if [ -f "$str_project/mkdocs.yml" ]; then
         str_docs="$(docs_dir "$str_project/mkdocs.yml")"
         str_pages="$(nav_pages "$str_project/mkdocs.yml")" \
-            || { fail "mkdocs.yml could not be parsed as YAML (needs python3 with PyYAML)"; str_pages=""; }
+            || { fail "mkdocs.yml could not be read as YAML: PyYAML missing for python3 -I, or invalid YAML (see stderr)"; str_pages=""; }
         while IFS= read -r str_ref; do
             [ -n "$str_ref" ] || continue
             int_refs=$((int_refs + 1)); int_nav=$((int_nav + 1))
@@ -92,7 +92,7 @@ check_project() {
     done
     for str_file in ${list_sources[@]+"${list_sources[@]}"}; do
         str_text="$(source_text "$str_file")" \
-            || { fail "${str_file#"$str_project"/} could not be parsed as YAML (needs python3 with PyYAML)"; continue; }
+            || { fail "${str_file#"$str_project"/} could not be read as YAML: PyYAML missing for python3 -I, or invalid YAML (see stderr)"; continue; }
         while IFS= read -r str_ref; do
             int_refs=$((int_refs + 1)); int_scripts=$((int_scripts + 1))
             [ -e "$str_project/$str_ref" ] \

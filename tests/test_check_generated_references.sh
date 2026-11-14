@@ -92,7 +92,6 @@ LC_ALL=C expect_extra "accented nav filename is matched whole" fail mkdocs.yml $
 expect_extra "spaced nav filename is matched whole" fail mkdocs.yml $'nav:\n  - Guide: my guide.md\n' 'my guide.md'
 expect_extra "apostrophe in prose does not hide the comment strip" pass .github/workflows/p.yml $'jobs:\n  j:\n    steps:\n      - name: Don\x27t skip # see bin/old.sh\n        run: bash bin/a.sh\n' old.sh
 expect_extra "nav extractor matching nothing fails even if scripts match" fail mkdocs.yml $'nav:\n  - Home: ~\n' 'mkdocs.yml' 'nothing was checked'
-expect_extra "nav title containing a colon keeps the page name" fail mkdocs.yml $'nav:\n  - "Guide: intro": guide.md\n' 'guide.md'
 expect_extra "quoted local nav page is matched whole" fail mkdocs.yml $'nav:\n  - Home: "gone.md"\n  - Two: \'two.md\'\n' 'gone.md'
 expect_extra "yaml anchor before a nav page is not part of the name" fail mkdocs.yml $'nav:\n  - &home gone.md\n' 'docs/gone.md'
 expect_extra "double quote after a word still opens a quoted span" fail .github/workflows/w.yml $'run: |\n  echo prefix" # text"; bash bin/nope.sh\n'
@@ -101,6 +100,7 @@ expect_extra "single quote closed later on the line still hides a comment span" 
 expect_extra "colon inside a quoted nav page is kept" fail mkdocs.yml $'nav:\n  - Guide: "part: one.md"\n' 'docs/part: one.md'
 expect_extra "quoted nav title with a colon extracts the exact page" fail mkdocs.yml $'nav:\n  - "Guide: intro": guide.md\n' 'docs/guide.md, which'
 expect_extra "prose apostrophes in a name and a comment leave the comment inert" pass .github/workflows/n.yml $'jobs:\n  j:\n    steps:\n      - name: Don\x27t skip # see Bob\x27s bin/old.sh\n        run: bash bin/a.sh\n' 'old.sh'
+expect_extra "python tag in mkdocs.yml does not break nav extraction" fail mkdocs.yml $'markdown_extensions:\n  - pymdownx.emoji:\n      emoji_index: !!python/name:material.extensions.emoji.twemoji\nnav:\n  - A: gone.md\n' 'docs/gone.md'
 expect_extra "poe_tasks fragment reference to a missing script fails" fail poe_tasks.test.toml $'[tool.poe.tasks.t]\ncmd = "bash bin/nope.sh"\n'
 expect_extra "commented-out reference is ignored" pass Makefile $'# bin/nope.sh\n'
 expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n' site/index.md
@@ -119,6 +119,10 @@ str_noref="$(mktemp -d)"
 printf 'site_name: x\n' >"$str_noref/mkdocs.yml"
 expect_dir "a project with no extracted reference fails" "$str_noref"
 rm -rf "$str_noref"
+str_nobin="$(mktemp -d)"
+printf 'a:\n\techo hi\n' >"$str_nobin/Makefile"
+expect_dir "task files with no bin reference fail as nothing checked" "$str_nobin"
+rm -rf "$str_nobin"
 
 str_got="pass"
 bash "$CHECK" --generated --skeleton no-such-skeleton >/dev/null 2>&1 || str_got="fail"
