@@ -41,5 +41,13 @@ fi
 cd "$PROJECT_PATH"
 npm ci --no-audit --no-fund
 npm run lint
+if [ -f bin/check_test_directives.sh ]; then
+    printf "/* eslint-disable */\nit.skip('x', () => {});\n" >src/zz-witness.test.ts
+    if npm run lint >/dev/null 2>&1; then
+        echo "ERROR: lint accepted a block eslint-disable over a skipped test" >&2
+        exit 1
+    fi
+    rm -f src/zz-witness.test.ts
+fi
 npm test
 echo "OK: $SKELETON scaffold passes npm ci, lint and jest."

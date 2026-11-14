@@ -164,6 +164,9 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/tsconfig.json" "$project_path/tsconfig.json"
     cp "$SKELETON_TEMPLATE_ROOT/webpack.config.js" "$project_path/webpack.config.js"
     cp "$SKELETON_TEMPLATE_ROOT/lint-staged.config.js" "$project_path/lint-staged.config.js"
+    mkdir -p "$project_path/bin"
+    cp "$SKELETON_TEMPLATE_ROOT/bin/check_test_directives.sh" "$project_path/bin/check_test_directives.sh"
+    chmod +x "$project_path/bin/check_test_directives.sh"
 
     cp "$SKELETON_TEMPLATE_ROOT/.env.example" "$project_path/.env"
     cp "$SKELETON_TEMPLATE_ROOT/.env.example" "$project_path/.env.example"
