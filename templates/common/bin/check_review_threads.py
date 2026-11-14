@@ -308,7 +308,7 @@ _RE_GRAPHQL_RATE_LIMIT = re.compile(r"rate limit|RATE_LIMITED|HTTP 429", re.IGNO
 _INT_EXIT_RATE_LIMITED = 3
 
 
-class RateLimited(RuntimeError):
+class RateLimitedError(RuntimeError):
     """GitHub's GraphQL budget is exhausted, so the PR could not be read."""
 
 
@@ -352,12 +352,14 @@ def _fetch_page(
         f"cc={str_comment_cursor}" if str_comment_cursor else "cc=",
     ]
     cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
-    if _RE_GRAPHQL_RATE_LIMIT.search(f"{cls_run.stderr}\n{cls_run.stdout}"):
-        raise RateLimited(cls_run.stderr.strip()[:200] or "GraphQL RATE_LIMITED")
     if cls_run.returncode != 0:
+        if _RE_GRAPHQL_RATE_LIMIT.search(f"{cls_run.stderr}\n{cls_run.stdout}"):
+            raise RateLimitedError(cls_run.stderr.strip()[:200] or "GraphQL RATE_LIMITED")
         raise RuntimeError(f"GraphQL query failed: {cls_run.stderr.strip()[:400]}")
     dict_out = json.loads(cls_run.stdout)
     if "errors" in dict_out:
+        if any(dict_err.get("type") == "RATE_LIMITED" for dict_err in dict_out["errors"]):
+            raise RateLimitedError("GraphQL RATE_LIMITED")
         raise RuntimeError(f"GraphQL returned errors: {dict_out['errors']}")
     return dict_out["data"]["repository"]["pullRequest"]
 
@@ -2375,7 +2377,7 @@ def _roster_or_verdict(
     return dict_roster, None
 
 
-def _print_rate_limited() -> int:
+def _print_rate_limited(str_detail: str) -> int:
     """Print one line naming the GraphQL rate limit and its reset time.
 
     Returns
@@ -2384,8 +2386,14 @@ def _print_rate_limited() -> int:
         ``3``, distinct from ``1`` (a real finding): the gate read nothing.
     """
     str_reset = (_gh_api_text(["rate_limit", "--jq", ".resources.graphql.reset"]) or "").strip()
-    str_when = f"resets at epoch {str_reset}" if str_reset.isdigit() else "reset time unknown"
+    dt_reset = (
+        datetime.datetime.fromtimestamp(int(str_reset), tz=datetime.UTC)
+        if str_reset.isdigit()
+        else None
+    )
+    str_when = f"resets at {dt_reset.isoformat()}" if dt_reset else "reset time unknown"
     print(f"UNKNOWN: GitHub GraphQL rate limit exhausted ({str_when}); no review was read.")
+    print(f"gh diagnostic: {str_detail}", file=sys.stderr)
     return _INT_EXIT_RATE_LIMITED
 
 
@@ -2401,8 +2409,17 @@ def main(list_argv: list[str] | None = None) -> int:
     -------
     int
         ``0`` when every thread is answered (or the roster opts out with a base-backed
-        ``adopted: false``), ``1`` otherwise; a missing roster is ``1``.
+        ``adopted: false``), ``1`` otherwise; a missing roster is ``1``; ``3`` when the GraphQL
+        rate limit stopped the read.
     """
+    try:
+        return _check_pull_request(list_argv)
+    except RateLimitedError as err:
+        return _print_rate_limited(str(err))
+
+
+def _check_pull_request(list_argv: list[str] | None) -> int:
+    """Run the gate; a GraphQL rate limit propagates as :class:`RateLimitedError`."""
     bool_json = parse_args(list_argv).json
 
     str_repo_full = os.environ.get("GITHUB_REPOSITORY", "")
@@ -2421,15 +2438,12 @@ def main(list_argv: list[str] | None = None) -> int:
     set_reviewers = reviewer_logins(dict_roster)
 
     str_owner, _, str_repo = str_repo_full.partition("/")
-    try:
-        dict_pr = fetch_pull_request(
-            str_owner,
-            str_repo,
-            int(str_number),
-            frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
-        )
-    except RateLimited:
-        return _print_rate_limited()
+    dict_pr = fetch_pull_request(
+        str_owner,
+        str_repo,
+        int(str_number),
+        frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
+    )
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 

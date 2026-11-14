@@ -651,32 +651,83 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
 def test_fetch_page_names_the_rate_limit(
     monkeypatch: pytest.MonkeyPatch, str_stdout: str, str_stderr: str, int_code: int
 ) -> None:
-    """An exhausted GraphQL budget raises ``RateLimited``, not a bare failure."""
+    """An exhausted GraphQL budget raises ``RateLimitedError``, not a bare failure."""
     cls_gate = _load_gate()
     cls_run = Mock(returncode=int_code, stdout=str_stdout, stderr=str_stderr)
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
-    with pytest.raises(cls_gate.RateLimited):
+    with pytest.raises(cls_gate.RateLimitedError):
         cls_gate._fetch_page("o", "r", 1, None, None)
 
 
+def test_fetch_page_ignores_rate_limit_wording_in_a_successful_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A thread body quoting "rate limit" in a successful read is data, not a rate limit."""
+    cls_gate = _load_gate()
+    json_ok = json.dumps(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"body": "RATE_LIMITED, HTTP 429, rate limit"}]
+                        }
+                    }
+                }
+            }
+        }
+    )
+    cls_run = Mock(returncode=0, stdout=json_ok, stderr="")
+    monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
+    dict_pr = cls_gate._fetch_page("o", "r", 1, None, None, None)
+    assert dict_pr["reviewThreads"]["nodes"][0]["body"].startswith("RATE_LIMITED")
+
+
+def test_fetch_page_keeps_a_non_rate_limit_error_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ``errors`` body whose type is not ``RATE_LIMITED`` stays a plain ``RuntimeError``."""
+    cls_gate = _load_gate()
+    json_err = '{"errors": [{"type": "NOT_FOUND", "message": "mentions a rate limit"}]}'
+    cls_run = Mock(returncode=0, stdout=json_err, stderr="")
+    monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
+    with pytest.raises(RuntimeError) as cls_info:
+        cls_gate._fetch_page("o", "r", 1, None, None, None)
+    assert not isinstance(cls_info.value, cls_gate.RateLimitedError)
+
+
+@pytest.mark.parametrize(
+    ("str_reset", "str_expected"),
+    [
+        ("1700000000\n", "2023-11-14T22:13:20+00:00"),
+        (None, "reset time unknown"),
+    ],
+    ids=["reset-known", "reset-unknown"],
+)
 def test_main_reports_rate_limit_in_one_line_with_distinct_exit(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    str_reset: str | None,
+    str_expected: str,
 ) -> None:
     """``main`` prints one explicit line and exits 3 instead of a traceback."""
     cls_gate = _load_gate()
     monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
     monkeypatch.setenv("PR_NUMBER", "1")
-    monkeypatch.setattr(cls_gate, "_roster_or_verdict", Mock(return_value=({"x": {}}, None)))
+    monkeypatch.setattr(cls_gate, "_roster_or_verdict", Mock(return_value=({"x": "y"}, None)))
     monkeypatch.setattr(cls_gate, "reviewer_logins", Mock(return_value=set()))
-    monkeypatch.setattr(cls_gate, "_gh_api_text", Mock(return_value="1700000000\n"))
+    monkeypatch.setattr(cls_gate, "_gh_api_text", Mock(return_value=str_reset))
     monkeypatch.setattr(cls_gate, "load_marker_posters", Mock(return_value=frozenset()))
     monkeypatch.setattr(
-        cls_gate, "fetch_pull_request", Mock(side_effect=cls_gate.RateLimited("budget at 0"))
+        cls_gate, "fetch_pull_request", Mock(side_effect=cls_gate.RateLimitedError("budget at 0"))
     )
     assert cls_gate.main([]) == 3
-    str_out = capsys.readouterr().out.strip()
+    cls_captured = capsys.readouterr()
+    str_out = cls_captured.out.strip()
     assert len(str_out.splitlines()) == 1
     assert "rate limit" in str_out.lower()
+    assert str_expected in str_out
+    assert "budget at 0" in cls_captured.err
 
 
 @pytest.mark.parametrize(
