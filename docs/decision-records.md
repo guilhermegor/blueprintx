@@ -1109,16 +1109,20 @@ is shaped as it is; a generated project gets the behavior, not the history.
   rewritten to `<pkg>._internal.*` and can exceed the line length, so it is excluded in full
   (mypy excludes it too).
 - **Preview mode is for PLR1702 only** (too-many-nested-blocks, still preview-only in ruff
-  0.11.13). It also activates 10 tag-along preview rules in the `PL` and `S` families, never
-  chosen on their merits, so they are ignored explicitly (#434): `--preview` alone raised
-  findings from 21 to 81 on `templates/`, and ignoring exactly those 10 restores 21. Revisit
+  0.17.5: `ruff rule PLR1702`). It also activates 10 tag-along preview rules in the `PL` and `S`
+  families, never chosen on their merits, so they are ignored explicitly (#434). Re-measured
+  with ruff 0.17.5 (`ruff check --isolated --select PL,S` over `templates/python-common/{src,bin,optional}`):
+  stable 109 findings, `--preview` alone 156, and `--preview` with exactly those 10 ignored 66,
+  the same 66 that stable reports with the same 10 ignored. The 0.11.13 figures (21 to 81 on
+  `templates/`) used a different tree and are not comparable. Revisit
   each on its own measurement the day PLR1702 leaves preview. Why nesting is gated at all is in
   `check_complexity.sh`'s header and [Complexity ceilings](complexity-ceilings-measured.md).
 - **PLR1702 pairs with `max-complexity = 3` for `src/` only.** Ceiling 3 alone would admit the
   nested `if`/`for` that ceiling 2 exists to forbid, and PLR1702 alone would not solve the
   guard-plus-try/except case. Per-tree ceilings live in `check_complexity.sh`, since
   `per-file-ignores` can switch a rule off but cannot set a different threshold.
-- **Rules adopted by measurement** (ruff 0.11.13), recorded in the Ruff Rule Adoption Log in
+- **Rules adopted by measurement** (ruff 0.11.13 when adopted; re-measured under 0.17.5 in the
+  Adoption Log), recorded in the Ruff Rule Adoption Log in
   `CONTRIBUTING.md`:
     - `RET` (#426): 0 RET505 and 11 RET501 (a trailing `return None` in a `-> None` function),
       all removed; 5 were reachable from `templates/python-common`, the other 6 needed a scaffold.

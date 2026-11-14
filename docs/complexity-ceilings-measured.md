@@ -80,7 +80,9 @@ ruff check <file> --select C901 \
   --output-format concise --no-cache
 ```
 
-## Measured table (2026-09-13, ruff 0.11.13, same command as above)
+## Measured table (2026-09-13 with ruff 0.11.13; re-run 2026-11-14 with ruff 0.17.5, same command as above)
+
+The 0.17.5 re-run reproduces every figure below unchanged (2, 2, 2, 3, 3, 1, 1).
 
 A probe file with one function per construct, run through the command above:
 

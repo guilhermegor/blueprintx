@@ -521,10 +521,10 @@ implicit `None`) — not narrowed to only `RET505` (the "unnecessary `else` afte
 
 ### `N` (pep8-naming) — blueprintx#422
 
-Adopted with two per-file-ignores, not whole. Re-measured 2026-09-13 (ruff 0.11.13):
-`ruff check --select N --statistics src/ bin/ tests/ optional/` → 9 findings across 3
-rules (an earlier count in the issue read 6 — stale; re-measuring is what the issue asked
-for, not trusting the number it opened with).
+Adopted with two per-file-ignores, not whole. Measured 2026-09-13 with ruff 0.11.13: 9 findings across 3 rules. Re-measured 2026-11-14
+(ruff 0.17.5): `ruff check --select N --statistics src/ bin/ tests/ optional/` from
+`templates/python-common` → 6 findings across 2 rules (5 `N802`, 1 `N813`); the 3 `N806` below were
+fixed in between.
 
 - **`N802` (function name should be lowercase) — 5 findings, all false positives, ignored
   in `tests/**` only.** Every one is a test name that uses upper-case for **semantic
@@ -565,7 +565,9 @@ Closes the gap `E722` (bare `except:`, already selected via `E`) leaves open:
 the same class of finding, one layer narrower.
 
 - Measured 2026-09-16 (ruff 0.11.13): `ruff check --select BLE --statistics
-  templates/` → 2 findings, both the SAME line in `_pipeline.py`
+  templates/` → 2 findings (re-measured 2026-11-14 with ruff 0.17.5: 0 findings with the
+  `noqa` comments honored, 11 with `--ignore-noqa`, so every broad handler still carries its
+  reasoned suppression), both the SAME line in `_pipeline.py`
   (mvc-service-native-db and mvc-service-orm-db ship byte-identical files) — a
   documented five-mode degradation (`PipelineOrchestrator._enrich`) where
   splitting the `except` by mode would re-create the original defect (one
@@ -584,7 +586,9 @@ the same class of finding, one layer narrower.
   3 unicode-ambiguity findings). Unlike `BLE`, this is real cost, not zero,
   so it is a deliberate separate decision rather than bundled into this
   issue: left for a follow-up issue to adopt (or narrow) on its own measured
-  merits.
+  merits. Re-measured 2026-11-14 (ruff 0.17.5): `ruff check --isolated --select RUF
+  --statistics templates/` → 303 findings (269 `RUF100`, 13 `RUF022`, 11 `RUF001`, 4 `RUF046`,
+  3 `RUF005`, 1 `RUF002`), still not adopted.
 
 ### TypeScript catch-safety — blueprintx#440 (already shipped, blueprintx#443)
 
@@ -1457,8 +1461,10 @@ notes" above.
 - **Task runner and tooling.** Poe the Poet runs every project command. It is a dev dependency
   living in `.venv`, so it cannot run the tasks that create `.venv`: bootstrap (`init`, `venv`,
   `ensure_env`, `precommit`) runs `bash bin/venv.sh` directly, and `[tool.poetry.requires-plugins]`
-  must not be used because it breaks `poetry install` (blueprintx#232). Ruff is pinned to the
-  ruff-pre-commit minor so `poe lint` and the hook agree. `pytest-randomly` shuffles test order and
+  must not be used because it breaks `poetry install` (blueprintx#232). Ruff has one version
+  source, the lock: the pre-commit hooks run `poetry run ruff` as `local` hooks, not a second pinned
+  `ruff-pre-commit` rev, and the dev dependency is `ruff = ">=0.17.5"` with no upper bound
+  (blueprintx#1130). `pytest-randomly` shuffles test order and
   prints the seed (blueprintx#442). `genbadge` replaced the abandoned `coverage-badge`, which
   imports the removed `pkg_resources`. `pytest-mock` is declared explicitly because a test imports
   it. shellcheck and shfmt are pip dev dependencies resolved through `poetry run`, then a system
