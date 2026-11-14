@@ -137,7 +137,7 @@ def output_path(str_name_key: str) -> Path:
 
 @type_checker
 def resolve_reference_spec(
-    dict_inputs: Mapping[object, object], str_source: str
+    dict_inputs: Mapping[str, object], str_source: str
 ) -> Mapping[object, object] | None:
     """Resolve ``str_source``'s reference ("golden copy") spec, override-first then real-input.
 
