@@ -3855,8 +3855,11 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   half were <code>_F = TypeVar("_F", bound=Callable[..., object])</code> in the <code>type_checker</code> shim (<code>...</code> is an
   implicit <code>Any</code>; the bound is dropped, the shim returns <code>_F</code> unchanged) and its <code>def type_checker</code>
   line; the rest were written <code>Any</code>, replaced by <code>object</code> where the value is only passed through
-  (<code>Record</code>, run summaries, query params). Opaque DB-API handles and <code>SanityCheck</code> keep <code>Any</code> via
-  per-module <code>disallow_any_explicit = False</code>, the same list as the <code>ANN401</code> ignores.</li>
+  (<code>Record</code>, run summaries, query params). The DB-API handles and <code>SanityCheck</code> first kept <code>Any</code> via
+  per-module <code>disallow_any_explicit = False</code>; #1054 removed those too: <code>utils/dbapi.py</code> holds the
+  structural <code>DbConnection</code>/<code>DbCursor</code> Protocols, a row cell is <code>object</code> (narrowed by
+  <code>decode_record</code>), and <code>SanityCheck</code> takes <code>object</code>. The one remaining <code>cast</code> per driver sits at
+  <code>_connect</code> (mvc-native: <code>build_connection</code>), because the drivers share no base class and their own stubs disagree.</li>
 <li><strong>Baseline strictness.</strong> Annotations and obvious type errors are enforced, not <code>--strict</code>,
   so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.
   <code>disallow_any_generics</code> is the exception (#1054): it is global, so a bare <code>dict</code> or <code>list</code>
@@ -3898,8 +3901,7 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   mirroring #190's mypy fix. They ship verbatim into every DDD project, so a defect or a style
   violation the rest of the tree is held to propagates. About 230 findings were fixed in place
   (D202, S608 <code>noqa</code>'d per line, UP007/UP035, missing ANN204/ANN202, a docstring hanging indent
-  authored before the tree was tabified); a few per-file ANN401 ignores remain where <code>Any</code> is
-  honest. <code>lib-minimal</code> vendors the typing engine at a nested private path whose imports are
+  authored before the tree was tabified); no per-file ANN401 ignore remains (#1054). <code>lib-minimal</code> vendors the typing engine at a nested private path whose imports are
   rewritten to <code>&lt;pkg&gt;._internal.*</code> and can exceed the line length, so it is excluded in full
   (mypy excludes it too).</li>
 <li><strong>Preview mode is for PLR1702 only</strong> (too-many-nested-blocks, still preview-only in ruff
@@ -4010,11 +4012,8 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   <code># noqa: TID251</code>, and the five emphatic upper-case test names were lower-cased.</li>
 <li><code>bin/**</code> ignores <code>PLC2701</code> only. The former <code>ERA001</code> and <code>E101</code> ignores measured 0
   findings and were removed (#1054).</li>
-<li><code>ANN401</code> is ignored for the raw-driver connection factory (<code>config/connection_db.py</code>,
-  MVC) and the DB handlers' <code>_connect</code> (psycopg, mysql-connector, pyodbc, oracledb), which
-  have no shared type; <code>sqlite_handler.py</code> needs none, <code>sqlite3.Connection</code> being real.
-  It is no longer ignored for the typing engine (#1054), which is typed without
-  <code>Any</code>; it stays for <code>SanityCheck.validate()</code>, which takes any joblib payload.</li>
+<li><code>ANN401</code> is no longer ignored anywhere (#1054): connections are typed by the
+  <code>utils/dbapi.py</code> Protocols and <code>SanityCheck.validate()</code> takes <code>object</code>.</li>
 <li><code>N813</code> is ignored for <code>import defusedxml.ElementTree as defused_et</code>, a deliberate alias
   for the trust-boundary-safe parser; renaming would only hurt readability (#422).</li>
 <li><code>lib-minimal</code> mirrors the exemptions for <code>src/&lt;pkg&gt;/_internal/...</code>; its typing engine is
