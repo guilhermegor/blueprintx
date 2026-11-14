@@ -1371,6 +1371,12 @@ either layout (blueprintx#360). A few modules stub the metaclass shape instead o
     (`REVIEW_THREADS_REQUIRE_RESOLVED=1`, #196). An outdated thread counts, because the merge
     setting drops it and an author can manufacture that state by rewriting the commented lines.
     The cost is that a resolve leaves the check red until it is re-run by hand (#263).
+  - *Rate limit* (#1128). An exhausted GraphQL budget prints one `UNKNOWN` line naming the reset
+    time (a `{"status": "rate_limited"}` object under `--json`) and exits `3`, distinct from `1`
+    (a real finding): the gate read nothing. The workflow step fails on any non-zero exit, so `3`
+    stays red; it is never a pass. Detection reads only `stderr` of a failed `gh` call or an
+    `errors[].type` of `RATE_LIMITED`, never response data, because a thread quoting "rate limit"
+    would otherwise be misread as the budget running out.
   - *Misc.* `--json` exists because grepping the prose misreported 27 PRs (#364). The reply
     length floor of 100 characters sits at or below the shortest real verdict measured and
     excludes "done" and "fixed". Stdout is reconfigured so the status glyphs do not crash a
