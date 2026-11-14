@@ -521,10 +521,9 @@ implicit `None`) — not narrowed to only `RET505` (the "unnecessary `else` afte
 
 ### `N` (pep8-naming) — blueprintx#422
 
-Adopted with two per-file-ignores, not whole. Re-measured 2026-09-13 (ruff 0.11.13):
-`ruff check --select N --statistics src/ bin/ tests/ optional/` → 9 findings across 3
-rules (an earlier count in the issue read 6 — stale; re-measuring is what the issue asked
-for, not trusting the number it opened with).
+Adopted with two per-file-ignores, not whole. Measured 2026-09-13 with ruff 0.11.13: 9 findings across 3 rules. Re-measured 2026-11-14: `ruff check --select N --statistics src/ bin/ tests/ optional/` from
+`templates/python-common` with its own `ruff.toml` → 0 findings; the 5 `N802` and 3 `N806` below
+were fixed in between and the `N813` is covered by its per-file-ignore.
 
 - **`N802` (function name should be lowercase) — 5 findings, all test names that used
   upper-case for emphasis; renamed, no ignore.** The five tests were renamed to lowercase
@@ -575,6 +574,9 @@ the same class of finding, one layer narrower.
   naming a rule that never runs looks identical to one that does, from
   either side. Selecting `BLE` is what makes those 9 pre-existing
   suppressions real.
+- Re-measured 2026-11-14 with ruff 0.17.5: `ruff check --isolated --select BLE
+  --statistics templates/` → 0 findings with `noqa` honored and 11 with `--ignore-noqa`, so every
+  broad handler still carries its reasoned suppression.
 - **`RUF` was measured in the same pass and NOT adopted.** `ruff check
   --select RUF --statistics templates/` → 150 findings (138 `RUF100`
   unused-noqa alone, mostly noqa comments anticipating rule families not yet
@@ -582,7 +584,10 @@ the same class of finding, one layer narrower.
   3 unicode-ambiguity findings). Unlike `BLE`, this is real cost, not zero,
   so it is a deliberate separate decision rather than bundled into this
   issue: left for a follow-up issue to adopt (or narrow) on its own measured
-  merits.
+  merits. Re-measured 2026-11-14 (ruff 0.17.5): `ruff check --isolated --select RUF
+  --statistics templates/` → 346 findings: 312 `RUF100` (an artefact of `--isolated`, which makes
+  every non-RUF `noqa` look unused), 13 `RUF022`, 11 `RUF001`, 4 `RUF046`, 3 `RUF005`,
+  1 `RUF002`, 1 `RUF043`, 1 `RUF007`; still not adopted.
 
 ### TypeScript catch-safety — blueprintx#440 (already shipped, blueprintx#443)
 
@@ -1455,8 +1460,10 @@ notes" above.
 - **Task runner and tooling.** Poe the Poet runs every project command. It is a dev dependency
   living in `.venv`, so it cannot run the tasks that create `.venv`: bootstrap (`init`, `venv`,
   `ensure_env`, `precommit`) runs `bash bin/venv.sh` directly, and `[tool.poetry.requires-plugins]`
-  must not be used because it breaks `poetry install` (blueprintx#232). Ruff is pinned to the
-  ruff-pre-commit minor so `poe lint` and the hook agree. `pytest-randomly` shuffles test order and
+  must not be used because it breaks `poetry install` (blueprintx#232). Ruff has one version
+  source, the lock: the pre-commit hooks run `poetry run ruff` as `local` hooks, not a second pinned
+  `ruff-pre-commit` rev, and the dev dependency is `ruff = ">=0.17.5"` with no upper bound
+  (blueprintx#1130). `pytest-randomly` shuffles test order and
   prints the seed (blueprintx#442). `genbadge` replaced the abandoned `coverage-badge`, which
   imports the removed `pkg_resources`. `pytest-mock` is declared explicitly because a test imports
   it. shellcheck and shfmt are pip dev dependencies resolved through `poetry run`, then a system
