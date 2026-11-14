@@ -41,6 +41,39 @@ fi
 cd "$PROJECT_PATH"
 npm ci --no-audit --no-fund
 npm run lint
+if [ "$SKELETON" = "react-spa-webpack" ]; then
+    str_msg="test files may not use"
+    list_bodies=(
+        "/* eslint-disable */"
+        "// eslint-disable-line"
+        "it.skip('x', () => {}); // eslint-disable-line skip/require-issue"
+        $'/*\n  eslint-disable\n*/'
+    )
+    for str_body in "${list_bodies[@]}"; do
+        printf '%s\n' "$str_body" >src/zz-witness.test.ts
+        int_rc=0
+        str_out="$(bash bin/check_test_directives.sh . 2>&1)" || int_rc=$?
+        if [ "$int_rc" -ne 1 ] || [[ "$str_out" != *"$str_msg"* ]]; then
+            echo "ERROR: gate accepted (rc=$int_rc): $str_body" >&2
+            exit 1
+        fi
+    done
+    printf "it('x', () => {});\n" >src/zz-witness.test.ts
+    npm run lint
+    printf "/* eslint-disable */\nit.skip('x', () => {});\n" >src/zz-witness.test.ts
+    str_out="$(npm run lint 2>&1)" && { echo "ERROR: lint accepted a block eslint-disable" >&2; exit 1; }
+    if [[ "$str_out" != *"$str_msg"* ]]; then
+        echo "ERROR: lint failed without running the test-directive gate" >&2
+        exit 1
+    fi
+    printf "// eslint-disable-next-line skip/require-issue\n// eslint-disable-next-line jest/no-disabled-tests\nit.skip('x', () => {});\n" >src/zz-witness.test.ts
+    str_out="$(npm run lint 2>&1)" && { echo "ERROR: lint accepted a chained next-line disable" >&2; exit 1; }
+    if [[ "$str_out" != *"$str_msg"* ]]; then
+        echo "ERROR: chained next-line disable was not rejected by the gate" >&2
+        exit 1
+    fi
+    rm -f src/zz-witness.test.ts
+fi
 npm run lint:docs
 npm test
 echo "OK: $SKELETON scaffold passes npm ci, lint, lint:docs and jest."
