@@ -327,6 +327,26 @@ def test_a_module_only_an_unlisted_private_module_imports_stays_dead(tmp_path: P
     assert _run(tmp_path) == 1
 
 
+def test_a_file_with_a_utf8_bom_is_parsed(tmp_path: Path) -> None:
+    """A BOM is valid Python source, so the import it holds is followed."""
+    _write(tmp_path, "src/pkg/__init__.py")
+    (tmp_path / "src/pkg/api.py").write_bytes(b"\xef\xbb\xbffrom pkg import _impl\n")
+    _write(tmp_path, "src/pkg/_impl.py")
+
+    assert _run(tmp_path) == 0
+
+
+def test_a_file_with_a_coding_cookie_is_decoded_by_it(tmp_path: Path) -> None:
+    """A latin-1 file declaring its coding is valid Python source, not a parse finding."""
+    _write(tmp_path, "src/pkg/__init__.py")
+    (tmp_path / "src/pkg/api.py").write_bytes(
+        b"# -*- coding: latin-1 -*-\nfrom pkg import _impl\nname = '\xe9'\n"
+    )
+    _write(tmp_path, "src/pkg/_impl.py")
+
+    assert _run(tmp_path) == 0
+
+
 def test_a_file_with_a_null_byte_fails_with_a_finding(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

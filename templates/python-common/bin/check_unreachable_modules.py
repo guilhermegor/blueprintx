@@ -181,10 +181,10 @@ def reachable(dict_modules: dict[str, pathlib.Path], list_extra_roots: list[str]
     Raises
     ------
     SyntaxError
-        If a reached module cannot be parsed (Python below 3.12 raises it as ``ValueError``
-        for a NUL byte).
-    UnicodeDecodeError
-        If a reached module is not valid UTF-8.
+        If a reached module cannot be parsed, including undecodable bytes. Parsing bytes
+        honours a BOM and a PEP 263 coding cookie, as the import system does.
+    ValueError
+        If a reached module holds a NUL byte on Python below 3.12.
     """
     set_seen = set()
     list_queue = [str_module for str_module in dict_modules if is_public(str_module)]
@@ -195,7 +195,7 @@ def reachable(dict_modules: dict[str, pathlib.Path], list_extra_roots: list[str]
             continue
         set_seen.add(str_module)
         path_file = dict_modules[str_module]
-        cls_tree = ast.parse(path_file.read_text(encoding="utf-8"), filename=str(path_file))
+        cls_tree = ast.parse(path_file.read_bytes(), filename=str(path_file))
         for str_name in imported_names(cls_tree, package_of(str_module, path_file)):
             list_queue.extend(with_ancestors(str_name, dict_modules))
     return set_seen
