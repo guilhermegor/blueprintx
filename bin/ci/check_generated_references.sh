@@ -32,7 +32,7 @@ strip_inline_comment() {
         for (int_i = 1; int_i <= length($0); int_i++) {
             str_c = substr($0, int_i, 1)
             if (str_q != "") { if (str_c == "\\" && str_q == "\"") int_i++; else if (str_c == str_q) str_q = ""; continue }
-            if (str_c == "\"" || str_c == "\047") { str_q = str_c; continue }
+            if ((str_c == "\"" || str_c == "\047") && (int_i == 1 || substr($0, int_i - 1, 1) !~ /[A-Za-z0-9]/)) { str_q = str_c; continue }
             if (str_c == "#" && (int_i == 1 || substr($0, int_i - 1, 1) ~ /[ \t]/)) { $0 = substr($0, 1, int_i - 1); break }
         }
         print
@@ -43,7 +43,7 @@ nav_pages() {
     awk '/^nav:/ { in_nav = 1; next } /^[A-Za-z_]/ { in_nav = 0 } in_nav' "$1" \
         | strip_inline_comment \
         | { grep -vE '^[[:space:]]*#|^[[:space:]]*-?[[:space:]]*[^:]*:[[:space:]]*["'"'"']?https?://' || true; } \
-        | { grep -oE '[A-Za-z0-9_./-]+\.md' || true; } | sort -u
+        | sed -nE 's/^[[:space:]]*(-[[:space:]]*)?([^:]*:[[:space:]]*)?["'"'"']?(.*\.md)["'"'"']?[[:space:]]*$/\3/p' | sort -u
 }
 
 docs_dir() {
@@ -61,17 +61,20 @@ script_refs() {
 
 check_project() {
     local str_project="$1" str_ref str_file
-    local int_refs=0
+    local int_refs=0 int_nav=0 int_scripts=0
     local -a list_sources=()
     local str_docs
     [ -d "$str_project" ] || { fail "no project directory at $str_project"; return 0; }
     if [ -f "$str_project/mkdocs.yml" ]; then
         str_docs="$(docs_dir "$str_project/mkdocs.yml")"
         while IFS= read -r str_ref; do
-            int_refs=$((int_refs + 1))
+            int_refs=$((int_refs + 1)); int_nav=$((int_nav + 1))
             [ -e "$str_project/$str_docs/$str_ref" ] \
                 || fail "mkdocs.yml nav lists $str_docs/$str_ref, which the scaffold never copied"
         done < <(nav_pages "$str_project/mkdocs.yml")
+        if grep -q '^nav:' "$str_project/mkdocs.yml" && [ "$int_nav" -eq 0 ]; then
+            fail "mkdocs.yml declares a nav but no page was extracted from it; nothing was checked"
+        fi
     fi
     for str_file in "$str_project"/poe_tasks*.toml "$str_project/.pre-commit-config.yaml" \
         "$str_project/package.json" "$str_project/.vscode/tasks.json" "$str_project/Makefile" \
@@ -81,11 +84,14 @@ check_project() {
     done
     for str_file in ${list_sources[@]+"${list_sources[@]}"}; do
         while IFS= read -r str_ref; do
-            int_refs=$((int_refs + 1))
+            int_refs=$((int_refs + 1)); int_scripts=$((int_scripts + 1))
             [ -e "$str_project/$str_ref" ] \
                 || fail "${str_file#"$str_project"/} runs $str_ref, which the scaffold never copied"
         done < <(script_refs "$str_file")
     done
+    if [ "${#list_sources[@]}" -gt 0 ] && [ "$int_scripts" -eq 0 ]; then
+        fail "${#list_sources[@]} task or workflow file(s) found but no bin/ script reference extracted; nothing was checked"
+    fi
     [ "$int_refs" -gt 0 ] || fail "no nav page or bin/ script reference found in $str_project; nothing was checked"
 }
 

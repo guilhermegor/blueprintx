@@ -66,7 +66,7 @@ expect_extra() {
     printf '%s' "$str_body" >"$str_dir/$str_file"
     str_out="$(bash "$CHECK" --project "$str_dir" 2>&1)" || str_got="fail"
     rm -rf "$str_dir"
-    if [ "$str_got" = "fail" ] && ! printf '%s' "$str_out" | grep -qE "ERROR: .*$str_needle.*never copied"; then
+    if [ "$str_got" = "fail" ] && ! printf '%s' "$str_out" | grep -qE "ERROR: .*$str_needle"; then
         echo "FAIL: $str_desc -> failed without a gate message: $str_out" >&2
         int_failures=$((int_failures + 1))
     elif [ "$str_got" = "$str_want" ]; then
@@ -88,6 +88,12 @@ expect_extra "hash inside a quoted string does not hide a later reference" fail 
 expect_extra "URL in a nav inline comment does not hide a missing page" fail mkdocs.yml $'nav:\n  - Incidents: gone.md # https://example.com/x\n' gone.md
 expect_extra "escaped quote does not end a quoted value early" fail .github/workflows/e.yml $'run: |\n  echo "escaped \\" # label"; bash bin/nope.sh\n'
 expect_extra "quoted external nav target is not a local page" pass mkdocs.yml $'nav:\n  - Home: index.md\n  - Source: \'https://example.com/README.md\'\n  - Other: "https://example.com/X.md"\n' index.md
+export LC_ALL=C
+expect_extra "accented nav filename is matched whole" fail mkdocs.yml $'nav:\n  - Guia: guia-avançado.md\n' 'guia-avançado.md'
+unset LC_ALL
+expect_extra "spaced nav filename is matched whole" fail mkdocs.yml $'nav:\n  - Guide: my guide.md\n' 'my guide.md'
+expect_extra "apostrophe in prose does not hide the comment strip" pass .github/workflows/p.yml $'jobs:\n  j:\n    steps:\n      - name: Don\x27t skip # see bin/old.sh\n        run: bash bin/a.sh\n' old.sh
+expect_extra "nav extractor matching nothing fails even if scripts match" fail mkdocs.yml $'nav:\n  - Home: ~\n' 'nothing was checked'
 expect_extra "poe_tasks fragment reference to a missing script fails" fail poe_tasks.test.toml $'[tool.poe.tasks.t]\ncmd = "bash bin/nope.sh"\n'
 expect_extra "commented-out reference is ignored" pass Makefile $'# bin/nope.sh\n'
 expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n' site/index.md
