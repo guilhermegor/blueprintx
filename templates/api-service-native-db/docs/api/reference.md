@@ -17,8 +17,8 @@ from app.api import create_app
 
 app = create_app()  # in src/main.py — `app.api` exports create_app() only,
 # so `uvicorn app.api:app` fails on attribute lookup.
-# Use `uvicorn main:app` (or `poe run`), or factory mode:
-# `uvicorn app.api:create_app --factory`
+# Use `uvicorn --app-dir src main:app`, or factory mode:
+# `uvicorn --app-dir src app.api:create_app --factory`
 ```
 
 `GET /health` is always mounted, unconditionally of any capability — a liveness probe with no
