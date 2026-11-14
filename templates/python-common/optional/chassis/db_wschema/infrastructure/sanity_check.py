@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 
 @dataclass
@@ -30,12 +29,12 @@ class SanityCheck:
     expected_class_name: str | None = None
     required_attrs: list[str] = field(default_factory=list)
 
-    def validate(self, obj: Any) -> None:
+    def validate(self, obj: object) -> None:
         """Assert that the object satisfies all configured constraints.
 
         Parameters
         ----------
-        obj : Any
+        obj : object
             The loaded object to validate.
 
         Raises
@@ -48,12 +47,12 @@ class SanityCheck:
         self._check_class(obj)
         self._check_attrs(obj)
 
-    def _check_class(self, obj: Any) -> None:
+    def _check_class(self, obj: object) -> None:
         """Raise ``TypeError`` when ``obj`` is not of the expected class.
 
         Parameters
         ----------
-        obj : Any
+        obj : object
             The loaded object to validate.
 
         Raises
@@ -66,12 +65,12 @@ class SanityCheck:
                 f"Expected class {self.expected_class_name!r}, got {type(obj).__name__!r}"
             )
 
-    def _check_attrs(self, obj: Any) -> None:
+    def _check_attrs(self, obj: object) -> None:
         """Raise ``AttributeError`` for the first required attribute ``obj`` lacks.
 
         Parameters
         ----------
-        obj : Any
+        obj : object
             The loaded object to validate.
 
         Raises

@@ -153,7 +153,7 @@ copy_internal_utils() {
     local utils_src="$COMMON_TEMPLATE_ROOT/src/utils"
     local -a modules=(
         __init__.py dtypes.py br_identifiers.py http_downloader.py
-        tabular_reader.py xml_reader.py provenance.py sidecar_metadata.py text.py
+        dbapi.py tabular_reader.py xml_reader.py provenance.py sidecar_metadata.py text.py
         zip_extractor.py raw_workspace.py daily_cache.py
         regime_window.py regime_registry.py regime_adapter.py spec_gap_registry.py
     )
