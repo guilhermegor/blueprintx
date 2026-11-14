@@ -3858,11 +3858,19 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   (<code>Record</code>, run summaries, query params). Opaque DB-API handles and <code>SanityCheck</code> keep <code>Any</code> via
   per-module <code>disallow_any_explicit = False</code>, the same list as the <code>ANN401</code> ignores.</li>
 <li><strong>Baseline strictness.</strong> Annotations and obvious type errors are enforced, not <code>--strict</code>,
-  so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.</li>
-<li><strong>The one exclude</strong> is the runtime type-checking engine (<code>utils/typing</code> or <code>chassis/typing</code>,
-  nested at <code>&lt;pkg&gt;._internal.utils.typing</code> in <code>lib-minimal</code>): intrinsic metaprogramming mypy
-  cannot analyse, the same reason it is ANN401-exempt. It matches <code>ruff.toml</code>'s <code>exclude</code>
-  (#203). <code>^chassis/</code> and <code>^capabilities/example_feature/</code> were both removed in #190:
+  so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.
+  <code>disallow_any_generics</code> is the exception (#1054): it is global, so a bare <code>dict</code> or <code>list</code>
+  in a generated project's own <code>src/</code> now fails mypy. <code>bin/</code> is outside mypy's scope.</li>
+<li><strong>No engine exclude</strong> (#1054). The runtime type-checking engine (<code>utils/typing</code> or
+  <code>chassis/typing</code>, nested at <code>&lt;pkg&gt;._internal.utils.typing</code> in <code>lib-minimal</code>) was excluded from
+  ruff and mypy, so it was never checked. It is now checked under <code>disallow_any_explicit</code> and
+  <code>disallow_any_generics</code>: decorators and wrappers are <code>ParamSpec</code> + <code>TypeVar</code>, the metaclass
+  namespace is <code>dict[str, object]</code>, and <code>value</code> / <code>expected_type</code> are <code>object</code>. <code>TypeForm</code>
+  (PEP 747) is not supported by mypy yet, so <code>expected_type</code> stays <code>object</code>. Two
+  <code># type: ignore</code>s remain, each a limit of mypy rather than of the code: <code>[operator]</code> on the
+  <code>BeartypeHintOverrides({...})</code> call in <code>policy.py</code>, and <code>[misc,valid-type]</code> on
+  <code>ProtocolTypeCheckerMeta</code> in <code>protocol_type_checker.py</code>, which mixes two metaclasses.</li>
+<li><strong>No <code>chassis</code> / <code>example_feature</code> mypy exclude</strong> (#190). <code>^chassis/</code> and <code>^capabilities/example_feature/</code> were both removed in #190:
   <code>chassis</code> was unchecked and had accumulated 20 errors in the DB handlers while shipping into
   every DDD project; <code>example_feature</code> was excluded yet checked anyway, because <code>main.py</code> and
   <code>app/container.py</code> import it. Dropping it took the DDD native tier from 58 to 69 checked
@@ -3956,7 +3964,7 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
 <li><strong><code>bin/</code> is linted like the rest</strong> (#207). It was excluded for a hypothetical (ruff-format
   would tabify space-indented helpers and trip E101); the 27 E101s all sat in one genuinely
   mixed file, and the exclude hid the project's own quality machinery, with 73 findings behind
-  it. Two rules are relaxed there: <code>ERA001</code> (100% false positives, 0 of 24 true: the gates'
+  it. Two rules were relaxed there (both removed in #1054 after re-measuring 0 findings with the ignore lifted): <code>ERA001</code> (as measured when it was introduced: 100% false positives, 0 of 24 true: the gates'
   long wrapped prose comments contain <code>(</code>, <code>:</code> or <code>=</code> and read as code; per-line <code>noqa</code> would
   teach authors that <code>noqa</code> is how you write a comment; <code>src/</code> keeps it, and the global
   decision is open in #169) and <code>E101</code> (the 2-space hanging indent of a wrapped Markdown
@@ -3965,18 +3973,41 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   carries the same E101 exemption (#203), and <code>lib-minimal</code>'s private-package path mirrors every
   exemption (<code>*</code> matches the single package segment; without the mirror only that tier goes
   red, #486).</li>
+<li><strong>Global <code>ignore</code> list, settled rule by rule</strong> (#1054; counts are distinct sites over the six
+  tiers' <code>src</code>, <code>tests</code> and <code>bin</code>, <code>preview = true</code>).<ul>
+<li><code>PLC1901</code> stays ignored: the suggested <code>not x</code> is also true for <code>None</code>, <code>0</code> and <code>[]</code>,
+  so <code>== ""</code> is the exact test (27 findings).</li>
+<li><code>S404</code> stays ignored: the import finds nothing, and the calls are covered by <code>S603</code> and
+  <code>S607</code> (24 findings).</li>
+<li><code>PLR0917</code> stays ignored for now: with <code>max-positional-args = 1</code> it reports 1069
+  findings in the templates, nearly all call sites of shipped APIs and tests, so it is a
+  signature change tracked as its own slice, not a lint toggle.</li>
+<li>Re-enabled, with the shipped code made clean: <code>PLR6301</code> (a method with no <code>self</code> use is
+  a <code>@staticmethod</code>; an override of a foreign or port signature carries a line-scoped
+  <code># noqa: PLR6301</code>), <code>PLC0415</code> (stdlib imports hoisted; a deliberately lazy optional
+  dependency carries <code># noqa: PLC0415</code>), <code>PLC0207</code> (<code>split(..., 1)</code> / <code>rsplit</code>),
+  <code>PLR0916</code>, <code>PLR0914</code> (a helper extracted) and <code>PLC2701</code> (<code>src</code> must not import another
+  module's <code>_private</code> name; package-internal siblings use a relative import).</li>
+<li><code>PLR6201</code> is re-enabled but <strong>never <code>--fix</code></strong>: <code>x in {...}</code> raises <code>TypeError</code> when the
+  needle or an element is unhashable, so those sites stay tuples with
+  <code># noqa: PLR6201</code> (the contract reader's cell check is one).</li>
+<li>The <code>TID251</code> whole-file ignores for the seam and contract files became per-line
+  <code># noqa: TID251</code>, so a new <code>pd.read_*</code> in the same file fails instead of passing unseen.</li>
+</ul>
+</li>
 <li><strong>Per-file ignores.</strong><ul>
-<li><code>S101</code> and the magic-value rule are off in <code>tests/</code>: a literal in a test is the case
-  under test (21 of 29 findings were in <code>tests/</code>). <code>TID251</code> is off there because tests read
-  back outputs with <code>pd.read_*</code> to assert on them.</li>
-<li><code>N802</code> is off in <code>tests/</code>: a mixed-case name where the upper-case word is the point
-  (<code>..._FAIL_rather_than_pass_silently</code>) is the behaviour description <code>tests/CLAUDE.md</code>
-  asks for (5 findings, #422).</li>
+<li><code>tests/**</code> ignores <code>S101</code>, <code>PLC2701</code> (tests exercise <code>_internal</code> on purpose) and
+  <code>PLR2004</code>: a literal in a test is the case under test (43 distinct sites, 223 findings
+  across the six tiers when measured on 2026-11-08, #1054). <code>TID251</code> and <code>N802</code> are
+  enforced in tests (#1054): a read-back via <code>pd.read_*</code> carries a line-scoped
+  <code># noqa: TID251</code>, and the five emphatic upper-case test names were lower-cased.</li>
+<li><code>bin/**</code> ignores <code>PLC2701</code> only. The former <code>ERA001</code> and <code>E101</code> ignores measured 0
+  findings and were removed (#1054).</li>
 <li><code>ANN401</code> is ignored for the raw-driver connection factory (<code>config/connection_db.py</code>,
   MVC) and the DB handlers' <code>_connect</code> (psycopg, mysql-connector, pyodbc, oracledb), which
   have no shared type; <code>sqlite_handler.py</code> needs none, <code>sqlite3.Connection</code> being real.
-  It is also ignored for the typing engine in both layouts (MVC <code>utils/typing</code>, DDD
-  <code>chassis/typing</code>, #203) and for <code>SanityCheck.validate()</code>, which takes any joblib payload.</li>
+  It is no longer ignored for the typing engine (#1054), which is typed without
+  <code>Any</code>; it stays for <code>SanityCheck.validate()</code>, which takes any joblib payload.</li>
 <li><code>N813</code> is ignored for <code>import defusedxml.ElementTree as defused_et</code>, a deliberate alias
   for the trust-boundary-safe parser; renaming would only hurt readability (#422).</li>
 <li><code>lib-minimal</code> mirrors the exemptions for <code>src/&lt;pkg&gt;/_internal/...</code>; its typing engine is
