@@ -10,6 +10,17 @@ offline mode removes `.github/`, so it ships none there). The root repository's 
 | TypeScript (`react-spa-webpack`, `ts-lib`) | `templates/ts-common/dependabot.yml` | `npm`, `github-actions` |
 | Bash (`bash-cli`, `etcher-chromeos`, `ventoy-usb`) | `templates/common/.github/dependabot.yml` | `github-actions` |
 
+## Why the lockfile is the pin
+
+The Python blocks use `versioning-strategy: lockfile-only`, which never widens a constraint in
+`pyproject.toml`. Dependabot can therefore only propose versions inside a declared range, so a dev
+dependency with an upper bound (ruff had `<0.12`) could never be bumped. The tiers declare lower
+bounds only, and `poetry.lock` is the pin: each bump arrives as a reviewed Dependabot PR that CI
+must pass. Ruff has a single version source; the pre-commit hooks run the locked ruff through
+`poetry run`, not a separate `ruff-pre-commit` rev that Dependabot would not update.
+The accepted risk is that a new ruff release can redden a freshly generated project or `main` CI with no
+BlueprintX commit; the lockfile limits that to the next bump, and the Dependabot PR surfaces it.
+
 ## Cooldown
 
 A release is aged before Dependabot proposes it. Security updates ignore the cooldown.

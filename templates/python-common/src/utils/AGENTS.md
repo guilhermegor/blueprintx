@@ -58,9 +58,9 @@ a bare one — copy this block verbatim into a new module rather than hand-rolli
 
 ```python
 try:
-	from utils.typing import type_checker
+    from utils.typing import type_checker
 except ModuleNotFoundError:  # DDD ships the engine as chassis.typing
-	from chassis.typing import type_checker
+    from chassis.typing import type_checker
 ```
 
 ⚠️ **No separate `if TYPE_CHECKING:` branch** (blueprintx#360). An earlier revision duplicated

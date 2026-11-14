@@ -227,8 +227,38 @@ def _reject_credential_forwarding_redirects(cls_exporter: object) -> None:
 
 
 @type_checker
+def _build_otel_handler() -> logging.Handler:
+    """Build the OTLP logger provider and return the handler that feeds it.
+
+    Returns
+    -------
+    logging.Handler
+        A handler exporting log records through the configured OTLP collector.
+    """
+    from opentelemetry._logs import set_logger_provider  # noqa: PLC0415, PLC2701
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import (  # noqa: PLC0415, PLC2701
+        OTLPLogExporter,  # noqa: PLC2701
+    )
+    from opentelemetry.sdk._logs import (  # noqa: PLC0415, PLC2701
+        LoggerProvider,  # noqa: PLC2701
+        LoggingHandler,  # noqa: PLC2701
+    )
+    from opentelemetry.sdk._logs.export import (  # noqa: PLC0415, PLC2701
+        BatchLogRecordProcessor,  # noqa: PLC2701
+    )
+    from opentelemetry.sdk.resources import Resource  # noqa: PLC0415
+
+    cls_exporter = OTLPLogExporter()
+    _reject_credential_forwarding_redirects(cls_exporter)
+    cls_provider = LoggerProvider(resource=Resource.create())
+    cls_provider.add_log_record_processor(BatchLogRecordProcessor(cls_exporter))
+    set_logger_provider(cls_provider)
+    return LoggingHandler(logger_provider=cls_provider)
+
+
+@type_checker
 def _install_otel_handler(logger: logging.Logger) -> None:  # complexity-ok: one guard, one sink
-    """Build the OTLP logger provider and attach its handler to ``logger``.
+    """Attach the OTLP handler to ``logger``.
 
     Split out of :func:`configure_otel_logging` so the opt-out guard (env unset) and the
     fire-and-forget failure guard each carry their own single branch — two responsibilities,
@@ -244,25 +274,7 @@ def _install_otel_handler(logger: logging.Logger) -> None:  # complexity-ok: one
     None
     """
     try:
-        from opentelemetry._logs import set_logger_provider  # noqa: PLC0415, PLC2701
-        from opentelemetry.exporter.otlp.proto.http._log_exporter import (  # noqa: PLC0415
-            OTLPLogExporter,  # noqa: PLC2701
-        )
-        from opentelemetry.sdk._logs import (  # noqa: PLC0415
-            LoggerProvider,  # noqa: PLC2701
-            LoggingHandler,  # noqa: PLC2701
-        )
-        from opentelemetry.sdk._logs.export import (  # noqa: PLC0415
-            BatchLogRecordProcessor,  # noqa: PLC2701
-        )
-        from opentelemetry.sdk.resources import Resource  # noqa: PLC0415
-
-        cls_exporter = OTLPLogExporter()
-        _reject_credential_forwarding_redirects(cls_exporter)
-        cls_provider = LoggerProvider(resource=Resource.create())
-        cls_provider.add_log_record_processor(BatchLogRecordProcessor(cls_exporter))
-        set_logger_provider(cls_provider)
-        logger.addHandler(LoggingHandler(logger_provider=cls_provider))
+        logger.addHandler(_build_otel_handler())
     except Exception as cls_exc:  # noqa: BLE001 — see the fire-and-forget note above
         logger.warning("OTel log export not started: %s", cls_exc)
 

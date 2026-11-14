@@ -16,9 +16,9 @@ capability's router — `src/main.py` calls it and hands the result to `uvicorn`
 from app.api import create_app
 
 app = create_app()  # in src/main.py — `app.api` exports create_app() only,
-                    # so `uvicorn app.api:app` fails on attribute lookup.
-                    # Use `uvicorn main:app` (or `poe run`), or factory mode:
-                    # `uvicorn app.api:create_app --factory`
+# so `uvicorn app.api:app` fails on attribute lookup.
+# Use `uvicorn main:app` (or `poe run`), or factory mode:
+# `uvicorn app.api:create_app --factory`
 ```
 
 `GET /health` is always mounted, unconditionally of any capability — a liveness probe with no

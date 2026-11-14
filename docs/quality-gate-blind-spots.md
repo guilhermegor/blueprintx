@@ -7,7 +7,8 @@ coverage it did not measure — that is the exact failure #169 exists to catch i
 themselves, and it would be self-defeating to reproduce it here.
 
 Scratch tree: `/tmp/.../scratchpad/gate-audit/` (session-local, discarded — not part of this
-repo). Ruff version used: `0.11.13`, matching the pin in `templates/python-common/ruff.toml`.
+repo). Ruff version used: `0.11.13` for the original run; Part 1 was re-measured on 2026-11-14 with
+`0.17.5`, the measured version and the minimum the templates declare; a generated project may lock a later one (blueprintx#1130).
 
 ## Method
 
@@ -50,13 +51,19 @@ def wide_signature(a, b, c, d, e, f, g, h, i) -> int:  # PLR0913 — 9 args > ma
 ```
 ruff check --config templates/python-common/ruff.toml --no-cache src/bad_families.py
 ```
-**Output:** `10 issues` — `D103 (7x)`, `PLR2004 (1x)`, `B904 (1x)`, `PLR0913 (1x)`.
+**Output (0.11.13):** `10 issues` — `D103 (7x)`, `PLR2004 (1x)`, `B904 (1x)`, `PLR0913 (1x)`.
+**Output (0.17.5, a different fixture: the same file with annotated signatures, so the counts are not like-for-like):** `11 errors` — `D103 (7x)`,
+`PLR2004`, `B904`, `PLR0913`, `D100`. Same rule families caught; the extra `D100` is the fixture's
+missing module docstring.
 
 **Command 2 — the families the issue listed as ungated, selected explicitly:**
 ```
 ruff check --isolated --select FBT,PTH,T20,TRY,DTZ,ARG --no-cache src/bad_families.py
 ```
-**Output:** `7 issues` — `T201 (2x)`, `DTZ005`, `TRY003`, `ARG001`, `FBT001`, `PTH118`.
+**Output (0.11.13):** `7 issues` — `T201 (2x)`, `DTZ005`, `TRY003`, `ARG001`, `FBT001`, `PTH118`.
+**Output (0.17.5, the same annotated fixture, not the one printed above):** `14 errors` — `ARG001 (9x)`, `FBT001`, `DTZ005`,
+`PTH118`, `T201`, `TRY003`. All six families still fire when selected and none is in `select`,
+so every verdict in the table below holds under 0.17.5.
 
 | Family | Issue's 2026-08-16 verdict | Re-measured 2026-09-17 | Status |
 |---|---|---|---|

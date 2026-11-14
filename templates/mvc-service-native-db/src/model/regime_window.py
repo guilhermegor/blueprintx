@@ -30,14 +30,14 @@ def _validate_period(int_period: int | None, str_field: str) -> None:
     str_field : str
         The attribute name, used in the error message.
 
+    Returns
+    -------
+    None
+
     Raises
     ------
     ValueError
         If the value is not a six-digit ``YYYYMM`` with a month in ``01``-``12``.
-
-    Returns
-    -------
-    None
     """
     bool_valid = int_period is None or (
         _INT_MIN_PERIOD <= int_period <= _INT_MAX_PERIOD
@@ -72,14 +72,14 @@ class RegimeWindow(metaclass=TypeChecker):
     def __post_init__(self) -> None:
         """Reject bounds that are not ``YYYYMM``, or that run backwards.
 
+        Returns
+        -------
+        None
+
         Raises
         ------
         ValueError
             If a bound is not a valid ``YYYYMM`` period, or the start is after the end.
-
-        Returns
-        -------
-        None
         """
         _validate_period(self.int_period_start, "int_period_start")
         _validate_period(self.int_period_end, "int_period_end")

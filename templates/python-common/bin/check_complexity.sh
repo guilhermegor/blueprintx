@@ -60,7 +60,7 @@ run_ruff_check() {
 		--select "$str_rule"
 		--config "$SCRIPT_DIR/../ruff.toml"
 		--config "$str_config_key = $int_max"
-		--output-format concise
+		--output-format pylint
 		--no-cache
 	)
 
@@ -116,14 +116,14 @@ report_tree() {
 	run_ruff_check "$str_dir" "$str_rule" "$str_config_key" "$int_max" >"$str_findings"
 
 	while IFS= read -r str_finding; do
-		[[ "$str_finding" == *"$str_rule"* ]] || continue
+		[[ "$str_finding" =~ ^[^:]+:[0-9]+:\ \[ ]] || continue
 		str_file="${str_finding%%:*}"
 		int_line="$(printf '%s' "$str_finding" | cut -d: -f2)"
 
 		if line_has_reasoned_hatch "$str_file" "$int_line"; then
 			continue
 		fi
-		print_status "error" "$str_finding (max $int_max in $str_dir/)"
+		print_status "error" "$str_finding ($str_rule, max $int_max in $str_dir/)"
 		int_errors=1
 	done <"$str_findings"
 

@@ -30,8 +30,8 @@ from model.example_entity import ExampleEntity
 
 cls_engine = build_engine()
 cls_example = ExampleEntity(cls_engine)
-cls_example.ensure_table()           # Base.metadata.create_all
-cls_example.insert("Hello")          # session.add + commit
+cls_example.ensure_table()  # Base.metadata.create_all
+cls_example.insert("Hello")  # session.add + commit
 df_report = cls_example.fetch_all()  # pd.read_sql(select(...)) -> DataFrame
 cls_engine.dispose()
 ```
