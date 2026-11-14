@@ -43,7 +43,7 @@ nav_pages() {
     awk '/^nav:/ { in_nav = 1; next } /^[A-Za-z_]/ { in_nav = 0 } in_nav' "$1" \
         | strip_inline_comment \
         | { grep -vE '^[[:space:]]*#|^[[:space:]]*-?[[:space:]]*[^:]*:[[:space:]]*["'"'"']?https?://' || true; } \
-        | sed -nE 's/^[[:space:]]*(-[[:space:]]*)?([^:]*:[[:space:]]*)?["'"'"']?(.*\.md)["'"'"']?[[:space:]]*$/\3/p' | sort -u
+        | sed -nE 's/^[[:space:]]*(-[[:space:]]*)?(.*:[[:space:]]+)?["'"'"']?([&!][^[:space:]]*[[:space:]]+)?(.*\.md)["'"'"']?[[:space:]]*$/\4/p' | sort -u
 }
 
 docs_dir() {
