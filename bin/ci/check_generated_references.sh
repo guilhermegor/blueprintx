@@ -32,7 +32,7 @@ strip_inline_comment() {
         for (int_i = 1; int_i <= length($0); int_i++) {
             str_c = substr($0, int_i, 1)
             if (str_q != "") { if (str_c == "\\" && str_q == "\"") int_i++; else if (str_c == str_q) str_q = ""; continue }
-            if ((str_c == "\"" || (str_c == "\047" && (int_i == 1 || substr($0, int_i - 1, 1) !~ /[A-Za-z0-9]/ || index(substr($0, int_i + 1), "\047") > 0)))) { str_q = str_c; continue }
+            if (str_c == "\"" || str_c == "\047") { str_q = str_c; continue }
             if (str_c == "#" && (int_i == 1 || substr($0, int_i - 1, 1) ~ /[ \t]/)) { $0 = substr($0, 1, int_i - 1); break }
         }
         print
@@ -40,10 +40,15 @@ strip_inline_comment() {
 }
 
 nav_pages() {
-    awk '/^nav:/ { in_nav = 1; next } /^[A-Za-z_]/ { in_nav = 0 } in_nav' "$1" \
-        | strip_inline_comment \
-        | { grep -vE '^[[:space:]]*#|^[[:space:]]*-?[[:space:]]*[^:]*:[[:space:]]*["'"'"']?https?://' || true; } \
-        | sed -nE 's/^[[:space:]]*(-[[:space:]]*)?([^"'"'"']*:[[:space:]]+)?([&!][^[:space:]]*[[:space:]]+)?["'"'"']?(.*\.md)["'"'"']?[[:space:]]*$/\4/p' | sort -u
+    python3 -I "$REPO_ROOT/bin/ci/yaml_extract.py" nav "$1"
+}
+
+is_yaml() {
+    case "$1" in *.yml | *.yaml) return 0 ;; *) return 1 ;; esac
+}
+
+source_text() {
+    if is_yaml "$1"; then python3 -I "$REPO_ROOT/bin/ci/yaml_extract.py" scalars "$1"; else cat "$1"; fi
 }
 
 docs_dir() {
@@ -53,7 +58,7 @@ docs_dir() {
 }
 
 script_refs() {
-    { grep -hvE '^[[:space:]]*#' "$@" || true; } \
+    { grep -vE '^[[:space:]]*#' || true; } \
         | strip_inline_comment \
         | { grep -oE '(^|[ "'\''=(;&`[:space:]])(\./)?bin/[A-Za-z0-9_./-]+\.(sh|py)' || true; } \
         | sed -E 's#^[ "'\''=(;&`[:space:]]+##; s#^\./##' | sort -u
@@ -63,15 +68,18 @@ check_project() {
     local str_project="$1" str_ref str_file
     local int_refs=0 int_nav=0 int_scripts=0
     local -a list_sources=()
-    local str_docs
+    local str_docs str_pages str_text
     [ -d "$str_project" ] || { fail "no project directory at $str_project"; return 0; }
     if [ -f "$str_project/mkdocs.yml" ]; then
         str_docs="$(docs_dir "$str_project/mkdocs.yml")"
+        str_pages="$(nav_pages "$str_project/mkdocs.yml")" \
+            || { fail "mkdocs.yml could not be parsed as YAML (needs python3 with PyYAML)"; str_pages=""; }
         while IFS= read -r str_ref; do
+            [ -n "$str_ref" ] || continue
             int_refs=$((int_refs + 1)); int_nav=$((int_nav + 1))
             [ -e "$str_project/$str_docs/$str_ref" ] \
                 || fail "mkdocs.yml nav lists $str_docs/$str_ref, which the scaffold never copied"
-        done < <(nav_pages "$str_project/mkdocs.yml")
+        done <<<"$str_pages"
         if grep -q '^nav:' "$str_project/mkdocs.yml" && [ "$int_nav" -eq 0 ]; then
             fail "mkdocs.yml declares a nav but no page was extracted from it; nothing was checked"
         fi
@@ -83,11 +91,13 @@ check_project() {
         [ -f "$str_file" ] && list_sources+=("$str_file")
     done
     for str_file in ${list_sources[@]+"${list_sources[@]}"}; do
+        str_text="$(source_text "$str_file")" \
+            || { fail "${str_file#"$str_project"/} could not be parsed as YAML (needs python3 with PyYAML)"; continue; }
         while IFS= read -r str_ref; do
             int_refs=$((int_refs + 1)); int_scripts=$((int_scripts + 1))
             [ -e "$str_project/$str_ref" ] \
                 || fail "${str_file#"$str_project"/} runs $str_ref, which the scaffold never copied"
-        done < <(script_refs "$str_file")
+        done < <(script_refs <<<"$str_text")
     done
     if [ "${#list_sources[@]}" -gt 0 ] && [ "$int_scripts" -eq 0 ]; then
         fail "${#list_sources[@]} task or workflow file(s) found but no bin/ script reference extracted; nothing was checked"
