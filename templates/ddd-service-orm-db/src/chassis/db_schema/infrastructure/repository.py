@@ -10,7 +10,7 @@ from .base import Repository, generate_uuid
 from .models import RecordModel
 
 
-class SQLAlchemyRecordRepository(Repository):
+class SQLAlchemyRecordRepository(Repository[dict[str, object]]):
     """SQLAlchemy-based repository for Record entities.
 
     This repository provides CRUD operations using SQLAlchemy ORM.
@@ -36,7 +36,7 @@ class SQLAlchemyRecordRepository(Repository):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
 
-    def add(self, entity: dict) -> dict:
+    def add(self, entity: dict[str, object]) -> dict[str, object]:
         """Add a new record to the database.
 
         Parameters
@@ -58,7 +58,7 @@ class SQLAlchemyRecordRepository(Repository):
         self.session.flush()
         return {**entity, "id": record.id}
 
-    def get(self, entity_id: str) -> dict | None:
+    def get(self, entity_id: str) -> dict[str, object] | None:
         """Retrieve a record by ID.
 
         Parameters
@@ -76,7 +76,9 @@ class SQLAlchemyRecordRepository(Repository):
             return None
         return json.loads(record.data) if record.data else {"id": record.id}
 
-    def update(self, entity: dict) -> dict | None:  # complexity-ok: two existence guards
+    def update(  # complexity-ok: two existence guards
+        self, entity: dict[str, object]
+    ) -> dict[str, object] | None:
         """Update an existing record.
 
         Parameters
@@ -121,7 +123,7 @@ class SQLAlchemyRecordRepository(Repository):
         self.session.flush()
         return True
 
-    def list_all(self) -> list[dict]:
+    def list_all(self) -> list[dict[str, object]]:
         """Retrieve all records.
 
         Returns

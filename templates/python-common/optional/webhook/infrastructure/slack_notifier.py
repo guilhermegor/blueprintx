@@ -19,7 +19,8 @@ _TIMEOUT_SECONDS = 10
 class SlackNotifier:
     """Adapter that posts notifications to a Slack incoming webhook."""
 
-    def _validate_url(self, str_url: str) -> None:
+    @staticmethod
+    def _validate_url(str_url: str) -> None:
         """Validate the webhook URL format.
 
         Parameters

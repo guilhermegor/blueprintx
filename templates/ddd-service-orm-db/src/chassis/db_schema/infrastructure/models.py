@@ -43,7 +43,7 @@ class RecordModel(Base):
         """Return a debug-friendly representation showing id and created_at."""
         return f"<RecordModel(id={self.id!r}, created_at={self.created_at})>"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str | None]:
         """Convert model to dictionary representation.
 
         Returns

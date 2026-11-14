@@ -252,7 +252,7 @@ def normalize_exception_name(name: str) -> str:
     str
         Unqualified exception name.
     """
-    return name.split(".")[-1]
+    return name.rsplit(".", 1)[-1]
 
 
 def _is_checkable(node: ast.AST) -> bool:

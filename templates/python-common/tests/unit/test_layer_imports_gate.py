@@ -511,7 +511,7 @@ _STR_MINIMAL_POLICY = "layers:\n  model:\n    allow: {}\n"
 
 
 @pytest.mark.parametrize("str_fragment", [".layer-policy.yaml", "no import boundary"])
-def test_modules_with_no_policy_file_FAIL_rather_than_pass_silently(
+def test_modules_with_no_policy_file_fail_rather_than_pass_silently(
     tmp_path: Path, str_fragment: str
 ) -> None:
     """⚠️ The negative control for the defect this fixed.
@@ -782,7 +782,7 @@ def test_a_dotted_deny_spares_the_sibling_subpackage(tmp_path: Path) -> None:
     assert int_code == 0, str_out
 
 
-def test_a_glob_governs_packages_NESTED_below_the_sublayer(tmp_path: Path) -> None:
+def test_a_glob_governs_packages_nested_below_the_sublayer(tmp_path: Path) -> None:
     """⚠️ ``fnmatch`` matches the WHOLE string, so a deeper module needs ancestor matching.
 
     ``capabilities/*/domain`` matches ``capabilities/notes/domain`` and NOT
@@ -801,7 +801,7 @@ def test_a_glob_governs_packages_NESTED_below_the_sublayer(tmp_path: Path) -> No
     assert "capabilities/*/domain" in _output_at(_run_main(tmp_path), 1)
 
 
-def test_a_dotted_deny_also_catches_the_RELATIVE_form(tmp_path: Path) -> None:
+def test_a_dotted_deny_also_catches_the_relative_form(tmp_path: Path) -> None:
     """⚠️ The relative twin of a rejected import must be rejected too.
 
     Resolving a relative import to its first component only made every DOTTED deny key miss:

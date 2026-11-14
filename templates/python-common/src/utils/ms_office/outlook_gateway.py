@@ -313,7 +313,7 @@ def _com_send_email(  # complexity-ok: COM interop, optional fields and non-fata
     RuntimeError
         If the auto-send fails.
     """
-    import win32com.client as win32
+    import win32com.client as win32  # noqa: PLC0415 -- optional dependency, imported lazily
 
     cls_outlook = win32.Dispatch("outlook.application")
     cls_mail = cls_outlook.CreateItem(0)
@@ -375,7 +375,7 @@ def _com_download_attachment(  # complexity-ok: COM interop, non-fatal degradati
     dict[str, bool]
         Mapping of the saved path to whether the file now exists; returns after the first save.
     """
-    import win32com.client as win32
+    import win32com.client as win32  # noqa: PLC0415 -- optional dependency, imported lazily
 
     cls_app = win32.Dispatch("Outlook.Application")
     cls_namespace = cls_app.GetNamespace("MAPI")
@@ -426,7 +426,7 @@ def _com_get_body_content(  # complexity-ok: COM interop, non-fatal degradation
         One dict per matching message with ``subject`` / ``last_edition`` / ``creation_time`` /
         ``body`` keys.
     """
-    import win32com.client as win32
+    import win32com.client as win32  # noqa: PLC0415 -- optional dependency, imported lazily
 
     cls_app = win32.Dispatch("Outlook.Application")
     cls_namespace = cls_app.GetNamespace("MAPI")

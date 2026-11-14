@@ -89,7 +89,7 @@ def resolve_vulture() -> ModuleType | None:
         is not an absent one, and skipping would be a vacuous pass (blueprintx#640).
     """
     try:
-        import vulture
+        import vulture  # noqa: PLC0415 -- optional dependency, imported lazily
     except ModuleNotFoundError as exc:
         if exc.name != "vulture" or _is_distribution_installed():
             raise

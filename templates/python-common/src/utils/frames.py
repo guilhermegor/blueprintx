@@ -13,7 +13,7 @@ empty-result edge case.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import pandas as pd
 
@@ -32,6 +32,9 @@ else:
         from utils.typing import type_checker
     except ModuleNotFoundError:
         from chassis.typing import type_checker
+
+
+_KeyT = TypeVar("_KeyT")
 
 
 @type_checker
@@ -147,7 +150,9 @@ def from_records(
 
 
 @type_checker
-def map_with_default(series_value: pd.Series, dict_mapping: dict, default: object) -> pd.Series:
+def map_with_default(
+    series_value: pd.Series, dict_mapping: Mapping[_KeyT, object], default: object
+) -> pd.Series:
     """Relabel a Series via a mapping, sending every unmapped value to ``default``.
 
     A **total** relabel: unlike ``series.map(dict_mapping)`` (which yields ``NaN`` for any
@@ -160,9 +165,9 @@ def map_with_default(series_value: pd.Series, dict_mapping: dict, default: objec
     ----------
     series_value : pandas.Series
         The column whose values are relabelled.
-    dict_mapping : dict
+    dict_mapping : Mapping[_KeyT, object]
         ``{raw_value: label}`` mapping applied to each cell.
-    default : Any
+    default : object
         The value assigned to any cell whose raw value is not a key in ``dict_mapping``.
 
     Returns

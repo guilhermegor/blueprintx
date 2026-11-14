@@ -245,7 +245,7 @@ def resolve_input(spec: str | dict[str, str] | None, dt_ref: date) -> Path | Non
 
 
 @type_checker
-def _resolve_mapping_spec(dict_spec: dict[str, str], dict_tokens: dict) -> Path | None:
+def _resolve_mapping_spec(dict_spec: dict[str, str], dict_tokens: dict[str, str]) -> Path | None:
     """Resolve a ``{dir, filename_pattern}`` spec to the newest matching file.
 
     Parameters
@@ -267,7 +267,7 @@ def _resolve_mapping_spec(dict_spec: dict[str, str], dict_tokens: dict) -> Path 
 
 
 @type_checker
-def _resolve_plain_spec(str_spec: str, dict_tokens: dict) -> Path | None:
+def _resolve_plain_spec(str_spec: str, dict_tokens: dict[str, str]) -> Path | None:
     """Resolve a plain path-string spec to an existing absolute file.
 
     Parameters

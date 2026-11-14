@@ -57,7 +57,7 @@ def collect_sources(str_corporate: str, path_out: pathlib.Path) -> list:
             list_sources.append(str_existing)
 
     try:
-        import certifi
+        import certifi  # noqa: PLC0415 -- optional dependency, imported lazily
 
         list_sources.append(certifi.where())
     except ModuleNotFoundError:

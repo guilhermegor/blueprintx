@@ -9,7 +9,7 @@ class NullEmailHandler:
     e-mail is effectively opted out.
     """
 
-    def send_email(
+    def send_email(  # noqa: PLR6301 -- fixed foreign/port signature
         self,
         str_subject: str,
         list_to: list[str],

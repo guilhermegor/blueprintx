@@ -10,7 +10,11 @@ from src.utils.xml_reader import (
     read_xml,
     text_path_columns,
 )
-from utils.tabular_reader import ContractError, FileContract, ProblemReport
+from utils.tabular_reader import (
+    ContractError,
+    FileContract,  # noqa: TID251 -- constructs a contract to test the seam
+    ProblemReport,
+)
 
 
 def _fixture_xml() -> str:

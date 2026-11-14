@@ -526,17 +526,15 @@ Adopted with two per-file-ignores, not whole. Re-measured 2026-09-13 (ruff 0.11.
 rules (an earlier count in the issue read 6 — stale; re-measuring is what the issue asked
 for, not trusting the number it opened with).
 
-- **`N802` (function name should be lowercase) — 5 findings, all false positives, ignored
-  in `tests/**` only.** Every one is a test name that uses upper-case for **semantic
-  emphasis** on the exact behaviour under test:
-  `test_modules_with_no_policy_file_FAIL_rather_than_pass_silently`,
-  `test_a_glob_governs_packages_NESTED_below_the_sublayer`,
-  `test_a_dotted_deny_also_catches_the_RELATIVE_form`,
-  `test_account_blocked_until_takes_the_LATEST_deadline_not_the_latest_notice`,
-  `test_no_threads_is_not_a_THREAD_problem`. `tests/CLAUDE.md` asks a test name to
-  describe the *behaviour*, not the function under test — the upper-case word is that
-  description, not a casing slip. Renaming to satisfy N802 would erase the one thing the
-  name is for. `N802` stays active everywhere else; only `tests/**` is exempt.
+- **`N802` (function name should be lowercase) — 5 findings, all test names that used
+  upper-case for emphasis; renamed, no ignore.** The five tests were renamed to lowercase
+  (`test_modules_with_no_policy_file_fail_rather_than_pass_silently`,
+  `test_a_glob_governs_packages_nested_below_the_sublayer`,
+  `test_a_dotted_deny_also_catches_the_relative_form`,
+  `test_account_blocked_until_takes_the_latest_deadline_not_the_latest_notice`,
+  `test_no_threads_is_not_a_thread_problem`) and the former `tests/**` `N802` ignore was
+  removed in #1054, so `N802` is active everywhere. Select them with `pytest -k` by the new
+  names; the old upper-case spellings no longer exist.
 - **`N806` (non-lowercase variable in function) — 3 findings, all true positives, fixed by
   moving the constant to module scope.** All three are the same shape: a local `_ALL_CAPS`
   name assigned inside a function body — exactly PEP-8's "constants are module-level and

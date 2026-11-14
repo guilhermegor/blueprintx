@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import math
 from typing import TYPE_CHECKING
 
-from utils.retry._schedule import (
+from ._schedule import (
     _DEFAULT_BASE_WAIT_S,
     _DEFAULT_FACTOR,
     _DEFAULT_MAX_ATTEMPTS,

@@ -12,7 +12,7 @@ must not do.
 """
 
 import ast
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -61,7 +61,7 @@ def _load_pure_function(cls_tree: ast.Module, str_name: str) -> Callable[[dict, 
     cls_func.decorator_list = []
     cls_module = ast.Module(body=[cls_func], type_ignores=[])
     ast.fix_missing_locations(cls_module)
-    dict_namespace: dict = {}
+    dict_namespace: dict = {"Mapping": Mapping}
     exec(  # noqa: S102 — extracting one pure function's own AST node, not untrusted input
         compile(cls_module, "<startup-function>", "exec"), dict_namespace
     )

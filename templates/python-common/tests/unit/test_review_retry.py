@@ -835,7 +835,7 @@ def test_account_blocked_until_reads_the_newest_refusal_across_all_waiting_prs(
     assert cls_retry.account_blocked_until(list_notices, _DT_NOW) is not None
 
 
-def test_account_blocked_until_takes_the_LATEST_deadline_not_the_latest_notice(
+def test_account_blocked_until_takes_the_latest_deadline_not_the_latest_notice(
     cls_retry: ModuleType,
 ) -> None:
     """A newer refusal naming NO number must not erase an older PR's open window.

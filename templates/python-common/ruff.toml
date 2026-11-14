@@ -38,7 +38,6 @@ exclude = [
     ".vscode",
 
     "migrations",
-    "src/*/_internal/utils/typing",
 
     ".pants.d",
     ".pyenv",
@@ -79,17 +78,9 @@ select = [
     "PLR1702",
 ]
 ignore = [
-
-    "PLR6301",
     "PLC1901",
     "S404",
-    "PLC0415",
-    "PLC2701",
-    "PLR6201",
-    "PLC0207",
     "PLR0917",
-    "PLR0916",
-    "PLR0914",
 ]
 fixable = ["I"]
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
@@ -137,28 +128,18 @@ ignore-fully-untyped = false
 allow-star-arg-any = false
 
 [lint.per-file-ignores]
-"bin/*.py" = [
-    "ERA001",
-    "E101",
-]
+"bin/**/*.py" = ["PLC2701"]
 
 "src/chassis/db_wschema/infrastructure/joblib_handler.py" = ["E101"]
 "src/chassis/db_wschema/infrastructure/sanity_check.py" = ["ANN401"]
 
 "tests/**/*.py" = [
     "S101",
+    "PLC2701",
     "PLR2004",
-    "TID251",
-    "N802",
 ]
-"src/utils/tabular_reader.py" = ["TID251"]
-"src/config/contracts/*.py" = ["TID251"]
 "src/config/connection_db.py" = ["ANN401"]
 "src/model/example_entity.py" = ["ANN401"]
-"src/utils/typing/**/*.py" = ["ANN401"]
-"src/chassis/typing/**/*.py" = ["ANN401"]
 "src/chassis/db_schema/infrastructure/*_handler.py" = ["ANN401"]
-"src/*/_internal/utils/tabular_reader.py" = ["TID251"]
-"src/*/_internal/config/contracts/*.py" = ["TID251"]
 "src/utils/xml_reader.py" = ["N813"]
 "src/*/_internal/utils/xml_reader.py" = ["N813"]

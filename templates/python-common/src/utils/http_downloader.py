@@ -59,7 +59,7 @@ class _NoRedirectHandler(request.HTTPRedirectHandler, metaclass=TypeChecker):
     here turns any redirect into an error the caller treats as a failed (broken) download.
     """
 
-    def redirect_request(
+    def redirect_request(  # noqa: PLR6301 -- overrides the urllib handler signature
         self,
         req: request.Request,
         fp: IO[bytes] | HTTPResponse,
@@ -207,6 +207,32 @@ def _fetch_bytes(
 
 
 @type_checker
+def _is_non_public(cls_ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Tell whether an address belongs to a range an SSRF probe would target.
+
+    Parameters
+    ----------
+    cls_ip : ipaddress.IPv4Address | ipaddress.IPv6Address
+        The resolved address.
+
+    Returns
+    -------
+    bool
+        ``True`` for private, loopback, link-local, reserved, unspecified or multicast.
+    """
+    return any(
+        (
+            cls_ip.is_private,
+            cls_ip.is_loopback,
+            cls_ip.is_link_local,
+            cls_ip.is_reserved,
+            cls_ip.is_unspecified,
+            cls_ip.is_multicast,
+        )
+    )
+
+
+@type_checker
 def _assert_public_host(
     str_url: str,
 ) -> None:  # complexity-ok: SSRF guard, one branch per rejection rule
@@ -237,12 +263,5 @@ def _assert_public_host(
         raise OSError(f"Host not resolved ({str_host!r}): {cls_err}") from cls_err
     for tuple_info in list_info:
         cls_ip = ipaddress.ip_address(tuple_info[4][0])
-        if (
-            cls_ip.is_private
-            or cls_ip.is_loopback
-            or cls_ip.is_link_local
-            or cls_ip.is_reserved
-            or cls_ip.is_unspecified
-            or cls_ip.is_multicast
-        ):
+        if _is_non_public(cls_ip):
             raise ValueError(f"Host {str_host!r} resolves to a non-public address ({cls_ip})")

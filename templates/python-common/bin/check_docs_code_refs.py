@@ -246,7 +246,7 @@ def strip_inline_comment(str_line: str) -> str:
     str
         ``str_line`` up to the first ``#``, right-stripped.
     """
-    return str_line.split("#")[0].rstrip()
+    return str_line.split("#", 1)[0].rstrip()
 
 
 def parse_names(str_names: str) -> list[str]:

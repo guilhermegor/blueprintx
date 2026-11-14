@@ -216,7 +216,8 @@ class PostgresDatabaseHandler(DatabaseHandler):
         """Create a psycopg connection using the configured DSN."""
         return psycopg.connect(self.dsn)
 
-    def _parse_dsn(self, dsn: str) -> DsnParts:
+    @staticmethod
+    def _parse_dsn(dsn: str) -> DsnParts:
         """Parse a PostgreSQL DSN into connection parts for pg_dump."""
         cls_parsed = urlparse(dsn)
         return {

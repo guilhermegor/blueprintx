@@ -34,7 +34,7 @@ PEP484_NUMERIC_TOWER : bool
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from beartype import BeartypeConf, BeartypeHintOverrides
 from beartype.vale import Is
@@ -47,19 +47,19 @@ PEP484_NUMERIC_TOWER: bool = False
 
 
 def _int_hint(  # complexity-ok: type metaprogramming
-) -> Any:
+) -> object:
     """Build the ``int`` replacement hint from the numeric knobs.
 
     Returns
     -------
-    Any
+    object
         Either bare ``int`` (no override needed) or an ``Annotated``/union hint that
         widens to ``numpy.integer`` and/or rejects ``bool``, per the knobs above.
     """
-    int_base: Any = int
+    int_base: object = int
     if WIDEN_INT_TO_NUMPY:
         try:
-            import numpy as np
+            import numpy as np  # noqa: PLC0415 -- optional dependency, imported lazily
 
             int_base = int | np.integer
         except ModuleNotFoundError:  # pragma: no cover - depends on the tier's deps
@@ -86,7 +86,7 @@ def build_conf() -> BeartypeConf:
     return BeartypeConf(
         violation_type=VIOLATION_TYPE,
         is_pep484_tower=PEP484_NUMERIC_TOWER,
-        hint_overrides=BeartypeHintOverrides({int: int_hint}),
+        hint_overrides=BeartypeHintOverrides({int: int_hint}),  # type: ignore[operator]
     )
 
 

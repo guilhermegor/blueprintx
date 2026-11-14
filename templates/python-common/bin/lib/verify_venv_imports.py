@@ -161,7 +161,7 @@ def requirement_is_active(str_line: str) -> bool:
     if not str_marker:
         return True
     try:
-        from packaging.markers import Marker
+        from packaging.markers import Marker  # noqa: PLC0415 -- lazy optional dependency
     except ImportError:
         print(f"warning: cannot evaluate marker for {str_line.strip()!r}", file=sys.stderr)
         return True
