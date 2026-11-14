@@ -295,6 +295,8 @@ copy_static_ts_lib_files() {
 
     cp "$SHARED_TEMPLATE_ROOT/bin/check_review_threads.py" "$project_path/bin/check_review_threads.py"
     cp "$SHARED_TEMPLATE_ROOT/bin/check_release_gate.py" "$project_path/bin/check_release_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/bin/check_doc_commands.sh" "$project_path/bin/check_doc_commands.sh"
+    chmod +x "$project_path/bin/check_doc_commands.sh"
 }
 
 apply_branch_protection() {

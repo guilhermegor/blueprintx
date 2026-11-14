@@ -148,6 +148,41 @@ ensure_poetry() {
 	return 1
 }
 
+venv_python() {
+	local str_candidate
+
+	for str_candidate in "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/.venv/Scripts/python.exe"; do
+		if [[ -x "$str_candidate" ]]; then
+			printf '%s' "$str_candidate"
+			return 0
+		fi
+	done
+	return 1
+}
+
+venv_missing_deps() {
+	local str_python
+
+	if str_python="$(venv_python)"; then
+		"$str_python" "$BOOTSTRAP_LIB_DIR/missing_deps.py" "$PROJECT_ROOT/pyproject.toml"
+		return
+	fi
+	run_poetry run python "$BOOTSTRAP_LIB_DIR/missing_deps.py" "$PROJECT_ROOT/pyproject.toml"
+}
+
+ensure_venv_deps() {
+	local str_output str_missing
+
+	if ! str_output="$(venv_missing_deps)"; then
+		print_status "error" "Could not check the venv's dependencies — see the error above, or run 'poetry install --with dev'"
+		return 1
+	fi
+	str_missing="$(printf '%s\n' "$str_output" | sed -n 's/^missing: //p' | tr '\n' ' ')"
+	[[ -z "${str_missing// /}" ]] && return 0
+	print_status "error" "The venv is missing dependencies: ${str_missing% } — run 'poetry install --with dev'"
+	return 1
+}
+
 bootstrap_init() {
 	BIN_DIR="$(cd "$BOOTSTRAP_LIB_DIR/.." && pwd)"
 	PROJECT_ROOT="$(cd "$BOOTSTRAP_LIB_DIR/../.." && pwd)"

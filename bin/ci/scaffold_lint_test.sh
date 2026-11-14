@@ -69,8 +69,13 @@ done
     exit 1
 }
 
+export DOCS_LOCALE="${DOCS_LOCALE:-en}"
+case "$DOCS_LOCALE" in
+    en|pt-BR) ;;
+    *) echo "ERROR: DOCS_LOCALE must be en or pt-BR, got '$DOCS_LOCALE'" >&2; exit 1 ;;
+esac
 str_opt_label="${SCAFFOLD_SPEC_FILE:+opt-ins from $SCAFFOLD_SPEC_FILE}"
-echo "::group::Scaffold $SKELETON (offline, ${str_opt_label:-no opt-ins})"
+echo "::group::Scaffold $SKELETON (offline, docs_locale=$DOCS_LOCALE, ${str_opt_label:-no opt-ins})"
 spec_skeleton_supported "$SKELETON" || {
     echo "ERROR: bin/lib/spec.sh has no named-key prompt map for '$SKELETON'" >&2
     exit 1
@@ -85,6 +90,16 @@ spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
         bash "$REPO_ROOT/$str_scaffold_rel" \
         "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
 echo "::endgroup::"
+
+[[ -f "$PROJECT_PATH/mkdocs.yml" ]] || {
+    echo "ERROR: the scaffold did not generate $PROJECT_PATH/mkdocs.yml" >&2
+    exit 1
+}
+if ! grep -Eq "^[[:space:]]+language:[[:space:]]*[\"']?${DOCS_LOCALE}[\"']?[[:space:]]*(#.*)?$" "$PROJECT_PATH/mkdocs.yml"; then
+    echo "ERROR: DOCS_LOCALE=$DOCS_LOCALE did not reach the generated mkdocs.yml (language:)" >&2
+    exit 1
+fi
+echo "Generated mkdocs.yml carries language: $DOCS_LOCALE."
 
 str_leaked="$(find "$PROJECT_PATH" \
     \( -type d \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.ruff_cache' \
@@ -133,7 +148,8 @@ echo "The project's docs/ gate passes its skeleton and rejects docs/backlog/."
 
 bash "$PROJECT_PATH/bin/check_readme_structure.sh" "$PROJECT_PATH/README.md"
 str_probe="$(mktemp -d)"
-sed 's/^## Overview$/## 🚀 Overview/' "$PROJECT_PATH/README.md" >"$str_probe/emoji.md"
+awk '/^<!-- slug: overview -->$/ { str_next = 1; print; next } str_next { sub(/^## /, "## 🚀 "); str_next = 0 } { print }' \
+    "$PROJECT_PATH/README.md" >"$str_probe/emoji.md"
 grep -vF '<!-- slug: license -->' "$PROJECT_PATH/README.md" >"$str_probe/no-license.md"
 for str_broken in emoji no-license; do
     if bash "$PROJECT_PATH/bin/check_readme_structure.sh" "$str_probe/$str_broken.md" >/dev/null 2>&1; then
@@ -206,6 +222,21 @@ if ! git ls-files --error-unmatch poetry.lock >/dev/null 2>&1; then
 fi
 echo "The generated project tracks poetry.lock."
 
+str_ignore_probe="$(mktemp -d -p "$WORK_DIR")"
+git init -q "$str_ignore_probe"
+cp .gitignore "$str_ignore_probe/.gitignore"
+for str_venv_name in .venv venv env; do
+    ln -s /nonexistent "$str_ignore_probe/$str_venv_name"
+    if ! GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$str_ignore_probe" check-ignore -q "$str_venv_name"; then
+        echo "ERROR: [$SKELETON] .gitignore does not ignore a SYMLINKED $str_venv_name." >&2
+        echo "       A trailing slash matches directories only, and git sees a" >&2
+        echo "       symlink as a file, so a venv linked to a shared env would" >&2
+        echo "       show as untracked and could be committed (blueprintx#1070)." >&2
+        exit 1
+    fi
+done
+echo "The generated project's .gitignore ignores a symlinked .venv, venv and env."
+
 str_cz_version="$(poetry run cz version --project 2>/dev/null || true)"
 case "$str_cz_version" in
     [0-9]*.[0-9]*.[0-9]*) echo "commitizen resolves its config ($str_cz_version)." ;;
@@ -238,6 +269,15 @@ echo "::endgroup::"
 
 echo "::group::poe integration_tests"
 bash bin/poe_exec.sh integration_tests || [ $? -eq 5 ]
+echo "::endgroup::"
+
+echo "::group::mkdocs --strict builds"
+poetry install --only docs --no-root --no-interaction --no-ansi
+poetry run mkdocs build --strict -d "$WORK_DIR/site"
+echo "::endgroup::"
+
+echo "::group::final tree is self-consistent"
+bash "$REPO_ROOT/bin/ci/check_final_tree.sh" "$SKELETON"
 echo "::endgroup::"
 
 if [ "$SKELETON" = "lib-minimal" ]; then

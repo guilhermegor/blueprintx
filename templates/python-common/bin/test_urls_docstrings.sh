@@ -5,22 +5,37 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
-CACHE_DIR=".url_check_cache"
 CACHE_TTL=$((60 * 60 * 24 * 7))
+CACHE_FAIL_TTL=$((60 * 60 * 6))
+
+resolve_cache_dir() {
+	local str_common_dir
+	if [[ -n "${URL_CHECK_CACHE_DIR:-}" ]]; then
+		echo "$URL_CHECK_CACHE_DIR"
+	elif str_common_dir=$(git rev-parse --git-common-dir 2>/dev/null); then
+		echo "${str_common_dir}/url_check_cache"
+	else
+		echo ".url_check_cache"
+	fi
+}
+
+CACHE_DIR="$(resolve_cache_dir)"
 
 get_cache() {
 	local url="$1"
-	local str_cache_file
+	local str_cache_file str_cached=""
 	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
+	[[ -f "$str_cache_file" ]] && str_cached=$(<"$str_cache_file")
 
-	if [[ -f "$str_cache_file" ]]; then
-		local int_timestamp
+	if [[ -n "$str_cached" && ! "$str_cached" =~ ^(403|408|429)$ ]]; then
+		local int_timestamp int_ttl=$CACHE_FAIL_TTL
+		[[ "$str_cached" =~ ^2 ]] && int_ttl=$CACHE_TTL
 		int_timestamp=$(stat -c %Y "$str_cache_file")
 		local int_now
 		int_now=$(date +%s)
 
-		if ((int_now - int_timestamp < CACHE_TTL)); then
-			cat "$str_cache_file"
+		if ((int_now - int_timestamp < int_ttl)); then
+			echo "$str_cached"
 			return 0
 		fi
 	fi
@@ -32,7 +47,8 @@ set_cache() {
 	local str_status="$2"
 	local str_cache_file
 	str_cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1)"
-	echo "$str_status" >"$str_cache_file"
+	echo "$str_status" >"${str_cache_file}.$$"
+	mv -f "${str_cache_file}.$$" "$str_cache_file"
 }
 
 clean_cache() {
@@ -115,9 +131,7 @@ check_url() {
 	fi
 
 	str_status_code=$(probe_url_status "$str_url")
-	if [[ "$str_status_code" =~ ^2 ]]; then
-		set_cache "$str_url" "$str_status_code"
-	fi
+	[[ "$str_status_code" =~ ^[1-4][0-9][0-9]$ && ! "$str_status_code" =~ ^(403|408|429)$ ]] && set_cache "$str_url" "$str_status_code"
 	echo "$str_status_code"
 }
 
@@ -143,7 +157,7 @@ check_urls_in_line() {
 	local str_file="$1" int_line_num="$2" str_line="$3"
 	local str_url str_status_code
 
-	while [[ "$str_line" =~ (https?://[a-zA-Z0-9./?=_%:-]+[a-zA-Z0-9./?=_%:-]) ]]; do
+	while [[ "$str_line" =~ (https?://[a-zA-Z0-9./?=_%:-]+[a-zA-Z0-9/=_%-]) ]]; do
 		str_url="${BASH_REMATCH[1]}"
 		str_line="${str_line#*"$str_url"}"
 
@@ -197,16 +211,26 @@ scan_file_for_urls() {
 process_python_files() {
 	clean_cache
 
-	local str_root_dir="${1:-.}"
-	local str_file
+	local -a list_targets=("$@")
+	local str_target str_file
 	DICT_PROCESSED_URLS=()
 	INT_URL_ERRORS=0
+	[[ ${#list_targets[@]} -eq 0 ]] && list_targets=(.)
 
-	print_status "info" "Scanning Python docstrings for URLs in '$str_root_dir'..."
+	print_status "info" "Scanning Python docstrings for URLs in: ${list_targets[*]}"
 
-	while IFS= read -r -d '' str_file; do
-		scan_file_for_urls "$str_file"
-	done < <(find "$str_root_dir" -type f -name "*.py" -print0)
+	for str_target in "${list_targets[@]}"; do
+		if [[ -d "$str_target" ]]; then
+			while IFS= read -r -d '' str_file; do
+				scan_file_for_urls "$str_file"
+			done < <(find "$str_target" -type f -name "*.py" -print0)
+		elif [[ -f "$str_target" && "$str_target" == *.py ]]; then
+			scan_file_for_urls "$str_target"
+		elif [[ ! -e "$str_target" ]]; then
+			print_status "error" "Path not found: $str_target"
+			INT_URL_ERRORS=1
+		fi
+	done
 
 	if [[ $INT_URL_ERRORS -eq 0 ]]; then
 		print_status "success" "All docstring URLs are reachable"
@@ -215,9 +239,68 @@ process_python_files() {
 	return 1
 }
 
+list_open_trackers() {
+	gh issue list --label docstring-urls --state open --limit 100 \
+		--json number --jq 'sort_by(.number) | .[].number'
+}
+
+track_dead_urls() {
+	local str_report="$1"
+	local str_pattern='URL (issue|problem)|Failed to access URL'
+	local str_marker='<!-- docstring-urls-tracker -->'
+	local str_body="docstring_urls_body.md" str_open="" str_existing int_num
+
+	if ! grep -qE "$str_pattern" "$str_report"; then
+		if ! grep -qF 'All docstring URLs are reachable' "$str_report"; then
+			echo "::error::Docstring URL scan produced no verdict."
+			cat "$str_report"
+			return 1
+		fi
+		echo "No dead docstring URLs."
+		str_open=$(list_open_trackers) || {
+			echo "::warning::Could not list open docstring-urls issues; stale trackers stay open."
+			str_open=""
+		}
+		for int_num in $str_open; do
+			gh issue close "$int_num" --comment "All docstring URLs are reachable again." ||
+				echo "::warning::Could not close #${int_num}; the next scan retries."
+		done
+		return 0
+	fi
+
+	gh label create docstring-urls --color fbca04 \
+		--description "A docstring URL no longer resolves" --force || true
+	{
+		printf '%s\n\nDead docstring URLs (status, file, line):\n\n```\n' "$str_marker"
+		grep -E "$str_pattern" "$str_report"
+		printf '```\n'
+	} >"$str_body"
+	str_open=$(list_open_trackers)
+	str_existing=${str_open%%$'\n'*}
+	if [[ -z "$str_existing" ]]; then
+		gh issue create --title "Dead docstring URLs" \
+			--label docstring-urls --body-file "$str_body"
+		return 0
+	fi
+	gh issue comment "$str_existing" --body-file "$str_body"
+	for int_num in $str_open; do
+		[[ "$int_num" == "$str_existing" ]] || gh issue close "$int_num" --reason "not planned" \
+			--comment "Duplicate of #${str_existing}." ||
+			echo "::warning::Could not close duplicate #${int_num}; the next scan retries."
+	done
+}
+
 main() {
-	mkdir -p "$CACHE_DIR"
-	process_python_files "${1:-.}" || exit 1
+	if [[ "${1:-}" == "--track" ]]; then
+		track_dead_urls "${2:?--track needs the report file}"
+		return
+	fi
+	if ! mkdir -p "$CACHE_DIR" 2>/dev/null || [[ ! -w "$CACHE_DIR" ]]; then
+		CACHE_DIR="$(mktemp -d)"
+		trap 'rm -rf "$CACHE_DIR"' EXIT
+		print_status "warning" "Cache dir not writable; using ${CACHE_DIR}"
+	fi
+	process_python_files "$@" || exit 1
 }
 
 main "$@"

@@ -27,6 +27,7 @@ import time
 from types import MappingProxyType
 
 import pytest
+import yaml
 
 
 _STR_GIT = shutil.which("git")
@@ -796,7 +797,26 @@ def _run_url_hook(path_root: Path) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         check=False,
+        env={**os.environ, "URL_CHECK_CACHE_DIR": str(path_root / ".url_check_cache")},
     )
+
+
+@pytest.mark.skipif(_STR_GIT is None, reason="git not available -- integration guard only")
+def test_check_urls_uses_the_seeded_cache_inside_a_git_work_tree(tmp_path: Path) -> None:
+    """The seeded cache must be read even when the scanned dir is a git work tree.
+
+    Without the ``URL_CHECK_CACHE_DIR`` isolation in ``_run_url_hook`` the hook would look in
+    the git common dir, miss the seed and fetch the URL live instead.
+    """
+    subprocess.run([str(_STR_GIT), "init", "-q", str(tmp_path)], check=True)  # noqa: S603
+    (tmp_path / "module_under_test.py").write_text(
+        DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
+    )
+    _seed_url_cache(tmp_path, _URL_404, "200")
+
+    cls_result = _run_url_hook(tmp_path)
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
 
 
 @pytest.mark.parametrize("str_shape", sorted(DICT_DOCSTRING_SHAPES))
@@ -837,6 +857,73 @@ def test_check_urls_passes_when_the_same_url_resolves(tmp_path: Path) -> None:
 
     assert cls_result.returncode == 0
     assert "All docstring URLs are reachable" in cls_result.stdout + cls_result.stderr
+
+
+def _run_url_hook_with_cache_override(
+    path_root: Path, path_cache: Path
+) -> subprocess.CompletedProcess:
+    """Run the check-urls hook with ``URL_CHECK_CACHE_DIR`` pointing at ``path_cache``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Directory to scan; also the hook's CWD.
+    path_cache : pathlib.Path
+        The cache directory the hook is told to use.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The completed run.
+    """
+    return subprocess.run(  # noqa: S603
+        [shutil.which("bash") or "bash", str(_bin_script("test_urls_docstrings.sh")), "."],
+        cwd=path_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "URL_CHECK_CACHE_DIR": str(path_cache)},
+    )
+
+
+def test_check_urls_honors_the_cache_dir_override(tmp_path: Path) -> None:
+    """A 200 seeded ONLY in the override dir must satisfy the scan.
+
+    The scanned tree and its CWD hold no cache, so a hook that ignored
+    ``URL_CHECK_CACHE_DIR`` would fetch the 404 URL live and fail.
+    """
+    path_proj = tmp_path / "proj"
+    path_proj.mkdir()
+    (path_proj / "module_under_test.py").write_text(
+        DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
+    )
+    (tmp_path / "elsewhere_parent").mkdir()
+    _seed_url_cache(tmp_path / "elsewhere_parent", _URL_404, "200")
+
+    cls_result = _run_url_hook_with_cache_override(
+        path_proj, tmp_path / "elsewhere_parent" / ".url_check_cache"
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+
+
+def test_check_urls_warns_and_scans_when_the_cache_dir_is_uncreatable(
+    tmp_path: Path,
+) -> None:
+    """An uncreatable cache dir must fall back to a temp dir, warn, and still scan.
+
+    The override sits beneath a regular file, so ``mkdir -p`` fails deterministically
+    (even as root).
+    """
+    path_blocker = tmp_path / "blocker"
+    path_blocker.write_text("not a directory", encoding="utf-8")
+    path_proj = tmp_path / "proj"
+    path_proj.mkdir()
+
+    cls_result = _run_url_hook_with_cache_override(path_proj, path_blocker / "cache")
+
+    assert "Cache dir not writable" in cls_result.stdout + cls_result.stderr
+    assert cls_result.returncode == 0
 
 
 def test_check_urls_ignores_a_url_outside_any_docstring(tmp_path: Path) -> None:
@@ -2618,3 +2705,494 @@ def test_ensure_env_with_an_example_still_seeds_the_env_file(tmp_path: Path) -> 
     )
 
     assert (tmp_path / ".env").read_text(encoding="utf-8") == "KEY=value\n"
+
+
+def _stub_curl_returning_404(path_dir: Path) -> Path:
+    """Write a ``curl`` stub that logs its arguments and answers 404.
+
+    Parameters
+    ----------
+    path_dir : pathlib.Path
+        Directory that becomes the head of ``PATH``.
+
+    Returns
+    -------
+    pathlib.Path
+        The log file the stub appends every argument line to.
+    """
+    path_log = path_dir / "curl_calls.log"
+    path_stub = path_dir / "curl"
+    path_stub.write_text(
+        f'#!/bin/bash\nprintf \'%s\\n\' "$@" >> "{path_log}"\nprintf 404\n', encoding="utf-8"
+    )
+    path_stub.chmod(0o755)
+    return path_log
+
+
+def test_check_urls_scans_every_filename_passed_not_only_the_first(tmp_path: Path) -> None:
+    """A URL living only in the second file must still be probed and fail the run.
+
+    Before blueprintx#1045 the first filename became the ``find`` root, so a commit staging
+    two files scanned only the first. The probe is a stub: no network is touched.
+    """
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    path_log = _stub_curl_returning_404(path_bin)
+    (tmp_path / "first.py").write_text('"""No links here."""\n', encoding="utf-8")
+    (tmp_path / "second.py").write_text(f'"""See {_URL_404} for details."""\n', encoding="utf-8")
+
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, str(_bin_script("test_urls_docstrings.sh")), "first.py", "second.py"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}",
+            "URL_CHECK_CACHE_DIR": str(tmp_path / "isolated_cache"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
+    assert _URL_404 in path_log.read_text(encoding="utf-8")
+
+
+def _run_url_hook_with_stub_curl(
+    path_root: Path, path_stub_dir: Path, list_args: list[str], dict_env: dict[str, str]
+) -> subprocess.CompletedProcess:
+    """Run the check-urls hook with a stubbed ``curl`` at the head of ``PATH``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The hook's CWD.
+    path_stub_dir : pathlib.Path
+        Directory holding the ``curl`` stub.
+    list_args : list[str]
+        Arguments passed to the hook.
+    dict_env : dict[str, str]
+        Extra environment variables.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The completed run.
+    """
+    return subprocess.run(  # noqa: S603
+        [_STR_BASH, str(_bin_script("test_urls_docstrings.sh")), *list_args],
+        cwd=path_root,
+        env={**os.environ, "PATH": f"{path_stub_dir}{os.pathsep}{os.environ['PATH']}", **dict_env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.mark.skipif(_STR_GIT is None, reason="git not available -- integration guard only")
+def test_check_urls_cache_defaults_to_the_git_common_dir(tmp_path: Path) -> None:
+    """With no override, a probed URL is cached under ``.git/url_check_cache``."""
+    subprocess.run([str(_STR_GIT), "init", "-q", str(tmp_path)], check=True)  # noqa: S603
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    _stub_curl_returning_404(path_bin)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404}."""\n', encoding="utf-8")
+
+    _run_url_hook_with_stub_curl(tmp_path, path_bin, ["mod.py"], {})
+
+    assert list((tmp_path / ".git" / "url_check_cache").iterdir())
+
+
+@pytest.mark.parametrize("str_status", ["000", "403", "408", "429", "503"])
+def test_check_urls_does_not_cache_an_unstable_answer(tmp_path: Path, str_status: str) -> None:
+    """No HTTP answer, a bot block, a timeout, a rate limit or a 5xx must never be cached."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text(f"#!/bin/bash\nprintf {str_status}\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (path_bin / "wget").write_text("#!/bin/bash\nexit 1\n", encoding="utf-8")
+    (path_bin / "wget").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404}."""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+
+    _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    assert not list(path_cache.iterdir())
+
+
+@pytest.mark.parametrize("str_status", ["403", "408", "429"])
+def test_check_urls_reprobes_an_unstable_answer_already_cached(
+    tmp_path: Path, str_status: str
+) -> None:
+    """An unstable answer cached by an older script is a miss: the URL is probed again."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text("#!/bin/bash\nprintf 200\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404} for details"""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+    path_cache.mkdir()
+    str_key = hashlib.md5(_URL_404.encode(), usedforsecurity=False).hexdigest()
+    (path_cache / str_key).write_text(f"{str_status}\n", encoding="utf-8")
+
+    cls_result = _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert (path_cache / str_key).read_text(encoding="utf-8").strip() == "200"
+
+
+@pytest.mark.parametrize("str_punct", [".", ":", "..", "?"])
+def test_check_urls_drops_sentence_punctuation_after_a_url(tmp_path: Path, str_punct: str) -> None:
+    """A URL ending a sentence is probed and cached without the trailing punctuation."""
+    path_bin = tmp_path / "stubs"
+    path_bin.mkdir()
+    (path_bin / "curl").write_text("#!/bin/bash\nprintf 200\n", encoding="utf-8")
+    (path_bin / "curl").chmod(0o755)
+    (tmp_path / "mod.py").write_text(f'"""See {_URL_404}{str_punct}"""\n', encoding="utf-8")
+    path_cache = tmp_path / "cache"
+
+    cls_result = _run_url_hook_with_stub_curl(
+        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    str_key = hashlib.md5(_URL_404.encode(), usedforsecurity=False).hexdigest()
+    assert [path_entry.name for path_entry in path_cache.iterdir()] == [str_key]
+
+
+def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
+    """A typo'd explicit path must fail, never report ``All docstring URLs are reachable``."""
+    cls_result = _run_url_hook_with_stub_curl(
+        tmp_path, tmp_path, ["no_such_dir"], {"URL_CHECK_CACHE_DIR": str(tmp_path / "cache")}
+    )
+
+    assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
+
+
+def _stage_poetry_exec(path_root: Path, str_missing_output: str) -> tuple[Path, dict[str, str]]:
+    """Copy ``poetry_exec.sh`` beside a stub ``poetry`` whose dep check reports a given state.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Throwaway project root.
+    str_missing_output : str
+        What the pyproject dependency check prints; empty means nothing is missing.
+
+    Returns
+    -------
+    tuple[Path, dict[str, str]]
+        The staged script and the environment that puts the stub first on ``PATH``.
+    """
+    path_bin = path_root / "bin"
+    path_bin.mkdir()
+    shutil.copy(_bin_script("poetry_exec.sh"), path_bin / "poetry_exec.sh")
+    _materialise_bin_lib(path_bin)
+    path_stubs = path_root / "_stubs"
+    path_stubs.mkdir()
+    path_poetry = path_stubs / "poetry"
+    path_poetry.write_text(
+        '#!/bin/bash\n[[ "$*" == *missing_deps.py* ]] && '
+        '{ printf \'%s\' "$MISSING_OUT"; exit "${CHECK_EXIT:-0}"; }\n'
+        '[ "$1" = "run" ] && echo RAN\nexit 0\n',
+        encoding="utf-8",
+    )
+    path_poetry.chmod(0o755)
+    dict_env = dict(os.environ)
+    dict_env.pop("LOG_FILE", None)
+    dict_env.pop("FORCE_COLOR", None)
+    dict_env.pop("CLICOLOR_FORCE", None)
+    dict_env.pop("NO_COLOR", None)
+    dict_env["PATH"] = f"{path_stubs}{os.pathsep}{dict_env['PATH']}"
+    dict_env["MISSING_OUT"] = str_missing_output
+    return path_bin / "poetry_exec.sh", dict_env
+
+
+def _run_staged_poetry_exec(
+    path_script: Path, dict_env: dict[str, str]
+) -> subprocess.CompletedProcess:
+    """Run the staged ``poetry_exec.sh run python gate.py`` and capture its output.
+
+    Parameters
+    ----------
+    path_script : pathlib.Path
+        The staged script.
+    dict_env : dict[str, str]
+        Environment from ``_stage_poetry_exec``.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The finished run.
+    """
+    return subprocess.run(  # noqa: S603
+        [_STR_BASH, str(path_script), "run", "python", "gate.py"],
+        env=dict_env,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+
+def test_poetry_run_with_missing_declared_deps_fails_with_one_install_line(tmp_path: Path) -> None:
+    """A venv lacking declared packages must not reach the gate and die in a traceback."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "missing: pyyaml\nmissing: defusedxml\n")
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode != 0, cls_run.stdout
+    assert "RAN" not in cls_run.stdout
+    assert "pyyaml" in cls_run.stderr
+    assert "poetry install --with dev" in cls_run.stderr
+
+
+def test_poetry_run_with_failing_dependency_check_explains_itself(tmp_path: Path) -> None:
+    """A checker that crashes must stop the run with a line saying so, never a bare abort."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+    dict_env["CHECK_EXIT"] = "1"
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode != 0, cls_run.stdout
+    assert "RAN" not in cls_run.stdout
+    assert "Could not check the venv's dependencies" in cls_run.stderr
+
+
+def test_poetry_run_ignores_poetry_notices_on_stdout(tmp_path: Path) -> None:
+    """A notice Poetry prints to stdout is not a dependency name and must not block the run."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "Creating virtualenv demo in /x\n")
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode == 0, cls_run.stderr
+    assert "RAN" in cls_run.stdout
+
+
+def test_poetry_run_checks_with_the_project_venv_interpreter_not_poetry(tmp_path: Path) -> None:
+    """The check must not pay a second Poetry start-up when the in-project venv exists."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+    dict_env["CHECK_EXIT"] = "9"
+    path_python = tmp_path / ".venv" / "bin" / "python"
+    path_python.parent.mkdir(parents=True)
+    path_python.write_text("#!/bin/bash\necho 'missing: pyyaml'\n", encoding="utf-8")
+    path_python.chmod(0o755)
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert "pyyaml" in cls_run.stderr, cls_run.stderr
+    assert "Could not check" not in cls_run.stderr
+    assert "RAN" not in cls_run.stdout
+
+
+def test_poetry_run_with_complete_venv_still_runs(tmp_path: Path) -> None:
+    """The guard must be invisible when nothing is missing."""
+    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+
+    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+
+    assert cls_run.returncode == 0, cls_run.stderr
+    assert "RAN" in cls_run.stdout
+
+
+_STR_OPEN_TRACKERS_NEWEST_FIRST = '[{"number": 9}, {"number": 7}]'
+
+
+def _run_track_mode(
+    path_root: Path,
+    str_report: str,
+    str_open: str,
+    str_fail_close: str = "",
+    bool_fail_list: bool = False,
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    """Run ``test_urls_docstrings.sh --track`` against a stub ``gh``.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Scratch directory used as CWD.
+    str_report : str
+        Content of the scan report.
+    str_open : str
+        JSON the stub serves for ``gh issue list``; the script's own ``--jq`` runs over it.
+    str_fail_close : str
+        Issue number whose ``gh issue close`` the stub fails; empty fails none.
+    bool_fail_list : bool
+        Whether the stub's ``gh issue list`` exits non-zero.
+
+    Returns
+    -------
+    tuple[subprocess.CompletedProcess[str], list[str]]
+        The finished process and one line per ``gh`` invocation, ``issue list`` excluded.
+    """
+    _skip_unless(shutil.which("jq") is not None, "jq is needed to apply the script's --jq")
+    path_bin = path_root / "stubs"
+    path_bin.mkdir()
+    path_log = path_root / "gh.log"
+    path_json = path_root / "issues.json"
+    path_json.write_text(str_open, encoding="utf-8")
+    (path_bin / "gh").write_text(
+        f'#!/bin/bash\necho "$*" >> "{path_log}"\n'
+        f'[ "$2 $3" = "close {str_fail_close}" ] && exit 1\n[ "$2" = list ] || exit 0\n'
+        f"{'exit 1' if bool_fail_list else ':'}\n"
+        'while [ $# -gt 0 ]; do [ "$1" = --jq ] && str_jq="$2"; shift; done\n'
+        f'jq -r "$str_jq" "{path_json}"\n',
+        encoding="utf-8",
+    )
+    (path_bin / "gh").chmod(0o755)
+    (path_root / "report.txt").write_text(str_report, encoding="utf-8")
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, str(_bin_script("test_urls_docstrings.sh")), "--track", "report.txt"],
+        cwd=path_root,
+        env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    path_log.touch()
+    list_lines = path_log.read_text(encoding="utf-8").splitlines()
+    list_reads = [str_line for str_line in list_lines if str_line.startswith("issue list")]
+    assert all("--label docstring-urls --state open" in str_line for str_line in list_reads)
+    return cls_result, [
+        str_line for str_line in list_lines if not str_line.startswith("issue list")
+    ]
+
+
+def test_track_mode_opens_a_tracker_for_a_dead_url(tmp_path: Path) -> None:
+    """A failing scan with no open tracker creates one; runs in any generated project."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]"
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert list_calls == [
+        "label create docstring-urls --color fbca04 "
+        "--description A docstring URL no longer resolves --force",
+        "issue create --title Dead docstring URLs --label docstring-urls "
+        "--body-file docstring_urls_body.md",
+    ]
+    str_body = (tmp_path / "docstring_urls_body.md").read_text(encoding="utf-8")
+    assert "<!-- docstring-urls-tracker -->" in str_body
+    assert "URL issue (404) in a.py (line 1): u" in str_body
+
+
+def test_track_mode_lists_only_open_docstring_url_trackers(tmp_path: Path) -> None:
+    """The tracker lookup must carry the label and state filters, and must happen."""
+    cls_result, _ = _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]")
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    list_lines = (tmp_path / "gh.log").read_text(encoding="utf-8").splitlines()
+    list_reads = [str_line for str_line in list_lines if str_line.startswith("issue list")]
+    assert len(list_reads) == 1
+    assert "--label docstring-urls --state open" in list_reads[0]
+
+
+def test_docstring_urls_workflow_calls_track_mode_on_the_scan_report() -> None:
+    """The tracking step must run ``--track`` on the scan step's report, with the token set."""
+    path_workflow = (
+        Path(__file__).resolve().parents[2] / ".github" / "workflows" / "docstring-urls.yml"
+    )
+    _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
+    dict_workflow = yaml.safe_load(path_workflow.read_text(encoding="utf-8"))
+    dict_steps = {
+        dict_step["name"]: dict_step
+        for dict_job in dict_workflow["jobs"].values()
+        for dict_step in dict_job["steps"]
+        if "name" in dict_step
+    }
+    dict_track = dict_steps["Open or Update Tracking Issue"]
+
+    assert "docstring_urls_report.txt" in dict_steps["Scan Docstring URLs"]["run"]
+    assert (
+        dict_track["run"] == "bash bin/test_urls_docstrings.sh --track docstring_urls_report.txt"
+    )
+    assert "GH_TOKEN" in dict_track["env"]
+
+
+def test_track_mode_does_not_open_a_duplicate_when_listing_trackers_fails(tmp_path: Path) -> None:
+    """A failed tracker lookup must fail the step, never fall through to ``issue create``."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]", bool_fail_list=True
+    )
+
+    assert cls_result.returncode != 0
+    assert not [str_call for str_call in list_calls if str_call.startswith("issue c")]
+
+
+def test_track_mode_fails_when_the_scan_gave_no_verdict(tmp_path: Path) -> None:
+    """A report with neither a failure nor the success line must fail, never pass silently."""
+    cls_result, list_calls = _run_track_mode(tmp_path, "curl: not found\n", "[]")
+
+    assert cls_result.returncode != 0
+    assert "produced no verdict" in cls_result.stdout
+    assert not list_calls
+
+
+def test_track_mode_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None:
+    """A clean scan must close every open tracking issue and do nothing else."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert list_calls == [
+        "issue close 7 --comment All docstring URLs are reachable again.",
+        "issue close 9 --comment All docstring URLs are reachable again.",
+    ]
+
+
+def test_track_mode_keeps_closing_after_one_close_fails(tmp_path: Path) -> None:
+    """One failed close must not abort the step or skip the remaining trackers."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST, "7"
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert list_calls[-1] == "issue close 9 --comment All docstring URLs are reachable again."
+
+
+def test_track_mode_dedupes_to_one_open_tracker(tmp_path: Path) -> None:
+    """With duplicates open, a failing scan updates the oldest and closes the rest."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, "URL issue (404) in a.py (line 1): u\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert [str_call for str_call in list_calls if str_call.startswith("issue c")] == [
+        "issue comment 7 --body-file docstring_urls_body.md",
+        "issue close 9 --reason not planned --comment Duplicate of #7.",
+    ]
+
+
+def test_track_mode_dedupe_survives_a_failed_close(tmp_path: Path) -> None:
+    """A failed duplicate close must not abort the step or skip later duplicates."""
+    cls_result, list_calls = _run_track_mode(
+        tmp_path,
+        "URL issue (404) in a.py (line 1): u\n",
+        '[{"number": 11}, {"number": 9}, {"number": 7}]',
+        "9",
+    )
+
+    assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
+    assert list_calls[-1] == "issue close 11 --reason not planned --comment Duplicate of #7."
+
+
+def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
+    """The hook must filter on ``.py`` like the script, not on ``types: python``."""
+    path_config = Path(__file__).resolve().parents[2] / ".pre-commit-config.yaml"
+    _skip_unless(path_config.is_file(), "no pre-commit config in this tree")
+    dict_config = yaml.safe_load(path_config.read_text(encoding="utf-8"))
+    list_hooks = [
+        dict_hook
+        for dict_repo in dict_config["repos"]
+        for dict_hook in dict_repo["hooks"]
+        if dict_hook["id"] == "check-urls"
+    ]
+
+    assert len(list_hooks) == 1
+    assert list_hooks[0].get("files") == r"\.py$"
+    assert "types" not in list_hooks[0]

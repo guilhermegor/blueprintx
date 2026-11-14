@@ -53,7 +53,9 @@ case "$1 $2" in
 "repo create") echo "created" ;;
 "project list") echo "${GH_PROJECT_NUMBER:-}" ;;
 "project create") echo 7 ;;
-"project field-list") case "$*" in *".fields[].name"* | *options*) ;; *) echo PVTSSF_status ;; esac ;;
+"project field-list") case "$*" in *'select(.name=="Blocked")'*) echo PVTSO_blocked ;; *".fields[].name"* | *options*) ;; *) echo PVTSSF_status ;; esac ;;
+"project view") echo PVT_board ;;
+"project item-add") echo PVTI_card ;;
 esac
 exit 0
 STUB
@@ -137,6 +139,34 @@ test_preflight_stops_when_the_budget_is_too_low() {
     run_fn '' "GH_RATE=10 ${int_reset}" gh_preflight
     expect_stop "low budget"
     expect_said "low budget" "retry in 10 min"
+}
+
+test_preflight_stops_on_a_non_numeric_budget_or_cost() {
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=lots" gh_preflight
+    expect_stop "non-numeric budget"
+    expect_said "non-numeric budget" "SCAFFOLD_GH_GRAPHQL_BUDGET must be a whole number"
+    expect_not_said "non-numeric budget" "gh preflight passed"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=5x" gh_preflight
+    expect_stop "non-numeric cost"
+    expect_said "non-numeric cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    expect_not_said "non-numeric cost" "gh preflight passed"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=0560" gh_preflight
+    expect_stop "octal cost"
+    expect_said "octal cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=60000000" gh_preflight
+    expect_stop "eight-digit cost"
+    expect_said "eight-digit cost" "SCAFFOLD_GH_GRAPHQL_COST must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_COST=9999999" gh_preflight
+    expect_not_said "largest cost" "must be a whole number"
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=99999999999999999999" gh_preflight
+    expect_stop "overlong budget"
+    expect_said "overlong budget" "SCAFFOLD_GH_GRAPHQL_BUDGET must be a whole number"
+}
+
+test_preflight_warns_when_the_budget_is_below_one_scaffold() {
+    run_fn '' "SCAFFOLD_GH_GRAPHQL_BUDGET=100" gh_preflight
+    [ "$int_rc" -eq 0 ] || fail "low override: preflight stopped: $str_out"
+    expect_said "low override" "it is in points now, not calls"
 }
 
 test_preflight_stops_on_a_blank_login() {
@@ -343,17 +373,65 @@ test_board_workflows_empty_list_is_not_unreadable() {
     expect_said "workflows empty" "'Item closed' was not found under that name"
 }
 
-test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget() {
-    local int_calls
+test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults() {
+    local int_calls int_fields
+    unset SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET SCAFFOLD_GH_GRAPHQL_MEASURED SCAFFOLD_GH_GRAPHQL_SITES
     run_fn 'y\n\n' "GH_PROJECT_NUMBER=" scaffold_kanban_setup
     [ "$int_rc" -eq 0 ] || fail "budget: scaffold stopped: $str_out"
     int_calls="$(grep -cE '^(project|repo view|api graphql)' "$WORK_DIR/gh.log")"
+    int_fields="$(grep -c '^project field-list' "$WORK_DIR/gh.log")"
+    [ "$int_fields" -eq 3 ] ||
+        fail "a fresh scaffold makes ${int_fields} field-list calls (101 points each), the doc's fresh-setup rows say 3"
     # shellcheck source=bin/lib/gh_preflight.sh
     source "$REPO_ROOT/bin/lib/gh_preflight.sh"
     [ "$int_calls" -eq "$SCAFFOLD_GH_GRAPHQL_MEASURED" ] ||
         fail "a fresh scaffold makes ${int_calls} GraphQL-backed gh calls, SCAFFOLD_GH_GRAPHQL_MEASURED is ${SCAFFOLD_GH_GRAPHQL_MEASURED}"
-    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge $(((SCAFFOLD_GH_GRAPHQL_MEASURED + 2) * 3 + 3)) ] ||
-        fail "SCAFFOLD_GH_GRAPHQL_BUDGET ${SCAFFOLD_GH_GRAPHQL_BUDGET} is below (MEASURED + 2) * 3 + 3"
+    [ "$SCAFFOLD_GH_GRAPHQL_COST" -eq 560 ] ||
+        fail "SCAFFOLD_GH_GRAPHQL_COST default is ${SCAFFOLD_GH_GRAPHQL_COST}, pinned at 560: update the doc table with it"
+    [ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -eq 1120 ] ||
+        fail "SCAFFOLD_GH_GRAPHQL_BUDGET default is ${SCAFFOLD_GH_GRAPHQL_BUDGET}, pinned at 1120 (2 * cost)"
+    unset SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET SCAFFOLD_GH_GRAPHQL_MEASURED SCAFFOLD_GH_GRAPHQL_SITES
+}
+
+test_the_card_add_path_pins_its_field_list_calls_and_points() {
+    local int_fields int_list int_others int_calls int_doc int_cost
+    run_fn '' "GH_PROJECT_NUMBER=7" scaffold_release_issue_card octo/widget https://github.com/octo/widget/issues/1
+    [ "$int_rc" -eq 0 ] || fail "card add: stopped: $str_out"
+    expect_not_said "card add" "Could not place"
+    int_calls="$(grep -cE '^(project|repo view|api graphql)' "$WORK_DIR/gh.log" || true)"
+    int_fields="$(grep -c '^project field-list' "$WORK_DIR/gh.log" || true)"
+    int_list="$(grep -c '^project list' "$WORK_DIR/gh.log" || true)"
+    int_others=$((int_calls - int_fields - int_list))
+    [ "$int_fields" -eq 2 ] ||
+        fail "the card-add path makes ${int_fields} field-list calls (102 points each), the doc's card-add rows say 2"
+    [ "$int_calls" -eq 6 ] ||
+        fail "the card-add path makes ${int_calls} GraphQL-backed gh calls, the doc says 6 (list, view, 2 field-list, item-add, item-edit)"
+    int_cost=$((int_fields * 102 + int_list * 3 + int_others * 2))
+    int_doc="$(awk -F'|' '/^\| Step/ { in_t = 1 } /^\| Total/ { in_t = 0 } in_t && /^\| card add:/ { gsub(/[^0-9]/, "", $(NF-1)); int_sum += $(NF-1) } END { print int_sum + 0 }' \
+        "$REPO_ROOT/docs/online-scaffold-gh-preflight.md")"
+    [ "$int_doc" -gt 0 ] || fail "no '| card add:' rows found in docs/online-scaffold-gh-preflight.md"
+    [ "$int_cost" -eq "$int_doc" ] ||
+        fail "the card-add path costs ${int_cost} points (102 per field-list, 3 per project list, 2 per other call), the doc's card-add rows sum to ${int_doc}"
+    check_doc_total_matches_rows
+}
+
+check_doc_total_matches_rows() {
+    local str_doc="$REPO_ROOT/docs/online-scaffold-gh-preflight.md" int_rows int_total
+    local int_total_rows int_cost_default
+    int_rows="$(awk -F'|' '/^\| Step/ { in_t = 1; next } /^\| Total/ { exit } in_t && /^\| / && !/subtotal/ { gsub(/[^0-9]/, "", $(NF-1)); int_sum += $(NF-1) } END { print int_sum + 0 }' "$str_doc")"
+    int_total_rows="$(grep -c '^| Total' "$str_doc" || true)"
+    if [ "$int_total_rows" -ne 1 ]; then
+        fail "the doc has ${int_total_rows} '| Total' rows, expected exactly 1"
+        return 0
+    fi
+    int_total="$(awk -F'|' '/^\| Total/ { gsub(/[^0-9]/, "", $(NF-1)); print $(NF-1) }' "$str_doc")"
+    if [ -z "$int_total" ] || [ "$int_rows" -ne "$int_total" ]; then
+        fail "the doc's Total row is '${int_total}', the rows above it sum to ${int_rows}"
+        return 0
+    fi
+    int_cost_default="$(unset SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET; source "$REPO_ROOT/bin/lib/gh_preflight.sh"; echo "$SCAFFOLD_GH_GRAPHQL_COST")"
+    [ $((int_total - int_cost_default)) -ge 0 ] && [ $((int_total - int_cost_default)) -le 5 ] ||
+        fail "the doc's Total is ${int_total}, SCAFFOLD_GH_GRAPHQL_COST is ${int_cost_default}: Total may exceed the default by at most 5 and never undershoot it"
 }
 
 test_graphql_call_sites_match_the_measured_count() {
@@ -393,6 +471,8 @@ main() {
     test_preflight_stops_on_an_auth_error
     test_preflight_stops_on_a_network_error
     test_preflight_stops_when_the_budget_is_too_low
+    test_preflight_stops_on_a_non_numeric_budget_or_cost
+    test_preflight_warns_when_the_budget_is_below_one_scaffold
     test_preflight_stops_on_a_blank_login
     test_preflight_passes_on_a_healthy_gh
     test_preflight_stops_when_the_project_scope_is_missing
@@ -421,7 +501,8 @@ main() {
     test_board_workflows_print_the_instruction_when_unreadable
     test_board_workflows_name_the_cause_when_rate_limited
     test_board_workflows_empty_list_is_not_unreadable
-    test_a_fresh_scaffold_stays_inside_the_measured_graphql_budget
+    test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults
+    test_the_card_add_path_pins_its_field_list_calls_and_points
     test_graphql_call_sites_match_the_measured_count
     if [ "$int_failures" -gt 0 ]; then
         print_status "error" "$int_failures failure(s)"

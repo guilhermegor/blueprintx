@@ -1,3 +1,7 @@
 npx lint-staged
 python3 bin/check_comment_budget.py --require-baseline
 bash bin/check_agents_md_pairs.sh --root .
+bash bin/check_doc_commands.sh .
+gate=$(find src -name assertion-weakening.cjs -print -quit)
+[ -n "$gate" ] || { echo 'assertion-weakening gate missing' >&2; exit 1; }
+node "$gate"

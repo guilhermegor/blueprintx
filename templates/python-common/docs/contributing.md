@@ -125,8 +125,28 @@ logo/favicon (`theme.logo` / `theme.favicon` in `mkdocs.yml`) and as the landing
    4.5:1 or more against the `slate` background (`#1e2129`, Material 9.5 default hue). The
    template enables no `md-button`, `navigation.top` or `content.code.annotate`; if you add
    one, also set `--md-accent-bg-color`, since Material draws its hover text white on the
-   accent colour. Known limit: the gate derives the background from Material 9.5's default
-   hue and does not follow a Material version bump that changes it.
+   accent colour (BlueprintX's template gate, `tests/test_brand_css_contrast.sh`, fails when
+   `mkdocs.yml` enables `navigation.top` or `content.code.annotate`, or any template page
+   uses `md-button`; it is not shipped into generated projects, so re-check by hand after
+   editing: links and hover at 4.5:1 or more on `#ffffff` and `#1e2129`). The
+   `[data-md-color-scheme="default"]` block sets `--md-accent-fg-color` to a dark blue,
+   since Material's default hover (`#526cfe`) is only 4.25:1 on white. It cannot live in
+   `:root`: the `<body>` carries `data-md-color-accent="indigo"`, whose palette rule
+   `[data-md-color-accent=indigo]` sits on `body` and shadows `:root`. The scheme block has
+   the same specificity and wins only because `brand.css` loads after Material's palette CSS
+   (measured on a built site: hovered link `rgb(63, 81, 181)`, 6.87:1 on white). Keep
+   `brand.css` last in `extra_css`. The primary colour set in `:root` does reach the page
+   (computed `#0d2c54`). Known limits: a direct `color:` rule on `.md-typeset a` bypasses
+   these variables and is invisible to the gate, any selector on `:root` or a colour scheme
+   other than the bare `default` or `slate` one (grouped, compound, descendant or a third
+   scheme), a rule that sets `--md-accent-fg-color`, `--md-primary-fg-color` or
+   `--md-typeset-a-color` under any other selector, and any `@media`/`@supports` wrapper make
+   the gate refuse rather than resolve, a value with `!important` is refused as unparseable,
+   and the gate derives the background from Material 9.5's default hue and
+   does not follow a Material version bump that changes it. Keep
+   `stylesheets/brand.css` the **last** `extra_css` entry in `mkdocs.yml` and add no
+   `@import` statement to it; this is a convention your project's own checks do not
+   enforce (BlueprintX's template test does, for the shipped files).
 
 ## Repository protection & security (one-time, scripted)
 

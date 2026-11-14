@@ -1,0 +1,34 @@
+name: Docstring URLs
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: docstring-urls
+  cancel-in-progress: false
+
+jobs:
+  urls:
+    name: Docstring URL check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Scan Docstring URLs
+        run: bash bin/test_urls_docstrings.sh . > docstring_urls_report.txt 2>&1 || true
+
+      - name: Open or Update Tracking Issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash bin/test_urls_docstrings.sh --track docstring_urls_report.txt

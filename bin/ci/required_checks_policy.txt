@@ -18,6 +18,12 @@ optional|Scaffold + lint + test (otel opt-in) — api-service-native-db|new job;
 optional|Scaffold + lint + test (otel opt-in) — ddd-service-orm-db|new job; require once it has a green record on main
 optional|Scaffold + lint + test (otel opt-in) — lib-minimal|new job; require once it has a green record on main
 optional|Scaffold + lint + test (otel opt-in) — mvc-service-orm-db|new job; require once it has a green record on main
+optional|Scaffold + lint + test (pt-BR docs locale) — ddd-service-orm-db|new job; require once it has a green record on main
+optional|Scaffold + lint + test (pt-BR docs locale) — lib-minimal|new job; require once it has a green record on main
 optional|tests clear inherited GIT_* env|new gate (blueprintx#901); require once it has a green record on main
 optional|Template workflow filenames|new gate (blueprintx#947); require once it has run green on recent PRs
 optional|Python scaffolds refuse an explicit Any|new job (blueprintx#1022); require once it has a green record on main
+optional|Every generated project ships the files it references|new gate (blueprintx#1094); require once it has a green record on main
+optional|PR body matches the template layout (blueprintx#587)|runs on every PR into main (branches: [main]); not required yet, owner decision pending
+optional|Generated TS project - npm ci, lint, jest (react-spa-webpack)|new job; require once it has a green record on main
+optional|Generated TS project - npm ci, lint, jest (ts-lib)|new job; require once it has a green record on main

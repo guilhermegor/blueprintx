@@ -120,6 +120,13 @@ repos:
         pass_filenames: false
         files: ^(templates/.*\.github/workflows/|bin/ci/check_workflow_names\.sh|tests/test_check_workflow_names\.sh)
 
+      - id: release-target-sha
+        name: release tag targets the built SHA (blueprintx#1065)
+        entry: bash tests/test_release_target_sha.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/.*\.ya?ml$|tests/test_release_target_sha\.sh)
+
       - id: docs-gap
         name: docs gap (published pages registered in mkdocs nav + docs/CLAUDE.md index, blueprintx#340)
         entry: python templates/python-common/bin/check_docs_gap.py --root .
@@ -283,9 +290,10 @@ repos:
       - id: docs-locale-prompt-tests
         name: docs-locale prompt should-fail regression tests (blueprintx#247)
         entry: bash tests/test_docs_locale_prompt.sh
-        language: system
+        language: python
+        additional_dependencies: [pathspec, pyyaml]
         pass_filenames: false
-        files: ^(bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
+        files: ^(bin/blueprintx\.sh|bin/lib/scaffold_docs_locale\.sh|bin/scaffold/python_[^/]+\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
 
       - id: prompt-tty-guard-tests
         name: scaffold prompt tty-guard should-fail tests (blueprintx#539)
@@ -308,12 +316,19 @@ repos:
         pass_filenames: false
         files: ^(bin/ci/(scaffold_lint_test|check_review_config_shipped)\.sh|bin/lib/no_background_git\.sh|tests/test_scaffold_lint_test_cleanup\.sh)$
 
+      - id: check-final-tree-tests
+        name: check_final_tree.sh should-fail tests (blueprintx#1077)
+        entry: bash tests/test_check_final_tree.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/ci/check_final_tree\.sh|tests/test_check_final_tree\.sh)$
+
       - id: spec-answers-tests
         name: --spec regression tests (blueprintx#629)
         entry: bash tests/test_spec_answers.sh
         language: system
         pass_filenames: false
-        files: ^(bin/lib/(spec|common)\.sh|bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/lib-minimal/.*|tests/test_spec_answers\.sh)$
+        files: ^(bin/lib/(spec|common|scaffold_docs_locale|scaffold_readme)\.sh|templates/python-common/(README\.md|docs/(changelog\.md|pt-BR/.*))|templates/python-common/bin/check_(docs_(language|gap)|comment_language)\.py|bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/lib-minimal/.*|tests/test_spec_answers\.sh)$
 
       - id: scaffold-kanban-tests
         name: scaffold kanban board and labels should-fail tests (blueprintx#592)
@@ -496,6 +511,14 @@ repos:
         language: system
         pass_filenames: false
         files: ^(bin/scaffold/.*\.sh|bin/lib/.*\.sh|templates/common/.*|templates/[^/]+/skeleton\.meta|bin/ci/check_review_config_shipped\.sh)$
+
+      - id: generated-references
+        name: every file a generated project references was copied (blueprintx#1094)
+        entry: bash bin/ci/check_generated_references.sh --generated
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [manual]
 
       - id: dependabot-shipped
         name: every skeleton ships dependabot.yml with a cooldown (blueprintx#838)

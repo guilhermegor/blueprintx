@@ -4,6 +4,8 @@
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_provenance.sh"
 # shellcheck source=bin/lib/scaffold_readme.sh
 source "$(dirname "${BASH_SOURCE[0]}")/scaffold_readme.sh"
+# shellcheck source=bin/lib/scaffold_docs_extras.sh
+source "$(dirname "${BASH_SOURCE[0]}")/scaffold_docs_extras.sh"
 
 scaffold_render_pyproject() {
 	local str_tier="$1"
@@ -81,12 +83,16 @@ scaffold_copy_shared_tests() {
 		"$str_project_path/tests/unit/test_pr_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
 		"$str_project_path/tests/unit/test_backlog_ledger.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_check_backlog_ledger.py" \
+		"$str_project_path/tests/unit/test_check_backlog_ledger.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
 		"$str_project_path/tests/unit/test_layer_imports_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_all_exports_gate.py" \
 		"$str_project_path/tests/unit/test_all_exports_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_contract_family_conventions.py" \
 		"$str_project_path/tests/unit/test_contract_family_conventions.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_language_gate.py" \
+		"$str_project_path/tests/unit/test_docs_language_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
 		"$str_project_path/tests/unit/test_comment_language_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
@@ -194,12 +200,6 @@ scaffold_copy_executables_and_vscode() {
 		"$str_project_path/.vscode/extensions.json"
 	cp "$COMMON_TEMPLATE_ROOT/.vscode/tasks.json" \
 		"$str_project_path/.vscode/tasks.json"
-}
-
-scaffold_copy_docs_extras() {
-	local str_project_path="$1"
-
-	cp "$COMMON_TEMPLATE_ROOT/docs/incidents.md" "$str_project_path/docs/incidents.md"
 }
 
 scaffold_copy_leaf_docs() {

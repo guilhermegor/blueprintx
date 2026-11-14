@@ -7,7 +7,7 @@ hole it cannot see: **a member missing from ``__all__`` is invisible to it.** Th
 returns one fewer item, `parametrize` generates one fewer case, and the suite passes by not
 looking.
 
-Measured (filings-cvm#164): three readers registered by an anchor-replace landed in the import
+Measured (opendata-cvm#164): three readers registered by an anchor-replace landed in the import
 block but never in ``__all__``. They were importable, unexported, and every test was green.
 The sibling failure is worse: narrowing an ``__all__`` **empties** every gate that discovers
 through it — 2182 → 1311 tests with no new failure, four gates silently inert.
@@ -245,6 +245,21 @@ def _inside_internal(path_init: pathlib.Path) -> bool:
     return True
 
 
+_SET_WRITER_MODULES = frozenset({"builtins", "sys", "inspect"})
+_SET_SAFE_DECORATORS = frozenset(
+    {
+        "classmethod",
+        "property",
+        "abstractmethod",
+        "override",
+        "cached_property",
+        "final",
+        "overload",
+    }
+)
+_SET_ACCESSORS = frozenset({"setter", "getter", "deleter"})
+_SET_SAFE_MODULES = frozenset({"abc", "typing", "typing_extensions", "functools", "builtins"})
+_TUPLE_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
 _SET_DYNAMIC_WRITERS = frozenset(
     {
         "globals",
@@ -258,6 +273,8 @@ _SET_DYNAMIC_WRITERS = frozenset(
         "f_globals",
         "_getframe",
         "currentframe",
+        "__globals__",
+        "f_locals",
     }
 )
 
@@ -334,7 +351,29 @@ def _extends_all(list_nodes: list[ast.stmt]) -> bool:
         and isinstance(cls_sub.ctx, ast.Store)
         for cls_sub in list_subs
     )
-    return int_stores > 1 or any(_all_is_opaque(cls_sub) for cls_sub in list_subs)
+    return int_stores > 1 or any(
+        _all_is_opaque(cls_sub) or _all_is_deleted(cls_sub) for cls_sub in list_subs
+    )
+
+
+def _all_is_deleted(cls_sub: ast.AST) -> bool:
+    """Return whether a node is ``__all__`` being deleted, which makes a star import export all.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node under a module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for the ``__all__`` in ``del __all__``.
+    """
+    return (
+        isinstance(cls_sub, ast.Name)
+        and cls_sub.id == "__all__"
+        and isinstance(cls_sub.ctx, ast.Del)
+    )
 
 
 def _all_is_opaque(cls_sub: ast.AST) -> bool:
@@ -379,10 +418,54 @@ def _scope_nodes(list_nodes: list[ast.stmt]) -> Iterator[ast.AST]:
     while list_stack:
         cls_cur = list_stack.pop()
         yield cls_cur
-        if not isinstance(
-            cls_cur, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda
-        ):
+        if isinstance(cls_cur, _TUPLE_SCOPES):
+            list_stack.extend(_header_nodes(cls_cur))
+        elif isinstance(cls_cur, ast.comprehension):
+            list_stack.extend([cls_cur.iter, *cls_cur.ifs])
+        else:
             list_stack.extend(ast.iter_child_nodes(cls_cur))
+
+
+def _header_nodes(
+    cls_scope: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda,
+) -> list[ast.AST]:
+    """Return the parts of a def, class or lambda that run in the enclosing scope.
+
+    Decorators, defaults, annotations and class bases are evaluated where the statement sits, so
+    a walrus there binds a name in that scope even though the body does not.
+
+    Parameters
+    ----------
+    cls_scope : ast.FunctionDef or ast.AsyncFunctionDef or ast.ClassDef or ast.Lambda
+        The nested scope.
+
+    Returns
+    -------
+    list of ast.AST
+        The expressions evaluated outside its body.
+    """
+    if isinstance(cls_scope, ast.ClassDef):
+        return [*cls_scope.decorator_list, *cls_scope.bases, *cls_scope.keywords]
+    cls_args = cls_scope.args
+    list_found: list[ast.AST] = [*cls_args.defaults, *filter(None, cls_args.kw_defaults)]
+    if isinstance(cls_scope, ast.Lambda):
+        return list_found
+    list_annots = [
+        cls_arg.annotation
+        for cls_arg in [
+            *cls_args.posonlyargs,
+            *cls_args.args,
+            *cls_args.kwonlyargs,
+            *filter(None, [cls_args.vararg, cls_args.kwarg]),
+        ]
+        if cls_arg.annotation
+    ]
+    return [
+        *cls_scope.decorator_list,
+        *list_found,
+        *list_annots,
+        *filter(None, [cls_scope.returns]),
+    ]
 
 
 def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
@@ -393,7 +476,7 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
     A writer name counts as a bare name or as an attribute (``builtins.exec``, ``sys.modules``).
     The one exemption is ``setattr(x, ...)`` or ``vars(x)`` inside a method body, where ``x`` is
     that method's own first parameter: a caller can still pass a module there, so a lambda or a
-    plain function never qualifies.
+    plain function never qualifies. A file that binds ``setattr`` or ``vars`` itself gets none.
 
     Parameters
     ----------
@@ -405,28 +488,328 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
     bool
         ``True`` when a dynamic writer is named outside that exemption.
     """
-    set_exempt = {
-        id(cls_call.func)
-        for cls_fn in _methods(list_nodes)
-        for cls_stmt in cls_fn.body
-        for cls_call in ast.walk(cls_stmt)
-        if isinstance(cls_call, ast.Call)
-        and isinstance(cls_call.func, ast.Name)
-        and cls_call.func.id in {"setattr", "vars"}
-        and cls_call.args
-        and isinstance(cls_call.args[0], ast.Name)
-        and cls_call.args[0].id == cls_fn.args.args[0].arg
-        and cls_call.args[0].id in {"self", "cls"}
-    }
+    set_bound = _bound_names(list_nodes)
+    set_exempt = (
+        set()
+        if _module_shadows_writer(list_nodes)
+        else {
+            int_id
+            for cls_fn in _methods(list_nodes)
+            for int_id in _own_parameter_writes(cls_fn, set_bound)
+        }
+    )
     return any(
-        (
-            (isinstance(cls_sub, ast.Name) and cls_sub.id in _SET_DYNAMIC_WRITERS)
-            or (isinstance(cls_sub, ast.Attribute) and cls_sub.attr in _SET_DYNAMIC_WRITERS)
-        )
-        and id(cls_sub) not in set_exempt
+        _names_writer(cls_sub) and id(cls_sub) not in set_exempt
         for cls_node in list_nodes
         for cls_sub in ast.walk(cls_node)
     )
+
+
+def _names_writer(cls_sub: ast.AST) -> bool:
+    """Return whether a node names a dynamic writer, including through an import alias.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node.
+
+    Returns
+    -------
+    bool
+        ``True`` for a bare or attribute writer name, a ``__class__`` store, or
+        ``from x import <writer> as y``.
+    """
+    if isinstance(cls_sub, ast.Name):
+        return cls_sub.id in _SET_DYNAMIC_WRITERS
+    if isinstance(cls_sub, ast.Attribute):
+        return cls_sub.attr in _SET_DYNAMIC_WRITERS or (
+            cls_sub.attr == "__class__" and isinstance(cls_sub.ctx, ast.Store)
+        )
+    return (
+        isinstance(cls_sub, ast.ImportFrom)
+        and cls_sub.level == 0
+        and cls_sub.module in _SET_WRITER_MODULES
+        and any(cls_alias.name in _SET_DYNAMIC_WRITERS for cls_alias in cls_sub.names)
+    )
+
+
+def _own_parameter_writes(
+    cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, set_bound: set[str]
+) -> set[int]:
+    """Return the ids of ``setattr``/``vars`` names that act on this method's own ``self``/``cls``.
+
+    A ``staticmethod`` has no bound first parameter, a rebound ``self`` is no longer the
+    instance, and a nested def or lambda that takes the name as its own parameter shadows it,
+    so none of those exempt. A closure that merely reads the method's ``self`` still does.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        A method with at least one positional parameter.
+    set_bound : set of str
+        Names the module binds itself; a decorator spelled with one is not the builtin.
+
+    Returns
+    -------
+    set of int
+        ``id()`` of each exempt ``Name`` node; empty when the method gets no exemption.
+    """
+    list_positional = [*cls_fn.args.posonlyargs, *cls_fn.args.args]
+    str_param = list_positional[0].arg
+    if (
+        str_param not in {"self", "cls"}
+        or len(cls_fn.args.defaults) >= len(list_positional)
+        or _loses_exemption(cls_fn, set_bound)
+        or _rebinds(cls_fn, str_param)
+        or _shadows_writer(cls_fn)
+        or _shadowed_by_nested(cls_fn, str_param)
+    ):
+        return set()
+    return {
+        id(cls_hit)
+        for cls_stmt in cls_fn.body
+        for cls_sub in ast.walk(cls_stmt)
+        for cls_hit in [_own_write_node(cls_sub, str_param)]
+        if cls_hit is not None
+    }
+
+
+def _own_write_node(cls_sub: ast.AST, str_param: str) -> ast.AST | None:
+    """Return the node to exempt when ``cls_sub`` writes through the parameter, else ``None``.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node under a method body.
+    str_param : str
+        The method's first parameter name.
+
+    Returns
+    -------
+    ast.AST or None
+        The ``setattr``/``vars`` name of a call on the parameter, or the ``__class__``
+        attribute of a store to it.
+    """
+    if isinstance(cls_sub, ast.Attribute):
+        is_own = isinstance(cls_sub.value, ast.Name) and cls_sub.value.id == str_param
+        return cls_sub if is_own and cls_sub.attr == "__class__" else None
+    if not (isinstance(cls_sub, ast.Call) and isinstance(cls_sub.func, ast.Name)):
+        return None
+    is_own = bool(cls_sub.args) and (
+        isinstance(cls_sub.args[0], ast.Name) and cls_sub.args[0].id == str_param
+    )
+    return cls_sub.func if is_own and cls_sub.func.id in {"setattr", "vars"} else None
+
+
+def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> bool:
+    """Return whether a def or lambda nested in the method takes the name as a parameter.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        The method.
+    str_param : str
+        Its first parameter name.
+
+    Returns
+    -------
+    bool
+        ``True`` when any nested scope declares a parameter of that name.
+    """
+    return any(
+        isinstance(cls_sub, ast.arg) and cls_sub.arg == str_param
+        for cls_stmt in cls_fn.body
+        for cls_sub in ast.walk(cls_stmt)
+    )
+
+
+def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, set_bound: set[str]) -> bool:
+    """Return whether a def gets no ``self``/``cls`` exemption (``__new__``, unknown decorator).
+
+    Only ``classmethod``, ``property``, ``abstractmethod``, ``override``, ``cached_property``,
+    ``final`` and ``overload`` (bare, or on ``abc``/``typing``/``typing_extensions``/
+    ``functools``/``builtins``) and
+    ``*.setter``/``getter``/``deleter`` keep the exemption. ``staticmethod`` and any
+    decorator that could call the method with another object (``@(lambda fn: fn(me))``)
+    lose it.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        The def.
+    set_bound : set of str
+        Names the module defines or assigns; a decorator spelled with one loses the exemption.
+
+    Returns
+    -------
+    bool
+        ``True`` when the def is ``__new__`` or carries a decorator outside the safe set.
+    """
+    return cls_fn.name == "__new__" or not all(
+        _is_safe_decorator(cls_dec, cls_fn.name, set_bound) for cls_dec in cls_fn.decorator_list
+    )
+
+
+def _is_safe_decorator(cls_dec: ast.expr, str_method: str, set_bound: set[str]) -> bool:
+    """Return whether a decorator is one of the known names that never calls the method.
+
+    A property accessor counts only on the method's own name (``@x.setter def x``).
+
+    Parameters
+    ----------
+    cls_dec : ast.expr
+        One entry of ``decorator_list``.
+    str_method : str
+        The name of the decorated method.
+    set_bound : set of str
+        Names the module defines itself; the safe name or module must not be one of them.
+
+    Returns
+    -------
+    bool
+        ``True`` for a safe bare name, a safe name on a known module, or a property accessor.
+    """
+    if isinstance(cls_dec, ast.Name):
+        return cls_dec.id in _SET_SAFE_DECORATORS and cls_dec.id not in set_bound
+    return isinstance(cls_dec, ast.Attribute) and (
+        (
+            cls_dec.attr in _SET_ACCESSORS
+            and isinstance(cls_dec.value, ast.Name)
+            and cls_dec.value.id == str_method
+        )
+        or (
+            cls_dec.attr in _SET_SAFE_DECORATORS
+            and isinstance(cls_dec.value, ast.Name)
+            and cls_dec.value.id in _SET_SAFE_MODULES
+            and cls_dec.value.id not in set_bound
+        )
+    )
+
+
+def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> bool:
+    """Return whether the name is bound or deleted by any statement under the def.
+
+    A store or delete, an ``import ... as``, a ``match`` capture, an ``except ... as`` and a
+    nested ``def`` or ``class`` of that name, and a ``global`` or ``nonlocal`` declaration of
+    it, all count. Nested scopes are included, which can
+    only over-charge.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        The def.
+    str_param : str
+        Its first parameter name.
+
+    Returns
+    -------
+    bool
+        ``True`` when a binding of that name is found.
+    """
+    return any(
+        (isinstance(cls_sub, ast.Global | ast.Nonlocal) and str_param in cls_sub.names)
+        or (
+            _bound_name(cls_sub) == str_param
+            and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
+        )
+        for cls_stmt in cls_fn.body
+        for cls_sub in ast.walk(cls_stmt)
+    )
+
+
+def _shadows_writer(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Return whether the def rebinds ``setattr`` or ``vars``, or takes either as a parameter.
+
+    Parameters
+    ----------
+    cls_fn : ast.FunctionDef or ast.AsyncFunctionDef
+        The def.
+
+    Returns
+    -------
+    bool
+        ``True`` when a call to either name in the body may not reach the builtin.
+    """
+    return any(
+        isinstance(cls_sub, ast.arg) and cls_sub.arg in {"setattr", "vars"}
+        for cls_sub in ast.walk(cls_fn)
+    ) or any(_rebinds(cls_fn, str_writer) for str_writer in ("setattr", "vars"))
+
+
+def _module_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
+    """Return whether the module namespace binds ``setattr`` or ``vars`` by any statement.
+
+    A star import counts as a possible binding. An import, ``def``, ``class``,
+    ``except ... as`` or ``match`` capture all count; a plain assignment is a ``Name`` the
+    writer scan already charges. Class bodies are not entered, so a method named
+    ``vars`` does not shadow the builtin its sibling methods call.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Returns
+    -------
+    bool
+        ``True`` when a call to either name in a method may not reach the builtin.
+    """
+    return any(
+        _bound_name(cls_sub) in {"setattr", "vars", "*"}
+        and not (isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Load))
+        for cls_sub in _scope_nodes(list_nodes)
+    ) or _function_shadows_writer(list_nodes)
+
+
+def _function_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
+    """Return whether a ``global`` or any def can rebind ``setattr`` or ``vars``.
+
+    A ``global`` statement rebinds the module name from inside a function, and a def, method
+    included, that binds either name locally shadows the builtin for a class nested in it.
+    The scan covers the whole file, so it can only over-charge.
+
+    Parameters
+    ----------
+    list_nodes : list of ast.stmt
+        The module-level statements.
+
+    Returns
+    -------
+    bool
+        ``True`` when either route is found anywhere in the tree.
+    """
+    return any(
+        (isinstance(cls_sub, ast.Global) and {"setattr", "vars"} & set(cls_sub.names))
+        or (
+            isinstance(cls_sub, ast.FunctionDef | ast.AsyncFunctionDef)
+            and _shadows_writer(cls_sub)
+        )
+        for cls_node in list_nodes
+        for cls_sub in ast.walk(cls_node)
+    )
+
+
+def _bound_name(cls_node: ast.AST) -> str | None:
+    """Return the name a node binds or mentions, whichever node shape carries it.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        Any node.
+
+    Returns
+    -------
+    str or None
+        The identifier, the first component of a dotted ``import`` or ``None``.
+    """
+    if isinstance(cls_node, ast.Name):
+        return cls_node.id
+    if isinstance(cls_node, ast.alias):
+        return cls_node.asname or cls_node.name.split(".")[0]
+    if isinstance(cls_node, ast.MatchMapping):
+        return cls_node.rest
+    str_name = getattr(cls_node, "name", None)
+    return str_name if isinstance(str_name, str) else None
 
 
 def _methods(list_nodes: list[ast.stmt]) -> Iterator[ast.FunctionDef | ast.AsyncFunctionDef]:
@@ -449,7 +832,7 @@ def _methods(list_nodes: list[ast.stmt]) -> Iterator[ast.FunctionDef | ast.Async
                     cls_fn
                     for cls_fn in cls_cls.body
                     if isinstance(cls_fn, ast.FunctionDef | ast.AsyncFunctionDef)
-                    and cls_fn.args.args
+                    and (cls_fn.args.posonlyargs or cls_fn.args.args)
                 )
 
 

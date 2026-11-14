@@ -10,6 +10,8 @@ source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
 source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
 # shellcheck source=bin/lib/scaffold_provenance.sh
 source "$SCRIPT_DIR/../lib/scaffold_provenance.sh"
+# shellcheck source=bin/lib/scaffold_docs_extras.sh
+source "$SCRIPT_DIR/../lib/scaffold_docs_extras.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -106,7 +108,9 @@ create_python_files() {
 
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_import_root.py" "$project_path/tests/unit/test_import_root.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_missing_deps.py" "$project_path/tests/unit/test_missing_deps.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dynamic_version_stub_gate.py" "$project_path/tests/unit/test_dynamic_version_stub_gate.py"
 
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
@@ -312,6 +316,7 @@ lib_minimal_copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review-retry.yml" "$project_path/.github/workflows/review-retry.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yml" "$project_path/.github/workflows/pr-gate.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yml" "$project_path/.github/workflows/pr-reconcile.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/docstring-urls.yml" "$project_path/.github/workflows/docstring-urls.yml"
     if [[ "$PUBLISH_PYPI" == "true" ]]; then
         envsubst '${PROJECT_NAME} ${GITHUB_USERNAME}' \
             < "$BLUEPRINTX_ROOT/templates/lib-minimal/.github/workflows/release-pypi.yaml" \
@@ -342,6 +347,8 @@ lib_minimal_copy_gate_tests() {
 
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_layer_imports_gate.py" \
         "$project_path/tests/unit/test_layer_imports_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_language_gate.py" \
+        "$project_path/tests/unit/test_docs_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
         "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_sql_guards_gate.py" \
@@ -404,6 +411,8 @@ lib_minimal_copy_project_scaffolding() {
         "$project_path/tests/unit/test_pr_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_backlog_ledger.py" \
         "$project_path/tests/unit/test_backlog_ledger.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_check_backlog_ledger.py" \
+        "$project_path/tests/unit/test_check_backlog_ledger.py"
     lib_minimal_copy_gate_tests "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_pip_requirements.py" \
         "$project_path/tests/unit/test_pip_requirements.py"
@@ -474,12 +483,14 @@ copy_mkdocs_templates() {
         "$project_path/docs/contributing.md"
     cp "$COMMON_TEMPLATE_ROOT/docs/changelog.md" \
         "$project_path/docs/changelog.md"
+    cp "$COMMON_TEMPLATE_ROOT/docs/incidents.md" \
+        "$project_path/docs/incidents.md"
     cp "$SHARED_TEMPLATE_ROOT/docs/releasing-1-0-0.md" \
         "$project_path/docs/releasing-1-0-0.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/CLAUDE.md" \
         "$project_path/docs/CLAUDE.md"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/docs/AGENTS.md" "$project_path/docs/AGENTS.md"
-
+    scaffold_copy_docs_extras "$project_path"
 
     print_status "success" "MkDocs templates copied"
 }
@@ -812,6 +823,37 @@ conditional_copy_docker_compose() {
 }
 
 
+apply_docs_locale_pages() {
+    local project_path="$1" path_lib="$BLUEPRINTX_ROOT/templates/lib-minimal"
+    local path_src str_rel path_tmp
+
+    [ "${DOCS_LOCALE:-en}" = "pt-BR" ] || return 0
+    print_status "info" "Applying pt-BR pages..."
+    for path_src in "$path_lib/docs/pt-BR" "$COMMON_TEMPLATE_ROOT/docs/pt-BR"; do
+        while IFS= read -r str_rel; do
+            mkdir -p "$project_path/docs/$(dirname "$str_rel")"
+            envsubst '${PROJECT_DISPLAY_NAME}' <"$path_src/$str_rel" >"$project_path/docs/$str_rel"
+        done < <(cd "$path_src" && find . -type f -name '*.md' | sed 's|^\./||')
+    done
+    scaffold_render_readme lib-minimal "$path_lib/README.pt-BR.md" "$project_path/README.md"
+    path_tmp="$(mktemp)"
+    awk -F'\t' 'NR == FNR { dict_label[$1] = $2; next }
+        match($0, /^ *- [^:]+:/) {
+            str_key = substr($0, RSTART, RLENGTH); sub(/^ *- /, "", str_key); sub(/:$/, "", str_key)
+            if (str_key in dict_label) sub(/- [^:]+:/, "- " dict_label[str_key] ":")
+        }
+        match($0, /^ +name: /) {
+            str_key = $0; sub(/^ +name: /, "", str_key)
+            if (str_key in dict_label) sub(/name: .*/, "name: " dict_label[str_key])
+        }
+        { print }' "$path_lib/docs/pt-BR/nav-labels.tsv" "$project_path/mkdocs.yml" >"$path_tmp"
+    cat "$path_tmp" >"$project_path/mkdocs.yml"
+    sed 's|^skip = |skip = */docs/*,docs/*,README.md,mkdocs.yml,|' "$project_path/.codespellrc" >"$path_tmp"
+    cat "$path_tmp" >"$project_path/.codespellrc"
+    rm -f "$path_tmp"
+    print_status "success" "pt-BR pages, README, nav labels and codespell skip applied"
+}
+
 main() {
     PROJECT_PATH="$PROJECT_ROOT/$PROJECT_NAME"
 
@@ -839,6 +881,8 @@ main() {
     copy_mkdocs_templates "$PROJECT_PATH"
     scaffold_purge_caches "$PROJECT_PATH"
     scaffold_comment_budget "$PROJECT_PATH"
+    scaffold_mark_untranslated "$PROJECT_PATH"
+    apply_docs_locale_pages "$PROJECT_PATH"
     initialize_git_repo "$PROJECT_PATH"
     prompt_git_remote_setup "$PROJECT_PATH"
 

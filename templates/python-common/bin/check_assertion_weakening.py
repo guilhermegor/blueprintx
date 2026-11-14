@@ -29,7 +29,7 @@ and the index (staged/HEAD) version, for a function whose name is unchanged, cat
 - a test function DELETED, or a whole test file deleted
 - a test's assertion COUNT decreased (an assertion removed) between old and new
 - an assertion trivialised to a bare truthy constant (`assert True`)
-- an `==` comparison weakened by OPERATOR to `in` / `not in` / `>=` / `<=` / `!=`
+- an `==` comparison weakened by OPERATOR to `in` / `not in` / `>` / `<` / `>=` / `<=` / `!=`
   (blueprintx#289's live example)
 - a `self.assertEqual`-family call weakened to a looser call (`assertTrue`,
   `assertIsNotNone`, `assertIn`, ...)
@@ -70,6 +70,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from gate_env import is_ci  # noqa: E402
+from gate_rename import deleted_message, rename_pairs  # noqa: E402
 
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -84,8 +85,16 @@ STR_INDEX_REF = ""
 _INT_MIN_FIELDS = 2
 _MIN_EQ_ARGS = 2
 
-_WEAK_FROM_EQ = frozenset({"In", "NotIn", "GtE", "LtE", "NotEq"})
-_OP_SYMBOLS = {"In": "in", "NotIn": "not in", "GtE": ">=", "LtE": "<=", "NotEq": "!="}
+_OP_SYMBOLS = {
+    "In": "in",
+    "NotIn": "not in",
+    "Gt": ">",
+    "Lt": "<",
+    "GtE": ">=",
+    "LtE": "<=",
+    "NotEq": "!=",
+}
+_WEAK_FROM_EQ = frozenset(_OP_SYMBOLS)
 
 _WEAKER_ASSERT_CALLS = {
     "assertEqual": frozenset(
@@ -96,6 +105,10 @@ _WEAKER_ASSERT_CALLS = {
             "assertIsInstance",
             "assertFalse",
             "assertIsNone",
+            "assertGreater",
+            "assertLess",
+            "assertGreaterEqual",
+            "assertLessEqual",
         }
     ),
     "assertIs": frozenset({"assertIsNotNone", "assertTrue"}),
@@ -899,13 +912,20 @@ def _file_findings(
     if dict_old_funcs is None or dict_new_funcs is None:
         return [f"{str_path}: could not parse — not checked"]
     list_problems = []
+    list_free = [str_n for str_n in dict_new_funcs if str_n not in dict_old_funcs]
+    dict_renames = rename_pairs(
+        {str_n: cls_f for str_n, cls_f in dict_old_funcs.items() if str_n not in dict_new_funcs},
+        {str_n: dict_new_funcs[str_n] for str_n in list_free},
+    )
+    list_free = [str_n for str_n in list_free if str_n not in dict_renames.values()]
     for str_name, node_old in dict_old_funcs.items():
-        node_new = dict_new_funcs.get(str_name)
+        str_now = dict_renames.get(str_name, str_name)
+        node_new = dict_new_funcs.get(str_now)
         if node_new is None:
-            list_problems.append(f"{str_path}: test {str_name!r} deleted")
+            list_problems.append(deleted_message(str_path, str_name, list_free))
             continue
         list_problems.extend(
-            _function_findings(str_path, str_name, node_old, node_new, bool_prod_changed)
+            _function_findings(str_path, str_now, node_old, node_new, bool_prod_changed)
         )
     return list_problems
 

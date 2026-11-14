@@ -288,6 +288,7 @@ machine-decidable — it is a review question, so it stays prose reviewed by a h
 | Barrel / registry export order — row added 2026-11-07 | ✅ `check_registry_order.py` over `__all__` (blueprintx#959) | ✅ `perfectionist/sort-exports` on `templates/ts-lib/src/index.ts` (blueprintx#1015); an existing lint rule, so no gate script |
 | Required status checks provisioned on the default branch — row added 2026-09-20 | ✅ `bin/enable_repo_rules.sh` seeds `REQUIRED_CHECKS=("Review threads answered")` and provisions the `pr-quality-gate` ruleset from it | ❌ none — the script ships only from `templates/python-common/`, so the check names `ts-common`/`ts-lib` emit (`webpack`, `eslint`, `stylelint`, `jest`, `type-check`, `Review threads answered`) are required by nothing. Same for the `bash-cli` tier, which additionally ships no review-threads workflow at all (blueprintx#164; per-tier inventory and the four-rule qualification test in `docs/required-status-checks.md`) |
 | Explicit `any` and lint warnings refused — row added 2026-11-07 | 🔧 in flight — the Python half of blueprintx#1022 (ruff `ANN401`) | ✅ `@typescript-eslint/no-explicit-any` at `error` in both tiers' ESLint configs, and `npm run lint` runs `--max-warnings 0` so no rule left at `warn` passes. `tests/test_explicit_any_refused_ts.sh` plants one `any` (checked with `eslint --quiet`, so only an `error` severity fails it) and one real warning (`no-unused-vars`, which must pass plain `eslint` yet fail `npm run lint`); reverting either edit turns the matching case red (blueprintx#1022) |
+| Assertion weakening (`==` loosened to `in`, `>`, `<`, `>=`, `<=`, `!=`; a matcher or exception made broader) — row added 2026-11-08 | ✅ `check_assertion_weakening.py` (Gt/Lt added in blueprintx#1053); escape hatch `test-change-ok:` | 🔧 partial — only the equality-to-inequality half; no broadened-matcher, deleted-test or trivialised-assertion check: `src/utils/assertion-weakening.cjs` (`toBe`/`toEqual`/`toStrictEqual` to `toBeGreaterThan`/`toBeLessThan`/`...OrEqual`), same `test-change-ok:` hatch, wired in `.husky/pre-commit` and `lint.yml` (blueprintx#1053) |
 
 Re-measure before trusting this table on a later read — it is a snapshot, not a standing fact.
 The heading date covers the table as a whole; a row re-measured later carries its own date in
@@ -710,6 +711,17 @@ Configuration files in this repository carry no comments, so the reasoning lives
   `SCRIPT_DIR`-based navigation resolves `BLUEPRINTX_ROOT` without patching, and its wrapper
   uses `exec` so `BASH_SOURCE` resolves to `libexec/bin`. Each package stamps the release
   version into the fallback literal, since none has a `.git`.
+
+### TypeScript scaffold jest gate - blueprintx#1109
+
+The Python tiers run the generated project's own lint and tests in CI through
+`bin/ci/scaffold_lint_test.sh`. The TypeScript skeletons had no equivalent, so a regression in
+a jest test shipped by `ts-lib` or `react-spa-webpack` merged green: the only run was an
+agent's local scaffold. The `ts-scaffold-jest` job in `scaffold_checks.yml` closes that gap.
+`bin/ci/scaffold_ts_test.sh <skeleton>` scaffolds offline with default answers, then runs
+`npm ci`, `npm run lint` and `npm test` inside the generated project. Setting
+`SCAFFOLD_TS_SABOTAGE=1` appends a failing test first; `tests/test_scaffold_ts_test.sh` uses
+it to prove the script exits non-zero and reports the jest failure for both skeletons.
 
 ## Shell test suites under `tests/`
 
@@ -1318,7 +1330,7 @@ either layout (blueprintx#360). A few modules stub the metaclass shape instead o
   zipping fails, with the path expanded into the trap at definition time.
 - **`close_linked_issues.sh`** (blueprintx#604) is strict because a wrong closure is worse than
   a missed one: a number is taken only from a leading `<type>/<N>-<slug>` branch or from
-  `Closes|Fixes|Resolves #N`, with a date-like prefix (`2026-10`) not read as an issue, negated
+  `Closes|Fixes|Resolves #N` (a branch number the body names only as `Refs #N` is not closed, blueprintx#1123), with a date-like prefix (`2026-10`) not read as an issue, negated
   uses skipped, fenced code, quotes, HTML comments and inline code ignored, and bot branches
   skipped because their bodies quote another repository's notes. The workflow cannot close
   anything from a fork PR (read-only token) or a PR merged into a non-default branch, and it
@@ -1572,7 +1584,10 @@ grouped by what they guard.
 - **Documentation locale** is the locale of the generated project's published pages only.
   It says nothing about this repository's prose (en-US) or about code: comments and
   docstrings stay English in every locale, enforced in the generated project by
-  `bin/check_comment_language.py`.
+  `bin/check_comment_language.py`. The docs-language check (`check_docs_language.py`) fails
+  closed: when run with the system `python3`, it needs the `pathspec` and `yaml` modules
+  (the `pathspec` and `PyYAML` packages) importable, and errors out rather than skipping
+  when either is missing.
 - **`--spec`** (#481) answers prompts by name instead of stdin position. Resolve the answers
   before the scaffold starts, into a file rather than `$(...)`, which strips trailing empty
   (accept-default) lines; no pipe also means no SIGPIPE status when the scaffold finishes
@@ -1996,11 +2011,17 @@ grouped by what they guard.
   context is deliberately distinct from the PR job's check name: a status and a check run
   sharing a name are ambiguous for branch protection. It fails the job too, since a red
   status on someone else's PR is easy to miss from the issue timeline. See `docs/issue-scope.md`.
-- **`validate_meta.sh` (#407, #478).** Every `skeleton.meta` has all four fields non-empty, a
-  `scaffold=` path that exists, and the skeleton directory named in the root `CLAUDE.md`:
+- **`validate_meta.sh` (#407, #478).** Every `skeleton.meta` has all five required fields non-empty (`ships_docs` must be exactly `true` or
+  `false`, declared once, and must match whether the scaffold script references
+  `mkdocs.yml` or `docusaurus.config` on a non-comment line), a `scaffold=` path that
+  exists, and the skeleton directory named in the root `CLAUDE.md`:
   machine-decidable, so a gate, while the quality of the mention stays a human call. A missing
   key under `set -euo pipefail` used to kill the gate inside its own `grep` pipeline with exit
   1 and no message, which every should-fail test read as proof the check ran; hence `|| true`.
+  It also maps every `language=` to its assertion-weakening gate file and fails on a language
+  with no entry, or on an entry whose file is gone (#1053). That is the test that turns red
+  when a new language template ships without the gate. `bash` is mapped to "none" on purpose:
+  its tiers predate #1053, which scoped the gate to Python and TypeScript.
 - **Shell helper scripts.** `check_docs_build.sh` builds MkDocs `--strict`, preferring `poetry
   run` and falling back to `mkdocs` on `PATH`; `check_spelling.sh` runs codespell over `docs/`
   and `templates/` with the root `.codespellrc`; neither inlines flags, so CI and pre-commit
@@ -2172,3 +2193,12 @@ from CI too. `templates/common/CLAUDE.md` is exempt: it ships as `.claude/CLAUDE
 template whose name differs from its deployed name (`utils_CLAUDE.md`) pairs with the same prefix
 (`utils_AGENTS.md`). The TypeScript tiers ship no `.pre-commit-config.yaml`, so they carry the
 script but no hook.
+
+## Release tag targets the built SHA (#1065)
+
+Every template workflow using `softprops/action-gh-release` must pin `target_commitish:
+${{ github.sha }}` on each such step, inside its `with:` block, so the tag lands on the commit that was built
+rather than the branch tip. The gate is `tests/test_release_target_sha.sh` (pre-commit hook
+`release-target-sha` and a step of the `workflow-names` job in `scaffold_checks.yml`); it
+discovers workflows by grep and carries should-fail witnesses. The root repo's own workflows
+do not use `action-gh-release`, so they are out of scope.

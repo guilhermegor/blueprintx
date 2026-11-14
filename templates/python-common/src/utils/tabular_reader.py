@@ -33,6 +33,7 @@ here stays domain-agnostic.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Sequence
 import csv
 from dataclasses import dataclass
@@ -608,7 +609,8 @@ def _read_raw(
         int_csv_quoting,
     )
     list_normalised = [str(col).strip() for col in df_raw.columns]
-    list_duplicates = sorted({c for c in list_normalised if list_normalised.count(c) > 1})
+    dict_counts = Counter(list_normalised)
+    list_duplicates = sorted(str_col for str_col, int_n in dict_counts.items() if int_n > 1)
     if list_duplicates:
         raise ContractError(
             [

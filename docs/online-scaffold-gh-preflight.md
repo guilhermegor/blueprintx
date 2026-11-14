@@ -10,7 +10,7 @@ guessing.
 1. **Preflight.** Before `gh repo create`, `gh_preflight`
    (`bin/lib/gh_preflight.sh`) calls GraphQL (`{viewer{login}}`), REST
    (`gh api user`) and `gh api rate_limit`. A failed call, a blank login, or
-   fewer GraphQL calls left than `SCAFFOLD_GH_GRAPHQL_BUDGET` stops the run
+   fewer GraphQL points left than `SCAFFOLD_GH_GRAPHQL_BUDGET` stops the run
    before anything is created.
    The same preflight reads the token scopes (`gh api -i user`, header
    `X-Oauth-Scopes`) and requires every scope in `SCAFFOLD_GH_REQUIRED_SCOPES`
@@ -78,18 +78,88 @@ happened after the repo was created, finish the remaining steps by hand or use
 `tests/test_scaffold_gh_preflight.sh` counts them against a stubbed `gh` and
 fails when the number changes, which is the prompt to re-set the budget.
 
-`SCAFFOLD_GH_GRAPHQL_BUDGET` (100) stays the conservative bound it was. The
-count above plus the preflight call and `gh repo create` is 19; times 3, the
-most GraphQL queries one `gh` command is assumed to send (owner lookup, object
-lookup, mutation), plus 3 for one retried command, gives 60. That multiplier
-has not been measured: `gh project` subcommands can send more than 3 queries
-(owner fallback, paginated `field-list`), and a fresh-board run is only one of
-the branches. The budget is therefore not lowered to 60 until `gh api
-rate_limit` has been read before and after a real run on a throwaway account.
-The test only requires the budget to stay at or above that computed 60. The
-count covers the kanban setup only: `gh issue create` (the release issue) and
-other GraphQL-backed commands elsewhere in the scaffold are outside it, so 60 is
-a floor for that path, not a total for a whole scaffold.
+The budget is in points, the unit `rate_limit` reports, not requests. One
+`gh project field-list` request costs 101 points, because `gh` sends it with
+`items(first:100)` and `fields(first:30)`, so a count of requests says little
+about what a scaffold spends.
+
+One full online scaffold spends about 560 points. That is the
+`SCAFFOLD_GH_GRAPHQL_COST` default in `bin/lib/gh_preflight.sh`; the table
+below sums to 563 and the test fails if the table total is below the default or exceeds it by more than 5. The
+`SCAFFOLD_GH_GRAPHQL_BUDGET` default (1120) is twice the 560 default. Only a re-run of the command
+re-enters preflight, so a user retry is a new run and needs no allowance of its
+own. The scaffold libraries have no in-run retry loop; if one is added, each
+retried `field-list` costs about 102 points, and the 2x margin absorbs it along
+with the estimated rows below and a future `gh` version.
+
+The test pins the sourced defaults to literals (`SCAFFOLD_GH_GRAPHQL_COST` is
+560 and `SCAFFOLD_GH_GRAPHQL_BUDGET` is 1120, with overrides unset), so
+changing either default fails it and forces this table to be re-read. It cannot
+tell whether 560 still matches what GitHub charges.
+
+The invocation count (`SCAFFOLD_GH_GRAPHQL_MEASURED` and
+`SCAFFOLD_GH_GRAPHQL_SITES`) counts invocations and not points, so a change in
+what one call costs passes it. A new `field-list` in the fresh-setup path
+fails the test's `field-list == 3` check; one on the card-add path fails its
+`field-list == 2` check. That test also sums the four `card add:` rows below
+(213 points) and compares them with 102 points per `field-list`, 3 per
+`project list` and 2 per other call, so editing either the table or the call
+count alone fails it. Those prices are pinned in the test as well as here, so
+re-pricing means changing both. The
+`first:100` inside `gh` is not visible to a stub, so a price change is caught
+only through those table rows.
+
+`SCAFFOLD_GH_GRAPHQL_BUDGET` changed unit from calls to points. An old exported
+value (for example `100`) is now about 5x too loose, so the preflight prints a
+warning when the budget is below the cost; unset it or re-set it in points. It
+stays a warning, not a stop, because a deliberately low budget is a legitimate
+override.
+
+Online scaffolds are run by a person with their own `gh` login, never under an
+Actions `GITHUB_TOKEN` (1,000 points per hour, below the 1120 budget); CI only
+runs the stubbed test.
+
+The request counts were measured on 2026-11-07 with `gh` 2.103.3: a local HTTPS
+server that logs every `POST /api/graphql` and answers with canned JSON was set
+as `GH_HOST` (`GH_ENTERPRISE_TOKEN` set, `SSL_CERT_FILE` pointing at its
+self-signed certificate), and the real `gh` binary and scaffold functions ran
+the fresh-board path. Counting a `gh` shim instead would only see the 17
+invocations above, because the extra requests are sent inside `gh` itself.
+
+The prices were read the same day from the real API, read-only, on an existing
+board: the queries were captured with `GH_DEBUG=api`, then sent with
+`rateLimit{cost}` added. For `field-list` the charge was also confirmed from
+`remaining`, which fell from 1289 to 1188. `UserOrgOwner` costs 1, `UserProject`
+1, `UserProjects` 2 and `UserProjectWithFields` 101. The other requests are
+priced at the API's minimum of 1 point, not read individually.
+
+| Step | Requests | Points |
+|---|---|---|
+| preflight probe (`gh api graphql`) | 1 | 1 |
+| `gh repo create` | 2 | 2 |
+| house labels (10 x `gh label create`) | 0 (REST) | 0 |
+| `gh repo view` for the visibility default | 1 | 1 |
+| `gh project list` | 2 | 3 |
+| `gh project create` | 2 | 2 |
+| `gh project edit` | 3 | 3 |
+| `gh project link` | 4 | 4 |
+| Status `field-list` x2 and the options mutation | 5 | 205 |
+| `gh project field-list` (existing fields) | 2 | 102 |
+| `gh project field-create` x7 | 21 | 21 |
+| workflows read | 1 | 1 |
+| Fresh setup subtotal | 44 | 345 |
+| card add: `project list` (board lookup) | 2 | 3 |
+| card add: `project view` | 2 | 2 |
+| card add: `field-list` x2 | 4 | 204 |
+| card add: `item-add` and `item-edit` | 4 (estimated) | 4 (estimated) |
+| `gh issue create` | 5 (estimated) | 5 (estimated) |
+| Total | 61 (9 estimated) | 563 |
+
+The fake-server run did not cover the card-add path or `gh issue create`, so
+those request counts come from the per-command shape above and are marked
+estimated. A board with more than 30 fields is outside the figure too. No real
+scaffold has been run against a throwaway account: the totals are built from
+measured prices, not read from one end-to-end run.
 
 `SCAFFOLD_GH_GRAPHQL_SITES` (16) counts the call sites in the scaffold
 libraries; the same test fails when one is added without updating it.
