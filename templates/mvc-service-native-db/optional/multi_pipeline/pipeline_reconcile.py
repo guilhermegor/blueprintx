@@ -20,6 +20,7 @@ import json
 from logging import Logger
 from pathlib import Path
 from time import time
+
 from controller import pipeline_common
 from controller.pipeline_common import EmailHandler, WebhookNotifier
 from utils.dbapi import DbConnection

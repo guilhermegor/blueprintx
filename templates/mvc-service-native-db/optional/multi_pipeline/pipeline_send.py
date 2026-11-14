@@ -13,6 +13,7 @@ from collections.abc import Callable
 from logging import Logger
 from pathlib import Path
 from time import time
+
 import pandas as pd
 
 from controller import pipeline_common
