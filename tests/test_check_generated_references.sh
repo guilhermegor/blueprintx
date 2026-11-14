@@ -120,8 +120,16 @@ printf 'site_name: x\n' >"$str_noref/mkdocs.yml"
 expect_dir "a project with no extracted reference fails" "$str_noref"
 rm -rf "$str_noref"
 str_nobin="$(mktemp -d)"
+mkdir -p "$str_nobin/docs" && touch "$str_nobin/docs/index.md"
+printf 'nav:\n  - Home: index.md\n' >"$str_nobin/mkdocs.yml"
 printf 'a:\n\techo hi\n' >"$str_nobin/Makefile"
-expect_dir "task files with no bin reference fail as nothing checked" "$str_nobin"
+str_out="$(bash "$CHECK" --project "$str_nobin" 2>&1 || true)"
+if printf '%s' "$str_out" | grep -q 'found but no bin/ script reference'; then
+    echo "ok: task files with no bin reference fail even when the nav was checked"
+else
+    echo "FAIL: task files with no bin reference were not flagged" >&2
+    int_failures=$((int_failures + 1))
+fi
 rm -rf "$str_nobin"
 
 str_got="pass"
