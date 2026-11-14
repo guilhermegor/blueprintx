@@ -1069,8 +1069,11 @@ is shaped as it is; a generated project gets the behavior, not the history.
   half were `_F = TypeVar("_F", bound=Callable[..., object])` in the `type_checker` shim (`...` is an
   implicit `Any`; the bound is dropped, the shim returns `_F` unchanged) and its `def type_checker`
   line; the rest were written `Any`, replaced by `object` where the value is only passed through
-  (`Record`, run summaries, query params). Opaque DB-API handles and `SanityCheck` keep `Any` via
-  per-module `disallow_any_explicit = False`, the same list as the `ANN401` ignores.
+  (`Record`, run summaries, query params). The DB-API handles and `SanityCheck` first kept `Any` via
+  per-module `disallow_any_explicit = False`; #1054 removed those too: `utils/dbapi.py` holds the
+  structural `DbConnection`/`DbCursor` Protocols, a row cell is `object` (narrowed by
+  `decode_record`), and `SanityCheck` takes `object`. The one remaining `cast` per driver sits at
+  `_connect` (mvc-native: `build_connection`), because the drivers share no base class and their own stubs disagree.
 - **Baseline strictness.** Annotations and obvious type errors are enforced, not `--strict`,
   so the runtime-TypeChecker metaclass machinery does not drown the signal. Tighten later.
   `disallow_any_generics` is the exception (#1054): it is global, so a bare `dict` or `list`
@@ -1112,21 +1115,27 @@ is shaped as it is; a generated project gets the behavior, not the history.
   mirroring #190's mypy fix. They ship verbatim into every DDD project, so a defect or a style
   violation the rest of the tree is held to propagates. About 230 findings were fixed in place
   (D202, S608 `noqa`'d per line, UP007/UP035, missing ANN204/ANN202, a docstring hanging indent
-  authored before the tree was tabified); a few per-file ANN401 ignores remain where `Any` is
-  honest. `lib-minimal` vendors the typing engine at a nested private path whose imports are
+  authored before the tree was tabified); no per-file ANN401 ignore remains (#1054). `lib-minimal` vendors the typing engine at a nested private path whose imports are
   rewritten to `<pkg>._internal.*` and can exceed the line length, so it is excluded in full
   (mypy excludes it too).
 - **Preview mode is for PLR1702 only** (too-many-nested-blocks, still preview-only in ruff
-  0.11.13). It also activates 10 tag-along preview rules in the `PL` and `S` families, never
-  chosen on their merits, so they are ignored explicitly (#434): `--preview` alone raised
-  findings from 21 to 81 on `templates/`, and ignoring exactly those 10 restores 21. Revisit
+  0.17.5: `ruff rule PLR1702`). It also activates tag-along preview rules in the `PL` and `S`
+  families, never chosen on their merits, so each is settled rule by rule (#434, #1054).
+  Re-measured with ruff 0.17.5 and the current `ruff.toml` ignores (`PLC1901`, `S404`, `PLR0917`)
+  as `ruff check --isolated --select PL,S --ignore PLC1901,S404,PLR0917` over
+  `templates/python-common/{src,bin,optional}`: 66 findings stable, 71 with `--preview`. The 5
+  extra are all `PLC2701`, which the shipped `ruff.toml` already settles with a `bin/` and
+  `tests/` per-file-ignore and line-scoped `noqa` on the private imports in `optional/`. The older
+  figures (21 to 81 on `templates/`, ruff 0.11.13) used a different tree and ignore list and are
+  not comparable. Revisit
   each on its own measurement the day PLR1702 leaves preview. Why nesting is gated at all is in
   `check_complexity.sh`'s header and [Complexity ceilings](complexity-ceilings-measured.md).
 - **PLR1702 pairs with `max-complexity = 3` for `src/` only.** Ceiling 3 alone would admit the
   nested `if`/`for` that ceiling 2 exists to forbid, and PLR1702 alone would not solve the
   guard-plus-try/except case. Per-tree ceilings live in `check_complexity.sh`, since
   `per-file-ignores` can switch a rule off but cannot set a different threshold.
-- **Rules adopted by measurement** (ruff 0.11.13), recorded in the Ruff Rule Adoption Log in
+- **Rules adopted by measurement** (ruff 0.11.13 when adopted; re-measured under 0.17.5 in the
+  Adoption Log), recorded in the Ruff Rule Adoption Log in
   `CONTRIBUTING.md`:
     - `RET` (#426): 0 RET505 and 11 RET501 (a trailing `return None` in a `-> None` function),
       all removed; 5 were reachable from `templates/python-common`, the other 6 needed a scaffold.
@@ -1213,11 +1222,8 @@ is shaped as it is; a generated project gets the behavior, not the history.
       `# noqa: TID251`, and the five emphatic upper-case test names were lower-cased.
     - `bin/**` ignores `PLC2701` only. The former `ERA001` and `E101` ignores measured 0
       findings and were removed (#1054).
-    - `ANN401` is ignored for the raw-driver connection factory (`config/connection_db.py`,
-      MVC) and the DB handlers' `_connect` (psycopg, mysql-connector, pyodbc, oracledb), which
-      have no shared type; `sqlite_handler.py` needs none, `sqlite3.Connection` being real.
-      It is no longer ignored for the typing engine (#1054), which is typed without
-      `Any`; it stays for `SanityCheck.validate()`, which takes any joblib payload.
+    - `ANN401` is no longer ignored anywhere (#1054): connections are typed by the
+      `utils/dbapi.py` Protocols and `SanityCheck.validate()` takes `object`.
     - `N813` is ignored for `import defusedxml.ElementTree as defused_et`, a deliberate alias
       for the trust-boundary-safe parser; renaming would only hurt readability (#422).
     - `lib-minimal` mirrors the exemptions for `src/<pkg>/_internal/...`; its typing engine is

@@ -34,16 +34,17 @@ here stays domain-agnostic.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 import csv
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Protocol
 
 import pandas as pd
 
 from utils.br_identifiers import is_valid_cnpj, unmask_cnpj
+from utils.dbapi import DbConnection
 from utils.dtypes import apply_dtypes
 from utils.text import safe_str
 
@@ -118,12 +119,12 @@ class FileContract(metaclass=TypeChecker):
 
     @property
     def output_columns(self) -> tuple[str, ...]:
-        """Return the full output shape: source-required columns then provenance columns.
+        """Required source columns then provenance columns, not the full frame schema.
 
         Returns
         -------
         tuple of str
-            ``tuple_required + PROVENANCE_COLUMNS`` — what a stamped, ingested frame holds.
+            ``tuple_required + PROVENANCE_COLUMNS``; extra source columns may also pass through.
         """
         return self.tuple_required + self.PROVENANCE_COLUMNS
 
@@ -255,7 +256,7 @@ def read_table(  # noqa: PLR0913 — the public reader API; each argument is a r
 
 @type_checker
 def read_query(
-    cls_connection: Any,  # noqa: ANN401 — opaque DB-API connection; any driver's object is valid
+    cls_connection: DbConnection,
     str_sql: str,
     dict_dtypes: dict[str, str],
     cls_contract: FileContract,
@@ -271,9 +272,9 @@ def read_query(
 
     Parameters
     ----------
-    cls_connection : Any
+    cls_connection : DbConnection
         An open DB-API 2.0 connection (e.g. from ``config.connection_db.build_connection``).
-        Opaque by design — any driver's connection object is accepted.
+        Any object with ``cursor``, ``commit`` and ``close`` is accepted (structural).
     str_sql : str
         The SQL query, with ``?``/``%s`` placeholders for any parameters.
     dict_dtypes : dict of {str: str}
@@ -808,7 +809,26 @@ def _read_excel_raw(
     return pd.read_excel(path_file, sheet_name=sheet_excel, dtype=str_dtype, header=int_header_row)  # noqa: TID251 -- the one authorized read seam
 
 
-_DICT_RAW_READERS: dict[str, Callable[..., pd.DataFrame]] = {
+class _RawReader(Protocol):
+    """The keyword signature every raw per-format reader accepts."""
+
+    def __call__(  # noqa: PLR0913 -- one shared dispatch signature
+        self,
+        path_file: Path,
+        *,
+        str_sheet: str,
+        str_dtype: str | None,
+        str_csv_sep: str,
+        list_columns: Sequence[str] | None,
+        str_encoding: str,
+        int_header_row: int,
+        int_csv_quoting: int,
+    ) -> pd.DataFrame:
+        """Read the file into a raw frame."""
+        ...
+
+
+_DICT_RAW_READERS: dict[str, _RawReader] = {
     ".csv": _read_csv_raw,
     ".json": _read_json_raw,
 }

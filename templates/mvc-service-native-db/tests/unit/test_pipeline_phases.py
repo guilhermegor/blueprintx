@@ -17,6 +17,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from src.controller._pipeline import PipelineOrchestrator, WebhookNotifier
+from src.utils.dbapi import DbConnection
 
 
 STR_SEED_TITLE = "Hello from MVC native-db service!"
@@ -175,7 +176,7 @@ def test_run_closes_the_connection_even_when_the_read_fails(
     """The connection is closed in a ``finally``, so a failing read cannot leak it."""
     cls_orchestrator = _build_orchestrator(tmp_path, cls_connection)
     mocker.patch.object(cls_orchestrator, "_read", side_effect=RuntimeError("boom"))
-    mock_connection = Mock()
+    mock_connection = Mock(spec=DbConnection)
     cls_orchestrator.fn_build_connection = lambda: mock_connection
     with contextlib.suppress(RuntimeError):
         cls_orchestrator.run()

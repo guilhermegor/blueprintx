@@ -31,7 +31,7 @@ cls_connection = build_connection()
 cls_example = ExampleEntity(cls_connection)
 cls_example.ensure_table()
 cls_example.insert("Hello")
-df_report = cls_example.fetch_all()   # -> pandas DataFrame
+df_report = cls_example.fetch_all()  # -> pandas DataFrame
 cls_connection.close()
 ```
 
