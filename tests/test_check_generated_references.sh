@@ -95,6 +95,8 @@ expect_extra "nav extractor matching nothing fails even if scripts match" fail m
 expect_extra "nav title containing a colon keeps the page name" fail mkdocs.yml $'nav:\n  - "Guide: intro": guide.md\n' 'guide.md'
 expect_extra "quoted local nav page is matched whole" fail mkdocs.yml $'nav:\n  - Home: "gone.md"\n  - Two: \'two.md\'\n' 'gone.md'
 expect_extra "yaml anchor before a nav page is not part of the name" fail mkdocs.yml $'nav:\n  - &home gone.md\n' 'docs/gone.md'
+expect_extra "double quote after a word still opens a quoted span" fail .github/workflows/w.yml $'run: |\n  echo prefix" # text"; bash bin/nope.sh\n'
+expect_extra "anchor before a quoted nav page is consumed" fail mkdocs.yml $'nav:\n  - Home: &home "gone.md"\n' 'docs/gone.md'
 expect_extra "poe_tasks fragment reference to a missing script fails" fail poe_tasks.test.toml $'[tool.poe.tasks.t]\ncmd = "bash bin/nope.sh"\n'
 expect_extra "commented-out reference is ignored" pass Makefile $'# bin/nope.sh\n'
 expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n' site/index.md
