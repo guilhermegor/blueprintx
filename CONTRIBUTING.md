@@ -562,9 +562,7 @@ Closes the gap `E722` (bare `except:`, already selected via `E`) leaves open:
 the same class of finding, one layer narrower.
 
 - Measured 2026-09-16 (ruff 0.11.13): `ruff check --select BLE --statistics
-  templates/` → 2 findings (re-measured 2026-11-14 with ruff 0.17.5: 0 findings with the
-  `noqa` comments honored, 11 with `--ignore-noqa`, so every broad handler still carries its
-  reasoned suppression), both the SAME line in `_pipeline.py`
+  templates/` → 2 findings, both the SAME line in `_pipeline.py`
   (mvc-service-native-db and mvc-service-orm-db ship byte-identical files) — a
   documented five-mode degradation (`PipelineOrchestrator._enrich`) where
   splitting the `except` by mode would re-create the original defect (one
@@ -576,6 +574,9 @@ the same class of finding, one layer narrower.
   naming a rule that never runs looks identical to one that does, from
   either side. Selecting `BLE` is what makes those 9 pre-existing
   suppressions real.
+- Re-measured 2026-11-14 with ruff 0.17.5: `ruff check --isolated --select BLE
+  --statistics templates/` → 0 findings with `noqa` honored and 11 with `--ignore-noqa`, so every
+  broad handler still carries its reasoned suppression.
 - **`RUF` was measured in the same pass and NOT adopted.** `ruff check
   --select RUF --statistics templates/` → 150 findings (138 `RUF100`
   unused-noqa alone, mostly noqa comments anticipating rule families not yet
@@ -584,8 +585,9 @@ the same class of finding, one layer narrower.
   so it is a deliberate separate decision rather than bundled into this
   issue: left for a follow-up issue to adopt (or narrow) on its own measured
   merits. Re-measured 2026-11-14 (ruff 0.17.5): `ruff check --isolated --select RUF
-  --statistics templates/` → 303 findings (269 `RUF100`, an artefact of `--isolated` making every non-RUF `noqa` look unused, 13 `RUF022`, 11 `RUF001`, 4 `RUF046`,
-  3 `RUF005`, 1 `RUF002`), still not adopted.
+  --statistics templates/` → 346 findings: 312 `RUF100` (an artefact of `--isolated`, which makes
+  every non-RUF `noqa` look unused), 13 `RUF022`, 11 `RUF001`, 4 `RUF046`, 3 `RUF005`,
+  1 `RUF002`, 1 `RUF043`, 1 `RUF007`; still not adopted.
 
 ### TypeScript catch-safety — blueprintx#440 (already shipped, blueprintx#443)
 

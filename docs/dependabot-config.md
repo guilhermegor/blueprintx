@@ -18,6 +18,8 @@ dependency with an upper bound (ruff had `<0.12`) could never be bumped. The tie
 bounds only, and `poetry.lock` is the pin: each bump arrives as a reviewed Dependabot PR that CI
 must pass. Ruff has a single version source; the pre-commit hooks run the locked ruff through
 `poetry run`, not a separate `ruff-pre-commit` rev that Dependabot would not update.
+The accepted risk is that a new ruff release can redden a freshly generated project or `main` CI with no
+BlueprintX commit; the lockfile limits that to the next bump, and the Dependabot PR surfaces it.
 
 ## Cooldown
 

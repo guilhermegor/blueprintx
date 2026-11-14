@@ -64,29 +64,31 @@ YAML_INPUTS: dict[str, object] = {}
 
 
 @type_checker
-def _require_mapping(str_label: str, loaded: object) -> dict[object, object]:
+def _require_mapping(str_label: str, obj_loaded: object) -> dict[object, object]:
     """Return a parsed YAML document, rejecting one that is not a mapping.
 
     Parameters
     ----------
     str_label : str
         The config's name, used in the error message.
-    loaded : object
+    obj_loaded : object
         The value ``yaml.safe_load`` returned.
 
     Returns
     -------
     dict
-        ``loaded``, narrowed to the mapping it was checked to be.
+        ``obj_loaded``, narrowed to the mapping it was checked to be.
 
     Raises
     ------
     TypeError
-        If ``loaded`` is not a ``dict``.
+        If ``obj_loaded`` is not a ``dict``.
     """
-    if not isinstance(loaded, dict):
-        raise TypeError(f"{str_label} config must be a YAML mapping, got {type(loaded).__name__}")
-    return loaded
+    if not isinstance(obj_loaded, dict):
+        raise TypeError(
+            f"{str_label} config must be a YAML mapping, got {type(obj_loaded).__name__}"
+        )
+    return obj_loaded
 
 
 @type_checker
@@ -131,22 +133,22 @@ def _validate_outputs_templates(dict_outputs: dict[object, object]) -> None:
 
 
 @type_checker
-def _validate_config(dict_outputs: object, dict_inputs: object) -> None:
+def _validate_config(obj_outputs: object, obj_inputs: object) -> None:
     """Reject YAML documents that are not mappings or lack a filename template.
 
     Parameters
     ----------
-    dict_outputs : object
+    obj_outputs : object
         The parsed ``outputs`` document.
-    dict_inputs : object
+    obj_inputs : object
         The parsed ``inputs`` document.
 
     Returns
     -------
     None
     """
-    dict_checked = _require_mapping("outputs", dict_outputs)
-    _require_mapping("inputs", dict_inputs)
+    dict_checked = _require_mapping("outputs", obj_outputs)
+    _require_mapping("inputs", obj_inputs)
     _validate_outputs_templates(dict_checked)
 
 

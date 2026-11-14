@@ -52,7 +52,7 @@ def wide_signature(a, b, c, d, e, f, g, h, i) -> int:  # PLR0913 — 9 args > ma
 ruff check --config templates/python-common/ruff.toml --no-cache src/bad_families.py
 ```
 **Output (0.11.13):** `10 issues` — `D103 (7x)`, `PLR2004 (1x)`, `B904 (1x)`, `PLR0913 (1x)`.
-**Output (0.17.5, re-run on a fixture with annotated signatures):** `11 errors` — `D103 (7x)`,
+**Output (0.17.5, a different fixture: the same file with annotated signatures, so the counts are not like-for-like):** `11 errors` — `D103 (7x)`,
 `PLR2004`, `B904`, `PLR0913`, `D100`. Same rule families caught; the extra `D100` is the fixture's
 missing module docstring.
 
@@ -61,7 +61,7 @@ missing module docstring.
 ruff check --isolated --select FBT,PTH,T20,TRY,DTZ,ARG --no-cache src/bad_families.py
 ```
 **Output (0.11.13):** `7 issues` — `T201 (2x)`, `DTZ005`, `TRY003`, `ARG001`, `FBT001`, `PTH118`.
-**Output (0.17.5, same annotated fixture):** `14 errors` — `ARG001 (9x)`, `FBT001`, `DTZ005`,
+**Output (0.17.5, the same annotated fixture, not the one printed above):** `14 errors` — `ARG001 (9x)`, `FBT001`, `DTZ005`,
 `PTH118`, `T201`, `TRY003`. All six families still fire when selected and none is in `select`,
 so every verdict in the table below holds under 0.17.5.
 
