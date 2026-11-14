@@ -63,8 +63,8 @@ YAML_INPUTS: dict = {}
 
 
 @type_checker
-def _require_mapping(str_label: str, loaded: object) -> None:
-    """Reject a parsed YAML document that is not a mapping.
+def _require_mapping(str_label: str, loaded: object) -> dict:
+    """Return a parsed YAML document, rejecting one that is not a mapping.
 
     Parameters
     ----------
@@ -75,7 +75,8 @@ def _require_mapping(str_label: str, loaded: object) -> None:
 
     Returns
     -------
-    None
+    dict
+        ``loaded``, narrowed to the mapping it was checked to be.
 
     Raises
     ------
@@ -84,6 +85,7 @@ def _require_mapping(str_label: str, loaded: object) -> None:
     """
     if not isinstance(loaded, dict):
         raise TypeError(f"{str_label} config must be a YAML mapping, got {type(loaded).__name__}")
+    return loaded
 
 
 @type_checker
@@ -128,28 +130,33 @@ def _validate_outputs_templates(dict_outputs: dict) -> None:
 
 
 @type_checker
-def _load_yaml_config() -> tuple[dict, dict]:
-    """Load and validate the outputs and inputs YAML for the active environment.
+def _validate_config(dict_outputs: object, dict_inputs: object) -> None:
+    """Reject YAML documents that are not mappings or lack a filename template.
+
+    Parameters
+    ----------
+    dict_outputs : object
+        The parsed ``outputs`` document.
+    dict_inputs : object
+        The parsed ``inputs`` document.
 
     Returns
     -------
-    tuple of dict
-        The parsed ``outputs`` mapping, then the parsed ``inputs`` mapping.
+    None
     """
-    dict_outputs = yaml.safe_load(
-        resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR).read_text(encoding="utf-8")
-    )
-    dict_inputs = yaml.safe_load(
-        resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
-    )
-    _require_mapping("outputs", dict_outputs)
+    dict_checked = _require_mapping("outputs", dict_outputs)
     _require_mapping("inputs", dict_inputs)
-    _validate_outputs_templates(dict_outputs)
-    return dict_outputs, dict_inputs
+    _validate_outputs_templates(dict_checked)
 
 
 try:
-    YAML_OUTPUTS, YAML_INPUTS = _load_yaml_config()
+    YAML_OUTPUTS = yaml.safe_load(
+        resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR).read_text(encoding="utf-8")
+    )
+    YAML_INPUTS = yaml.safe_load(
+        resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
+    )
+    _validate_config(YAML_OUTPUTS, YAML_INPUTS)
 except Exception as cls_exc:  # noqa: BLE001
     _str_config_error = f"{type(cls_exc).__name__}: {cls_exc}"
     YAML_OUTPUTS = dict(_DICT_FALLBACK_OUTPUTS)
