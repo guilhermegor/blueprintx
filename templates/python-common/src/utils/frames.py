@@ -165,7 +165,7 @@ def map_with_default(
     ----------
     series_value : pandas.Series
         The column whose values are relabelled.
-    dict_mapping : Mapping of {key: object}
+    dict_mapping : Mapping[_KeyT, object]
         ``{raw_value: label}`` mapping applied to each cell.
     default : object
         The value assigned to any cell whose raw value is not a key in ``dict_mapping``.
