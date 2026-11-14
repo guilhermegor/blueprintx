@@ -86,6 +86,7 @@ repos:
         name: ruff check
         entry: bash bin/poetry_exec.sh run ruff check --force-exclude --config=ruff.toml
         language: system
+        require_serial: true
         types_or:
           - python
           - pyi
@@ -95,6 +96,7 @@ repos:
         name: ruff format
         entry: bash bin/poetry_exec.sh run ruff format --force-exclude --config=ruff.toml
         language: system
+        require_serial: true
         types_or:
           - python
           - pyi

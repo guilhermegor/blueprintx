@@ -521,10 +521,9 @@ implicit `None`) — not narrowed to only `RET505` (the "unnecessary `else` afte
 
 ### `N` (pep8-naming) — blueprintx#422
 
-Adopted with two per-file-ignores, not whole. Measured 2026-09-13 with ruff 0.11.13: 9 findings across 3 rules. Re-measured 2026-11-14
-(ruff 0.17.5): `ruff check --select N --statistics src/ bin/ tests/ optional/` from
-`templates/python-common` → 6 findings across 2 rules (5 `N802`, 1 `N813`); the 3 `N806` below were
-fixed in between.
+Adopted with two per-file-ignores, not whole. Measured 2026-09-13 with ruff 0.11.13: 9 findings across 3 rules. Re-measured 2026-11-14: `ruff check --select N --statistics src/ bin/ tests/ optional/` from
+`templates/python-common` with its own `ruff.toml` → 0 findings; the 5 `N802` and 3 `N806` below
+were fixed in between and the `N813` is covered by its per-file-ignore.
 
 - **`N802` (function name should be lowercase) — 5 findings, all test names that used
   upper-case for emphasis; renamed, no ignore.** The five tests were renamed to lowercase
@@ -585,7 +584,7 @@ the same class of finding, one layer narrower.
   so it is a deliberate separate decision rather than bundled into this
   issue: left for a follow-up issue to adopt (or narrow) on its own measured
   merits. Re-measured 2026-11-14 (ruff 0.17.5): `ruff check --isolated --select RUF
-  --statistics templates/` → 303 findings (269 `RUF100`, 13 `RUF022`, 11 `RUF001`, 4 `RUF046`,
+  --statistics templates/` → 303 findings (269 `RUF100`, an artefact of `--isolated` making every non-RUF `noqa` look unused, 13 `RUF022`, 11 `RUF001`, 4 `RUF046`,
   3 `RUF005`, 1 `RUF002`), still not adopted.
 
 ### TypeScript catch-safety — blueprintx#440 (already shipped, blueprintx#443)
