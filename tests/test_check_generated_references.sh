@@ -97,6 +97,8 @@ expect_extra "quoted local nav page is matched whole" fail mkdocs.yml $'nav:\n  
 expect_extra "yaml anchor before a nav page is not part of the name" fail mkdocs.yml $'nav:\n  - &home gone.md\n' 'docs/gone.md'
 expect_extra "double quote after a word still opens a quoted span" fail .github/workflows/w.yml $'run: |\n  echo prefix" # text"; bash bin/nope.sh\n'
 expect_extra "anchor before a quoted nav page is consumed" fail mkdocs.yml $'nav:\n  - Home: &home "gone.md"\n' 'docs/gone.md'
+expect_extra "single quote closed later on the line still hides a comment span" fail .github/workflows/s.yml $'run: |\n  echo prefix\x27 # text\x27; bash bin/nope.sh\n'
+expect_extra "colon inside a quoted nav page is kept" fail mkdocs.yml $'nav:\n  - Guide: "part: one.md"\n' 'docs/part: one.md'
 expect_extra "poe_tasks fragment reference to a missing script fails" fail poe_tasks.test.toml $'[tool.poe.tasks.t]\ncmd = "bash bin/nope.sh"\n'
 expect_extra "commented-out reference is ignored" pass Makefile $'# bin/nope.sh\n'
 expect_extra "nav page missing under a non-default docs_dir fails" fail mkdocs.yml $'docs_dir: site\nnav:\n  - A: index.md\n' site/index.md

@@ -32,7 +32,7 @@ strip_inline_comment() {
         for (int_i = 1; int_i <= length($0); int_i++) {
             str_c = substr($0, int_i, 1)
             if (str_q != "") { if (str_c == "\\" && str_q == "\"") int_i++; else if (str_c == str_q) str_q = ""; continue }
-            if ((str_c == "\"" || (str_c == "\047" && (int_i == 1 || substr($0, int_i - 1, 1) !~ /[A-Za-z0-9]/)))) { str_q = str_c; continue }
+            if ((str_c == "\"" || (str_c == "\047" && (int_i == 1 || substr($0, int_i - 1, 1) !~ /[A-Za-z0-9]/ || index(substr($0, int_i + 1), "\047") > 0)))) { str_q = str_c; continue }
             if (str_c == "#" && (int_i == 1 || substr($0, int_i - 1, 1) ~ /[ \t]/)) { $0 = substr($0, 1, int_i - 1); break }
         }
         print
@@ -43,7 +43,7 @@ nav_pages() {
     awk '/^nav:/ { in_nav = 1; next } /^[A-Za-z_]/ { in_nav = 0 } in_nav' "$1" \
         | strip_inline_comment \
         | { grep -vE '^[[:space:]]*#|^[[:space:]]*-?[[:space:]]*[^:]*:[[:space:]]*["'"'"']?https?://' || true; } \
-        | sed -nE 's/^[[:space:]]*(-[[:space:]]*)?(.*:[[:space:]]+)?([&!][^[:space:]]*[[:space:]]+)?["'"'"']?(.*\.md)["'"'"']?[[:space:]]*$/\4/p' | sort -u
+        | sed -nE 's/^[[:space:]]*(-[[:space:]]*)?([^"'"'"']*:[[:space:]]+)?([&!][^[:space:]]*[[:space:]]+)?["'"'"']?(.*\.md)["'"'"']?[[:space:]]*$/\4/p' | sort -u
 }
 
 docs_dir() {
