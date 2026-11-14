@@ -64,7 +64,7 @@ YAML_INPUTS: dict[str, object] = {}
 
 
 @type_checker
-def _require_mapping(str_label: str, loaded: object) -> dict:
+def _require_mapping(str_label: str, loaded: object) -> dict[object, object]:
     """Return a parsed YAML document, rejecting one that is not a mapping.
 
     Parameters
@@ -90,7 +90,7 @@ def _require_mapping(str_label: str, loaded: object) -> dict:
 
 
 @type_checker
-def _require_string_template(dict_outputs: dict, str_key: str) -> None:
+def _require_string_template(dict_outputs: dict[object, object], str_key: str) -> None:
     """Reject an outputs mapping whose ``str_key`` is not a string.
 
     Parameters
@@ -114,7 +114,7 @@ def _require_string_template(dict_outputs: dict, str_key: str) -> None:
 
 
 @type_checker
-def _validate_outputs_templates(dict_outputs: dict) -> None:
+def _validate_outputs_templates(dict_outputs: dict[object, object]) -> None:
     """Require every filename template the run reads to be a string.
 
     Parameters
