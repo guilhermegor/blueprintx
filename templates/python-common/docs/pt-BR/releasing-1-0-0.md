@@ -46,5 +46,28 @@ as issues abertas e falha enquanto alguma não tiver o label `post-1.0`, nomeand
 - Uma primeira publicação conta como vinda de 0.0.0, então um projeto cuja primeira release é a
   1.0.0 também passa pelo gate.
 
-Para passar, implemente cada issue citada ou aplique a ela o label `post-1.0`, e então rode o
-workflow de novo.
+## A verificação de módulos inalcançáveis
+
+Uma biblioteca Python traz `bin/check_unreachable_modules.py`, e o gate de lançamento o roda
+depois da verificação das issues abertas. Ele existe porque o deptry enxerga dependências não
+usadas, não módulos não usados: um seam do template que o pacote nunca ligou (`http_downloader`,
+`daily_cache`, `retry/` e assim por diante) continua em `src/`, e um módulo morto que importa um
+pacote de terceiros mantém essa dependência "em uso".
+
+- Um módulo é **público** quando nenhum segmento do seu caminho pontuado começa com `_`. O gate
+  percorre os `import` e `from ... import` (imports relativos resolvidos) a partir dos módulos
+  públicos, e um módulo alcançado também alcança seus pacotes pai. Todo módulo de `src/` que
+  sobrar reprova o gate, e a saída nomeia cada um.
+- Corrija um achado removendo o módulo, seus testes e toda dependência que só ele importava, e
+  rodando o deptry de novo. Um módulo carregado dinamicamente (`importlib.import_module` com uma
+  string, um entry point, uma string de engine) é invisível ao percurso: coloque-o em
+  `.unreachable-modules.txt` na raiz do projeto, um `<módulo ou glob> | <motivo>` por linha. Uma
+  entrada sem motivo, ou que não corresponda a nenhum módulo inalcançável, reprova o gate.
+- Ele roda só no gate de lançamento, não no CI: um scaffold novo de biblioteca traz os seams do
+  template sem ligação de propósito, então a verificação ficaria vermelha desde o primeiro commit.
+- Um import sob `if TYPE_CHECKING:`, ou dentro de uma função, conta como alcançado. Os testes não
+  são raízes: um módulo que só os testes importam está morto.
+- Um projeto sem o script, como uma biblioteca TypeScript, pula a verificação.
+
+Para passar, implemente cada issue citada ou aplique a ela o label `post-1.0`, remova ou
+coloque na lista cada módulo apontado, e então rode o workflow de novo.

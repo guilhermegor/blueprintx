@@ -104,6 +104,16 @@ main() {
 	case_with_issues "0.x to 1.0.0 with no open issues passes" "[]" 0 "gate passed"
 	case_with_issues "an open unlabelled pull request alone does not block (documented decision)" '[{"number":12,"title":"Dependabot bump","pull_request":{},"labels":[]}]' 0 "gate passed"
 
+	local str_real_gate="$GATE"
+	mkdir -p "$WORK_DIR/proj/bin"
+	cp "$str_real_gate" "$WORK_DIR/proj/bin/check_release_gate.py"
+	GATE="$WORK_DIR/proj/bin/check_release_gate.py"
+	printf 'import sys\nprint("pkg._dead is unreachable")\nsys.exit(1)\n' >"$WORK_DIR/proj/bin/check_unreachable_modules.py"
+	case_with_issues "a shipped unreachable-modules gate that fails blocks 1.0.0" "[]" 1 "pkg._dead is unreachable"
+	printf 'print("ok")\n' >"$WORK_DIR/proj/bin/check_unreachable_modules.py"
+	case_with_issues "a shipped unreachable-modules gate that passes lets 1.0.0 through" "[]" 0 "gate passed"
+	GATE="$str_real_gate"
+
 	run_gate "1.0.0" "1.0.1"
 	expect "1.0.0 to 1.0.1 is unaffected (no API call)" 0 "$?" "not applicable"
 	run_gate "0.4.0" "0.5.0"

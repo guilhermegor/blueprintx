@@ -1,8 +1,9 @@
 """Fail a 0.x to 1.0.0 release while open issues lack the ``post-1.0`` label.
 
 Any other version bump passes untouched. The open issues are read through the GitHub
-REST API with the workflow token, read-only, and an API error fails CLOSED. The design
-record lives in ``docs/releasing-1-0-0.md``.
+REST API with the workflow token, read-only, and an API error fails CLOSED. A project that
+ships ``bin/check_unreachable_modules.py`` must also pass it. The design record lives in
+``docs/releasing-1-0-0.md``.
 """
 
 from __future__ import annotations
@@ -10,7 +11,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pathlib
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -158,6 +161,20 @@ def open_blockers(str_repo: str) -> list[dict]:
         int_page += 1
 
 
+def dead_modules_status() -> int:
+    """Run the sibling unreachable-modules gate when this project ships it.
+
+    Returns
+    -------
+    int
+        0 when the gate passes or is not shipped (TypeScript projects), else its exit code.
+    """
+    path_gate = pathlib.Path(__file__).with_name("check_unreachable_modules.py")
+    if not path_gate.is_file():
+        return 0
+    return subprocess.run([sys.executable, str(path_gate)], check=False).returncode  # noqa: S603
+
+
 def main(list_argv: list[str] | None = None) -> int:
     """Run the gate.
 
@@ -185,9 +202,13 @@ def main(list_argv: list[str] | None = None) -> int:
     except (GateError, ValueError) as cls_error:
         print(f"::error::1.0.0 gate failed closed: {cls_error}", file=sys.stderr)
         return 1
+    int_dead = dead_modules_status()
+    if int_dead:
+        print("::error::unreachable template seams block 1.0.0, see above", file=sys.stderr)
     if not list_blockers:
-        print("1.0.0 gate passed: every open issue is labelled post-1.0")
-        return 0
+        if not int_dead:
+            print("1.0.0 gate passed: every open issue is labelled post-1.0")
+        return int_dead
     for dict_issue in list_blockers:
         print(
             f"::error::open issue #{dict_issue['number']} blocks 1.0.0: {dict_issue['title']}",

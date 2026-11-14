@@ -2394,6 +2394,40 @@ owner judges each one. `tests/test_check_release_gate.sh` pins the decision with
 a lone unlabelled PR passes the gate. The generated project's `docs/releasing-1-0-0.md` states
 the decision without naming that suite, because a generated project does not ship it.
 
+## The unreachable-modules gate runs in the 1.0.0 release gate, not in CI (`templates/python-common/bin/check_unreachable_modules.py`, #1133)
+
+`python-common` ships every utility seam to every package, and deptry sees unused dependencies
+but not unused modules. The gate walks the import graph from the public modules (no `_`-prefixed
+path segment) and fails on any `src/` module left over. The `Cut 1.0.0` release gate runs it;
+CI does not.
+
+Measured 2026-11-14 over a fresh default scaffold of each Python tier:
+
+| tier | modules | public roots | unreachable |
+|---|---|---|---|
+| `lib-minimal` | 36 | 2 | 25 |
+| `ddd-service-native-db` | 83 | 82 | 0 |
+| `ddd-service-orm-db` | 74 | 73 | 0 |
+| `api-service-native-db` | 86 | 85 | 0 |
+| `mvc-service-native-db` | 62 | 60 | 0 |
+| `mvc-service-orm-db` | 58 | 56 | 0 |
+
+The 25 in `lib-minimal` are all true positives: the vendored `_internal/utils` and
+`_internal/config` seams no public module imports yet, which is what the issue asks the gate to
+report. It cannot run in CI because a fresh library scaffold would fail it on the first commit,
+and an allowlist of 25 entries would excuse exactly the modules the gate exists to surface. The
+service tiers pass, but only because "public" covers nearly every module in an application
+(1 or 2 private modules per tier), so a CI run there checks almost nothing. The gate therefore
+sits where its definition of public holds, the library release gate. The script ships to every
+tier through the `bin/` copy, and the release gate (shipped by `lib-minimal` and `ts-lib`) runs
+it when the sibling file exists, so `ts-lib` skips it.
+
+Known blind spots, stated in the generated `docs/releasing-1-0-0.md`: dynamic loading
+(`importlib.import_module` strings, entry points, pandas engine strings) is invisible, handled
+by the allowlist with a written reason per entry; tests are not roots; an import under
+`TYPE_CHECKING` counts as reached. Opt-in network seams and a `banned-api` for no-network
+families (item 3 of the issue) are not part of this change.
+
 ## Snap is no longer a release channel (#1026)
 
 The `snap` job failed on every recent release (v3.3.0, v3.3.1) with "Waiting for previous

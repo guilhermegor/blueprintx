@@ -15,7 +15,7 @@ backlog is done, and the docs describe the code that actually ships.
    the owner (the scaffold creates the label; otherwise `gh label create post-1.0`), so it is deferred on the record rather than dropped.
 3. Work the issue's checklist: the docs audit, runnable examples, the 1.x supported-versions
    table in `SECURITY.md`, the public-API freeze (audit the exported names; removing one after
-   1.0 is a 2.0), the 1.x API guarantee stated in the 1.0.0 release notes and the README (`CHANGELOG.md` is regenerated, so it cannot hold it), and every open
+   1.0 is a 2.0), the removal of unused template seams (Python projects), the 1.x API guarantee stated in the 1.0.0 release notes and the README (`CHANGELOG.md` is regenerated, so it cannot hold it), and every open
    pull request merged, closed, or explicitly deferred past 1.0 by the owner, then the rehearsal and publish. Python projects also flip the classifier to
    `Development Status :: 5 - Production/Stable`, check that `requires-python` (Poetry's `python` constraint) and one Python
    classifier per version of the `tests.yml` matrix agree, and confirm `py.typed` is in the
@@ -40,4 +40,28 @@ it lists the open issues and fails while any lacks the `post-1.0` label, naming 
 - Every other bump, such as 0.4.0 to 0.5.0 or 1.0.0 to 1.0.1, is untouched.
 - A first publish counts as coming from 0.0.0, so a project whose first release is 1.0.0 is gated too.
 
-To pass, implement each named issue or label it `post-1.0`, then re-run the workflow.
+## The unreachable-modules check
+
+A Python library ships `bin/check_unreachable_modules.py`, and the release gate runs it after
+the open-issue check. It exists because deptry sees unused dependencies, not unused modules: a
+template seam the package never wired up (`http_downloader`, `daily_cache`, `retry/`, and so on)
+stays in `src/`, and a dead module that imports a third-party package keeps that dependency
+"used".
+
+- A module is **public** when no segment of its dotted path starts with `_`. The gate walks
+  `import` and `from ... import` statements (relative imports resolved) from the public modules,
+  and a reached module also reaches its parent packages. Any `src/` module left over fails the
+  gate, and the output names each one.
+- Fix a finding by deleting the module, its tests, and every dependency only it imported, then
+  re-running deptry. A module loaded dynamically (`importlib.import_module` with a string, an
+  entry point, an engine string) is invisible to the walk: allowlist it in
+  `.unreachable-modules.txt` at the project root, one `<module or glob> | <reason>` per line. An
+  entry without a reason, or one that matches no unreachable module, fails the gate.
+- It runs in the release gate only, not in CI: a fresh library scaffold ships its template
+  seams unwired on purpose, so the check would be red from the first commit.
+- An import under `if TYPE_CHECKING:`, or inside a function, counts as reached. Tests are not
+  roots: a module only its tests import is dead.
+- A project without the script, such as a TypeScript library, skips the check.
+
+To pass, implement each named issue or label it `post-1.0`, remove or allowlist each reported
+module, then re-run the workflow.
