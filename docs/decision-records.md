@@ -2407,21 +2407,21 @@ but not unused modules. The gate walks the import graph from the public modules 
 path segment) and fails on any `src/` module left over. The `Cut 1.0.0` release gate runs it;
 CI does not.
 
-Measured 2026-11-14 over a fresh default scaffold of each Python tier:
+Re-measured after #1132 added `utils/dbapi.py` (one more module per tier); first measured 2026-11-14 over a fresh default scaffold of each Python tier:
 
 | tier | modules | public roots | unreachable |
 |---|---|---|---|
-| `lib-minimal` | 36 | 2 | 25 |
-| `ddd-service-native-db` | 83 | 82 | 0 |
-| `ddd-service-orm-db` | 74 | 73 | 0 |
-| `api-service-native-db` | 86 | 85 | 0 |
-| `mvc-service-native-db` | 62 | 60 | 0 |
-| `mvc-service-orm-db` | 58 | 56 | 0 |
+| `lib-minimal` | 37 | 2 | 26 |
+| `ddd-service-native-db` | 84 | 83 | 0 |
+| `ddd-service-orm-db` | 75 | 74 | 0 |
+| `api-service-native-db` | 87 | 86 | 0 |
+| `mvc-service-native-db` | 63 | 61 | 0 |
+| `mvc-service-orm-db` | 59 | 57 | 0 |
 
-The 25 in `lib-minimal` are all true positives: the vendored `_internal/utils` and
+The 26 in `lib-minimal` are all true positives: the vendored `_internal/utils` and
 `_internal/config` seams no public module imports yet, which is what the issue asks the gate to
 report. It cannot run in CI because a fresh library scaffold would fail it on the first commit,
-and an allowlist of 25 entries would excuse exactly the modules the gate exists to surface. The
+and an allowlist of 26 entries would excuse exactly the modules the gate exists to surface. The
 service tiers pass, but only because "public" covers nearly every module in an application
 (1 or 2 private modules per tier), so a CI run there checks almost nothing. The gate therefore
 sits where its definition of public holds, the library release gate. The script ships to every
