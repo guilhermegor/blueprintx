@@ -163,13 +163,15 @@ def is_public(str_module: str) -> bool:
     )
 
 
-def reachable(dict_modules: dict[str, pathlib.Path]) -> set[str]:
-    """Walk the import graph from the public modules.
+def reachable(dict_modules: dict[str, pathlib.Path], list_extra_roots: list[str]) -> set[str]:
+    """Walk the import graph from the public modules and any extra roots.
 
     Parameters
     ----------
     dict_modules : dict of str to pathlib.Path
         Every module under ``src/``.
+    list_extra_roots : list of str
+        Modules that count as roots besides the public ones (the allowlisted ones).
 
     Returns
     -------
@@ -179,12 +181,14 @@ def reachable(dict_modules: dict[str, pathlib.Path]) -> set[str]:
     Raises
     ------
     SyntaxError
-        If a reached module cannot be parsed.
+        If a reached module cannot be parsed (Python below 3.12 raises it as ``ValueError``
+        for a NUL byte).
     UnicodeDecodeError
         If a reached module is not valid UTF-8.
     """
     set_seen = set()
     list_queue = [str_module for str_module in dict_modules if is_public(str_module)]
+    list_queue.extend(list_extra_roots)
     while list_queue:
         str_module = list_queue.pop()
         if str_module in set_seen:
@@ -230,6 +234,34 @@ def load_allowlist(path_allowlist: pathlib.Path) -> tuple[list[str], list[str]]:
     return list_patterns, list_problems
 
 
+def dead_modules(
+    dict_modules: dict[str, pathlib.Path], list_patterns: list[str]
+) -> tuple[list[str], list[str]]:
+    """Find the modules no root reaches, before and after the allowlist counts as roots.
+
+    Parameters
+    ----------
+    dict_modules : dict of str to pathlib.Path
+        Every module under ``src/``.
+    list_patterns : list of str
+        Allowlist patterns. An allowlisted module is loaded dynamically, so what it imports
+        is reached too.
+
+    Returns
+    -------
+    tuple of list of str
+        The modules the public roots miss, then those still missed once the allowlisted
+        ones are roots as well.
+    """
+    list_dead = sorted(set(dict_modules) - reachable(dict_modules, []))
+    list_allowed = [
+        str_module
+        for str_module in list_dead
+        if any(fnmatch.fnmatchcase(str_module, str_pattern) for str_pattern in list_patterns)
+    ]
+    return list_dead, sorted(set(dict_modules) - reachable(dict_modules, list_allowed))
+
+
 def audit(path_root: pathlib.Path, path_allowlist: pathlib.Path) -> tuple[list[str], int]:
     """Audit one project tree.
 
@@ -250,21 +282,19 @@ def audit(path_root: pathlib.Path, path_allowlist: pathlib.Path) -> tuple[list[s
         return [f"no module found under {path_root / 'src'}: this gate would pass vacuously"], 0
     list_patterns, list_problems = load_allowlist(path_allowlist)
     try:
-        set_reached = reachable(dict_modules)
-    except (SyntaxError, UnicodeDecodeError) as cls_error:
+        list_dead, list_open = dead_modules(dict_modules, list_patterns)
+    except (SyntaxError, ValueError) as cls_error:
         return [*list_problems, f"could not parse ({cls_error})"], len(dict_modules)
-    list_dead = sorted(set(dict_modules) - set_reached)
     for str_pattern in list_patterns:
         if not any(fnmatch.fnmatchcase(str_module, str_pattern) for str_module in list_dead):
             list_problems.append(
                 f"allowlist entry '{str_pattern}' matches no unreachable module: remove it"
             )
-    for str_module in list_dead:
-        if not any(fnmatch.fnmatchcase(str_module, str_pattern) for str_pattern in list_patterns):
-            list_problems.append(
-                f"{dict_modules[str_module].relative_to(path_root)}: {str_module} is unreachable"
-                " from the public modules"
-            )
+    for str_module in list_open:
+        list_problems.append(
+            f"{dict_modules[str_module].relative_to(path_root)}: {str_module} is unreachable"
+            " from the public modules"
+        )
     return list_problems, len(dict_modules)
 
 

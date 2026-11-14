@@ -64,7 +64,9 @@ pacote de terceiros mantém essa dependência "em uso".
   string, um entry point, uma string de engine) é invisível ao percurso: coloque-o em
   `.unreachable-modules.txt` na raiz do projeto, um `<módulo ou glob> | <motivo>` por linha. Uma
   entrada sem motivo, ou que não corresponda a nenhum módulo inalcançável, reprova o gate. Linhas
-  iniciadas por `#` são comentários, e um glob diferencia maiúsculas de minúsculas.
+  iniciadas por `#` são comentários, e um glob diferencia maiúsculas de minúsculas. Um módulo da
+  lista também vira raiz, então os módulos privados que ele importa são alcançados e não precisam
+  de entrada própria.
 - Ele roda só no gate de lançamento, não no CI: um scaffold novo de biblioteca traz os seams do
   template sem ligação de propósito, então a verificação ficaria vermelha desde o primeiro commit.
 - Um import sob `if TYPE_CHECKING:`, ou dentro de uma função, conta como alcançado. Os testes não

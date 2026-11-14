@@ -306,6 +306,47 @@ def test_an_import_inside_a_function_counts_as_reached(tmp_path: Path) -> None:
     assert _run(tmp_path) == 0
 
 
+def test_an_allowlisted_module_reaches_what_it_imports(tmp_path: Path) -> None:
+    """A module loaded dynamically still imports its helper, so the helper is reached."""
+    _write(tmp_path, "src/pkg/__init__.py")
+    _write(tmp_path, "src/pkg/_plugin.py", "from pkg import _helper\n")
+    _write(tmp_path, "src/pkg/_helper.py")
+    _write(tmp_path, ".unreachable-modules.txt", "pkg._plugin | loaded by entry point\n")
+
+    assert _run(tmp_path) == 0
+
+
+def test_a_module_only_an_unlisted_private_module_imports_stays_dead(tmp_path: Path) -> None:
+    """The allowlist excuses its own entries and what they import, nothing else."""
+    _write(tmp_path, "src/pkg/__init__.py")
+    _write(tmp_path, "src/pkg/_plugin.py")
+    _write(tmp_path, "src/pkg/_other.py", "from pkg import _helper\n")
+    _write(tmp_path, "src/pkg/_helper.py")
+    _write(tmp_path, ".unreachable-modules.txt", "pkg._plugin | loaded by entry point\n")
+
+    assert _run(tmp_path) == 1
+
+
+def test_a_file_with_a_null_byte_fails_with_a_finding(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A NUL byte is a parse finding on every supported Python, not a traceback.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture[str]
+        Output capture.
+    """
+    _write(tmp_path, "src/pkg/__init__.py")
+    (tmp_path / "src/pkg/api.py").write_bytes(b"x = 1\x00\n")
+
+    _run(tmp_path)
+
+    assert "could not parse" in capsys.readouterr().out
+
+
 def test_a_file_that_is_not_utf8_fails_with_a_finding(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

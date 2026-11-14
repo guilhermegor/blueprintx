@@ -58,7 +58,8 @@ stays in `src/`, and a dead module that imports a third-party package keeps that
   entry point, an engine string) is invisible to the walk: allowlist it in
   `.unreachable-modules.txt` at the project root, one `<module or glob> | <reason>` per line. An
   entry without a reason, or one that matches no unreachable module, fails the gate. Lines
-  starting with `#` are comments, and a glob is case-sensitive.
+  starting with `#` are comments, and a glob is case-sensitive. An allowlisted module also
+  counts as a root, so the private modules it imports are reached and need no entry of their own.
 - It runs in the release gate only, not in CI: a fresh library scaffold ships its template
   seams unwired on purpose, so the check would be red from the first commit.
 - An import under `if TYPE_CHECKING:`, or inside a function, counts as reached. Tests are not
