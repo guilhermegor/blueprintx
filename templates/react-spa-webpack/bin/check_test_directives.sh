@@ -6,9 +6,15 @@ root="${1:-.}"
 re_block='(/\*|//)[[:space:]]*eslint-disable([[:space:]]|\*|$)'
 re_line='eslint-disable-line([[:space:]]*(\*/|--|$)|.*skip/)'
 
-hits="$(grep -rnE --include='*.test.*' --include='*.spec.*' \
+int_status=0
+hits="$(grep -rnE --include='*.test.*' --include='*.spec.*' --exclude='*.snap' \
     --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=coverage \
-    -e "$re_block" -e "$re_line" "$root" || true)"
+    -e "$re_block" -e "$re_line" "$root")" || int_status=$?
+
+if [ "$int_status" -gt 1 ]; then
+    echo "ERROR: grep failed (exit $int_status) while scanning $root" >&2
+    exit "$int_status"
+fi
 
 if [ -n "$hits" ]; then
     printf '%s\n' "$hits" >&2

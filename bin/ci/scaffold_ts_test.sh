@@ -41,7 +41,16 @@ fi
 cd "$PROJECT_PATH"
 npm ci --no-audit --no-fund
 npm run lint
-if [ -f bin/check_test_directives.sh ]; then
+if [ "$SKELETON" = "react-spa-webpack" ]; then
+    str_msg="test files may not use"
+    for str_body in "/* eslint-disable */" "// eslint-disable-line" "it.skip('x', () => {}); // eslint-disable-line skip/require-issue"; do
+        printf '%s\n' "$str_body" >src/zz-witness.test.ts
+        str_out="$(bash bin/check_test_directives.sh . 2>&1 || true)"
+        if [[ "$str_out" != *"$str_msg"* ]]; then
+            echo "ERROR: gate accepted: $str_body" >&2
+            exit 1
+        fi
+    done
     printf "/* eslint-disable */\nit.skip('x', () => {});\n" >src/zz-witness.test.ts
     if npm run lint >/dev/null 2>&1; then
         echo "ERROR: lint accepted a block eslint-disable over a skipped test" >&2
