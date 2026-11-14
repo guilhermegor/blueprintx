@@ -17,8 +17,8 @@ import pandas as pd
 
 from controller import pipeline_common
 from controller.pipeline_common import EmailHandler, WebhookNotifier
-from utils.dbapi import DbConnection
 from model.example_entity import ExampleEntity
+from utils.dbapi import DbConnection
 from utils.logs import log_message
 from utils.typing import TypeChecker
 

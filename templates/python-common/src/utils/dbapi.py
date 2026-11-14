@@ -20,13 +20,22 @@ Row = Sequence[object]
 
 
 @runtime_checkable
-class DbCursor(Protocol):
-    """The cursor surface the template calls."""
+class DbResultCursor(Protocol):
+    """The part of a cursor needed to read an executed query's result."""
 
     @property
     def description(self) -> Sequence[Sequence[object]] | None:
         """Column metadata of the last query, ``None`` when it returned no rows."""
         ...
+
+    def fetchall(self) -> Sequence[Row]:
+        """Return every remaining row."""
+        ...
+
+
+@runtime_checkable
+class DbCursor(DbResultCursor, Protocol):
+    """The cursor surface the template calls."""
 
     @property
     def rowcount(self) -> int:
@@ -39,10 +48,6 @@ class DbCursor(Protocol):
 
     def fetchone(self) -> Row | None:
         """Return the next row, or ``None`` when exhausted."""
-        ...
-
-    def fetchall(self) -> Sequence[Row]:
-        """Return every remaining row."""
         ...
 
     def __iter__(self) -> Iterator[Row]:

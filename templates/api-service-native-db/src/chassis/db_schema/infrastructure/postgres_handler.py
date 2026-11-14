@@ -17,8 +17,8 @@ except ImportError:  # pragma: no cover - optional dependency
 
 from chassis.db.domain.ports import DatabaseHandler, Record
 from chassis.db.infrastructure.helpers import (
-    decode_record,
     DsnParts,
+    decode_record,
     ensure_id,
     validate_not_flag,
     validate_sql_identifier,

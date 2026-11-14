@@ -24,9 +24,9 @@ from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
-from utils.dbapi import DbConnection
 from model.example_entity import ExampleEntity
 from model.label_enricher import LabelEnricher
+from utils.dbapi import DbConnection
 from utils.logs import log_message
 from utils.typing import ProtocolTypeCheckerMeta, TypeChecker
 from view.report_renderer import RenderToExcel

@@ -13,6 +13,7 @@ direct vendor call, which is the point of a reference example.
 from __future__ import annotations
 
 import re
+
 import pandas as pd
 
 from utils.dbapi import DbConnection

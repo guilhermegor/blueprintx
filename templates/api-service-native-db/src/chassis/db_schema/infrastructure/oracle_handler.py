@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Protocol, cast, runtime_checkable
+from typing import Protocol, cast
 
 
 try:
@@ -18,7 +18,6 @@ from chassis.db.infrastructure.helpers import ensure_id, validate_sql_identifier
 from utils.dbapi import DbManagedConnection
 
 
-@runtime_checkable
 class _Lob(Protocol):
     def read(self) -> str:
         """Return the LOB text."""
@@ -38,11 +37,9 @@ def _read_lob(value: object) -> str:
     str
         Textual payload of the column.
     """
-    if isinstance(value, _Lob):
-        return value.read()
-    if not isinstance(value, str):
-        raise TypeError(f"Expected a LOB or str cell, got {type(value).__name__!r}")
-    return value
+    if isinstance(value, str):
+        return value
+    return cast(_Lob, value).read()
 
 
 class OracleDatabaseHandler(DatabaseHandler):

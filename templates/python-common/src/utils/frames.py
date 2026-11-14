@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 import pandas as pd
 
-from utils.dbapi import DbCursor
+from utils.dbapi import DbResultCursor
 from utils.dtypes import apply_dtypes
 
 
@@ -74,7 +74,7 @@ def _empty_frame(
 
 @type_checker
 def from_cursor(
-    cls_cursor: DbCursor,
+    cls_cursor: DbResultCursor,
     dict_dtypes: dict[str, str],
     list_date_cols: list[str] | None = None,
 ) -> pd.DataFrame:
@@ -93,7 +93,7 @@ def from_cursor(
 
     Parameters
     ----------
-    cls_cursor : DbCursor
+    cls_cursor : DbResultCursor
         A DB-API 2.0 cursor on which ``execute`` has already been called.
     dict_dtypes : dict of {str: str}
         Column→dtype mapping enforced via :func:`utils.dtypes.apply_dtypes`.
