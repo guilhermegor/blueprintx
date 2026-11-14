@@ -4,6 +4,7 @@ All module-level names are initialised once at import time. Import this module
 early (before any feature code) so every consumer shares the same instances.
 """
 
+from collections.abc import Mapping
 from datetime import datetime
 from getpass import getuser
 import os
@@ -136,7 +137,7 @@ def output_path(str_name_key: str) -> Path:
 
 @type_checker
 def resolve_reference_spec(
-    dict_inputs: dict[str, object], str_source: str
+    dict_inputs: Mapping[object, object], str_source: str
 ) -> dict[str, object] | None:
     """Resolve ``str_source``'s reference ("golden copy") spec, override-first then real-input.
 
