@@ -2337,6 +2337,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#why-the-lockfile-is-the-pin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the lockfile is the pin
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cooldown" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2765,6 +2776,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#why-the-lockfile-is-the-pin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the lockfile is the pin
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cooldown" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2858,6 +2880,15 @@ offline mode removes <code>.github/</code>, so it ships none there). The root re
 </tr>
 </tbody>
 </table>
+<h2 id="why-the-lockfile-is-the-pin">Why the lockfile is the pin<a class="headerlink" href="#why-the-lockfile-is-the-pin" title="Permanent link">&para;</a></h2>
+<p>The Python blocks use <code>versioning-strategy: lockfile-only</code>, which never widens a constraint in
+<code>pyproject.toml</code>. Dependabot can therefore only propose versions inside a declared range, so a dev
+dependency with an upper bound (ruff had <code>&lt;0.12</code>) could never be bumped. The tiers declare lower
+bounds only, and <code>poetry.lock</code> is the pin: each bump arrives as a reviewed Dependabot PR that CI
+must pass. Ruff has a single version source; the pre-commit hooks run the locked ruff through
+<code>poetry run</code>, not a separate <code>ruff-pre-commit</code> rev that Dependabot would not update.
+The accepted risk is that a new ruff release can redden a freshly generated project or <code>main</code> CI with no
+BlueprintX commit; the lockfile limits that to the next bump, and the Dependabot PR surfaces it.</p>
 <h2 id="cooldown">Cooldown<a class="headerlink" href="#cooldown" title="Permanent link">&para;</a></h2>
 <p>A release is aged before Dependabot proposes it. Security updates ignore the cooldown.</p>
 <ul>

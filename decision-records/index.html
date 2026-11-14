@@ -3903,16 +3903,23 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   rewritten to <code>&lt;pkg&gt;._internal.*</code> and can exceed the line length, so it is excluded in full
   (mypy excludes it too).</li>
 <li><strong>Preview mode is for PLR1702 only</strong> (too-many-nested-blocks, still preview-only in ruff
-  0.11.13). It also activates 10 tag-along preview rules in the <code>PL</code> and <code>S</code> families, never
-  chosen on their merits, so they are ignored explicitly (#434): <code>--preview</code> alone raised
-  findings from 21 to 81 on <code>templates/</code>, and ignoring exactly those 10 restores 21. Revisit
+  0.17.5: <code>ruff rule PLR1702</code>). It also activates tag-along preview rules in the <code>PL</code> and <code>S</code>
+  families, never chosen on their merits, so each is settled rule by rule (#434, #1054).
+  Re-measured with ruff 0.17.5 and the current <code>ruff.toml</code> ignores (<code>PLC1901</code>, <code>S404</code>, <code>PLR0917</code>)
+  as <code>ruff check --isolated --select PL,S --ignore PLC1901,S404,PLR0917</code> over
+  <code>templates/python-common/{src,bin,optional}</code>: 66 findings stable, 71 with <code>--preview</code>. The 5
+  extra are all <code>PLC2701</code>, which the shipped <code>ruff.toml</code> already settles with a <code>bin/</code> and
+  <code>tests/</code> per-file-ignore and line-scoped <code>noqa</code> on the private imports in <code>optional/</code>. The older
+  figures (21 to 81 on <code>templates/</code>, ruff 0.11.13) used a different tree and ignore list and are
+  not comparable. Revisit
   each on its own measurement the day PLR1702 leaves preview. Why nesting is gated at all is in
   <code>check_complexity.sh</code>'s header and <a href="../complexity-ceilings-measured/">Complexity ceilings</a>.</li>
 <li><strong>PLR1702 pairs with <code>max-complexity = 3</code> for <code>src/</code> only.</strong> Ceiling 3 alone would admit the
   nested <code>if</code>/<code>for</code> that ceiling 2 exists to forbid, and PLR1702 alone would not solve the
   guard-plus-try/except case. Per-tree ceilings live in <code>check_complexity.sh</code>, since
   <code>per-file-ignores</code> can switch a rule off but cannot set a different threshold.</li>
-<li><strong>Rules adopted by measurement</strong> (ruff 0.11.13), recorded in the Ruff Rule Adoption Log in
+<li><strong>Rules adopted by measurement</strong> (ruff 0.11.13 when adopted; re-measured under 0.17.5 in the
+  Adoption Log), recorded in the Ruff Rule Adoption Log in
   <code>CONTRIBUTING.md</code>:<ul>
 <li><code>RET</code> (#426): 0 RET505 and 11 RET501 (a trailing <code>return None</code> in a <code>-&gt; None</code> function),
   all removed; 5 were reachable from <code>templates/python-common</code>, the other 6 needed a scaffold.</li>

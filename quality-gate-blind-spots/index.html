@@ -2791,7 +2791,8 @@ throwaway scratch tree (never committed) and its real output, so this document d
 coverage it did not measure — that is the exact failure #169 exists to catch in the gates
 themselves, and it would be self-defeating to reproduce it here.</p>
 <p>Scratch tree: <code>/tmp/.../scratchpad/gate-audit/</code> (session-local, discarded — not part of this
-repo). Ruff version used: <code>0.11.13</code>, matching the pin in <code>templates/python-common/ruff.toml</code>.</p>
+repo). Ruff version used: <code>0.11.13</code> for the original run; Part 1 was re-measured on 2026-11-14 with
+<code>0.17.5</code>, the measured version and the minimum the templates declare; a generated project may lock a later one (blueprintx#1130).</p>
 <h2 id="method">Method<a class="headerlink" href="#method" title="Permanent link">&para;</a></h2>
 <p>For each gate, a deliberately-bad fixture was written that the gate <em>should</em> catch, the gate
 was run against it, and the result recorded as <strong>CAUGHT</strong> or <strong>MISSED</strong>. Where a fixture needed
@@ -2826,11 +2827,17 @@ so), so "CAUGHT" there means "detected and printed," not "exit 1."</p>
 <p><strong>Command 1 — current adopted config:</strong>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ruff check --config templates/python-common/ruff.toml --no-cache src/bad_families.py
 </span></code></pre></div>
-<strong>Output:</strong> <code>10 issues</code> — <code>D103 (7x)</code>, <code>PLR2004 (1x)</code>, <code>B904 (1x)</code>, <code>PLR0913 (1x)</code>.</p>
+<strong>Output (0.11.13):</strong> <code>10 issues</code> — <code>D103 (7x)</code>, <code>PLR2004 (1x)</code>, <code>B904 (1x)</code>, <code>PLR0913 (1x)</code>.
+<strong>Output (0.17.5, a different fixture: the same file with annotated signatures, so the counts are not like-for-like):</strong> <code>11 errors</code> — <code>D103 (7x)</code>,
+<code>PLR2004</code>, <code>B904</code>, <code>PLR0913</code>, <code>D100</code>. Same rule families caught; the extra <code>D100</code> is the fixture's
+missing module docstring.</p>
 <p><strong>Command 2 — the families the issue listed as ungated, selected explicitly:</strong>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ruff check --isolated --select FBT,PTH,T20,TRY,DTZ,ARG --no-cache src/bad_families.py
 </span></code></pre></div>
-<strong>Output:</strong> <code>7 issues</code> — <code>T201 (2x)</code>, <code>DTZ005</code>, <code>TRY003</code>, <code>ARG001</code>, <code>FBT001</code>, <code>PTH118</code>.</p>
+<strong>Output (0.11.13):</strong> <code>7 issues</code> — <code>T201 (2x)</code>, <code>DTZ005</code>, <code>TRY003</code>, <code>ARG001</code>, <code>FBT001</code>, <code>PTH118</code>.
+<strong>Output (0.17.5, the same annotated fixture, not the one printed above):</strong> <code>14 errors</code> — <code>ARG001 (9x)</code>, <code>FBT001</code>, <code>DTZ005</code>,
+<code>PTH118</code>, <code>T201</code>, <code>TRY003</code>. All six families still fire when selected and none is in <code>select</code>,
+so every verdict in the table below holds under 0.17.5.</p>
 <table>
 <thead>
 <tr>
