@@ -15,7 +15,7 @@ from chassis.db_schema.application import build_database_session
 
 # .env: DB_BACKEND=sqlite  DB_URL=sqlite:///./data/app.db
 cls_db_session = build_database_session()
-cls_db_session.create_tables()   # runs Base.metadata.create_all()
+cls_db_session.create_tables()  # runs Base.metadata.create_all()
 ```
 
 Supported values for `DB_BACKEND`: `sqlite`, `postgresql`, `mysql`, `mssql`, `oracle`.
@@ -30,7 +30,7 @@ Use `.session()` for an explicit context-managed session. The session is committ
 with cls_db_session.session() as cls_session:
     cls_repo = SQLNoteRepository(cls_session)
     cls_note = create_note(NoteCreateDTO(title="Hello"), cls_repo)
-    cls_session.commit()   # commit happens in the caller, not the repository
+    cls_session.commit()  # commit happens in the caller, not the repository
 ```
 
 ---
@@ -45,8 +45,10 @@ from sqlalchemy.orm import Session
 
 app = FastAPI()
 
+
 def get_db() -> Session:
     yield from cls_db_session.get_session()
+
 
 @app.post("/notes")
 def create(cls_dto: NoteCreateDTO, cls_session: Session = Depends(get_db)) -> NoteResponseDTO:

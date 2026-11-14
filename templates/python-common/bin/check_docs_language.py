@@ -253,9 +253,9 @@ def _blank_multiline(list_lines: list) -> list:
         The same number of lines, with each blanked span reduced to empty lines.
     """
     str_blanked = RE_MULTILINE_BLANK.sub(
-        lambda re_hit: re.sub(r"[^\n]", "", re_hit.group())
-        if "\n" in re_hit.group()
-        else re_hit.group(),
+        lambda re_hit: (
+            re.sub(r"[^\n]", "", re_hit.group()) if "\n" in re_hit.group() else re_hit.group()
+        ),
         RE_CODE_SPAN.sub(" ", "\n".join(list_lines)),
     )
     return str_blanked.split("\n")

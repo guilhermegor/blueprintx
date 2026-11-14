@@ -65,6 +65,7 @@ project/
 from typing import Iterable, Protocol
 from .entities import Note
 
+
 class NoteRepository(Protocol):
     def add(self, cls_note: Note) -> Note: ...
     def get(self, str_note_id: str) -> Note | None: ...
@@ -80,6 +81,7 @@ class NoteRepository(Protocol):
 from ..domain.dto import NoteCreateDTO, NoteResponseDTO
 from ..domain.entities import Note
 from ..domain.ports import NoteRepository
+
 
 def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:
     cls_note = Note(title=cls_dto.title)
@@ -102,13 +104,14 @@ from sqlalchemy.orm import Session
 from chassis.db_schema.infrastructure.base import Repository
 from ..domain.entities import Note
 
+
 class SQLNoteRepository(Repository):
     def __init__(self, cls_session: Session) -> None:
         self._cls_session = cls_session
 
     def add(self, cls_note: Note) -> Note:
         self._cls_session.add(cls_note)
-        self._cls_session.flush()   # assigns id without committing
+        self._cls_session.flush()  # assigns id without committing
         return cls_note
 
     def get(self, str_note_id: str) -> Note | None:
@@ -132,7 +135,7 @@ from chassis.db_schema.application import build_database_session
 
 # reads DB_BACKEND from .env — e.g. DB_BACKEND=sqlite  DB_URL=sqlite:///./data/app.db
 cls_db_session = build_database_session()
-cls_db_session.create_tables()   # runs Base.metadata.create_all()
+cls_db_session.create_tables()  # runs Base.metadata.create_all()
 
 with cls_db_session.session() as cls_session:
     cls_repo = SQLNoteRepository(cls_session)

@@ -41,7 +41,7 @@ Rule: when a test wires together two src classes and at least one is `TypeChecke
 import **both** via the **bare runtime root** — the way the app actually runs:
 
 ```python
-from utils.paths import resolve_path            # NOT src.utils.paths
+from utils.paths import resolve_path  # NOT src.utils.paths
 from view.report_renderer import RenderToExcel  # NOT src.view.report_renderer
 ```
 
@@ -427,7 +427,7 @@ _MAPPING_NO_EXTRA_ENV: Mapping[str, str] = MappingProxyType({})
 
 def _run_gate(path_root: Path, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV) -> ...:
     dict_env = dict(os.environ)
-    dict_env.pop("FORCE_COLOR", None)      # unrolled: a loop costs complexity, and tests/ is capped at 1
+    dict_env.pop("FORCE_COLOR", None)  # unrolled: tests/ is capped at complexity 1
     dict_env.pop("CLICOLOR_FORCE", None)
     dict_env.pop("NO_COLOR", None)
     dict_env.update(dict_extra)

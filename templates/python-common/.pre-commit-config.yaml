@@ -65,18 +65,6 @@ repos:
         args:
           - --select=D412,D417
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
-    hooks:
-      - id: ruff
-        name: ruff check
-        args:
-          - --config=ruff.toml
-      - id: ruff-format
-        name: ruff format
-        args:
-          - --config=ruff.toml
-
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
@@ -94,6 +82,24 @@ repos:
 
   - repo: local
     hooks:
+      - id: ruff
+        name: ruff check
+        entry: bash bin/poetry_exec.sh run ruff check --config=ruff.toml
+        language: system
+        types_or:
+          - python
+          - pyi
+          - jupyter
+
+      - id: ruff-format
+        name: ruff format
+        entry: bash bin/poetry_exec.sh run ruff format --config=ruff.toml
+        language: system
+        types_or:
+          - python
+          - pyi
+          - jupyter
+
       - id: check-unix-filenames
         name: check unix/linux filename validity
         entry: bash bin/check_unix_filenames.sh

@@ -329,19 +329,22 @@ def _comment_blocks(str_source: str) -> list:
     int_start = 0
     int_previous = -2
     try:
-        for cls_token in tokenize.generate_tokens(iter(str_source.splitlines(True)).__next__):
-            if cls_token.type != tokenize.COMMENT:
-                continue
-            int_line = cls_token.start[0]
-            if int_line != int_previous + 1 and list_block:
-                list_out.append((int_start, "\n".join(list_block)))
-                list_block = []
-            if not list_block:
-                int_start = int_line
-            list_block.append(cls_token.string.lstrip("#"))
-            int_previous = int_line
+        list_comments = [
+            cls_token
+            for cls_token in tokenize.generate_tokens(iter(str_source.splitlines(True)).__next__)
+            if cls_token.type == tokenize.COMMENT
+        ]
     except (tokenize.TokenError, IndentationError, SyntaxError):
         return []
+    for cls_token in list_comments:
+        int_line = cls_token.start[0]
+        if int_line != int_previous + 1 and list_block:
+            list_out.append((int_start, "\n".join(list_block)))
+            list_block = []
+        if not list_block:
+            int_start = int_line
+        list_block.append(cls_token.string.lstrip("#"))
+        int_previous = int_line
     if list_block:
         list_out.append((int_start, "\n".join(list_block)))
     return list_out

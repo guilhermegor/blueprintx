@@ -118,7 +118,7 @@ class FileContract(metaclass=TypeChecker):
 
     @property
     def output_columns(self) -> tuple[str, ...]:
-        """Return the full output shape: source-required columns then provenance columns.
+        """The full output shape: source-required columns then provenance columns.
 
         Returns
         -------

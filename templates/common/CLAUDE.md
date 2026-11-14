@@ -29,7 +29,9 @@ the callers import the seam.**
 # <package>/_internal/utils/http_downloader.py in a library. It names the vendor, and types it.
 import requests
 
+
 def download_file(str_url: str, path_dest: Path) -> Path: ...
+
 
 # The caller — any other layer. It names the SEAM, and nothing else.
 from utils.http_downloader import download_file

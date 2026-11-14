@@ -61,21 +61,95 @@ _str_config_error: str | None = None
 YAML_OUTPUTS: dict = {}
 YAML_INPUTS: dict = {}
 
-try:
-    YAML_OUTPUTS = yaml.safe_load(
+
+@type_checker
+def _require_mapping(str_label: str, loaded: object) -> None:
+    """Reject a parsed YAML document that is not a mapping.
+
+    Parameters
+    ----------
+    str_label : str
+        The config's name, used in the error message.
+    loaded : object
+        The value ``yaml.safe_load`` returned.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If ``loaded`` is not a ``dict``.
+    """
+    if not isinstance(loaded, dict):
+        raise TypeError(f"{str_label} config must be a YAML mapping, got {type(loaded).__name__}")
+
+
+@type_checker
+def _require_string_template(dict_outputs: dict, str_key: str) -> None:
+    """Reject an outputs mapping whose ``str_key`` is not a string.
+
+    Parameters
+    ----------
+    dict_outputs : dict
+        The parsed ``outputs`` mapping.
+    str_key : str
+        The filename-template key that must hold a string.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If the value under ``str_key`` is not a string.
+    """
+    if not isinstance(dict_outputs.get(str_key), str):
+        raise TypeError(f"outputs config must define {str_key!r} as a string")
+
+
+@type_checker
+def _validate_outputs_templates(dict_outputs: dict) -> None:
+    """Require every filename template the run reads to be a string.
+
+    Parameters
+    ----------
+    dict_outputs : dict
+        The parsed ``outputs`` mapping.
+
+    Returns
+    -------
+    None
+    """
+    for str_key in ("log_name", "json_name", "txt_name"):
+        _require_string_template(dict_outputs, str_key)
+
+
+@type_checker
+def _load_yaml_config() -> tuple[dict, dict]:
+    """Load and validate the outputs and inputs YAML for the active environment.
+
+    Returns
+    -------
+    tuple of dict
+        The parsed ``outputs`` mapping, then the parsed ``inputs`` mapping.
+    """
+    dict_outputs = yaml.safe_load(
         resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR).read_text(encoding="utf-8")
     )
-    YAML_INPUTS = yaml.safe_load(
+    dict_inputs = yaml.safe_load(
         resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
     )
-    for str_label, dict_loaded in (("outputs", YAML_OUTPUTS), ("inputs", YAML_INPUTS)):
-        if not isinstance(dict_loaded, dict):
-            raise TypeError(
-                f"{str_label} config must be a YAML mapping, got {type(dict_loaded).__name__}"
-            )
-    for str_key in ("log_name", "json_name", "txt_name"):
-        if not isinstance(YAML_OUTPUTS.get(str_key), str):
-            raise TypeError(f"outputs config must define {str_key!r} as a string")
+    _require_mapping("outputs", dict_outputs)
+    _require_mapping("inputs", dict_inputs)
+    _validate_outputs_templates(dict_outputs)
+    return dict_outputs, dict_inputs
+
+
+try:
+    YAML_OUTPUTS, YAML_INPUTS = _load_yaml_config()
 except Exception as cls_exc:  # noqa: BLE001
     _str_config_error = f"{type(cls_exc).__name__}: {cls_exc}"
     YAML_OUTPUTS = dict(_DICT_FALLBACK_OUTPUTS)

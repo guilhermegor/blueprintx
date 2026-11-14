@@ -23,8 +23,9 @@ external API) without touching callers:
 # model/ports/note_repository.py
 from typing import Protocol
 
+
 class NoteRepository(Protocol):
-	def fetch_all(self) -> "pd.DataFrame": ...
+    def fetch_all(self) -> "pd.DataFrame": ...
 ```
 
 **Why "only when shared":** ports + DTOs are decoupling machinery with a real
