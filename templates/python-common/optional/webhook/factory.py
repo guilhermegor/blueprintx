@@ -5,6 +5,8 @@ caller passes only ``WEBHOOK_URL``. A blank URL yields a :class:`NullNotifier`
 (opt-out) instead of crashing an adapter constructor that requires a live URL.
 """
 
+from collections.abc import Callable
+
 from chassis.webhook.domain.ports import WebhookNotifier
 from chassis.webhook.infrastructure.null_notifier import NullNotifier
 from chassis.webhook.infrastructure.slack_notifier import SlackNotifier
@@ -17,13 +19,13 @@ _DICT_PLATFORM_SIGNATURES = {
     "slack": "slack",
 }
 
-_DICT_BUILDERS = {
+_DICT_BUILDERS: dict[str, Callable[[str], WebhookNotifier]] = {
     "teams": TeamsNotifier,
     "slack": SlackNotifier,
 }
 
 
-def detect_platform(str_url: str) -> str:
+def detect_platform(str_url: str) -> str:  # complexity-ok: signature scan
     """Infer the webhook platform from its URL.
 
     Parameters

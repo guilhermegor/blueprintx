@@ -20,7 +20,7 @@ class SlackNotifier:
     """Adapter that posts notifications to a Slack incoming webhook."""
 
     @staticmethod
-    def _validate_url(str_url: str) -> None:
+    def _validate_url(str_url: str) -> None:  # complexity-ok: two input guards, one error each
         """Validate the webhook URL format.
 
         Parameters
@@ -49,7 +49,9 @@ class SlackNotifier:
         self._validate_url(str_url)
         self._str_url = str_url
 
-    def send(self, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
+    def send(  # complexity-ok: guard + failure map
+        self, str_message: str, str_title: str = "ROUTINE_CONCLUSION"
+    ) -> None:
         """Post a message to the configured Slack channel.
 
         The title is rendered as a bold first line (Slack ``mrkdwn``), followed
