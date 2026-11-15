@@ -6,4 +6,4 @@ Leave `WEBHOOK_URL` empty to opt out: a no-op notifier is used and nothing is se
 
 | Variable | In .env.example | Read when | Required | Default | Example | Notes |
 |---|---|---|---|---|---|---|
-| `WEBHOOK_URL` | yes | `ENV` is a production value | no | empty (opted out) | `https://hooks.slack.com/services/T000/B000/XXXX` | Incoming-webhook URL. Never commit a real value: this file ships as `.env.example` too. |
+| `WEBHOOK_URL` | yes | import (`config.startup`), every `ENV` | no | empty (opted out) | `https://hooks.slack.com/services/T000/B000/XXXX` | Incoming-webhook URL. Never commit a real value; `.env.example` carries it blank. A malformed URL raises at import. |
