@@ -126,7 +126,7 @@ def all_value(path_init: pathlib.Path) -> ast.expr | None:
     return list_nodes[0].value or ast.Constant(None)
 
 
-def order_problems(path_init: pathlib.Path, cls_value: ast.expr) -> list[str]:
+def order_problems(path_init: pathlib.Path, *, cls_value: ast.expr) -> list[str]:
     """Return one message per ordering or layout defect in an ``__all__``.
 
     Parameters
@@ -215,7 +215,7 @@ def main() -> int:
         return 1
     list_problems: list[str] = []
     for path_init, cls_value in list_found:
-        list_problems += order_problems(path_init, cls_value)
+        list_problems += order_problems(path_init, cls_value=cls_value)
     for path_doc in doc_files():
         list_problems += count_problems(path_doc)
     for str_problem in list_problems:

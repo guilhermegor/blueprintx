@@ -205,6 +205,7 @@ def _decimal_from_float(value: float) -> object:
 @type_checker
 def apply_dtypes(
     df_input: pd.DataFrame,
+    *,
     dict_dtypes: dict[str, str] | None = None,
     list_date_cols: Sequence[str] | None = None,
     list_datetime_cols: Sequence[str] | None = None,
@@ -262,7 +263,7 @@ def apply_dtypes(
     list_referenced = (
         list(dict_dtypes.keys()) + list_date_cols + list_datetime_cols + list_decimal_cols
     )
-    _validate_referenced_columns(df_input, list_referenced)
+    _validate_referenced_columns(df_input, list_referenced=list_referenced)
 
     df_typed = df_input.copy()
     if dict_dtypes:
@@ -284,7 +285,7 @@ def apply_dtypes(
 
 @type_checker
 def _validate_referenced_columns(  # complexity-ok: two distinct validation faults
-    df_input: pd.DataFrame, list_referenced: list[str]
+    df_input: pd.DataFrame, *, list_referenced: list[str]
 ) -> None:
     """Fail fast when a referenced column is absent or claimed by more than one target type.
 

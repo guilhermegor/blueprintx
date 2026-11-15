@@ -38,7 +38,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_migration_slugs")
 
 
-def _migration_file(path_dir: Path, str_name: str, str_body: str = "") -> Path:
+def _migration_file(path_dir: Path, *, str_name: str, str_body: str = "") -> Path:
     """Write a migration version file and return its path.
 
     Parameters
@@ -62,14 +62,14 @@ def _migration_file(path_dir: Path, str_name: str, str_body: str = "") -> Path:
 
 def test_non_verb_slug_is_reported(tmp_path: Path) -> None:
     """A slug that does not lead with a known verb must fail the gate."""
-    path_file = _migration_file(tmp_path, "20260913_a1b2c3d4e5f6_users_table.py")
+    path_file = _migration_file(tmp_path, str_name="20260913_a1b2c3d4e5f6_users_table.py")
 
     assert gate.check_file(path_file) == 1
 
 
 @pytest.mark.parametrize("str_which", ["file", "slug"])
 def test_non_verb_slug_names_file_and_slug(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], str_which: str
+    tmp_path: Path, *, capsys: pytest.CaptureFixture[str], str_which: str
 ) -> None:
     """The message must name the offending file and slug, not just 'invalid'.
 
@@ -82,7 +82,7 @@ def test_non_verb_slug_names_file_and_slug(
     str_which : str
         Which half of the identification is under test.
     """
-    path_file = _migration_file(tmp_path, "20260913_a1b2c3d4e5f6_users_table.py")
+    path_file = _migration_file(tmp_path, str_name="20260913_a1b2c3d4e5f6_users_table.py")
     gate.check_file(path_file)
     dict_expected = {"file": str(path_file), "slug": "users_table"}
 
@@ -91,7 +91,7 @@ def test_non_verb_slug_names_file_and_slug(
 
 def test_unparsable_filename_shape_is_reported(tmp_path: Path) -> None:
     """A filename that does not match <date>_<rev>_<slug>.py cannot be verified — a finding."""
-    path_file = _migration_file(tmp_path, "add_users_table.py")
+    path_file = _migration_file(tmp_path, str_name="add_users_table.py")
 
     assert gate.check_file(path_file) == 1
 
@@ -109,9 +109,9 @@ def test_unparsable_filename_shape_is_reported(tmp_path: Path) -> None:
         "seed_roles",
     ],
 )
-def test_known_verb_slug_passes(tmp_path: Path, str_slug: str) -> None:
+def test_known_verb_slug_passes(tmp_path: Path, *, str_slug: str) -> None:
     """Every verb from the adopted Rails-style enum must pass untouched."""
-    path_file = _migration_file(tmp_path, f"20260913_a1b2c3d4e5f6_{str_slug}.py")
+    path_file = _migration_file(tmp_path, str_name=f"20260913_a1b2c3d4e5f6_{str_slug}.py")
 
     assert gate.check_file(path_file) == 0
 
@@ -120,8 +120,8 @@ def test_escape_hatch_with_a_reason_silences_the_finding(tmp_path: Path) -> None
     """`alembic merge` produces a slug outside the enum — the documented escape hatch."""
     path_file = _migration_file(
         tmp_path,
-        "20260913_a1b2c3d4e5f6_merge_heads.py",
-        "# migration-slug-ok: alembic merge, no verb applies\n",
+        str_name="20260913_a1b2c3d4e5f6_merge_heads.py",
+        str_body="# migration-slug-ok: alembic merge, no verb applies\n",
     )
 
     assert gate.check_file(path_file) == 0
@@ -131,8 +131,8 @@ def test_a_bare_escape_hatch_with_no_reason_is_rejected(tmp_path: Path) -> None:
     """The reason is required — a bare marker must not satisfy the gate."""
     path_file = _migration_file(
         tmp_path,
-        "20260913_a1b2c3d4e5f6_merge_heads.py",
-        "# migration-slug-ok:\n",
+        str_name="20260913_a1b2c3d4e5f6_merge_heads.py",
+        str_body="# migration-slug-ok:\n",
     )
 
     assert gate.check_file(path_file) == 1
@@ -144,15 +144,15 @@ def test_a_bare_escape_hatch_cannot_borrow_a_reason_from_the_next_line(
     """A bare pragma must not scavenge non-whitespace content off a later line as its reason."""
     path_file = _migration_file(
         tmp_path,
-        "20260913_a1b2c3d4e5f6_merge_heads.py",
-        '# migration-slug-ok:\n"""merge migration heads"""\n',
+        str_name="20260913_a1b2c3d4e5f6_merge_heads.py",
+        str_body='# migration-slug-ok:\n"""merge migration heads"""\n',
     )
 
     assert gate.check_file(path_file) == 1
 
 
 def test_main_skips_when_migrations_dir_is_absent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A tier with no migrations/versions/ (most Python tiers today) must pass, not fail."""
     monkeypatch.chdir(tmp_path)
@@ -161,12 +161,12 @@ def test_main_skips_when_migrations_dir_is_absent(
 
 
 def test_main_fails_on_a_bad_slug_in_the_tree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The whole-run entrypoint must fail when any file under versions/ has a bad slug."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260913_a1b2c3d4e5f6_users_table.py")
+    _migration_file(path_versions, str_name="20260913_a1b2c3d4e5f6_users_table.py")
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 1

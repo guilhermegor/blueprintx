@@ -119,7 +119,7 @@ def discover_python_files(path_src: pathlib.Path) -> list:
     )
 
 
-def run_vulture(cls_vulture: ModuleType, list_files: list) -> list:
+def run_vulture(cls_vulture: ModuleType, *, list_files: list) -> list:
     """Scan an explicit file list and return every finding at or above the report floor.
 
     Parameters
@@ -212,7 +212,7 @@ def print_gate_tier(list_gate: list) -> None:
     )
 
 
-def run_gate(cls_vulture: ModuleType, list_files: list) -> int:
+def run_gate(cls_vulture: ModuleType, *, list_files: list) -> int:
     """Scan the files, print both tiers, and return the gate's exit code.
 
     Parameters
@@ -229,7 +229,7 @@ def run_gate(cls_vulture: ModuleType, list_files: list) -> int:
         scan a file (an unscanned file is not a clean one).
     """
     try:
-        list_findings = run_vulture(cls_vulture, list_files)
+        list_findings = run_vulture(cls_vulture, list_files=list_files)
     except RuntimeError as err:
         print(f"❌ check_dead_code: {err} — refusing to report a clean tree.", file=sys.stderr)
         return 1
@@ -298,7 +298,7 @@ def main(list_argv: list) -> int:
         )
         return 0
 
-    return run_gate(cls_vulture, list_files)
+    return run_gate(cls_vulture, list_files=list_files)
 
 
 if __name__ == "__main__":

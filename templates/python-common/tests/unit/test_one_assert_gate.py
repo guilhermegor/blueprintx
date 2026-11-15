@@ -50,7 +50,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_one_assert")
 
 
-def _write_test_file(path_root: Path, str_content: str, str_suite: str = "tests/unit") -> None:
+def _write_test_file(path_root: Path, *, str_content: str, str_suite: str = "tests/unit") -> None:
     """Write one fixture test file under ``<path_root>/<str_suite>/test_sample.py``.
 
     Parameters
@@ -68,7 +68,7 @@ def _write_test_file(path_root: Path, str_content: str, str_suite: str = "tests/
     (path_suite / "test_sample.py").write_text(str_content, encoding="utf-8")
 
 
-def _run(path_root: Path, list_extra_args: list[str]) -> int:
+def _run(path_root: Path, *, list_extra_args: list[str]) -> int:
     """Run the gate's ``main()`` against a fixture root.
 
     Parameters
@@ -104,34 +104,34 @@ def _count_sites(str_src: str) -> int:
 
 def test_a_zero_assertion_unit_test_is_flagged(tmp_path: Path) -> None:
     """A ``test_*`` function with no assert, call, or raises/warns block is a finding."""
-    _write_test_file(tmp_path, _SRC_ZERO_ASSERT)
+    _write_test_file(tmp_path, str_content=_SRC_ZERO_ASSERT)
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 def test_a_zero_assertion_integration_test_is_flagged_too(tmp_path: Path) -> None:
     """The zero rule is unconditional — the loose integration cap does not excuse it."""
-    _write_test_file(tmp_path, _SRC_ZERO_ASSERT, str_suite="tests/integration")
+    _write_test_file(tmp_path, str_content=_SRC_ZERO_ASSERT, str_suite="tests/integration")
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 @pytest.mark.parametrize("str_fragment", ["test_x", "asserts nothing"])
 def test_a_zero_assertion_finding_names_the_function_and_the_reason(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], str_fragment: str
+    tmp_path: Path, *, capsys: pytest.CaptureFixture[str], str_fragment: str
 ) -> None:
     """The message must identify the offending function, not merely report a count."""
-    _write_test_file(tmp_path, _SRC_ZERO_ASSERT)
-    _run(tmp_path, [])
+    _write_test_file(tmp_path, str_content=_SRC_ZERO_ASSERT)
+    _run(tmp_path, list_extra_args=[])
 
     assert str_fragment in capsys.readouterr().err
 
 
 def test_a_single_bare_assert_is_clean(tmp_path: Path) -> None:
     """One ``assert`` statement is the ordinary, unflagged case."""
-    _write_test_file(tmp_path, _SRC_ONE_ASSERT)
+    _write_test_file(tmp_path, str_content=_SRC_ONE_ASSERT)
 
-    assert _run(tmp_path, []) == 0
+    assert _run(tmp_path, list_extra_args=[]) == 0
 
 
 @pytest.mark.parametrize(
@@ -145,12 +145,12 @@ def test_a_single_bare_assert_is_clean(tmp_path: Path) -> None:
     ids=["raises", "warns", "mock-assert-call", "pandas-assert-call"],
 )
 def test_a_non_assert_statement_check_counts_as_one_assertion_site(
-    tmp_path: Path, str_body: str
+    tmp_path: Path, *, str_body: str
 ) -> None:
     """A context-manager or ``assert_*()`` check is the assertion — not its absence."""
-    _write_test_file(tmp_path, f"def test_x() -> None:\n{str_body}")
+    _write_test_file(tmp_path, str_content=f"def test_x() -> None:\n{str_body}")
 
-    assert _run(tmp_path, []) == 0
+    assert _run(tmp_path, list_extra_args=[]) == 0
 
 
 def test_an_async_raises_block_alone_counts_as_one_site_not_zero() -> None:
@@ -176,18 +176,18 @@ def test_a_plain_assert_plus_an_async_raises_block_is_two_sites_and_flagged(
     """The async block must be counted, or this under-counts at one and passes silently (#643)."""
     _write_test_file(
         tmp_path,
-        "async def test_x() -> None:\n\tassert 1 == 1\n"
+        str_content="async def test_x() -> None:\n\tassert 1 == 1\n"
         "\tasync with pytest.raises(ValueError):\n\t\tawait f()\n",
     )
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 def test_two_assertion_sites_in_a_unit_test_are_flagged_by_default(tmp_path: Path) -> None:
     """The cap of one is the DEFAULT for the unit suite — no flag needed to arm it."""
-    _write_test_file(tmp_path, _SRC_TWO_ASSERTS)
+    _write_test_file(tmp_path, str_content=_SRC_TWO_ASSERTS)
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 def test_two_assertion_sites_in_an_integration_test_are_clean(tmp_path: Path) -> None:
@@ -196,91 +196,94 @@ def test_two_assertion_sites_in_an_integration_test_are_clean(tmp_path: Path) ->
     This is the whole reason the rule is scoped by path. Splitting these re-runs the
     expensive arrange to prove no new fact — measured 76% of the integration suite.
     """
-    _write_test_file(tmp_path, _SRC_TWO_ASSERTS, str_suite="tests/integration")
+    _write_test_file(tmp_path, str_content=_SRC_TWO_ASSERTS, str_suite="tests/integration")
 
-    assert _run(tmp_path, []) == 0
+    assert _run(tmp_path, list_extra_args=[]) == 0
 
 
 def test_the_suite_is_decided_by_path_not_by_filename(tmp_path: Path) -> None:
     """The same ``test_sample.py`` name is capped or not purely by where it sits."""
-    _write_test_file(tmp_path, _SRC_TWO_ASSERTS, str_suite="tests/integration/deep/nested")
+    _write_test_file(
+        tmp_path, str_content=_SRC_TWO_ASSERTS, str_suite="tests/integration/deep/nested"
+    )
 
-    assert _run(tmp_path, []) == 0
+    assert _run(tmp_path, list_extra_args=[]) == 0
 
 
 def test_a_custom_unit_dir_moves_the_cap(tmp_path: Path) -> None:
     """``--unit-dir`` re-points the cap for a project that renames its suite."""
-    _write_test_file(tmp_path, _SRC_TWO_ASSERTS, str_suite="tests/fast")
+    _write_test_file(tmp_path, str_content=_SRC_TWO_ASSERTS, str_suite="tests/fast")
 
-    assert _run(tmp_path, ["--unit-dir", "tests/fast"]) == 1
+    assert _run(tmp_path, list_extra_args=["--unit-dir", "tests/fast"]) == 1
 
 
 @pytest.mark.parametrize("str_fragment", ["test_x", "2 assertion sites", "parametrize"])
 def test_a_cap_finding_names_the_test_the_count_and_the_remedy(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], str_fragment: str
+    tmp_path: Path, *, capsys: pytest.CaptureFixture[str], str_fragment: str
 ) -> None:
     """A finding that does not say how to fix it is a finding people route around."""
-    _write_test_file(tmp_path, _SRC_TWO_ASSERTS)
-    _run(tmp_path, [])
+    _write_test_file(tmp_path, str_content=_SRC_TWO_ASSERTS)
+    _run(tmp_path, list_extra_args=[])
 
     assert str_fragment in capsys.readouterr().err
 
 
 def test_max_per_test_zero_disables_the_cap_leaving_the_zero_check(tmp_path: Path) -> None:
     """Measurement mode: ``--max-per-test 0`` cannot mean "cap at zero"."""
-    _write_test_file(tmp_path, _SRC_TWO_ASSERTS)
+    _write_test_file(tmp_path, str_content=_SRC_TWO_ASSERTS)
 
-    assert _run(tmp_path, ["--max-per-test", "0"]) == 0
+    assert _run(tmp_path, list_extra_args=["--max-per-test", "0"]) == 0
 
 
 def test_max_per_test_zero_still_flags_a_zero_assertion_test(tmp_path: Path) -> None:
     """Disabling the cap must not disable the rule the cap was layered on top of."""
-    _write_test_file(tmp_path, _SRC_ZERO_ASSERT)
+    _write_test_file(tmp_path, str_content=_SRC_ZERO_ASSERT)
 
-    assert _run(tmp_path, ["--max-per-test", "0"]) == 1
+    assert _run(tmp_path, list_extra_args=["--max-per-test", "0"]) == 1
 
 
 def test_a_raised_cap_admits_a_two_assert_unit_test(tmp_path: Path) -> None:
     """``--max-per-test`` overrides the default rather than only tightening it."""
-    _write_test_file(tmp_path, _SRC_TWO_ASSERTS)
+    _write_test_file(tmp_path, str_content=_SRC_TWO_ASSERTS)
 
-    assert _run(tmp_path, ["--max-per-test", "2"]) == 0
+    assert _run(tmp_path, list_extra_args=["--max-per-test", "2"]) == 0
 
 
 @pytest.mark.parametrize("str_value", ["not-a-number", "-1", "1.5"])
-def test_a_non_integer_max_per_test_value_is_rejected(tmp_path: Path, str_value: str) -> None:
+def test_a_non_integer_max_per_test_value_is_rejected(tmp_path: Path, *, str_value: str) -> None:
     """Bad usage is refused, not silently coerced or ignored."""
-    assert _run(tmp_path, ["--max-per-test", str_value]) == 1
+    assert _run(tmp_path, list_extra_args=["--max-per-test", str_value]) == 1
 
 
 def test_an_unrecognised_flag_is_rejected(tmp_path: Path) -> None:
     """A typo'd flag must not be swallowed into a silently narrower run."""
-    assert _run(tmp_path, ["--max-per-tests", "1"]) == 1
+    assert _run(tmp_path, list_extra_args=["--max-per-tests", "1"]) == 1
 
 
 def test_a_flag_with_no_value_is_rejected(tmp_path: Path) -> None:
     """Every flag takes a value; a dangling one is bad usage, not a default."""
-    assert _run(tmp_path, ["--unit-dir"]) == 1
+    assert _run(tmp_path, list_extra_args=["--unit-dir"]) == 1
 
 
 def test_a_justified_multi_assert_test_is_exempted_by_the_hatch(tmp_path: Path) -> None:
     """``# one-assert-ok: <reason>`` clears a cap violation."""
     _write_test_file(
         tmp_path,
-        "def test_x() -> None:\n\tassert 1 == 1\n"
+        str_content="def test_x() -> None:\n\tassert 1 == 1\n"
         "\tassert 2 == 2  # one-assert-ok: value and dtype\n",
     )
 
-    assert _run(tmp_path, []) == 0
+    assert _run(tmp_path, list_extra_args=[]) == 0
 
 
 def test_a_bare_hatch_marker_with_no_reason_does_not_exempt(tmp_path: Path) -> None:
     """The reason is REQUIRED, matching ``# complexity-ok:``'s convention."""
     _write_test_file(
-        tmp_path, "def test_x() -> None:\n\tassert 1 == 1\n\tassert 2 == 2  # one-assert-ok:\n"
+        tmp_path,
+        str_content="def test_x() -> None:\n\tassert 1 == 1\n\tassert 2 == 2  # one-assert-ok:\n",
     )
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 def test_a_bare_hatch_marker_mid_function_does_not_exempt(tmp_path: Path) -> None:
@@ -292,67 +295,72 @@ def test_a_bare_hatch_marker_mid_function_does_not_exempt(tmp_path: Path) -> Non
     "a bare marker is rejected" rule.
     """
     _write_test_file(
-        tmp_path, "def test_x() -> None:\n\tassert 1 == 1  # one-assert-ok:\n\tassert 2 == 2\n"
+        tmp_path,
+        str_content="def test_x() -> None:\n\tassert 1 == 1  # one-assert-ok:\n\tassert 2 == 2\n",
     )
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 def test_a_hatch_marker_inside_a_string_literal_does_not_exempt(tmp_path: Path) -> None:
     """Only a real comment is an exemption; the same text in a string is just data."""
     _write_test_file(
         tmp_path,
-        "def test_x() -> None:\n\tstr_note = '# one-assert-ok: example'\n"
+        str_content="def test_x() -> None:\n\tstr_note = '# one-assert-ok: example'\n"
         "\tassert 1 == 1\n\tassert 2 == 2\n",
     )
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 def test_two_assertion_contexts_in_one_with_are_two_sites(tmp_path: Path) -> None:
     """``with pytest.raises(A), pytest.warns(B):`` must not pass the one-site cap."""
     _write_test_file(
         tmp_path,
-        "import pytest\n\n\ndef test_x() -> None:\n"
+        str_content="import pytest\n\n\ndef test_x() -> None:\n"
         "\twith pytest.raises(ValueError), pytest.warns(UserWarning):\n\t\tpass\n",
     )
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 def test_the_hatch_also_exempts_a_zero_assertion_test(tmp_path: Path) -> None:
     """The same hatch covers the zero-assertion check, not only the cap."""
-    _write_test_file(tmp_path, "def test_x() -> None:\n\tpass  # one-assert-ok: smoke test\n")
+    _write_test_file(
+        tmp_path, str_content="def test_x() -> None:\n\tpass  # one-assert-ok: smoke test\n"
+    )
 
-    assert _run(tmp_path, []) == 0
+    assert _run(tmp_path, list_extra_args=[]) == 0
 
 
 @pytest.mark.parametrize("str_fragment", ["not valid Python", "not checked"])
 def test_an_unparsable_file_is_a_finding_not_a_silent_skip(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], str_fragment: str
+    tmp_path: Path, *, capsys: pytest.CaptureFixture[str], str_fragment: str
 ) -> None:
     """A file the gate cannot parse must FAIL, never read as clean."""
-    _write_test_file(tmp_path, "def test_x(:\n")
-    _run(tmp_path, [])
+    _write_test_file(tmp_path, str_content="def test_x(:\n")
+    _run(tmp_path, list_extra_args=[])
 
     assert str_fragment in capsys.readouterr().err
 
 
 def test_an_unparsable_file_exits_non_zero(tmp_path: Path) -> None:
     """The message above is only useful if the run actually fails."""
-    _write_test_file(tmp_path, "def test_x(:\n")
+    _write_test_file(tmp_path, str_content="def test_x(:\n")
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 def test_no_tests_directory_is_a_legitimate_skip(tmp_path: Path) -> None:
     """A tree with no ``tests/`` at all (like this repo's own root) is a real skip."""
-    assert _run(tmp_path, []) == 0
+    assert _run(tmp_path, list_extra_args=[]) == 0
 
 
-def test_the_skip_says_why_it_skipped(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_skip_says_why_it_skipped(
+    tmp_path: Path, *, capsys: pytest.CaptureFixture[str]
+) -> None:
     """A silent skip is indistinguishable from a gate that never ran."""
-    _run(tmp_path, [])
+    _run(tmp_path, list_extra_args=[])
 
     assert "no tests/ directory" in capsys.readouterr().out
 
@@ -361,15 +369,15 @@ def test_a_tests_dir_with_zero_matching_files_is_a_failure_not_a_skip(tmp_path: 
     """An empty ``tests/`` is the broken-discovery shape, not a legitimate skip."""
     (tmp_path / "tests").mkdir()
 
-    assert _run(tmp_path, []) == 1
+    assert _run(tmp_path, list_extra_args=[]) == 1
 
 
 def test_broken_discovery_names_the_file_count_it_found(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The failure has to distinguish "found nothing" from "could not look"."""
     (tmp_path / "tests").mkdir()
-    _run(tmp_path, [])
+    _run(tmp_path, list_extra_args=[])
 
     assert "0 test_*.py files" in capsys.readouterr().err
 
@@ -385,7 +393,7 @@ def test_a_tests_dir_holding_only_non_python_tests_is_a_legitimate_skip(tmp_path
     path_tests.mkdir()
     (path_tests / "test_something.sh").write_text("#!/bin/bash\necho ok\n", encoding="utf-8")
 
-    assert _run(tmp_path, []) == 0
+    assert _run(tmp_path, list_extra_args=[]) == 0
 
 
 @pytest.mark.parametrize(

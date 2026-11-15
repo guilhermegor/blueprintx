@@ -58,7 +58,7 @@ def _reject_ambiguous_windows(  # complexity-ok: pairwise overlap IS the check
         ),
     )
     for cls_earlier, cls_later in zip(list_sorted, list_sorted[1:], strict=False):
-        if _windows_overlap(cls_earlier, cls_later):
+        if _windows_overlap(cls_earlier, cls_later=cls_later):
             raise ValueError(
                 f"regime windows overlap: {cls_earlier.str_name} and {cls_later.str_name} "
                 f"both cover at least one period, so resolve() would depend on list order"
@@ -66,7 +66,7 @@ def _reject_ambiguous_windows(  # complexity-ok: pairwise overlap IS the check
 
 
 @type_checker
-def _windows_overlap(cls_earlier: RegimeWindow, cls_later: RegimeWindow) -> bool:
+def _windows_overlap(cls_earlier: RegimeWindow, *, cls_later: RegimeWindow) -> bool:
     """Return whether two windows share at least one period.
 
     Parameters

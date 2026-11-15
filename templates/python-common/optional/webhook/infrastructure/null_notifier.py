@@ -22,7 +22,7 @@ class NullNotifier(metaclass=TypeChecker):
     webhook is effectively opted out regardless of the environment gate.
     """
 
-    def send(self, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
+    def send(self, str_message: str, *, str_title: str = "ROUTINE_CONCLUSION") -> None:
         """Discard the notification (no URL configured).
 
         Parameters

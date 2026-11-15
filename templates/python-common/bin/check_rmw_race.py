@@ -218,7 +218,7 @@ def _collect_read_entities(func: ast.AST) -> dict:
     return dict_entities
 
 
-def _references_attr(expr: ast.AST, str_var: str, str_attr: str) -> bool:
+def _references_attr(expr: ast.AST, *, str_var: str, str_attr: str) -> bool:
     """Return whether ``expr`` reads ``var.attr`` anywhere within it.
 
     Parameters
@@ -271,7 +271,7 @@ def _assign_target_and_check(node: ast.AST) -> tuple:
     return None, None
 
 
-def _model_has_version_id_col(tree: ast.Module, str_source: str, str_model: str) -> bool:
+def _model_has_version_id_col(tree: ast.Module, *, str_source: str, str_model: str) -> bool:
     """Return whether a same-file class named ``str_model`` declares ``version_id_col``.
 
     Parameters
@@ -334,7 +334,7 @@ def _class_declares_version_id_col(cls_class: ast.ClassDef) -> bool:
     return False
 
 
-def _message(str_var: str, str_attr: str, str_model: str) -> str:
+def _message(str_var: str, *, str_attr: str, str_model: str) -> str:
     """Build the finding message: names the race and its one-line SQL fix.
 
     Parameters
@@ -361,7 +361,7 @@ def _message(str_var: str, str_attr: str, str_model: str) -> str:
     )
 
 
-def _race_violations(func: ast.AST, tree: ast.Module, str_source: str) -> list:
+def _race_violations(func: ast.AST, *, tree: ast.Module, str_source: str) -> list:
     """Find arithmetic read-modify-write races inside one function's own body.
 
     Parameters
@@ -387,12 +387,16 @@ def _race_violations(func: ast.AST, tree: ast.Module, str_source: str) -> list:
         if not isinstance(cls_target.value, ast.Name) or cls_target.value.id not in dict_entities:
             continue
         str_var, str_attr = cls_target.value.id, cls_target.attr
-        if not _references_attr(cls_check, str_var, str_attr):
+        if not _references_attr(cls_check, str_var=str_var, str_attr=str_attr):
             continue
         str_model, bool_lock = dict_entities[str_var]
-        if bool_lock or _model_has_version_id_col(tree, str_source, str_model):
+        if bool_lock or _model_has_version_id_col(
+            tree, str_source=str_source, str_model=str_model
+        ):
             continue
-        list_findings.append((cls_node.lineno, _message(str_var, str_attr, str_model)))
+        list_findings.append(
+            (cls_node.lineno, _message(str_var, str_attr=str_attr, str_model=str_model))
+        )
     return list_findings
 
 
@@ -422,7 +426,7 @@ def check_file(str_path: str) -> int:
     for cls_func in ast.walk(tree):
         if not isinstance(cls_func, ast.FunctionDef | ast.AsyncFunctionDef):
             continue
-        for int_line, str_msg in _race_violations(cls_func, tree, str_source):
+        for int_line, str_msg in _race_violations(cls_func, tree=tree, str_source=str_source):
             str_src_line = list_lines[int_line - 1] if int_line - 1 < len(list_lines) else ""
             if _RE_ALLOW_MARKER.search(str_src_line):
                 continue

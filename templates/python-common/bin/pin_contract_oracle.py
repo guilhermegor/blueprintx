@@ -24,7 +24,7 @@ import pathlib
 import sys
 
 
-def read_header(path_file: pathlib.Path, str_sep: str, str_encoding: str) -> tuple[str, ...]:
+def read_header(path_file: pathlib.Path, *, str_sep: str, str_encoding: str) -> tuple[str, ...]:
     """Return the first non-empty line of a delimited file as a tuple of stripped column names.
 
     Parameters
@@ -75,7 +75,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    tuple_header = read_header(args.artifact, args.sep, args.encoding)
+    tuple_header = read_header(args.artifact, str_sep=args.sep, str_encoding=args.encoding)
     print("tuple_required = (")
     for str_col in tuple_header:
         print(f'    "{str_col}",')

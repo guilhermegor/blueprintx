@@ -121,7 +121,7 @@ def test_metaclass_pep604_union_rejects_other_type() -> None:
 
 
 @type_checker
-def _add(a: int, b: int) -> int:
+def _add(a: int, *, b: int) -> int:
     """Add two ints — the decorated subject, defined at MODULE level.
 
     Nested inside the test it charged the test 1 for the nested ``def`` (tests/ is capped at
@@ -145,13 +145,13 @@ def _add(a: int, b: int) -> int:
 
 def test_decorator_checks_standalone_function() -> None:
     """The decorator validates a standalone function's arguments."""
-    assert _add(1, 2) == 3
+    assert _add(1, b=2) == 3
 
 
 def test_decorator_rejects_a_wrong_type_on_a_standalone_function() -> None:
     """The decorator rejects a wrong-typed argument to a standalone function."""
     with pytest.raises(TypeError):
-        _add(1, "two")
+        _add(1, b=2.0)
 
 
 def test_bool_is_not_accepted_as_int() -> None:

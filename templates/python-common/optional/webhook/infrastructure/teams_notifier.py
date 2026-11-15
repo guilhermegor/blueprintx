@@ -57,7 +57,7 @@ class TeamsNotifier(metaclass=TypeChecker):
         self._str_url = str_url
 
     def send(  # complexity-ok: guard + failure map
-        self, str_message: str, str_title: str = "ROUTINE_CONCLUSION"
+        self, str_message: str, *, str_title: str = "ROUTINE_CONCLUSION"
     ) -> None:
         """Post a message to the configured Teams channel.
 

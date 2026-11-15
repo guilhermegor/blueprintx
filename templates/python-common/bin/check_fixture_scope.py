@@ -112,7 +112,7 @@ def _fixture_scope(node_call: ast.Call) -> str | None:
     return None
 
 
-def _justified(list_lines: list, int_start: int, int_end: int) -> bool:
+def _justified(list_lines: list, *, int_start: int, int_end: int) -> bool:
     """Return whether a written justification appears in a line range.
 
     Parameters
@@ -139,7 +139,7 @@ def _justified(list_lines: list, int_start: int, int_end: int) -> bool:
     return False
 
 
-def _parse_or_raise(path_file: pathlib.Path, str_source: str) -> ast.Module:
+def _parse_or_raise(path_file: pathlib.Path, *, str_source: str) -> ast.Module:
     """Parse a file's source, raising the gate's own error type on failure.
 
     Parameters
@@ -206,7 +206,7 @@ def _iter_fixture_decorators(cls_tree: ast.Module) -> list:
 
 
 def _violation_message(
-    node_dec: ast.expr, cls_node: ast.FunctionDef, list_lines: list, str_shown: str
+    node_dec: ast.expr, *, cls_node: ast.FunctionDef, list_lines: list, str_shown: str
 ) -> str | None:
     """Return a finding for one fixture decorator, or ``None`` when it is clean.
 
@@ -230,7 +230,7 @@ def _violation_message(
     str_scope = _fixture_scope(node_dec)
     if str_scope not in SET_WIDE_SCOPES:
         return None
-    if _justified(list_lines, node_dec.lineno, cls_node.lineno):
+    if _justified(list_lines, int_start=node_dec.lineno, int_end=cls_node.lineno):
         return None
     return (
         f"{str_shown}:{cls_node.lineno}: fixture {cls_node.name}() is "
@@ -254,13 +254,15 @@ def file_problems(path_file: pathlib.Path) -> list:
         Human-readable findings; empty when every fixture is function-scoped or justified.
     """
     str_source = path_file.read_text(encoding="utf-8")
-    cls_tree = _parse_or_raise(path_file, str_source)
+    cls_tree = _parse_or_raise(path_file, str_source=str_source)
     str_shown = _display_path(path_file)
     list_lines = str_source.splitlines()
 
     list_problems = []
     for node_dec, cls_node in _iter_fixture_decorators(cls_tree):
-        str_msg = _violation_message(node_dec, cls_node, list_lines, str_shown)
+        str_msg = _violation_message(
+            node_dec, cls_node=cls_node, list_lines=list_lines, str_shown=str_shown
+        )
         if str_msg is not None:
             list_problems.append(str_msg)
     return list_problems
