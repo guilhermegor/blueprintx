@@ -2264,6 +2264,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#arming-auto-merge-from-pr-gateyml-blueprintx1148" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Arming auto-merge from pr-gate.yml (blueprintx#1148)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#assignee-and-linked-issue-blueprintx937" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2754,6 +2765,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#arming-auto-merge-from-pr-gateyml-blueprintx1148" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Arming auto-merge from pr-gate.yml (blueprintx#1148)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#assignee-and-linked-issue-blueprintx937" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2843,6 +2865,22 @@ user-owned Projects v2 board, so that stays in a local hook or behind a PAT secr
   allows a name only after a real PR has emitted it. Add them once they have reported.</li>
 <li>Offline scaffolds drop <code>.github/</code> but keep <code>close_linked_issues.sh</code> and <code>check_pr_policy.sh</code> in <code>bin/</code>, and drop <code>dependabot_auto_merge.sh</code> (tracked in #727).</li>
 </ul>
+<h2 id="arming-auto-merge-from-pr-gateyml-blueprintx1148">Arming auto-merge from <code>pr-gate.yml</code> (blueprintx#1148)<a class="headerlink" href="#arming-auto-merge-from-pr-gateyml-blueprintx1148" title="Permanent link">&para;</a></h2>
+<p><code>bin/pr_gate.py</code> arms native auto-merge with the <code>enablePullRequestAutoMerge</code> GraphQL mutation. The
+workflow grants <code>contents: write</code> beside <code>pull-requests: write</code>, because the mutation needs both
+(<a href="https://docs.github.com/en/graphql/reference/mutations#enablepullrequestautomerge">mutation reference</a>,
+<a href="https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication"><code>GITHUB_TOKEN</code> permissions</a>).</p>
+<p>A <code>pull_request</code> run triggered by Dependabot gets a read-only token by default
+(<a href="https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions">Dependabot on Actions</a>),
+as does a run in a repository whose default workflow permissions are read-only; a <code>permissions:</code> block can raise either. GitHub then answers "Resource not accessible by
+integration". The gate logs <code>::notice::auto-merge not armed, step skipped: &lt;reason&gt;</code> and exits on its own verdict;
+labels and the comment still apply, and a refused arming never turns the gate red. <code>pr_gate.py</code> never arms a
+Dependabot-authored PR whatever its token can do: <code>dependabot-auto-merge.yml</code> owns that path, including the
+review wait on major bumps. The mutation carries <code>expectedHeadOid</code>, so a push during the poll is refused rather
+than armed on stale checks. A merge made by auto-merge armed with <code>GITHUB_TOKEN</code> does not start <code>push</code>
+workflows (release, deploy) on the base branch.</p>
+<p>The roughly 13 minutes seen on a refused run were the check poll (<code>GATE_MAX_POLLS</code> 26 x <code>GATE_POLL_SECONDS</code> 30),
+which runs before arming on purpose. No retry loop wraps the mutation, so an authorization error is never retried.</p>
 <h2 id="assignee-and-linked-issue-blueprintx937">Assignee and linked issue (blueprintx#937)<a class="headerlink" href="#assignee-and-linked-issue-blueprintx937" title="Permanent link">&para;</a></h2>
 <p><code>check_pr_policy.sh assignee</code> fails when <code>ASSIGNEES</code> is blank. <code>check_pr_policy.sh linked-issue</code> reads
 <code>BRANCH</code>, <code>TITLE</code>, <code>TRACKER</code> and <code>CLOSING_COUNT</code>; <code>dependabot/</code> and <code>renovate/</code> branches skip it, since a
