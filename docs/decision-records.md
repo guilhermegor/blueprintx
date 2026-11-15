@@ -1118,16 +1118,18 @@ is shaped as it is; a generated project gets the behavior, not the history.
   authored before the tree was tabified); no per-file ANN401 ignore remains (#1054). `lib-minimal` vendors the typing engine at a nested private path whose imports are
   rewritten to `<pkg>._internal.*` and can exceed the line length, so it is excluded in full
   (mypy excludes it too).
-- **Preview mode is for PLR1702 only** (too-many-nested-blocks, still preview-only in ruff
-  0.17.5: `ruff rule PLR1702`). It also activates tag-along preview rules in the `PL` and `S`
+- **Preview mode is for PLR1702 and PLR0917 only** (too-many-nested-blocks and
+  too-many-positional-arguments, both preview-only in ruff 0.17.5: `ruff rule PLR1702`,
+  `ruff rule PLR0917`; turning preview off silently disables the keyword-only gate). It also activates tag-along preview rules in the `PL` and `S`
   families, never chosen on their merits, so each is settled rule by rule (#434, #1054).
-  Re-measured with ruff 0.17.5 and the current `ruff.toml` ignores (`PLC1901`, `S404`, `PLR0917`)
-  as `ruff check --isolated --select PL,S --ignore PLC1901,S404,PLR0917` over
-  `templates/python-common/{src,bin,optional}`: 66 findings stable, 71 with `--preview`. The 5
+  Re-measured with ruff 0.17.5 and the current `ruff.toml` ignores (`PLC1901`, `S404`)
+  as `ruff check --isolated --select PL,S --ignore PLC1901,S404` over
+  `templates/python-common/{src,bin,optional}`: 63 findings stable, 68 with `--preview`. The 5
   extra are all `PLC2701`, which the shipped `ruff.toml` already settles with a `bin/` and
   `tests/` per-file-ignore and line-scoped `noqa` on the private imports in `optional/`. The older
   figures (21 to 81 on `templates/`, ruff 0.11.13) used a different tree and ignore list and are
-  not comparable. Revisit
+  not comparable. That command runs `--isolated`, so it never reads `max-positional-args = 1`;
+  it counts the other `PL`/`S` rules, and the shipped tree is `PLR0917`-clean by `ruff check`. Revisit
   each on its own measurement the day PLR1702 leaves preview. Why nesting is gated at all is in
   `check_complexity.sh`'s header and [Complexity ceilings](complexity-ceilings-measured.md).
 - **PLR1702 pairs with `max-complexity = 3` for `src/` only.** Ceiling 3 alone would admit the
@@ -1200,9 +1202,12 @@ is shaped as it is; a generated project gets the behavior, not the history.
       so `== ""` is the exact test (27 findings).
     - `S404` stays ignored: the import finds nothing, and the calls are covered by `S603` and
       `S607` (24 findings).
-    - `PLR0917` stays ignored for now: with `max-positional-args = 1` it reports 1069
-      findings in the templates, nearly all call sites of shipped APIs and tests, so it is a
-      signature change tracked as its own slice, not a lint toggle.
+    - `PLR0917` is enforced with `[lint.pylint] max-positional-args = 1` (#1054, shipped in
+      three slices of signature changes before the rule was turned on): only the subject
+      argument is positional, so two same-typed arguments cannot be swapped silently at a call
+      site. Every other parameter is keyword-only (`*,`). A signature fixed by a foreign
+      contract (a DB-API cursor, a PyYAML constructor override, a metaclass hook) carries a line-scoped
+      `# noqa: PLR0917 -- <reason>` on its `def`; nothing else is exempt.
     - Re-enabled, with the shipped code made clean: `PLR6301` (a method with no `self` use is
       a `@staticmethod`; an override of a foreign or port signature carries a line-scoped
       `# noqa: PLR6301`), `PLC0415` (stdlib imports hoisted; a deliberately lazy optional
@@ -2361,7 +2366,9 @@ rest of the suite.
   a shell has a terminal, Jenkins does not. Everything else, including a bare shell, an unknown
   runner, a GUI or IDE commit and a headless agent commit (no `/dev/tty`), is CI and
   ignores the hatch; the PR-body and trailer
-  justifications remain available there. Known limit: a CI container allocated a pty
+  justifications remain available there. When `/dev/tty` is unreadable, both rejection messages now also say the
+  override is honored only in an interactive terminal and that a person must run that commit
+  (#1146); the policy is unchanged. Known limit: a CI container allocated a pty
   (`docker run -t`) with `PRE_COMMIT` set reads as local. Pinned in
   `tests/unit/test_gate_integrity_gate.py` for `CI=false`, `CI=""`, `GITHUB_ACTIONS=true`, `JENKINS_URL`
   and a bare environment.
