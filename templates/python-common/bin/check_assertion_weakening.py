@@ -143,7 +143,7 @@ def _git(list_args: list) -> str:
     return cls_proc.stdout
 
 
-def show(str_ref: str, str_path: str) -> str | None:
+def show(str_ref: str, *, str_path: str) -> str | None:
     """Return a blob's text content at a git ref/path, or ``None`` when unreadable.
 
     Parameters
@@ -573,7 +573,7 @@ def _is_literal_ish(node: ast.expr) -> bool:
     return False
 
 
-def _value_side_changed(cmp_old: ast.Compare, cmp_new: ast.Compare) -> bool:
+def _value_side_changed(cmp_old: ast.Compare, *, cmp_new: ast.Compare) -> bool:
     """Return whether a LITERAL side of an ``==`` comparison changed, the other unchanged.
 
     Parameters
@@ -601,7 +601,7 @@ def _value_side_changed(cmp_old: ast.Compare, cmp_new: ast.Compare) -> bool:
     return False
 
 
-def _compare_assert(old_node: ast.Assert, new_node: ast.Assert, bool_prod_changed: bool) -> str:
+def _compare_assert(old_node: ast.Assert, *, new_node: ast.Assert, bool_prod_changed: bool) -> str:
     """Return a weakening message for an ``assert``-to-``assert`` pair, or ``""``.
 
     Parameters
@@ -629,12 +629,12 @@ def _compare_assert(old_node: ast.Assert, new_node: ast.Assert, bool_prod_change
     if str_old_op == "Eq" and str_new_op in _WEAK_FROM_EQ:
         return f"operator weakened from == to {_OP_SYMBOLS.get(str_new_op, str_new_op)}"
     bool_value_edit = str_old_op == "Eq" and str_new_op == "Eq" and bool_prod_changed
-    if bool_value_edit and _value_side_changed(cmp_old, cmp_new):
+    if bool_value_edit and _value_side_changed(cmp_old, cmp_new=cmp_new):
         return "expected value changed while production code changed in the same diff"
     return ""
 
 
-def _compare_call(old_node: ast.Call, new_node: ast.Call, bool_prod_changed: bool) -> str:
+def _compare_call(old_node: ast.Call, *, new_node: ast.Call, bool_prod_changed: bool) -> str:
     """Return a weakening message for a unittest-style call pair, or ``""``.
 
     Parameters
@@ -681,7 +681,7 @@ def _compare_call(old_node: ast.Call, new_node: ast.Call, bool_prod_changed: boo
     return ""
 
 
-def _compare_raises(old_node: ast.With, new_node: ast.With) -> str:
+def _compare_raises(old_node: ast.With, *, new_node: ast.With) -> str:
     """Return a weakening message for a ``pytest.raises`` pair, or ``""``.
 
     Parameters
@@ -705,7 +705,7 @@ def _compare_raises(old_node: ast.With, new_node: ast.With) -> str:
     return ""
 
 
-def _compare_pair(tuple_old: tuple, tuple_new: tuple, bool_prod_changed: bool) -> str:
+def _compare_pair(tuple_old: tuple, *, tuple_new: tuple, bool_prod_changed: bool) -> str:
     """Dispatch a same-position check pair to its comparator by kind.
 
     Parameters
@@ -728,13 +728,13 @@ def _compare_pair(tuple_old: tuple, tuple_new: tuple, bool_prod_changed: bool) -
     if old_kind == "raises" and new_kind != "raises":
         return "pytest.raises removed or replaced by a plain assertion"
     if old_kind == "raises" and new_kind == "raises":
-        return _compare_raises(old_node, new_node)
+        return _compare_raises(old_node, new_node=new_node)
     if old_kind == "assert" and new_kind == "assert":
-        return _compare_assert(old_node, new_node, bool_prod_changed)
+        return _compare_assert(old_node, new_node=new_node, bool_prod_changed=bool_prod_changed)
     if old_kind == "call" and new_kind == "call":
-        return _compare_call(old_node, new_node, bool_prod_changed)
+        return _compare_call(old_node, new_node=new_node, bool_prod_changed=bool_prod_changed)
     if old_kind == "call" and new_kind == "assert":
-        return _compare_call_to_assert(old_node, new_node)
+        return _compare_call_to_assert(old_node, new_node=new_node)
     return ""
 
 
@@ -749,7 +749,7 @@ _CALL_AS_OPERATOR = {
 }
 
 
-def _compare_call_to_assert(old_node: ast.Call, new_node: ast.Assert) -> str:
+def _compare_call_to_assert(old_node: ast.Call, *, new_node: ast.Assert) -> str:
     """Return a weakening message when a unittest call became a weaker bare ``assert``.
 
     Rewriting ``self.assertEqual(a, b)`` as ``assert a in b`` changes the assertion's kind, so
@@ -807,11 +807,11 @@ def parse_functions(str_source: str) -> dict | None:
     except SyntaxError:
         return None
     dict_funcs = {}
-    _index_tests(cls_tree, "", dict_funcs)
+    _index_tests(cls_tree, str_prefix="", dict_funcs=dict_funcs)
     return dict_funcs
 
 
-def _index_tests(node_parent: ast.AST, str_prefix: str, dict_funcs: dict) -> None:
+def _index_tests(node_parent: ast.AST, *, str_prefix: str, dict_funcs: dict) -> None:
     """Index every ``test_*`` function under ``node_parent`` by its qualified name.
 
     Qualified, not bare: two classes in one module routinely define the same method name, and
@@ -830,7 +830,7 @@ def _index_tests(node_parent: ast.AST, str_prefix: str, dict_funcs: dict) -> Non
     """
     for node in ast.iter_child_nodes(node_parent):
         if isinstance(node, ast.ClassDef):
-            _index_tests(node, f"{str_prefix}{node.name}.", dict_funcs)
+            _index_tests(node, str_prefix=f"{str_prefix}{node.name}.", dict_funcs=dict_funcs)
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith(
             "test_"
         ):
@@ -839,6 +839,7 @@ def _index_tests(node_parent: ast.AST, str_prefix: str, dict_funcs: dict) -> Non
 
 def _function_findings(
     str_path: str,
+    *,
     str_name: str,
     node_old: ast.FunctionDef,
     node_new: ast.FunctionDef,
@@ -878,14 +879,16 @@ def _function_findings(
             f"assertion(s) (had {len(list_old_checks)}, now {len(list_new_checks)})"
         )
     for tuple_old, tuple_new in zip(list_old_checks, list_new_checks, strict=False):
-        str_msg = _compare_pair(tuple_old, tuple_new, bool_prod_changed)
+        str_msg = _compare_pair(
+            tuple_old, tuple_new=tuple_new, bool_prod_changed=bool_prod_changed
+        )
         if str_msg:
             list_problems.append(f"{str_path}: {str_name}() line {tuple_new[1].lineno}: {str_msg}")
     return list_problems
 
 
 def _file_findings(
-    str_path: str, str_old_text: str, str_new_text: str, bool_prod_changed: bool
+    str_path: str, *, str_old_text: str, str_new_text: str, bool_prod_changed: bool
 ) -> list:
     """Return every weakening finding for one changed test file.
 
@@ -915,17 +918,25 @@ def _file_findings(
     list_free = [str_n for str_n in dict_new_funcs if str_n not in dict_old_funcs]
     dict_renames = rename_pairs(
         {str_n: cls_f for str_n, cls_f in dict_old_funcs.items() if str_n not in dict_new_funcs},
-        {str_n: dict_new_funcs[str_n] for str_n in list_free},
+        dict_added={str_n: dict_new_funcs[str_n] for str_n in list_free},
     )
     list_free = [str_n for str_n in list_free if str_n not in dict_renames.values()]
     for str_name, node_old in dict_old_funcs.items():
         str_now = dict_renames.get(str_name, str_name)
         node_new = dict_new_funcs.get(str_now)
         if node_new is None:
-            list_problems.append(deleted_message(str_path, str_name, list_free))
+            list_problems.append(
+                deleted_message(str_path, str_name=str_name, list_unpaired_added=list_free)
+            )
             continue
         list_problems.extend(
-            _function_findings(str_path, str_now, node_old, node_new, bool_prod_changed)
+            _function_findings(
+                str_path,
+                str_name=str_now,
+                node_old=node_old,
+                node_new=node_new,
+                bool_prod_changed=bool_prod_changed,
+            )
         )
     return list_problems
 
@@ -953,7 +964,7 @@ def _touches_production_code(list_changed: list) -> bool:
     return False
 
 
-def _test_file_removed(str_status: str, str_src: str, str_path: str) -> bool:
+def _test_file_removed(str_status: str, *, str_src: str, str_path: str) -> bool:
     """Return whether a row takes a test file out of the suite (deleted, or moved off tests/).
 
     Parameters
@@ -976,7 +987,7 @@ def _test_file_removed(str_status: str, str_src: str, str_path: str) -> bool:
     return str_status == "R" and bool(moved_off)
 
 
-def _removed_findings(str_base: str, str_path: str) -> list:
+def _removed_findings(str_base: str, *, str_path: str) -> list:
     """Return the findings for a test file that left the suite.
 
     Parameters
@@ -991,7 +1002,7 @@ def _removed_findings(str_base: str, str_path: str) -> list:
     list of str
         One finding when the base file held tests (or cannot be parsed), else empty.
     """
-    str_old = show(str_base, str_path)
+    str_old = show(str_base, str_path=str_path)
     dict_old_funcs = parse_functions(str_old) if str_old is not None else {}
     if str_old is not None and dict_old_funcs is None:
         return [f"{str_path}: could not parse the removed test file — not checked"]
@@ -1001,7 +1012,7 @@ def _removed_findings(str_base: str, str_path: str) -> list:
     return []
 
 
-def collect_problems(list_changed: list, str_base: str) -> list:
+def collect_problems(list_changed: list, *, str_base: str) -> list:
     """Return every weakening finding across the branch's changed test files.
 
     Parameters
@@ -1019,16 +1030,23 @@ def collect_problems(list_changed: list, str_base: str) -> list:
     list_problems = []
     bool_prod_changed = _touches_production_code(list_changed)
     for str_status, str_src, str_path in list_changed:
-        if _test_file_removed(str_status, str_src, str_path):
-            list_problems.extend(_removed_findings(str_base, str_src))
+        if _test_file_removed(str_status, str_src=str_src, str_path=str_path):
+            list_problems.extend(_removed_findings(str_base, str_path=str_src))
             continue
         if not RE_TEST_PATH.search(str_path):
             continue
-        str_new = show(STR_INDEX_REF, str_path)
-        str_old = show(str_base, str_src) if RE_TEST_PATH.search(str_src) else None
+        str_new = show(STR_INDEX_REF, str_path=str_path)
+        str_old = show(str_base, str_path=str_src) if RE_TEST_PATH.search(str_src) else None
         if str_new is None or str_old is None:
             continue
-        list_problems.extend(_file_findings(str_path, str_old, str_new, bool_prod_changed))
+        list_problems.extend(
+            _file_findings(
+                str_path,
+                str_old_text=str_old,
+                str_new_text=str_new,
+                bool_prod_changed=bool_prod_changed,
+            )
+        )
     return list_problems
 
 
@@ -1054,7 +1072,7 @@ def unjustified_advice() -> str:
     )
 
 
-def report(list_problems: list, str_base: str, int_changed_count: int) -> int:
+def report(list_problems: list, *, str_base: str, int_changed_count: int) -> int:
     """Print findings and the verdict, resolving the justification escape hatch.
 
     Parameters
@@ -1113,8 +1131,8 @@ def main(list_argv: list) -> int:
         return 1
 
     list_changed = changed_paths(str_base)
-    list_problems = collect_problems(list_changed, str_base)
-    return report(list_problems, str_base, len(list_changed))
+    list_problems = collect_problems(list_changed, str_base=str_base)
+    return report(list_problems, str_base=str_base, int_changed_count=len(list_changed))
 
 
 if __name__ == "__main__":

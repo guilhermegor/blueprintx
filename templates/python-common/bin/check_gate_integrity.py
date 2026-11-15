@@ -201,7 +201,7 @@ def default_branch() -> str:
     return "main"
 
 
-def show(str_ref: str, str_path: str) -> str | None:
+def show(str_ref: str, *, str_path: str) -> str | None:
     """Return a blob's text content at a git ref/path, or ``None`` when it does not exist there.
 
     Parameters
@@ -287,7 +287,7 @@ def strip_toml_comments(str_text: str) -> str:
     return "\n".join(list_out)
 
 
-def toml_top_array(str_text: str, str_key: str) -> set:
+def toml_top_array(str_text: str, *, str_key: str) -> set:
     """Return the quoted string entries of a top-level ``key = [ ... ]`` TOML array.
 
     Parameters
@@ -335,7 +335,7 @@ def toml_per_file_ignores(str_text: str) -> dict:
     return dict_out
 
 
-def ruff_toml_problems(str_old: str, str_new: str, str_shown: str) -> list:
+def ruff_toml_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return weakening findings between two versions of a ``ruff.toml``.
 
     Parameters
@@ -353,16 +353,18 @@ def ruff_toml_problems(str_old: str, str_new: str, str_shown: str) -> list:
         One message per weakening found.
     """
     list_problems = []
-    for str_rule in sorted(toml_top_array(str_old, "select") - toml_top_array(str_new, "select")):
+    for str_rule in sorted(
+        toml_top_array(str_old, str_key="select") - toml_top_array(str_new, str_key="select")
+    ):
         list_problems.append(f"{str_shown}: rule {str_rule!r} removed from [lint] select")
     set_old_ignore, set_new_ignore = (
-        toml_top_array(str_old, "ignore"),
-        toml_top_array(str_new, "ignore"),
+        toml_top_array(str_old, str_key="ignore"),
+        toml_top_array(str_new, str_key="ignore"),
     )
     for str_rule in sorted(set_new_ignore - set_old_ignore):
         list_problems.append(f"{str_shown}: rule {str_rule!r} added to [lint] ignore")
-    set_old_exclude = toml_top_array(str_old, "exclude")
-    set_new_exclude = toml_top_array(str_new, "exclude")
+    set_old_exclude = toml_top_array(str_old, str_key="exclude")
+    set_new_exclude = toml_top_array(str_new, str_key="exclude")
     for str_path in sorted(set_new_exclude - set_old_exclude):
         list_problems.append(f"{str_shown}: path {str_path!r} added to exclude")
 
@@ -398,7 +400,7 @@ def parsed_ini(str_text: str) -> configparser.ConfigParser | None:
     return cls_parser
 
 
-def mypy_ini_problems(str_old: str, str_new: str, str_shown: str) -> list:
+def mypy_ini_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return weakening findings between two versions of a ``mypy.ini``.
 
     Parameters
@@ -438,7 +440,7 @@ def mypy_ini_problems(str_old: str, str_new: str, str_shown: str) -> list:
     return list_problems
 
 
-def pytest_ini_problems(str_old: str, str_new: str, str_shown: str) -> list:
+def pytest_ini_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return weakening findings between two versions of a ``pytest.ini``.
 
     Parameters
@@ -474,7 +476,7 @@ def pytest_ini_problems(str_old: str, str_new: str, str_shown: str) -> list:
     ]
 
 
-def precommit_problems(str_old: str, str_new: str, str_shown: str) -> list:
+def precommit_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return hooks present at the merge-base and missing now.
 
     Parameters
@@ -525,7 +527,7 @@ def workflow_jobs(str_text: str) -> set:
     return set_jobs
 
 
-def workflow_problems(str_old: str, str_new: str, str_shown: str) -> list:
+def workflow_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return job ids present at the merge-base and missing now.
 
     Parameters
@@ -546,7 +548,7 @@ def workflow_problems(str_old: str, str_new: str, str_shown: str) -> list:
     return [f"{str_shown}: workflow job {str_id!r} removed" for str_id in sorted(set_removed)]
 
 
-def required_checks_problems(str_old: str, str_new: str, str_shown: str) -> list:
+def required_checks_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return required status-check contexts removed from ``enable_repo_rules.sh``.
 
     Parameters
@@ -720,7 +722,7 @@ def _outer_pytest_mark(cls_dec: ast.expr) -> str:
     return ""
 
 
-def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
+def deleted_or_gutted_tests(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return findings for a ``test_*`` function removed, or reduced to a no-op, since base.
 
     Parameters
@@ -740,11 +742,11 @@ def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
     dict_old, dict_new = test_functions(str_old), test_functions(str_new)
     dict_gone = {str_n: cls_f for str_n, cls_f in dict_old.items() if str_n not in dict_new}
     dict_added = {str_n: cls_f for str_n, cls_f in dict_new.items() if str_n not in dict_old}
-    dict_pairs = rename_pairs(dict_gone, dict_added)
+    dict_pairs = rename_pairs(dict_gone, dict_added=dict_added)
     dict_old_of = {str_to: dict_old[str_from] for str_from, str_to in dict_pairs.items()}
     list_free = sorted(set(dict_added) - set(dict_pairs.values()))
     list_problems = [
-        deleted_message(str_shown, str_gone, list_free)
+        deleted_message(str_shown, str_name=str_gone, list_unpaired_added=list_free)
         for str_gone in sorted(dict_gone)
         if str_gone not in dict_pairs
     ]
@@ -755,7 +757,7 @@ def deleted_or_gutted_tests(str_old: str, str_new: str, str_shown: str) -> list:
     return list_problems
 
 
-def newly_skipped_tests(str_old: str, str_new: str, str_shown: str) -> list:
+def newly_skipped_tests(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return findings for a ``test_*`` function newly marked ``skip``/``xfail`` since base.
 
     Parameters
@@ -777,7 +779,7 @@ def newly_skipped_tests(str_old: str, str_new: str, str_shown: str) -> list:
     dict_added = {str_n: cls_f for str_n, cls_f in dict_new.items() if str_n not in dict_old}
     dict_old_of = {
         str_to: dict_old[str_from]
-        for str_from, str_to in rename_pairs(dict_gone, dict_added).items()
+        for str_from, str_to in rename_pairs(dict_gone, dict_added=dict_added).items()
     }
     list_problems = []
     for str_name, cls_new_node in dict_new.items():
@@ -791,7 +793,7 @@ def newly_skipped_tests(str_old: str, str_new: str, str_shown: str) -> list:
     return list_problems
 
 
-def diff_replace_pairs(str_old: str, str_new: str) -> list:
+def diff_replace_pairs(str_old: str, *, str_new: str) -> list:
     """Return ``(old_line, new_line, new_lineno)`` for every 1:1 replaced source line.
 
     Parameters
@@ -821,7 +823,7 @@ def diff_replace_pairs(str_old: str, str_new: str) -> list:
     return list_pairs
 
 
-def assertion_value_or_operator_change(str_old_line: str, str_new_line: str) -> str | None:
+def assertion_value_or_operator_change(str_old_line: str, *, str_new_line: str) -> str | None:
     """Return a finding when a replaced line weakens an ``assert``/``assertEqual``, else ``None``.
 
     Parameters
@@ -865,7 +867,7 @@ def assertion_value_or_operator_change(str_old_line: str, str_new_line: str) -> 
     return None
 
 
-def raises_broadened_or_removed(str_old_line: str, str_new_line: str) -> str | None:
+def raises_broadened_or_removed(str_old_line: str, *, str_new_line: str) -> str | None:
     """Return a finding when a replaced line broadens or drops a ``pytest.raises(...)``.
 
     Parameters
@@ -894,7 +896,7 @@ def raises_broadened_or_removed(str_old_line: str, str_new_line: str) -> str | N
     return None
 
 
-def raises_count_decreased(str_old: str, str_new: str, str_shown: str) -> list:
+def raises_count_decreased(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return a finding when ``pytest.raises(...)`` wrappers vanish, counted whole-file.
 
     A wrapper removed alongside its now-unwrapped body reindents every line under it, so it
@@ -975,7 +977,7 @@ def _is_pytest_raises_target(cls_func: ast.expr) -> bool:
     return isinstance(cls_func, ast.Name) and cls_func.id == "raises"
 
 
-def enclosing_test_name(str_new: str, int_lineno: int) -> str:
+def enclosing_test_name(str_new: str, *, int_lineno: int) -> str:
     """Return the innermost ``test_*`` function containing a 1-based line number.
 
     Parameters
@@ -996,7 +998,7 @@ def enclosing_test_name(str_new: str, int_lineno: int) -> str:
     return ""
 
 
-def replaced_assertion_problems(str_old: str, str_new: str, str_shown: str) -> list:
+def replaced_assertion_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return findings for assertion lines replaced 1:1 between two test-file versions.
 
     Parameters
@@ -1014,19 +1016,19 @@ def replaced_assertion_problems(str_old: str, str_new: str, str_shown: str) -> l
         One message per weakened replaced line, naming its enclosing test where resolvable.
     """
     list_problems = []
-    for str_old_line, str_new_line, int_lineno in diff_replace_pairs(str_old, str_new):
+    for str_old_line, str_new_line, int_lineno in diff_replace_pairs(str_old, str_new=str_new):
         str_finding = assertion_value_or_operator_change(
-            str_old_line, str_new_line
-        ) or raises_broadened_or_removed(str_old_line, str_new_line)
+            str_old_line, str_new_line=str_new_line
+        ) or raises_broadened_or_removed(str_old_line, str_new_line=str_new_line)
         if not str_finding:
             continue
-        str_test = enclosing_test_name(str_new, int_lineno)
+        str_test = enclosing_test_name(str_new, int_lineno=int_lineno)
         str_where = f"test {str_test!r}" if str_test else f"{str_shown}:{int_lineno}"
         list_problems.append(f"{str_shown}: {str_where} {str_finding}")
     return list_problems
 
 
-def test_assertion_problems(str_old: str, str_new: str, str_shown: str) -> list:
+def test_assertion_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     """Return every assertion-integrity finding for one changed test file (blueprintx#324).
 
     Parameters
@@ -1046,10 +1048,10 @@ def test_assertion_problems(str_old: str, str_new: str, str_shown: str) -> list:
         (see ``file_problems``, which is the only caller and gates on ``touched_code_stems``).
     """
     return [
-        *deleted_or_gutted_tests(str_old, str_new, str_shown),
-        *newly_skipped_tests(str_old, str_new, str_shown),
-        *replaced_assertion_problems(str_old, str_new, str_shown),
-        *raises_count_decreased(str_old, str_new, str_shown),
+        *deleted_or_gutted_tests(str_old, str_new=str_new, str_shown=str_shown),
+        *newly_skipped_tests(str_old, str_new=str_new, str_shown=str_shown),
+        *replaced_assertion_problems(str_old, str_new=str_new, str_shown=str_shown),
+        *raises_count_decreased(str_old, str_new=str_new, str_shown=str_shown),
     ]
 
 
@@ -1063,7 +1065,7 @@ _DICT_DISPATCH = {
 
 
 def file_problems(
-    str_path: str, str_base: str, set_touched_stems: frozenset = frozenset()
+    str_path: str, *, str_base: str, set_touched_stems: frozenset = frozenset()
 ) -> list:
     """Return weakening findings for one changed, still-existing path.
 
@@ -1083,22 +1085,24 @@ def file_problems(
         Findings for this path; empty when it is not a watched config/test file, is newly
         added (nothing to weaken), or carries no weakening.
     """
-    str_new = show(STR_INDEX_REF, str_path)
-    str_old = show(str_base, str_path)
+    str_new = show(STR_INDEX_REF, str_path=str_path)
+    str_old = show(str_base, str_path=str_path)
     if str_new is None or str_old is None:
         return []
 
     fn_analyzer = _DICT_DISPATCH.get(pathlib.Path(str_path).name)
     if fn_analyzer is None and RE_WORKFLOW_PATH.search(str_path):
         fn_analyzer = workflow_problems
-    list_problems = fn_analyzer(str_old, str_new, str_path) if fn_analyzer else []
+    list_problems = (
+        fn_analyzer(str_old, str_new=str_new, str_shown=str_path) if fn_analyzer else []
+    )
 
     if RE_TEST_PATH.search(str_path) and test_module_stem(str_path) in set_touched_stems:
-        list_problems.extend(test_assertion_problems(str_old, str_new, str_path))
+        list_problems.extend(test_assertion_problems(str_old, str_new=str_new, str_shown=str_path))
     return list_problems
 
 
-def deletion_problems(list_changed: list, set_touched_stems: frozenset = frozenset()) -> list:
+def deletion_problems(list_changed: list, *, set_touched_stems: frozenset = frozenset()) -> list:
     """Return findings for a deleted gate script, watched config/workflow file, or test file.
 
     Deleting the whole file is the bluntest form of every weakening ``file_problems`` reads
@@ -1265,7 +1269,7 @@ def resolve_base() -> str | None:
     return str_base
 
 
-def collect_problems(list_changed: list, str_base: str) -> list:
+def collect_problems(list_changed: list, *, str_base: str) -> list:
     """Return every weakening finding across the branch's changed paths.
 
     Parameters
@@ -1281,14 +1285,16 @@ def collect_problems(list_changed: list, str_base: str) -> list:
         Combined findings from deletions and from modified watched config/test files.
     """
     set_touched_stems = touched_code_stems(list_changed)
-    list_problems = deletion_problems(list_changed, set_touched_stems)
+    list_problems = deletion_problems(list_changed, set_touched_stems=set_touched_stems)
     for str_status, str_path in list_changed:
         if str_status != "D":
-            list_problems.extend(file_problems(str_path, str_base, set_touched_stems))
+            list_problems.extend(
+                file_problems(str_path, str_base=str_base, set_touched_stems=set_touched_stems)
+            )
     return list_problems
 
 
-def report(list_problems: list, str_base: str, int_changed_count: int) -> int:
+def report(list_problems: list, *, str_base: str, int_changed_count: int) -> int:
     """Print findings and the verdict, resolving the justification escape hatch.
 
     Parameters
@@ -1353,8 +1359,8 @@ def main(list_argv: list) -> int:
         return 1
 
     list_changed = changed_paths(str_base)
-    list_problems = collect_problems(list_changed, str_base)
-    return report(list_problems, str_base, len(list_changed))
+    list_problems = collect_problems(list_changed, str_base=str_base)
+    return report(list_problems, str_base=str_base, int_changed_count=len(list_changed))
 
 
 if __name__ == "__main__":

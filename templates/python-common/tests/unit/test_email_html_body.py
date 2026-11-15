@@ -22,7 +22,7 @@ def test_to_html_body_leaves_html_body_untouched() -> None:
     [("<script>", False), ("&lt;final&gt;", True), ("&amp;", True)],
     ids=["no-live-tag-survives", "angle-brackets-are-escaped", "ampersands-are-escaped"],
 )
-def test_to_html_body_escapes_plain_text_markup(str_fragment: str, bool_present: bool) -> None:
+def test_to_html_body_escapes_plain_text_markup(str_fragment: str, *, bool_present: bool) -> None:
     """Plain text carrying '<', '&', or a full tag is escaped, not rendered as markup.
 
     Without escaping, a value like a filename or a pasted name containing '<'/'>' would be
@@ -156,7 +156,7 @@ def test_to_html_body_real_tag_is_detected_as_html(str_html: str) -> None:
     ],
 )
 def test_to_html_body_tag_lookalike_is_escaped_as_plain_text_literal(
-    str_text: str, str_expected: str
+    str_text: str, *, str_expected: str
 ) -> None:
     """Should-fail witness: ``<br``/``<p``/block-tag text not shaped like a tag is escaped.
 

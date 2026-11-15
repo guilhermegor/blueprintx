@@ -40,7 +40,7 @@ gate = _load("check_migration_graph")
 
 
 def _migration_file(
-    path_dir: Path, str_filename: str, str_revision: str, str_down_revision_repr: str
+    path_dir: Path, *, str_filename: str, str_revision: str, str_down_revision_repr: str
 ) -> Path:
     """Write a synthetic migration version file and return its path.
 
@@ -72,7 +72,7 @@ def _migration_file(
 
 
 def test_main_skips_when_migrations_dir_is_absent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A tier with no migrations/versions/ (most Python tiers today) must pass, not fail."""
     monkeypatch.chdir(tmp_path)
@@ -81,7 +81,7 @@ def test_main_skips_when_migrations_dir_is_absent(
 
 
 def test_main_skips_when_versions_dir_is_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A fresh scaffold's versions/ holding only .gitkeep must pass, not fail."""
     (tmp_path / "migrations" / "versions").mkdir(parents=True)
@@ -91,40 +91,85 @@ def test_main_skips_when_versions_dir_is_empty(
 
 
 def test_main_passes_on_a_single_linear_chain(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A root revision plus one child, with a single head, must pass."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_root.py", "root", "None")
-    _migration_file(path_versions, "20260902_child.py", "child", '"root"')
+    _migration_file(
+        path_versions,
+        str_filename="20260901_root.py",
+        str_revision="root",
+        str_down_revision_repr="None",
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_child.py",
+        str_revision="child",
+        str_down_revision_repr='"root"',
+    )
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 0
 
 
 def test_main_passes_after_a_merge_revision_joins_two_heads(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The documented fix — a merge revision whose down_revision is a tuple — resolves it."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_root.py", "root", "None")
-    _migration_file(path_versions, "20260902_branch_a.py", "branch_a", '"root"')
-    _migration_file(path_versions, "20260902_branch_b.py", "branch_b", '"root"')
-    _migration_file(path_versions, "20260903_merge.py", "merged", '("branch_a", "branch_b")')
+    _migration_file(
+        path_versions,
+        str_filename="20260901_root.py",
+        str_revision="root",
+        str_down_revision_repr="None",
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_branch_a.py",
+        str_revision="branch_a",
+        str_down_revision_repr='"root"',
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_branch_b.py",
+        str_revision="branch_b",
+        str_down_revision_repr='"root"',
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260903_merge.py",
+        str_revision="merged",
+        str_down_revision_repr='("branch_a", "branch_b")',
+    )
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 0
 
 
-def test_main_fails_on_two_heads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_fails_on_two_heads(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """Two independent PRs branching off the same parent must be reported as two heads."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_root.py", "root", "None")
-    _migration_file(path_versions, "20260902_branch_a.py", "branch_a", '"root"')
-    _migration_file(path_versions, "20260902_branch_b.py", "branch_b", '"root"')
+    _migration_file(
+        path_versions,
+        str_filename="20260901_root.py",
+        str_revision="root",
+        str_down_revision_repr="None",
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_branch_a.py",
+        str_revision="branch_a",
+        str_down_revision_repr='"root"',
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_branch_b.py",
+        str_revision="branch_b",
+        str_down_revision_repr='"root"',
+    )
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 1
@@ -132,7 +177,7 @@ def test_main_fails_on_two_heads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
 @pytest.fixture
 def str_two_heads_err(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> str:
     """Run the gate over two migrations branching off one root; return its stderr.
 
@@ -152,9 +197,24 @@ def str_two_heads_err(
     """
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_root.py", "root", "None")
-    _migration_file(path_versions, "20260902_branch_a.py", "branch_a", '"root"')
-    _migration_file(path_versions, "20260902_branch_b.py", "branch_b", '"root"')
+    _migration_file(
+        path_versions,
+        str_filename="20260901_root.py",
+        str_revision="root",
+        str_down_revision_repr="None",
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_branch_a.py",
+        str_revision="branch_a",
+        str_down_revision_repr='"root"',
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_branch_b.py",
+        str_revision="branch_b",
+        str_down_revision_repr='"root"',
+    )
     monkeypatch.chdir(tmp_path)
     gate.main()
     return capsys.readouterr().err
@@ -162,7 +222,7 @@ def str_two_heads_err(
 
 @pytest.mark.parametrize("str_needle", ["branch_a", "branch_b", "2 head revisions present"])
 def test_two_heads_message_names_both_head_revisions(
-    str_two_heads_err: str, str_needle: str
+    str_two_heads_err: str, *, str_needle: str
 ) -> None:
     """The message must name the offending heads, not just 'branched'.
 
@@ -177,43 +237,65 @@ def test_two_heads_message_names_both_head_revisions(
 
 
 def test_main_fails_on_a_dangling_down_revision(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A down_revision with no matching file (a torn-out migration) must be reported."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_child.py", "child", '"missing_parent"')
+    _migration_file(
+        path_versions,
+        str_filename="20260901_child.py",
+        str_revision="child",
+        str_down_revision_repr='"missing_parent"',
+    )
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 1
 
 
 def test_main_fails_on_a_duplicate_revision_id(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Two files claiming the same revision id must be reported."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_a.py", "dupe", "None")
-    _migration_file(path_versions, "20260902_b.py", "dupe", "None")
+    _migration_file(
+        path_versions,
+        str_filename="20260901_a.py",
+        str_revision="dupe",
+        str_down_revision_repr="None",
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_b.py",
+        str_revision="dupe",
+        str_down_revision_repr="None",
+    )
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 1
 
 
 def test_main_fails_on_a_self_referencing_down_revision(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A revision naming itself as its own parent must be reported."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_loop.py", "loop", '"loop"')
+    _migration_file(
+        path_versions,
+        str_filename="20260901_loop.py",
+        str_revision="loop",
+        str_down_revision_repr='"loop"',
+    )
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 1
 
 
-def test_main_fails_on_an_unparsable_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_fails_on_an_unparsable_file(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A migration file that is not valid Python cannot be verified — a finding, not a skip."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
@@ -224,7 +306,7 @@ def test_main_fails_on_an_unparsable_file(tmp_path: Path, monkeypatch: pytest.Mo
 
 
 def test_main_fails_on_a_file_missing_the_revision_assignment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A file with no 'revision' literal cannot be verified — a finding, not a silent skip."""
     path_versions = tmp_path / "migrations" / "versions"
@@ -238,7 +320,7 @@ def test_main_fails_on_a_file_missing_the_revision_assignment(
 
 
 def test_main_fails_on_a_non_literal_down_revision(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A down_revision this reader cannot evaluate is unverifiable, never a root.
 
@@ -248,8 +330,18 @@ def test_main_fails_on_a_non_literal_down_revision(
     """
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_root.py", "root", "None")
-    _migration_file(path_versions, "20260902_child.py", "child", "PREVIOUS_REVISION")
+    _migration_file(
+        path_versions,
+        str_filename="20260901_root.py",
+        str_revision="root",
+        str_down_revision_repr="None",
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_child.py",
+        str_revision="child",
+        str_down_revision_repr="PREVIOUS_REVISION",
+    )
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 1
@@ -257,7 +349,7 @@ def test_main_fails_on_a_non_literal_down_revision(
 
 @pytest.fixture
 def str_non_literal_err(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> str:
     """Run the gate over a migration whose ``down_revision`` is a bare name; return stderr.
 
@@ -281,8 +373,18 @@ def str_non_literal_err(
     """
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_root.py", "root", "None")
-    _migration_file(path_versions, "20260902_child.py", "child", "PREVIOUS_REVISION")
+    _migration_file(
+        path_versions,
+        str_filename="20260901_root.py",
+        str_revision="root",
+        str_down_revision_repr="None",
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_child.py",
+        str_revision="child",
+        str_down_revision_repr="PREVIOUS_REVISION",
+    )
     monkeypatch.chdir(tmp_path)
     gate.main()
     return capsys.readouterr().err
@@ -290,7 +392,7 @@ def str_non_literal_err(
 
 @pytest.mark.parametrize("str_needle", ["cannot verify", "20260902_child.py"])
 def test_non_literal_down_revision_names_the_cause(
-    str_non_literal_err: str, str_needle: str
+    str_non_literal_err: str, *, str_needle: str
 ) -> None:
     """The finding names the unverifiable cause and the file, not a consequence.
 
@@ -305,12 +407,17 @@ def test_non_literal_down_revision_names_the_cause(
 
 
 def test_main_fails_when_down_revision_is_absent_entirely(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A missing key is 'cannot verify', not 'this is a root' — a root says so explicitly."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_root.py", "root", "None")
+    _migration_file(
+        path_versions,
+        str_filename="20260901_root.py",
+        str_revision="root",
+        str_down_revision_repr="None",
+    )
     (path_versions / "20260902_child.py").write_text(
         '"""synthetic migration"""\n\nrevision: str = "child"\n', encoding="utf-8"
     )
@@ -320,7 +427,7 @@ def test_main_fails_when_down_revision_is_absent_entirely(
 
 
 def test_absent_down_revision_names_the_missing_assignment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Same as above: the old code exited 1 for the wrong reason (an extra head).
 
@@ -328,7 +435,12 @@ def test_absent_down_revision_names_the_missing_assignment(
     """
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_root.py", "root", "None")
+    _migration_file(
+        path_versions,
+        str_filename="20260901_root.py",
+        str_revision="root",
+        str_down_revision_repr="None",
+    )
     (path_versions / "20260902_child.py").write_text(
         '"""synthetic migration"""\n\nrevision: str = "child"\n', encoding="utf-8"
     )
@@ -340,13 +452,23 @@ def test_absent_down_revision_names_the_missing_assignment(
 
 
 def test_main_fails_on_a_tuple_with_a_non_string_element(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A merge tuple holding a non-string had that element silently dropped."""
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_a.py", "a", "None")
-    _migration_file(path_versions, "20260902_merge.py", "merge", '("a", 123)')
+    _migration_file(
+        path_versions,
+        str_filename="20260901_a.py",
+        str_revision="a",
+        str_down_revision_repr="None",
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_merge.py",
+        str_revision="merge",
+        str_down_revision_repr='("a", 123)',
+    )
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 1
@@ -354,7 +476,7 @@ def test_main_fails_on_a_tuple_with_a_non_string_element(
 
 @pytest.fixture
 def tuple_cycle_run(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> tuple:
     """Run the gate over a 2-node cycle that coexists with a valid root->child chain.
 
@@ -377,10 +499,30 @@ def tuple_cycle_run(
     """
     path_versions = tmp_path / "migrations" / "versions"
     path_versions.mkdir(parents=True)
-    _migration_file(path_versions, "20260901_root.py", "root", "None")
-    _migration_file(path_versions, "20260902_child.py", "child", '"root"')
-    _migration_file(path_versions, "20260903_loop_a.py", "loop_a", '"loop_b"')
-    _migration_file(path_versions, "20260904_loop_b.py", "loop_b", '"loop_a"')
+    _migration_file(
+        path_versions,
+        str_filename="20260901_root.py",
+        str_revision="root",
+        str_down_revision_repr="None",
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260902_child.py",
+        str_revision="child",
+        str_down_revision_repr='"root"',
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260903_loop_a.py",
+        str_revision="loop_a",
+        str_down_revision_repr='"loop_b"',
+    )
+    _migration_file(
+        path_versions,
+        str_filename="20260904_loop_b.py",
+        str_revision="loop_b",
+        str_down_revision_repr='"loop_a"',
+    )
     monkeypatch.chdir(tmp_path)
     int_status = gate.main()
     return int_status, capsys.readouterr().err
@@ -399,7 +541,7 @@ def test_main_fails_on_a_cycle_that_coexists_with_a_valid_chain(tuple_cycle_run:
 
 @pytest.mark.parametrize("str_needle", ["cycle", "loop_a", "loop_b"])
 def test_a_cycle_finding_names_the_cycle_and_its_members(
-    tuple_cycle_run: tuple, str_needle: str
+    tuple_cycle_run: tuple, *, str_needle: str
 ) -> None:
     """The finding says "cycle" and names both revisions on it.
 

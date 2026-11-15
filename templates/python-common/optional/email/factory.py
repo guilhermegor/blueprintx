@@ -27,6 +27,7 @@ _TRUE_TOKENS = frozenset({"1", "true", "yes", "on", "y", "t"})
 
 def build_email_handler(
     str_backend: str = "",
+    *,
     str_sender: str = "",
     path_signatures_dir: Path | None = None,
     logger: Logger | None = None,

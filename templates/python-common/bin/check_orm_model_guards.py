@@ -88,7 +88,7 @@ def _hatch_reason(str_line: str) -> str | None:
     return str_line.split(_ALLOW_MARKER, 1)[1].strip() or None
 
 
-def _line_allowed(list_lines: list[str], int_line: int) -> bool:
+def _line_allowed(list_lines: list[str], *, int_line: int) -> bool:
     """Return whether a 1-indexed line carries a valid escape-hatch reason.
 
     Parameters
@@ -200,7 +200,7 @@ def _find_bitwise_nodes(cls_node: ast.AST) -> list[ast.AST]:
     return list_found
 
 
-def _bitwise_filter_message(path_file: pathlib.Path, int_line: int) -> str:
+def _bitwise_filter_message(path_file: pathlib.Path, *, int_line: int) -> str:
     """Return the bitwise-precedence finding, naming the failure mode and the fix.
 
     Parameters
@@ -226,7 +226,7 @@ def _bitwise_filter_message(path_file: pathlib.Path, int_line: int) -> str:
 
 
 def _bitwise_filter_problems(
-    cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
+    cls_tree: ast.Module, *, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
     """Report every &/|/~ found inside a ``.where()``/``.filter()`` call's arguments.
 
@@ -258,13 +258,15 @@ def _bitwise_filter_problems(
             continue
         for cls_arg in cls_node.args:
             for cls_hazard in _find_bitwise_nodes(cls_arg):
-                if not _line_allowed(list_lines, cls_hazard.lineno):
-                    list_problems.append(_bitwise_filter_message(path_file, cls_hazard.lineno))
+                if not _line_allowed(list_lines, int_line=cls_hazard.lineno):
+                    list_problems.append(
+                        _bitwise_filter_message(path_file, int_line=cls_hazard.lineno)
+                    )
     return list_problems
 
 
 def _base_declarations_in_file(
-    cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
+    cls_tree: ast.Module, *, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[tuple[pathlib.Path, int, str]]:
     """Collect every Base declaration (``declarative_base()``, ``generate_base()``, subclasses).
 
@@ -302,13 +304,13 @@ def _base_declarations_in_file(
             for b in cls_node.bases
         ):
             str_kind, int_line = f"class {cls_node.name}(DeclarativeBase)", cls_node.lineno
-        if str_kind is not None and not _line_allowed(list_lines, int_line):
+        if str_kind is not None and not _line_allowed(list_lines, int_line=int_line):
             list_found.append((path_file, int_line, str_kind))
     return list_found
 
 
 def _duplicate_base_message(
-    cls_entry: tuple[pathlib.Path, int, str], list_others: list[tuple[pathlib.Path, int, str]]
+    cls_entry: tuple[pathlib.Path, int, str], *, list_others: list[tuple[pathlib.Path, int, str]]
 ) -> str:
     """Return the "more than one Base" finding for one declaration site.
 
@@ -355,7 +357,7 @@ def _is_create_all_call(cls_call: ast.Call) -> bool:
     return isinstance(cls_receiver, ast.Attribute) and cls_receiver.attr == "metadata"
 
 
-def _create_all_message(path_file: pathlib.Path, int_line: int) -> str:
+def _create_all_message(path_file: pathlib.Path, *, int_line: int) -> str:
     """Return the module-scope ``create_all`` finding, naming the failure mode and the fix.
 
     Parameters
@@ -406,7 +408,7 @@ def _is_main_guard(cls_node: ast.AST) -> bool:
 
 
 def _module_scope_create_all_problems(
-    cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
+    cls_tree: ast.Module, *, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
     """Report every ``create_all(...)`` call reachable without entering a function scope.
 
@@ -426,23 +428,23 @@ def _module_scope_create_all_problems(
     """
     list_problems: list[str] = []
 
-    def _walk(cls_node: ast.AST, bool_in_function: bool) -> None:
+    def _walk(cls_node: ast.AST, *, bool_in_function: bool) -> None:
         for cls_child in ast.iter_child_nodes(cls_node):
             if (
                 isinstance(cls_child, ast.Call)
                 and not bool_in_function
                 and _is_create_all_call(cls_child)
-                and not _line_allowed(list_lines, cls_child.lineno)
+                and not _line_allowed(list_lines, int_line=cls_child.lineno)
             ):
-                list_problems.append(_create_all_message(path_file, cls_child.lineno))
+                list_problems.append(_create_all_message(path_file, int_line=cls_child.lineno))
             bool_child_in_function = (
                 bool_in_function
                 or isinstance(cls_child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda)
                 or _is_main_guard(cls_child)
             )
-            _walk(cls_child, bool_child_in_function)
+            _walk(cls_child, bool_in_function=bool_child_in_function)
 
-    _walk(cls_tree, False)
+    _walk(cls_tree, bool_in_function=False)
     return list_problems
 
 
@@ -652,7 +654,7 @@ def _base_class_names(cls_node: ast.ClassDef) -> list[str]:
 
 
 def _linearised_bases(
-    str_name: str, dict_classes: dict[str, ast.ClassDef], set_visited: set[str]
+    str_name: str, *, dict_classes: dict[str, ast.ClassDef], set_visited: set[str]
 ) -> list[str]:
     """Return ``str_name`` and its in-file ancestors, depth-first and left to right.
 
@@ -677,11 +679,13 @@ def _linearised_bases(
     set_visited.add(str_name)
     list_order = [str_name]
     for str_base in _base_class_names(dict_classes[str_name]):
-        list_order += _linearised_bases(str_base, dict_classes, set_visited)
+        list_order += _linearised_bases(
+            str_base, dict_classes=dict_classes, set_visited=set_visited
+        )
     return list_order
 
 
-def _in_file_mro(str_name: str, dict_classes: dict[str, ast.ClassDef]) -> list[str]:
+def _in_file_mro(str_name: str, *, dict_classes: dict[str, ast.ClassDef]) -> list[str]:
     """Return ``str_name`` and its in-file ancestors in Python's own C3 attribute-lookup order.
 
     Builds a throwaway ``type`` per in-file class, bases first, and reads ``__mro__`` — so the
@@ -716,7 +720,7 @@ def _in_file_mro(str_name: str, dict_classes: dict[str, ast.ClassDef]) -> list[s
     try:
         list_mro = _build(str_name).__mro__
     except (TypeError, RecursionError):
-        return _linearised_bases(str_name, dict_classes, set())
+        return _linearised_bases(str_name, dict_classes=dict_classes, set_visited=set())
     dict_name_of = {id(cls_type): str_cls for str_cls, cls_type in dict_built.items()}
     return [dict_name_of[id(cls_type)] for cls_type in list_mro if id(cls_type) in dict_name_of]
 
@@ -748,6 +752,7 @@ def _consumed_bases(cls_declaration: ast.AST | None) -> set[str]:
 
 def _effective_table_args(
     str_name: str,
+    *,
     dict_classes: dict[str, ast.ClassDef],
     dict_own_names: dict[str, list[tuple[str, int]]],
 ) -> tuple[list[tuple[str, int, str]], list[str]]:
@@ -778,7 +783,7 @@ def _effective_table_args(
     """
     list_declarers = [
         str_cls
-        for str_cls in _in_file_mro(str_name, dict_classes)
+        for str_cls in _in_file_mro(str_name, dict_classes=dict_classes)
         if _declares_table_args(dict_classes[str_cls])
     ]
     if not list_declarers:
@@ -800,6 +805,7 @@ def _effective_table_args(
 
 def _duplicate_constraint_message(
     path_file: pathlib.Path,
+    *,
     str_name: str,
     int_line: int,
     str_class: str,
@@ -839,6 +845,7 @@ def _duplicate_constraint_message(
 
 def _shadowed_table_args_problems(
     path_file: pathlib.Path,
+    *,
     dict_inheritors: dict[str, list[str]],
     dict_classes: dict[str, ast.ClassDef],
     list_lines: list[str],
@@ -868,7 +875,7 @@ def _shadowed_table_args_problems(
     list_problems = []
     for str_shadowed, list_models in dict_inheritors.items():
         int_line = dict_classes[str_shadowed].lineno
-        if _line_allowed(list_lines, int_line):
+        if _line_allowed(list_lines, int_line=int_line):
             continue
         list_problems.append(
             f"{path_file}:{int_line}: '{str_shadowed}' declares '__table_args__', but "
@@ -884,6 +891,7 @@ def _shadowed_table_args_problems(
 
 def _duplicate_names_in(
     path_file: pathlib.Path,
+    *,
     list_effective: list[tuple[str, int, str]],
     list_lines: list[str],
 ) -> list[str]:
@@ -908,18 +916,23 @@ def _duplicate_names_in(
     for str_constraint, int_line, str_class in list_effective:
         if str_constraint not in dict_seen:
             dict_seen[str_constraint] = (int_line, str_class)
-        elif not _line_allowed(list_lines, int_line):
+        elif not _line_allowed(list_lines, int_line=int_line):
             int_other_line, str_other_class = dict_seen[str_constraint]
             list_problems.append(
                 _duplicate_constraint_message(
-                    path_file, str_constraint, int_line, str_class, int_other_line, str_other_class
+                    path_file,
+                    str_name=str_constraint,
+                    int_line=int_line,
+                    str_class=str_class,
+                    int_other_line=int_other_line,
+                    str_other_class=str_other_class,
                 )
             )
     return list_problems
 
 
 def _duplicate_constraint_name_problems(
-    cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
+    cls_tree: ast.Module, *, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
     """Report duplicated constraint names and discarded ``__table_args__`` across in-file MROs.
 
@@ -946,14 +959,19 @@ def _duplicate_constraint_name_problems(
     list_problems: list[str] = []
     for str_name, cls_model in dict_classes.items():
         list_effective, list_shadowed = _effective_table_args(
-            str_name, dict_classes, dict_own_names
+            str_name, dict_classes=dict_classes, dict_own_names=dict_own_names
         )
-        if not _line_allowed(list_lines, cls_model.lineno):
+        if not _line_allowed(list_lines, int_line=cls_model.lineno):
             for str_shadowed in list_shadowed:
                 dict_inheritors.setdefault(str_shadowed, []).append(str_name)
-        list_problems += _duplicate_names_in(path_file, list_effective, list_lines)
+        list_problems += _duplicate_names_in(
+            path_file, list_effective=list_effective, list_lines=list_lines
+        )
     list_problems += _shadowed_table_args_problems(
-        path_file, dict_inheritors, dict_classes, list_lines
+        path_file,
+        dict_inheritors=dict_inheritors,
+        dict_classes=dict_classes,
+        list_lines=list_lines,
     )
     return list(dict.fromkeys(list_problems))
 
@@ -981,10 +999,14 @@ def check_python_file(
         return [f"{path_file}: could not parse ({cls_exc})"], []
 
     list_lines = str_source.splitlines()
-    list_problems = _bitwise_filter_problems(cls_tree, path_file, list_lines)
-    list_problems += _module_scope_create_all_problems(cls_tree, path_file, list_lines)
-    list_problems += _duplicate_constraint_name_problems(cls_tree, path_file, list_lines)
-    list_bases = _base_declarations_in_file(cls_tree, path_file, list_lines)
+    list_problems = _bitwise_filter_problems(cls_tree, path_file=path_file, list_lines=list_lines)
+    list_problems += _module_scope_create_all_problems(
+        cls_tree, path_file=path_file, list_lines=list_lines
+    )
+    list_problems += _duplicate_constraint_name_problems(
+        cls_tree, path_file=path_file, list_lines=list_lines
+    )
+    list_bases = _base_declarations_in_file(cls_tree, path_file=path_file, list_lines=list_lines)
     return list_problems, list_bases
 
 
@@ -1020,7 +1042,7 @@ def main() -> int:
     if len(list_all_bases) > 1:
         for cls_entry in list_all_bases:
             list_others = [e for e in list_all_bases if e != cls_entry]
-            list_problems.append(_duplicate_base_message(cls_entry, list_others))
+            list_problems.append(_duplicate_base_message(cls_entry, list_others=list_others))
 
     for str_problem in list_problems:
         print(f"❌ {str_problem}")

@@ -202,7 +202,7 @@ def build_graph(
 
 
 def cycle_problems(
-    dict_rev_to_file: dict[str, pathlib.Path], list_edges: list[_TupleGraphEdge]
+    dict_rev_to_file: dict[str, pathlib.Path], *, list_edges: list[_TupleGraphEdge]
 ) -> list[str]:
     """Return one problem per revision that sits on a cycle, in any component.
 
@@ -248,7 +248,7 @@ def cycle_problems(
 
 
 def graph_problems(
-    dict_rev_to_file: dict[str, pathlib.Path], list_edges: list[_TupleGraphEdge]
+    dict_rev_to_file: dict[str, pathlib.Path], *, list_edges: list[_TupleGraphEdge]
 ) -> list[str]:
     """Return dangling-parent, self-reference, and head-count problems for a parsed graph.
 
@@ -285,7 +285,7 @@ def graph_problems(
         list_problems.append(
             "no head revision found — every revision is referenced as a parent (a cycle)"
         )
-    list_problems.extend(cycle_problems(dict_rev_to_file, list_edges))
+    list_problems.extend(cycle_problems(dict_rev_to_file, list_edges=list_edges))
     return list_problems
 
 
@@ -325,7 +325,7 @@ def main() -> int:
         return 0
 
     dict_rev_to_file, list_edges, list_problems = build_graph(list_files)
-    list_problems += graph_problems(dict_rev_to_file, list_edges)
+    list_problems += graph_problems(dict_rev_to_file, list_edges=list_edges)
     for str_problem in list_problems:
         print(f"❌ {str_problem}", file=sys.stderr)
     if list_problems:

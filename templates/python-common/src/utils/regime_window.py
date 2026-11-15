@@ -42,7 +42,7 @@ _INT_LAST_MONTH = 12
 
 
 @type_checker
-def _validate_period(int_period: int | None, str_field: str) -> None:
+def _validate_period(int_period: int | None, *, str_field: str) -> None:
     """Reject a bound that is not a ``YYYYMM`` period, allowing ``None`` for an open bound.
 
     Parameters
@@ -103,8 +103,8 @@ class RegimeWindow(metaclass=TypeChecker):
         ValueError
             If a bound is not a valid ``YYYYMM`` period, or the start is after the end.
         """
-        _validate_period(self.int_period_start, "int_period_start")
-        _validate_period(self.int_period_end, "int_period_end")
+        _validate_period(self.int_period_start, str_field="int_period_start")
+        _validate_period(self.int_period_end, str_field="int_period_end")
         bool_backwards = (
             self.int_period_start is not None
             and self.int_period_end is not None
@@ -132,7 +132,7 @@ class RegimeWindow(metaclass=TypeChecker):
             ``True`` when ``int_period`` is within ``[int_period_start, int_period_end]``
             (either bound may be open).
         """
-        _validate_period(int_period, "int_period")
+        _validate_period(int_period, str_field="int_period")
         bool_after_start = self.int_period_start is None or int_period >= self.int_period_start
         bool_before_end = self.int_period_end is None or int_period <= self.int_period_end
         return bool_after_start and bool_before_end

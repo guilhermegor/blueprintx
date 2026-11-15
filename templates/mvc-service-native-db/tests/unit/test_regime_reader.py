@@ -14,6 +14,9 @@ from model.regime_registry import RegimeRegistry
 from model.regime_window import RegimeWindow
 
 
+_STR_REGIME_CLASSE = "cnpj_classe_keyed"
+
+
 @pytest.fixture
 def cls_registry() -> RegimeRegistry:
     """Build the two-regime registry from the issue's measured cutover (202311 / 202312).
@@ -128,7 +131,7 @@ def test_reader_with_no_period_defaults_to_its_regimes_last_covered_period(
     -------
     None
     """
-    cls_reader = RegimeReader(cls_registry, "cnpj_keyed")
+    cls_reader = RegimeReader(cls_registry=cls_registry, str_regime_name="cnpj_keyed")
     assert cls_reader.int_period == 202311
 
 
@@ -144,7 +147,9 @@ def test_reader_accepts_a_period_within_its_own_regime(cls_registry: RegimeRegis
     -------
     None
     """
-    cls_reader = RegimeReader(cls_registry, "cnpj_classe_keyed", int_period=202312)
+    cls_reader = RegimeReader(
+        cls_registry=cls_registry, str_regime_name=_STR_REGIME_CLASSE, int_period=202312
+    )
     assert cls_reader.cls_window.str_name == "cnpj_classe_keyed"
 
 
@@ -163,7 +168,7 @@ def test_reader_refuses_a_period_belonging_to_a_sibling_regime(
     None
     """
     with pytest.raises(ValueError, match="cnpj_classe_keyed"):
-        RegimeReader(cls_registry, "cnpj_keyed", int_period=202312)
+        RegimeReader(cls_registry=cls_registry, str_regime_name="cnpj_keyed", int_period=202312)
 
 
 @pytest.mark.parametrize(

@@ -49,7 +49,9 @@ MODULE = _load()
     ],
     ids=["extras-and-marker", "trailing-comment"],
 )
-def test_requirement_name_strips_extras_markers_and_comments(str_line: str, str_name: str) -> None:
+def test_requirement_name_strips_extras_markers_and_comments(
+    str_line: str, *, str_name: str
+) -> None:
     """A real requirement line reduces to its bare distribution name.
 
     Parameters

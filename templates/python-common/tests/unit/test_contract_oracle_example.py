@@ -19,7 +19,7 @@ from config.contracts import EXAMPLE_SOURCE
 _FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "example_source__header.csv"
 
 
-def _oracle_columns(path_fixture: Path, str_sep: str = ";") -> tuple[str, ...]:
+def _oracle_columns(path_fixture: Path, *, str_sep: str = ";") -> tuple[str, ...]:
     """Return the committed header fixture's columns (the source-produced oracle).
 
     Parameters

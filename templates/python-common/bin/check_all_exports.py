@@ -172,7 +172,7 @@ def _definitions(list_nodes: Iterable[ast.stmt]) -> set[str]:
     return set_names
 
 
-def internal_exports(path_init: pathlib.Path, set_exported: set[str]) -> list[str]:
+def internal_exports(path_init: pathlib.Path, *, set_exported: set[str]) -> list[str]:
     """Return one message per exported name imported from a module under ``_internal``.
 
     The leading underscore is a promise that a path is not public API, and ``__all__`` must
@@ -192,11 +192,13 @@ def internal_exports(path_init: pathlib.Path, set_exported: set[str]) -> list[st
     """
     if _inside_internal(path_init):
         return []
-    list_problems = [_export_problem(path_init, str_name) for str_name in sorted(set_exported)]
+    list_problems = [
+        _export_problem(path_init, str_name=str_name) for str_name in sorted(set_exported)
+    ]
     return list(dict.fromkeys(str_problem for str_problem in list_problems if str_problem))
 
 
-def _export_problem(path_init: pathlib.Path, str_name: str) -> str | None:
+def _export_problem(path_init: pathlib.Path, *, str_name: str) -> str | None:
     """Return the problem for one exported name, or ``None`` when it is not an ``_internal`` leak.
 
     Parameters
@@ -212,7 +214,7 @@ def _export_problem(path_init: pathlib.Path, str_name: str) -> str | None:
         The message, which is the parse failure when a file on the trace is unreadable.
     """
     try:
-        str_origin = _internal_origin(path_init, str_name, frozenset())
+        str_origin = _internal_origin(path_init, str_name=str_name, set_seen=frozenset())
     except _UnparseableError as cls_exc:
         return str(cls_exc)
     if str_origin is None:
@@ -280,7 +282,7 @@ _SET_DYNAMIC_WRITERS = frozenset(
 
 
 def _internal_origin(
-    path_module: pathlib.Path, str_name: str, set_seen: frozenset[pathlib.Path]
+    path_module: pathlib.Path, *, str_name: str, set_seen: frozenset[pathlib.Path]
 ) -> str | None:
     """Return the ``_internal`` module a module-level binding of ``str_name`` comes from.
 
@@ -309,7 +311,9 @@ def _internal_origin(
     list_nodes = list(_module_statements(_parse(path_module).body))
     set_next = set_seen | {path_module}
     for cls_node in list_nodes:
-        str_hit = _node_origin(path_module, cls_node, str_name, set_next)
+        str_hit = _node_origin(
+            path_module, cls_node=cls_node, str_name=str_name, set_seen=set_next
+        )
         if str_hit is not None:
             return str_hit
     if str_name in _definitions(list_nodes) | _imported_names(list_nodes):
@@ -320,7 +324,9 @@ def _internal_origin(
             for cls_node in list_nodes
             if isinstance(cls_node, ast.ImportFrom)
             and any(cls_alias.name == "*" for cls_alias in cls_node.names)
-            for str_hit in [_star_origin(path_module, cls_node, str_name, set_next)]
+            for str_hit in [
+                _star_origin(path_module, cls_node=cls_node, str_name=str_name, set_seen=set_next)
+            ]
             if str_hit is not None
         ),
         None,
@@ -495,7 +501,7 @@ def _binds_dynamically(list_nodes: list[ast.stmt]) -> bool:
         else {
             int_id
             for cls_fn in _methods(list_nodes)
-            for int_id in _own_parameter_writes(cls_fn, set_bound)
+            for int_id in _own_parameter_writes(cls_fn, set_bound=set_bound)
         }
     )
     return any(
@@ -534,7 +540,7 @@ def _names_writer(cls_sub: ast.AST) -> bool:
 
 
 def _own_parameter_writes(
-    cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, set_bound: set[str]
+    cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, *, set_bound: set[str]
 ) -> set[int]:
     """Return the ids of ``setattr``/``vars`` names that act on this method's own ``self``/``cls``.
 
@@ -561,22 +567,22 @@ def _own_parameter_writes(
     )
     if (
         is_unbound_param
-        or _loses_exemption(cls_fn, set_bound)
-        or _rebinds(cls_fn, str_param)
+        or _loses_exemption(cls_fn, set_bound=set_bound)
+        or _rebinds(cls_fn, str_param=str_param)
         or _shadows_writer(cls_fn)
-        or _shadowed_by_nested(cls_fn, str_param)
+        or _shadowed_by_nested(cls_fn, str_param=str_param)
     ):
         return set()
     return {
         id(cls_hit)
         for cls_stmt in cls_fn.body
         for cls_sub in ast.walk(cls_stmt)
-        for cls_hit in [_own_write_node(cls_sub, str_param)]
+        for cls_hit in [_own_write_node(cls_sub, str_param=str_param)]
         if cls_hit is not None
     }
 
 
-def _own_write_node(cls_sub: ast.AST, str_param: str) -> ast.AST | None:
+def _own_write_node(cls_sub: ast.AST, *, str_param: str) -> ast.AST | None:
     """Return the node to exempt when ``cls_sub`` writes through the parameter, else ``None``.
 
     Parameters
@@ -603,7 +609,7 @@ def _own_write_node(cls_sub: ast.AST, str_param: str) -> ast.AST | None:
     return cls_sub.func if is_own and cls_sub.func.id in {"setattr", "vars"} else None
 
 
-def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> bool:
+def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, *, str_param: str) -> bool:
     """Return whether a def or lambda nested in the method takes the name as a parameter.
 
     Parameters
@@ -625,7 +631,9 @@ def _shadowed_by_nested(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_para
     )
 
 
-def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, set_bound: set[str]) -> bool:
+def _loses_exemption(
+    cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, *, set_bound: set[str]
+) -> bool:
     """Return whether a def gets no ``self``/``cls`` exemption (``__new__``, unknown decorator).
 
     Only ``classmethod``, ``property``, ``abstractmethod``, ``override``, ``cached_property``,
@@ -648,11 +656,12 @@ def _loses_exemption(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, set_bound: 
         ``True`` when the def is ``__new__`` or carries a decorator outside the safe set.
     """
     return cls_fn.name == "__new__" or not all(
-        _is_safe_decorator(cls_dec, cls_fn.name, set_bound) for cls_dec in cls_fn.decorator_list
+        _is_safe_decorator(cls_dec, str_method=cls_fn.name, set_bound=set_bound)
+        for cls_dec in cls_fn.decorator_list
     )
 
 
-def _is_safe_decorator(cls_dec: ast.expr, str_method: str, set_bound: set[str]) -> bool:
+def _is_safe_decorator(cls_dec: ast.expr, *, str_method: str, set_bound: set[str]) -> bool:
     """Return whether a decorator is one of the known names that never calls the method.
 
     A property accessor counts only on the method's own name (``@x.setter def x``).
@@ -688,7 +697,7 @@ def _is_safe_decorator(cls_dec: ast.expr, str_method: str, set_bound: set[str]) 
     )
 
 
-def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, str_param: str) -> bool:
+def _rebinds(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef, *, str_param: str) -> bool:
     """Return whether the name is bound or deleted by any statement under the def.
 
     A store or delete, an ``import ... as``, a ``match`` capture, an ``except ... as`` and a
@@ -735,7 +744,7 @@ def _shadows_writer(cls_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return any(
         isinstance(cls_sub, ast.arg) and cls_sub.arg in {"setattr", "vars"}
         for cls_sub in ast.walk(cls_fn)
-    ) or any(_rebinds(cls_fn, str_writer) for str_writer in ("setattr", "vars"))
+    ) or any(_rebinds(cls_fn, str_param=str_writer) for str_writer in ("setattr", "vars"))
 
 
 def _module_shadows_writer(list_nodes: list[ast.stmt]) -> bool:
@@ -894,6 +903,7 @@ def _bound_names(list_nodes: list[ast.stmt]) -> set[str]:
 
 def _star_origin(
     path_module: pathlib.Path,
+    *,
     cls_node: ast.ImportFrom,
     str_name: str,
     set_seen: frozenset[pathlib.Path],
@@ -921,15 +931,21 @@ def _star_origin(
         The dotted ``_internal`` module, or ``None``.
     """
     if "_internal" not in (cls_node.module or "").split("."):
-        return _from_import_origin(path_module, cls_node, str_name, set_seen)
-    path_target = _import_target(path_module, cls_node)
-    if path_target is not None and not _star_provides(path_target, str_name, frozenset()):
+        return _from_import_origin(
+            path_module, cls_node=cls_node, str_source_name=str_name, set_seen=set_seen
+        )
+    path_target = _import_target(path_module, cls_node=cls_node)
+    if path_target is not None and not _star_provides(
+        path_target, str_name=str_name, set_seen=frozenset()
+    ):
         return None
-    return _from_import_origin(path_module, cls_node, str_name, set_seen)
+    return _from_import_origin(
+        path_module, cls_node=cls_node, str_source_name=str_name, set_seen=set_seen
+    )
 
 
 def _star_provides(
-    path_module: pathlib.Path, str_name: str, set_seen: frozenset[pathlib.Path]
+    path_module: pathlib.Path, *, str_name: str, set_seen: frozenset[pathlib.Path]
 ) -> bool:
     """Return whether ``from <module> import *`` would bind ``str_name``.
 
@@ -966,8 +982,8 @@ def _star_provides(
         return True
     set_next = set_seen | {path_module}
     return any(
-        (path_target := _import_target(path_module, cls_node)) is None
-        or _star_provides(path_target, str_name, set_next)
+        (path_target := _import_target(path_module, cls_node=cls_node)) is None
+        or _star_provides(path_target, str_name=str_name, set_seen=set_next)
         for cls_node in list_nodes
         if isinstance(cls_node, ast.ImportFrom)
         and any(cls_alias.name == "*" for cls_alias in cls_node.names)
@@ -998,6 +1014,7 @@ def _imported_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
 
 def _node_origin(
     path_module: pathlib.Path,
+    *,
     cls_node: ast.stmt,
     str_name: str,
     set_seen: frozenset[pathlib.Path],
@@ -1033,12 +1050,15 @@ def _node_origin(
         return None
     for cls_alias in cls_node.names:
         if (cls_alias.asname or cls_alias.name) == str_name:
-            return _from_import_origin(path_module, cls_node, cls_alias.name, set_seen)
+            return _from_import_origin(
+                path_module, cls_node=cls_node, str_source_name=cls_alias.name, set_seen=set_seen
+            )
     return None
 
 
 def _from_import_origin(
     path_module: pathlib.Path,
+    *,
     cls_node: ast.ImportFrom,
     str_source_name: str,
     set_seen: frozenset[pathlib.Path],
@@ -1064,14 +1084,14 @@ def _from_import_origin(
     if "_internal" in (cls_node.module or "").split("."):
         return f"{'.' * cls_node.level}{cls_node.module}"
     if str_source_name == "_internal":
-        return _internal_package_origin(path_module, cls_node)
-    path_target = _import_target(path_module, cls_node)
+        return _internal_package_origin(path_module, cls_node=cls_node)
+    path_target = _import_target(path_module, cls_node=cls_node)
     if path_target is None:
         return None
-    return _internal_origin(path_target, str_source_name, set_seen)
+    return _internal_origin(path_target, str_name=str_source_name, set_seen=set_seen)
 
 
-def _internal_package_origin(path_module: pathlib.Path, cls_node: ast.ImportFrom) -> str | None:
+def _internal_package_origin(path_module: pathlib.Path, *, cls_node: ast.ImportFrom) -> str | None:
     """Return the dotted ``_internal`` package a ``from … import _internal`` names, or ``None``.
 
     The bare relative form (``from . import _internal``) is always first-party. With a module
@@ -1092,12 +1112,12 @@ def _internal_package_origin(path_module: pathlib.Path, cls_node: ast.ImportFrom
     """
     if not cls_node.module:
         return f"{'.' * cls_node.level}_internal"
-    if not cls_node.level and _import_target(path_module, cls_node) is None:
+    if not cls_node.level and _import_target(path_module, cls_node=cls_node) is None:
         return None
     return f"{'.' * cls_node.level}{cls_node.module}._internal"
 
 
-def _import_target(path_module: pathlib.Path, cls_node: ast.ImportFrom) -> pathlib.Path | None:
+def _import_target(path_module: pathlib.Path, *, cls_node: ast.ImportFrom) -> pathlib.Path | None:
     """Resolve a first-party ``from … import`` to the file it names, or ``None``.
 
     A relative import climbs from the importing module's own package; an absolute one resolves
@@ -1122,11 +1142,11 @@ def _import_target(path_module: pathlib.Path, cls_node: ast.ImportFrom) -> pathl
     if cls_node.level:
         if cls_node.level > len(path_module.parents):
             return None
-        return _module_file(path_module.parents[cls_node.level - 1], tuple_parts)
+        return _module_file(path_module.parents[cls_node.level - 1], tuple_parts=tuple_parts)
     path_top = _top_package(path_module)
     if tuple_parts[0] != path_top.name:
         return None
-    return _module_file(path_top.parent, tuple_parts)
+    return _module_file(path_top.parent, tuple_parts=tuple_parts)
 
 
 def _top_package(path_module: pathlib.Path) -> pathlib.Path:
@@ -1148,7 +1168,7 @@ def _top_package(path_module: pathlib.Path) -> pathlib.Path:
     return path_dir
 
 
-def _module_file(path_base: pathlib.Path, tuple_parts: tuple[str, ...]) -> pathlib.Path | None:
+def _module_file(path_base: pathlib.Path, *, tuple_parts: tuple[str, ...]) -> pathlib.Path | None:
     """Return the file a dotted module path names below a base directory, or ``None``.
 
     Parameters
@@ -1175,7 +1195,7 @@ def _module_file(path_base: pathlib.Path, tuple_parts: tuple[str, ...]) -> pathl
 
 
 def _missing_exports(
-    path_init: pathlib.Path, path_module: pathlib.Path, set_exported: set[str]
+    path_init: pathlib.Path, *, path_module: pathlib.Path, set_exported: set[str]
 ) -> list[str]:
     """Return one message per public name a submodule defines that ``__all__`` omits.
 
@@ -1222,10 +1242,12 @@ def check_package(path_init: pathlib.Path) -> list[str]:
     if list_exported is None:
         return []
     set_exported = set(list_exported)
-    list_problems: list[str] = internal_exports(path_init, set_exported)
+    list_problems: list[str] = internal_exports(path_init, set_exported=set_exported)
     for path_module in sorted(path_init.parent.glob("*.py")):
         if path_module.name != "__init__.py":
-            list_problems += _missing_exports(path_init, path_module, set_exported)
+            list_problems += _missing_exports(
+                path_init, path_module=path_module, set_exported=set_exported
+            )
     return list(dict.fromkeys(list_problems))
 
 

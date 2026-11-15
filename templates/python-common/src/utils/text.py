@@ -53,7 +53,7 @@ def normalize_text(str_value: str) -> str:
 
 
 @type_checker
-def safe_str(value: object, default: str = "") -> str:
+def safe_str(value: object, *, default: str = "") -> str:
     """Stringify ``value`` without ever producing the literal ``"nan"``.
 
     ``str(float("nan"))`` is ``"nan"`` and ``str(None)`` is ``"None"`` — both are

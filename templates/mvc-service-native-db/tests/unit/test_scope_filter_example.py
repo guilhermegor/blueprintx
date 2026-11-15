@@ -87,6 +87,7 @@ def tuple_inactive_run(
 )
 def test_active_filter_freezes_each_price_count(
     tuple_active_run: tuple[pd.DataFrame, ScopeFilterPrice],
+    *,
     str_attribute: str,
     int_expected: int,
 ) -> None:

@@ -40,7 +40,7 @@ gate = _load("check_dynamic_version_stub")
 STR_DYNAMIC = '[tool.poetry-dynamic-versioning]\nenable = true\nvcs = "git"\n\n'
 
 
-def _pyproject(str_version: str, str_dynamic: str) -> str:
+def _pyproject(str_version: str, *, str_dynamic: str) -> str:
     """Build a minimal ``pyproject.toml`` body.
 
     Parameters
@@ -58,7 +58,7 @@ def _pyproject(str_version: str, str_dynamic: str) -> str:
     return f'[tool.poetry]\nname = "demo"\nversion = "{str_version}"\n\n{str_dynamic}'
 
 
-def _run(path_dir: Path, str_text: str) -> int:
+def _run(path_dir: Path, *, str_text: str) -> int:
     """Write ``pyproject.toml`` under ``path_dir`` and run the gate on it.
 
     Parameters
@@ -87,7 +87,9 @@ def _run(path_dir: Path, str_text: str) -> int:
     ],
     ids=["stub-passes", "hand-bump-fails", "static-ignored", "disabled-ignored"],
 )
-def test_exit_code(tmp_path: Path, str_version: str, str_dynamic: str, int_expected: int) -> None:
+def test_exit_code(
+    tmp_path: Path, *, str_version: str, str_dynamic: str, int_expected: int
+) -> None:
     """Pin the exit code for the stub, hand-bump and ignored-project cases.
 
     Parameters
@@ -101,12 +103,14 @@ def test_exit_code(tmp_path: Path, str_version: str, str_dynamic: str, int_expec
     int_expected : int
         Expected exit code.
     """
-    assert _run(tmp_path, _pyproject(str_version, str_dynamic)) == int_expected
+    assert (
+        _run(tmp_path, str_text=_pyproject(str_version, str_dynamic=str_dynamic)) == int_expected
+    )
 
 
 def test_finding_names_the_found_version() -> None:
     """A hand-bump finding names the offending version."""
-    assert "'1.0.0'" in gate.find_problem(_pyproject("1.0.0", STR_DYNAMIC))
+    assert "'1.0.0'" in gate.find_problem(_pyproject("1.0.0", str_dynamic=STR_DYNAMIC))
 
 
 def test_missing_version_is_a_finding() -> None:

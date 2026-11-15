@@ -68,7 +68,7 @@ def _first_problem(list_problems: list[str]) -> str:
 @pytest.mark.parametrize("str_path", ["src/model/loader.py", "bin/venv.sh"])
 def test_ledger_required_for_src_and_ci(str_path: str) -> None:
     """A branch touching src/ or ci paths must carry a ledger."""
-    assert ledger.needs_ledger([str_path], gate) is True
+    assert ledger.needs_ledger([str_path], cls_gate=gate) is True
 
 
 @pytest.mark.parametrize(
@@ -77,7 +77,7 @@ def test_ledger_required_for_src_and_ci(str_path: str) -> None:
 )
 def test_ledger_not_required_for_routine_classes(str_path: str) -> None:
     """docs/deps/tests-only branches are routine — a ledger there would be noise."""
-    assert ledger.needs_ledger([str_path], gate) is False
+    assert ledger.needs_ledger([str_path], cls_gate=gate) is False
 
 
 _LIST_MIXED_BRANCH = ["bin/venv.sh", "tests/unit/test_x.py"]
@@ -90,7 +90,7 @@ def test_the_whole_list_view_collapses_a_mixed_branch_to_tests() -> None:
 
 def test_membership_is_asked_per_path_not_over_the_whole_list() -> None:
     """The regression this guards: a mixed branch must NOT escape the ledger requirement."""
-    assert ledger.needs_ledger(_LIST_MIXED_BRANCH, gate) is True
+    assert ledger.needs_ledger(_LIST_MIXED_BRANCH, cls_gate=gate) is True
 
 
 def test_a_valid_ledger_satisfies_the_branch() -> None:
@@ -120,7 +120,7 @@ def test_gitkeep_is_not_reported_as_a_misnamed_ledger() -> None:
 
 
 def test_crlf_ledger_with_a_closed_fence_keeps_its_real_checkboxes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A CRLF checkout must not turn every closed fence into an unclosed one."""
     str_rel = ".specs/backlog/crlf_20260101_000000.md"
@@ -141,7 +141,7 @@ def test_crlf_ledger_with_a_closed_fence_keeps_its_real_checkboxes(
     ],
 )
 def test_checkbox_inside_a_code_fence_does_not_count(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, str_fenced: str
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, str_fenced: str
 ) -> None:
     """The specs gate skips fenced blocks, closers may be longer; an example-only ledger fails."""
     str_rel = ".specs/backlog/fenced_20260101_000000.md"
@@ -186,7 +186,7 @@ def test_unresolved_author_is_treated_as_human() -> None:
     assert ledger.is_bot_author("") is False
 
 
-def _write_event(path_dir: Path, dict_payload: dict) -> str:
+def _write_event(path_dir: Path, *, dict_payload: dict) -> str:
     """Write a GitHub event payload to disk and return its path.
 
     Parameters
@@ -207,7 +207,7 @@ def _write_event(path_dir: Path, dict_payload: dict) -> str:
 
 
 def test_pr_author_comes_from_the_payload_never_the_actor(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """⚠️ The trap: ``GITHUB_ACTOR`` is whoever TRIGGERED the run, not the PR author.
 
@@ -223,7 +223,9 @@ def test_pr_author_comes_from_the_payload_never_the_actor(
     monkeypatch : pytest.MonkeyPatch
         Used to set the GitHub Actions environment variables.
     """
-    str_event = _write_event(tmp_path, {"pull_request": {"user": {"login": "dependabot[bot]"}}})
+    str_event = _write_event(
+        tmp_path, dict_payload={"pull_request": {"user": {"login": "dependabot[bot]"}}}
+    )
     monkeypatch.setenv("GITHUB_EVENT_PATH", str_event)
     monkeypatch.setenv("GITHUB_ACTOR", "a-human-who-clicked-rerun")
 
@@ -231,10 +233,12 @@ def test_pr_author_comes_from_the_payload_never_the_actor(
 
 
 def test_human_authored_pr_is_not_exempt_even_when_a_bot_is_the_actor(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The other direction: a bot triggering a human's PR must not exempt it."""
-    str_event = _write_event(tmp_path, {"pull_request": {"user": {"login": "octocat"}}})
+    str_event = _write_event(
+        tmp_path, dict_payload={"pull_request": {"user": {"login": "octocat"}}}
+    )
     monkeypatch.setenv("GITHUB_EVENT_PATH", str_event)
     monkeypatch.setenv("GITHUB_ACTOR", "github-actions[bot]")
 
@@ -242,7 +246,7 @@ def test_human_authored_pr_is_not_exempt_even_when_a_bot_is_the_actor(
 
 
 def test_a_push_run_has_no_pr_author_and_stays_enforced(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Inside a workflow run the payload is the ONLY authority — never the actor.
 
@@ -256,7 +260,7 @@ def test_a_push_run_has_no_pr_author_and_stays_enforced(
     monkeypatch : pytest.MonkeyPatch
         Used to set the GitHub Actions environment variables.
     """
-    str_event = _write_event(tmp_path, {"ref": "refs/heads/main"})
+    str_event = _write_event(tmp_path, dict_payload={"ref": "refs/heads/main"})
     monkeypatch.setenv("GITHUB_EVENT_PATH", str_event)
     monkeypatch.setenv("GITHUB_ACTOR", "dependabot[bot]")
 
@@ -264,7 +268,7 @@ def test_a_push_run_has_no_pr_author_and_stays_enforced(
 
 
 def test_a_missing_event_file_exempts_nobody(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """GITHUB_EVENT_PATH set but the file absent must fail CLOSED, not fall back to the actor.
 
@@ -286,7 +290,7 @@ def test_a_missing_event_file_exempts_nobody(
 
 
 def test_a_missing_event_file_resolves_to_no_author_at_all(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The MECHANISM behind the test above: the resolver returns "", never the actor.
 
@@ -310,7 +314,7 @@ def test_a_missing_event_file_resolves_to_no_author_at_all(
 
 
 def test_unreadable_payload_exempts_nobody(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A corrupt payload must fail closed rather than exempt the whole run."""
     path_event = tmp_path / "event.json"
@@ -353,7 +357,9 @@ def test_hook_removal_is_detected() -> None:
     """The should-fail witness: a hook present at the base and gone now is reported by name."""
     str_old = "repos:\n  - hooks:\n      - id: check-complexity\n      - id: ruff\n"
     str_new = "repos:\n  - hooks:\n      - id: ruff\n"
-    list_problems = gate_integrity.precommit_problems(str_old, str_new, ".pre-commit-config.yaml")
+    list_problems = gate_integrity.precommit_problems(
+        str_old, str_new=str_new, str_shown=".pre-commit-config.yaml"
+    )
     assert list_problems == [".pre-commit-config.yaml: pre-commit hook 'check-complexity' removed"]
 
 
@@ -361,27 +367,33 @@ def test_hook_reorder_is_not_a_removal() -> None:
     """NEGATIVE CONTROL: moving a hook must not read as deleting and re-adding it."""
     str_old = "- id: a\n- id: b\n"
     str_new = "- id: b\n- id: a\n"
-    assert gate_integrity.precommit_problems(str_old, str_new, "x.yaml") == []
+    assert gate_integrity.precommit_problems(str_old, str_new=str_new, str_shown="x.yaml") == []
 
 
 def test_ruff_rule_removed_from_select() -> None:
     """A rule dropped from [lint] select is a weakening."""
     str_new = _RUFF_BASE.replace('    "S",\n', "")
-    list_problems = gate_integrity.ruff_toml_problems(_RUFF_BASE, str_new, "ruff.toml")
+    list_problems = gate_integrity.ruff_toml_problems(
+        _RUFF_BASE, str_new=str_new, str_shown="ruff.toml"
+    )
     assert "ruff.toml: rule 'S' removed from [lint] select" in list_problems
 
 
 def test_ruff_rule_added_to_ignore() -> None:
     """A rule added to [lint] ignore is a weakening — the rule-level surface PR #306 avoided."""
     str_new = _RUFF_BASE.replace('    "D206",\n', '    "D206",\n    "S608",\n')
-    list_problems = gate_integrity.ruff_toml_problems(_RUFF_BASE, str_new, "ruff.toml")
+    list_problems = gate_integrity.ruff_toml_problems(
+        _RUFF_BASE, str_new=str_new, str_shown="ruff.toml"
+    )
     assert "ruff.toml: rule 'S608' added to [lint] ignore" in list_problems
 
 
 def test_ruff_exclude_path_added() -> None:
     """Re-excluding a tree that was being checked is a weakening."""
     str_new = _RUFF_BASE.replace('    ".venv",\n', '    ".venv",\n    "src/chassis",\n')
-    list_problems = gate_integrity.ruff_toml_problems(_RUFF_BASE, str_new, "ruff.toml")
+    list_problems = gate_integrity.ruff_toml_problems(
+        _RUFF_BASE, str_new=str_new, str_shown="ruff.toml"
+    )
     assert "ruff.toml: path 'src/chassis' added to exclude" in list_problems
 
 
@@ -390,14 +402,18 @@ def test_ruff_per_file_ignore_added_is_rule_level_and_flagged() -> None:
     str_old_pfi = '"bin/*.py" = [\n    "ERA001",\n]'
     str_new_pfi = '"bin/*.py" = [\n    "ERA001",\n    "S608",\n]'
     str_new = _RUFF_BASE.replace(str_old_pfi, str_new_pfi)
-    list_problems = gate_integrity.ruff_toml_problems(_RUFF_BASE, str_new, "ruff.toml")
+    list_problems = gate_integrity.ruff_toml_problems(
+        _RUFF_BASE, str_new=str_new, str_shown="ruff.toml"
+    )
     assert "ruff.toml: rule 'S608' added to per-file-ignores['bin/*.py']" in list_problems
 
 
 def test_ruff_toml_with_no_changes_reports_nothing() -> None:
     """NEGATIVE CONTROL: an untouched (or purely additive-to-select) file passes clean."""
     str_new = _RUFF_BASE.replace('    "S",\n', '    "S",\n    "B",\n')
-    assert gate_integrity.ruff_toml_problems(_RUFF_BASE, str_new, "ruff.toml") == []
+    assert (
+        gate_integrity.ruff_toml_problems(_RUFF_BASE, str_new=str_new, str_shown="ruff.toml") == []
+    )
 
 
 _MYPY_BASE = "[mypy]\nexclude = (?x)(^utils/typing/|_internal/utils/typing/)\n"
@@ -406,14 +422,18 @@ _MYPY_BASE = "[mypy]\nexclude = (?x)(^utils/typing/|_internal/utils/typing/)\n"
 def test_mypy_exclude_path_added() -> None:
     """A new alternative added to [mypy] exclude is a weakening."""
     str_new = _MYPY_BASE.rstrip() + "|^chassis/)\n"
-    list_problems = gate_integrity.mypy_ini_problems(_MYPY_BASE, str_new, "mypy.ini")
+    list_problems = gate_integrity.mypy_ini_problems(
+        _MYPY_BASE, str_new=str_new, str_shown="mypy.ini"
+    )
     assert any("chassis" in str_problem for str_problem in list_problems)
 
 
 def test_mypy_ignore_errors_section_added() -> None:
     """A new [mypy-X] ignore_errors = True section re-hides a tree, same as blueprintx#190."""
     str_new = _MYPY_BASE + "\n[mypy-chassis.*]\nignore_errors = True\n"
-    list_problems = gate_integrity.mypy_ini_problems(_MYPY_BASE, str_new, "mypy.ini")
+    list_problems = gate_integrity.mypy_ini_problems(
+        _MYPY_BASE, str_new=str_new, str_shown="mypy.ini"
+    )
     assert "mypy.ini: [mypy-chassis.*] ignore_errors = True added" in list_problems
 
 
@@ -426,7 +446,9 @@ def test_mypy_ignore_errors_flipped_on_existing_section() -> None:
     """
     str_old = _MYPY_BASE + "\n[mypy-legacy_module]\nignore_errors = False\n"
     str_new = _MYPY_BASE + "\n[mypy-legacy_module]\nignore_errors = True\n"
-    list_problems = gate_integrity.mypy_ini_problems(str_old, str_new, "mypy.ini")
+    list_problems = gate_integrity.mypy_ini_problems(
+        str_old, str_new=str_new, str_shown="mypy.ini"
+    )
     assert "mypy.ini: [mypy-legacy_module] ignore_errors = True added" in list_problems
 
 
@@ -434,7 +456,7 @@ def test_mypy_ignore_errors_left_true_is_not_a_new_weakening() -> None:
     """NEGATIVE CONTROL: a section already True on both sides is pre-existing, not a delta."""
     str_old = _MYPY_BASE + "\n[mypy-legacy_module]\nignore_errors = True\n"
     str_new = _MYPY_BASE + "\n[mypy-legacy_module]\nignore_errors = True\n"
-    assert gate_integrity.mypy_ini_problems(str_old, str_new, "mypy.ini") == []
+    assert gate_integrity.mypy_ini_problems(str_old, str_new=str_new, str_shown="mypy.ini") == []
 
 
 _PYTEST_BASE = (
@@ -448,7 +470,9 @@ _PYTEST_BASE = (
 def test_pytest_filterwarnings_escalation_removed() -> None:
     """Dropping an error: escalation quietly downgrades a docstring check to a warning."""
     str_new = "[pytest]\nfilterwarnings =\n    ignore::DeprecationWarning:PIL\n"
-    list_problems = gate_integrity.pytest_ini_problems(_PYTEST_BASE, str_new, "pytest.ini")
+    list_problems = gate_integrity.pytest_ini_problems(
+        _PYTEST_BASE, str_new=str_new, str_shown="pytest.ini"
+    )
     assert list_problems == [
         "pytest.ini: filterwarnings escalation 'error:Missing docstring for parameter.*:' removed"
     ]
@@ -457,14 +481,19 @@ def test_pytest_filterwarnings_escalation_removed() -> None:
 def test_pytest_ignore_entries_are_not_escalations() -> None:
     """NEGATIVE CONTROL: removing an `ignore:` line is routine noise-tuning, not a weakening."""
     str_new = _PYTEST_BASE.replace("    ignore::DeprecationWarning:PIL\n", "")
-    assert gate_integrity.pytest_ini_problems(_PYTEST_BASE, str_new, "pytest.ini") == []
+    assert (
+        gate_integrity.pytest_ini_problems(_PYTEST_BASE, str_new=str_new, str_shown="pytest.ini")
+        == []
+    )
 
 
 def test_workflow_job_removed() -> None:
     """A job dropped from a workflow's jobs: block is a check silently switched off."""
     str_old = "jobs:\n  lint-shell:\n    runs-on: x\n  complexity:\n    runs-on: x\n"
     str_new = "jobs:\n  complexity:\n    runs-on: x\n"
-    list_problems = gate_integrity.workflow_problems(str_old, str_new, "tests.yml")
+    list_problems = gate_integrity.workflow_problems(
+        str_old, str_new=str_new, str_shown="tests.yml"
+    )
     assert list_problems == ["tests.yml: workflow job 'lint-shell' removed"]
 
 
@@ -473,7 +502,7 @@ def test_required_status_check_removed() -> None:
     str_old = 'REQUIRED_CHECKS=(\n  "Review threads answered"\n  "lint-shell"\n)\n'
     str_new = 'REQUIRED_CHECKS=(\n  "lint-shell"\n)\n'
     list_problems = gate_integrity.required_checks_problems(
-        str_old, str_new, "enable_repo_rules.sh"
+        str_old, str_new=str_new, str_shown="enable_repo_rules.sh"
     )
     assert list_problems == [
         "enable_repo_rules.sh: required status check 'Review threads answered' removed"
@@ -537,11 +566,14 @@ def test_an_ordinary_source_file_is_not_a_watched_workflow_path() -> None:
 
 
 def test_justification_reason_reads_the_pr_body(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A `gate-change-ok: <reason>` line in the PR body satisfies the escape hatch."""
     str_event = _write_event(
-        tmp_path, {"pull_request": {"body": "Removes a duplicate hook.\n\ngate-change-ok: dup"}}
+        tmp_path,
+        dict_payload={
+            "pull_request": {"body": "Removes a duplicate hook.\n\ngate-change-ok: dup"}
+        },
     )
     monkeypatch.setenv("GITHUB_EVENT_PATH", str_event)
     monkeypatch.setattr(gate_integrity, "_git", lambda _args: "")
@@ -601,12 +633,12 @@ _TEST_NEW_WEAKENED = _TEST_OLD.replace(
     ids=["names-the-test", "names-the-weakening", "does-not-name-the-innocent-test"],
 )
 def test_assertion_expected_value_changed_is_detected_and_names_the_test(
-    str_fragment: str, bool_present: bool
+    str_fragment: str, *, bool_present: bool
 ) -> None:
     """⚠️ THE SHOULD-FAIL WITNESS: the exact #323 shape — same call, new expected value."""
     str_problem = _first_problem(
         gate_integrity.test_assertion_problems(
-            _TEST_OLD, _TEST_NEW_WEAKENED, "tests/unit/test_decimals.py"
+            _TEST_OLD, str_new=_TEST_NEW_WEAKENED, str_shown="tests/unit/test_decimals.py"
         )
     )
 
@@ -623,7 +655,7 @@ def test_only_the_weakened_assertion_is_reported_not_a_cascade() -> None:
     assert (
         len(
             gate_integrity.test_assertion_problems(
-                _TEST_OLD, _TEST_NEW_WEAKENED, "tests/unit/test_decimals.py"
+                _TEST_OLD, str_new=_TEST_NEW_WEAKENED, str_shown="tests/unit/test_decimals.py"
             )
         )
         == 1
@@ -636,14 +668,14 @@ def test_assertion_unrelated_rewrite_is_not_flagged() -> None:
         'assert to_decimal_strict("1.999", 2) == Decimal("1.99")',
         'assert to_decimal_strict("1.999", 3) == Decimal("1.999")',
     )
-    assert gate_integrity.test_assertion_problems(_TEST_OLD, str_new, "x") == []
+    assert gate_integrity.test_assertion_problems(_TEST_OLD, str_new=str_new, str_shown="x") == []
 
 
 def test_assertion_operator_weakened_to_in_is_detected() -> None:
     """The #289 shape: `==` (pins one value) replaced by `in` (pins a set, can't pin one)."""
     str_old = 'def test_intent() -> None:\n\tassert resolve_intent(x) == "send"\n'
     str_new = 'def test_intent() -> None:\n\tassert resolve_intent(x) in {"send", "reconcile"}\n'
-    list_problems = gate_integrity.test_assertion_problems(str_old, str_new, "x")
+    list_problems = gate_integrity.test_assertion_problems(str_old, str_new=str_new, str_shown="x")
     assert any("operator weakened from '==' to 'in'" in str_p for str_p in list_problems)
 
 
@@ -651,7 +683,7 @@ def test_assert_equal_to_assert_true_is_detected() -> None:
     """`assertTrue` cannot fail on the SHAPE `assertEqual` was pinning, only on falsiness."""
     str_old = "def test_x(self) -> None:\n\tself.assertEqual(compute(), 42)\n"
     str_new = "def test_x(self) -> None:\n\tself.assertTrue(compute())\n"
-    list_problems = gate_integrity.test_assertion_problems(str_old, str_new, "x")
+    list_problems = gate_integrity.test_assertion_problems(str_old, str_new=str_new, str_shown="x")
     assert any("assertEqual() -> assertTrue()" in str_p for str_p in list_problems)
 
 
@@ -659,7 +691,7 @@ def test_pytest_raises_broadened_is_detected() -> None:
     """A narrow, meaningful exception widened to the exception hierarchy's root catches nothing."""
     str_old = "def test_x() -> None:\n\twith pytest.raises(ValueError):\n\t\tdo_thing()\n"
     str_new = "def test_x() -> None:\n\twith pytest.raises(Exception):\n\t\tdo_thing()\n"
-    list_problems = gate_integrity.test_assertion_problems(str_old, str_new, "x")
+    list_problems = gate_integrity.test_assertion_problems(str_old, str_new=str_new, str_shown="x")
     assert any("pytest.raises broadened" in str_p for str_p in list_problems)
 
 
@@ -671,7 +703,7 @@ def test_pytest_raises_removed_is_detected() -> None:
     """
     str_old = "def test_x() -> None:\n\twith pytest.raises(ValueError):\n\t\tdo_thing()\n"
     str_new = "def test_x() -> None:\n\tdo_thing()\n"
-    list_problems = gate_integrity.test_assertion_problems(str_old, str_new, "x")
+    list_problems = gate_integrity.test_assertion_problems(str_old, str_new=str_new, str_shown="x")
     assert any("pytest.raises(...) count dropped" in str_p for str_p in list_problems)
 
 
@@ -681,7 +713,7 @@ def test_deleted_test_is_detected() -> None:
         "def test_a() -> None:\n\tassert 1 == 1\n\n\ndef test_b() -> None:\n\tassert 2 == 2\n"
     )
     str_new = "def test_a() -> None:\n\tassert 1 == 1\n"
-    list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
+    list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new=str_new, str_shown="x")
     assert list_problems == ["x: test 'test_b' deleted"]
 
 
@@ -689,14 +721,14 @@ def test_renamed_test_is_not_reported_deleted() -> None:
     """Renaming `..._six_...` to `..._seven_...` is a rename, not a deletion (#1073)."""
     str_old = "def test_has_six_required_pages() -> None:\n\tassert 1 == 1\n"
     str_new = "def test_has_seven_required_pages() -> None:\n\tassert 1 == 1\n"
-    assert gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x") == []
+    assert gate_integrity.deleted_or_gutted_tests(str_old, str_new=str_new, str_shown="x") == []
 
 
 def test_renamed_test_gutted_in_the_same_change_is_detected() -> None:
     """NEGATIVE CONTROL: a rename that also guts the body is never read as clean."""
     str_old = "def test_has_six_required_pages() -> None:\n\tassert compute() == 6\n"
     str_new = "def test_has_seven_required_pages() -> None:\n\tpass\n"
-    list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
+    list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new=str_new, str_shown="x")
     assert list_problems == [
         "x: test 'test_has_six_required_pages' deleted"
         " (possible rename to 'test_has_seven_required_pages', bodies differ)"
@@ -707,7 +739,7 @@ def test_gutted_test_body_is_detected() -> None:
     """A body collapsed to `pass` is functionally the same as deleting the test."""
     str_old = 'def test_a() -> None:\n\t"""Doc."""\n\tassert compute() == 42\n'
     str_new = 'def test_a() -> None:\n\t"""Doc."""\n\tpass\n'
-    list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
+    list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new=str_new, str_shown="x")
     assert list_problems == ["x: test 'test_a' body replaced with a no-op"]
 
 
@@ -715,7 +747,7 @@ def test_gutted_test_body_assert_true_is_detected() -> None:
     """`assert True` never fails — an equally silent way to gut a test."""
     str_old = "def test_a() -> None:\n\tassert compute() == 42\n"
     str_new = "def test_a() -> None:\n\tassert True\n"
-    list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x")
+    list_problems = gate_integrity.deleted_or_gutted_tests(str_old, str_new=str_new, str_shown="x")
     assert list_problems == ["x: test 'test_a' body replaced with a no-op"]
 
 
@@ -723,7 +755,7 @@ def test_new_test_with_a_trivial_body_is_not_flagged() -> None:
     """NEGATIVE CONTROL: a BRAND NEW test has nothing to have been gutted FROM."""
     str_old = ""
     str_new = "def test_a() -> None:\n\tpass\n"
-    assert gate_integrity.deleted_or_gutted_tests(str_old, str_new, "x") == []
+    assert gate_integrity.deleted_or_gutted_tests(str_old, str_new=str_new, str_shown="x") == []
 
 
 def test_newly_skipped_test_is_detected() -> None:
@@ -732,7 +764,7 @@ def test_newly_skipped_test_is_detected() -> None:
     str_new = (
         "@pytest.mark.skip(reason='flaky')\ndef test_a() -> None:\n\tassert compute() == 42\n"
     )
-    list_problems = gate_integrity.newly_skipped_tests(str_old, str_new, "x")
+    list_problems = gate_integrity.newly_skipped_tests(str_old, str_new=str_new, str_shown="x")
     assert list_problems == ["x: test 'test_a' newly decorated @pytest.mark.skip"]
 
 
@@ -740,7 +772,7 @@ def test_preexisting_skip_mark_is_not_a_new_weakening() -> None:
     """NEGATIVE CONTROL: a mark present on BOTH sides is pre-existing, not a delta."""
     str_old = "@pytest.mark.skip\ndef test_a() -> None:\n\tassert compute() == 42\n"
     str_new = "@pytest.mark.skip\ndef test_a() -> None:\n\tassert compute() == 43\n"
-    assert gate_integrity.newly_skipped_tests(str_old, str_new, "x") == []
+    assert gate_integrity.newly_skipped_tests(str_old, str_new=str_new, str_shown="x") == []
 
 
 @pytest.mark.parametrize(
@@ -753,13 +785,13 @@ def test_preexisting_skip_mark_is_not_a_new_weakening() -> None:
     ids=["bare-tests-tree", "nested-template-tests-tree", "ordinary-source-file"],
 )
 def test_test_path_regex_matches_unit_and_integration_only(
-    str_path: str, bool_watched: bool
+    str_path: str, *, bool_watched: bool
 ) -> None:
     """Only the shipped test tree is watched — an ordinary source file is invisible to this."""
     assert (gate_integrity.RE_TEST_PATH.search(str_path) is not None) is bool_watched
 
 
-def _stub_show(str_ref: str, _str_path: str) -> str:
+def _stub_show(str_ref: str, *, str_path: str) -> str:
     """Module-level stand-in for ``show`` — a nested ``def`` inside a test costs +1 complexity.
 
     Parameters
@@ -786,7 +818,7 @@ def test_file_problems_fires_when_code_under_test_is_also_touched(
     )
     monkeypatch.setattr(gate_integrity, "show", _stub_show)
     list_problems = gate_integrity.file_problems(
-        "tests/unit/test_decimals.py", "deadbeef", set_stems
+        "tests/unit/test_decimals.py", str_base="deadbeef", set_touched_stems=set_stems
     )
     assert any("expected value changed" in str_p for str_p in list_problems)
 
@@ -801,7 +833,7 @@ def test_file_problems_stays_silent_when_code_under_test_is_untouched(
     """
     monkeypatch.setattr(gate_integrity, "show", _stub_show)
     list_problems = gate_integrity.file_problems(
-        "tests/unit/test_decimals.py", "deadbeef", frozenset()
+        "tests/unit/test_decimals.py", str_base="deadbeef", set_touched_stems=frozenset()
     )
     assert list_problems == []
 
@@ -814,7 +846,7 @@ def test_deletion_flags_a_test_file_deleted_with_its_code() -> None:
     """
     list_changed = [("D", "tests/unit/test_decimals.py"), ("M", "src/utils/decimals.py")]
     set_stems = gate_integrity.touched_code_stems(list_changed)
-    assert gate_integrity.deletion_problems(list_changed, set_stems) == [
+    assert gate_integrity.deletion_problems(list_changed, set_touched_stems=set_stems) == [
         "tests/unit/test_decimals.py: test file deleted while its code under test changed"
     ]
 
@@ -826,7 +858,7 @@ def test_deletion_of_a_test_file_alone_is_not_flagged() -> None:
     """
     list_changed = [("D", "tests/unit/test_decimals.py")]
     set_stems = gate_integrity.touched_code_stems(list_changed)
-    assert gate_integrity.deletion_problems(list_changed, set_stems) == []
+    assert gate_integrity.deletion_problems(list_changed, set_touched_stems=set_stems) == []
 
 
 def test_a_string_literal_cannot_restore_the_raises_count() -> None:
@@ -898,7 +930,7 @@ def _git_in(path_repo: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def path_mid_merge(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Return a repo whose ``feature`` has a merge of ``main`` in progress.
 
     ``main`` moves on after the fork, so a base resolved from the pre-merge HEAD (the fork

@@ -246,7 +246,7 @@ def changed_paths(str_base: str) -> list:
     return [p for p in str_out.splitlines() if p]
 
 
-def needs_ledger(list_paths: list, cls_gate: types.ModuleType) -> bool:
+def needs_ledger(list_paths: list, *, cls_gate: types.ModuleType) -> bool:
     """Return whether ANY changed path falls in a ledger-requiring class.
 
     Parameters
@@ -350,7 +350,7 @@ def main() -> int:
         return int_verdict
 
     list_paths = changed_paths(str_base)
-    if not list_paths or not needs_ledger(list_paths, cls_gate):
+    if not list_paths or not needs_ledger(list_paths, cls_gate=cls_gate):
         return 0
 
     list_problems = find_ledger_problems(list_paths)

@@ -13,7 +13,7 @@ from pytest_mock import MockerFixture
 from src.view.report_renderer import RenderToExcel
 
 
-def test_render_writes_file_to_disk(df_sample: pd.DataFrame, tmp_path: Path) -> None:
+def test_render_writes_file_to_disk(df_sample: pd.DataFrame, *, tmp_path: Path) -> None:
     """The rendered ``.xlsx`` file exists on disk after render.
 
     Parameters
@@ -28,11 +28,11 @@ def test_render_writes_file_to_disk(df_sample: pd.DataFrame, tmp_path: Path) -> 
     None
     """
     path_out = tmp_path / "report.xlsx"
-    RenderToExcel(path_out).render(df_sample)
+    RenderToExcel(path_out=path_out).render(df_sample)
     assert path_out.exists()
 
 
-def test_render_returns_written_path(df_sample: pd.DataFrame, tmp_path: Path) -> None:
+def test_render_returns_written_path(df_sample: pd.DataFrame, *, tmp_path: Path) -> None:
     """``render()`` returns the path it wrote to.
 
     Parameters
@@ -47,11 +47,11 @@ def test_render_returns_written_path(df_sample: pd.DataFrame, tmp_path: Path) ->
     None
     """
     path_out = tmp_path / "report.xlsx"
-    path_result = RenderToExcel(path_out).render(df_sample)
+    path_result = RenderToExcel(path_out=path_out).render(df_sample)
     assert path_result == path_out
 
 
-def test_render_missing_parent_dir_creates_it(df_sample: pd.DataFrame, tmp_path: Path) -> None:
+def test_render_missing_parent_dir_creates_it(df_sample: pd.DataFrame, *, tmp_path: Path) -> None:
     """``render()`` creates parent directories that do not yet exist.
 
     Parameters
@@ -66,11 +66,11 @@ def test_render_missing_parent_dir_creates_it(df_sample: pd.DataFrame, tmp_path:
     None
     """
     path_out = tmp_path / "nested" / "deep" / "report.xlsx"
-    RenderToExcel(path_out).render(df_sample)
+    RenderToExcel(path_out=path_out).render(df_sample)
     assert path_out.exists()
 
 
-def test_render_roundtrip_preserves_data(df_sample: pd.DataFrame, tmp_path: Path) -> None:
+def test_render_roundtrip_preserves_data(df_sample: pd.DataFrame, *, tmp_path: Path) -> None:
     """Data read back from the rendered file matches the input.
 
     Parameters
@@ -85,13 +85,14 @@ def test_render_roundtrip_preserves_data(df_sample: pd.DataFrame, tmp_path: Path
     None
     """
     path_out = tmp_path / "report.xlsx"
-    RenderToExcel(path_out).render(df_sample)
+    RenderToExcel(path_out=path_out).render(df_sample)
     df_read = pd.read_excel(path_out, engine="openpyxl")  # noqa: TID251 -- reads back the rendered output to assert on it
     pd.testing.assert_frame_equal(df_read, df_sample)
 
 
 def test_render_uses_configured_sheet_name(
     df_sample: pd.DataFrame,
+    *,
     tmp_path: Path,
     mocker: MockerFixture,
 ) -> None:
@@ -115,13 +116,14 @@ def test_render_uses_configured_sheet_name(
     """
     mock_to_excel = mocker.patch.object(pd.DataFrame, "to_excel")
     path_out = tmp_path / "report.xlsx"
-    RenderToExcel(path_out, str_sheet_name="custom").render(df_sample)
+    RenderToExcel(path_out=path_out, str_sheet_name="custom").render(df_sample)
     _, dict_kwargs = mock_to_excel.call_args
     assert dict_kwargs["sheet_name"] == "custom"
 
 
 def test_render_writes_the_workbook_once(
     df_sample: pd.DataFrame,
+    *,
     tmp_path: Path,
     mocker: MockerFixture,
 ) -> None:
@@ -141,5 +143,5 @@ def test_render_writes_the_workbook_once(
     None
     """
     mock_to_excel = mocker.patch.object(pd.DataFrame, "to_excel")
-    RenderToExcel(tmp_path / "report.xlsx", str_sheet_name="custom").render(df_sample)
+    RenderToExcel(path_out=tmp_path / "report.xlsx", str_sheet_name="custom").render(df_sample)
     mock_to_excel.assert_called_once()

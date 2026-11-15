@@ -25,7 +25,7 @@ class RenderToExcel(metaclass=TypeChecker):
         Worksheet name, by default ``"report"``.
     """
 
-    def __init__(self, path_out: Path, str_sheet_name: str = "report") -> None:
+    def __init__(self, *, path_out: Path, str_sheet_name: str = "report") -> None:
         self.path_out = path_out
         self.str_sheet_name = str_sheet_name
 
