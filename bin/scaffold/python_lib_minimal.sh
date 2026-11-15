@@ -556,9 +556,19 @@ initialize_git_repo() {
 
 prompt_git_remote_setup() {
 	SCAFFOLD_REPO_HOMEPAGE="https://${GITHUB_USERNAME:-$DEFAULT_GITHUB_USERNAME}.github.io/${PROJECT_NAME}/"
-	if scaffold_prompt_git_remote_setup "$1"; then
-		apply_branch_protection "$1"
-	fi
+	scaffold_prompt_git_remote_setup "$1" || true
+}
+
+lib_minimal_lock_dependencies() {
+    local project_path="$1"
+    [ -f "$project_path/pyproject.toml" ] || return 0
+    if ! command -v poetry >/dev/null 2>&1; then
+        print_status "warning" "poetry not found; poetry.lock not generated (run 'poetry lock' and commit it)."
+        return 0
+    fi
+    (cd "$project_path" && poetry lock >/dev/null 2>&1) \
+        && print_status "success" "poetry.lock generated" \
+        || print_status "warning" "poetry lock failed; run it and commit poetry.lock."
 }
 
 apply_offline_mode() {
@@ -889,6 +899,7 @@ main() {
 
     if [ "$SCAFFOLD_REMOTE_VERIFIED" != "1" ] \
         || ! git -C "$PROJECT_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        lib_minimal_lock_dependencies "$PROJECT_PATH"
         apply_offline_mode "$PROJECT_PATH"
     else
         apply_online_tag_versioning "$PROJECT_PATH"
@@ -897,7 +908,10 @@ main() {
             rm -f "$PROJECT_PATH/.github/workflows/release.yml"
             print_status "success" "Library: generic service release.yml removed (uses release-pypi instead)"
         fi
-        commit_online_artifacts "$PROJECT_PATH"
+        lib_minimal_lock_dependencies "$PROJECT_PATH"
+        (commit_online_artifacts "$PROJECT_PATH") \
+            || print_status "warning" "Versioning commit failed; finish it by hand. Branch protection still follows."
+        apply_branch_protection "$PROJECT_PATH"
     fi
 
     print_status "success" "Lib-minimal scaffold complete!"
