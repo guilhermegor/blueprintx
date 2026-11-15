@@ -3383,6 +3383,7 @@ answer shows up as the wrong visibility or the wrong protection payload.</p>
 </tr>
 </tbody>
 </table>
+<p><strong>Order (<code>lib-minimal</code>).</strong> Protection is applied last: the tag-driven versioning commit is pushed and <code>poetry.lock</code> is committed first, so a protected scaffold ends with local <code>main</code> equal to <code>origin/main</code> (blueprintx#1145).</p>
 <p><strong>Protection can fail after the repo exists.</strong> On a free GitHub plan, branch protection on a
 private repo is refused (HTTP 403, "Upgrade to GitHub Pro"). By then the repo is created and
 pushed. The scaffold prints "Failed to protect branch 'main'; adjust settings manually in
