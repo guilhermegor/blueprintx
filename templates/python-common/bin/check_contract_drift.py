@@ -85,7 +85,9 @@ def live_header(dict_entry: dict) -> tuple[str, ...]:
     int_timeout_s = int(dict_entry.get("timeout_s", _DEFAULT_TIMEOUT_SECONDS))
     with tempfile.TemporaryDirectory() as str_tmp:
         path_art = download_file(
-            dict_entry["url"], pathlib.Path(str_tmp) / "artifact", int_timeout_s
+            dict_entry["url"],
+            path_dest=pathlib.Path(str_tmp) / "artifact",
+            int_timeout_s=int_timeout_s,
         )
         with path_art.open(encoding=str_encoding) as fh:
             for str_line in fh:
@@ -95,7 +97,7 @@ def live_header(dict_entry: dict) -> tuple[str, ...]:
 
 
 def drift_for_source(
-    cls_contract: FileContract, dict_entry: dict
+    cls_contract: FileContract, *, dict_entry: dict
 ) -> tuple[list[str] | None, list[str]]:
     """Return ``(drift_lines, note_lines)`` for one source — notes are logged, never reported.
 
@@ -153,7 +155,7 @@ def drift_for_source(
     return list_lines, []
 
 
-def build_report(dict_registry: dict, dict_contracts: dict) -> tuple[str, list[str], list[str]]:
+def build_report(dict_registry: dict, *, dict_contracts: dict) -> tuple[str, list[str], list[str]]:
     """Assemble the drift report and the log-only notes across all configured sources.
 
     Parameters
@@ -181,7 +183,7 @@ def build_report(dict_registry: dict, dict_contracts: dict) -> tuple[str, list[s
                 f"### `{str_key}`\n\n⚠️ no FileContract with this source_key in config/contracts/."
             )
             continue
-        list_lines, list_entry_notes = drift_for_source(cls_contract, dict_entry)
+        list_lines, list_entry_notes = drift_for_source(cls_contract, dict_entry=dict_entry)
         list_notes.extend(f"{str_key}: {note}" for note in list_entry_notes)
         if list_lines is None:
             list_skipped.append(str_key)
@@ -206,7 +208,9 @@ def main() -> int:
         print("No oracles configured in config/contract_oracles.yaml — skipping drift check.")
         _REPORT_PATH.write_text("", encoding="utf-8")
         return 0
-    str_report, list_notes, list_skipped = build_report(dict_registry, contracts_by_source_key())
+    str_report, list_notes, list_skipped = build_report(
+        dict_registry, dict_contracts=contracts_by_source_key()
+    )
     _REPORT_PATH.write_text(str_report, encoding="utf-8")
     for str_note in list_notes:
         print(f"note: {str_note}")

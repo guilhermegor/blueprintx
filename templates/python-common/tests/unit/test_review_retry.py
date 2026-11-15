@@ -25,6 +25,11 @@ from unittest.mock import Mock
 import pytest
 
 
+_INT_11 = 11
+_INT_22 = 22
+_INT_35 = 35
+
+
 def _load_retry() -> ModuleType:
     """Import ``bin/retry_rate_limited_review.py`` as a module.
 
@@ -74,7 +79,9 @@ def _find_gate_path() -> Path:
 _DT_NOW = datetime(2026, 8, 24, 23, 55, 0, tzinfo=UTC)
 
 
-def _comment(str_login: str, str_body: str, int_min_ago: int = 0, str_type: str = "Bot") -> dict:
+def _comment(
+    str_login: str, *, str_body: str, int_min_ago: int = 0, str_type: str = "Bot"
+) -> dict:
     """Build one normalised issue comment.
 
     Parameters
@@ -102,7 +109,7 @@ def _comment(str_login: str, str_body: str, int_min_ago: int = 0, str_type: str 
     }
 
 
-def _pr(list_comments: list, list_reviews: list, str_head: str = "cafe123") -> dict:
+def _pr(list_comments: list, *, list_reviews: list, str_head: str = "cafe123") -> dict:
     """Build a ``pullRequest`` node with the fields the retry predicate reads.
 
     Parameters
@@ -164,7 +171,7 @@ def cls_gate() -> ModuleType:
 
 
 def test_a_rate_limited_pr_with_no_review_is_re_asked(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """The case the file exists for: reviewer throttled, nothing reviewed, so ask again.
 
@@ -175,18 +182,23 @@ def test_a_rate_limited_pr_with_no_review_is_re_asked(
     cls_gate : types.ModuleType
         The gate module.
     """
-    list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED)]
-    dict_pr = _pr(list_comments, [])
+    list_comments = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED)]
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is True
     )
 
 
-def test_a_reviewed_head_is_never_re_asked(cls_retry: ModuleType, cls_gate: ModuleType) -> None:
+def test_a_reviewed_head_is_never_re_asked(cls_retry: ModuleType, *, cls_gate: ModuleType) -> None:
     """A review on the head commit ends the matter, whatever the notices say.
 
     Parameters
@@ -196,21 +208,27 @@ def test_a_reviewed_head_is_never_re_asked(cls_retry: ModuleType, cls_gate: Modu
     cls_gate : types.ModuleType
         The gate module.
     """
-    list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED)]
+    list_comments = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED)]
     dict_pr = _pr(
-        list_comments, [{"author": {"login": "coderabbitai"}, "commit": {"oid": "cafe123"}}]
+        list_comments,
+        list_reviews=[{"author": {"login": "coderabbitai"}, "commit": {"oid": "cafe123"}}],
     )
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is False
     )
 
 
 def test_a_pr_with_no_notice_at_all_is_not_re_asked(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """Zero reviews and SILENCE is not a rate limit — the load-bearing negative.
 
@@ -227,18 +245,23 @@ def test_a_pr_with_no_notice_at_all_is_not_re_asked(
         The gate module.
     """
     list_comments = []
-    dict_pr = _pr(list_comments, [])
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is False
     )
 
 
 def test_a_successful_trigger_notice_is_not_a_rate_limit(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """``Action performed`` must not be read as throttled, though it shares the footnote.
 
@@ -253,18 +276,23 @@ def test_a_successful_trigger_notice_is_not_a_rate_limit(
     cls_gate : types.ModuleType
         The gate module.
     """
-    list_comments = [_comment("coderabbitai", _STR_PERFORMED)]
-    dict_pr = _pr(list_comments, [])
+    list_comments = [_comment("coderabbitai", str_body=_STR_PERFORMED)]
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is False
     )
 
 
-def test_only_the_newest_notice_decides(cls_retry: ModuleType, cls_gate: ModuleType) -> None:
+def test_only_the_newest_notice_decides(cls_retry: ModuleType, *, cls_gate: ModuleType) -> None:
     """A rate limit the reviewer has since superseded must not trigger a re-ask.
 
     Same rule the gate already applies to its quoted notice: an older sentence describes a
@@ -278,21 +306,26 @@ def test_only_the_newest_notice_decides(cls_retry: ModuleType, cls_gate: ModuleT
         The gate module.
     """
     list_comments = [
-        _comment("coderabbitai", _STR_RATE_LIMITED),
-        _comment("coderabbitai", _STR_PERFORMED),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED),
+        _comment("coderabbitai", str_body=_STR_PERFORMED),
     ]
-    dict_pr = _pr(list_comments, [])
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is False
     )
 
 
 def test_the_marker_makes_a_scheduled_run_ask_once_per_window(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """Our own recent request stops the next tick asking again.
 
@@ -310,21 +343,26 @@ def test_the_marker_makes_a_scheduled_run_ask_once_per_window(
         The gate module.
     """
     list_comments = [
-        _comment("coderabbitai", _STR_RATE_LIMITED),
-        _comment("guilhermegor", cls_retry._STR_REQUEST),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST),
     ]
-    dict_pr = _pr(list_comments, [])
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is False
     )
 
 
 def test_the_reviewers_own_acknowledgement_does_not_trigger_another_ask(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """🔴 The loop this file shipped once: the ack to our request is NOT a new window.
 
@@ -346,22 +384,27 @@ def test_the_reviewers_own_acknowledgement_does_not_trigger_another_ask(
         The gate module.
     """
     list_comments = [
-        _comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=6),
-        _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=5),
-        _comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=4),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED, int_min_ago=6),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST, int_min_ago=5),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED, int_min_ago=4),
     ]
-    dict_pr = _pr(list_comments, [])
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is False
     )
 
 
 def test_the_cooldown_expires_so_a_stuck_pr_is_asked_again(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """The other half: once the window has genuinely passed, ask again.
 
@@ -376,21 +419,26 @@ def test_the_cooldown_expires_so_a_stuck_pr_is_asked_again(
         The gate module.
     """
     list_comments = [
-        _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=45),
-        _comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=44),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST, int_min_ago=45),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED, int_min_ago=44),
     ]
-    dict_pr = _pr(list_comments, [])
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is True
     )
 
 
 def test_a_review_on_older_code_is_not_a_rate_limit_case(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """A review pinned to a superseded commit, with no throttle notice, is left alone.
 
@@ -405,14 +453,20 @@ def test_a_review_on_older_code_is_not_a_rate_limit_case(
     cls_gate : types.ModuleType
         The gate module.
     """
-    list_comments = [_comment("coderabbitai", _STR_PERFORMED)]
+    list_comments = [_comment("coderabbitai", str_body=_STR_PERFORMED)]
     dict_pr = _pr(
-        list_comments, [{"author": {"login": "coderabbitai"}, "commit": {"oid": "0ldc0de"}}]
+        list_comments,
+        list_reviews=[{"author": {"login": "coderabbitai"}, "commit": {"oid": "0ldc0de"}}],
     )
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is False
     )
@@ -446,7 +500,7 @@ def test_the_request_carries_the_idempotence_marker(cls_retry: ModuleType) -> No
 
 
 def test_a_marker_from_another_author_does_not_suppress_the_retry(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """🔴 The security case: anyone who can comment can post the marker text.
 
@@ -464,21 +518,26 @@ def test_a_marker_from_another_author_does_not_suppress_the_retry(
         The gate module.
     """
     list_comments = [
-        _comment("coderabbitai", _STR_RATE_LIMITED),
-        _comment("a-passer-by", cls_retry._STR_REQUEST),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED),
+        _comment("a-passer-by", str_body=cls_retry._STR_REQUEST),
     ]
-    dict_pr = _pr(list_comments, [])
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is True
     )
 
 
 def test_an_unresolvable_identity_trusts_no_marker(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """With no known self-login, even our own marker is ignored — ask twice, never fall silent.
 
@@ -494,13 +553,20 @@ def test_an_unresolvable_identity_trusts_no_marker(
         The gate module.
     """
     list_comments = [
-        _comment("coderabbitai", _STR_RATE_LIMITED),
-        _comment("guilhermegor", cls_retry._STR_REQUEST),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST),
     ]
-    dict_pr = _pr(list_comments, [])
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
-        cls_retry.pr_needs_retry(dict_pr, list_comments, {"coderabbitai"}, cls_gate, "", _DT_NOW)
+        cls_retry.pr_needs_retry(
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="",
+            dt_now=_DT_NOW,
+        )
         is True
     )
 
@@ -561,7 +627,7 @@ def test_flatten_open_prs_sorts_oldest_created_at_first(cls_retry: ModuleType) -
 
 
 def test_an_author_less_marker_cannot_match_an_unknown_identity(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """An empty author must not equal an empty self-login — found by a SURVIVING mutant.
 
@@ -582,19 +648,26 @@ def test_an_author_less_marker_cannot_match_an_unknown_identity(
         The gate module.
     """
     list_comments = [
-        _comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=6),
-        _comment("", cls_retry._STR_REQUEST, int_min_ago=1),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED, int_min_ago=6),
+        _comment("", str_body=cls_retry._STR_REQUEST, int_min_ago=1),
     ]
-    dict_pr = _pr(list_comments, [])
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
-        cls_retry.pr_needs_retry(dict_pr, list_comments, {"coderabbitai"}, cls_gate, "", _DT_NOW)
+        cls_retry.pr_needs_retry(
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="",
+            dt_now=_DT_NOW,
+        )
         is True
     )
 
 
 def test_one_unreadable_pr_does_not_end_the_sweep(
-    cls_retry: ModuleType, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
+    cls_retry: ModuleType, *, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A PR whose fetch raises is skipped with a warning; the sweep continues.
 
@@ -620,7 +693,11 @@ def test_one_unreadable_pr_does_not_end_the_sweep(
 
     assert (
         cls_retry.build_candidate(
-            "acme/widget", 7, "2026-08-24T00:00:00Z", {"coderabbitai"}, cls_gate
+            "acme/widget",
+            int_number=7,
+            str_created_at="2026-08-24T00:00:00Z",
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
         )
         is None
     )
@@ -641,7 +718,7 @@ def test_the_declared_wait_is_read_from_the_reviewers_own_words(cls_retry: Modul
     cls_retry : types.ModuleType
         The retry module.
     """
-    assert cls_retry.parse_declared_wait(_STR_RATE_LIMITED_35) == 35
+    assert cls_retry.parse_declared_wait(_STR_RATE_LIMITED_35) == _INT_35
 
 
 def test_a_refusal_that_declares_no_wait_yields_no_number(cls_retry: ModuleType) -> None:
@@ -656,7 +733,7 @@ def test_a_refusal_that_declares_no_wait_yields_no_number(cls_retry: ModuleType)
 
 
 def test_a_pr_inside_the_declared_window_is_not_re_asked(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """⚠️ The defect this issue exists for: asking inside the window burns a request.
 
@@ -672,19 +749,24 @@ def test_a_pr_inside_the_declared_window_is_not_re_asked(
     cls_gate : types.ModuleType
         The gate module.
     """
-    list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20)]
-    dict_pr = _pr(list_comments, [])
+    list_comments = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED_35, int_min_ago=20)]
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is False
     )
 
 
 def test_a_pr_past_the_declared_window_is_re_asked(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """The other half of the pair: once the declared wait elapses, the retry fires.
 
@@ -698,12 +780,17 @@ def test_a_pr_past_the_declared_window_is_re_asked(
     cls_gate : types.ModuleType
         The gate module.
     """
-    list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=36)]
-    dict_pr = _pr(list_comments, [])
+    list_comments = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED_35, int_min_ago=36)]
+    dict_pr = _pr(list_comments, list_reviews=[])
 
     assert (
         cls_retry.pr_needs_retry(
-            dict_pr, list_comments, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            dict_pr,
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is True
     )
@@ -723,9 +810,9 @@ def test_the_declared_window_is_measured_from_the_notice_not_from_our_marker(
     cls_retry : types.ModuleType
         The retry module.
     """
-    dict_notice = _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=36)
+    dict_notice = _comment("coderabbitai", str_body=_STR_RATE_LIMITED_35, int_min_ago=36)
 
-    assert cls_retry.declared_wait_still_open(dict_notice, _DT_NOW) is False
+    assert cls_retry.declared_wait_still_open(dict_notice, dt_now=_DT_NOW) is False
 
 
 def test_a_declared_wait_with_an_unreadable_timestamp_defers_to_the_cooldown(
@@ -747,7 +834,7 @@ def test_a_declared_wait_with_an_unreadable_timestamp_defers_to_the_cooldown(
         "created_at": "not-a-date",
     }
 
-    assert cls_retry.declared_wait_still_open(dict_notice, _DT_NOW) is False
+    assert cls_retry.declared_wait_still_open(dict_notice, dt_now=_DT_NOW) is False
 
 
 def test_an_oversized_declared_wait_is_rejected_instead_of_crashing(
@@ -789,7 +876,9 @@ def test_a_representable_but_oversized_wait_is_also_rejected(cls_retry: ModuleTy
     assert cls_retry.parse_declared_wait(str_absurd) is None
 
 
-def _candidate(int_number: int, str_created_at: str, list_comments: list, dict_pr: dict) -> dict:
+def _candidate(
+    int_number: int, *, str_created_at: str, list_comments: list, dict_pr: dict
+) -> dict:
     """Build one ``build_candidate``-shaped record for the selection tests.
 
     Parameters
@@ -828,11 +917,11 @@ def test_account_blocked_until_reads_the_newest_refusal_across_all_waiting_prs(
         The retry module.
     """
     list_notices = [
-        _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20),
-        _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=5),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED_35, int_min_ago=20),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED_35, int_min_ago=5),
     ]
 
-    assert cls_retry.account_blocked_until(list_notices, _DT_NOW) is not None
+    assert cls_retry.account_blocked_until(list_notices, dt_now=_DT_NOW) is not None
 
 
 def test_account_blocked_until_takes_the_latest_deadline_not_the_latest_notice(
@@ -851,11 +940,11 @@ def test_account_blocked_until_takes_the_latest_deadline_not_the_latest_notice(
         The retry module.
     """
     list_notices = [
-        _comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=20),
-        _comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=5),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED_35, int_min_ago=20),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED, int_min_ago=5),
     ]
 
-    assert cls_retry.account_blocked_until(list_notices, _DT_NOW) is not None
+    assert cls_retry.account_blocked_until(list_notices, dt_now=_DT_NOW) is not None
 
 
 def test_account_blocked_until_is_free_once_the_newest_refusal_elapses(
@@ -868,13 +957,13 @@ def test_account_blocked_until_is_free_once_the_newest_refusal_elapses(
     cls_retry : types.ModuleType
         The retry module.
     """
-    list_notices = [_comment("coderabbitai", _STR_RATE_LIMITED_35, int_min_ago=36)]
+    list_notices = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED_35, int_min_ago=36)]
 
-    assert cls_retry.account_blocked_until(list_notices, _DT_NOW) is None
+    assert cls_retry.account_blocked_until(list_notices, dt_now=_DT_NOW) is None
 
 
 def test_select_pr_for_retry_picks_the_oldest_of_several_waiting_prs(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """The should-fail witness's core claim: exactly ONE PR, and it is the oldest waiting one.
 
@@ -885,23 +974,31 @@ def test_select_pr_for_retry_picks_the_oldest_of_several_waiting_prs(
     cls_gate : types.ModuleType
         The gate module.
     """
-    list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED)]
-    dict_pr = _pr(list_comments, [])
+    list_comments = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED)]
+    dict_pr = _pr(list_comments, list_reviews=[])
     list_candidates = [
-        _candidate(20, "2026-08-25T00:00:00Z", list_comments, dict_pr),
-        _candidate(11, "2026-08-20T00:00:00Z", list_comments, dict_pr),
+        _candidate(
+            20, str_created_at="2026-08-25T00:00:00Z", list_comments=list_comments, dict_pr=dict_pr
+        ),
+        _candidate(
+            11, str_created_at="2026-08-20T00:00:00Z", list_comments=list_comments, dict_pr=dict_pr
+        ),
     ]
 
     assert (
         cls_retry.select_pr_for_retry(
-            list_candidates, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            list_candidates,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
-        == 11
+        == _INT_11
     )
 
 
 def test_select_pr_for_retry_picks_none_while_the_only_candidate_is_cooling_down(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """A second invocation while our own ask is outstanding must pick nobody.
 
@@ -916,22 +1013,30 @@ def test_select_pr_for_retry_picks_none_while_the_only_candidate_is_cooling_down
         The gate module.
     """
     list_comments = [
-        _comment("coderabbitai", _STR_RATE_LIMITED),
-        _comment("guilhermegor", cls_retry._STR_REQUEST),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST),
     ]
-    dict_pr = _pr(list_comments, [])
-    list_candidates = [_candidate(11, "2026-08-20T00:00:00Z", list_comments, dict_pr)]
+    dict_pr = _pr(list_comments, list_reviews=[])
+    list_candidates = [
+        _candidate(
+            11, str_created_at="2026-08-20T00:00:00Z", list_comments=list_comments, dict_pr=dict_pr
+        )
+    ]
 
     assert (
         cls_retry.select_pr_for_retry(
-            list_candidates, {"coderabbitai"}, cls_gate, "guilhermegor", _DT_NOW
+            list_candidates,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
         )
         is None
     )
 
 
 def test_select_pr_for_retry_skips_a_pr_past_the_attempt_cap(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """A permanently-stuck oldest PR must not starve every younger PR forever (design Q2).
 
@@ -943,36 +1048,46 @@ def test_select_pr_for_retry_skips_a_pr_past_the_attempt_cap(
         The gate module.
     """
     list_comments_stuck = [
-        _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=250),
-        _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=200),
-        _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=150),
-        _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=100),
-        _comment("guilhermegor", cls_retry._STR_REQUEST, int_min_ago=60),
-        _comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=50),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST, int_min_ago=250),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST, int_min_ago=200),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST, int_min_ago=150),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST, int_min_ago=100),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST, int_min_ago=60),
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED, int_min_ago=50),
     ]
-    dict_pr_stuck = _pr(list_comments_stuck, [])
-    list_comments_next = [_comment("coderabbitai", _STR_RATE_LIMITED, int_min_ago=50)]
-    dict_pr_next = _pr(list_comments_next, [])
+    dict_pr_stuck = _pr(list_comments_stuck, list_reviews=[])
+    list_comments_next = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED, int_min_ago=50)]
+    dict_pr_next = _pr(list_comments_next, list_reviews=[])
     list_candidates = [
-        _candidate(11, "2026-08-20T00:00:00Z", list_comments_stuck, dict_pr_stuck),
-        _candidate(22, "2026-08-21T00:00:00Z", list_comments_next, dict_pr_next),
+        _candidate(
+            11,
+            str_created_at="2026-08-20T00:00:00Z",
+            list_comments=list_comments_stuck,
+            dict_pr=dict_pr_stuck,
+        ),
+        _candidate(
+            22,
+            str_created_at="2026-08-21T00:00:00Z",
+            list_comments=list_comments_next,
+            dict_pr=dict_pr_next,
+        ),
     ]
 
     assert (
         cls_retry.select_pr_for_retry(
             list_candidates,
-            {"coderabbitai"},
-            cls_gate,
-            "guilhermegor",
-            _DT_NOW,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
             int_max_attempts=5,
         )
-        == 22
+        == _INT_22
     )
 
 
 def test_count_self_asks_counts_only_our_own_marker(
-    cls_retry: ModuleType, cls_gate: ModuleType
+    cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
     """The attempt cap must count OUR asks, not a passer-by's copy of the marker text.
 
@@ -984,11 +1099,16 @@ def test_count_self_asks_counts_only_our_own_marker(
         The gate module.
     """
     list_comments = [
-        _comment("guilhermegor", cls_retry._STR_REQUEST),
-        _comment("a-passer-by", cls_retry._STR_REQUEST),
+        _comment("guilhermegor", str_body=cls_retry._STR_REQUEST),
+        _comment("a-passer-by", str_body=cls_retry._STR_REQUEST),
     ]
 
-    assert cls_retry.count_self_asks(list_comments, "guilhermegor", cls_gate.normalise_login) == 1
+    assert (
+        cls_retry.count_self_asks(
+            list_comments, str_self_login="guilhermegor", fn_norm=cls_gate.normalise_login
+        )
+        == 1
+    )
 
 
 def test_newest_roster_comment_ignores_a_user_typed_borrower(cls_retry: ModuleType) -> None:
@@ -999,12 +1119,15 @@ def test_newest_roster_comment_ignores_a_user_typed_borrower(cls_retry: ModuleTy
     cls_retry : types.ModuleType
         The retry module.
     """
-    list_comments = [_comment("coderabbitai", _STR_RATE_LIMITED, str_type="User")]
-    assert cls_retry.newest_roster_comment(list_comments, {"coderabbitai"}, str) is None
+    list_comments = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED, str_type="User")]
+    assert (
+        cls_retry.newest_roster_comment(list_comments, set_roster={"coderabbitai"}, fn_norm=str)
+        is None
+    )
 
 
 def test_build_candidate_passes_the_roster_to_the_fetch(
-    cls_retry: ModuleType, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
+    cls_retry: ModuleType, *, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The retry reads the PR through the gate's roster-aware fetch, so no caller skips it.
 
@@ -1019,5 +1142,11 @@ def test_build_candidate_passes_the_roster_to_the_fetch(
     """
     mock_fetch = Mock(side_effect=RuntimeError("stop"))
     monkeypatch.setattr(cls_gate, "fetch_pull_request", mock_fetch)
-    cls_retry.build_candidate("acme/widget", 7, "2026-08-24T00:00:00Z", {"coderabbitai"}, cls_gate)
-    assert mock_fetch.call_args.args[3] == frozenset({"coderabbitai"})
+    cls_retry.build_candidate(
+        "acme/widget",
+        int_number=7,
+        str_created_at="2026-08-24T00:00:00Z",
+        set_reviewers={"coderabbitai"},
+        cls_gate=cls_gate,
+    )
+    assert mock_fetch.call_args.kwargs["set_declared"] == frozenset({"coderabbitai"})

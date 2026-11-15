@@ -18,7 +18,7 @@ def test_logs_emitter_is_a_log_emitter() -> None:
 
 @pytest.mark.parametrize("str_level", ["info", "not-a-level"])
 def test_logs_emitter_emits_at_any_level_without_raising(
-    caplog: pytest.LogCaptureFixture, str_level: str
+    caplog: pytest.LogCaptureFixture, *, str_level: str
 ) -> None:
     """A valid level and an unrecognised one both emit; the odd level degrades, never raises.
 
@@ -31,7 +31,7 @@ def test_logs_emitter_emits_at_any_level_without_raising(
     """
     cls_logger = logging.getLogger("test_logs_emitter")
     with caplog.at_level(logging.DEBUG, logger="test_logs_emitter"):
-        LogsEmitter(cls_logger).log_message("emitted message", str_level)
+        LogsEmitter(cls_logger).log_message(str_message="emitted message", str_level=str_level)
     assert "emitted message" in caplog.text
 
 
@@ -81,8 +81,10 @@ def test_logs_emitter_without_logger_passes_none_to_create_log(
     mock_create_log : unittest.mock.MagicMock
         The mocked ``CreateLog`` instance.
     """
-    LogsEmitter().log_message("hello", "info")
-    mock_create_log.log_message.assert_called_once_with(None, "hello", "info")
+    LogsEmitter().log_message(str_message="hello", str_level="info")
+    mock_create_log.log_message.assert_called_once_with(
+        logger=None, message="hello", log_level="info"
+    )
 
 
 def test_logs_emitter_default_prints_message_to_screen(
@@ -98,7 +100,7 @@ def test_logs_emitter_default_prints_message_to_screen(
     capsys : pytest.CaptureFixture[str]
         Captures what the emitter printed.
     """
-    LogsEmitter().log_message("visible on screen", "info")
+    LogsEmitter().log_message(str_message="visible on screen", str_level="info")
     assert "visible on screen" in capsys.readouterr().out
 
 
@@ -113,5 +115,7 @@ def test_logs_emitter_with_logger_passes_it_through_unchanged(
         The mocked ``CreateLog`` instance.
     """
     cls_logger = logging.getLogger("test_logs_emitter_injected")
-    LogsEmitter(cls_logger).log_message("hello", "info")
-    mock_create_log.log_message.assert_called_once_with(cls_logger, "hello", "info")
+    LogsEmitter(cls_logger).log_message(str_message="hello", str_level="info")
+    mock_create_log.log_message.assert_called_once_with(
+        logger=cls_logger, message="hello", log_level="info"
+    )

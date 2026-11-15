@@ -53,7 +53,7 @@ class ScopeFilterPrice(metaclass=TypeChecker):
 
 @type_checker
 def resolve_kill_switch(
-    str_env_var: str, bool_default: bool, logger: Logger | None = None
+    str_env_var: str, *, bool_default: bool, logger: Logger | None = None
 ) -> bool:
     """Resolve a scope-filter kill switch from the environment, safe-side on unset/unknown.
 
@@ -84,7 +84,7 @@ def resolve_kill_switch(
     bool_resolved = _DICT_ENV_BOOL.get(str_norm, bool_default)
     log_message(
         logger,
-        f"[scope_filter] consulted {str_env_var} "
+        str_message=f"[scope_filter] consulted {str_env_var} "
         f"({'set' if bool_set else 'unset'}, resolved={bool_resolved})",
     )
     return bool_resolved
@@ -93,6 +93,7 @@ def resolve_kill_switch(
 @type_checker
 def apply_scope_filter(
     df_input: pd.DataFrame,
+    *,
     str_column: str,
     set_excluded_values: frozenset[str],
     str_env_var: str,
@@ -123,7 +124,9 @@ def apply_scope_filter(
         The (possibly filtered) frame, and the measured price of this run.
     """
     int_rows_before = len(df_input)
-    bool_active = resolve_kill_switch(str_env_var, bool_default_exclude, logger)
+    bool_active = resolve_kill_switch(
+        str_env_var, bool_default=bool_default_exclude, logger=logger
+    )
     if not bool_active:
         return df_input, ScopeFilterPrice(
             int_rows_before=int_rows_before,

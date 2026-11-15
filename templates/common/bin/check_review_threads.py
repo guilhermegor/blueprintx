@@ -65,7 +65,6 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 import datetime
-import functools
 import hashlib
 import json
 import os
@@ -327,6 +326,7 @@ def _errors_say_rate_limited(str_stdout: str) -> bool:
 
 def _fetch_page(
     str_owner: str,
+    *,
     str_repo: str,
     int_number: int,
     str_review_cursor: str | None,
@@ -380,6 +380,7 @@ def _fetch_page(
 
 
 _TUPLE_PAGED = ("reviews", "reviewThreads", "comments")
+_TUPLE_CURSOR_KWARGS = ("str_review_cursor", "str_thread_cursor", "str_comment_cursor")
 
 
 def _next_cursor(dict_side: dict | None) -> str | None:
@@ -389,7 +390,7 @@ def _next_cursor(dict_side: dict | None) -> str | None:
     return dict_side["pageInfo"]["endCursor"]
 
 
-def _borrows_bot_login(dict_node: dict, set_declared: set[str]) -> bool:
+def _borrows_bot_login(dict_node: dict, *, set_declared: set[str]) -> bool:
     """Return whether a node's author borrows the login of a roster entry.
 
     ``normalise_login`` strips ``[bot]``, so a human who registers a roster App's bare name
@@ -405,18 +406,20 @@ def _borrows_bot_login(dict_node: dict, set_declared: set[str]) -> bool:
     )
 
 
-def _drop_borrowed(dict_pr: dict, set_declared: set[str]) -> None:
+def _drop_borrowed(dict_pr: dict, *, set_declared: set[str]) -> None:
     """Remove the reviews and issue comments whose author borrows a roster login."""
     for str_key in ("reviews", "comments"):
         dict_side = dict_pr.get(str_key)
         if dict_side:
             dict_side["nodes"] = [
-                d for d in dict_side["nodes"] if not _borrows_bot_login(d, set_declared)
+                d
+                for d in dict_side["nodes"]
+                if not _borrows_bot_login(d, set_declared=set_declared)
             ]
 
 
 def fetch_pull_request(
-    str_owner: str, str_repo: str, int_number: int, set_declared: frozenset[str] = frozenset()
+    str_owner: str, *, str_repo: str, int_number: int, set_declared: frozenset[str] = frozenset()
 ) -> dict:
     """Fetch the PR's author, submitted reviews and review threads in one GraphQL call.
 
@@ -442,27 +445,39 @@ def fetch_pull_request(
     RuntimeError
         If the API call fails, so an unreachable API is never mistaken for a clean PR.
     """
-    dict_pr = _fetch_page(str_owner, str_repo, int_number, None, None, None)
+    dict_pr = _fetch_page(
+        str_owner,
+        str_repo=str_repo,
+        int_number=int_number,
+        str_review_cursor=None,
+        str_thread_cursor=None,
+        str_comment_cursor=None,
+    )
     list_sides = [(dict_pr[str_key], str_key) for str_key in _TUPLE_PAGED if str_key in dict_pr]
 
     while any(dict_side["pageInfo"]["hasNextPage"] for dict_side, _ in list_sides):
+        dict_cursors = dict(
+            zip(
+                _TUPLE_CURSOR_KWARGS,
+                (_next_cursor(dict_pr.get(str_key)) for str_key in _TUPLE_PAGED),
+                strict=True,
+            )
+        )
         dict_next = _fetch_page(
-            str_owner,
-            str_repo,
-            int_number,
-            *(_next_cursor(dict_pr.get(str_key)) for str_key in _TUPLE_PAGED),
+            str_owner, str_repo=str_repo, int_number=int_number, **dict_cursors
         )
         for dict_side, str_key in list_sides:
             if not dict_side["pageInfo"]["hasNextPage"]:
                 continue
             dict_side["nodes"].extend(dict_next[str_key]["nodes"])
             dict_side["pageInfo"] = dict_next[str_key]["pageInfo"]
-    _drop_borrowed(dict_pr, set_declared)
+    _drop_borrowed(dict_pr, set_declared=set_declared)
     return dict_pr
 
 
 def reviewers_who_reported(
     list_reviews: list[dict],
+    *,
     set_roster: set[str],
     str_commit_oid: str = "",
 ) -> set[str]:
@@ -491,7 +506,7 @@ def reviewers_who_reported(
     } & set_roster
 
 
-def reviewed_commits(list_reviews: list[dict], set_roster: set[str]) -> list[str]:
+def reviewed_commits(list_reviews: list[dict], *, set_roster: set[str]) -> list[str]:
     """Return the distinct commits a roster member reviewed, newest review first.
 
     Newest first because, after an ``update-branch``, the most recent reviewed commit is the
@@ -601,7 +616,7 @@ def patch_fingerprint(list_files: list[dict]) -> str:
     return hashlib.sha256(json.dumps(list_parts).encode()).hexdigest()
 
 
-def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oid: str) -> str:
+def fetch_patch_fingerprint(str_owner: str, *, str_repo: str, str_base: str, str_oid: str) -> str:
     """Return the PR's own patch fingerprint at ``str_oid`` via the compare API.
 
     The CI checkout is shallow (``actions/checkout`` defaults to ``fetch-depth: 1``), so
@@ -648,9 +663,11 @@ def fetch_patch_fingerprint(str_owner: str, str_repo: str, str_base: str, str_oi
         or not str_merge_base
     ):
         raise ValueError("patch unavailable: the compare response lacks files or a merge base")
-    dict_head = _tree_modes(str_owner, str_repo, str_oid)
-    dict_base = _tree_modes(str_owner, str_repo, str_merge_base)
-    return patch_fingerprint([_with_modes(d, dict_head, dict_base) for d in list_files])
+    dict_head = _tree_modes(str_owner, str_repo=str_repo, str_commit=str_oid)
+    dict_base = _tree_modes(str_owner, str_repo=str_repo, str_commit=str_merge_base)
+    return patch_fingerprint(
+        [_with_modes(d, dict_head=dict_head, dict_base=dict_base) for d in list_files]
+    )
 
 
 def _gh_get_object(str_path: str) -> dict:
@@ -688,7 +705,7 @@ def _gh_get_object(str_path: str) -> dict:
     return dict_body
 
 
-def _tree_modes(str_owner: str, str_repo: str, str_commit: str) -> dict[str, tuple[str, str]]:
+def _tree_modes(str_owner: str, *, str_repo: str, str_commit: str) -> dict[str, tuple[str, str]]:
     """Map every path of a commit's tree to its git file mode and blob ``sha``.
 
     The compare payload carries no mode, so an exec-bit flip is invisible to it; the tree does.
@@ -728,6 +745,7 @@ def _is_tree_entry(dict_entry: dict) -> bool:
 
 def _with_modes(
     dict_file: dict,
+    *,
     dict_head: dict[str, tuple[str, str]],
     dict_base: dict[str, tuple[str, str]],
 ) -> dict:
@@ -773,6 +791,7 @@ def _with_modes(
 
 def review_covers_head(
     fn_fingerprint: Callable[[str], str],
+    *,
     str_review_oid: str,
     str_head_oid: str,
     str_head_digest: str,
@@ -827,6 +846,7 @@ def _note(str_message: str) -> None:
 
 def review_carried_forward(
     fn_fingerprint: Callable[[str], str] | None,
+    *,
     list_reviews: list[dict],
     set_roster: set[str],
     str_head_oid: str,
@@ -853,7 +873,7 @@ def review_carried_forward(
     str
         The covering review's commit, or ``""`` when none has an equal fingerprint.
     """
-    list_oids = reviewed_commits(list_reviews, set_roster) if fn_fingerprint else []
+    list_oids = reviewed_commits(list_reviews, set_roster=set_roster) if fn_fingerprint else []
     if not list_oids:
         return ""
     try:
@@ -862,7 +882,12 @@ def review_carried_forward(
         _note(f"carry-forward unavailable, the head patch cannot be read: {cls_error}")
         return ""
     for str_oid in list_oids[:_INT_MAX_REVIEWED_COMMITS]:
-        if review_covers_head(fn_fingerprint, str_oid, str_head_oid, str_head_digest):
+        if review_covers_head(
+            fn_fingerprint,
+            str_review_oid=str_oid,
+            str_head_oid=str_head_oid,
+            str_head_digest=str_head_digest,
+        ):
             return str_oid
     return ""
 
@@ -870,7 +895,7 @@ def review_carried_forward(
 _INT_NOTICE_DISPLAY_CHARS = 200
 
 
-def newest_roster_notice(list_notices: list[dict], set_roster: set[str]) -> str:
+def newest_roster_notice(list_notices: list[dict], *, set_roster: set[str]) -> str:
     """Return the roster's most recent notice, flattened and COMPLETE.
 
     Parameters
@@ -907,7 +932,7 @@ def newest_roster_notice(list_notices: list[dict], set_roster: set[str]) -> str:
     return ""
 
 
-def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) -> str:
+def summarise_reviewer_notice(list_notices: list[dict], *, set_roster: set[str]) -> str:
     """Return the roster's most recent notice, truncated, to quote in a failure message.
 
     Parameters
@@ -925,10 +950,10 @@ def summarise_reviewer_notice(list_notices: list[dict], set_roster: set[str]) ->
             above: every outcome carries the same "already reviewed" footnote, so the text cannot
             discriminate between them. Match on :func:`newest_roster_notice` instead.
     """
-    return newest_roster_notice(list_notices, set_roster)[:_INT_NOTICE_DISPLAY_CHARS]
+    return newest_roster_notice(list_notices, set_roster=set_roster)[:_INT_NOTICE_DISPLAY_CHARS]
 
 
-def newest_roster_notice_date(list_notices: list[dict], set_roster: set[str]) -> str:
+def newest_roster_notice_date(list_notices: list[dict], *, set_roster: set[str]) -> str:
     """Return the ``createdAt`` of the newest roster-authored notice.
 
     Parameters
@@ -1041,6 +1066,7 @@ _TUPLE_COMPLETION_PHRASES = (
 
 def reviewer_declared_completion(
     list_notices: list[dict],
+    *,
     set_roster: set[str],
     str_head_date: str = "",
 ) -> bool:
@@ -1065,10 +1091,10 @@ def reviewer_declared_completion(
     """
     if not str_head_date:
         return False
-    str_newest = newest_roster_notice(list_notices, set_roster).casefold()
+    str_newest = newest_roster_notice(list_notices, set_roster=set_roster).casefold()
     if not any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES):
         return False
-    str_when = newest_roster_notice_date(list_notices, set_roster)
+    str_when = newest_roster_notice_date(list_notices, set_roster=set_roster)
     return bool(str_when) and str_when >= str_head_date
 
 
@@ -1172,7 +1198,7 @@ def ladder_reports_zero_findings(list_lines: list[str]) -> bool:
     return list_counts == ["0"] and len(list_zero) == 1 and int(list_zero[0].group(2)) > 0
 
 
-def _is_allowlisted_bot(dict_notice: dict, set_posters: frozenset[str]) -> bool:
+def _is_allowlisted_bot(dict_notice: dict, *, set_posters: frozenset[str]) -> bool:
     """Return whether a comment's author is a GitHub ``Bot`` actor whose login is allowlisted.
 
     The login alone is not identity: normalising strips ``[bot]``, so a human who registers the
@@ -1188,6 +1214,7 @@ def _is_allowlisted_bot(dict_notice: dict, set_posters: frozenset[str]) -> bool:
 
 def ladder_marker_declared(
     list_notices: list[dict],
+    *,
     tuple_markers: tuple[str, ...],
     str_head_date: str = "",
     str_head_oid: str = "",
@@ -1228,7 +1255,7 @@ def ladder_marker_declared(
     list_trusted = [
         d
         for d in list_notices
-        if _is_allowlisted_bot(d, set_posters)
+        if _is_allowlisted_bot(d, set_posters=set_posters)
         and (d.get("createdAt") or "") >= str_head_date
         and (d.get("body") or "").lstrip().casefold().startswith(tuple_markers)
     ]
@@ -1242,7 +1269,7 @@ def ladder_marker_declared(
     return ladder_reports_zero_findings(list_lines)
 
 
-def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: list[dict]) -> str:
+def _zero_review_message(str_quote: str, *, set_roster: set[str], list_notices: list[dict]) -> str:
     """Return the message for a PR with zero reviews submitted by the roster.
 
     Parameters
@@ -1261,7 +1288,7 @@ def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: lis
         The file-cap sentence when the reviewer's newest notice states that structural reason;
             the generic "never ran" sentence otherwise. Both are failures — never a pass.
     """
-    str_notice = newest_roster_notice(list_notices, set_roster)
+    str_notice = newest_roster_notice(list_notices, set_roster=set_roster)
     if classify_reviewer_notice(str_notice) == NOTICE_FILE_CAP_EXCEEDED:
         return (
             "a declared reviewer DECLINED this PR for a STRUCTURAL reason it stated: the diff "
@@ -1282,14 +1309,15 @@ def _zero_review_message(str_quote: str, set_roster: set[str], list_notices: lis
     )
 
 
-def _notice_quote(list_notices: list[dict], set_roster: set[str]) -> str:
+def _notice_quote(list_notices: list[dict], *, set_roster: set[str]) -> str:
     """Return the reviewer's newest notice as a message suffix, or ``""`` when there is none."""
-    str_seen = summarise_reviewer_notice(list_notices, set_roster)
+    str_seen = summarise_reviewer_notice(list_notices, set_roster=set_roster)
     return f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
 
 
 def _notice_declares_review(
     list_notices: list[dict],
+    *,
     set_roster: set[str],
     tuple_marker_rule: tuple[tuple[str, ...], frozenset[str]],
     str_head_date: str,
@@ -1302,9 +1330,13 @@ def _notice_declares_review(
     """
     tuple_markers, set_posters = tuple_marker_rule
     return reviewer_declared_completion(
-        list_notices, set_roster, str_head_date
+        list_notices, set_roster=set_roster, str_head_date=str_head_date
     ) or ladder_marker_declared(
-        list_notices, tuple_markers, str_head_date, str_head_oid, set_posters
+        list_notices,
+        tuple_markers=tuple_markers,
+        str_head_date=str_head_date,
+        str_head_oid=str_head_oid,
+        set_posters=set_posters,
     )
 
 
@@ -1325,9 +1357,9 @@ def counts_as_review(dict_review: dict) -> bool:
 
 def check_missing_review(  # noqa: PLR0913
     list_reviews: list[dict],
+    *,
     set_reviewers: set[str],
     str_pr_author: str = "",
-    *,
     str_head_oid: str,
     list_notices: list[dict] | None = None,
     str_head_date: str = "",
@@ -1378,21 +1410,27 @@ def check_missing_review(  # noqa: PLR0913
         return None, ""
 
     list_reviews = [d for d in list_reviews if counts_as_review(d)]
-    if reviewers_who_reported(list_reviews, set_roster, str_head_oid):
+    if reviewers_who_reported(list_reviews, set_roster=set_roster, str_commit_oid=str_head_oid):
         return None, ""
 
     if _notice_declares_review(
-        list_notices or [], set_roster, (tuple_markers, set_posters), str_head_date, str_head_oid
+        list_notices or [],
+        set_roster=set_roster,
+        tuple_marker_rule=(tuple_markers, set_posters),
+        str_head_date=str_head_date,
+        str_head_oid=str_head_oid,
     ):
         return None, ""
 
-    str_carried = review_carried_forward(fn_fingerprint, list_reviews, set_roster, str_head_oid)
+    str_carried = review_carried_forward(
+        fn_fingerprint, list_reviews=list_reviews, set_roster=set_roster, str_head_oid=str_head_oid
+    )
     if str_carried:
         return None, str_carried
 
-    str_quote = _notice_quote(list_notices or [], set_roster)
+    str_quote = _notice_quote(list_notices or [], set_roster=set_roster)
 
-    if reviewers_who_reported(list_reviews, set_roster):
+    if reviewers_who_reported(list_reviews, set_roster=set_roster):
         str_problem = (
             f"a declared reviewer DID review this PR, but only on SUPERSEDED code — no review "
             f"is attributed to the head commit {str_head_oid[:7] or '?'}. A review is pinned to "
@@ -1406,14 +1444,16 @@ def check_missing_review(  # noqa: PLR0913
         )
         return str_problem, ""
 
-    return _zero_review_message(str_quote, set_roster, list_notices or []), ""
+    return _zero_review_message(
+        str_quote, set_roster=set_roster, list_notices=list_notices or []
+    ), ""
 
 
 def find_missing_review_problem(  # noqa: PLR0913
     list_reviews: list[dict],
+    *,
     set_reviewers: set[str],
     str_pr_author: str = "",
-    *,
     str_head_oid: str,
     list_notices: list[dict] | None = None,
     str_head_date: str = "",
@@ -1424,8 +1464,8 @@ def find_missing_review_problem(  # noqa: PLR0913
     """Return only the problem half of :func:`check_missing_review` (same parameters)."""
     return check_missing_review(
         list_reviews,
-        set_reviewers,
-        str_pr_author,
+        set_reviewers=set_reviewers,
+        str_pr_author=str_pr_author,
         str_head_oid=str_head_oid,
         list_notices=list_notices,
         str_head_date=str_head_date,
@@ -1437,9 +1477,9 @@ def find_missing_review_problem(  # noqa: PLR0913
 
 def find_thread_problems(
     list_threads: list[dict],
+    *,
     set_roster: set[str],
     int_min_chars: int = _MIN_REPLY_CHARS,
-    *,
     bool_require_resolved: bool = True,
 ) -> list[str]:
     """Return one problem per thread that nobody outside the roster answered.
@@ -1562,7 +1602,7 @@ _SET_HEADER_AUTHORS = frozenset({"coderabbitai"})
 _SET_LADDER_AUTHORS = frozenset({"guilhermegor-review-ladder"})
 
 
-def _declared_findings(str_body: str, str_login: str = "") -> list[str] | None:
+def _declared_findings(str_body: str, *, str_login: str = "") -> list[str] | None:
     """Return the findings a body's own printed counts declare, or ``None`` if it prints none.
 
     A non-zero body section (outside the diff, duplicates) always counts: it can only add a
@@ -1610,7 +1650,7 @@ def _ladder_empty_findings(str_body: str) -> list[str]:
     return ["ladder review with no findings count and no clean statement"]
 
 
-def review_body_finding_lines(str_body: str | None, str_login: str = "") -> list[str]:
+def review_body_finding_lines(str_body: str | None, *, str_login: str = "") -> list[str]:
     """Return the lines of a review body that list findings; empty means a clean body.
 
     Parameters
@@ -1629,7 +1669,7 @@ def review_body_finding_lines(str_body: str | None, str_login: str = "") -> list
             heading. A line that only reports there are none ("No findings.", "Minor: none")
             and a findings heading directly followed by one are dropped first.
     """
-    list_declared = _declared_findings(str_body or "", str_login)
+    list_declared = _declared_findings(str_body or "", str_login=str_login)
     if list_declared is not None:
         return list_declared
     str_text = _RE_BODY_CLEAN_LINE.sub("", _RE_BODY_CLEAN_SECTION.sub("", str_body or ""))
@@ -1659,7 +1699,7 @@ def review_body_has_findings(str_body: str | None) -> bool:
     return bool(review_body_finding_lines(str_body))
 
 
-def _is_marker_comment(dict_notice: dict, tuple_markers: tuple[str, ...]) -> bool:
+def _is_marker_comment(dict_notice: dict, *, tuple_markers: tuple[str, ...]) -> bool:
     """Return whether a comment opens with a roster ``comment-marker`` string."""
     return bool(tuple_markers) and (
         (dict_notice.get("body") or "").lstrip().casefold().startswith(tuple_markers)
@@ -1668,6 +1708,7 @@ def _is_marker_comment(dict_notice: dict, tuple_markers: tuple[str, ...]) -> boo
 
 def _answered_after(
     list_notices: list[dict],
+    *,
     set_roster: set[str],
     str_when: str,
     int_min_chars: int,
@@ -1681,8 +1722,8 @@ def _answered_after(
     either, so it fails closed like a missing ``submittedAt``.
     """
     return bool(str_when) and any(
-        _is_human_answer(dict_notice, set_roster, int_min_chars)
-        and not _is_marker_comment(dict_notice, tuple_markers)
+        _is_human_answer(dict_notice, set_roster=set_roster, int_min_chars=int_min_chars)
+        and not _is_marker_comment(dict_notice, tuple_markers=tuple_markers)
         and (dict_notice.get("createdAt") or "") > str_when
         for dict_notice in list_notices
     )
@@ -1702,7 +1743,7 @@ _RE_ANSWER_SHAPE = re.compile(
 )
 
 
-def _is_human_answer(dict_notice: dict, set_roster: set[str], int_min_chars: int) -> bool:
+def _is_human_answer(dict_notice: dict, *, set_roster: set[str], int_min_chars: int) -> bool:
     """Return whether one comment is by a known human outside the roster and reads as an answer."""
     dict_author = dict_notice.get("author") or {}
     str_login = dict_author.get("login") or ""
@@ -1716,7 +1757,7 @@ def _is_human_answer(dict_notice: dict, set_roster: set[str], int_min_chars: int
     )
 
 
-def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[dict]:
+def _notices_as_reviews(list_notices: list[dict], *, set_roster: set[str]) -> list[dict]:
     """Return the roster's own issue comments in review shape.
 
     Some ladder rungs post their review as an issue comment, not a PR review. Only a comment that
@@ -1741,7 +1782,7 @@ def _notices_as_reviews(list_notices: list[dict], set_roster: set[str]) -> list[
 
 
 def _marker_notices_as_reviews(
-    list_notices: list[dict], tuple_markers: tuple[str, ...], set_roster: set[str]
+    list_notices: list[dict], *, tuple_markers: tuple[str, ...], set_roster: set[str]
 ) -> list[dict]:
     """Return trusted ladder-marker comments in review shape, authored by their poster.
 
@@ -1757,24 +1798,25 @@ def _marker_notices_as_reviews(
         }
         for dict_notice in list_notices
         if dict_notice.get("authorAssociation") in _SET_TRUSTED_ASSOCIATIONS
-        and _is_marker_comment(dict_notice, tuple_markers)
+        and _is_marker_comment(dict_notice, tuple_markers=tuple_markers)
         and normalise_login((dict_notice.get("author") or {}).get("login") or "") not in set_roster
     ]
 
 
-def _count_authority(dict_review: dict, tuple_markers: tuple[str, ...]) -> str:
+def _count_authority(dict_review: dict, *, tuple_markers: tuple[str, ...]) -> str:
     """Return the login whose printed findings count speaks for this review body.
 
     A trusted marker comment is posted by a person on the ladder's behalf, so its count is read
     with the ladder app's authority; every other review speaks as its own author.
     """
-    if _is_marker_comment(dict_review, tuple_markers):
+    if _is_marker_comment(dict_review, tuple_markers=tuple_markers):
         return next(iter(_SET_LADDER_AUTHORS))
     return (dict_review.get("author") or {}).get("login") or ""
 
 
 def find_review_body_problems(
     list_reviews: list[dict],
+    *,
     list_notices: list[dict],
     set_roster: set[str],
     int_min_chars: int = _MIN_REPLY_CHARS,
@@ -1815,16 +1857,18 @@ def find_review_body_problems(
             dict_review,
             review_body_finding_lines(
                 dict_review.get("body"),
-                _count_authority(dict_review, tuple_markers),
+                str_login=_count_authority(dict_review, tuple_markers=tuple_markers),
             ),
         )
         for dict_review in list_reviews
-        + _notices_as_reviews(list_notices, set_roster)
-        + _marker_notices_as_reviews(list_notices, tuple_markers, set_roster)
+        + _notices_as_reviews(list_notices, set_roster=set_roster)
+        + _marker_notices_as_reviews(
+            list_notices, tuple_markers=tuple_markers, set_roster=set_roster
+        )
         if dict_review.get("state") != "DISMISSED"
         and (
             normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
-            or _is_marker_comment(dict_review, tuple_markers)
+            or _is_marker_comment(dict_review, tuple_markers=tuple_markers)
         )
     ]
     return [
@@ -1835,16 +1879,17 @@ def find_review_body_problems(
         if list_lines
         and not _answered_after(
             list_notices,
-            set_roster,
-            dict_review.get("submittedAt") or "",
-            int_min_chars,
-            tuple_markers,
+            set_roster=set_roster,
+            str_when=dict_review.get("submittedAt") or "",
+            int_min_chars=int_min_chars,
+            tuple_markers=tuple_markers,
         )
     ]
 
 
 def report_verdict(
     list_problems: list[str],
+    *,
     int_threads: int,
     bool_require_resolved: bool,
 ) -> int:
@@ -1910,7 +1955,7 @@ def parse_args(list_argv: list[str] | None = None) -> argparse.Namespace:
     return cls_parser.parse_args(list_argv)
 
 
-def _print_skip(bool_json: bool, str_reason: str) -> int:
+def _print_skip(bool_json: bool, *, str_reason: str) -> int:
     """Print a self-skip in the requested representation and return ``0``."""
     print(json.dumps({"status": "skipped", "reason": str_reason}) if bool_json else str_reason)
     return 0
@@ -1959,7 +2004,7 @@ def _gh_api_text(list_args: list[str]) -> str | None:
     return "" if "(HTTP 404)" in cls_run.stderr else None
 
 
-def _base_roster_text(str_repo_full: str, str_base: str) -> str | None:
+def _base_roster_text(str_repo_full: str, *, str_base: str) -> str | None:
     """Return the base branch's roster text, trying each roster location in order.
 
     The repo root comes first (Python scaffolds), then ``.github/`` (TypeScript scaffolds, whose
@@ -1980,7 +2025,7 @@ def _base_roster_text(str_repo_full: str, str_base: str) -> str | None:
     return None
 
 
-def base_opted_out(str_repo_full: str, str_number: str) -> bool:
+def base_opted_out(str_repo_full: str, *, str_number: str) -> bool:
     """Return whether the PR's BASE branch roster declares ``adopted: false``.
 
     Parameters
@@ -2004,7 +2049,7 @@ def base_opted_out(str_repo_full: str, str_number: str) -> bool:
     ).strip()
     if not str_base:
         return False
-    str_text = _base_roster_text(str_repo_full, str_base)
+    str_text = _base_roster_text(str_repo_full, str_base=str_base)
     try:
         return str_text is not None and _declares_opt_out(str_text)
     except (yaml.YAMLError, ValueError):
@@ -2026,7 +2071,7 @@ def _print_missing_parser(bool_json: bool) -> int:
 
 
 def _print_missing_roster(
-    bool_json: bool, str_detail: str = "", str_code: str = "missing_roster"
+    bool_json: bool, *, str_detail: str = "", str_code: str = "missing_roster"
 ) -> int:
     """Print the missing-roster failure in the requested representation and return ``1``.
 
@@ -2048,11 +2093,11 @@ def _print_missing_roster(
 
 
 def _print_missing_review(
-    bool_json: bool, str_missing: str, list_notices: list[dict], set_reviewers: set[str]
+    bool_json: bool, *, str_missing: str, list_notices: list[dict], set_reviewers: set[str]
 ) -> int:
     """Print the missing-review failure in the requested representation and return ``1``."""
     if bool_json:
-        str_notice = newest_roster_notice(list_notices, set_reviewers)
+        str_notice = newest_roster_notice(list_notices, set_roster=set_reviewers)
         print(
             json.dumps(
                 {
@@ -2070,6 +2115,7 @@ def _print_missing_review(
 
 def _print_review_body_problems(
     bool_json: bool,
+    *,
     list_problems: list[str],
     list_thread_problems: list[str] | None = None,
 ) -> int:
@@ -2099,6 +2145,7 @@ def _print_review_body_problems(
 
 def _print_thread_verdict(
     bool_json: bool,
+    *,
     list_problems: list[str],
     int_threads: int,
     bool_require_resolved: bool,
@@ -2122,7 +2169,9 @@ def _print_thread_verdict(
         return 1 if list_problems else 0
     if str_carried:
         print(f"Review carried forward from {str_carried[:7]} (the PR's own patch is unchanged).")
-    return report_verdict(list_problems, int_threads, bool_require_resolved)
+    return report_verdict(
+        list_problems, int_threads=int_threads, bool_require_resolved=bool_require_resolved
+    )
 
 
 def _head_committed_date(dict_pr: dict) -> str:
@@ -2131,12 +2180,14 @@ def _head_committed_date(dict_pr: dict) -> str:
     return dict_commit.get("committedDate") or ""
 
 
-def _unanswered_bodies(dict_pr: dict, list_notices: list[dict], set_roster: set[str]) -> list[str]:
+def _unanswered_bodies(
+    dict_pr: dict, *, list_notices: list[dict], set_roster: set[str]
+) -> list[str]:
     """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node."""
     return find_review_body_problems(
         dict_pr.get("reviews", {}).get("nodes", []),
-        list_notices,
-        set_roster,
+        list_notices=list_notices,
+        set_roster=set_roster,
         tuple_markers=load_comment_markers(pathlib.Path.cwd()),
     )
 
@@ -2147,7 +2198,7 @@ def _parse_time(str_time: str) -> datetime.datetime:
 
 
 def _review_times(
-    dict_pr: dict, str_oid: str, set_roster: set[str] | None
+    dict_pr: dict, *, str_oid: str, set_roster: set[str] | None
 ) -> list[datetime.datetime]:
     """Return the submission times of the live roster reviews written against ``str_oid``.
 
@@ -2168,7 +2219,7 @@ def _review_times(
 
 
 def _reviewed_before_base_change(
-    dict_pr: dict, list_changes: list[dict], str_oid: str, set_roster: set[str] | None = None
+    dict_pr: dict, *, list_changes: list[dict], str_oid: str, set_roster: set[str] | None = None
 ) -> bool:
     """Return whether the newest review at ``str_oid`` predates the PR's latest base change.
 
@@ -2194,14 +2245,14 @@ def _reviewed_before_base_change(
     """
     try:
         dt_change = max(_parse_time(dict_ev.get("createdAt") or "") for dict_ev in list_changes)
-        list_times = _review_times(dict_pr, str_oid, set_roster)
+        list_times = _review_times(dict_pr, str_oid=str_oid, set_roster=set_roster)
     except (ValueError, AttributeError, TypeError):
         return True
     return bool(list_times) and max(list_times) <= dt_change
 
 
 def _compare_fingerprint(
-    dict_pr: dict, str_repo_full: str, set_roster: set[str] | None = None
+    dict_pr: dict, *, str_repo_full: str, set_roster: set[str] | None = None
 ) -> Callable[[str], str]:
     """Bind the compare-API fingerprint to this PR's repository and base branch.
 
@@ -2234,10 +2285,12 @@ def _compare_fingerprint(
         if not isinstance(list_changes, list):
             raise ValueError("the PR's retarget state is unknown: a review is not carried across")
         if list_changes and _reviewed_before_base_change(
-            dict_pr, list_changes, str_oid, set_roster
+            dict_pr, list_changes=list_changes, str_oid=str_oid, set_roster=set_roster
         ):
             raise ValueError("the PR's base branch was changed: a review is not carried across")
-        return fetch_patch_fingerprint(str_owner, str_repo, str_base, str_oid)
+        return fetch_patch_fingerprint(
+            str_owner, str_repo=str_repo, str_base=str_base, str_oid=str_oid
+        )
 
     return fn_fingerprint
 
@@ -2271,7 +2324,7 @@ def _is_dependabot_bot(dict_author: dict) -> bool:
     )
 
 
-def dependabot_pushed_head(str_repo_full: str, str_head_oid: str) -> bool:
+def dependabot_pushed_head(str_repo_full: str, *, str_head_oid: str) -> bool:
     """Return whether every ``pull_request`` run on the head commit was started by Dependabot.
 
     Commit metadata can be forged by anyone with write access; the actor of the run is who
@@ -2300,7 +2353,7 @@ def dependabot_pushed_head(str_repo_full: str, str_head_oid: str) -> bool:
 
 
 def dependabot_review_exempt(
-    dict_pr: dict, fn_pusher: Callable[[str], bool] | None = None
+    dict_pr: dict, *, fn_pusher: Callable[[str], bool] | None = None
 ) -> bool:
     """Return whether a PR needs no review: a pure Dependabot patch/minor bump (fail-closed).
 
@@ -2337,48 +2390,57 @@ def dependabot_review_exempt(
 
 def _missing_review(
     dict_pr: dict,
+    *,
     str_repo_full: str,
     set_reviewers: set[str],
 ) -> tuple[str | None, str]:
     """Return :func:`check_missing_review` for one fetched ``pullRequest`` node."""
-    if dependabot_review_exempt(dict_pr, functools.partial(dependabot_pushed_head, str_repo_full)):
+    if dependabot_review_exempt(
+        dict_pr,
+        fn_pusher=lambda str_oid: dependabot_pushed_head(str_repo_full, str_head_oid=str_oid),
+    ):
         return None, ""
     str_author = (dict_pr.get("author") or {}).get("login") or ""
     return check_missing_review(
         dict_pr.get("reviews", {}).get("nodes", []),
-        set_reviewers,
-        "" if _borrows_bot_login(dict_pr, set_reviewers) else str_author,
+        set_reviewers=set_reviewers,
+        str_pr_author=""
+        if _borrows_bot_login(dict_pr, set_declared=set_reviewers)
+        else str_author,
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=dict_pr.get("comments", {}).get("nodes", []),
         str_head_date=_head_committed_date(dict_pr),
         tuple_markers=load_comment_markers(pathlib.Path.cwd()),
         set_posters=load_marker_posters(pathlib.Path.cwd()),
         fn_fingerprint=_compare_fingerprint(
-            dict_pr, str_repo_full, {normalise_login(str_login) for str_login in set_reviewers}
+            dict_pr,
+            str_repo_full=str_repo_full,
+            set_roster={normalise_login(str_login) for str_login in set_reviewers},
         ),
     )
 
 
 def _roster_or_verdict(
-    bool_json: bool, str_repo_full: str, str_number: str
+    bool_json: bool, *, str_repo_full: str, str_number: str
 ) -> tuple[dict[str, str], int | None]:
     """Return the roster, or the exit code of the skip/failure that ends the run early."""
     path_cwd = pathlib.Path.cwd()
     bool_pr_opt_out = False
     try:
         bool_pr_opt_out = roster_opted_out(path_cwd)
-        if bool_pr_opt_out and base_opted_out(str_repo_full, str_number):
+        if bool_pr_opt_out and base_opted_out(str_repo_full, str_number=str_number):
             return {}, _print_skip(
                 bool_json,
-                f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out",
+                str_reason=f"{_ROSTER_FILE} declares `adopted: false` "
+                "— review-thread gate opted out",
             )
         if bool_pr_opt_out:
             return {}, _print_missing_roster(
                 bool_json,
-                f"{_ROSTER_FILE} opts out with `adopted: false`, but the base branch's roster "
-                "does not (or could not be read), so the opt-out is refused. Land the opt-out "
-                "on the base branch first.",
-                "opt_out_refused",
+                str_detail=f"{_ROSTER_FILE} opts out with `adopted: false`, but the base "
+                "branch's roster does not (or could not be read), so the opt-out is "
+                "refused. Land the opt-out on the base branch first.",
+                str_code="opt_out_refused",
             )
         dict_roster = load_roster(path_cwd)
         reviewer_logins(dict_roster)
@@ -2386,13 +2448,13 @@ def _roster_or_verdict(
         str_code = "missing_roster"
         if isinstance(err, (yaml.YAMLError, ValueError)):
             str_code = "malformed_roster"
-        return {}, _print_missing_roster(bool_json, str(err), str_code)
+        return {}, _print_missing_roster(bool_json, str_detail=str(err), str_code=str_code)
     if not dict_roster:
         return {}, _print_missing_roster(bool_json)
     return dict_roster, None
 
 
-def _fetch_current_pr(str_repo_full: str, str_number: str, dict_roster: dict) -> dict:
+def _fetch_current_pr(str_repo_full: str, *, str_number: str, dict_roster: dict) -> dict:
     """Fetch the PR under check, trusting the roster plus the marker posters.
 
     Parameters
@@ -2412,13 +2474,13 @@ def _fetch_current_pr(str_repo_full: str, str_number: str, dict_roster: dict) ->
     str_owner, _, str_repo = str_repo_full.partition("/")
     return fetch_pull_request(
         str_owner,
-        str_repo,
-        int(str_number),
-        frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
+        str_repo=str_repo,
+        int_number=int(str_number),
+        set_declared=frozenset(dict_roster) | load_marker_posters(pathlib.Path.cwd()),
     )
 
 
-def _print_rate_limited(bool_json: bool, str_detail: str) -> int:
+def _print_rate_limited(bool_json: bool, *, str_detail: str) -> int:
     """Print the GraphQL rate-limit verdict and its reset time.
 
     Parameters
@@ -2469,7 +2531,7 @@ def main(list_argv: list[str] | None = None) -> int:
     try:
         return _check_pull_request(bool_json)
     except RateLimitedError as err:
-        return _print_rate_limited(bool_json, str(err))
+        return _print_rate_limited(bool_json, str_detail=str(err))
 
 
 def _check_pull_request(bool_json: bool) -> int:
@@ -2489,41 +2551,56 @@ def _check_pull_request(bool_json: bool) -> int:
     str_repo_full = os.environ.get("GITHUB_REPOSITORY", "")
     str_number = os.environ.get("PR_NUMBER", "")
     if not str_repo_full or not str_number.isdigit():
-        return _print_skip(bool_json, "PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check")
+        return _print_skip(
+            bool_json, str_reason="PR_NUMBER / GITHUB_REPOSITORY not set — nothing to check"
+        )
 
     if yaml is None:
         return _print_missing_parser(bool_json)
 
-    dict_roster, int_exit = _roster_or_verdict(bool_json, str_repo_full, str_number)
+    dict_roster, int_exit = _roster_or_verdict(
+        bool_json, str_repo_full=str_repo_full, str_number=str_number
+    )
     if int_exit is not None:
         return int_exit
 
     set_roster = set(dict_roster)
     set_reviewers = reviewer_logins(dict_roster)
 
-    dict_pr = _fetch_current_pr(str_repo_full, str_number, dict_roster)
+    dict_pr = _fetch_current_pr(str_repo_full, str_number=str_number, dict_roster=dict_roster)
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 
-    str_missing, str_carried = _missing_review(dict_pr, str_repo_full, set_reviewers)
+    str_missing, str_carried = _missing_review(
+        dict_pr, str_repo_full=str_repo_full, set_reviewers=set_reviewers
+    )
     if str_missing:
-        return _print_missing_review(bool_json, str_missing, list_notices, set_reviewers)
+        return _print_missing_review(
+            bool_json,
+            str_missing=str_missing,
+            list_notices=list_notices,
+            set_reviewers=set_reviewers,
+        )
 
-    list_body_problems = _unanswered_bodies(dict_pr, list_notices, set_roster)
+    list_body_problems = _unanswered_bodies(
+        dict_pr, list_notices=list_notices, set_roster=set_roster
+    )
 
     bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"
     list_problems = find_thread_problems(
-        list_threads, set_roster, bool_require_resolved=bool_require_resolved
+        list_threads, set_roster=set_roster, bool_require_resolved=bool_require_resolved
     )
     if list_body_problems:
-        return _print_review_body_problems(bool_json, list_body_problems, list_problems)
+        return _print_review_body_problems(
+            bool_json, list_problems=list_body_problems, list_thread_problems=list_problems
+        )
 
     return _print_thread_verdict(
         bool_json,
-        list_problems,
-        len(list_threads),
-        bool_require_resolved,
-        str_carried,
+        list_problems=list_problems,
+        int_threads=len(list_threads),
+        bool_require_resolved=bool_require_resolved,
+        str_carried=str_carried,
     )
 
 

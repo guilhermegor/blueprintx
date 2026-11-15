@@ -50,6 +50,7 @@ class SendPipeline(metaclass=TypeChecker):
 
     def __init__(
         self,
+        *,
         cls_logger: Logger | None,
         fn_build_engine: Callable[[], Engine],
         fn_output_path: Callable[[str], Path],
@@ -78,25 +79,32 @@ class SendPipeline(metaclass=TypeChecker):
         """
         float_start = time()
         pipeline_common.log_context(
-            self.cls_logger, self.dict_context, self.cls_email_handler, self.cls_webhook
+            self.cls_logger,
+            dict_context=self.dict_context,
+            cls_email_handler=self.cls_email_handler,
+            cls_webhook=self.cls_webhook,
         )
         cls_engine = self._open_engine()
         try:
             df_report = self._read(cls_engine)
         finally:
             cls_engine.dispose()
-            log_message(self.cls_logger, "DB engine disposed")
+            log_message(self.cls_logger, str_message="DB engine disposed")
         path_report = pipeline_common.render_report(
-            self.cls_logger, self.fn_output_path, df_report
+            self.cls_logger, fn_output_path=self.fn_output_path, df_report=df_report
         )
         dict_summary: dict[str, object] = {
             "intent": "send",
             "rows_read": int(len(df_report)),
             "report_path": str(path_report),
         }
-        pipeline_common.write_summary(self.cls_logger, self.path_json, dict_summary)
-        pipeline_common.log_elapsed(self.cls_logger, time() - float_start)
-        pipeline_common.notify(self.cls_logger, self.cls_webhook, self.str_webhook_message)
+        pipeline_common.write_summary(
+            self.cls_logger, path_json=self.path_json, dict_summary=dict_summary
+        )
+        pipeline_common.log_elapsed(self.cls_logger, float_elapsed=time() - float_start)
+        pipeline_common.notify(
+            self.cls_logger, cls_webhook=self.cls_webhook, str_message=self.str_webhook_message
+        )
         return dict_summary
 
     def _open_engine(self) -> Engine:
@@ -107,7 +115,7 @@ class SendPipeline(metaclass=TypeChecker):
         sqlalchemy.Engine
             The engine (disposed by :meth:`run` in a ``finally``).
         """
-        log_message(self.cls_logger, "Building DB engine")
+        log_message(self.cls_logger, str_message="Building DB engine")
         return self.fn_build_engine()
 
     def _read(self, cls_engine: Engine) -> pd.DataFrame:
@@ -123,10 +131,12 @@ class SendPipeline(metaclass=TypeChecker):
         pandas.DataFrame
             The rows read by the model.
         """
-        log_message(self.cls_logger, "Starting data-read process")
+        log_message(self.cls_logger, str_message="Starting data-read process")
         cls_example = ExampleEntity(cls_engine)
         cls_example.ensure_table()
         cls_example.insert("Hello from the 'send' intent (MVC ORM service)!")
         df_report = cls_example.fetch_all()
-        log_message(self.cls_logger, f"Finishing data-read process ({len(df_report)} rows)")
+        log_message(
+            self.cls_logger, str_message=f"Finishing data-read process ({len(df_report)} rows)"
+        )
         return df_report

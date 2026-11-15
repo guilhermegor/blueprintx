@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from chassis.db.domain.ports import Record
 
 
-def row_has_id(dict_row: Record, str_id_field: str, record_id: str) -> bool:
+def row_has_id(dict_row: Record, *, str_id_field: str, record_id: str) -> bool:
     """Return whether a row carries the given identifier.
 
     Compared as strings on both sides, because the CSV backend reads every value back as text.
@@ -29,7 +29,7 @@ def row_has_id(dict_row: Record, str_id_field: str, record_id: str) -> bool:
     return str(dict_row.get(str_id_field)) == str(record_id)
 
 
-def find_row(list_rows: Iterable[Record], str_id_field: str, record_id: str) -> Record | None:
+def find_row(list_rows: Iterable[Record], *, str_id_field: str, record_id: str) -> Record | None:
     """Return the first row carrying the identifier, or ``None``.
 
     Parameters
@@ -46,11 +46,18 @@ def find_row(list_rows: Iterable[Record], str_id_field: str, record_id: str) -> 
     Record or None
         First matching row, otherwise ``None``.
     """
-    return next((row for row in list_rows if row_has_id(row, str_id_field, record_id)), None)
+    return next(
+        (
+            row
+            for row in list_rows
+            if row_has_id(row, str_id_field=str_id_field, record_id=record_id)
+        ),
+        None,
+    )
 
 
 def apply_update(
-    list_rows: list[Record], str_id_field: str, record_id: str, dict_updates: Record
+    list_rows: list[Record], *, str_id_field: str, record_id: str, dict_updates: Record
 ) -> tuple[list[Record], Record | None]:
     """Merge ``dict_updates`` into every row carrying the identifier.
 
@@ -73,7 +80,7 @@ def apply_update(
     """
     list_out = [
         {**dict_row, **dict_updates, str_id_field: record_id}
-        if row_has_id(dict_row, str_id_field, record_id)
+        if row_has_id(dict_row, str_id_field=str_id_field, record_id=record_id)
         else dict_row
         for dict_row in list_rows
     ]

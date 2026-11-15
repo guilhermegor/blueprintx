@@ -144,14 +144,14 @@ def build_pipeline(  # noqa: PLR0913
     if cls_builder is None:
         _abort(f"no pipeline registered for intent {str_intent!r}")
     return cls_builder(
-        cls_logger,
-        fn_build_connection,
-        fn_output_path,
-        path_json,
-        dict_context,
-        cls_email_handler,
-        cls_webhook,
-        str_webhook_message,
+        cls_logger=cls_logger,
+        fn_build_connection=fn_build_connection,
+        fn_output_path=fn_output_path,
+        path_json=path_json,
+        dict_context=dict_context,
+        cls_email_handler=cls_email_handler,
+        cls_webhook=cls_webhook,
+        str_webhook_message=str_webhook_message,
     )
 
 

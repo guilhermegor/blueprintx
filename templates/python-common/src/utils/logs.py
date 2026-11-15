@@ -108,7 +108,7 @@ class CreateLog(metaclass=TypeChecker):
         logger.handlers.clear()
 
     def basic_conf(
-        self, complete_path: str, basic_level: Literal["info", "debug"] = "info"
+        self, *, complete_path: str, basic_level: Literal["info", "debug"] = "info"
     ) -> logging.Logger:
         """Configure a file logger.
 
@@ -153,6 +153,7 @@ class CreateLog(metaclass=TypeChecker):
 
     def log_message(
         self,
+        *,
         logger: logging.Logger | None,
         message: str,
         log_level: LogLevel,
@@ -177,7 +178,13 @@ class CreateLog(metaclass=TypeChecker):
             raise ValueError("log_level cannot be empty")
 
         str_class_name, str_method_name = self._caller_context()
-        self._emit(logger, log_level, message, str_class_name, str_method_name)
+        self._emit(
+            logger,
+            log_level=log_level,
+            message=message,
+            str_class_name=str_class_name,
+            str_method_name=str_method_name,
+        )
 
     def _caller_context(self) -> tuple[str, str]:  # complexity-ok: a stack walk IS the work here
         """Walk back up the stack to the first frame outside this logging machinery.
@@ -217,6 +224,7 @@ class CreateLog(metaclass=TypeChecker):
     @staticmethod
     def _emit(  # complexity-ok: two sinks and one rejected level, one branch each
         logger: logging.Logger | None,
+        *,
         log_level: LogLevel,
         message: str,
         str_class_name: str,
@@ -267,7 +275,7 @@ _CLS_LOG = CreateLog()
 
 @type_checker
 def log_message(
-    logger: logging.Logger | None, str_message: str, str_level: LogLevel = "info"
+    logger: logging.Logger | None, *, str_message: str, str_level: LogLevel = "info"
 ) -> None:
     """Log ``str_message`` at ``str_level`` through the shared logger.
 
@@ -280,7 +288,7 @@ def log_message(
     str_level : LogLevel, optional
         One of ``"info"``, ``"warning"``, ``"error"``, ``"critical"``; default ``"info"``.
     """
-    _CLS_LOG.log_message(logger, str_message, str_level)
+    _CLS_LOG.log_message(logger=logger, message=str_message, log_level=str_level)
 
 
 _DICT_PARENT_FOLDER_OUTCOME = {
@@ -291,7 +299,7 @@ _DICT_PARENT_FOLDER_OUTCOME = {
 
 @type_checker
 def _report_parent_folder(
-    cls_create_log: CreateLog, logger: logging.Logger | None, path_log: str
+    cls_create_log: CreateLog, *, logger: logging.Logger | None, path_log: str
 ) -> None:
     """Create the log file's parent directory and report the outcome.
 
@@ -314,11 +322,13 @@ def _report_parent_folder(
         If the attempt reports an outcome this module does not recognise.
     """
     bool_dispatch = cls_create_log.creating_parent_folder(path_log)
-    cls_create_log.log_message(logger, f"Logs parent directory: {path_log}", "info")
+    cls_create_log.log_message(
+        logger=logger, message=f"Logs parent directory: {path_log}", log_level="info"
+    )
     str_outcome = _DICT_PARENT_FOLDER_OUTCOME.get(bool_dispatch)
     if str_outcome is None:
         raise RuntimeError(f"Unexpected dispatch value: {bool_dispatch}") from None
-    cls_create_log.log_message(logger, str_outcome, "info")
+    cls_create_log.log_message(logger=logger, message=str_outcome, log_level="info")
 
 
 @type_checker
@@ -340,7 +350,7 @@ def _validate_path_log(path_log: str | None) -> None:
 
 
 @type_checker
-def initiate_logging(logger: logging.Logger, path_log: str | None = None) -> None:
+def initiate_logging(logger: logging.Logger, *, path_log: str | None = None) -> None:
     """Initialise logging with directory creation and operator information.
 
     Parameters
@@ -360,8 +370,12 @@ def initiate_logging(logger: logging.Logger, path_log: str | None = None) -> Non
     cls_create_log = CreateLog()
 
     if path_log is not None:
-        _report_parent_folder(cls_create_log, logger, path_log)
+        _report_parent_folder(cls_create_log, logger=logger, path_log=path_log)
 
     dt_now = datetime.now(tz=ZoneInfo("UTC"))
-    cls_create_log.log_message(logger, f"Routine started at {dt_now}", "info")
-    cls_create_log.log_message(logger, f"Routine operator {getuser()}", "info")
+    cls_create_log.log_message(
+        logger=logger, message=f"Routine started at {dt_now}", log_level="info"
+    )
+    cls_create_log.log_message(
+        logger=logger, message=f"Routine operator {getuser()}", log_level="info"
+    )

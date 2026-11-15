@@ -74,7 +74,7 @@ def decode_record(cell: object) -> Record:
 
 
 @type_checker
-def validate_not_flag(value: str, label: str) -> None:
+def validate_not_flag(value: str, *, label: str) -> None:
     """Reject a value a getopt-based dump tool would parse as an option flag.
 
     A ``backup()`` implementation passes ``value`` (typically the database
@@ -103,7 +103,7 @@ def validate_not_flag(value: str, label: str) -> None:
 
 
 @type_checker
-def validate_sql_identifier(value: str, label: str) -> None:
+def validate_sql_identifier(value: str, *, label: str) -> None:
     """Reject a table or column name that is not a plain SQL identifier.
 
     The handlers interpolate ``table`` and ``id_field`` into SQL text, because a driver cannot
@@ -129,7 +129,7 @@ def validate_sql_identifier(value: str, label: str) -> None:
 
 
 @type_checker
-def ensure_id(record: Record, id_field: str = "id") -> Record:
+def ensure_id(record: Record, *, id_field: str = "id") -> Record:
     """Ensure a record carries a string identifier.
 
     Parameters

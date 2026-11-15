@@ -32,6 +32,7 @@ class OutlookEmailHandler:
 
     def send_email(
         self,
+        *,
         str_subject: str,
         list_to: list[str],
         list_cc: list[str],
@@ -63,11 +64,17 @@ class OutlookEmailHandler:
             (logged by the gateway).
         """
         return self._cls_gateway.send_email(
-            str_subject, list_to, list_cc, str_body, list_attachments, bool_auto_send
+            str_subject=str_subject,
+            list_to=list_to,
+            list_cc=list_cc,
+            str_body=str_body,
+            list_attachments=list_attachments,
+            bool_auto_send=bool_auto_send,
         )
 
     def download_attachment(
         self,
+        *,
         str_email_account: str,
         str_folder: str,
         str_subject_substring: str,
@@ -103,10 +110,10 @@ class OutlookEmailHandler:
             The saved attachment path, or ``None`` off Windows / on any failure / no match.
         """
         return self._cls_gateway.download_attachment(
-            str_email_account,
-            str_folder,
-            str_subject_substring,
-            path_dest_dir,
-            str_subfolder,
-            list_file_formats,
+            str_email_account=str_email_account,
+            str_folder=str_folder,
+            str_subject_substring=str_subject_substring,
+            path_dest_dir=path_dest_dir,
+            str_subfolder=str_subfolder,
+            list_file_formats=list_file_formats,
         )

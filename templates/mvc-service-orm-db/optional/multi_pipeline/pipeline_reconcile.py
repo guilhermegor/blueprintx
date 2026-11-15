@@ -56,6 +56,7 @@ class ReconcilePipeline(metaclass=TypeChecker):
 
     def __init__(
         self,
+        *,
         cls_logger: Logger | None,
         fn_build_engine: Callable[[], Engine],
         fn_output_path: Callable[[str], Path],
@@ -84,7 +85,10 @@ class ReconcilePipeline(metaclass=TypeChecker):
         """
         float_start = time()
         pipeline_common.log_context(
-            self.cls_logger, self.dict_context, self.cls_email_handler, self.cls_webhook
+            self.cls_logger,
+            dict_context=self.dict_context,
+            cls_email_handler=self.cls_email_handler,
+            cls_webhook=self.cls_webhook,
         )
         dict_baseline = self._read_baseline()
         dict_summary: dict[str, object] = {
@@ -92,9 +96,13 @@ class ReconcilePipeline(metaclass=TypeChecker):
             "baseline_found": bool(dict_baseline),
             "baseline_rows": int(str(dict_baseline.get("rows_read", 0))),
         }
-        pipeline_common.write_summary(self.cls_logger, self.path_json, dict_summary)
-        pipeline_common.log_elapsed(self.cls_logger, time() - float_start)
-        pipeline_common.notify(self.cls_logger, self.cls_webhook, self.str_webhook_message)
+        pipeline_common.write_summary(
+            self.cls_logger, path_json=self.path_json, dict_summary=dict_summary
+        )
+        pipeline_common.log_elapsed(self.cls_logger, float_elapsed=time() - float_start)
+        pipeline_common.notify(
+            self.cls_logger, cls_webhook=self.cls_webhook, str_message=self.str_webhook_message
+        )
         return dict_summary
 
     def _read_baseline(self) -> dict[str, object]:
@@ -107,14 +115,16 @@ class ReconcilePipeline(metaclass=TypeChecker):
             reconcile reads a values store DB-first and falls back to a bounded backfill
             (fail loud on nothing within the cap) rather than returning empty.
         """
-        log_message(self.cls_logger, "Reading prior-run baseline for reconciliation")
+        log_message(self.cls_logger, str_message="Reading prior-run baseline for reconciliation")
         if not self.path_json.exists():
             log_message(
-                self.cls_logger, "No prior summary found — baseline empty (prod: bounded backfill)"
+                self.cls_logger,
+                str_message="No prior summary found — baseline empty (prod: bounded backfill)",
             )
             return {}
         dict_prior: dict[str, object] = json.loads(self.path_json.read_text(encoding="utf-8"))
         log_message(
-            self.cls_logger, f"Baseline loaded ({dict_prior.get('rows_read', 0)} prior rows)"
+            self.cls_logger,
+            str_message=f"Baseline loaded ({dict_prior.get('rows_read', 0)} prior rows)",
         )
         return dict_prior

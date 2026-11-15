@@ -21,11 +21,10 @@ seam), so tests mock at that boundary and the autouse network guard stays satisf
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from utils.http_downloader import download_file
+from utils.http_downloader import DownloadFn, download_file
 
 
 if TYPE_CHECKING:
@@ -46,7 +45,7 @@ _INT_MIN_DESCRIPTOR_LINES = 2
 
 
 @type_checker
-def cvm_meta_url(str_base_url: str, str_dataset_key: str) -> str:
+def cvm_meta_url(str_base_url: str, *, str_dataset_key: str) -> str:
     """Build a CVM sidecar-descriptor URL from a dataset's base URL (the reference locator).
 
     CVM publishes ``<base>/META/meta_<dataset>.txt`` beside each dataset. This is the documented
@@ -78,8 +77,9 @@ def cvm_meta_url(str_base_url: str, str_dataset_key: str) -> str:
 @type_checker
 def fetch_sidecar_text(
     str_descriptor_url: str,
+    *,
     path_dest: Path,
-    fn_download: Callable[[str, Path], Path] = download_file,
+    fn_download: DownloadFn = download_file,
     str_encoding: str = "utf-8",
 ) -> str | None:
     """Fetch a sidecar descriptor to the bronze layer and return its text, or ``None`` if absent.
@@ -97,7 +97,7 @@ def fetch_sidecar_text(
     path_dest : pathlib.Path
         Bronze-layer path to persist the descriptor to (the ``path_raw`` seam). Its parent is
         created by the transport when missing.
-    fn_download : Callable[[str, pathlib.Path], pathlib.Path], optional
+    fn_download : DownloadFn, optional
         The download transport, by default
         :func:`utils.http_downloader.download_file`. Injected so
         tests mock at the one network boundary.
@@ -111,14 +111,14 @@ def fetch_sidecar_text(
         The descriptor text, or ``None`` when the source publishes no sidecar.
     """
     try:
-        path_written = fn_download(str_descriptor_url, path_dest)
+        path_written = fn_download(str_url=str_descriptor_url, path_dest=path_dest)
     except OSError:
         return None
     return path_written.read_text(encoding=str_encoding)
 
 
 @type_checker
-def parse_sidecar_metadata(str_text: str, str_sep: str = ";") -> dict[str, dict[str, str]]:
+def parse_sidecar_metadata(str_text: str, *, str_sep: str = ";") -> dict[str, dict[str, str]]:
     """Parse a delimited sidecar descriptor into ``{field: {column: value}}``.
 
     Header-driven and format-agnostic: the first non-empty line names the columns; every later
