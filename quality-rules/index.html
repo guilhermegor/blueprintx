@@ -1902,6 +1902,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#keyword-only-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keyword-only parameters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#default-arg-spacing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2820,6 +2831,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#keyword-only-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keyword-only parameters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#default-arg-spacing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2948,6 +2970,18 @@ trackable (blueprintx#431). Python's complexity-1 ceiling on <code>tests/</code>
 test but not a straight-line test carrying several sequential <code>assert</code> statements — a genuinely
 different shape. <code>eslint-plugin-jest</code> is already a devDependency (for <code>jest/no-export</code>,
 blueprintx#442) but its <code>max-expects</code> rule is not yet wired into <code>eslint.config.js</code>.</p>
+<h2 id="keyword-only-parameters">Keyword-only parameters<a class="headerlink" href="#keyword-only-parameters" title="Permanent link">&para;</a></h2>
+<p><strong>Prohibits:</strong> a Python function with more than one positional parameter. Ruff's <code>PLR0917</code>
+runs with <code>max-positional-args = 1</code>, so only the subject argument is positional and every other
+parameter follows a bare <code>*</code>.</p>
+<p>Two same-typed positional arguments (<code>copy(src, dst)</code>, <code>window(start, end)</code>) can be swapped at a
+call site with no error from the type checker or the runtime; a keyword names each one where it
+is passed. <code>self</code> and <code>cls</code> do not count. A signature fixed by a foreign contract (a DB-API
+cursor, a PyYAML constructor override, a metaclass hook) cannot change, so that <code>def</code> carries a
+line-scoped <code># noqa: PLR0917 -- &lt;reason&gt;</code>; nothing else does (blueprintx#1054). The trees
+<code>ruff.toml</code> excludes (<code>migrations</code>, <code>src/chassis</code>, <code>src/capabilities/example_feature</code>) are not
+checked. TypeScript has no keyword-only parameters, so this entry is Python-only: its nearest
+idiom is an options object, and no ESLint <code>max-params</code> rule is wired in the TS templates.</p>
 <h2 id="default-arg-spacing">Default arg spacing<a class="headerlink" href="#default-arg-spacing" title="Permanent link">&para;</a></h2>
 <p><strong>Prohibits:</strong> nothing — this entry exists to demonstrate the <code>overridden_by:</code> field, the
 "community standard beats the house rule" case blueprintx#430 established as the top-level

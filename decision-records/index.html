@@ -3904,16 +3904,18 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   authored before the tree was tabified); no per-file ANN401 ignore remains (#1054). <code>lib-minimal</code> vendors the typing engine at a nested private path whose imports are
   rewritten to <code>&lt;pkg&gt;._internal.*</code> and can exceed the line length, so it is excluded in full
   (mypy excludes it too).</li>
-<li><strong>Preview mode is for PLR1702 only</strong> (too-many-nested-blocks, still preview-only in ruff
-  0.17.5: <code>ruff rule PLR1702</code>). It also activates tag-along preview rules in the <code>PL</code> and <code>S</code>
+<li><strong>Preview mode is for PLR1702 and PLR0917 only</strong> (too-many-nested-blocks and
+  too-many-positional-arguments, both preview-only in ruff 0.17.5: <code>ruff rule PLR1702</code>,
+  <code>ruff rule PLR0917</code>; turning preview off silently disables the keyword-only gate). It also activates tag-along preview rules in the <code>PL</code> and <code>S</code>
   families, never chosen on their merits, so each is settled rule by rule (#434, #1054).
-  Re-measured with ruff 0.17.5 and the current <code>ruff.toml</code> ignores (<code>PLC1901</code>, <code>S404</code>, <code>PLR0917</code>)
-  as <code>ruff check --isolated --select PL,S --ignore PLC1901,S404,PLR0917</code> over
-  <code>templates/python-common/{src,bin,optional}</code>: 66 findings stable, 71 with <code>--preview</code>. The 5
+  Re-measured with ruff 0.17.5 and the current <code>ruff.toml</code> ignores (<code>PLC1901</code>, <code>S404</code>)
+  as <code>ruff check --isolated --select PL,S --ignore PLC1901,S404</code> over
+  <code>templates/python-common/{src,bin,optional}</code>: 63 findings stable, 68 with <code>--preview</code>. The 5
   extra are all <code>PLC2701</code>, which the shipped <code>ruff.toml</code> already settles with a <code>bin/</code> and
   <code>tests/</code> per-file-ignore and line-scoped <code>noqa</code> on the private imports in <code>optional/</code>. The older
   figures (21 to 81 on <code>templates/</code>, ruff 0.11.13) used a different tree and ignore list and are
-  not comparable. Revisit
+  not comparable. That command runs <code>--isolated</code>, so it never reads <code>max-positional-args = 1</code>;
+  it counts the other <code>PL</code>/<code>S</code> rules, and the shipped tree is <code>PLR0917</code>-clean by <code>ruff check</code>. Revisit
   each on its own measurement the day PLR1702 leaves preview. Why nesting is gated at all is in
   <code>check_complexity.sh</code>'s header and <a href="../complexity-ceilings-measured/">Complexity ceilings</a>.</li>
 <li><strong>PLR1702 pairs with <code>max-complexity = 3</code> for <code>src/</code> only.</strong> Ceiling 3 alone would admit the
@@ -3988,9 +3990,12 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   so <code>== ""</code> is the exact test (27 findings).</li>
 <li><code>S404</code> stays ignored: the import finds nothing, and the calls are covered by <code>S603</code> and
   <code>S607</code> (24 findings).</li>
-<li><code>PLR0917</code> stays ignored for now: with <code>max-positional-args = 1</code> it reports 1069
-  findings in the templates, nearly all call sites of shipped APIs and tests, so it is a
-  signature change tracked as its own slice, not a lint toggle.</li>
+<li><code>PLR0917</code> is enforced with <code>[lint.pylint] max-positional-args = 1</code> (#1054, shipped in
+  three slices of signature changes before the rule was turned on): only the subject
+  argument is positional, so two same-typed arguments cannot be swapped silently at a call
+  site. Every other parameter is keyword-only (<code>*,</code>). A signature fixed by a foreign
+  contract (a DB-API cursor, a PyYAML constructor override, a metaclass hook) carries a line-scoped
+  <code># noqa: PLR0917 -- &lt;reason&gt;</code> on its <code>def</code>; nothing else is exempt.</li>
 <li>Re-enabled, with the shipped code made clean: <code>PLR6301</code> (a method with no <code>self</code> use is
   a <code>@staticmethod</code>; an override of a foreign or port signature carries a line-scoped
   <code># noqa: PLR6301</code>), <code>PLC0415</code> (stdlib imports hoisted; a deliberately lazy optional
