@@ -93,6 +93,21 @@ test but not a straight-line test carrying several sequential `assert` statement
 different shape. `eslint-plugin-jest` is already a devDependency (for `jest/no-export`,
 blueprintx#442) but its `max-expects` rule is not yet wired into `eslint.config.js`.
 
+## Keyword-only parameters
+
+**Prohibits:** a Python function with more than one positional parameter. Ruff's `PLR0917`
+runs with `max-positional-args = 1`, so only the subject argument is positional and every other
+parameter follows a bare `*`.
+
+Two same-typed positional arguments (`copy(src, dst)`, `window(start, end)`) can be swapped at a
+call site with no error from the type checker or the runtime; a keyword names each one where it
+is passed. `self` and `cls` do not count. A signature fixed by a foreign contract (a DB-API
+cursor, a PyYAML constructor override, a metaclass hook) cannot change, so that `def` carries a
+line-scoped `# noqa: PLR0917 -- <reason>`; nothing else does (blueprintx#1054). The trees
+`ruff.toml` excludes (`migrations`, `src/chassis`, `src/capabilities/example_feature`) are not
+checked. TypeScript has no keyword-only parameters, so this entry is Python-only: its nearest
+idiom is an options object, and no ESLint `max-params` rule is wired in the TS templates.
+
 ## Default arg spacing
 
 **Prohibits:** nothing — this entry exists to demonstrate the `overridden_by:` field, the
