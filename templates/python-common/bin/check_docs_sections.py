@@ -117,7 +117,7 @@ def _load_config() -> dict:
     return yaml.safe_load(_SKELETON_CONFIG.read_text(encoding="utf-8")) or {}
 
 
-def _check_layer1(set_nav_files: set[str], tuple_required: tuple[str, ...]) -> list[str]:
+def _check_layer1(set_nav_files: set[str], *, tuple_required: tuple[str, ...]) -> list[str]:
     """Return errors for canonical pages that are missing on disk or absent from ``nav:``.
 
     Parameters
@@ -215,7 +215,7 @@ def main() -> int:
     set_nav_files = _nav_files(dict_mkdocs.get("nav"))
     dict_config = _load_config()
     tuple_required = tuple(dict_config.get("required_pages") or _DEFAULT_REQUIRED_PAGES)
-    list_errors = _check_layer1(set_nav_files, tuple_required)
+    list_errors = _check_layer1(set_nav_files, tuple_required=tuple_required)
     list_errors += _check_layer2(dict_config.get("section_families") or {})
     for str_error in list_errors:
         print(str_error)

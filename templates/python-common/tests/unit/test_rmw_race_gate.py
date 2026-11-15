@@ -47,7 +47,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_rmw_race")
 
 
-def _python_file(path_dir: Path, str_source: str) -> Path:
+def _python_file(path_dir: Path, *, str_source: str) -> Path:
     """Write a Python source file and return its path.
 
     Parameters
@@ -71,7 +71,7 @@ def test_arithmetic_write_after_session_get_is_reported(tmp_path: Path) -> None:
     """The canonical race: `.get()` read, arithmetic write, no lock, no version column."""
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         "\n\n"
         "def decrement_stock(session, product_id, quantity):\n"
@@ -85,7 +85,7 @@ def test_arithmetic_write_after_session_get_is_reported(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("str_which", ["location", "source"])
 def test_arithmetic_write_after_session_get_names_file_and_line(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], str_which: str
+    tmp_path: Path, *, capsys: pytest.CaptureFixture[str], str_which: str
 ) -> None:
     """The message must name the offending file and line — 'possible race' teaches nothing.
 
@@ -100,7 +100,7 @@ def test_arithmetic_write_after_session_get_names_file_and_line(
     """
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         "\n\n"
         "def decrement_stock(session, product_id, quantity):\n"
@@ -122,7 +122,7 @@ def test_augmented_assignment_form_is_also_reported(tmp_path: Path) -> None:
     """`x.qty -= n` IS `x.qty = x.qty - n` — the augmented form must fire identically."""
     path_file = _python_file(
         tmp_path,
-        "class Order:\n"
+        str_source="class Order:\n"
         '\t__tablename__ = "order"\n'
         "\n\n"
         "def decrement_stock(session, order_id, quantity):\n"
@@ -138,7 +138,7 @@ def test_query_first_chain_with_a_model_is_reported(tmp_path: Path) -> None:
     """The `.query(Model)....first()` chain form is gated too, not only `.get()`."""
     path_file = _python_file(
         tmp_path,
-        "class Order:\n"
+        str_source="class Order:\n"
         '\t__tablename__ = "order"\n'
         "\n\n"
         "def decrement_stock(session, order_id, quantity):\n"
@@ -154,7 +154,7 @@ def test_with_for_update_kwarg_on_session_get_silences_it(tmp_path: Path) -> Non
     """A pessimistic lock on the read removes the race — must NOT fire."""
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         "\n\n"
         "def decrement_stock(session, product_id, quantity):\n"
@@ -170,7 +170,7 @@ def test_with_for_update_chained_call_silences_it(tmp_path: Path) -> None:
     """A chained `.with_for_update()` on the query form removes the race too."""
     path_file = _python_file(
         tmp_path,
-        "class Order:\n"
+        str_source="class Order:\n"
         '\t__tablename__ = "order"\n'
         "\n\n"
         "def decrement_stock(session, order_id, quantity):\n"
@@ -188,7 +188,7 @@ def test_version_id_col_on_the_model_silences_it(tmp_path: Path) -> None:
     """Optimistic locking via `version_id_col` on the same-file model removes the race."""
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         '\t__mapper_args__ = {"version_id_col": "version"}\n'
         "\n\n"
@@ -209,7 +209,7 @@ def test_sql_side_update_where_form_is_never_flagged(tmp_path: Path) -> None:
     """
     path_file = _python_file(
         tmp_path,
-        "def decrement_stock(session, product_id, quantity):\n"
+        str_source="def decrement_stock(session, product_id, quantity):\n"
         "\tsession.execute(\n"
         '\t\t"UPDATE product SET stock = stock - :q WHERE id = :id AND stock >= :q",\n'
         '\t\t{"q": quantity, "id": product_id},\n'
@@ -223,7 +223,7 @@ def test_escape_hatch_with_a_reason_silences_the_finding(tmp_path: Path) -> None
     """A single-writer migration script legitimately reads-then-writes arithmetically."""
     path_file = _python_file(
         tmp_path,
-        "class Order:\n"
+        str_source="class Order:\n"
         '\t__tablename__ = "order"\n'
         "\n\n"
         "def decrement_stock(session, order_id, quantity):\n"
@@ -239,7 +239,7 @@ def test_a_bare_escape_hatch_with_no_reason_is_rejected(tmp_path: Path) -> None:
     """The reason is required — a bare marker must not satisfy the gate."""
     path_file = _python_file(
         tmp_path,
-        "class Order:\n"
+        str_source="class Order:\n"
         '\t__tablename__ = "order"\n'
         "\n\n"
         "def decrement_stock(session, order_id, quantity):\n"
@@ -259,7 +259,7 @@ def test_a_plain_full_record_overwrite_is_not_flagged(tmp_path: Path) -> None:
     """
     path_file = _python_file(
         tmp_path,
-        "class Record:\n"
+        str_source="class Record:\n"
         '\t__tablename__ = "record"\n'
         "\n\n"
         "def update(session, entity_id, entity):\n"
@@ -282,7 +282,7 @@ def test_an_unrelated_first_call_with_no_query_model_is_not_flagged(tmp_path: Pa
     """
     path_file = _python_file(
         tmp_path,
-        "def touch_first(items):\n"
+        str_source="def touch_first(items):\n"
         "\tfirst_item = build_list(items).first()\n"
         "\tfirst_item.value = first_item.value - 1\n",
     )
@@ -298,7 +298,7 @@ def test_a_race_in_one_function_does_not_leak_into_a_sibling(tmp_path: Path) -> 
     """
     path_file = _python_file(
         tmp_path,
-        "class Order:\n"
+        str_source="class Order:\n"
         '\t__tablename__ = "order"\n'
         "\n\n"
         "def unsafe(session, order_id, quantity):\n"
@@ -314,7 +314,7 @@ def test_a_race_in_one_function_does_not_leak_into_a_sibling(tmp_path: Path) -> 
 
 
 def test_discovery_finds_nothing_when_there_is_no_src_dir(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Zero discovered files under `src/` is what makes the CLI guard fail, not pass.
 
@@ -330,7 +330,7 @@ def test_with_for_update_false_is_not_a_lock(tmp_path: Path) -> None:
     """Presence of the keyword is not protection; `False` means no lock."""
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         "\n\n"
         "def decrement_stock(session, product_id, quantity):\n"
@@ -346,7 +346,7 @@ def test_with_for_update_none_is_not_a_lock(tmp_path: Path) -> None:
     """`None` is the other falsey spelling and means no lock either."""
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         "\n\n"
         "def decrement_stock(session, product_id, quantity):\n"
@@ -362,7 +362,7 @@ def test_with_for_update_true_still_suppresses(tmp_path: Path) -> None:
     """The control: evaluating the value must not blind the gate to a genuine lock."""
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         "\n\n"
         "def decrement_stock(session, product_id, quantity):\n"
@@ -378,7 +378,7 @@ def test_an_unlocked_branch_is_not_masked_by_a_locked_one(tmp_path: Path) -> Non
     """Two definitions of one name: the unlocked branch decides, whatever the source order."""
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         "\n\n"
         "def decrement_stock(session, product_id, quantity, use_lock):\n"
@@ -397,7 +397,7 @@ def test_a_string_mentioning_version_id_col_is_not_a_version_column(tmp_path: Pa
     """A gate turned off by writing its own keyword in prose is no gate."""
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         '\tstr_note = "todo: consider version_id_col here"\n'
         "\n\n"
@@ -414,7 +414,7 @@ def test_a_declared_version_id_col_still_suppresses(tmp_path: Path) -> None:
     """The control: parsing must not blind the gate to a real optimistic lock."""
     path_file = _python_file(
         tmp_path,
-        "class Product:\n"
+        str_source="class Product:\n"
         '\t__tablename__ = "product"\n'
         '\t__mapper_args__ = {"version_id_col": version}\n'
         "\n\n"

@@ -294,20 +294,20 @@ def _index_test_functions(cls_tree: ast.AST) -> dict:
     """
     dict_funcs: dict = {}
 
-    def _walk(node_parent: ast.AST, str_prefix: str) -> None:
+    def _walk(node_parent: ast.AST, *, str_prefix: str) -> None:
         for node in ast.iter_child_nodes(node_parent):
             if isinstance(node, ast.ClassDef):
-                _walk(node, f"{str_prefix}{node.name}.")
+                _walk(node, str_prefix=f"{str_prefix}{node.name}.")
             elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith(
                 "test_"
             ):
                 dict_funcs[f"{str_prefix}{node.name}"] = node
 
-    _walk(cls_tree, "")
+    _walk(cls_tree, str_prefix="")
     return dict_funcs
 
 
-def _hatch_reason(str_source: str, node_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+def _hatch_reason(str_source: str, *, node_fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     """Return the ``# one-assert-ok: <reason>`` text inside a function, or ``""``.
 
     Parameters
@@ -335,7 +335,7 @@ def _hatch_reason(str_source: str, node_fn: ast.FunctionDef | ast.AsyncFunctionD
 
 
 def cap_for_file(
-    path_file: pathlib.Path, path_root: pathlib.Path, str_unit_dir: str, int_max: int
+    path_file: pathlib.Path, *, path_root: pathlib.Path, str_unit_dir: str, int_max: int
 ) -> int | None:
     """Return the assertion-site cap that applies to one file, or ``None`` for zero-only.
 
@@ -367,7 +367,9 @@ def cap_for_file(
     return None
 
 
-def _file_findings(path_file: pathlib.Path, path_root: pathlib.Path, int_max: int | None) -> tuple:
+def _file_findings(
+    path_file: pathlib.Path, *, path_root: pathlib.Path, int_max: int | None
+) -> tuple:
     """Return the problems and per-function assertion-site counts for one test file.
 
     Parameters
@@ -399,7 +401,7 @@ def _file_findings(path_file: pathlib.Path, path_root: pathlib.Path, int_max: in
     for str_name, node_fn in dict_funcs.items():
         int_count = len(_assertion_sites(node_fn))
         list_counts.append(int_count)
-        if _hatch_reason(str_source, node_fn):
+        if _hatch_reason(str_source, node_fn=node_fn):
             continue
         if int_count == 0:
             list_problems.append(
@@ -485,8 +487,12 @@ def main(list_argv: list) -> int:
     list_problems: list = []
     list_all_counts: list = []
     for path_file in list_files:
-        int_cap = cap_for_file(path_file, path_root, str_unit_dir, int_max)
-        list_file_problems, list_counts = _file_findings(path_file, path_root, int_cap)
+        int_cap = cap_for_file(
+            path_file, path_root=path_root, str_unit_dir=str_unit_dir, int_max=int_max
+        )
+        list_file_problems, list_counts = _file_findings(
+            path_file, path_root=path_root, int_max=int_cap
+        )
         list_problems.extend(list_file_problems)
         list_all_counts.extend(list_counts)
 

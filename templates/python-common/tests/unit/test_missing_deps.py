@@ -82,7 +82,7 @@ _MODULE = _load()
     ],
 )
 def test_declared_names_selects_unconditional_main_and_dev_deps(
-    dict_toml: dict, list_expected: list[str]
+    dict_toml: dict, *, list_expected: list[str]
 ) -> None:
     """Only unconditional main/dev dependencies are demanded of the venv."""
     assert _MODULE.declared_names(dict_toml) == list_expected
@@ -94,7 +94,7 @@ def test_missing_matches_installed_distributions_case_insensitively() -> None:
 
 
 def test_main_prints_one_sentinel_line_per_missing_dependency(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The shell reads ``missing: <name>`` lines, so nothing else may look like a name."""
     path_toml = tmp_path / "pyproject.toml"

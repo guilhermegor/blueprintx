@@ -36,7 +36,7 @@ _STR_BASH = shutil.which("bash") or "bash"
 _MAPPING_NO_EXTRA_ENV: Mapping[str, str] = MappingProxyType({})
 
 
-def _skip_unless(bool_available: bool, str_reason: str) -> None:
+def _skip_unless(bool_available: bool, *, str_reason: str) -> None:
     """Skip the calling test when a capability discovered AT RUNTIME is missing.
 
     Only for conditions that cannot be known at import time (what a subprocess actually did).
@@ -191,7 +191,7 @@ def test_poetry_exec_version_keeps_stdout_clean() -> None:
     cls_result = _run("poetry_exec.sh", "version", "-s")
     _skip_unless(
         cls_result.returncode == 0,
-        "Poetry could not be resolved -- offline/CI integration guard only",
+        str_reason="Poetry could not be resolved -- offline/CI integration guard only",
     )
 
     str_version = cls_result.stdout.strip()
@@ -251,7 +251,7 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
     str_output = cls_result.stdout + cls_result.stderr
     _skip_unless(
         "dubious ownership" in str_output or path_global_cfg.exists(),
-        "git build does not honour GIT_TEST_ASSUME_DIFFERENT_OWNER -- guard only",
+        str_reason="git build does not honour GIT_TEST_ASSUME_DIFFERENT_OWNER -- guard only",
     )
 
     str_cfg = path_global_cfg.read_text(encoding="utf-8") if path_global_cfg.exists() else ""
@@ -260,7 +260,7 @@ def test_precommit_registers_safe_directory_for_shared_worktree(tmp_path: Path) 
     assert "No git repository here" not in str_output
 
 
-def _run_prune(tmp_path: Path, str_backend: str) -> list[str]:
+def _run_prune(tmp_path: Path, *, str_backend: str) -> list[str]:
     """Source ``pip_fallback.sh`` and prune a requirements file for one ``DB_BACKEND``.
 
     Parameters
@@ -302,7 +302,7 @@ def test_prune_drops_every_db_driver_for_sqlite(tmp_path: Path) -> None:
     index that 403s that one package killed the whole install over a package the project can
     never import.
     """
-    list_kept = _run_prune(tmp_path, "sqlite")
+    list_kept = _run_prune(tmp_path, str_backend="sqlite")
     assert list_kept == ["beartype>=0.22", "pandas>=2.0"]
 
 
@@ -319,14 +319,14 @@ def test_prune_drops_every_db_driver_for_sqlite(tmp_path: Path) -> None:
     ],
 )
 def test_prune_keeps_only_the_configured_backends_driver(
-    tmp_path: Path, str_backend: str, str_driver: str
+    tmp_path: Path, *, str_backend: str, str_driver: str
 ) -> None:
     """Each backend keeps its own driver and drops the other three.
 
     The negative half matters as much as the positive one: pruning that dropped the driver the
     project actually needs would break the install it exists to protect.
     """
-    list_kept = _run_prune(tmp_path, str_backend)
+    list_kept = _run_prune(tmp_path, str_backend=str_backend)
     set_known_drivers = {"pyodbc", "oracledb", "psycopg", "mysql-connector-python"}
     list_drivers = [
         line for line in list_kept if line.split(">")[0].split("<")[0] in set_known_drivers
@@ -553,7 +553,7 @@ def _init_repo_with_one_commit(path_repo: Path) -> str:
     str
         Absolute path to the ``git`` executable.
     """
-    _skip_unless(_STR_GIT is not None, "git not available -- integration guard only")
+    _skip_unless(_STR_GIT is not None, str_reason="git not available -- integration guard only")
     str_git = str(_STR_GIT)
 
     path_repo.mkdir(parents=True, exist_ok=True)
@@ -674,7 +674,7 @@ def test_get_corporate_ca_never_disables_tls_verification() -> None:
     assert "enum_certificates" in str_source
 
 
-def _stub_poetry(path_dir: Path, str_export_body: str) -> dict[str, str]:
+def _stub_poetry(path_dir: Path, *, str_export_body: str) -> dict[str, str]:
     """Put a fake ``poetry`` first on PATH and return the env that selects it.
 
     ``resolve_poetry`` takes the first ``command -v poetry`` hit, so a stub earlier on PATH
@@ -709,7 +709,7 @@ def _stub_poetry(path_dir: Path, str_export_body: str) -> dict[str, str]:
 def test_export_deps_writes_the_lock_file(tmp_path: Path) -> None:
     """The happy path forwards ``--output`` and reports the artifact it wrote."""
     path_out = tmp_path / "requirements-lock.txt"
-    dict_env = _stub_poetry(tmp_path, '\tprintf "pandas==2.2.0\\n" >"$5"; exit 0')
+    dict_env = _stub_poetry(tmp_path, str_export_body='\tprintf "pandas==2.2.0\\n" >"$5"; exit 0')
     dict_env["OUTPUT_FILE"] = str(path_out)
 
     cls_result = _run("export_deps.sh", dict_env=dict_env)
@@ -727,7 +727,7 @@ def test_export_deps_reprints_what_poetry_said_on_failure(tmp_path: Path) -> Non
     wrong. The message below is the one only Poetry could have produced.
     """
     dict_env = _stub_poetry(
-        tmp_path, '\techo "The command \\"export\\" does not exist." >&2; exit 1'
+        tmp_path, str_export_body='\techo "The command \\"export\\" does not exist." >&2; exit 1'
     )
     dict_env["OUTPUT_FILE"] = str(tmp_path / "requirements-lock.txt")
 
@@ -751,7 +751,7 @@ DICT_DOCSTRING_SHAPES = {
 }
 
 
-def _seed_url_cache(path_root: Path, str_url: str, str_status: str) -> None:
+def _seed_url_cache(path_root: Path, *, str_url: str, str_status: str) -> None:
     """Seed the hook's on-disk cache so the scan resolves offline.
 
     The cache is keyed by the md5 of the URL (see ``get_cache`` in the hook), and a cache
@@ -812,7 +812,7 @@ def test_check_urls_uses_the_seeded_cache_inside_a_git_work_tree(tmp_path: Path)
     (tmp_path / "module_under_test.py").write_text(
         DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
     )
-    _seed_url_cache(tmp_path, _URL_404, "200")
+    _seed_url_cache(tmp_path, str_url=_URL_404, str_status="200")
 
     cls_result = _run_url_hook(tmp_path)
 
@@ -821,7 +821,7 @@ def test_check_urls_uses_the_seeded_cache_inside_a_git_work_tree(tmp_path: Path)
 
 @pytest.mark.parametrize("str_shape", sorted(DICT_DOCSTRING_SHAPES))
 def test_check_urls_fails_on_unreachable_url_in_every_docstring_shape(
-    tmp_path: Path, str_shape: str
+    tmp_path: Path, *, str_shape: str
 ) -> None:
     """A 404 must fail the gate whatever docstring shape holds it.
 
@@ -833,7 +833,7 @@ def test_check_urls_fails_on_unreachable_url_in_every_docstring_shape(
     (tmp_path / "module_under_test.py").write_text(
         DICT_DOCSTRING_SHAPES[str_shape], encoding="utf-8"
     )
-    _seed_url_cache(tmp_path, _URL_404, "404")
+    _seed_url_cache(tmp_path, str_url=_URL_404, str_status="404")
 
     cls_result = _run_url_hook(tmp_path)
     str_all = cls_result.stdout + cls_result.stderr
@@ -851,7 +851,7 @@ def test_check_urls_passes_when_the_same_url_resolves(tmp_path: Path) -> None:
     (tmp_path / "module_under_test.py").write_text(
         DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
     )
-    _seed_url_cache(tmp_path, _URL_404, "200")
+    _seed_url_cache(tmp_path, str_url=_URL_404, str_status="200")
 
     cls_result = _run_url_hook(tmp_path)
 
@@ -860,7 +860,7 @@ def test_check_urls_passes_when_the_same_url_resolves(tmp_path: Path) -> None:
 
 
 def _run_url_hook_with_cache_override(
-    path_root: Path, path_cache: Path
+    path_root: Path, *, path_cache: Path
 ) -> subprocess.CompletedProcess:
     """Run the check-urls hook with ``URL_CHECK_CACHE_DIR`` pointing at ``path_cache``.
 
@@ -898,10 +898,10 @@ def test_check_urls_honors_the_cache_dir_override(tmp_path: Path) -> None:
         DICT_DOCSTRING_SHAPES["one_line"], encoding="utf-8"
     )
     (tmp_path / "elsewhere_parent").mkdir()
-    _seed_url_cache(tmp_path / "elsewhere_parent", _URL_404, "200")
+    _seed_url_cache(tmp_path / "elsewhere_parent", str_url=_URL_404, str_status="200")
 
     cls_result = _run_url_hook_with_cache_override(
-        path_proj, tmp_path / "elsewhere_parent" / ".url_check_cache"
+        path_proj, path_cache=tmp_path / "elsewhere_parent" / ".url_check_cache"
     )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
@@ -920,7 +920,7 @@ def test_check_urls_warns_and_scans_when_the_cache_dir_is_uncreatable(
     path_proj = tmp_path / "proj"
     path_proj.mkdir()
 
-    cls_result = _run_url_hook_with_cache_override(path_proj, path_blocker / "cache")
+    cls_result = _run_url_hook_with_cache_override(path_proj, path_cache=path_blocker / "cache")
 
     assert "Cache dir not writable" in cls_result.stdout + cls_result.stderr
     assert cls_result.returncode == 0
@@ -935,7 +935,7 @@ def test_check_urls_ignores_a_url_outside_any_docstring(tmp_path: Path) -> None:
     (tmp_path / "module_under_test.py").write_text(
         f'STR_ENDPOINT = "{_URL_404}"  # not a docstring\n', encoding="utf-8"
     )
-    _seed_url_cache(tmp_path, _URL_404, "404")
+    _seed_url_cache(tmp_path, str_url=_URL_404, str_status="404")
 
     cls_result = _run_url_hook(tmp_path)
 
@@ -965,7 +965,7 @@ def _seed_tree(path_dir: Path) -> None:
     (path_dir / "filler.py").write_text(_STR_SIMPLE, encoding="utf-8")
 
 
-def _complexity_tree(path_root: Path, str_marker: str = "", str_tree: str = "src") -> None:
+def _complexity_tree(path_root: Path, *, str_marker: str = "", str_tree: str = "src") -> None:
     """Materialise a minimal project the complexity gate can run against.
 
     Parameters
@@ -997,7 +997,7 @@ _RE_C901_LINE = re.compile(r"^.*C901.*$", re.MULTILINE)
 
 
 def _run_complexity(
-    path_root: Path, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV
+    path_root: Path, *, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV
 ) -> subprocess.CompletedProcess:
     """Run the complexity gate against a prepared tree.
 
@@ -1103,7 +1103,7 @@ def test_complexity_gate_applies_a_different_ceiling_per_tree(tmp_path: Path) ->
 
 @pytest.mark.parametrize("str_var", ["FORCE_COLOR", "CLICOLOR_FORCE"])
 def test_complexity_gate_reaches_a_verdict_under_forced_colour(
-    tmp_path: Path, str_var: str
+    tmp_path: Path, *, str_var: str
 ) -> None:
     """Ruff's coloured output must never reach the gate's parsing.
 
@@ -1119,7 +1119,7 @@ def test_complexity_gate_reaches_a_verdict_under_forced_colour(
     """
     _complexity_tree(tmp_path)
 
-    cls_result = _run_complexity(tmp_path, {str_var: "3"})
+    cls_result = _run_complexity(tmp_path, dict_extra={str_var: "3"})
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode != 0, f"no verdict under {str_var}: {str_all}"
@@ -1137,7 +1137,7 @@ def test_complexity_gate_passes_a_hatched_tree_under_forced_colour(tmp_path: Pat
     """
     _complexity_tree(tmp_path, str_marker="  # complexity-ok: validator, branching IS the work")
 
-    cls_result = _run_complexity(tmp_path, {"FORCE_COLOR": "3"})
+    cls_result = _run_complexity(tmp_path, dict_extra={"FORCE_COLOR": "3"})
 
     assert cls_result.returncode == 0, f"hatched tree red under colour: {cls_result.stderr}"
 
@@ -1146,7 +1146,7 @@ def test_complexity_finding_carries_no_ansi_escapes(tmp_path: Path) -> None:
     """The printed finding must be plain text a human and a log can both read."""
     _complexity_tree(tmp_path)
 
-    cls_result = _run_complexity(tmp_path, {"FORCE_COLOR": "3"})
+    cls_result = _run_complexity(tmp_path, dict_extra={"FORCE_COLOR": "3"})
     str_all = cls_result.stdout + cls_result.stderr
     cls_match = _RE_C901_LINE.search(str_all)
 
@@ -1227,14 +1227,14 @@ def test_check_urls_stops_scanning_after_a_closing_delimiter(tmp_path: Path) -> 
         f'STR_ENDPOINT = "{_URL_404}"  # ordinary code, never a docstring\n',
         encoding="utf-8",
     )
-    _seed_url_cache(tmp_path, _URL_404, "404")
+    _seed_url_cache(tmp_path, str_url=_URL_404, str_status="404")
 
     cls_result = _run_url_hook(tmp_path)
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
 
 
-def _run_py_gate(str_gate: str, path_root: Path) -> subprocess.CompletedProcess:
+def _run_py_gate(str_gate: str, *, path_root: Path) -> subprocess.CompletedProcess:
     """Run a ``bin/*.py`` gate with its cwd set to a prepared tree.
 
     These gates take no arguments (``pass_filenames: false``) and discover their own targets
@@ -1263,7 +1263,7 @@ def _run_py_gate(str_gate: str, path_root: Path) -> subprocess.CompletedProcess:
     )
 
 
-def _write(path_file: Path, str_text: str) -> Path:
+def _write(path_file: Path, *, str_text: str) -> Path:
     """Write text to a path, creating parents.
 
     Parameters
@@ -1294,9 +1294,9 @@ _STR_STAMPED_READ = (
 
 def test_provenance_gate_fires_on_a_read_without_a_stamp(tmp_path: Path) -> None:
     """The should-fail control: a read with no stamp must be reported, by filename."""
-    _write(tmp_path / "src" / "loader.py", _STR_UNSTAMPED_READ)
+    _write(tmp_path / "src" / "loader.py", str_text=_STR_UNSTAMPED_READ)
 
-    cls_result = _run_py_gate("check_provenance.py", tmp_path)
+    cls_result = _run_py_gate("check_provenance.py", path_root=tmp_path)
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 1
@@ -1306,9 +1306,9 @@ def test_provenance_gate_fires_on_a_read_without_a_stamp(tmp_path: Path) -> None
 
 def test_provenance_gate_passes_a_stamped_read(tmp_path: Path) -> None:
     """The positive control — and it must say WHAT it checked, not just stay quiet."""
-    _write(tmp_path / "src" / "loader.py", _STR_STAMPED_READ)
+    _write(tmp_path / "src" / "loader.py", str_text=_STR_STAMPED_READ)
 
-    cls_result = _run_py_gate("check_provenance.py", tmp_path)
+    cls_result = _run_py_gate("check_provenance.py", path_root=tmp_path)
 
     assert cls_result.returncode == 0
     assert "file(s) checked" in cls_result.stdout
@@ -1321,7 +1321,7 @@ def test_provenance_gate_refuses_to_report_success_on_zero_discovery(tmp_path: P
     exited 0 — reporting success for having checked nothing, which is the exact failure it
     exists to catch in someone else's data.
     """
-    cls_result = _run_py_gate("check_provenance.py", tmp_path)
+    cls_result = _run_py_gate("check_provenance.py", path_root=tmp_path)
 
     assert cls_result.returncode == 1
     assert "refusing to report success" in cls_result.stdout + cls_result.stderr
@@ -1335,9 +1335,9 @@ _STR_RETURN_TYPE_MISMATCH = (
 
 def test_docstrings_gate_fires_on_a_return_type_mismatch(tmp_path: Path) -> None:
     """The should-fail control: the annotation and the docstring must agree."""
-    _write(tmp_path / "src" / "m.py", _STR_RETURN_TYPE_MISMATCH)
+    _write(tmp_path / "src" / "m.py", str_text=_STR_RETURN_TYPE_MISMATCH)
 
-    cls_result = _run_py_gate("check_docstrings.py", tmp_path)
+    cls_result = _run_py_gate("check_docstrings.py", path_root=tmp_path)
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 1
@@ -1350,7 +1350,7 @@ def test_docstrings_gate_refuses_to_report_success_on_zero_discovery(tmp_path: P
 
     Same measured defect as check_provenance: silent exit 0 over an empty glob.
     """
-    cls_result = _run_py_gate("check_docstrings.py", tmp_path)
+    cls_result = _run_py_gate("check_docstrings.py", path_root=tmp_path)
 
     assert cls_result.returncode == 1
     assert "refusing to report success" in cls_result.stdout + cls_result.stderr
@@ -1358,9 +1358,9 @@ def test_docstrings_gate_refuses_to_report_success_on_zero_discovery(tmp_path: P
 
 def test_docs_sections_gate_fires_on_a_missing_canonical_page(tmp_path: Path) -> None:
     """The should-fail control: a nav that omits the canonical pages must be reported."""
-    _write(tmp_path / "mkdocs.yml", "site_name: X\nnav:\n  - Home: index.md\n")
+    _write(tmp_path / "mkdocs.yml", str_text="site_name: X\nnav:\n  - Home: index.md\n")
 
-    cls_result = _run_py_gate("check_docs_sections.py", tmp_path)
+    cls_result = _run_py_gate("check_docs_sections.py", path_root=tmp_path)
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 1
@@ -1376,7 +1376,7 @@ def test_docs_sections_gate_announces_its_skip_rather_than_passing_silently(
     project may genuinely ship no docs site, so exit 0 is right, and the printed sentence is
     what stops that zero from being mistaken for "the docs skeleton is intact".
     """
-    cls_result = _run_py_gate("check_docs_sections.py", tmp_path)
+    cls_result = _run_py_gate("check_docs_sections.py", path_root=tmp_path)
 
     assert cls_result.returncode == 0
     assert "skipping" in cls_result.stdout
@@ -1417,10 +1417,12 @@ def _seed_widgets_module(tmp_path: Path) -> None:
     -------
     None
     """
-    _write(tmp_path / "src" / "chassis" / "__init__.py", "")
+    _write(tmp_path / "src" / "chassis" / "__init__.py", str_text="")
     _write(
         tmp_path / "src" / "chassis" / "widgets.py",
-        '"""Widgets."""\n\n\ndef build_widget() -> str:\n\t"""Build one."""\n\treturn "w"\n',
+        str_text=(
+            '"""Widgets."""\n\n\ndef build_widget() -> str:\n\t"""Build one."""\n\treturn "w"\n'
+        ),
     )
 
 
@@ -1433,7 +1435,7 @@ def test_docs_code_refs_gate_fires_on_a_symbol_that_does_not_exist(tmp_path: Pat
     _seed_widgets_module(tmp_path)
     _write(
         tmp_path / "docs" / "bad.md",
-        "# Bad\n\n```python\nfrom chassis.widgets import build_gadget\n```\n",
+        str_text="# Bad\n\n```python\nfrom chassis.widgets import build_gadget\n```\n",
     )
 
     cls_result = _run_docs_code_refs_gate(tmp_path)
@@ -1450,7 +1452,7 @@ def test_docs_code_refs_gate_passes_on_the_real_symbol(tmp_path: Path) -> None:
     _seed_widgets_module(tmp_path)
     _write(
         tmp_path / "docs" / "good.md",
-        "# Good\n\n```python\nfrom chassis.widgets import build_widget\n```\n",
+        str_text="# Good\n\n```python\nfrom chassis.widgets import build_widget\n```\n",
     )
 
     cls_result = _run_docs_code_refs_gate(tmp_path)
@@ -1463,7 +1465,7 @@ def test_docs_code_refs_gate_respects_the_escape_hatch(tmp_path: Path) -> None:
     _seed_widgets_module(tmp_path)
     _write(
         tmp_path / "docs" / "before.md",
-        "# Before example\n\n"
+        str_text="# Before example\n\n"
         "<!-- docs-refs-ok: deliberately-wrong sample, see architecture.md -->\n"
         "```python\nfrom chassis.widgets import build_gadget\n```\n",
     )
@@ -1485,7 +1487,7 @@ def test_docs_code_refs_gate_treats_zero_in_scope_candidates_as_legitimate(
     """
     _write(
         tmp_path / "docs" / "stdlib_only.md",
-        "# Stdlib\n\n```python\nfrom dataclasses import dataclass\n```\n",
+        str_text="# Stdlib\n\n```python\nfrom dataclasses import dataclass\n```\n",
     )
 
     cls_result = _run_docs_code_refs_gate(tmp_path)
@@ -1494,7 +1496,7 @@ def test_docs_code_refs_gate_treats_zero_in_scope_candidates_as_legitimate(
     assert "0 first-party candidate" in cls_result.stdout
 
 
-def _materialise_gate_tree(path_root: Path, str_script: str) -> Path:
+def _materialise_gate_tree(path_root: Path, *, str_script: str) -> Path:
     """Copy ``bin/lib`` plus one wrapper into a throwaway project tree.
 
     ⚠️ Required rather than merely tidy. These wrappers open ``main()`` with
@@ -1523,7 +1525,7 @@ def _materialise_gate_tree(path_root: Path, str_script: str) -> Path:
     return path_script
 
 
-def _shadow(path_dir: Path, str_tool: str) -> Path:
+def _shadow(path_dir: Path, *, str_tool: str) -> Path:
     """Place a stub named ``str_tool`` in ``path_dir`` that fails every invocation.
 
     Parameters
@@ -1545,7 +1547,7 @@ def _shadow(path_dir: Path, str_tool: str) -> Path:
     return path_dir
 
 
-def _stub_ok(path_dir: Path, str_tool: str) -> Path:
+def _stub_ok(path_dir: Path, *, str_tool: str) -> Path:
     """Place a stub named ``str_tool`` in ``path_dir`` that succeeds at everything.
 
     The counterpart to ``_shadow``: it makes a tool resolve as PRESENT and healthy, so a test
@@ -1587,7 +1589,7 @@ def _path_with(path_dir: Path) -> str:
     return f"{path_dir}{os.pathsep}{os.environ.get('PATH', '')}"
 
 
-def _shadow_tool_and_poetry(path_root: Path, str_tool: str) -> str:
+def _shadow_tool_and_poetry(path_root: Path, *, str_tool: str) -> str:
     """Build a ``PATH`` on which ``str_tool`` is unresolvable by EITHER branch.
 
     ⚠️ Shadowing the tool alone is not enough, and CI is where that shows. These wrappers
@@ -1613,8 +1615,8 @@ def _shadow_tool_and_poetry(path_root: Path, str_tool: str) -> str:
         A PATH value with the stub directory first.
     """
     path_stub_dir = path_root / "_stubbin"
-    _shadow(path_stub_dir, str_tool)
-    _shadow(path_stub_dir, "poetry")
+    _shadow(path_stub_dir, str_tool=str_tool)
+    _shadow(path_stub_dir, str_tool="poetry")
     return _path_with(path_stub_dir)
 
 
@@ -1637,14 +1639,14 @@ def _shadow_hadolint_completely(path_root: Path) -> str:
         A PATH value with the stub directory first.
     """
     path_stub_dir = path_root / "_stubbin"
-    _shadow(path_stub_dir, "hadolint")
-    _shadow(path_stub_dir, "docker")
-    _shadow(path_stub_dir, "poetry")
+    _shadow(path_stub_dir, str_tool="hadolint")
+    _shadow(path_stub_dir, str_tool="docker")
+    _shadow(path_stub_dir, str_tool="poetry")
     return _path_with(path_stub_dir)
 
 
 def _run_sh_gate(
-    path_script: Path, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV
+    path_script: Path, *, dict_extra: Mapping[str, str] = _MAPPING_NO_EXTRA_ENV
 ) -> subprocess.CompletedProcess:
     """Run a wrapper from inside its materialised tree.
 
@@ -1683,12 +1685,15 @@ def test_lint_actions_required_flag_makes_the_skip_impossible(tmp_path: Path) ->
     A graceful skip is right on a contributor's box and placebo in CI, which is why
     ``LINT_ACTIONS_REQUIRED=1`` exists. Without a test, that flag is a claim nobody checked.
     """
-    path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
-    _write(tmp_path / ".github" / "workflows" / "w.yaml", _STR_VALID_WORKFLOW)
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_actions.sh")
+    _write(tmp_path / ".github" / "workflows" / "w.yaml", str_text=_STR_VALID_WORKFLOW)
 
     cls_result = _run_sh_gate(
         path_script,
-        {"PATH": _shadow_tool_and_poetry(tmp_path, "actionlint"), "LINT_ACTIONS_REQUIRED": "1"},
+        dict_extra={
+            "PATH": _shadow_tool_and_poetry(tmp_path, str_tool="actionlint"),
+            "LINT_ACTIONS_REQUIRED": "1",
+        },
     )
     str_all = cls_result.stdout + cls_result.stderr
 
@@ -1698,11 +1703,11 @@ def test_lint_actions_required_flag_makes_the_skip_impossible(tmp_path: Path) ->
 
 def test_lint_actions_skips_gracefully_when_not_required(tmp_path: Path) -> None:
     """The same absent tool without the flag is a warning and a zero — the local contract."""
-    path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
-    _write(tmp_path / ".github" / "workflows" / "w.yaml", _STR_VALID_WORKFLOW)
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_actions.sh")
+    _write(tmp_path / ".github" / "workflows" / "w.yaml", str_text=_STR_VALID_WORKFLOW)
 
     cls_result = _run_sh_gate(
-        path_script, {"PATH": _shadow_tool_and_poetry(tmp_path, "actionlint")}
+        path_script, dict_extra={"PATH": _shadow_tool_and_poetry(tmp_path, str_tool="actionlint")}
     )
 
     assert cls_result.returncode == 0
@@ -1718,11 +1723,11 @@ def test_lint_actions_a_broken_binary_on_path_resolves_as_absent(tmp_path: Path)
     The poetry branch always probed ``--version``; the system branch did not, though the
     function's own comment claimed both did.
     """
-    path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
-    _write(tmp_path / ".github" / "workflows" / "w.yaml", _STR_VALID_WORKFLOW)
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_actions.sh")
+    _write(tmp_path / ".github" / "workflows" / "w.yaml", str_text=_STR_VALID_WORKFLOW)
 
     cls_result = _run_sh_gate(
-        path_script, {"PATH": _shadow_tool_and_poetry(tmp_path, "actionlint")}
+        path_script, dict_extra={"PATH": _shadow_tool_and_poetry(tmp_path, str_tool="actionlint")}
     )
     str_all = cls_result.stdout + cls_result.stderr
 
@@ -1738,15 +1743,15 @@ def test_lint_actions_fails_when_discovery_matches_zero_files(tmp_path: Path) ->
     it is checking nothing. The count must be asserted, not the exit code. The required flag
     is set so the run reaches discovery instead of stopping at the absent tool.
     """
-    path_script = _materialise_gate_tree(tmp_path, "lint_actions.sh")
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_actions.sh")
     (tmp_path / ".github" / "workflows").mkdir(parents=True)
 
     path_stub_dir = tmp_path / "_stubbin"
-    _stub_ok(path_stub_dir, "actionlint")
-    _shadow(path_stub_dir, "poetry")
+    _stub_ok(path_stub_dir, str_tool="actionlint")
+    _shadow(path_stub_dir, str_tool="poetry")
 
     cls_result = _run_sh_gate(
-        path_script, {"PATH": _path_with(path_stub_dir), "LINT_ACTIONS_REQUIRED": "1"}
+        path_script, dict_extra={"PATH": _path_with(path_stub_dir), "LINT_ACTIONS_REQUIRED": "1"}
     )
     str_all = cls_result.stdout + cls_result.stderr
 
@@ -1756,12 +1761,12 @@ def test_lint_actions_fails_when_discovery_matches_zero_files(tmp_path: Path) ->
 
 def test_lint_docker_required_flag_makes_the_skip_impossible(tmp_path: Path) -> None:
     """The same required-flag contract as lint_actions, for hadolint."""
-    path_script = _materialise_gate_tree(tmp_path, "lint_docker.sh")
-    _write(tmp_path / "Dockerfile", "FROM python:3.12-slim\nRUN echo hi\n")
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_docker.sh")
+    _write(tmp_path / "Dockerfile", str_text="FROM python:3.12-slim\nRUN echo hi\n")
 
     cls_result = _run_sh_gate(
         path_script,
-        {"PATH": _shadow_hadolint_completely(tmp_path), "LINT_DOCKER_REQUIRED": "1"},
+        dict_extra={"PATH": _shadow_hadolint_completely(tmp_path), "LINT_DOCKER_REQUIRED": "1"},
     )
 
     assert cls_result.returncode != 0
@@ -1770,9 +1775,9 @@ def test_lint_docker_required_flag_makes_the_skip_impossible(tmp_path: Path) -> 
 
 def test_lint_docker_skips_when_the_tier_ships_no_dockerfile(tmp_path: Path) -> None:
     """No Dockerfile is a legitimate skip — the tier genuinely ships none — but it must say so."""
-    path_script = _materialise_gate_tree(tmp_path, "lint_docker.sh")
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_docker.sh")
 
-    cls_result = _run_sh_gate(path_script, {"LINT_DOCKER_REQUIRED": "1"})
+    cls_result = _run_sh_gate(path_script, dict_extra={"LINT_DOCKER_REQUIRED": "1"})
 
     assert cls_result.returncode == 0
     assert "skip" in (cls_result.stdout + cls_result.stderr).lower()
@@ -1780,7 +1785,7 @@ def test_lint_docker_skips_when_the_tier_ships_no_dockerfile(tmp_path: Path) -> 
 
 def test_lint_sql_skips_when_no_sql_files_exist(tmp_path: Path) -> None:
     """A tier with no ``.sql`` is a legitimate skip, and the wrapper must announce it."""
-    path_script = _materialise_gate_tree(tmp_path, "lint_sql.sh")
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_sql.sh")
 
     cls_result = _run_sh_gate(path_script)
 
@@ -1790,8 +1795,8 @@ def test_lint_sql_skips_when_no_sql_files_exist(tmp_path: Path) -> None:
 
 def test_lint_yaml_reports_which_branch_it_took(tmp_path: Path) -> None:
     """The wrapper must never exit 0 in silence — a silent gate reads as an absent one."""
-    path_script = _materialise_gate_tree(tmp_path, "lint_yaml.sh")
-    _write(tmp_path / "conf.yaml", "a: 1\n")
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_yaml.sh")
+    _write(tmp_path / "conf.yaml", str_text="a: 1\n")
 
     cls_result = _run_sh_gate(path_script)
 
@@ -1800,7 +1805,7 @@ def test_lint_yaml_reports_which_branch_it_took(tmp_path: Path) -> None:
 
 def test_unix_filenames_gate_fires_on_a_filename_with_a_space(tmp_path: Path) -> None:
     """The should-fail control for the argv path — the one pre-commit actually uses."""
-    path_bad = _write(tmp_path / "bad name.py", "x = 1\n")
+    path_bad = _write(tmp_path / "bad name.py", str_text="x = 1\n")
 
     cls_result = subprocess.run(  # noqa: S603
         [_STR_BASH, str(_bin_script("check_unix_filenames.sh")), path_bad.name],
@@ -1817,7 +1822,7 @@ def test_unix_filenames_gate_fires_on_a_filename_with_a_space(tmp_path: Path) ->
 
 def test_unix_filenames_gate_accepts_a_conventional_filename(tmp_path: Path) -> None:
     """The positive control, so the test above is proving the rule and not a crash."""
-    path_ok = _write(tmp_path / "good_name.py", "x = 1\n")
+    path_ok = _write(tmp_path / "good_name.py", str_text="x = 1\n")
 
     cls_result = subprocess.run(  # noqa: S603
         [_STR_BASH, str(_bin_script("check_unix_filenames.sh")), path_ok.name],
@@ -1869,6 +1874,7 @@ def _fake_gh(path_root: Path) -> tuple[str, Path]:
 
 def _run_cleanup(
     path_root: Path,
+    *,
     str_run_ids: str,
     str_head_sha: str = "deadbee",
     str_rerun_exit: str = "0",
@@ -1924,7 +1930,7 @@ def test_stale_cleanup_reruns_every_stale_failure_but_never_itself(tmp_path: Pat
     tmp_path : pathlib.Path
         Pytest's per-test temporary directory.
     """
-    cls_result, str_log = _run_cleanup(tmp_path, "111 222 999")
+    cls_result, str_log = _run_cleanup(tmp_path, str_run_ids="111 222 999")
 
     assert cls_result.returncode == 0
     assert "runs/111/rerun-failed-jobs" in str_log
@@ -1945,7 +1951,7 @@ def test_stale_cleanup_scopes_its_query_to_this_workflow_and_this_head(tmp_path:
     tmp_path : pathlib.Path
         Pytest's per-test temporary directory.
     """
-    _cls_result, str_log = _run_cleanup(tmp_path, "111")
+    _cls_result, str_log = _run_cleanup(tmp_path, str_run_ids="111")
 
     assert "head_sha=deadbee" in str_log
     assert "status=failure" in str_log
@@ -1960,7 +1966,7 @@ def test_stale_cleanup_does_nothing_off_a_pull_request_event(tmp_path: Path) -> 
     tmp_path : pathlib.Path
         Pytest's per-test temporary directory.
     """
-    cls_result, str_log = _run_cleanup(tmp_path, "111", str_head_sha="")
+    cls_result, str_log = _run_cleanup(tmp_path, str_run_ids="111", str_head_sha="")
 
     assert cls_result.returncode == 0
     assert str_log == ""
@@ -1979,7 +1985,7 @@ def test_stale_cleanup_stays_green_and_warns_when_it_may_not_rerun(tmp_path: Pat
     tmp_path : pathlib.Path
         Pytest's per-test temporary directory.
     """
-    cls_result, _str_log = _run_cleanup(tmp_path, "111", str_rerun_exit="1")
+    cls_result, _str_log = _run_cleanup(tmp_path, str_run_ids="111", str_rerun_exit="1")
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 0
@@ -2000,7 +2006,7 @@ def test_stale_cleanup_never_reports_clean_over_a_listing_that_failed(tmp_path: 
     tmp_path : pathlib.Path
         Pytest's per-test temporary directory.
     """
-    cls_result, _str_log = _run_cleanup(tmp_path, "", str_list_exit="1")
+    cls_result, _str_log = _run_cleanup(tmp_path, str_run_ids="", str_list_exit="1")
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 0
@@ -2060,11 +2066,13 @@ def test_deps_gate_fires_on_an_import_that_is_no_declared_dependency(tmp_path: P
     tmp_path : pathlib.Path
         Pytest's per-test temporary directory.
     """
-    path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
-    _write(tmp_path / "pyproject.toml", _STR_EMPTY_MANIFEST)
-    _write(tmp_path / "src" / "probe.py", _STR_UNDECLARED_IMPORT)
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_deps.sh")
+    _write(tmp_path / "pyproject.toml", str_text=_STR_EMPTY_MANIFEST)
+    _write(tmp_path / "src" / "probe.py", str_text=_STR_UNDECLARED_IMPORT)
 
-    cls_result = _run_sh_gate(path_script, {"PATH": _poetry_forwarding_deptry(tmp_path / "_stub")})
+    cls_result = _run_sh_gate(
+        path_script, dict_extra={"PATH": _poetry_forwarding_deptry(tmp_path / "_stub")}
+    )
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode != 0, f"the undeclared import passed the gate: {str_all}"
@@ -2084,14 +2092,16 @@ def test_deps_gate_passes_when_the_same_import_is_declared(tmp_path: Path) -> No
     tmp_path : pathlib.Path
         Pytest's per-test temporary directory.
     """
-    path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_deps.sh")
     _write(
         tmp_path / "pyproject.toml",
-        _STR_EMPTY_MANIFEST.replace("dependencies = []", 'dependencies = ["pandas"]'),
+        str_text=_STR_EMPTY_MANIFEST.replace("dependencies = []", 'dependencies = ["pandas"]'),
     )
-    _write(tmp_path / "src" / "probe.py", _STR_UNDECLARED_IMPORT)
+    _write(tmp_path / "src" / "probe.py", str_text=_STR_UNDECLARED_IMPORT)
 
-    cls_result = _run_sh_gate(path_script, {"PATH": _poetry_forwarding_deptry(tmp_path / "_stub")})
+    cls_result = _run_sh_gate(
+        path_script, dict_extra={"PATH": _poetry_forwarding_deptry(tmp_path / "_stub")}
+    )
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 0, f"a declared dependency was reported anyway: {str_all}"
@@ -2110,11 +2120,13 @@ def test_deps_gate_fails_when_discovery_matches_zero_python_files(tmp_path: Path
     tmp_path : pathlib.Path
         Pytest's per-test temporary directory.
     """
-    path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
-    _write(tmp_path / "pyproject.toml", _STR_EMPTY_MANIFEST)
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_deps.sh")
+    _write(tmp_path / "pyproject.toml", str_text=_STR_EMPTY_MANIFEST)
     (tmp_path / "src").mkdir(parents=True, exist_ok=True)
 
-    cls_result = _run_sh_gate(path_script, {"PATH": _poetry_forwarding_deptry(tmp_path / "_stub")})
+    cls_result = _run_sh_gate(
+        path_script, dict_extra={"PATH": _poetry_forwarding_deptry(tmp_path / "_stub")}
+    )
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode != 0, f"an empty tree reported success: {str_all}"
@@ -2140,11 +2152,13 @@ def test_deps_gate_hard_fails_when_deptry_is_unresolvable_instead_of_skipping(
     tmp_path : pathlib.Path
         Pytest's per-test temporary directory.
     """
-    path_script = _materialise_gate_tree(tmp_path, "lint_deps.sh")
-    _write(tmp_path / "pyproject.toml", _STR_EMPTY_MANIFEST)
-    _write(tmp_path / "src" / "probe.py", _STR_UNDECLARED_IMPORT)
+    path_script = _materialise_gate_tree(tmp_path, str_script="lint_deps.sh")
+    _write(tmp_path / "pyproject.toml", str_text=_STR_EMPTY_MANIFEST)
+    _write(tmp_path / "src" / "probe.py", str_text=_STR_UNDECLARED_IMPORT)
 
-    cls_result = _run_sh_gate(path_script, {"PATH": _shadow_tool_and_poetry(tmp_path, "deptry")})
+    cls_result = _run_sh_gate(
+        path_script, dict_extra={"PATH": _shadow_tool_and_poetry(tmp_path, str_tool="deptry")}
+    )
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode != 0, f"an absent gate reported success: {str_all}"
@@ -2196,13 +2210,17 @@ def _seed_fake_blueprintx_checkout(path_root: Path) -> None:
     """
     _write(
         path_root / "bin" / "lib" / "scaffold_python_templates.sh",
-        '[ "$1" = --list-copies ] || exit 1\n'
+        str_text='[ "$1" = --list-copies ] || exit 1\n'
         "printf 'COPY\\tfile\\ttemplates/python-common/.codespellrc\\t.codespellrc\\n'\n"
         "printf 'COPY\\tdir\\ttemplates/python-common/bin\\tbin\\n'\n",
     )
-    _write(path_root / "templates" / "python-common" / ".codespellrc", "ignore-words-list =\n")
     _write(
-        path_root / "templates" / "python-common" / "bin" / "check_complexity.sh", "#!/bin/bash\n"
+        path_root / "templates" / "python-common" / ".codespellrc",
+        str_text="ignore-words-list =\n",
+    )
+    _write(
+        path_root / "templates" / "python-common" / "bin" / "check_complexity.sh",
+        str_text="#!/bin/bash\n",
     )
 
 
@@ -2242,8 +2260,8 @@ def test_template_drift_reports_a_file_the_project_never_received(tmp_path: Path
     path_blueprintx = tmp_path / "blueprintx"
     _seed_fake_blueprintx_checkout(path_blueprintx)
     path_project = tmp_path / "project"
-    _write(path_project / ".blueprintx-provenance.yaml", "tier: mvc-service-native-db\n")
-    _write(path_project / "bin" / "check_complexity.sh", "#!/bin/bash\n")
+    _write(path_project / ".blueprintx-provenance.yaml", str_text="tier: mvc-service-native-db\n")
+    _write(path_project / "bin" / "check_complexity.sh", str_text="#!/bin/bash\n")
 
     cls_result = _run_template_drift(
         ["--root", str(path_project), "--blueprintx-root", str(path_blueprintx)]
@@ -2265,9 +2283,9 @@ def test_template_drift_clean_when_every_required_path_is_present(tmp_path: Path
     path_blueprintx = tmp_path / "blueprintx"
     _seed_fake_blueprintx_checkout(path_blueprintx)
     path_project = tmp_path / "project"
-    _write(path_project / ".blueprintx-provenance.yaml", "tier: mvc-service-native-db\n")
-    _write(path_project / ".codespellrc", "ignore-words-list =\n")
-    _write(path_project / "bin" / "check_complexity.sh", "#!/bin/bash\n")
+    _write(path_project / ".blueprintx-provenance.yaml", str_text="tier: mvc-service-native-db\n")
+    _write(path_project / ".codespellrc", str_text="ignore-words-list =\n")
+    _write(path_project / "bin" / "check_complexity.sh", str_text="#!/bin/bash\n")
 
     cls_result = _run_template_drift(
         ["--root", str(path_project), "--blueprintx-root", str(path_blueprintx)]
@@ -2295,19 +2313,19 @@ def _materialise_run_sh(path_root: Path) -> Path:
     pathlib.Path
         Path to the copied ``run.sh`` inside the throwaway tree.
     """
-    path_script = _materialise_gate_tree(path_root, "run.sh")
-    _write(path_root / "pyproject.toml", "[tool.poetry]\n")
-    _write(path_root / "src" / "main.py", '"""Entrypoint stub."""\n')
+    path_script = _materialise_gate_tree(path_root, str_script="run.sh")
+    _write(path_root / "pyproject.toml", str_text="[tool.poetry]\n")
+    _write(path_root / "src" / "main.py", str_text='"""Entrypoint stub."""\n')
 
     path_python = path_root / ".venv" / "bin" / "python"
-    _write(path_python, "#!/bin/sh\nprintf 'ARG:%s\\n' \"$@\"\n")
+    _write(path_python, str_text="#!/bin/sh\nprintf 'ARG:%s\\n' \"$@\"\n")
     path_python.chmod(0o755)
     float_future = time.time() + 60
     os.utime(path_python, (float_future, float_future))
     return path_script
 
 
-def _run_run_sh(path_script: Path, list_args: list[str]) -> subprocess.CompletedProcess[str]:
+def _run_run_sh(path_script: Path, *, list_args: list[str]) -> subprocess.CompletedProcess[str]:
     """Invoke the materialised ``run.sh`` with extra CLI arguments.
 
     Parameters
@@ -2349,7 +2367,7 @@ def test_run_forwards_an_argument_to_the_entrypoint(tmp_path: Path) -> None:
     """
     path_script = _materialise_run_sh(tmp_path)
 
-    cls_result = _run_run_sh(path_script, ["reconcile", "two words"])
+    cls_result = _run_run_sh(path_script, list_args=["reconcile", "two words"])
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 0, f"run.sh did not exit cleanly: {str_all}"
@@ -2368,7 +2386,7 @@ def test_run_with_no_extra_argument_still_calls_the_entrypoint(tmp_path: Path) -
     """Forwarding ``"$@"`` must not break the existing zero-argument invocation."""
     path_script = _materialise_run_sh(tmp_path)
 
-    cls_result = _run_run_sh(path_script, [])
+    cls_result = _run_run_sh(path_script, list_args=[])
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 0, f"run.sh did not exit cleanly: {str_all}"
@@ -2378,7 +2396,7 @@ def test_run_with_no_extra_argument_still_calls_the_entrypoint(tmp_path: Path) -
 _TUPLE_VENV_SH_TOOLS = ("basename", "cat", "cp", "date", "dirname", "grep", "head", "mkdir", "rm")
 
 
-def _link_tool(path_dir: Path, str_tool: str) -> None:
+def _link_tool(path_dir: Path, *, str_tool: str) -> None:
     """Symlink one host tool into a directory so a hermetic ``PATH`` can still resolve it.
 
     Parameters
@@ -2410,11 +2428,11 @@ def _stage_tools_dir(path_root: Path) -> Path:
     """
     path_tools = path_root / "_tools"
     path_tools.mkdir(parents=True)
-    tuple(map(lambda str_tool: _link_tool(path_tools, str_tool), _TUPLE_VENV_SH_TOOLS))
+    tuple(map(lambda str_tool: _link_tool(path_tools, str_tool=str_tool), _TUPLE_VENV_SH_TOOLS))
     return path_tools
 
 
-def _write_stub_python(path_dir: Path, int_in_venv: int) -> Path:
+def _write_stub_python(path_dir: Path, *, int_in_venv: int) -> Path:
     """Write a ``python3`` stub that logs its argv and answers only what ``venv.sh`` asks first.
 
     ``--version`` answers, ``-c`` exits ``int_in_venv`` (0 means "I am a venv interpreter",
@@ -2436,7 +2454,7 @@ def _write_stub_python(path_dir: Path, int_in_venv: int) -> Path:
     path_log = path_dir / "calls.log"
     path_stub = _write(
         path_dir / "python3",
-        f'#!{_STR_BASH}\nprintf "%s\\n" "$*" >>"{path_log}"\ncase "$1" in\n'
+        str_text=f'#!{_STR_BASH}\nprintf "%s\\n" "$*" >>"{path_log}"\ncase "$1" in\n'
         f'--version) echo "Python 3.12.2" ;;\n-c) exit {int_in_venv} ;;\n'
         '-m) [ "$2" = venv ] && mkdir -p "$3/bin" || exit 1 ;;\n*) exit 1 ;;\nesac\n',
     )
@@ -2446,7 +2464,7 @@ def _write_stub_python(path_dir: Path, int_in_venv: int) -> Path:
 
 
 def _run_venv_sh(
-    path_script: Path, list_path_dirs: list[Path], dict_extra_env: Mapping[str, str]
+    path_script: Path, *, list_path_dirs: list[Path], dict_extra_env: Mapping[str, str]
 ) -> subprocess.CompletedProcess[str]:
     """Run ``venv.sh`` with a constructed environment so the host's Python never leaks in.
 
@@ -2493,7 +2511,7 @@ def _stage_venv_project(path_root: Path) -> tuple[Path, Path, Path]:
         The copied ``venv.sh``, the tools directory and the ``.venv/bin`` directory path (not
         yet created).
     """
-    path_script = _materialise_gate_tree(path_root, "venv.sh")
+    path_script = _materialise_gate_tree(path_root, str_script="venv.sh")
     return path_script, _stage_tools_dir(path_root), path_root / ".venv" / "bin"
 
 
@@ -2516,15 +2534,15 @@ def tuple_inside_venv_with_base(
     path_root = tmp_path_factory.mktemp("inside_venv_with_base")
     path_script, path_tools, path_venv_bin = _stage_venv_project(path_root)
     path_venv_bin.mkdir(parents=True)
-    _write(path_root / ".venv" / "sentinel.txt", "keep me\n")
-    path_venv_log = _write_stub_python(path_venv_bin, 0)
+    _write(path_root / ".venv" / "sentinel.txt", str_text="keep me\n")
+    path_venv_log = _write_stub_python(path_venv_bin, int_in_venv=0)
     path_base = path_root / "_base"
     path_base.mkdir()
-    path_base_log = _write_stub_python(path_base, 1)
+    path_base_log = _write_stub_python(path_base, int_in_venv=1)
     cls_result = _run_venv_sh(
         path_script,
-        [path_venv_bin, path_base, path_tools],
-        {"VIRTUAL_ENV": str(path_root / ".venv")},
+        list_path_dirs=[path_venv_bin, path_base, path_tools],
+        dict_extra_env={"VIRTUAL_ENV": str(path_root / ".venv")},
     )
     return cls_result, path_root, path_venv_log, path_base_log
 
@@ -2548,10 +2566,12 @@ def tuple_inside_venv_no_base(
     path_root = tmp_path_factory.mktemp("inside_venv_no_base")
     path_script, path_tools, path_venv_bin = _stage_venv_project(path_root)
     path_venv_bin.mkdir(parents=True)
-    _write(path_root / ".venv" / "sentinel.txt", "keep me\n")
-    path_venv_log = _write_stub_python(path_venv_bin, 0)
+    _write(path_root / ".venv" / "sentinel.txt", str_text="keep me\n")
+    path_venv_log = _write_stub_python(path_venv_bin, int_in_venv=0)
     cls_result = _run_venv_sh(
-        path_script, [path_venv_bin, path_tools], {"VIRTUAL_ENV": str(path_root / ".venv")}
+        path_script,
+        list_path_dirs=[path_venv_bin, path_tools],
+        dict_extra_env={"VIRTUAL_ENV": str(path_root / ".venv")},
     )
     return cls_result, path_root, path_venv_log
 
@@ -2576,8 +2596,10 @@ def tuple_fresh_clone(
     path_script, path_tools, _ = _stage_venv_project(path_root)
     path_base = path_root / "_base"
     path_base.mkdir()
-    path_base_log = _write_stub_python(path_base, 1)
-    cls_result = _run_venv_sh(path_script, [path_base, path_tools], {})
+    path_base_log = _write_stub_python(path_base, int_in_venv=1)
+    cls_result = _run_venv_sh(
+        path_script, list_path_dirs=[path_base, path_tools], dict_extra_env={}
+    )
     return cls_result, path_root, path_base_log
 
 
@@ -2673,7 +2695,7 @@ def test_venv_sh_on_a_fresh_clone_builds_the_venv_with_the_base_interpreter(
 
 def test_ensure_env_without_an_example_is_an_info_no_op(tmp_path: Path) -> None:
     """A library tier ships no ``.env.example``: ``ensure_env`` exits 0 and prints no failure."""
-    path_script = _materialise_gate_tree(tmp_path, "ensure_env.sh")
+    path_script = _materialise_gate_tree(tmp_path, str_script="ensure_env.sh")
 
     cls_result = subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script)],
@@ -2693,8 +2715,8 @@ def test_ensure_env_without_an_example_is_an_info_no_op(tmp_path: Path) -> None:
 
 def test_ensure_env_with_an_example_still_seeds_the_env_file(tmp_path: Path) -> None:
     """The no-op for a missing template must not weaken the seeding it exists for."""
-    path_script = _materialise_gate_tree(tmp_path, "ensure_env.sh")
-    _write(tmp_path / ".env.example", "KEY=value\n")
+    path_script = _materialise_gate_tree(tmp_path, str_script="ensure_env.sh")
+    _write(tmp_path / ".env.example", str_text="KEY=value\n")
 
     subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script)],
@@ -2759,7 +2781,7 @@ def test_check_urls_scans_every_filename_passed_not_only_the_first(tmp_path: Pat
 
 
 def _run_url_hook_with_stub_curl(
-    path_root: Path, path_stub_dir: Path, list_args: list[str], dict_env: dict[str, str]
+    path_root: Path, *, path_stub_dir: Path, list_args: list[str], dict_env: dict[str, str]
 ) -> subprocess.CompletedProcess:
     """Run the check-urls hook with a stubbed ``curl`` at the head of ``PATH``.
 
@@ -2798,13 +2820,15 @@ def test_check_urls_cache_defaults_to_the_git_common_dir(tmp_path: Path) -> None
     _stub_curl_returning_404(path_bin)
     (tmp_path / "mod.py").write_text(f'"""See {_URL_404}."""\n', encoding="utf-8")
 
-    _run_url_hook_with_stub_curl(tmp_path, path_bin, ["mod.py"], {})
+    _run_url_hook_with_stub_curl(
+        tmp_path, path_stub_dir=path_bin, list_args=["mod.py"], dict_env={}
+    )
 
     assert list((tmp_path / ".git" / "url_check_cache").iterdir())
 
 
 @pytest.mark.parametrize("str_status", ["000", "403", "408", "429", "503"])
-def test_check_urls_does_not_cache_an_unstable_answer(tmp_path: Path, str_status: str) -> None:
+def test_check_urls_does_not_cache_an_unstable_answer(tmp_path: Path, *, str_status: str) -> None:
     """No HTTP answer, a bot block, a timeout, a rate limit or a 5xx must never be cached."""
     path_bin = tmp_path / "stubs"
     path_bin.mkdir()
@@ -2816,7 +2840,10 @@ def test_check_urls_does_not_cache_an_unstable_answer(tmp_path: Path, str_status
     path_cache = tmp_path / "cache"
 
     _run_url_hook_with_stub_curl(
-        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+        tmp_path,
+        path_stub_dir=path_bin,
+        list_args=["mod.py"],
+        dict_env={"URL_CHECK_CACHE_DIR": str(path_cache)},
     )
 
     assert not list(path_cache.iterdir())
@@ -2824,7 +2851,7 @@ def test_check_urls_does_not_cache_an_unstable_answer(tmp_path: Path, str_status
 
 @pytest.mark.parametrize("str_status", ["403", "408", "429"])
 def test_check_urls_reprobes_an_unstable_answer_already_cached(
-    tmp_path: Path, str_status: str
+    tmp_path: Path, *, str_status: str
 ) -> None:
     """An unstable answer cached by an older script is a miss: the URL is probed again."""
     path_bin = tmp_path / "stubs"
@@ -2838,7 +2865,10 @@ def test_check_urls_reprobes_an_unstable_answer_already_cached(
     (path_cache / str_key).write_text(f"{str_status}\n", encoding="utf-8")
 
     cls_result = _run_url_hook_with_stub_curl(
-        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+        tmp_path,
+        path_stub_dir=path_bin,
+        list_args=["mod.py"],
+        dict_env={"URL_CHECK_CACHE_DIR": str(path_cache)},
     )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
@@ -2846,7 +2876,9 @@ def test_check_urls_reprobes_an_unstable_answer_already_cached(
 
 
 @pytest.mark.parametrize("str_punct", [".", ":", "..", "?"])
-def test_check_urls_drops_sentence_punctuation_after_a_url(tmp_path: Path, str_punct: str) -> None:
+def test_check_urls_drops_sentence_punctuation_after_a_url(
+    tmp_path: Path, *, str_punct: str
+) -> None:
     """A URL ending a sentence is probed and cached without the trailing punctuation."""
     path_bin = tmp_path / "stubs"
     path_bin.mkdir()
@@ -2856,7 +2888,10 @@ def test_check_urls_drops_sentence_punctuation_after_a_url(tmp_path: Path, str_p
     path_cache = tmp_path / "cache"
 
     cls_result = _run_url_hook_with_stub_curl(
-        tmp_path, path_bin, ["mod.py"], {"URL_CHECK_CACHE_DIR": str(path_cache)}
+        tmp_path,
+        path_stub_dir=path_bin,
+        list_args=["mod.py"],
+        dict_env={"URL_CHECK_CACHE_DIR": str(path_cache)},
     )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
@@ -2867,13 +2902,16 @@ def test_check_urls_drops_sentence_punctuation_after_a_url(tmp_path: Path, str_p
 def test_check_urls_fails_on_a_path_that_does_not_exist(tmp_path: Path) -> None:
     """A typo'd explicit path must fail, never report ``All docstring URLs are reachable``."""
     cls_result = _run_url_hook_with_stub_curl(
-        tmp_path, tmp_path, ["no_such_dir"], {"URL_CHECK_CACHE_DIR": str(tmp_path / "cache")}
+        tmp_path,
+        path_stub_dir=tmp_path,
+        list_args=["no_such_dir"],
+        dict_env={"URL_CHECK_CACHE_DIR": str(tmp_path / "cache")},
     )
 
     assert cls_result.returncode != 0, cls_result.stdout + cls_result.stderr
 
 
-def _stage_poetry_exec(path_root: Path, str_missing_output: str) -> tuple[Path, dict[str, str]]:
+def _stage_poetry_exec(path_root: Path, *, str_missing_output: str) -> tuple[Path, dict[str, str]]:
     """Copy ``poetry_exec.sh`` beside a stub ``poetry`` whose dep check reports a given state.
 
     Parameters
@@ -2913,7 +2951,7 @@ def _stage_poetry_exec(path_root: Path, str_missing_output: str) -> tuple[Path, 
 
 
 def _run_staged_poetry_exec(
-    path_script: Path, dict_env: dict[str, str]
+    path_script: Path, *, dict_env: dict[str, str]
 ) -> subprocess.CompletedProcess:
     """Run the staged ``poetry_exec.sh run python gate.py`` and capture its output.
 
@@ -2941,9 +2979,11 @@ def _run_staged_poetry_exec(
 
 def test_poetry_run_with_missing_declared_deps_fails_with_one_install_line(tmp_path: Path) -> None:
     """A venv lacking declared packages must not reach the gate and die in a traceback."""
-    path_script, dict_env = _stage_poetry_exec(tmp_path, "missing: pyyaml\nmissing: defusedxml\n")
+    path_script, dict_env = _stage_poetry_exec(
+        tmp_path, str_missing_output="missing: pyyaml\nmissing: defusedxml\n"
+    )
 
-    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+    cls_run = _run_staged_poetry_exec(path_script, dict_env=dict_env)
 
     assert cls_run.returncode != 0, cls_run.stdout
     assert "RAN" not in cls_run.stdout
@@ -2953,10 +2993,10 @@ def test_poetry_run_with_missing_declared_deps_fails_with_one_install_line(tmp_p
 
 def test_poetry_run_with_failing_dependency_check_explains_itself(tmp_path: Path) -> None:
     """A checker that crashes must stop the run with a line saying so, never a bare abort."""
-    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+    path_script, dict_env = _stage_poetry_exec(tmp_path, str_missing_output="")
     dict_env["CHECK_EXIT"] = "1"
 
-    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+    cls_run = _run_staged_poetry_exec(path_script, dict_env=dict_env)
 
     assert cls_run.returncode != 0, cls_run.stdout
     assert "RAN" not in cls_run.stdout
@@ -2965,9 +3005,11 @@ def test_poetry_run_with_failing_dependency_check_explains_itself(tmp_path: Path
 
 def test_poetry_run_ignores_poetry_notices_on_stdout(tmp_path: Path) -> None:
     """A notice Poetry prints to stdout is not a dependency name and must not block the run."""
-    path_script, dict_env = _stage_poetry_exec(tmp_path, "Creating virtualenv demo in /x\n")
+    path_script, dict_env = _stage_poetry_exec(
+        tmp_path, str_missing_output="Creating virtualenv demo in /x\n"
+    )
 
-    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+    cls_run = _run_staged_poetry_exec(path_script, dict_env=dict_env)
 
     assert cls_run.returncode == 0, cls_run.stderr
     assert "RAN" in cls_run.stdout
@@ -2975,14 +3017,14 @@ def test_poetry_run_ignores_poetry_notices_on_stdout(tmp_path: Path) -> None:
 
 def test_poetry_run_checks_with_the_project_venv_interpreter_not_poetry(tmp_path: Path) -> None:
     """The check must not pay a second Poetry start-up when the in-project venv exists."""
-    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+    path_script, dict_env = _stage_poetry_exec(tmp_path, str_missing_output="")
     dict_env["CHECK_EXIT"] = "9"
     path_python = tmp_path / ".venv" / "bin" / "python"
     path_python.parent.mkdir(parents=True)
     path_python.write_text("#!/bin/bash\necho 'missing: pyyaml'\n", encoding="utf-8")
     path_python.chmod(0o755)
 
-    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+    cls_run = _run_staged_poetry_exec(path_script, dict_env=dict_env)
 
     assert "pyyaml" in cls_run.stderr, cls_run.stderr
     assert "Could not check" not in cls_run.stderr
@@ -2991,9 +3033,9 @@ def test_poetry_run_checks_with_the_project_venv_interpreter_not_poetry(tmp_path
 
 def test_poetry_run_with_complete_venv_still_runs(tmp_path: Path) -> None:
     """The guard must be invisible when nothing is missing."""
-    path_script, dict_env = _stage_poetry_exec(tmp_path, "")
+    path_script, dict_env = _stage_poetry_exec(tmp_path, str_missing_output="")
 
-    cls_run = _run_staged_poetry_exec(path_script, dict_env)
+    cls_run = _run_staged_poetry_exec(path_script, dict_env=dict_env)
 
     assert cls_run.returncode == 0, cls_run.stderr
     assert "RAN" in cls_run.stdout
@@ -3004,6 +3046,7 @@ _STR_OPEN_TRACKERS_NEWEST_FIRST = '[{"number": 9}, {"number": 7}]'
 
 def _run_track_mode(
     path_root: Path,
+    *,
     str_report: str,
     str_open: str,
     str_fail_close: str = "",
@@ -3029,7 +3072,9 @@ def _run_track_mode(
     tuple[subprocess.CompletedProcess[str], list[str]]
         The finished process and one line per ``gh`` invocation, ``issue list`` excluded.
     """
-    _skip_unless(shutil.which("jq") is not None, "jq is needed to apply the script's --jq")
+    _skip_unless(
+        shutil.which("jq") is not None, str_reason="jq is needed to apply the script's --jq"
+    )
     path_bin = path_root / "stubs"
     path_bin.mkdir()
     path_log = path_root / "gh.log"
@@ -3065,7 +3110,7 @@ def _run_track_mode(
 def test_track_mode_opens_a_tracker_for_a_dead_url(tmp_path: Path) -> None:
     """A failing scan with no open tracker creates one; runs in any generated project."""
     cls_result, list_calls = _run_track_mode(
-        tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]"
+        tmp_path, str_report="URL issue (404) in a.py (line 1): u\n", str_open="[]"
     )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
@@ -3082,7 +3127,9 @@ def test_track_mode_opens_a_tracker_for_a_dead_url(tmp_path: Path) -> None:
 
 def test_track_mode_lists_only_open_docstring_url_trackers(tmp_path: Path) -> None:
     """The tracker lookup must carry the label and state filters, and must happen."""
-    cls_result, _ = _run_track_mode(tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]")
+    cls_result, _ = _run_track_mode(
+        tmp_path, str_report="URL issue (404) in a.py (line 1): u\n", str_open="[]"
+    )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
     list_lines = (tmp_path / "gh.log").read_text(encoding="utf-8").splitlines()
@@ -3096,7 +3143,9 @@ def test_docstring_urls_workflow_calls_track_mode_on_the_scan_report() -> None:
     path_workflow = (
         Path(__file__).resolve().parents[2] / ".github" / "workflows" / "docstring-urls.yml"
     )
-    _skip_unless(path_workflow.is_file(), "docstring-urls.yml ships only with a GitHub remote")
+    _skip_unless(
+        path_workflow.is_file(), str_reason="docstring-urls.yml ships only with a GitHub remote"
+    )
     dict_workflow = yaml.safe_load(path_workflow.read_text(encoding="utf-8"))
     dict_steps = {
         dict_step["name"]: dict_step
@@ -3116,7 +3165,10 @@ def test_docstring_urls_workflow_calls_track_mode_on_the_scan_report() -> None:
 def test_track_mode_does_not_open_a_duplicate_when_listing_trackers_fails(tmp_path: Path) -> None:
     """A failed tracker lookup must fail the step, never fall through to ``issue create``."""
     cls_result, list_calls = _run_track_mode(
-        tmp_path, "URL issue (404) in a.py (line 1): u\n", "[]", bool_fail_list=True
+        tmp_path,
+        str_report="URL issue (404) in a.py (line 1): u\n",
+        str_open="[]",
+        bool_fail_list=True,
     )
 
     assert cls_result.returncode != 0
@@ -3125,7 +3177,9 @@ def test_track_mode_does_not_open_a_duplicate_when_listing_trackers_fails(tmp_pa
 
 def test_track_mode_fails_when_the_scan_gave_no_verdict(tmp_path: Path) -> None:
     """A report with neither a failure nor the success line must fail, never pass silently."""
-    cls_result, list_calls = _run_track_mode(tmp_path, "curl: not found\n", "[]")
+    cls_result, list_calls = _run_track_mode(
+        tmp_path, str_report="curl: not found\n", str_open="[]"
+    )
 
     assert cls_result.returncode != 0
     assert "produced no verdict" in cls_result.stdout
@@ -3135,7 +3189,9 @@ def test_track_mode_fails_when_the_scan_gave_no_verdict(tmp_path: Path) -> None:
 def test_track_mode_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None:
     """A clean scan must close every open tracking issue and do nothing else."""
     cls_result, list_calls = _run_track_mode(
-        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+        tmp_path,
+        str_report="All docstring URLs are reachable\n",
+        str_open=_STR_OPEN_TRACKERS_NEWEST_FIRST,
     )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
@@ -3148,7 +3204,10 @@ def test_track_mode_closes_the_tracker_once_urls_recover(tmp_path: Path) -> None
 def test_track_mode_keeps_closing_after_one_close_fails(tmp_path: Path) -> None:
     """One failed close must not abort the step or skip the remaining trackers."""
     cls_result, list_calls = _run_track_mode(
-        tmp_path, "All docstring URLs are reachable\n", _STR_OPEN_TRACKERS_NEWEST_FIRST, "7"
+        tmp_path,
+        str_report="All docstring URLs are reachable\n",
+        str_open=_STR_OPEN_TRACKERS_NEWEST_FIRST,
+        str_fail_close="7",
     )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
@@ -3158,7 +3217,9 @@ def test_track_mode_keeps_closing_after_one_close_fails(tmp_path: Path) -> None:
 def test_track_mode_dedupes_to_one_open_tracker(tmp_path: Path) -> None:
     """With duplicates open, a failing scan updates the oldest and closes the rest."""
     cls_result, list_calls = _run_track_mode(
-        tmp_path, "URL issue (404) in a.py (line 1): u\n", _STR_OPEN_TRACKERS_NEWEST_FIRST
+        tmp_path,
+        str_report="URL issue (404) in a.py (line 1): u\n",
+        str_open=_STR_OPEN_TRACKERS_NEWEST_FIRST,
     )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
@@ -3172,9 +3233,9 @@ def test_track_mode_dedupe_survives_a_failed_close(tmp_path: Path) -> None:
     """A failed duplicate close must not abort the step or skip later duplicates."""
     cls_result, list_calls = _run_track_mode(
         tmp_path,
-        "URL issue (404) in a.py (line 1): u\n",
-        '[{"number": 11}, {"number": 9}, {"number": 7}]',
-        "9",
+        str_report="URL issue (404) in a.py (line 1): u\n",
+        str_open='[{"number": 11}, {"number": 9}, {"number": 7}]',
+        str_fail_close="9",
     )
 
     assert cls_result.returncode == 0, cls_result.stdout + cls_result.stderr
@@ -3184,7 +3245,7 @@ def test_track_mode_dedupe_survives_a_failed_close(tmp_path: Path) -> None:
 def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
     """The hook must filter on ``.py`` like the script, not on ``types: python``."""
     path_config = Path(__file__).resolve().parents[2] / ".pre-commit-config.yaml"
-    _skip_unless(path_config.is_file(), "no pre-commit config in this tree")
+    _skip_unless(path_config.is_file(), str_reason="no pre-commit config in this tree")
     dict_config = yaml.safe_load(path_config.read_text(encoding="utf-8"))
     list_hooks = [
         dict_hook

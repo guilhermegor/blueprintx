@@ -8,7 +8,7 @@ FLOAT_RENAME_SIMILARITY = 0.8
 FLOAT_BODY_SIMILARITY = 0.6
 
 
-def _ratio(str_a: str, str_b: str) -> float:
+def _ratio(str_a: str, *, str_b: str) -> float:
     """Return the ``SequenceMatcher`` ratio of two strings.
 
     Parameters
@@ -46,7 +46,7 @@ def _statements(cls_func: ast.FunctionDef | ast.AsyncFunctionDef) -> list:
     return [ast.unparse(cls_stmt) for cls_stmt in list_body]
 
 
-def rename_pairs(dict_removed: dict, dict_added: dict) -> dict:
+def rename_pairs(dict_removed: dict, *, dict_added: dict) -> dict:
     """Pair each removed test with the added one that is a plausible rename of it.
 
     Parameters
@@ -68,7 +68,7 @@ def rename_pairs(dict_removed: dict, dict_added: dict) -> dict:
         str_n: _statements(cls_node) for str_n, cls_node in (dict_removed | dict_added).items()
     }
     list_scored = sorted(
-        (-_ratio(str_old, str_new), str_old, str_new)
+        (-_ratio(str_old, str_b=str_new), str_old, str_new)
         for str_old in dict_removed
         for str_new in dict_added
     )
@@ -90,7 +90,7 @@ def rename_pairs(dict_removed: dict, dict_added: dict) -> dict:
     return dict_pairs
 
 
-def deleted_message(str_shown: str, str_name: str, list_unpaired_added: list) -> str:
+def deleted_message(str_shown: str, *, str_name: str, list_unpaired_added: list) -> str:
     """Return the ``deleted`` finding, naming a likely rename target when one exists.
 
     Parameters

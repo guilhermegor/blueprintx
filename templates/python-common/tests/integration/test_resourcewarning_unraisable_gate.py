@@ -50,7 +50,7 @@ def test_stays_clean():
 """
 
 
-def _run_probe(path_tmp: Path, str_module_source: str) -> subprocess.CompletedProcess[str]:
+def _run_probe(path_tmp: Path, *, str_module_source: str) -> subprocess.CompletedProcess[str]:
     """Run one throwaway test module under the shipped ``pytest.ini`` filters.
 
     Parameters
@@ -83,7 +83,7 @@ def test_resourcewarning_gate_fails_on_del_leak(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         Pytest's per-test scratch directory (isolates the throwaway module).
     """
-    cls_result = _run_probe(tmp_path, _STR_LEAKY_MODULE)
+    cls_result = _run_probe(tmp_path, str_module_source=_STR_LEAKY_MODULE)
     assert cls_result.returncode != 0
     assert "PytestUnraisableExceptionWarning" in cls_result.stdout
 
@@ -96,5 +96,5 @@ def test_resourcewarning_gate_leaves_clean_run_green(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         Pytest's per-test scratch directory (isolates the throwaway module).
     """
-    cls_result = _run_probe(tmp_path, _STR_CLEAN_MODULE)
+    cls_result = _run_probe(tmp_path, str_module_source=_STR_CLEAN_MODULE)
     assert cls_result.returncode == 0

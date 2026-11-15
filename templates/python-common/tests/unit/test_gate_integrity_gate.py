@@ -147,7 +147,12 @@ def test_report_fails_a_real_weakening_with_no_local_justification(
     monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
     monkeypatch.setattr(gate, "_git", lambda _args: "")
     monkeypatch.setattr(gate, "pr_body_text", lambda: "")
-    assert gate.report(["ruff.toml: rule 'S608' added to [lint] ignore"], "base", 1) == 1
+    assert (
+        gate.report(
+            ["ruff.toml: rule 'S608' added to [lint] ignore"], str_base="base", int_changed_count=1
+        )
+        == 1
+    )
 
 
 def test_report_passes_the_same_weakening_with_gate_change_ok_set(
@@ -158,7 +163,12 @@ def test_report_passes_the_same_weakening_with_gate_change_ok_set(
     monkeypatch.setenv("GATE_CHANGE_OK", "reviewed with the team")
     monkeypatch.setattr(gate, "_git", lambda _args: "")
     monkeypatch.setattr(gate, "pr_body_text", lambda: "")
-    assert gate.report(["ruff.toml: rule 'S608' added to [lint] ignore"], "base", 1) == 0
+    assert (
+        gate.report(
+            ["ruff.toml: rule 'S608' added to [lint] ignore"], str_base="base", int_changed_count=1
+        )
+        == 0
+    )
 
 
 def test_report_rejects_a_whitespace_only_gate_change_ok(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,11 +177,18 @@ def test_report_rejects_a_whitespace_only_gate_change_ok(monkeypatch: pytest.Mon
     monkeypatch.setenv("GATE_CHANGE_OK", "   ")
     monkeypatch.setattr(gate, "_git", lambda _args: "")
     monkeypatch.setattr(gate, "pr_body_text", lambda: "")
-    assert gate.report(["ruff.toml: rule 'S608' added to [lint] ignore"], "base", 1) == 1
+    assert (
+        gate.report(
+            ["ruff.toml: rule 'S608' added to [lint] ignore"], str_base="base", int_changed_count=1
+        )
+        == 1
+    )
 
 
 @pytest.mark.parametrize("str_marker", ["CI", "GITHUB_ACTIONS"])
-def test_env_reason_is_ignored_under_ci(monkeypatch: pytest.MonkeyPatch, str_marker: str) -> None:
+def test_env_reason_is_ignored_under_ci(
+    monkeypatch: pytest.MonkeyPatch, *, str_marker: str
+) -> None:
     """The hatch is LOCAL-ONLY: a CI runner exposing it must not be able to justify anything."""
     _local_shell(monkeypatch)
     monkeypatch.setenv("GATE_CHANGE_OK", "set by a workflow env: line, not by a reviewer")
@@ -190,7 +207,12 @@ def test_report_rejects_a_ci_set_gate_change_ok(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.setattr(gate, "_git", lambda _args: "")
     monkeypatch.setattr(gate, "pr_body_text", lambda: "")
-    assert gate.report(["ruff.toml: rule 'S608' added to [lint] ignore"], "base", 1) == 1
+    assert (
+        gate.report(
+            ["ruff.toml: rule 'S608' added to [lint] ignore"], str_base="base", int_changed_count=1
+        )
+        == 1
+    )
 
 
 _STR_PRECOMMIT_BASE = (
@@ -234,7 +256,9 @@ def list_precommit_310_problems() -> list[str]:
         "        name: some other hook\n"
     )
 
-    return gate.precommit_problems(_STR_PRECOMMIT_BASE, str_new, ".pre-commit-config.yaml")
+    return gate.precommit_problems(
+        _STR_PRECOMMIT_BASE, str_new=str_new, str_shown=".pre-commit-config.yaml"
+    )
 
 
 def test_precommit_conflict_resolution_drops_gate_integrity_310_shape(
@@ -252,7 +276,7 @@ def test_precommit_conflict_resolution_drops_gate_integrity_310_shape(
 
 @pytest.mark.parametrize("str_needle", ["gate-integrity", "removed"])
 def test_precommit_310_finding_names_the_dropped_hook(
-    list_precommit_310_problems: list[str], str_needle: str
+    list_precommit_310_problems: list[str], *, str_needle: str
 ) -> None:
     """The finding names the dropped hook and says it was removed.
 
@@ -281,14 +305,24 @@ def test_precommit_both_sides_kept_is_clean() -> None:
         "        name: some other hook\n"
     )
 
-    assert gate.precommit_problems(_STR_PRECOMMIT_BASE, str_new, ".pre-commit-config.yaml") == []
+    assert (
+        gate.precommit_problems(
+            _STR_PRECOMMIT_BASE, str_new=str_new, str_shown=".pre-commit-config.yaml"
+        )
+        == []
+    )
 
 
 def test_precommit_unrelated_addition_alone_is_clean() -> None:
     """Adding a hook without touching any existing one reports nothing (no false positive)."""
     str_new = _STR_PRECOMMIT_BASE + "      - id: brand-new-hook\n        name: brand new\n"
 
-    assert gate.precommit_problems(_STR_PRECOMMIT_BASE, str_new, ".pre-commit-config.yaml") == []
+    assert (
+        gate.precommit_problems(
+            _STR_PRECOMMIT_BASE, str_new=str_new, str_shown=".pre-commit-config.yaml"
+        )
+        == []
+    )
 
 
 @pytest.fixture
@@ -310,7 +344,9 @@ def list_workflow_312_problems() -> list[str]:
         "    runs-on: ubuntu-latest\n"
     )
 
-    return gate.workflow_problems(_STR_WORKFLOW_BASE, str_new, "scaffold_checks.yml")
+    return gate.workflow_problems(
+        _STR_WORKFLOW_BASE, str_new=str_new, str_shown="scaffold_checks.yml"
+    )
 
 
 def test_workflow_conflict_resolution_drops_gate_integrity_312_shape(
@@ -328,7 +364,7 @@ def test_workflow_conflict_resolution_drops_gate_integrity_312_shape(
 
 @pytest.mark.parametrize("str_needle", ["gate-integrity", "removed"])
 def test_workflow_312_finding_names_the_dropped_job(
-    list_workflow_312_problems: list[str], str_needle: str
+    list_workflow_312_problems: list[str], *, str_needle: str
 ) -> None:
     """The finding names the dropped job and says it was removed.
 
@@ -357,7 +393,12 @@ def test_workflow_both_sides_kept_is_clean() -> None:
         "    runs-on: ubuntu-latest\n"
     )
 
-    assert gate.workflow_problems(_STR_WORKFLOW_BASE, str_new, "scaffold_checks.yml") == []
+    assert (
+        gate.workflow_problems(
+            _STR_WORKFLOW_BASE, str_new=str_new, str_shown="scaffold_checks.yml"
+        )
+        == []
+    )
 
 
 def test_workflow_unrelated_addition_alone_is_clean() -> None:
@@ -366,7 +407,12 @@ def test_workflow_unrelated_addition_alone_is_clean() -> None:
         _STR_WORKFLOW_BASE + "  brand-new-job:\n    name: Brand new\n    runs-on: ubuntu-latest\n"
     )
 
-    assert gate.workflow_problems(_STR_WORKFLOW_BASE, str_new, "scaffold_checks.yml") == []
+    assert (
+        gate.workflow_problems(
+            _STR_WORKFLOW_BASE, str_new=str_new, str_shown="scaffold_checks.yml"
+        )
+        == []
+    )
 
 
 def test_report_unjustified_gate_drop_fails(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -374,7 +420,7 @@ def test_report_unjustified_gate_drop_fails(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(gate, "justification_reason", lambda str_base: "")
     str_finding = "scaffold_checks.yml: workflow job 'gate-integrity' removed"
 
-    int_code = gate.report([str_finding], "base", 1)
+    int_code = gate.report([str_finding], str_base="base", int_changed_count=1)
 
     assert int_code == 1
 
@@ -388,14 +434,14 @@ def test_report_justified_gate_drop_passes(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(gate, "justification_reason", lambda str_base: "renamed, see PR body")
     str_finding = "scaffold_checks.yml: workflow job 'gate-integrity' removed"
 
-    int_code = gate.report([str_finding], "base", 1)
+    int_code = gate.report([str_finding], str_base="base", int_changed_count=1)
 
     assert int_code == 0
 
 
 def test_report_no_findings_passes() -> None:
     """An empty findings list passes without consulting the justification hatch at all."""
-    assert gate.report([], "base", 3) == 0
+    assert gate.report([], str_base="base", int_changed_count=3) == 0
 
 
 def _git_in(path_repo: Path, *args: str) -> str:
@@ -422,7 +468,7 @@ def _git_in(path_repo: Path, *args: str) -> str:
     return cls_proc.stdout.strip()
 
 
-def _commit_file(path_repo: Path, str_name: str) -> None:
+def _commit_file(path_repo: Path, *, str_name: str) -> None:
     """Create one file and commit it.
 
     Parameters
@@ -438,7 +484,7 @@ def _commit_file(path_repo: Path, str_name: str) -> None:
 
 
 @pytest.fixture
-def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def path_mid_merge(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Return a repo whose ``feature`` has an octopus merge of ``main`` and ``side`` in progress.
 
     ``main`` and ``side`` each move on after the fork, so a base resolved from the pre-merge
@@ -459,14 +505,14 @@ def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     _git_in(tmp_path, "init", "-q", "--initial-branch=main")
     _git_in(tmp_path, "config", "user.email", "t@example.com")
     _git_in(tmp_path, "config", "user.name", "t")
-    _commit_file(tmp_path, "seed")
+    _commit_file(tmp_path, str_name="seed")
     _git_in(tmp_path, "branch", "side")
     _git_in(tmp_path, "checkout", "-q", "-b", "feature")
-    _commit_file(tmp_path, "own")
+    _commit_file(tmp_path, str_name="own")
     _git_in(tmp_path, "checkout", "-q", "main")
-    _commit_file(tmp_path, "main_moves_on")
+    _commit_file(tmp_path, str_name="main_moves_on")
     _git_in(tmp_path, "checkout", "-q", "side")
-    _commit_file(tmp_path, "side_moves_on")
+    _commit_file(tmp_path, str_name="side_moves_on")
     _git_in(tmp_path, "checkout", "-q", "feature")
     _git_in(tmp_path, "merge", "-q", "--no-commit", "--no-ff", "side", "main")
     monkeypatch.chdir(tmp_path)
@@ -493,7 +539,7 @@ def test_merge_heads_lists_every_incoming_head_of_an_octopus(path_mid_merge: Pat
 
 
 def test_merge_heads_is_empty_when_no_merge_is_in_progress(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Outside a merge there is nothing to add, so the base resolves exactly as before."""
     _git_in(tmp_path, "init", "-q", "--initial-branch=main")
@@ -603,14 +649,14 @@ def test_pairing_is_independent_of_input_order() -> None:
     dict_expected = {"test_parse_v1": "test_parse_w1", "test_parse_v2": "test_parse_w2"}
     tuple_fwd, tuple_rev = ("test_parse_v1", "test_parse_v2"), ("test_parse_v2", "test_parse_v1")
     dict_added = _funcs("test_parse_w1", "test_parse_w2")
-    assert gate_rename.rename_pairs(_funcs(*tuple_fwd), dict_added) == dict_expected
-    assert gate_rename.rename_pairs(_funcs(*tuple_rev), dict_added) == dict_expected
+    assert gate_rename.rename_pairs(_funcs(*tuple_fwd), dict_added=dict_added) == dict_expected
+    assert gate_rename.rename_pairs(_funcs(*tuple_rev), dict_added=dict_added) == dict_expected
 
 
 def test_a_better_later_match_is_not_stolen_by_an_earlier_name() -> None:
     """NEGATIVE CONTROL: both old names clear 0.8; the weaker one listed first must lose."""
     dict_pairs = gate_rename.rename_pairs(
-        _funcs("test_parse_v10", "test_parse_v1"), _funcs("test_parse_v11")
+        _funcs("test_parse_v10", "test_parse_v1"), dict_added=_funcs("test_parse_v11")
     )
     assert dict_pairs == {"test_parse_v1": "test_parse_v11"}
 
@@ -618,7 +664,10 @@ def test_a_better_later_match_is_not_stolen_by_an_earlier_name() -> None:
 def test_a_dissimilar_name_is_not_paired() -> None:
     """NEGATIVE CONTROL: below the name threshold nothing pairs, so the deletion stays visible."""
     assert (
-        gate_rename.rename_pairs(_funcs("test_rejects_negative_amounts"), _funcs("test_x")) == {}
+        gate_rename.rename_pairs(
+            _funcs("test_rejects_negative_amounts"), dict_added=_funcs("test_x")
+        )
+        == {}
     )
 
 
@@ -626,12 +675,14 @@ def test_a_similar_name_with_an_unrelated_body_is_not_paired() -> None:
     """NEGATIVE CONTROL: sibling names alone never absorb a deletion; the bodies must agree too."""
     dict_old = _funcs("test_parse_v1", str_body="assert f() == 1")
     dict_new = _funcs("test_parse_v2", str_body="assert sorted(load(path)) == [3, 4, 5, 6, 7]")
-    assert gate_rename.rename_pairs(dict_old, dict_new) == {}
+    assert gate_rename.rename_pairs(dict_old, dict_added=dict_new) == {}
 
 
 def test_integrity_gate_reports_a_deletion_beside_a_similarly_named_unrelated_test() -> None:
     """Delete one test, add a near-named test with a different body: still a deletion."""
-    list_problems = gate.deleted_or_gutted_tests(_STR_RENAME_OLD, _STR_RENAME_OTHER, "x")
+    list_problems = gate.deleted_or_gutted_tests(
+        _STR_RENAME_OLD, str_new=_STR_RENAME_OTHER, str_shown="x"
+    )
     assert list_problems == [
         "x: test 'test_rejects_negative_amounts' deleted"
         " (possible rename to 'test_rejects_negative_dates', bodies differ)"
@@ -640,7 +691,9 @@ def test_integrity_gate_reports_a_deletion_beside_a_similarly_named_unrelated_te
 
 def test_weakening_gate_reports_a_deletion_beside_a_similarly_named_unrelated_test() -> None:
     """The weakening gate agrees with the integrity gate on the same diff."""
-    list_problems = weakening._file_findings("x", _STR_RENAME_OLD, _STR_RENAME_OTHER, False)
+    list_problems = weakening._file_findings(
+        "x", str_old_text=_STR_RENAME_OLD, str_new_text=_STR_RENAME_OTHER, bool_prod_changed=False
+    )
     assert list_problems == [
         "x: test 'test_rejects_negative_amounts' deleted"
         " (possible rename to 'test_rejects_negative_dates', bodies differ)"
@@ -651,7 +704,9 @@ def test_weakening_finding_names_the_renamed_test() -> None:
     """A finding on a renamed test uses the name that exists in the change."""
     str_old = "def test_rejects_negative_amounts() -> None:\n    assert f() == 1\n    assert g()\n"
     str_new = "def test_rejects_negative_amount() -> None:\n    assert f() == 1\n"
-    list_problems = weakening._file_findings("x", str_old, str_new, False)
+    list_problems = weakening._file_findings(
+        "x", str_old_text=str_old, str_new_text=str_new, bool_prod_changed=False
+    )
     assert list_problems == [
         "x: test_rejects_negative_amount() lost 1 assertion(s) (had 2, now 1)"
     ]
@@ -661,7 +716,7 @@ def test_a_sibling_differing_only_in_a_literal_is_not_paired() -> None:
     """NEGATIVE CONTROL: v1 replaced by v2 with other inputs is a deletion, not a rename."""
     dict_old = _funcs("test_parse_v1", str_body="assert parse('a') == 1")
     dict_new = _funcs("test_parse_v2", str_body="assert parse('b') == 2")
-    assert gate_rename.rename_pairs(dict_old, dict_new) == {}
+    assert gate_rename.rename_pairs(dict_old, dict_added=dict_new) == {}
 
 
 def test_a_long_renamed_body_still_pairs() -> None:
@@ -669,7 +724,7 @@ def test_a_long_renamed_body_still_pairs() -> None:
     str_body = "\n    ".join(f"assert parse({int_i}) == {int_i}" for int_i in range(10))
     dict_old = _funcs("test_has_six_pages", str_body=str_body)
     dict_new = _funcs("test_has_seven_pages", str_body=str_body)
-    assert gate_rename.rename_pairs(dict_old, dict_new) == {
+    assert gate_rename.rename_pairs(dict_old, dict_added=dict_new) == {
         "test_has_six_pages": "test_has_seven_pages"
     }
 
@@ -678,7 +733,7 @@ def test_a_rename_that_also_edits_a_literal_is_a_hinted_deletion() -> None:
     """The #1073 shape with a changed literal stays a finding but names the likely target."""
     str_old = "def test_has_six_pages() -> None:\n    assert count() == 6\n"
     str_new = "def test_has_seven_pages() -> None:\n    assert count() == 7\n"
-    list_problems = gate.deleted_or_gutted_tests(str_old, str_new, "x")
+    list_problems = gate.deleted_or_gutted_tests(str_old, str_new=str_new, str_shown="x")
     assert list_problems == [
         "x: test 'test_has_six_pages' deleted"
         " (possible rename to 'test_has_seven_pages', bodies differ)"
@@ -690,7 +745,7 @@ def test_a_docstring_only_test_is_never_paired() -> None:
     str_src = 'def test_a_{s}() -> None:\n    """Doc."""\n'
     dict_old = gate.test_functions(str_src.format(s="v1"))
     dict_new = gate.test_functions(str_src.format(s="v2"))
-    assert gate_rename.rename_pairs(dict_old, dict_new) == {}
+    assert gate_rename.rename_pairs(dict_old, dict_added=dict_new) == {}
 
 
 def test_a_docstring_does_not_count_as_a_statement_when_pairing() -> None:
@@ -699,7 +754,7 @@ def test_a_docstring_does_not_count_as_a_statement_when_pairing() -> None:
     dict_new = gate.test_functions(
         'def test_has_seven_pages() -> None:\n    """Doc."""\n    assert count() == 6\n'
     )
-    assert gate_rename.rename_pairs(dict_old, dict_new) == {
+    assert gate_rename.rename_pairs(dict_old, dict_added=dict_new) == {
         "test_has_six_pages": "test_has_seven_pages"
     }
 
@@ -708,7 +763,7 @@ def test_a_renamed_test_newly_marked_skip_is_detected() -> None:
     """NEGATIVE CONTROL: renaming a test and skipping it in one change is still a finding."""
     str_old = "def test_has_six_pages() -> None:\n    assert count() == 6\n"
     str_new = "@pytest.mark.skip\ndef test_has_seven_pages() -> None:\n    assert count() == 6\n"
-    assert gate.newly_skipped_tests(str_old, str_new, "x") == [
+    assert gate.newly_skipped_tests(str_old, str_new=str_new, str_shown="x") == [
         "x: test 'test_has_seven_pages' newly decorated @pytest.mark.skip"
     ]
 
@@ -717,4 +772,4 @@ def test_a_renamed_test_keeping_its_xfail_is_not_flagged() -> None:
     """A marker already present on the old test is not new after a rename."""
     str_old = "@pytest.mark.xfail\ndef test_has_six_pages() -> None:\n    assert count() == 6\n"
     str_new = "@pytest.mark.xfail\ndef test_has_seven_pages() -> None:\n    assert count() == 6\n"
-    assert gate.newly_skipped_tests(str_old, str_new, "x") == []
+    assert gate.newly_skipped_tests(str_old, str_new=str_new, str_shown="x") == []

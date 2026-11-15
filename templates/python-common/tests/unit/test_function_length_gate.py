@@ -43,7 +43,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_function_length")
 
 
-def _python_file(path_dir: Path, str_source: str) -> Path:
+def _python_file(path_dir: Path, *, str_source: str) -> Path:
     """Write a Python source file and return its path.
 
     Parameters
@@ -78,7 +78,7 @@ def list_over_ceiling_problems(tmp_path: Path) -> list[str]:
         The gate's findings.
     """
     str_body = "\n".join(f"\tint_x = {i}" for i in range(gate.INT_MAX_LINES + 5))
-    path_file = _python_file(tmp_path, f"def f() -> None:\n{str_body}\n")
+    path_file = _python_file(tmp_path, str_source=f"def f() -> None:\n{str_body}\n")
     return gate.file_problems(path_file)
 
 
@@ -122,7 +122,7 @@ def test_the_over_ceiling_finding_states_the_ceiling(
 def test_a_function_at_the_ceiling_is_accepted(tmp_path: Path) -> None:
     """The boundary is inclusive: exactly the ceiling passes, one more does not."""
     str_body = "\n".join(f"\tint_x = {i}" for i in range(gate.INT_MAX_LINES - 1))
-    path_file = _python_file(tmp_path, f"def f() -> None:\n{str_body}\n")
+    path_file = _python_file(tmp_path, str_source=f"def f() -> None:\n{str_body}\n")
 
     assert gate.file_problems(path_file) == []
 
@@ -138,7 +138,7 @@ def test_a_long_docstring_does_not_count_towards_the_limit(tmp_path: Path) -> No
     str_doc = "\n".join(f"\tLine {i} of documentation." for i in range(gate.INT_MAX_LINES + 20))
     path_file = _python_file(
         tmp_path,
-        f'def f() -> None:\n\t"""Title.\n\n{str_doc}\n\t"""\n\tint_x = 1\n',
+        str_source=f'def f() -> None:\n\t"""Title.\n\n{str_doc}\n\t"""\n\tint_x = 1\n',
     )
 
     assert gate.file_problems(path_file) == []
@@ -155,7 +155,7 @@ def test_a_nested_function_docstring_does_not_count_either(tmp_path: Path) -> No
     str_doc = "\n".join(f"\t\tLine {i}." for i in range(gate.INT_MAX_LINES + 20))
     path_file = _python_file(
         tmp_path,
-        "def outer() -> None:\n"
+        str_source="def outer() -> None:\n"
         '\t"""Outer."""\n'
         "\n"
         "\tdef inner() -> None:\n"
@@ -172,7 +172,9 @@ def test_a_decorator_does_not_count_towards_the_limit(tmp_path: Path) -> None:
     """Decorator lines sit above ``def`` and are excluded by the span definition."""
     str_decorators = "\n".join("@staticmethod" for _ in range(5))
     str_body = "\n".join(f"\tint_x = {i}" for i in range(gate.INT_MAX_LINES - 1))
-    path_file = _python_file(tmp_path, f"{str_decorators}\ndef f() -> None:\n{str_body}\n")
+    path_file = _python_file(
+        tmp_path, str_source=f"{str_decorators}\ndef f() -> None:\n{str_body}\n"
+    )
 
     assert gate.file_problems(path_file) == []
 
@@ -188,7 +190,7 @@ def test_an_unparsable_file_is_a_finding_not_a_silent_pass(tmp_path: Path) -> No
     "Cannot be checked" and "is clean" are opposite facts; a gate that prints them the same
     way is the vacuous pass this whole file exists to prevent.
     """
-    path_file = _python_file(tmp_path, "def f(:\n")
+    path_file = _python_file(tmp_path, str_source="def f(:\n")
 
     list_problems = gate.file_problems(path_file)
 
@@ -197,16 +199,16 @@ def test_an_unparsable_file_is_a_finding_not_a_silent_pass(tmp_path: Path) -> No
 
 def test_an_unparsable_file_finding_says_it_could_not_parse(tmp_path: Path) -> None:
     """The finding for an unreadable file names the cause."""
-    path_file = _python_file(tmp_path, "def f(:\n")
+    path_file = _python_file(tmp_path, str_source="def f(:\n")
 
     assert "could not parse" in gate.file_problems(path_file)[0]
 
 
 def test_audit_mode_fails_on_an_unparsable_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The parse finding must reach the exit code, not just the output."""
-    _python_file(tmp_path, "def f(:\n")
+    _python_file(tmp_path, str_source="def f(:\n")
     monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 
     assert gate.main([]) == 1
@@ -241,7 +243,7 @@ def test_a_short_shell_function_is_accepted(tmp_path: Path) -> None:
 
 
 def test_audit_mode_fails_when_discovery_matches_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Zero discovered files is a FAILURE, not a pass.
 
@@ -256,11 +258,12 @@ def test_audit_mode_fails_when_discovery_matches_nothing(
 
 def test_audit_mode_passes_and_reports_the_count(
     tmp_path: Path,
+    *,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """On success the gate prints how many files it checked, rather than staying silent."""
-    _python_file(tmp_path, "def f() -> None:\n\tint_x = 1\n")
+    _python_file(tmp_path, str_source="def f() -> None:\n\tint_x = 1\n")
     monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 
     gate.main([])
@@ -268,16 +271,18 @@ def test_audit_mode_passes_and_reports_the_count(
 
 
 def test_audit_mode_exits_zero_on_a_short_function(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A tree holding only a short function exits 0."""
-    _python_file(tmp_path, "def f() -> None:\n\tint_x = 1\n")
+    _python_file(tmp_path, str_source="def f() -> None:\n\tint_x = 1\n")
     monkeypatch.setattr(gate, "PATH_ROOT", tmp_path)
 
     assert gate.main([]) == 0
 
 
-def test_a_dot_claude_worktree_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_dot_claude_worktree_is_skipped(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A file inside `.claude/worktrees/` (a stale, older checkout) is not discovered."""
     path_worktree = tmp_path / ".claude" / "worktrees" / "agent-abc" / "sample.py"
     path_worktree.parent.mkdir(parents=True)
@@ -288,7 +293,7 @@ def test_a_dot_claude_worktree_is_skipped(tmp_path: Path, monkeypatch: pytest.Mo
 
 
 def test_a_dot_claude_ancestor_above_root_does_not_hide_real_files(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Skipping `.claude` must key off the path RELATIVE to root, not any ancestor.
 

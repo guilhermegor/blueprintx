@@ -40,7 +40,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_identifier_masking")
 
 
-def _python_file(path_dir: Path, str_source: str) -> Path:
+def _python_file(path_dir: Path, *, str_source: str) -> Path:
     """Write a Python source file and return its path.
 
     Parameters
@@ -76,7 +76,7 @@ def tuple_masked_cpf_sql(tmp_path: Path) -> tuple:
     """
     path_file = _python_file(
         tmp_path,
-        "query = \"SELECT * FROM users WHERE cpf = '123.456.789-01'\"\n",
+        str_source="query = \"SELECT * FROM users WHERE cpf = '123.456.789-01'\"\n",
     )
     return path_file, gate.check_python_file(path_file)
 
@@ -129,7 +129,7 @@ def test_masked_cnpj_alphanumeric_in_sql_string_literal_is_reported(tmp_path: Pa
     """The 2026 alphanumeric CNPJ mask format is matched too, not just legacy numeric."""
     path_file = _python_file(
         tmp_path,
-        "query = \"SELECT * FROM firms WHERE cnpj = 'AB.CDE.FGH/1234-95'\"\n",
+        str_source="query = \"SELECT * FROM firms WHERE cnpj = 'AB.CDE.FGH/1234-95'\"\n",
     )
 
     list_problems = gate.check_python_file(path_file)
@@ -141,7 +141,7 @@ def test_masked_cnpj_alphanumeric_finding_quotes_the_value(tmp_path: Path) -> No
     """The alphanumeric-CNPJ finding quotes the masked value."""
     path_file = _python_file(
         tmp_path,
-        "query = \"SELECT * FROM firms WHERE cnpj = 'AB.CDE.FGH/1234-95'\"\n",
+        str_source="query = \"SELECT * FROM firms WHERE cnpj = 'AB.CDE.FGH/1234-95'\"\n",
     )
 
     assert "AB.CDE.FGH/1234-95" in gate.check_python_file(path_file)[0]
@@ -151,7 +151,7 @@ def test_unmasked_cpf_comparison_passes(tmp_path: Path) -> None:
     """An already-unmasked (digits-only) value never matches the mask format."""
     path_file = _python_file(
         tmp_path,
-        "query = \"SELECT * FROM users WHERE cpf = '12345678901'\"\n",
+        str_source="query = \"SELECT * FROM users WHERE cpf = '12345678901'\"\n",
     )
 
     assert gate.check_python_file(path_file) == []
@@ -161,7 +161,7 @@ def test_masked_value_compared_against_unrelated_column_passes(tmp_path: Path) -
     """A CPF-shaped literal compared against an unrelated column is not this gate's bug."""
     path_file = _python_file(
         tmp_path,
-        "query = \"SELECT * FROM logs WHERE reference_code = '123.456.789-01'\"\n",
+        str_source="query = \"SELECT * FROM logs WHERE reference_code = '123.456.789-01'\"\n",
     )
 
     assert gate.check_python_file(path_file) == []
@@ -189,7 +189,7 @@ def test_orm_attribute_comparison_masked_cpf_is_reported(tmp_path: Path) -> None
     """``Model.cpf == "<masked>"`` is the ORM-builder shape of the same bug."""
     path_file = _python_file(
         tmp_path,
-        'stmt = select(User).where(User.cpf == "123.456.789-01")\n',
+        str_source='stmt = select(User).where(User.cpf == "123.456.789-01")\n',
     )
 
     list_problems = gate.check_python_file(path_file)
@@ -201,7 +201,7 @@ def test_orm_attribute_comparison_finding_quotes_the_value(tmp_path: Path) -> No
     """The ORM-comparison finding quotes the masked value."""
     path_file = _python_file(
         tmp_path,
-        'stmt = select(User).where(User.cpf == "123.456.789-01")\n',
+        str_source='stmt = select(User).where(User.cpf == "123.456.789-01")\n',
     )
 
     assert "123.456.789-01" in gate.check_python_file(path_file)[0]
@@ -211,7 +211,7 @@ def test_orm_attribute_comparison_unmasked_cpf_passes(tmp_path: Path) -> None:
     """Comparing against the unmasked value (the correct form) must never be flagged."""
     path_file = _python_file(
         tmp_path,
-        'stmt = select(User).where(User.cpf == unmask_cpf("123.456.789-01"))\n',
+        str_source='stmt = select(User).where(User.cpf == unmask_cpf("123.456.789-01"))\n',
     )
 
     assert gate.check_python_file(path_file) == []
@@ -221,7 +221,7 @@ def test_filter_by_keyword_masked_cnpj_is_reported(tmp_path: Path) -> None:
     """``filter_by(cnpj="<masked>")`` is the keyword-argument shape of the same bug."""
     path_file = _python_file(
         tmp_path,
-        'session.query(Company).filter_by(cnpj="12.345.678/0001-95")\n',
+        str_source='session.query(Company).filter_by(cnpj="12.345.678/0001-95")\n',
     )
 
     list_problems = gate.check_python_file(path_file)
@@ -233,7 +233,7 @@ def test_filter_by_keyword_finding_quotes_the_value(tmp_path: Path) -> None:
     """The ``filter_by`` finding quotes the masked value."""
     path_file = _python_file(
         tmp_path,
-        'session.query(Company).filter_by(cnpj="12.345.678/0001-95")\n',
+        str_source='session.query(Company).filter_by(cnpj="12.345.678/0001-95")\n',
     )
 
     assert "12.345.678/0001-95" in gate.check_python_file(path_file)[0]
@@ -243,7 +243,7 @@ def test_filter_by_keyword_unmasked_value_passes(tmp_path: Path) -> None:
     """A digits-only keyword value is the correct, normalised form."""
     path_file = _python_file(
         tmp_path,
-        'session.query(Company).filter_by(cnpj="12345678000195")\n',
+        str_source='session.query(Company).filter_by(cnpj="12345678000195")\n',
     )
 
     assert gate.check_python_file(path_file) == []
@@ -253,7 +253,7 @@ def test_escape_hatch_with_reason_suppresses_finding(tmp_path: Path) -> None:
     """A written reason on the offending line suppresses the finding."""
     path_file = _python_file(
         tmp_path,
-        "query = \"SELECT * FROM users WHERE cpf = '123.456.789-01'\"  "
+        str_source="query = \"SELECT * FROM users WHERE cpf = '123.456.789-01'\"  "
         "# identifier-mask-ok: fixture oracle, reviewed in PR #355\n",
     )
 
@@ -264,14 +264,17 @@ def test_escape_hatch_with_empty_reason_is_rejected(tmp_path: Path) -> None:
     """A bare marker with no reason is not a decision anyone made on purpose."""
     path_file = _python_file(
         tmp_path,
-        "query = \"SELECT * FROM users WHERE cpf = '123.456.789-01'\"  # identifier-mask-ok:   \n",
+        str_source=(
+            "query = \"SELECT * FROM users WHERE cpf = '123.456.789-01'\"  # "
+            "identifier-mask-ok:   \n"
+        ),
     )
 
     assert len(gate.check_python_file(path_file)) == 1
 
 
 def test_main_fails_when_src_present_but_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``src/`` existing but holding zero Python files must fail, not pass silently."""
     (tmp_path / "src").mkdir()
@@ -280,14 +283,16 @@ def test_main_fails_when_src_present_but_empty(
     assert gate.main() == 1
 
 
-def test_main_skips_when_src_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_skips_when_src_absent(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """No ``src/`` directory at all is a graceful skip (e.g. a fresh scaffold)."""
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 0
 
 
-def test_main_scans_a_sql_only_src_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_scans_a_sql_only_src_tree(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A tree holding only ``.sql`` files is scanned, not reported as nothing-scanned."""
     path_src = tmp_path / "src"
     path_src.mkdir()
@@ -300,7 +305,7 @@ def test_main_scans_a_sql_only_src_tree(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 def test_main_passes_on_a_compliant_sql_only_src_tree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The same tree with no masked comparison passes: zero Python files is not a failure."""
     path_src = tmp_path / "src"

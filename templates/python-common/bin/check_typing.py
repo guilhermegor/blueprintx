@@ -159,7 +159,7 @@ def comment_lines(str_source: str) -> dict[int, str]:
 
 
 def _escape_reason(
-    node: ast.FunctionDef | ast.AsyncFunctionDef, dict_comments: dict[int, str]
+    node: ast.FunctionDef | ast.AsyncFunctionDef, *, dict_comments: dict[int, str]
 ) -> str | None:
     """Return the written reason for skipping the checker, or ``None`` when there is none.
 
@@ -195,7 +195,7 @@ def _escape_reason(
     return None
 
 
-def _check_class(node: ast.ClassDef, filepath: str) -> int:
+def _check_class(node: ast.ClassDef, *, filepath: str) -> int:
     """Check one public class for correct runtime-checker application.
 
     Parameters
@@ -252,12 +252,12 @@ def check_file(filepath: str) -> int:
     tree = ast.parse(str_source, filename=filepath)
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and not _is_dunder(node.name):
-            errors += _check_class(node, filepath)
+            errors += _check_class(node, filepath=filepath)
         elif (
             isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
             and not _is_dunder(node.name)
             and "type_checker" not in _decorator_names(node)
-            and _escape_reason(node, dict_comments) is None
+            and _escape_reason(node, dict_comments=dict_comments) is None
         ):
             print(
                 f"❌ {node.name}() at line {node.lineno} ({filepath}): a standalone function must "

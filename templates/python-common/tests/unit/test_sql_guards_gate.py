@@ -42,7 +42,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_sql_guards")
 
 
-def _python_file(path_dir: Path, str_source: str) -> Path:
+def _python_file(path_dir: Path, *, str_source: str) -> Path:
     """Write a Python source file and return its path.
 
     Parameters
@@ -78,7 +78,7 @@ def list_whereless_delete_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import delete\n\nstmt = delete(comments)\n",
+        str_source="from sqlalchemy import delete\n\nstmt = delete(comments)\n",
     )
     return gate.check_python_file(path_file)
 
@@ -109,6 +109,7 @@ def test_whereless_core_delete_finding_names_the_hazard(
 
 def test_whereless_core_delete_finding_names_the_file(
     tmp_path: Path,
+    *,
     list_whereless_delete_problems: list[str],
 ) -> None:
     """The finding names the file it was found in.
@@ -140,7 +141,7 @@ def test_whereless_module_qualified_delete_is_reported(tmp_path: Path) -> None:
     """``sa.delete(t)`` is a Core builder, not the ambiguous ``.delete()`` attribute form."""
     path_file = _python_file(
         tmp_path,
-        "import sqlalchemy as sa\n\nstmt = sa.delete(comments)\n",
+        str_source="import sqlalchemy as sa\n\nstmt = sa.delete(comments)\n",
     )
 
     assert len(gate.check_python_file(path_file)) == 1
@@ -150,7 +151,7 @@ def test_whereless_module_qualified_update_is_reported(tmp_path: Path) -> None:
     """The unaliased spelling reaches the same branch — the module name IS the alias."""
     path_file = _python_file(
         tmp_path,
-        'import sqlalchemy\n\nstmt = sqlalchemy.update(comments).values(status="x")\n',
+        str_source='import sqlalchemy\n\nstmt = sqlalchemy.update(comments).values(status="x")\n',
     )
 
     assert len(gate.check_python_file(path_file)) == 1
@@ -160,7 +161,9 @@ def test_module_qualified_delete_with_where_passes(tmp_path: Path) -> None:
     """Widening to the module alias must not fire on a properly scoped mutation."""
     path_file = _python_file(
         tmp_path,
-        "import sqlalchemy as sa\n\nstmt = sa.delete(comments).where(comments.c.id == 1)\n",
+        str_source=(
+            "import sqlalchemy as sa\n\nstmt = sa.delete(comments).where(comments.c.id == 1)\n"
+        ),
     )
 
     assert gate.check_python_file(path_file) == []
@@ -170,7 +173,9 @@ def test_whereless_core_delete_with_where_passes(tmp_path: Path) -> None:
     """The same call with a ``.where()`` chained on is clean."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import delete\n\nstmt = delete(comments).where(comments.c.id == 1)\n",
+        str_source=(
+            "from sqlalchemy import delete\n\nstmt = delete(comments).where(comments.c.id == 1)\n"
+        ),
     )
 
     assert gate.check_python_file(path_file) == []
@@ -192,7 +197,7 @@ def list_whereless_update_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        'from sqlalchemy import update\n\nstmt = update(comments).values(status="x")\n',
+        str_source='from sqlalchemy import update\n\nstmt = update(comments).values(status="x")\n',
     )
     return gate.check_python_file(path_file)
 
@@ -239,7 +244,7 @@ def list_query_delete_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy.orm import Session\n\nsession.query(Model).delete()\n",
+        str_source="from sqlalchemy.orm import Session\n\nsession.query(Model).delete()\n",
     )
     return gate.check_python_file(path_file)
 
@@ -272,7 +277,7 @@ def test_query_style_update_with_filter_passes(tmp_path: Path) -> None:
     """``session.query(Model).filter(...).update(...)`` is a safe, scoped mutation."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy.orm import Session\n\n"
+        str_source="from sqlalchemy.orm import Session\n\n"
         'session.query(Model).filter_by(id=1).update({"x": 1})\n',
     )
 
@@ -288,7 +293,7 @@ def test_single_instance_session_delete_is_not_flagged(tmp_path: Path) -> None:
     """
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy.orm import Session\n\nsession.delete(record)\n",
+        str_source="from sqlalchemy.orm import Session\n\nsession.delete(record)\n",
     )
 
     assert gate.check_python_file(path_file) == []
@@ -298,7 +303,7 @@ def test_plain_dict_update_in_a_sqlalchemy_file_is_not_flagged(tmp_path: Path) -
     """A ``dict.update()`` call must not be confused for a SQLAlchemy mutation."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy.orm import Session\n\ndict_config.update(other_dict)\n",
+        str_source="from sqlalchemy.orm import Session\n\ndict_config.update(other_dict)\n",
     )
 
     assert gate.check_python_file(path_file) == []
@@ -306,7 +311,7 @@ def test_plain_dict_update_in_a_sqlalchemy_file_is_not_flagged(tmp_path: Path) -
 
 def test_no_sqlalchemy_import_skips_the_whereless_check(tmp_path: Path) -> None:
     """A file with no ``sqlalchemy`` import is out of scope entirely."""
-    path_file = _python_file(tmp_path, "stmt = delete(comments)\n")
+    path_file = _python_file(tmp_path, str_source="stmt = delete(comments)\n")
 
     assert gate.check_python_file(path_file) == []
 
@@ -327,7 +332,7 @@ def list_nolock_literal_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        'str_query = "SELECT * FROM comments WITH (NOLOCK)"\n',
+        str_source='str_query = "SELECT * FROM comments WITH (NOLOCK)"\n',
     )
     return gate.check_python_file(path_file)
 
@@ -441,7 +446,7 @@ def list_second_nolock_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        "STR_Q = (\n"
+        str_source="STR_Q = (\n"
         '\t"SELECT a FROM t1 WITH (NOLOCK) "  # sql-guard-ok: reporting replica\n'
         '\t"UNION ALL SELECT b FROM t2 WITH (NOLOCK)"\n'
         ")\n",
@@ -543,7 +548,7 @@ def test_escape_hatch_with_reason_suppresses_the_finding(tmp_path: Path) -> None
     """A written reason after the marker is accepted."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import delete\n\n"
+        str_source="from sqlalchemy import delete\n\n"
         "stmt = delete(comments)  # sql-guard-ok: full purge, reviewed in PR #123\n",
     )
 
@@ -554,7 +559,9 @@ def test_escape_hatch_with_empty_reason_still_fails(tmp_path: Path) -> None:
     """A bare marker with no reason (or whitespace only) is rejected, not accepted."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import delete\n\nstmt = delete(comments)  # sql-guard-ok:   \n",
+        str_source=(
+            "from sqlalchemy import delete\n\nstmt = delete(comments)  # sql-guard-ok:   \n"
+        ),
     )
 
     list_problems = gate.check_python_file(path_file)
@@ -562,14 +569,14 @@ def test_escape_hatch_with_empty_reason_still_fails(tmp_path: Path) -> None:
     assert len(list_problems) == 1
 
 
-def test_main_skips_when_src_is_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_skips_when_src_is_absent(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """No ``src/`` directory at all is a legitimate skip."""
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 0
 
 
-def test_main_fails_on_zero_discovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_fails_on_zero_discovery(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """``src/`` exists but holds no Python files — that must FAIL, not pass silently."""
     (tmp_path / "src").mkdir()
     monkeypatch.chdir(tmp_path)
@@ -577,7 +584,7 @@ def test_main_fails_on_zero_discovery(tmp_path: Path, monkeypatch: pytest.Monkey
     assert gate.main() == 1
 
 
-def test_main_passes_on_a_clean_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_passes_on_a_clean_tree(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """A real file with no violations reports success."""
     path_src = tmp_path / "src"
     path_src.mkdir()

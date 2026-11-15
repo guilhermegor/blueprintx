@@ -335,7 +335,7 @@ from capabilities.market_data.domain.entities import OHLCV
 
 @pytest.fixture
 def db_session():
-    db = DatabaseSession("sqlite:///:memory:")
+    db = DatabaseSession(database_url="sqlite:///:memory:")
     db.create_tables()
     with db.session() as session:
         yield session

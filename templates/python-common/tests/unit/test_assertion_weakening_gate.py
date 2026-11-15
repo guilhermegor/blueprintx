@@ -61,7 +61,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys.modules["gate_env"], "has_terminal", lambda: True)
 
 
-def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) -> list[str]:
+def _findings(str_old: str, *, str_new: str, bool_prod_changed: bool = False) -> list[str]:
     """Run the file-level comparator over two versions of one test file's source.
 
     Parameters
@@ -78,10 +78,15 @@ def _findings(str_old: str, str_new: str, *, bool_prod_changed: bool = False) ->
     list of str
         Findings from ``gate._file_findings``.
     """
-    return gate._file_findings("tests/unit/test_sample.py", str_old, str_new, bool_prod_changed)
+    return gate._file_findings(
+        "tests/unit/test_sample.py",
+        str_old_text=str_old,
+        str_new_text=str_new,
+        bool_prod_changed=bool_prod_changed,
+    )
 
 
-def _sole_finding(str_old: str, str_new: str, *, bool_prod_changed: bool = False) -> str:
+def _sole_finding(str_old: str, *, str_new: str, bool_prod_changed: bool = False) -> str:
     """Run the comparator and return its single finding, asserting there is exactly one.
 
     Every fixture in this file is a two-line diff built to trip exactly one rule, so "one
@@ -103,7 +108,7 @@ def _sole_finding(str_old: str, str_new: str, *, bool_prod_changed: bool = False
     str
         The one finding.
     """
-    list_problems = _findings(str_old, str_new, bool_prod_changed=bool_prod_changed)
+    list_problems = _findings(str_old, str_new=str_new, bool_prod_changed=bool_prod_changed)
     assert len(list_problems) == 1, list_problems
     return list_problems[0]
 
@@ -113,7 +118,7 @@ def test_a_deleted_test_function_is_reported(str_fragment: str) -> None:
     """A test present at the merge-base but absent now is a finding."""
     assert str_fragment in _sole_finding(
         "def test_x() -> None:\n\tassert 1 == 1\n",
-        "def test_other() -> None:\n\tassert 1 == 1\n",
+        str_new="def test_other() -> None:\n\tassert 1 == 1\n",
     )
 
 
@@ -121,14 +126,14 @@ def test_a_renamed_test_with_the_same_assertions_is_clean() -> None:
     """Renaming ``..._six_...`` to ``..._seven_...`` is not a deletion (#1073)."""
     str_old = "def test_has_six_required_pages() -> None:\n\tassert 1 == 1\n"
     str_new = "def test_has_seven_required_pages() -> None:\n\tassert 1 == 1\n"
-    assert _findings(str_old, str_new) == []
+    assert _findings(str_old, str_new=str_new) == []
 
 
 def test_a_renamed_test_that_lost_an_assertion_is_still_reported() -> None:
     """NEGATIVE CONTROL: a rename does not launder a weakened body."""
     str_old = "def test_has_six_required_pages() -> None:\n\tassert 1 == 1\n\tassert 2 == 2\n"
     str_new = "def test_has_seven_required_pages() -> None:\n\tassert 1 == 1\n"
-    assert "lost 1 assertion" in _sole_finding(str_old, str_new)
+    assert "lost 1 assertion" in _sole_finding(str_old, str_new=str_new)
 
 
 def test_an_unrelated_new_test_alongside_the_old_one_is_clean() -> None:
@@ -138,7 +143,7 @@ def test_an_unrelated_new_test_alongside_the_old_one_is_clean() -> None:
         "def test_x() -> None:\n\tassert 1 == 1\n\n\ndef test_y() -> None:\n\tassert 2 == 2\n"
     )
 
-    assert _findings(str_old, str_new) == []
+    assert _findings(str_old, str_new=str_new) == []
 
 
 @pytest.mark.parametrize("str_fragment", ["test_x", "lost 1 assertion"])
@@ -146,7 +151,7 @@ def test_an_assertion_removed_is_reported(str_fragment: str) -> None:
     """A test that had two assertions and now has one is a finding, count-based."""
     assert str_fragment in _sole_finding(
         "def test_x() -> None:\n\tassert 1 == 1\n\tassert 2 == 2\n",
-        "def test_x() -> None:\n\tassert 1 == 1\n",
+        str_new="def test_x() -> None:\n\tassert 1 == 1\n",
     )
 
 
@@ -155,7 +160,7 @@ def test_trivialised_to_assert_true_is_reported() -> None:
     str_old = "def test_x() -> None:\n\tassert compute() == 5\n"
     str_new = "def test_x() -> None:\n\tassert True\n"
 
-    list_problems = _findings(str_old, str_new)
+    list_problems = _findings(str_old, str_new=str_new)
 
     assert any("trivialised" in str_p for str_p in list_problems)
 
@@ -165,7 +170,7 @@ def test_equality_weakened_to_membership_is_reported(str_fragment: str) -> None:
     """``==`` narrowed to ``in`` is exactly the defect blueprintx#289's review caught."""
     assert str_fragment in _sole_finding(
         'def test_x() -> None:\n\tassert resolve_intent(x) == "send"\n',
-        'def test_x() -> None:\n\tassert resolve_intent(x) in {"send", "reconcile"}\n',
+        str_new='def test_x() -> None:\n\tassert resolve_intent(x) in {"send", "reconcile"}\n',
     )
 
 
@@ -179,12 +184,12 @@ def test_equality_weakened_to_membership_is_reported(str_fragment: str) -> None:
     ],
 )
 def test_equality_loosened_to_an_inequality_is_reported(
-    str_symbol: str, str_fragment: str
+    str_symbol: str, *, str_fragment: str
 ) -> None:
     """``x == 5`` does not imply ``x > 5``: any inequality accepts values the equality rejected."""
     assert str_fragment in _sole_finding(
         "def test_x() -> None:\n\tassert compute() == 5\n",
-        f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n",
+        str_new=f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n",
     )
 
 
@@ -195,7 +200,7 @@ def test_equality_loosened_to_an_inequality_in_a_call_rewrite_is_reported(
     """``self.assertEqual(a, b)`` rewritten as a bare ``a > b`` is the same loosening."""
     assert "weakened to a bare assert with " + str_symbol in _sole_finding(
         "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n",
-        f"class T:\n\tdef test_x(self) -> None:\n\t\tassert compute() {str_symbol} 5\n",
+        str_new=f"class T:\n\tdef test_x(self) -> None:\n\t\tassert compute() {str_symbol} 5\n",
     )
 
 
@@ -204,7 +209,7 @@ def test_an_assert_that_was_always_an_inequality_is_clean(str_symbol: str) -> No
     """The gate judges a CHANGE from ``==``, so a pre-existing inequality is untouched."""
     str_src = f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n"
 
-    assert _findings(str_src, str_src) == []
+    assert _findings(str_src, str_new=str_src) == []
 
 
 @pytest.mark.parametrize("str_symbol", [">", "<"])
@@ -213,7 +218,7 @@ def test_an_inequality_tightened_to_equality_is_clean(str_symbol: str) -> None:
     assert (
         _findings(
             f"def test_x() -> None:\n\tassert compute() {str_symbol} 5\n",
-            "def test_x() -> None:\n\tassert compute() == 5\n",
+            str_new="def test_x() -> None:\n\tassert compute() == 5\n",
         )
         == []
     )
@@ -226,7 +231,7 @@ def test_assert_equal_loosened_to_an_inequality_call_is_reported(str_call: str) 
     """``assertEqual`` swapped for an inequality call is the unittest twin of ``== -> >``."""
     assert f"assertEqual() weakened to {str_call}()" in _sole_finding(
         "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n",
-        f"class T:\n\tdef test_x(self) -> None:\n\t\tself.{str_call}(compute(), 5)\n",
+        str_new=f"class T:\n\tdef test_x(self) -> None:\n\t\tself.{str_call}(compute(), 5)\n",
     )
 
 
@@ -235,7 +240,7 @@ def test_assert_equal_weakened_to_assert_true_is_reported() -> None:
     str_old = "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertEqual(compute(), 5)\n"
     str_new = "class T:\n\tdef test_x(self) -> None:\n\t\tself.assertTrue(compute())\n"
 
-    list_problems = _findings(str_old, str_new)
+    list_problems = _findings(str_old, str_new=str_new)
 
     assert any("assertEqual() weakened to assertTrue()" in str_p for str_p in list_problems)
 
@@ -245,7 +250,7 @@ def test_raises_broadened_to_bare_exception_is_reported() -> None:
     str_old = "def test_x() -> None:\n\twith pytest.raises(ValueError):\n\t\tf()\n"
     str_new = "def test_x() -> None:\n\twith pytest.raises(Exception):\n\t\tf()\n"
 
-    list_problems = _findings(str_old, str_new)
+    list_problems = _findings(str_old, str_new=str_new)
 
     str_want = "pytest.raises broadened from ValueError to Exception"
     assert any(str_want in str_p for str_p in list_problems)
@@ -263,7 +268,7 @@ def test_raises_replaced_in_place_by_a_plain_assertion_is_reported() -> None:
     )
     str_new = "def test_x() -> None:\n\tassert True\n\tassert 1 == 1\n"
 
-    list_problems = _findings(str_old, str_new)
+    list_problems = _findings(str_old, str_new=str_new)
 
     assert any("pytest.raises removed" in str_p for str_p in list_problems)
 
@@ -273,7 +278,7 @@ def test_raises_kept_at_the_same_specificity_is_clean() -> None:
     str_old = "def test_x() -> None:\n\twith pytest.raises(ValueError):\n\t\tf()\n"
     str_new = "def test_x() -> None:\n\tprepare()\n\twith pytest.raises(ValueError):\n\t\tf()\n"
 
-    assert _findings(str_old, str_new) == []
+    assert _findings(str_old, str_new=str_new) == []
 
 
 def test_a_newly_added_skip_marker_is_reported() -> None:
@@ -281,7 +286,7 @@ def test_a_newly_added_skip_marker_is_reported() -> None:
     str_old = "def test_x() -> None:\n\tassert 1 == 1\n"
     str_new = "@pytest.mark.skip(reason='flaky')\ndef test_x() -> None:\n\tassert 1 == 1\n"
 
-    list_problems = _findings(str_old, str_new)
+    list_problems = _findings(str_old, str_new=str_new)
 
     assert any("newly marked skip" in str_p for str_p in list_problems)
 
@@ -292,7 +297,7 @@ def test_expected_value_changed_alongside_production_code_is_reported() -> None:
     str_new = 'def test_x() -> None:\n\tassert to_decimal_strict("1.999", 2) == Decimal("2.00")\n'
 
     assert "expected value changed while production code changed" in _sole_finding(
-        str_old, str_new, bool_prod_changed=True
+        str_old, str_new=str_new, bool_prod_changed=True
     )
 
 
@@ -301,7 +306,7 @@ def test_expected_value_changed_without_production_code_changing_is_clean() -> N
     str_old = 'def test_x() -> None:\n\tassert to_decimal_strict("1.999", 2) == Decimal("1.99")\n'
     str_new = 'def test_x() -> None:\n\tassert to_decimal_strict("1.999", 2) == Decimal("2.00")\n'
 
-    assert _findings(str_old, str_new, bool_prod_changed=False) == []
+    assert _findings(str_old, str_new=str_new, bool_prod_changed=False) == []
 
 
 def test_a_rewritten_left_hand_expression_is_not_read_as_a_changed_value() -> None:
@@ -316,7 +321,7 @@ def test_a_rewritten_left_hand_expression_is_not_read_as_a_changed_value() -> No
     str_old = 'def test_x() -> None:\n\tassert dict_calls["n"] == 1\n'
     str_new = "def test_x() -> None:\n\tassert cls_call.call_count == 1\n"
 
-    assert _findings(str_old, str_new, bool_prod_changed=True) == []
+    assert _findings(str_old, str_new=str_new, bool_prod_changed=True) == []
 
 
 def test_an_unparsable_new_version_is_a_finding_not_a_silent_pass() -> None:
@@ -325,7 +330,7 @@ def test_an_unparsable_new_version_is_a_finding_not_a_silent_pass() -> None:
     Mirrors #324's sibling gates: "cannot be checked" and "is clean" are opposite facts.
     """
     assert "could not parse" in _sole_finding(
-        "def test_x() -> None:\n\tassert 1 == 1\n", "def test_x(:\n"
+        "def test_x() -> None:\n\tassert 1 == 1\n", str_new="def test_x(:\n"
     )
 
 
@@ -334,7 +339,7 @@ def test_a_clean_file_with_no_test_changes_reports_nothing() -> None:
     str_old = "def test_x() -> None:\n\tassert 1 == 1\n"
     str_new = "def test_x() -> None:\n\t# a harmless comment\n\tassert 1 == 1\n"
 
-    assert _findings(str_old, str_new) == []
+    assert _findings(str_old, str_new=str_new) == []
 
 
 def test_the_report_passes_a_flagged_diff_with_a_justification_trailer(
@@ -356,7 +361,7 @@ def test_the_report_passes_a_flagged_diff_with_a_justification_trailer(
         ),
     )
 
-    assert gate.report(["some finding"], "base-sha", 1) == 0
+    assert gate.report(["some finding"], str_base="base-sha", int_changed_count=1) == 0
 
 
 def test_the_report_fails_a_flagged_diff_with_no_justification(
@@ -365,14 +370,14 @@ def test_the_report_fails_a_flagged_diff_with_no_justification(
     """No ``test-change-ok`` trailer anywhere means the weakening blocks the PR."""
     monkeypatch.setattr(gate, "_git", lambda _args: "fix: unrelated commit body\n")
 
-    assert gate.report(["some finding"], "base-sha", 1) == 1
+    assert gate.report(["some finding"], str_base="base-sha", int_changed_count=1) == 1
 
 
 def test_a_bare_marker_with_no_reason_does_not_justify(monkeypatch: pytest.MonkeyPatch) -> None:
     """The reason is REQUIRED, matching ``gate-change-ok:``'s convention."""
     monkeypatch.setattr(gate, "_git", lambda _args: "test-change-ok:\n")
 
-    assert gate.report(["some finding"], "base-sha", 1) == 1
+    assert gate.report(["some finding"], str_base="base-sha", int_changed_count=1) == 1
 
 
 def test_env_reason_returns_the_stripped_value(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -390,7 +395,9 @@ def test_env_reason_rejects_whitespace_only(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.parametrize("str_marker", ["CI", "GITHUB_ACTIONS"])
-def test_env_reason_is_ignored_under_ci(monkeypatch: pytest.MonkeyPatch, str_marker: str) -> None:
+def test_env_reason_is_ignored_under_ci(
+    monkeypatch: pytest.MonkeyPatch, *, str_marker: str
+) -> None:
     """A workflow ``env:`` line cannot stand in for a justification a reviewer can read."""
     monkeypatch.setenv("TEST_CHANGE_OK", "set by a workflow")
     monkeypatch.setenv(str_marker, "true")
@@ -399,7 +406,7 @@ def test_env_reason_is_ignored_under_ci(monkeypatch: pytest.MonkeyPatch, str_mar
 
 
 @pytest.mark.parametrize("str_value", ["false", "0", "no", "FALSE", ""])
-def test_a_falsy_ci_value_is_not_ci(monkeypatch: pytest.MonkeyPatch, str_value: str) -> None:
+def test_a_falsy_ci_value_is_not_ci(monkeypatch: pytest.MonkeyPatch, *, str_value: str) -> None:
     """``CI=false`` in a developer shell must not disable the local hatch."""
     monkeypatch.setenv("CI", str_value)
     monkeypatch.setenv("TEST_CHANGE_OK", "local reason")
@@ -409,7 +416,7 @@ def test_a_falsy_ci_value_is_not_ci(monkeypatch: pytest.MonkeyPatch, str_value: 
 
 @pytest.mark.parametrize("str_value", ["false", "0", ""])
 def test_a_falsy_github_actions_value_is_still_ci(
-    monkeypatch: pytest.MonkeyPatch, str_value: str
+    monkeypatch: pytest.MonkeyPatch, *, str_value: str
 ) -> None:
     """Presence alone means CI: a runner never sets ``GITHUB_ACTIONS`` falsy."""
     monkeypatch.setenv("GITHUB_ACTIONS", str_value)
@@ -433,7 +440,7 @@ def test_a_blank_env_var_falls_back_to_a_trailer(
     monkeypatch.setenv("TEST_CHANGE_OK", "   ")
     monkeypatch.setattr(gate, "_git", lambda _args: "test-change-ok: from a trailer\n")
 
-    assert gate.report(["some finding"], "base-sha", 1) == 0
+    assert gate.report(["some finding"], str_base="base-sha", int_changed_count=1) == 0
 
 
 def test_the_report_passes_a_flagged_diff_with_the_env_justification(
@@ -443,7 +450,7 @@ def test_the_report_passes_a_flagged_diff_with_the_env_justification(
     monkeypatch.setenv("TEST_CHANGE_OK", "fixing the ROUND_DOWN bug this test pins")
     monkeypatch.setattr(gate, "_git", lambda _args: "")
 
-    assert gate.report(["some finding"], "base-sha", 1) == 0
+    assert gate.report(["some finding"], str_base="base-sha", int_changed_count=1) == 0
 
 
 @pytest.mark.parametrize(
@@ -454,7 +461,7 @@ def test_the_report_passes_a_flagged_diff_with_the_env_justification(
     ],
 )
 def test_the_unjustified_failure_says_how_to_justify_locally(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], str_needle: str
+    monkeypatch: pytest.MonkeyPatch, *, capsys: pytest.CaptureFixture[str], str_needle: str
 ) -> None:
     """The error names the env var for a local commit and says the trailer is CI-only.
 
@@ -468,13 +475,13 @@ def test_the_unjustified_failure_says_how_to_justify_locally(
         The exact phrase the error must carry.
     """
     monkeypatch.setattr(gate, "_git", lambda _args: "")
-    gate.report(["some finding"], "base-sha", 1)
+    gate.report(["some finding"], str_base="base-sha", int_changed_count=1)
 
     assert str_needle in capsys.readouterr().out
 
 
 def test_the_ci_failure_leads_with_the_pr_body_line_not_the_env_var(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Under CI the advice names the PR-body line and says the env var is ignored.
 
@@ -487,7 +494,7 @@ def test_the_ci_failure_leads_with_the_pr_body_line_not_the_env_var(
     """
     monkeypatch.setattr(gate, "_git", lambda _args: "")
     monkeypatch.setenv("CI", "true")
-    gate.report(["some finding"], "base-sha", 1)
+    gate.report(["some finding"], str_base="base-sha", int_changed_count=1)
 
     str_out = capsys.readouterr().out
 
@@ -501,7 +508,7 @@ def test_ci_ignores_test_change_ok_end_to_end(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("CI", "true")
     monkeypatch.setenv("TEST_CHANGE_OK", "a reason")
 
-    assert gate.report(["some finding"], "base-sha", 1) == 1
+    assert gate.report(["some finding"], str_base="base-sha", int_changed_count=1) == 1
 
 
 def test_two_classes_sharing_a_method_name_are_tracked_separately() -> None:
@@ -519,7 +526,7 @@ def test_two_classes_sharing_a_method_name_are_tracked_separately() -> None:
         'class TestOne:\n\tdef test_v(self) -> None:\n\t\tassert a() in {"send", "recon"}\n\n\n'
         'class TestTwo:\n\tdef test_v(self) -> None:\n\t\tassert b() == "x"\n'
     )
-    assert "TestOne.test_v" in _sole_finding(str_old, str_new)
+    assert "TestOne.test_v" in _sole_finding(str_old, str_new=str_new)
 
 
 def test_a_unittest_call_rewritten_as_a_weaker_bare_assert_is_reported() -> None:
@@ -531,7 +538,7 @@ def test_a_unittest_call_rewritten_as_a_weaker_bare_assert_is_reported() -> None
     """
     assert "bare assert with in" in _sole_finding(
         'class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), "send")\n',
-        'class T:\n\tdef test_v(self) -> None:\n\t\tassert a() in {"send", "recon"}\n',
+        str_new='class T:\n\tdef test_v(self) -> None:\n\t\tassert a() in {"send", "recon"}\n',
     )
 
 
@@ -544,14 +551,14 @@ def test_a_unittest_call_rewritten_as_an_equivalent_bare_assert_is_clean() -> No
     """
     str_old = 'class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), "send")\n'
     str_new = 'class T:\n\tdef test_v(self) -> None:\n\t\tassert a() == "send"\n'
-    assert _findings(str_old, str_new) == []
+    assert _findings(str_old, str_new=str_new) == []
 
 
 def test_a_unittest_call_rewritten_as_a_stricter_bare_assert_is_clean() -> None:
     """A stricter operator after the rewrite is a strengthening, not a weakening."""
     str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertIn(a(), [5])\n"
     str_new = "class T:\n\tdef test_v(self) -> None:\n\t\tassert a() == 5\n"
-    assert _findings(str_old, str_new) == []
+    assert _findings(str_old, str_new=str_new) == []
 
 
 @pytest.mark.parametrize("str_new_assert", ["assert True", "assert 1", 'assert "x"'])
@@ -570,7 +577,7 @@ def test_a_call_trivialised_to_any_truthy_constant_is_reported(str_new_assert: s
     """
     assert "truthy constant" in _sole_finding(
         "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n",
-        f"class T:\n\tdef test_v(self) -> None:\n\t\t{str_new_assert}\n",
+        str_new=f"class T:\n\tdef test_v(self) -> None:\n\t\t{str_new_assert}\n",
     )
 
 
@@ -589,7 +596,7 @@ def test_a_call_replaced_by_a_falsy_constant_is_not_a_weakening(str_new_assert: 
     """
     str_old = "class T:\n\tdef test_v(self) -> None:\n\t\tself.assertEqual(a(), 5)\n"
     str_new = f"class T:\n\tdef test_v(self) -> None:\n\t\t{str_new_assert}\n"
-    assert _findings(str_old, str_new) == []
+    assert _findings(str_old, str_new=str_new) == []
 
 
 def _git_in(path_repo: Path, *args: str) -> str:
@@ -617,7 +624,7 @@ def _git_in(path_repo: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def path_mid_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def path_mid_merge(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Return a repo whose ``feature`` has a merge of ``main`` in progress.
 
     ``main`` moves on after the fork, so a base resolved from the pre-merge HEAD (the fork
@@ -668,7 +675,7 @@ _STR_WEAK = _STR_PAD + "def test_v() -> None:\n    assert f() in (1, 2)\n"
 
 
 def _gate_after_merge(
-    path_repo: Path, monkeypatch: pytest.MonkeyPatch, str_main_body: str, str_feat_body: str
+    path_repo: Path, *, monkeypatch: pytest.MonkeyPatch, str_main_body: str, str_feat_body: str
 ) -> int:
     """Run the gate mid-merge, after ``main`` and ``feature`` each moved on from the fork.
 
@@ -715,21 +722,31 @@ def _gate_after_merge(
 
 
 def test_a_weakening_merged_in_from_main_is_not_charged_to_the_branch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Should-fail witness for #1060: main's own weakening must not block the branch."""
-    assert _gate_after_merge(tmp_path, monkeypatch, _STR_WEAK, _STR_STRONG) == 0
+    assert (
+        _gate_after_merge(
+            tmp_path, monkeypatch=monkeypatch, str_main_body=_STR_WEAK, str_feat_body=_STR_STRONG
+        )
+        == 0
+    )
 
 
 def test_a_weakening_authored_on_the_branch_still_fails_after_the_merge(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The other direction: narrowing the base must not blind the gate to the branch's own work."""
-    assert _gate_after_merge(tmp_path, monkeypatch, _STR_STRONG, _STR_WEAK) == 1
+    assert (
+        _gate_after_merge(
+            tmp_path, monkeypatch=monkeypatch, str_main_body=_STR_STRONG, str_feat_body=_STR_WEAK
+        )
+        == 1
+    )
 
 
 @pytest.fixture
-def path_renamed_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def path_renamed_repo(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Return a repo on ``feature`` holding ``tests/test_old.py`` committed on ``main``.
 
     Parameters
@@ -759,7 +776,7 @@ def path_renamed_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def _rename_with(path_repo: Path, str_body: str) -> list[str]:
+def _rename_with(path_repo: Path, *, str_body: str) -> list[str]:
     """Rename ``test_old.py`` to ``test_new.py`` with ``str_body``, stage, and run the gate.
 
     Parameters
@@ -778,17 +795,19 @@ def _rename_with(path_repo: Path, str_body: str) -> list[str]:
     (path_repo / "tests" / "test_new.py").write_text(str_body, encoding="utf-8")
     _git_in(path_repo, "add", "-A")
     str_base = _git_in(path_repo, "rev-parse", "main")
-    return gate.collect_problems(gate.changed_paths(str_base), str_base)
+    return gate.collect_problems(gate.changed_paths(str_base), str_base=str_base)
 
 
 def test_a_renamed_and_weakened_test_file_is_reported(path_renamed_repo: Path) -> None:
     """Renaming a test and weakening its assertion in one commit must fail the gate."""
-    assert any("test_new.py" in str_f for str_f in _rename_with(path_renamed_repo, _STR_WEAK))
+    assert any(
+        "test_new.py" in str_f for str_f in _rename_with(path_renamed_repo, str_body=_STR_WEAK)
+    )
 
 
 def test_a_merely_renamed_test_file_is_clean(path_renamed_repo: Path) -> None:
     """A pure rename keeps every assertion, so the gate stays green."""
-    assert _rename_with(path_renamed_repo, _STR_STRONG) == []
+    assert _rename_with(path_renamed_repo, str_body=_STR_STRONG) == []
 
 
 def test_a_source_file_renamed_into_tests_touches_production_code() -> None:
@@ -801,7 +820,7 @@ def test_a_test_file_moved_out_of_tests_is_reported(path_renamed_repo: Path) -> 
     (path_renamed_repo / "src").mkdir()
     _git_in(path_renamed_repo, "mv", "tests/test_old.py", "src/old.py")
     str_base = _git_in(path_renamed_repo, "rev-parse", "main")
-    list_found = gate.collect_problems(gate.changed_paths(str_base), str_base)
+    list_found = gate.collect_problems(gate.changed_paths(str_base), str_base=str_base)
     assert any("tests/test_old.py" in str_f for str_f in list_found)
 
 
@@ -817,7 +836,7 @@ def test_a_source_file_renamed_into_tests_is_not_read_as_an_old_test(
     _git_in(path_renamed_repo, "mv", "src/app.py", "tests/test_app.py")
     (path_renamed_repo / "tests" / "test_app.py").write_text(_STR_WEAK, encoding="utf-8")
     _git_in(path_renamed_repo, "add", "-A")
-    assert gate.collect_problems(gate.changed_paths(str_base), str_base) == []
+    assert gate.collect_problems(gate.changed_paths(str_base), str_base=str_base) == []
 
 
 @pytest.mark.parametrize(
@@ -832,10 +851,10 @@ def test_a_source_file_renamed_into_tests_is_not_read_as_an_old_test(
     ],
 )
 def test_test_file_removed_classifies_each_row_shape(
-    str_status: str, str_src: str, str_dst: str, bool_expected: bool
+    str_status: str, *, str_src: str, str_dst: str, bool_expected: bool
 ) -> None:
     """Only a deleted test, or one moved to a non-test path, has left the suite."""
-    assert gate._test_file_removed(str_status, str_src, str_dst) is bool_expected
+    assert gate._test_file_removed(str_status, str_src=str_src, str_path=str_dst) is bool_expected
 
 
 def test_moving_a_test_into_src_arms_the_expected_value_rule() -> None:

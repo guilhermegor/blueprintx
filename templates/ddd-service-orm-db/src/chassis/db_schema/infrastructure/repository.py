@@ -25,7 +25,7 @@ class SQLAlchemyRecordRepository(Repository[dict[str, object]]):
     Examples
     --------
     >>> from chassis.db_schema.infrastructure import DatabaseSession, SQLAlchemyRecordRepository
-    >>> db = DatabaseSession("sqlite:///app.db")
+    >>> db = DatabaseSession(database_url="sqlite:///app.db")
     >>> db.create_tables()
     >>> with db.session() as session:
     ...     repo = SQLAlchemyRecordRepository(session)
