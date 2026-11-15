@@ -27,7 +27,12 @@ jobs:
       - name: Install ShellCheck
         run: command -v shellcheck >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck; }
 
+      - name: Install shfmt
+        run: command -v shfmt >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends shfmt; }
+
       - name: Lint all shell scripts (severity ≥ warning)
+        env:
+          LINT_SHELL_REQUIRED: "1"
         run: bash bin/ci/check_shell.sh
 
   sed-portability:
