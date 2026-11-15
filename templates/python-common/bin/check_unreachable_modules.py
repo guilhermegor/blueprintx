@@ -33,14 +33,18 @@ def module_map(path_src: pathlib.Path) -> dict[str, pathlib.Path]:
     -------
     dict of str to pathlib.Path
         Dotted module name (``pkg.sub.mod``; a package ``__init__`` is the package) to file.
+        When ``pkg.py`` and ``pkg/__init__.py`` both exist the package wins, as it does for
+        the import system.
     """
     dict_modules = {}
     for path_file in sorted(path_src.rglob("*.py")):
         list_parts = list(path_file.relative_to(path_src).with_suffix("").parts)
         if list_parts[-1] == "__init__":
             list_parts.pop()
-        if list_parts:
-            dict_modules[".".join(list_parts)] = path_file
+        str_name = ".".join(list_parts)
+        path_known = dict_modules.get(str_name)
+        if list_parts and not (path_known and path_known.name == "__init__.py"):
+            dict_modules[str_name] = path_file
     return dict_modules
 
 

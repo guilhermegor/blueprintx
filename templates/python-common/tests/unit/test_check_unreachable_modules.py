@@ -347,6 +347,15 @@ def test_a_file_with_a_coding_cookie_is_decoded_by_it(tmp_path: Path) -> None:
     assert _run(tmp_path) == 0
 
 
+def test_a_package_shadows_a_module_of_the_same_name(tmp_path: Path) -> None:
+    """``pkg/__init__.py`` is what ``import pkg`` loads, so its imports are the ones followed."""
+    _write(tmp_path, "src/pkg/__init__.py", "from pkg import _impl\n")
+    _write(tmp_path, "src/pkg.py")
+    _write(tmp_path, "src/pkg/_impl.py")
+
+    assert _run(tmp_path) == 0
+
+
 def test_a_file_with_a_null_byte_fails_with_a_finding(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
