@@ -773,3 +773,44 @@ def test_a_renamed_test_keeping_its_xfail_is_not_flagged() -> None:
     str_old = "@pytest.mark.xfail\ndef test_has_six_pages() -> None:\n    assert count() == 6\n"
     str_new = "@pytest.mark.xfail\ndef test_has_seven_pages() -> None:\n    assert count() == 6\n"
     assert gate.newly_skipped_tests(str_old, str_new=str_new, str_shown="x") == []
+
+
+def test_gate_env_note_names_a_person_when_no_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a readable ``/dev/tty`` the hint says a person must run the commit."""
+    monkeypatch.setattr(gate_env, "has_terminal", lambda: False)
+
+    assert "a person must run that commit" in gate_env.no_terminal_note()
+
+
+def test_gate_env_note_is_empty_with_a_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With a terminal the hint is empty, so the message keeps its current text."""
+    monkeypatch.setattr(gate_env, "has_terminal", lambda: True)
+
+    assert gate_env.no_terminal_note() == ""
+
+
+def test_report_says_interactive_terminal_only_when_no_terminal(
+    monkeypatch: pytest.MonkeyPatch, *, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The unjustified failure says the override is honored only in an interactive terminal."""
+    _local_shell(monkeypatch)
+    monkeypatch.setattr(gate_env, "has_terminal", lambda: False)
+    monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    monkeypatch.setattr(gate, "pr_body_text", lambda: "")
+    gate.report(["some finding"], str_base="base", int_changed_count=1)
+
+    assert "honored only in an interactive terminal" in capsys.readouterr().out
+
+
+def test_report_omits_the_terminal_hint_with_a_terminal(
+    monkeypatch: pytest.MonkeyPatch, *, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With a terminal the unjustified failure keeps its current text."""
+    _local_shell(monkeypatch)
+    monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    monkeypatch.setattr(gate, "pr_body_text", lambda: "")
+    gate.report(["some finding"], str_base="base", int_changed_count=1)
+
+    assert "interactive terminal" not in capsys.readouterr().out
