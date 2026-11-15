@@ -1,0 +1,3 @@
+storage=y
+webhook=y
+webhook_platform=slack

@@ -27,3 +27,8 @@ optional|Every generated project ships the files it references|new gate (bluepri
 optional|PR body matches the template layout (blueprintx#587)|runs on every PR into main (branches: [main]); not required yet, owner decision pending
 optional|Generated TS project - npm ci, lint, jest (react-spa-webpack)|new job; require once it has a green record on main
 optional|Generated TS project - npm ci, lint, jest (ts-lib)|new job; require once it has a green record on main
+optional|Scaffold + lint + test (webhook opt-in) — api-service-native-db|new job; require once it has a green record on main
+optional|Scaffold + lint + test (webhook opt-in) — ddd-service-native-db|new job; require once it has a green record on main
+optional|Scaffold + lint + test (webhook opt-in) — ddd-service-orm-db|new job; require once it has a green record on main
+optional|Scaffold + lint + test (webhook opt-in) — mvc-service-native-db|new job; require once it has a green record on main
+optional|Scaffold + lint + test (webhook opt-in) — mvc-service-orm-db|new job; require once it has a green record on main

@@ -7,14 +7,27 @@ being swallowed, matching the Slack adapter; the caller decides whether to send 
 ``WEBHOOK_ENV_GATE`` environment check.
 """
 
-import pymsteams
+from typing import TYPE_CHECKING
+
+import pymsteams  # type: ignore[import-untyped]
 
 
-class TeamsNotifier:
+if TYPE_CHECKING:
+
+    class TypeChecker(type):
+        """Type-only stub — see src/utils/CLAUDE.md."""
+else:
+    try:
+        from utils.typing import TypeChecker
+    except ModuleNotFoundError:
+        from chassis.typing import TypeChecker
+
+
+class TeamsNotifier(metaclass=TypeChecker):
     """Adapter that posts notifications to a Microsoft Teams incoming webhook."""
 
     @staticmethod
-    def _validate_url(str_url: str) -> None:
+    def _validate_url(str_url: str) -> None:  # complexity-ok: two input guards, one error each
         """Validate the webhook URL format.
 
         Parameters
@@ -43,7 +56,9 @@ class TeamsNotifier:
         self._validate_url(str_url)
         self._str_url = str_url
 
-    def send(self, str_message: str, *, str_title: str = "ROUTINE_CONCLUSION") -> None:
+    def send(  # complexity-ok: guard + failure map
+        self, str_message: str, *, str_title: str = "ROUTINE_CONCLUSION"
+    ) -> None:
         """Post a message to the configured Teams channel.
 
         Parameters

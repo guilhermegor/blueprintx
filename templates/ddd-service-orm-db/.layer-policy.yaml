@@ -57,6 +57,7 @@ layers:
         The ORM IS this tier's persistence contract, not a peripheral dependency: Base,
         Session and the Repository ABC are written in it, and chassis/db_schema is the
         adapter. Swapping it is a rewrite, not a swap — the criterion in CLAUDE.md.
+      pymsteams: "Teams webhook transport, the only importer is the opt-in webhook teams_notifier adapter"
       opentelemetry: >-
         OTLP log export behind chassis/otel_logging.py (opt-in, blueprintx#438). The ONLY
         place this vendor is imported — application code calls configure_otel_logging(logger),

@@ -53,6 +53,7 @@ layers:
         Optional widening for the runtime type-checker (chassis/typing/policy.py), probed
         with a guarded import so a tier without numpy still loads.
       pandas: "the chassis seam layer owns the pandas surface, as utils/ does in the MVC tiers"
+      pymsteams: "Teams webhook transport, the only importer is the opt-in webhook teams_notifier adapter"
       opentelemetry: >-
         OTLP log export behind chassis/otel_logging.py (opt-in, blueprintx#438). The ONLY
         place this vendor is imported — application code calls configure_otel_logging(logger),

@@ -330,10 +330,10 @@ conditional_copy_email() {
         }
         /^CLS_EMAIL_HANDLER = None$/ {
             print "CLS_EMAIL_HANDLER = build_email_handler("
-            print "\tstr_backend=\"" backend "\","
-            print "\tstr_sender=os.getenv(\"SENDER_EMAIL\", \"\"),"
-            print "\tpath_signatures_dir=resolve_path(\"src/config/signatures\"),"
-            print "\tlogger=LOGGER,"
+            print "    str_backend=\"" backend "\","
+            print "    str_sender=os.getenv(\"SENDER_EMAIL\", \"\"),"
+            print "    path_signatures_dir=resolve_path(\"src/config/signatures\"),"
+            print "    logger=LOGGER,"
             print ")"
             next
         }
@@ -467,6 +467,7 @@ conditional_copy_webhooks_yaml() {
     webhook_env=$'\n# Webhook — platform auto-detected from the URL; fires only when ENV is a\n# production value (prod/production/...). Leave WEBHOOK_URL empty to opt out.\nWEBHOOK_URL=\n'
     printf '%s' "$webhook_env" >> "$project_path/.env"
     printf '%s' "$webhook_env" >> "$project_path/.env.example"
+    cat "$COMMON_TEMPLATE_ROOT/optional/webhook.config.md" >> "$project_path/docs/configuration.md"
     print_status "success" "Webhook provider (utils/webhook) + webhooks.yaml added"
 }
 
@@ -486,15 +487,17 @@ from utils.webhook.factory import build_webhook  # noqa: E402
 # Accent/case-insensitive, so "Prod"/"PRODUÇÃO"/"production" all match — and a
 # mistyped ENV on a dev box stays silent (unlike a "!= development" deny-list).
 _SET_ENV_PRODUCTION = frozenset({"prod", "production", "producao"})
-YAML_WEBHOOKS: dict = yaml.safe_load((_CONFIG_DIR / "webhooks.yaml").read_text(encoding="utf-8"))
+YAML_WEBHOOKS: dict[str, str] = yaml.safe_load(
+    (_CONFIG_DIR / "webhooks.yaml").read_text(encoding="utf-8")
+)
 BOOL_WEBHOOK_ENABLED: bool = normalize_text(ENVIRONMENT) in _SET_ENV_PRODUCTION
 CLS_WEBHOOK = build_webhook(os.getenv("WEBHOOK_URL", ""))
 MSG_WEBHOOK: str = YAML_WEBHOOKS["message"].format(
-	app_name=APP_NAME,
-	environment=ENVIRONMENT,
-	hostname=HOSTNAME,
-	user=USER,
-	log_path=str(PATH_LOG),
+    app_name=APP_NAME,
+    environment=ENVIRONMENT,
+    hostname=HOSTNAME,
+    user=USER,
+    log_path=str(PATH_LOG),
 )
 PYBLOCK
     print_status "success" "Webhook wiring appended to startup.py"
@@ -513,8 +516,8 @@ conditional_patch_main_py() {
             next
         }
         /^\)\.run\(\)$/ {
-            print "\tcls_webhook=CLS_WEBHOOK if BOOL_WEBHOOK_ENABLED else None,"
-            print "\tstr_webhook_message=MSG_WEBHOOK,"
+            print "    cls_webhook=CLS_WEBHOOK if BOOL_WEBHOOK_ENABLED else None,"
+            print "    str_webhook_message=MSG_WEBHOOK,"
             print
             next
         }
