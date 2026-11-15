@@ -83,7 +83,7 @@ from ..domain.entities import Note
 from ..domain.ports import NoteRepository
 
 
-def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:
+def create_note(cls_dto: NoteCreateDTO, *, cls_repo: NoteRepository) -> NoteResponseDTO:
     cls_note = Note(title=cls_dto.title)
     cls_stored = cls_repo.add(cls_note)
     return NoteResponseDTO(
@@ -139,7 +139,7 @@ cls_db_session.create_tables()  # runs Base.metadata.create_all()
 
 with cls_db_session.session() as cls_session:
     cls_repo = SQLNoteRepository(cls_session)
-    cls_note = create_note(NoteCreateDTO(title="Hello"), cls_repo)
+    cls_note = create_note(NoteCreateDTO(title="Hello"), cls_repo=cls_repo)
     cls_session.commit()
 ```
 

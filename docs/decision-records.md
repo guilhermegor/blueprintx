@@ -1121,8 +1121,8 @@ is shaped as it is; a generated project gets the behavior, not the history.
 - **Preview mode is for PLR1702 only** (too-many-nested-blocks, still preview-only in ruff
   0.17.5: `ruff rule PLR1702`). It also activates tag-along preview rules in the `PL` and `S`
   families, never chosen on their merits, so each is settled rule by rule (#434, #1054).
-  Re-measured with ruff 0.17.5 and the current `ruff.toml` ignores (`PLC1901`, `S404`, `PLR0917`)
-  as `ruff check --isolated --select PL,S --ignore PLC1901,S404,PLR0917` over
+  Re-measured with ruff 0.17.5 and the current `ruff.toml` ignores (`PLC1901`, `S404`)
+  as `ruff check --isolated --select PL,S --ignore PLC1901,S404` over
   `templates/python-common/{src,bin,optional}`: 66 findings stable, 71 with `--preview`. The 5
   extra are all `PLC2701`, which the shipped `ruff.toml` already settles with a `bin/` and
   `tests/` per-file-ignore and line-scoped `noqa` on the private imports in `optional/`. The older
@@ -1200,9 +1200,12 @@ is shaped as it is; a generated project gets the behavior, not the history.
       so `== ""` is the exact test (27 findings).
     - `S404` stays ignored: the import finds nothing, and the calls are covered by `S603` and
       `S607` (24 findings).
-    - `PLR0917` stays ignored for now: with `max-positional-args = 1` it reports 1069
-      findings in the templates, nearly all call sites of shipped APIs and tests, so it is a
-      signature change tracked as its own slice, not a lint toggle.
+    - `PLR0917` is enforced with `[lint.pylint] max-positional-args = 1` (#1054, shipped in
+      three slices of signature changes before the rule was turned on): only the subject
+      argument is positional, so two same-typed arguments cannot be swapped silently at a call
+      site. Every other parameter is keyword-only (`*,`). A signature fixed by a foreign
+      contract (a DB-API cursor, a PyYAML constructor override, a metaclass hook) is the only
+      per-file exemption and is listed in `[lint.per-file-ignores]`.
     - Re-enabled, with the shipped code made clean: `PLR6301` (a method with no `self` use is
       a `@staticmethod`; an override of a foreign or port signature carries a line-scoped
       `# noqa: PLR6301`), `PLC0415` (stdlib imports hoisted; a deliberately lazy optional

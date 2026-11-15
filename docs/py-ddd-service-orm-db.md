@@ -157,7 +157,7 @@ from ..domain.dto import NoteCreateDTO, NoteResponseDTO
 from ..domain.entities import Note
 from ..domain.ports import NoteRepository
 
-def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:
+def create_note(cls_dto: NoteCreateDTO, *, cls_repo: NoteRepository) -> NoteResponseDTO:
     cls_note = Note(id=uuid.uuid4().hex, title=cls_dto.title, created_at=datetime.now(tz=timezone.utc))
     cls_stored = cls_repo.add(cls_note)
     return NoteResponseDTO(
@@ -291,7 +291,7 @@ def build() -> AppContainer:
     cls_session = cls_db.session()
     cls_note_repo = SQLNoteRepository(cls_session)
     return AppContainer(
-        create_note=lambda cls_dto: create_note(cls_dto, cls_note_repo),
+        create_note=lambda cls_dto: create_note(cls_dto, cls_repo=cls_note_repo),
         list_notes=lambda: list_notes(cls_note_repo),
     )
 ```

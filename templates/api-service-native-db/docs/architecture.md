@@ -130,7 +130,7 @@ from ..domain.entities import Note
 from ..domain.ports import NoteRepository
 
 
-def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:
+def create_note(cls_dto: NoteCreateDTO, *, cls_repo: NoteRepository) -> NoteResponseDTO:
     cls_note = Note(title=cls_dto.title)
     cls_stored = cls_repo.add(cls_note)
     return NoteResponseDTO(
@@ -180,7 +180,7 @@ from fastapi import APIRouter, status
 from ..domain.dto import NoteCreateDTO, NoteResponseDTO
 
 
-def build_example_feature_router(fn_create_note, fn_list_notes) -> APIRouter:
+def build_example_feature_router(fn_create_note, *, fn_list_notes) -> APIRouter:
     cls_router = APIRouter(prefix="/notes", tags=["notes"])
 
     @cls_router.post("", response_model=NoteResponseDTO, status_code=status.HTTP_201_CREATED)
@@ -198,7 +198,7 @@ def build_example_feature_router(fn_create_note, fn_list_notes) -> APIRouter:
 # app/api.py — the composition root is the only place transport and container meet
 cls_container = build()
 cls_app.include_router(
-    build_example_feature_router(cls_container.create_note, cls_container.list_notes)
+    build_example_feature_router(cls_container.create_note, fn_list_notes=cls_container.list_notes)
 )
 ```
 
