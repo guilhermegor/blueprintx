@@ -33,7 +33,7 @@ DICT_MALICIOUS_DSN = {
 
 
 @pytest.mark.parametrize(("str_target", "str_dsn"), sorted(DICT_MALICIOUS_DSN.items()))
-def test_dashed_dbname_rejected_before_subprocess_runs(str_target: str, str_dsn: str) -> None:
+def test_dashed_dbname_rejected_before_subprocess_runs(str_target: str, *, str_dsn: str) -> None:
     """A dashed database name is rejected at construction, never reaching ``subprocess.run``.
 
     Parameters

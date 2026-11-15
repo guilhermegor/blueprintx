@@ -64,7 +64,7 @@ for str_mod, tuple_names in (("yaml", ()), ("check_docs_gap", ("load_mkdocs", "p
         sys.modules[str_mod] = mod_stub
 from check_docs_language import paragraph_locale, prose_paragraphs
 list_paragraphs = prose_paragraphs(sys.argv[2] + "\n")
-sys.exit(3 if any(paragraph_locale(str_p, "pt-BR") != "pt-BR" for _, str_p in list_paragraphs) else 0)
+sys.exit(3 if any(paragraph_locale(str_p, str_declared="pt-BR") != "pt-BR" for _, str_p in list_paragraphs) else 0)
 ' "$BLUEPRINTX_ROOT/templates/python-common/bin" "$1"
 }
 

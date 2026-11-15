@@ -20,12 +20,8 @@ from controller.pipeline_reconcile import ReconcilePipeline
 from controller.pipeline_send import SendPipeline
 
 
-def _build_args(tmp_path: Path) -> tuple:
-    """Return the positional collaborator args every ``pipeline_<intent>`` constructor accepts.
-
-    Positional (not keyword) on purpose: the third parameter's name differs between the
-    native-DB tier (``fn_build_connection``) and the ORM tier (``fn_build_engine``), so a
-    positional call is the form both tiers' copies of this test can share unchanged.
+def _build_kwargs(tmp_path: Path) -> dict:
+    """Return the keyword collaborators every ``pipeline_<intent>`` constructor accepts.
 
     Parameters
     ----------
@@ -34,16 +30,17 @@ def _build_args(tmp_path: Path) -> tuple:
 
     Returns
     -------
-    tuple
-        ``(cls_logger, fn_build_connection, fn_output_path, path_json, dict_context)``.
+    dict
+        The ``cls_logger``, ``fn_build_connection``, ``fn_output_path``, ``path_json`` and
+        ``dict_context`` keywords.
     """
-    return (
-        None,
-        lambda: None,
-        lambda str_key: tmp_path / str_key,
-        tmp_path / "summary.json",
-        {},
-    )
+    return {
+        "cls_logger": None,
+        "fn_build_connection": lambda: None,
+        "fn_output_path": lambda str_key: tmp_path / str_key,
+        "path_json": tmp_path / "summary.json",
+        "dict_context": {},
+    }
 
 
 @pytest.mark.parametrize(
@@ -60,7 +57,7 @@ def _build_args(tmp_path: Path) -> tuple:
     ],
 )
 def test_resolve_intent_maps_known_spelling_to_canonical_intent(
-    str_raw: str, str_expected: str
+    str_raw: str, *, str_expected: str
 ) -> None:
     """Every documented spelling (English/pt-BR, any case/accent) maps to ITS canonical intent.
 
@@ -105,7 +102,7 @@ def test_build_pipeline_returns_send_pipeline_for_send_intent(tmp_path: Path) ->
     -------
     None
     """
-    cls_pipeline = build_pipeline("send", *_build_args(tmp_path))
+    cls_pipeline = build_pipeline("send", **_build_kwargs(tmp_path))
     assert isinstance(cls_pipeline, SendPipeline)
 
 
@@ -121,7 +118,7 @@ def test_build_pipeline_returns_reconcile_pipeline_for_reconcile_intent(tmp_path
     -------
     None
     """
-    cls_pipeline = build_pipeline("reconcile", *_build_args(tmp_path))
+    cls_pipeline = build_pipeline("reconcile", **_build_kwargs(tmp_path))
     assert isinstance(cls_pipeline, ReconcilePipeline)
 
 
@@ -138,5 +135,5 @@ def test_build_pipeline_raises_systemexit_on_unregistered_intent(tmp_path: Path)
     None
     """
     with pytest.raises(SystemExit) as cls_exc_info:
-        build_pipeline("not-a-real-intent", *_build_args(tmp_path))
+        build_pipeline("not-a-real-intent", **_build_kwargs(tmp_path))
     assert cls_exc_info.value.code == 2

@@ -57,10 +57,10 @@ def test_read_xml_extracts_one_row_per_anchor_using_ordered_alternative_paths(
     path_xml.write_text(_fixture_xml())
     df_result = read_xml(
         path_xml,
-        "Tx",
-        {"isin": ("New/FinInstrm/Id", "Cxl/FinInstrm/Id")},
-        {"isin": "str"},
-        _empty_contract(),
+        str_row_anchor="Tx",
+        dict_column_paths={"isin": ("New/FinInstrm/Id", "Cxl/FinInstrm/Id")},
+        dict_dtypes={"isin": "str"},
+        cls_contract=_empty_contract(),
     )
     assert list(df_result["isin"]) == ["ISIN123", "ISIN456"]
 
@@ -70,7 +70,11 @@ def test_read_xml_wildcard_segment_matches_either_subblock_name(tmp_path: Path) 
     path_xml = tmp_path / "fixture.xml"
     path_xml.write_text(_fixture_xml())
     df_result = read_xml(
-        path_xml, "Tx", {"isin": ("*/FinInstrm/Id",)}, {"isin": "str"}, _empty_contract()
+        path_xml,
+        str_row_anchor="Tx",
+        dict_column_paths={"isin": ("*/FinInstrm/Id",)},
+        dict_dtypes={"isin": "str"},
+        cls_contract=_empty_contract(),
     )
     assert list(df_result["isin"]) == ["ISIN123", "ISIN456"]
 
@@ -90,7 +94,11 @@ def test_read_xml_wildcard_backtracks_past_a_non_completing_first_child(
         "</Tx></Document>"
     )
     df_result = read_xml(
-        path_xml, "Tx", {"isin": ("*/FinInstrm/Id",)}, {"isin": "str"}, _empty_contract()
+        path_xml,
+        str_row_anchor="Tx",
+        dict_column_paths={"isin": ("*/FinInstrm/Id",)},
+        dict_dtypes={"isin": "str"},
+        cls_contract=_empty_contract(),
     )
     assert list(df_result["isin"]) == ["ISIN999"]
 
@@ -103,10 +111,10 @@ def test_read_xml_row_filter_keeps_only_records_carrying_the_given_block(
     path_xml.write_text(_fixture_xml())
     df_result = read_xml(
         path_xml,
-        "Tx",
-        {"isin": ("New/FinInstrm/Id", "Cxl/FinInstrm/Id")},
-        {"isin": "str"},
-        _empty_contract(),
+        str_row_anchor="Tx",
+        dict_column_paths={"isin": ("New/FinInstrm/Id", "Cxl/FinInstrm/Id")},
+        dict_dtypes={"isin": "str"},
+        cls_contract=_empty_contract(),
         str_row_filter="New",
     )
     assert list(df_result["isin"]) == ["ISIN123"]
@@ -128,7 +136,11 @@ def test_read_xml_attribute_path_matches_a_namespace_prefixed_attribute(
         "</Tx></Document>"
     )
     df_result = read_xml(
-        path_xml, "Tx", {"ccy": ("MntryVal/@Ccy",)}, {"ccy": "str"}, _empty_contract()
+        path_xml,
+        str_row_anchor="Tx",
+        dict_column_paths={"ccy": ("MntryVal/@Ccy",)},
+        dict_dtypes={"ccy": "str"},
+        cls_contract=_empty_contract(),
     )
     assert list(df_result["ccy"]) == ["BRL"]
 
@@ -141,10 +153,10 @@ def test_read_xml_attribute_path_captures_the_currency_a_text_path_cannot(
     path_xml.write_text(_fixture_xml())
     df_without_attr = read_xml(
         path_xml,
-        "Tx",
-        {"amount": ("New/Pric/Pri/MntryVal",)},
-        {"amount": "str"},
-        _empty_contract(),
+        str_row_anchor="Tx",
+        dict_column_paths={"amount": ("New/Pric/Pri/MntryVal",)},
+        dict_dtypes={"amount": "str"},
+        cls_contract=_empty_contract(),
         str_row_filter="New",
     )
     assert "ccy" not in df_without_attr.columns
@@ -156,10 +168,13 @@ def test_read_xml_attribute_path_reaches_the_currency(tmp_path: Path) -> None:
     path_xml.write_text(_fixture_xml())
     df_with_attr = read_xml(
         path_xml,
-        "Tx",
-        {"amount": ("New/Pric/Pri/MntryVal",), "ccy": ("New/Pric/Pri/MntryVal/@Ccy",)},
-        {"amount": "str", "ccy": "str"},
-        _empty_contract(),
+        str_row_anchor="Tx",
+        dict_column_paths={
+            "amount": ("New/Pric/Pri/MntryVal",),
+            "ccy": ("New/Pric/Pri/MntryVal/@Ccy",),
+        },
+        dict_dtypes={"amount": "str", "ccy": "str"},
+        cls_contract=_empty_contract(),
         str_row_filter="New",
     )
     assert df_with_attr.loc[0, "ccy"] == "BRL"
@@ -171,13 +186,13 @@ def test_read_xml_absolute_path_broadcasts_one_scalar_to_every_row(tmp_path: Pat
     path_xml.write_text(_fixture_xml())
     df_result = read_xml(
         path_xml,
-        "Tx",
-        {
+        str_row_anchor="Tx",
+        dict_column_paths={
             "isin": ("New/FinInstrm/Id", "Cxl/FinInstrm/Id"),
             "report_id": ("/FinInstrmRptgTxRpt/Hdr/RptId",),
         },
-        {"isin": "str", "report_id": "str"},
-        _empty_contract(),
+        dict_dtypes={"isin": "str", "report_id": "str"},
+        cls_contract=_empty_contract(),
     )
     assert list(df_result["report_id"]) == ["R1", "R1"]
 
@@ -188,7 +203,13 @@ def test_read_xml_matches_local_name_ignoring_namespace(tmp_path: Path) -> None:
     path_xml.write_text(
         '<Doc xmlns="urn:example:v1"><Row><Id>1</Id></Row><Row><Id>2</Id></Row></Doc>'
     )
-    df_result = read_xml(path_xml, "Row", {"id": ("Id",)}, {"id": "str"}, _empty_contract())
+    df_result = read_xml(
+        path_xml,
+        str_row_anchor="Row",
+        dict_column_paths={"id": ("Id",)},
+        dict_dtypes={"id": "str"},
+        cls_contract=_empty_contract(),
+    )
     assert list(df_result["id"]) == ["1", "2"]
 
 
@@ -198,18 +219,32 @@ def test_read_xml_raises_contracterror_on_missing_required_column(tmp_path: Path
     path_xml.write_text(_fixture_xml())
     cls_contract = FileContract("tx", "tx", ("missing_col",), ())
     with pytest.raises(ContractError):
-        read_xml(path_xml, "Tx", {"isin": ("New/FinInstrm/Id",)}, {"isin": "str"}, cls_contract)
+        read_xml(
+            path_xml,
+            str_row_anchor="Tx",
+            dict_column_paths={"isin": ("New/FinInstrm/Id",)},
+            dict_dtypes={"isin": "str"},
+            cls_contract=cls_contract,
+        )
 
 
 def test_read_xml_raises_filenotfound_for_a_missing_file(tmp_path: Path) -> None:
     """A missing file fails fast, like every other reader in this seam family."""
     with pytest.raises(FileNotFoundError):
-        read_xml(tmp_path / "nope.xml", "Tx", {}, {}, _empty_contract())
+        read_xml(
+            tmp_path / "nope.xml",
+            str_row_anchor="Tx",
+            dict_column_paths={},
+            dict_dtypes={},
+            cls_contract=_empty_contract(),
+        )
 
 
 def test_find_xml_row_problems_reports_a_missing_file_as_fatal(tmp_path: Path) -> None:
     """A missing file is a FATAL finding, not a FileNotFoundError (the "never raises" half)."""
-    cls_report = find_xml_row_problems(tmp_path / "nope.xml", "Tx", _empty_contract())
+    cls_report = find_xml_row_problems(
+        tmp_path / "nope.xml", str_row_anchor="Tx", cls_contract=_empty_contract()
+    )
     assert "not found" in " ".join(cls_report.list_fatal)
 
 
@@ -217,7 +252,9 @@ def test_find_xml_row_problems_is_empty_when_rows_are_found(tmp_path: Path) -> N
     """A document carrying the expected row tag reports no problems."""
     path_xml = tmp_path / "fixture.xml"
     path_xml.write_text(_fixture_xml())
-    cls_report = find_xml_row_problems(path_xml, "Tx", _empty_contract())
+    cls_report = find_xml_row_problems(
+        path_xml, str_row_anchor="Tx", cls_contract=_empty_contract()
+    )
     assert cls_report == ProblemReport(list_fatal=[], list_warnings=[])
 
 
@@ -225,7 +262,9 @@ def test_find_xml_row_problems_reports_when_no_row_anchor_is_found(tmp_path: Pat
     """A document with none of the expected row tag reports a FATAL problem, never raises."""
     path_xml = tmp_path / "empty.xml"
     path_xml.write_text("<Document></Document>")
-    cls_report = find_xml_row_problems(path_xml, "Tx", _empty_contract())
+    cls_report = find_xml_row_problems(
+        path_xml, str_row_anchor="Tx", cls_contract=_empty_contract()
+    )
     assert cls_report.list_fatal != []
 
 
@@ -233,7 +272,9 @@ def test_find_xml_row_problems_with_no_row_anchor_adds_no_warnings(tmp_path: Pat
     """A document with no row tag is fatal only; nothing is duplicated into warnings."""
     path_xml = tmp_path / "empty.xml"
     path_xml.write_text("<Document></Document>")
-    cls_report = find_xml_row_problems(path_xml, "Tx", _empty_contract())
+    cls_report = find_xml_row_problems(
+        path_xml, str_row_anchor="Tx", cls_contract=_empty_contract()
+    )
     assert cls_report.list_warnings == []
 
 

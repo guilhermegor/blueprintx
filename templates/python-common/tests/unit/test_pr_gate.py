@@ -58,7 +58,7 @@ gate = _load_gate()
         ("some/unknown/thing.xyz", "other"),
     ],
 )
-def test_classify_path_maps_each_class(str_path: str, str_expected: str) -> None:
+def test_classify_path_maps_each_class(str_path: str, *, str_expected: str) -> None:
     """Each representative path lands in its documented risk class."""
     assert gate.classify_path(str_path) == str_expected
 
@@ -72,7 +72,7 @@ def test_classify_path_maps_each_class(str_path: str, str_expected: str) -> None
     ids=["docs-never-masks-src", "docs-never-masks-tests"],
 )
 def test_classify_risk_returns_the_most_dangerous_class(
-    list_paths: list[str], str_class: str
+    list_paths: list[str], *, str_class: str
 ) -> None:
     """A mixed PR collapses to its most dangerous class — docs never masks src.
 
@@ -115,7 +115,7 @@ def test_an_unknown_path_is_never_auto_mergeable() -> None:
         (501, "XL"),
     ],
 )
-def test_classify_size_buckets(int_lines: int, str_bucket: str) -> None:
+def test_classify_size_buckets(int_lines: int, *, str_bucket: str) -> None:
     """Changed-line counts fall in the documented buckets, boundaries included."""
     assert gate.classify_size(int_lines) == str_bucket
 
@@ -129,7 +129,7 @@ def test_classify_size_buckets(int_lines: int, str_bucket: str) -> None:
     ],
     ids=["the-lockfile-alone", "lockfile-plus-a-hand-edit", "a-hand-edit-alone"],
 )
-def test_is_lockfile_only_is_narrow(list_paths: list[str], bool_only: bool) -> None:
+def test_is_lockfile_only_is_narrow(list_paths: list[str], *, bool_only: bool) -> None:
     """Only a lockfile-ONLY diff qualifies — a hand-edited sibling must not.
 
     Parameters
@@ -145,18 +145,18 @@ def test_is_lockfile_only_is_narrow(list_paths: list[str], bool_only: bool) -> N
 @pytest.mark.parametrize("str_risk", sorted(gate.AUTO_MERGEABLE))
 def test_auto_merge_allows_safe_classes_without_a_label(str_risk: str) -> None:
     """Consent is opt-OUT: the safe classes merge with no label at all."""
-    assert gate.is_auto_mergeable(str_risk, "M", []) is True
+    assert gate.is_auto_mergeable(str_risk, str_size="M", list_labels=[]) is True
 
 
 @pytest.mark.parametrize("str_risk", ["src", "tests", "other"])
 def test_auto_merge_refuses_dangerous_classes(str_risk: str) -> None:
     """src/tests define what 'passing' means; other is unknown — none may auto-merge."""
-    assert gate.is_auto_mergeable(str_risk, "XS", []) is False
+    assert gate.is_auto_mergeable(str_risk, str_size="XS", list_labels=[]) is False
 
 
 def test_block_label_is_the_opt_out() -> None:
     """The do-not-merge label vetoes an otherwise-eligible PR."""
-    assert gate.is_auto_mergeable("docs", "S", [gate.BLOCK_LABEL]) is False
+    assert gate.is_auto_mergeable("docs", str_size="S", list_labels=[gate.BLOCK_LABEL]) is False
 
 
 @pytest.mark.parametrize(
@@ -165,7 +165,7 @@ def test_block_label_is_the_opt_out() -> None:
     ids=["hand-written-is-vetoed", "a-regenerated-lockfile-is-exempt"],
 )
 def test_xl_veto_applies_to_handwritten_but_is_waived_for_a_lockfile(
-    bool_lockfile_only: bool, bool_mergeable: bool
+    bool_lockfile_only: bool, *, bool_mergeable: bool
 ) -> None:
     """A huge hand-written diff is vetoed; a regenerated lockfile is exempt.
 
@@ -181,7 +181,9 @@ def test_xl_veto_applies_to_handwritten_but_is_waived_for_a_lockfile(
         Whether the XL veto is waived.
     """
     assert (
-        gate.is_auto_mergeable("deps", "XL", [], bool_lockfile_only=bool_lockfile_only)
+        gate.is_auto_mergeable(
+            "deps", str_size="XL", list_labels=[], bool_lockfile_only=bool_lockfile_only
+        )
         is bool_mergeable
     )
 
@@ -195,7 +197,7 @@ def test_xl_veto_applies_to_handwritten_but_is_waived_for_a_lockfile(
     ],
     ids=["red-outranks-pending", "pending-outranks-green", "all-green"],
 )
-def test_gate_state_lets_red_outrank_pending(dict_axes: dict, str_state: str) -> None:
+def test_gate_state_lets_red_outrank_pending(dict_axes: dict, *, str_state: str) -> None:
     """For DISPLAY, a known failure outranks a still-deciding axis.
 
     Parameters
@@ -216,7 +218,9 @@ def test_gate_state_lets_red_outrank_pending(dict_axes: dict, str_state: str) ->
     ],
     ids=["red-but-still-deciding", "red-and-everything-reported"],
 )
-def test_terminality_is_separate_from_display_state(dict_axes: dict, bool_terminal: bool) -> None:
+def test_terminality_is_separate_from_display_state(
+    dict_axes: dict, *, bool_terminal: bool
+) -> None:
     """A red-with-pending set is NOT terminal — conflating the two freezes the sticky comment.
 
     Parameters
@@ -231,7 +235,7 @@ def test_terminality_is_separate_from_display_state(dict_axes: dict, bool_termin
 
 def test_axis_with_no_check_run_is_pending_not_failing() -> None:
     """An axis with no check-run yet on this head SHA is awaiting a result, never a failure."""
-    dict_axes, _ = gate.collect_axes([], {"tests": ("Run Automated Tests",)})
+    dict_axes, _ = gate.collect_axes([], dict_axis_rules={"tests": ("Run Automated Tests",)})
     assert dict_axes["tests"] == "pending"
 
 
@@ -241,7 +245,7 @@ def test_collect_axes_matches_the_analysis_not_the_umbrella() -> None:
         {"name": "CodeQL", "status": "in_progress", "conclusion": None},
         {"name": "Analyze (python)", "status": "completed", "conclusion": "success"},
     ]
-    dict_axes, _ = gate.collect_axes(list_runs, {"code scanning": ("Analyze",)})
+    dict_axes, _ = gate.collect_axes(list_runs, dict_axis_rules={"code scanning": ("Analyze",)})
     assert dict_axes["code scanning"] == "success"
 
 
@@ -253,7 +257,7 @@ _DICT_TEST_AXIS = {"tests": ("Run Automated Tests",)}
 
 def test_a_failed_run_turns_its_axis_red() -> None:
     """The verdict half: one failed run is enough to fail the axis it belongs to."""
-    dict_axes, _ = gate.collect_axes(_LIST_ONE_FAILED_RUN, _DICT_TEST_AXIS)
+    dict_axes, _ = gate.collect_axes(_LIST_ONE_FAILED_RUN, dict_axis_rules=_DICT_TEST_AXIS)
 
     assert dict_axes["tests"] == "failure"
 
@@ -264,7 +268,7 @@ def test_failing_axis_names_its_checks() -> None:
     Split from the verdict above (blueprintx#544): an axis can go red while the failing-name
     map is empty, and that is precisely the regression worth its own name.
     """
-    _, dict_failing = gate.collect_axes(_LIST_ONE_FAILED_RUN, _DICT_TEST_AXIS)
+    _, dict_failing = gate.collect_axes(_LIST_ONE_FAILED_RUN, dict_axis_rules=_DICT_TEST_AXIS)
 
     assert dict_failing["tests"] == ["Run Automated Tests (ubuntu)"]
 
@@ -285,12 +289,16 @@ def test_render_comment_carries_the_sticky_marker_and_the_failing_names(
         A fragment the rendered body must contain.
     """
     assert str_fragment in gate.render_comment(
-        "deps", "L", {"tests": "failure"}, False, {"tests": ["Run Automated Tests (ubuntu)"]}
+        "deps",
+        str_size="L",
+        dict_axes={"tests": "failure"},
+        bool_eligible=False,
+        dict_failing={"tests": ["Run Automated Tests (ubuntu)"]},
     )
 
 
 def test_graphql_reports_a_refused_mutation_to_stderr(
-    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A GraphQL refusal is HTTP 200 + an ``errors`` body — it must not be discarded in silence.
 
@@ -298,16 +306,16 @@ def test_graphql_reports_a_refused_mutation_to_stderr(
     auto-merge looked identical to a successful one in the log.
     """
     monkeypatch.setattr(gate, "_api", lambda *a, **k: {"errors": [{"message": "refused"}]})
-    gate._graphql("mutation{}", {})
+    gate._graphql("mutation{}", dict_vars={})
     assert "refused" in capsys.readouterr().err
 
 
 def test_graphql_stays_quiet_on_a_clean_response(
-    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A response with no ``errors`` key prints nothing — the check must not cry wolf."""
     monkeypatch.setattr(gate, "_api", lambda *a, **k: {"data": {"clientMutationId": None}})
-    gate._graphql("mutation{}", {})
+    gate._graphql("mutation{}", dict_vars={})
     assert capsys.readouterr().err == ""
 
 
@@ -326,7 +334,9 @@ _DICT_MAIN_API_RESPONSES = {
 }
 
 
-def _fake_api_for_main(str_method: str, str_url: str, dict_payload: dict | None = None) -> object:
+def _fake_api_for_main(
+    str_method: str, *, str_url: str, dict_payload: dict | None = None
+) -> object:
     """Stand in for every REST call ``main()`` makes, keyed by URL.
 
     Parameters
@@ -354,7 +364,7 @@ class _CallRecorder:
     recorder type replaces either seam with no branch on which one it is.
     """
 
-    def __init__(self, list_target: list, str_label: str) -> None:
+    def __init__(self, *, list_target: list, str_label: str) -> None:
         """Bind the shared call log and this instance's label.
 
         Parameters
@@ -401,8 +411,14 @@ def test_main_hands_the_merge_over_after_the_poll_not_before(
     list_calls: list = []
 
     monkeypatch.setattr(gate, "_api", _fake_api_for_main)
-    monkeypatch.setattr(gate, "poll_axes_until_terminal", _CallRecorder(list_calls, "poll"))
-    monkeypatch.setattr(gate, "_enable_auto_merge", _CallRecorder(list_calls, "enable_auto_merge"))
+    monkeypatch.setattr(
+        gate, "poll_axes_until_terminal", _CallRecorder(list_target=list_calls, str_label="poll")
+    )
+    monkeypatch.setattr(
+        gate,
+        "_enable_auto_merge",
+        _CallRecorder(list_target=list_calls, str_label="enable_auto_merge"),
+    )
 
     gate.main()
 

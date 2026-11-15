@@ -47,7 +47,13 @@ def test_hash_artifact_missing_file_raises(tmp_path: Path) -> None:
 
 def test_stamp_provenance_appends_columns_in_output_shape() -> None:
     """The six provenance columns are appended after the source columns, in contract order."""
-    df_stamped = stamp_provenance(_frame(), "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
+    df_stamped = stamp_provenance(
+        _frame(),
+        str_url="https://x/y.csv",
+        cls_contract=_CONTRACT,
+        str_content_hash="deadbeef",
+        str_package_version="1.2.3",
+    )
     assert list(df_stamped.columns) == list(_CONTRACT.output_columns)
 
 
@@ -65,7 +71,7 @@ def test_contract_output_columns_are_source_then_provenance() -> None:
         ("content_hash", "deadbeef"),
     ],
 )
-def test_stamp_provenance_propagates_values(str_column: str, str_value: str) -> None:
+def test_stamp_provenance_propagates_values(str_column: str, *, str_value: str) -> None:
     """Every row carries the provenance value the caller passed.
 
     Parameters
@@ -75,7 +81,13 @@ def test_stamp_provenance_propagates_values(str_column: str, str_value: str) -> 
     str_value : str
         The value every row must carry.
     """
-    df_stamped = stamp_provenance(_frame(), "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
+    df_stamped = stamp_provenance(
+        _frame(),
+        str_url="https://x/y.csv",
+        cls_contract=_CONTRACT,
+        str_content_hash="deadbeef",
+        str_package_version="1.2.3",
+    )
     assert (df_stamped[str_column] == str_value).all()
 
 
@@ -87,7 +99,7 @@ def test_stamp_provenance_propagates_values(str_column: str, str_value: str) -> 
         ("updated_at", "datetime64[ns, UTC]"),
     ],
 )
-def test_stamp_provenance_dtypes(str_column: str, str_dtype: str) -> None:
+def test_stamp_provenance_dtypes(str_column: str, *, str_dtype: str) -> None:
     """Text provenance is nullable ``string``; ``updated_at`` is tz-aware UTC.
 
     Parameters
@@ -97,33 +109,69 @@ def test_stamp_provenance_dtypes(str_column: str, str_dtype: str) -> None:
     str_dtype : str
         The dtype it must carry.
     """
-    df_stamped = stamp_provenance(_frame(), "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
+    df_stamped = stamp_provenance(
+        _frame(),
+        str_url="https://x/y.csv",
+        cls_contract=_CONTRACT,
+        str_content_hash="deadbeef",
+        str_package_version="1.2.3",
+    )
     assert str(df_stamped[str_column].dtype) == str_dtype
 
 
 def test_stamp_provenance_updated_at_is_timezone_aware() -> None:
     """``updated_at`` carries a timezone, not a naive timestamp."""
-    df_stamped = stamp_provenance(_frame(), "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
+    df_stamped = stamp_provenance(
+        _frame(),
+        str_url="https://x/y.csv",
+        cls_contract=_CONTRACT,
+        str_content_hash="deadbeef",
+        str_package_version="1.2.3",
+    )
     assert df_stamped["updated_at"].dt.tz is not None
 
 
 def test_stamp_provenance_shares_one_run_id_across_rows() -> None:
     """Every row of one read shares a single ``ingestion_run_id`` (one UUID per stamp call)."""
-    df_stamped = stamp_provenance(_frame(), "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
+    df_stamped = stamp_provenance(
+        _frame(),
+        str_url="https://x/y.csv",
+        cls_contract=_CONTRACT,
+        str_content_hash="deadbeef",
+        str_package_version="1.2.3",
+    )
     assert df_stamped["ingestion_run_id"].nunique() == 1
 
 
 def test_stamp_provenance_generates_a_fresh_run_id_per_call() -> None:
     """Two reads get distinct run ids (the UUID is generated per call, not module-level)."""
-    str_id_a = stamp_provenance(_frame(), "u", _CONTRACT, "h", "v")["ingestion_run_id"].iloc[0]
-    str_id_b = stamp_provenance(_frame(), "u", _CONTRACT, "h", "v")["ingestion_run_id"].iloc[0]
+    str_id_a = stamp_provenance(
+        _frame(),
+        str_url="u",
+        cls_contract=_CONTRACT,
+        str_content_hash="h",
+        str_package_version="v",
+    )["ingestion_run_id"].iloc[0]
+    str_id_b = stamp_provenance(
+        _frame(),
+        str_url="u",
+        cls_contract=_CONTRACT,
+        str_content_hash="h",
+        str_package_version="v",
+    )["ingestion_run_id"].iloc[0]
     assert str_id_a != str_id_b
 
 
 def test_stamp_provenance_does_not_mutate_input() -> None:
     """Stamping returns a new frame; the caller's source frame is untouched."""
     df_source = _frame()
-    stamp_provenance(df_source, "https://x/y.csv", _CONTRACT, "deadbeef", "1.2.3")
+    stamp_provenance(
+        df_source,
+        str_url="https://x/y.csv",
+        cls_contract=_CONTRACT,
+        str_content_hash="deadbeef",
+        str_package_version="1.2.3",
+    )
     assert list(df_source.columns) == ["code", "amount"]
 
 

@@ -28,6 +28,7 @@ class _ExampleFeatureEndpoints(metaclass=TypeChecker):
 
     def __init__(
         self,
+        *,
         fn_create_note: Callable[[NoteCreateDTO], NoteResponseDTO],
         fn_list_notes: Callable[[], list[NoteResponseDTO]],
     ) -> None:
@@ -45,6 +46,7 @@ class _ExampleFeatureEndpoints(metaclass=TypeChecker):
 
 def build_example_feature_router(
     fn_create_note: Callable[[NoteCreateDTO], NoteResponseDTO],
+    *,
     fn_list_notes: Callable[[], list[NoteResponseDTO]],
 ) -> APIRouter:
     """Build the example_feature router, bound to injected application callables.
@@ -61,7 +63,9 @@ def build_example_feature_router(
     APIRouter
         Router exposing the note endpoints, ready to `include_router` into the app.
     """
-    cls_endpoints = _ExampleFeatureEndpoints(fn_create_note, fn_list_notes)
+    cls_endpoints = _ExampleFeatureEndpoints(
+        fn_create_note=fn_create_note, fn_list_notes=fn_list_notes
+    )
     cls_router = APIRouter(prefix="/notes", tags=["notes"])
     cls_router.add_api_route(
         "",

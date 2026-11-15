@@ -9,48 +9,53 @@ dict dispatch).
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
 from pathlib import Path
+from typing import Protocol
 
 from .ports import BrowserPage, BrowserStep, BrowserStepError
 from .secrets import resolve_placeholders
 
 
-async def _navigate(cls_page: BrowserPage, dict_step: BrowserStep, path_root: Path) -> None:
+async def _navigate(cls_page: BrowserPage, *, dict_step: BrowserStep, path_root: Path) -> None:
     """Load ``url`` in the page."""
     await cls_page.goto(resolve_placeholders(dict_step["url"]))
 
 
-async def _fill(cls_page: BrowserPage, dict_step: BrowserStep, path_root: Path) -> None:
+async def _fill(cls_page: BrowserPage, *, dict_step: BrowserStep, path_root: Path) -> None:
     """Type ``value`` into the element at ``selector``."""
-    await cls_page.fill(dict_step["selector"], resolve_placeholders(dict_step["value"]))
+    await cls_page.fill(
+        selector=dict_step["selector"], value=resolve_placeholders(dict_step["value"])
+    )
 
 
-async def _fill_date(cls_page: BrowserPage, dict_step: BrowserStep, path_root: Path) -> None:
+async def _fill_date(cls_page: BrowserPage, *, dict_step: BrowserStep, path_root: Path) -> None:
     """Type a formatted date ``value`` into a plain masked-text date input.
 
     Kept distinct from ``datepicker`` because a masked text input and a vendor calendar
     widget need different interactions, not the same ``fill``.
     """
-    await cls_page.fill(dict_step["selector"], resolve_placeholders(dict_step["value"]))
+    await cls_page.fill(
+        selector=dict_step["selector"], value=resolve_placeholders(dict_step["value"])
+    )
 
 
-async def _click(cls_page: BrowserPage, dict_step: BrowserStep, path_root: Path) -> None:
+async def _click(cls_page: BrowserPage, *, dict_step: BrowserStep, path_root: Path) -> None:
     """Click the element at ``selector``."""
     await cls_page.click(dict_step["selector"])
 
 
-async def _select(cls_page: BrowserPage, dict_step: BrowserStep, path_root: Path) -> None:
+async def _select(cls_page: BrowserPage, *, dict_step: BrowserStep, path_root: Path) -> None:
     """Choose ``option`` from the ``<select>`` at ``selector``."""
-    await cls_page.select_option(dict_step["selector"], dict_step["option"])
+    await cls_page.select_option(selector=dict_step["selector"], value=dict_step["option"])
 
 
-async def _wait(cls_page: BrowserPage, dict_step: BrowserStep, path_root: Path) -> None:
+async def _wait(cls_page: BrowserPage, *, dict_step: BrowserStep, path_root: Path) -> None:
     """Pause for ``timeout_ms`` milliseconds (use only when no selector settles the wait)."""
     await cls_page.wait_for_timeout(dict_step["timeout_ms"])
 
 
-async def _datepicker(cls_page: BrowserPage, dict_step: BrowserStep, path_root: Path) -> None:
+async def _datepicker(cls_page: BrowserPage, *, dict_step: BrowserStep, path_root: Path) -> None:
     """Open a vendor calendar widget at ``selector`` and click the day cell ``value``.
 
     The widget-specific mechanics (which selector reaches which day cell) live in the
@@ -60,17 +65,17 @@ async def _datepicker(cls_page: BrowserPage, dict_step: BrowserStep, path_root: 
     await cls_page.click(resolve_placeholders(dict_step["value"]))
 
 
-async def _download(cls_page: BrowserPage, dict_step: BrowserStep, path_root: Path) -> None:
+async def _download(cls_page: BrowserPage, *, dict_step: BrowserStep, path_root: Path) -> None:
     """Click ``trigger_selector`` and save the resulting download to ``save_path``."""
     async with cls_page.expect_download() as cls_download_info:
         await cls_page.click(dict_step["trigger_selector"])
     cls_download = await cls_download_info.value
     await cls_download.save_as(
-        str(_contained_path(resolve_placeholders(dict_step["save_path"]), path_root))
+        str(_contained_path(resolve_placeholders(dict_step["save_path"]), path_root=path_root))
     )
 
 
-def _contained_path(str_raw: str, path_root: Path) -> Path:
+def _contained_path(str_raw: str, *, path_root: Path) -> Path:
     """Resolve ``str_raw`` under ``path_root`` and refuse anything that escapes it.
 
     Parameters
@@ -107,7 +112,17 @@ def _contained_path(str_raw: str, path_root: Path) -> Path:
     return path_target
 
 
-_DICT_STEP_HANDLERS: dict[str, Callable[[BrowserPage, BrowserStep, Path], Awaitable[None]]] = {
+class StepHandler(Protocol):
+    """The call shape every step handler shares."""
+
+    def __call__(
+        self, cls_page: BrowserPage, *, dict_step: BrowserStep, path_root: Path
+    ) -> Awaitable[None]:
+        """Run one step against the page."""
+        ...
+
+
+_DICT_STEP_HANDLERS: dict[str, StepHandler] = {
     "navigate": _navigate,
     "fill": _fill,
     "fill_date": _fill_date,
@@ -132,7 +147,7 @@ _DICT_REQUIRED_FIELDS: dict[str, tuple[tuple[str, type], ...]] = {
 }
 
 
-def _validate_step(int_index: int, str_kind: str, dict_step: BrowserStep) -> None:
+def _validate_step(int_index: int, *, str_kind: str, dict_step: BrowserStep) -> None:
     """Check that ``dict_step`` carries every field its kind needs, at the right type.
 
     Parameters
@@ -174,6 +189,7 @@ def _validate_step(int_index: int, str_kind: str, dict_step: BrowserStep) -> Non
 
 async def run_browser_steps(
     list_steps: list[BrowserStep],
+    *,
     cls_page: BrowserPage,
     path_download_root: Path | None = None,
 ) -> None:
@@ -205,5 +221,5 @@ async def run_browser_steps(
                 f"Step {int_index}: unknown kind {str_kind!r}; expected one of "
                 f"{sorted(STEP_KINDS)}"
             )
-        _validate_step(int_index, str_kind, dict_step)
-        await _DICT_STEP_HANDLERS[str_kind](cls_page, dict_step, path_root)
+        _validate_step(int_index, str_kind=str_kind, dict_step=dict_step)
+        await _DICT_STEP_HANDLERS[str_kind](cls_page, dict_step=dict_step, path_root=path_root)

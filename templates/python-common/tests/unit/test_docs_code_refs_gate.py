@@ -67,7 +67,7 @@ def path_src(tmp_path: pathlib.Path) -> pathlib.Path:
         ("(Foo, Bar,)  # grouped", ["Foo", "Bar"]),
     ],
 )
-def test_parse_names_drops_an_inline_comment(str_names: str, list_expected: list[str]) -> None:
+def test_parse_names_drops_an_inline_comment(str_names: str, *, list_expected: list[str]) -> None:
     """A trailing ``# comment`` is not part of the imported name.
 
     Docs annotate example imports as a matter of course. Keeping the comment produced a name
@@ -85,7 +85,7 @@ def test_parse_names_drops_an_inline_comment(str_names: str, list_expected: list
     ],
 )
 def test_parse_names_still_handles_the_uncommented_forms(
-    str_names: str, list_expected: list[str]
+    str_names: str, *, list_expected: list[str]
 ) -> None:
     """The comment fix must not disturb aliases, grouped imports or the star form."""
     assert cls_gate.parse_names(str_names) == list_expected
@@ -97,12 +97,14 @@ def test_submodule_import_from_a_package_is_accepted(path_src: pathlib.Path) -> 
     Python resolves the name to ``chassis/widgets.py``. Checking only the names defined in
     ``__init__.py`` flagged a perfectly ordinary import.
     """
-    assert cls_gate.candidate_problem(path_src, "chassis", ["widgets"]) is None
+    assert (
+        cls_gate.candidate_problem(path_src, str_module="chassis", list_names=["widgets"]) is None
+    )
 
 
 def test_symbol_defined_in_the_package_is_accepted(path_src: pathlib.Path) -> None:
     """The ordinary case still passes: a name defined in ``__init__.py`` is fine."""
-    assert cls_gate.candidate_problem(path_src, "chassis", ["build"]) is None
+    assert cls_gate.candidate_problem(path_src, str_module="chassis", list_names=["build"]) is None
 
 
 def test_a_genuinely_absent_name_is_still_reported(path_src: pathlib.Path) -> None:
@@ -111,13 +113,17 @@ def test_a_genuinely_absent_name_is_still_reported(path_src: pathlib.Path) -> No
     ``nonexistent`` is not defined in the package and is not a submodule, so it must still be
     a finding — otherwise the two fixes above would have silently disabled the check.
     """
-    str_problem = cls_gate.candidate_problem(path_src, "chassis", ["nonexistent"])
+    str_problem = cls_gate.candidate_problem(
+        path_src, str_module="chassis", list_names=["nonexistent"]
+    )
     assert "nonexistent" in str_problem
 
 
 def test_an_absent_module_is_still_reported(path_src: pathlib.Path) -> None:
     """A module that does not resolve at all remains a finding."""
-    str_problem = cls_gate.candidate_problem(path_src, "no_such_package", ["anything"])
+    str_problem = cls_gate.candidate_problem(
+        path_src, str_module="no_such_package", list_names=["anything"]
+    )
     assert "module not found" in str_problem
 
 
@@ -157,7 +163,7 @@ _CASES_MULTILINE_IMPORT = pytest.mark.parametrize(
 
 @_CASES_MULTILINE_IMPORT
 def test_a_comment_never_shortens_a_multiline_import(
-    list_body: list[str], list_expected: list[str]
+    list_body: list[str], *, list_expected: list[str]
 ) -> None:
     """Every name in a parenthesised import is seen, whatever comments sit between them.
 
@@ -169,13 +175,13 @@ def test_a_comment_never_shortens_a_multiline_import(
     the string at its first ``#`` swallowed every name that followed the comment — which the
     ordinary annotated import in the second case triggers with no exotic syntax at all.
     """
-    list_statements = cls_gate.import_statements(list_body, 1)
+    list_statements = cls_gate.import_statements(list_body, int_first_lineno=1)
     assert cls_gate.parse_names(list_statements[0][2]) == list_expected
 
 
 @_CASES_MULTILINE_IMPORT
 def test_a_multiline_import_is_one_statement_whatever_comments_sit_in_it(
-    list_body: list[str], list_expected: list[str]
+    list_body: list[str], *, list_expected: list[str]
 ) -> None:
     """A parenthesised import with interleaved comments is still ONE statement.
 
@@ -186,7 +192,7 @@ def test_a_multiline_import_is_one_statement_whatever_comments_sit_in_it(
     list_expected : list[str]
         Unused here; shared with the sibling test's cases.
     """
-    assert len(cls_gate.import_statements(list_body, 1)) == 1
+    assert len(cls_gate.import_statements(list_body, int_first_lineno=1)) == 1
 
 
 def test_strip_inline_comment_leaves_an_uncommented_line_alone() -> None:

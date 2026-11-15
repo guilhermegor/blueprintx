@@ -167,7 +167,7 @@ def is_lockfile_only(list_paths: list) -> bool:
 
 
 def is_auto_mergeable(
-    str_risk: str, str_size: str, list_labels: list, bool_lockfile_only: bool = False
+    str_risk: str, *, str_size: str, list_labels: list, bool_lockfile_only: bool = False
 ) -> bool:
     """Decide ELIGIBILITY for native auto-merge (never whether the checks passed).
 
@@ -240,7 +240,7 @@ def axes_are_terminal(dict_axes: dict) -> bool:
 
 
 def render_comment(
-    str_risk: str, str_size: str, dict_axes: dict, bool_eligible: bool, dict_failing: dict
+    str_risk: str, *, str_size: str, dict_axes: dict, bool_eligible: bool, dict_failing: dict
 ) -> str:
     """Render the sticky comment body (English — a contributor/machine-facing surface).
 
@@ -288,7 +288,7 @@ def render_comment(
     )
 
 
-def _api(str_method: str, str_url: str, dict_payload: dict | None = None) -> object:
+def _api(str_method: str, *, str_url: str, dict_payload: dict | None = None) -> object:
     """Call the GitHub REST API with the workflow token.
 
     Parameters
@@ -319,7 +319,7 @@ def _api(str_method: str, str_url: str, dict_payload: dict | None = None) -> obj
         return None
 
 
-def _graphql(str_query: str, dict_vars: dict) -> object:
+def _graphql(str_query: str, *, dict_vars: dict) -> object:
     """Call the GraphQL API (native auto-merge has no REST equivalent).
 
     ⚠️ GraphQL answers a REFUSED mutation with HTTP 200 and an ``errors`` array in the
@@ -339,7 +339,9 @@ def _graphql(str_query: str, dict_vars: dict) -> object:
     object
         Parsed JSON, or ``None`` on a transport error (from :func:`_api`).
     """
-    dict_response = _api("POST", f"{API}/graphql", {"query": str_query, "variables": dict_vars})
+    dict_response = _api(
+        "POST", str_url=f"{API}/graphql", dict_payload={"query": str_query, "variables": dict_vars}
+    )
     list_errors = dict_response.get("errors") if isinstance(dict_response, dict) else None
     if list_errors:
         print(f"::error::GraphQL mutation refused: {list_errors}", file=sys.stderr)
@@ -361,11 +363,11 @@ def _enable_auto_merge(str_node_id: str) -> None:
     _graphql(
         "mutation($id:ID!){enablePullRequestAutoMerge(input:{pullRequestId:$id,"
         "mergeMethod:SQUASH}){clientMutationId}}",
-        {"id": str_node_id},
+        dict_vars={"id": str_node_id},
     )
 
 
-def collect_axes(list_check_runs: list, dict_axis_rules: dict) -> tuple:
+def collect_axes(list_check_runs: list, *, dict_axis_rules: dict) -> tuple:
     """Fold check-runs into per-axis states and the names of each axis's failing checks.
 
     ⚠️ Track the check that carries the real CONCLUSION, not an umbrella status. With CodeQL
@@ -413,7 +415,7 @@ def collect_axes(list_check_runs: list, dict_axis_rules: dict) -> tuple:
     return dict_axes, dict_failing
 
 
-def upsert_comment(str_repo: str, int_pr: int, str_body: str) -> None:
+def upsert_comment(str_repo: str, *, int_pr: int, str_body: str) -> None:
     """Create the sticky comment, or edit the existing one in place (never stack).
 
     Parameters
@@ -429,20 +431,24 @@ def upsert_comment(str_repo: str, int_pr: int, str_body: str) -> None:
     -------
     None
     """
-    list_comments = _api("GET", f"{API}/repos/{str_repo}/issues/{int_pr}/comments") or []
+    list_comments = _api("GET", str_url=f"{API}/repos/{str_repo}/issues/{int_pr}/comments") or []
     for dict_comment in list_comments:
         if COMMENT_MARKER in (dict_comment.get("body") or ""):
             _api(
                 "PATCH",
-                f"{API}/repos/{str_repo}/issues/comments/{dict_comment['id']}",
-                {"body": str_body},
+                str_url=f"{API}/repos/{str_repo}/issues/comments/{dict_comment['id']}",
+                dict_payload={"body": str_body},
             )
             return
-    _api("POST", f"{API}/repos/{str_repo}/issues/{int_pr}/comments", {"body": str_body})
+    _api(
+        "POST",
+        str_url=f"{API}/repos/{str_repo}/issues/{int_pr}/comments",
+        dict_payload={"body": str_body},
+    )
 
 
 def poll_axes_until_terminal(
-    str_repo: str, str_head_sha: str, int_max_polls: int, int_poll_seconds: int
+    str_repo: str, *, str_head_sha: str, int_max_polls: int, int_poll_seconds: int
 ) -> tuple[dict, dict]:
     """Poll the head commit's check runs until every axis reaches a terminal state.
 
@@ -476,10 +482,13 @@ def poll_axes_until_terminal(
     dict_axes, dict_failing = {}, {}
     for int_attempt in range(int_max_polls):
         list_runs = (
-            _api("GET", f"{API}/repos/{str_repo}/commits/{str_head_sha}/check-runs?per_page=100")
+            _api(
+                "GET",
+                str_url=f"{API}/repos/{str_repo}/commits/{str_head_sha}/check-runs?per_page=100",
+            )
             or {}
         ).get("check_runs", [])
-        dict_axes, dict_failing = collect_axes(list_runs, dict_axis_rules)
+        dict_axes, dict_failing = collect_axes(list_runs, dict_axis_rules=dict_axis_rules)
         if axes_are_terminal(dict_axes):
             break
         if int_attempt < int_max_polls - 1:
@@ -487,7 +496,9 @@ def poll_axes_until_terminal(
     return dict_axes, dict_failing
 
 
-def sync_gate_labels(str_repo: str, int_pr: int, list_current: list, list_desired: list) -> None:
+def sync_gate_labels(
+    str_repo: str, *, int_pr: int, list_current: list, list_desired: list
+) -> None:
     """Apply the desired risk/size/gate labels and drop the stale ones.
 
     Only the three families this gate owns are touched; any other label a human added
@@ -506,13 +517,13 @@ def sync_gate_labels(str_repo: str, int_pr: int, list_current: list, list_desire
     """
     _api(
         "POST",
-        f"{API}/repos/{str_repo}/issues/{int_pr}/labels",
-        {"labels": list_desired},
+        str_url=f"{API}/repos/{str_repo}/issues/{int_pr}/labels",
+        dict_payload={"labels": list_desired},
     )
     for str_stale in list_current:
         str_axis = str_stale.split(":", 1)[0]
         if str_axis in {"risk", "size", "gate"} and str_stale not in list_desired:
-            _api("DELETE", f"{API}/repos/{str_repo}/issues/{int_pr}/labels/{str_stale}")
+            _api("DELETE", str_url=f"{API}/repos/{str_repo}/issues/{int_pr}/labels/{str_stale}")
 
 
 def main() -> int:
@@ -534,21 +545,29 @@ def main() -> int:
     int_max_polls = int(os.environ.get("GATE_MAX_POLLS", "26"))
     int_poll_seconds = int(os.environ.get("GATE_POLL_SECONDS", "30"))
 
-    dict_pr = _api("GET", f"{API}/repos/{str_repo}/pulls/{int_pr}") or {}
+    dict_pr = _api("GET", str_url=f"{API}/repos/{str_repo}/pulls/{int_pr}") or {}
     str_head_sha = (dict_pr.get("head") or {}).get("sha", "")
     list_labels = [lbl["name"] for lbl in dict_pr.get("labels", [])]
 
-    list_files = _api("GET", f"{API}/repos/{str_repo}/pulls/{int_pr}/files?per_page=100") or []
+    list_files = (
+        _api("GET", str_url=f"{API}/repos/{str_repo}/pulls/{int_pr}/files?per_page=100") or []
+    )
     list_paths = [f["filename"] for f in list_files]
 
     str_risk = classify_risk(list_paths)
     str_size = classify_size(int(dict_pr.get("additions", 0)) + int(dict_pr.get("deletions", 0)))
     bool_eligible = is_auto_mergeable(
-        str_risk, str_size, list_labels, is_lockfile_only(list_paths)
+        str_risk,
+        str_size=str_size,
+        list_labels=list_labels,
+        bool_lockfile_only=is_lockfile_only(list_paths),
     )
 
     dict_axes, dict_failing = poll_axes_until_terminal(
-        str_repo, str_head_sha, int_max_polls, int_poll_seconds
+        str_repo,
+        str_head_sha=str_head_sha,
+        int_max_polls=int_max_polls,
+        int_poll_seconds=int_poll_seconds,
     )
 
     if bool_eligible:
@@ -556,15 +575,21 @@ def main() -> int:
 
     sync_gate_labels(
         str_repo,
-        int_pr,
-        list_labels,
-        [f"risk:{str_risk}", f"size:{str_size}", f"gate:{gate_state(dict_axes)}"],
+        int_pr=int_pr,
+        list_current=list_labels,
+        list_desired=[f"risk:{str_risk}", f"size:{str_size}", f"gate:{gate_state(dict_axes)}"],
     )
 
     upsert_comment(
         str_repo,
-        int_pr,
-        render_comment(str_risk, str_size, dict_axes, bool_eligible, dict_failing),
+        int_pr=int_pr,
+        str_body=render_comment(
+            str_risk,
+            str_size=str_size,
+            dict_axes=dict_axes,
+            bool_eligible=bool_eligible,
+            dict_failing=dict_failing,
+        ),
     )
     str_state = gate_state(dict_axes)
     print(f"risk={str_risk} size={str_size} eligible={bool_eligible} state={str_state}")

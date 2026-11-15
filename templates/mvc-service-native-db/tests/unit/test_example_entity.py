@@ -50,7 +50,7 @@ def cls_entity(cls_connection: sqlite3.Connection) -> ExampleEntity:
     ExampleEntity
         Entity with ``ensure_table()`` already applied.
     """
-    cls_built = ExampleEntity(cls_connection)
+    cls_built = ExampleEntity(cls_connection=cls_connection)
     cls_built.ensure_table()
     return cls_built
 

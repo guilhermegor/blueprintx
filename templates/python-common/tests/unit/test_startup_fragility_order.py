@@ -30,7 +30,9 @@ def _startup_tree() -> ast.Module:
     return ast.parse(path_startup.read_text(encoding="utf-8"))
 
 
-def _load_pure_function(cls_tree: ast.Module, str_name: str) -> Callable[[dict, str], dict | None]:
+def _load_pure_function(
+    cls_tree: ast.Module, *, str_name: str
+) -> Callable[[dict, str], dict | None]:
     """Extract a module-level function from the parsed ``startup`` module, without importing it.
 
     Only sound for a function with no reference to a startup.py global — the resolver tested
@@ -156,7 +158,9 @@ def _error_branch_source() -> str:
         ("SystemExit", "the run continues on fallback configuration"),
     ],
 )
-def test_a_captured_config_failure_is_reported_and_exits(str_needle: str, str_reason: str) -> None:
+def test_a_captured_config_failure_is_reported_and_exits(
+    str_needle: str, *, str_reason: str
+) -> None:
     """Capturing the failure is only half the fix — it must still be reported and abort.
 
     Swallowing the error and running on fallback config is strictly worse than the original
@@ -205,12 +209,12 @@ def test_the_failable_block_catches_exception_not_baseexception() -> None:
 
 def test_reference_override_wins_over_real_spec() -> None:
     """A source listed under ``reference_files`` returns that override, not its real spec."""
-    fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+    fn_resolve = _load_pure_function(_startup_tree(), str_name="resolve_reference_spec")
     dict_inputs = {
         "example_source": {"dir": "data/example_source", "pattern": "*.csv"},
         "reference_files": {"example_source": {"dir": "data/reference", "pattern": "*.csv"}},
     }
-    assert fn_resolve(dict_inputs, "example_source") == {
+    assert fn_resolve(dict_inputs, str_source="example_source") == {
         "dir": "data/reference",
         "pattern": "*.csv",
     }
@@ -223,9 +227,9 @@ def test_absent_override_falls_through_to_real_spec_unchanged() -> None:
     ``reference_files`` block at all, so this behaviour must be identical to a project that
     never heard of the override.
     """
-    fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+    fn_resolve = _load_pure_function(_startup_tree(), str_name="resolve_reference_spec")
     dict_inputs = {"example_source": {"dir": "data/example_source", "pattern": "*.csv"}}
-    assert fn_resolve(dict_inputs, "example_source") == {
+    assert fn_resolve(dict_inputs, str_source="example_source") == {
         "dir": "data/example_source",
         "pattern": "*.csv",
     }
@@ -237,13 +241,13 @@ def test_missing_reference_files_key_entirely_is_the_same_as_empty() -> None:
     Covers the literal shape of every project scaffolded before this issue: the key is not
     merely empty, it does not exist.
     """
-    fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+    fn_resolve = _load_pure_function(_startup_tree(), str_name="resolve_reference_spec")
     dict_inputs = {
         "daily_infos_base_path": "logs",
         "daily_infos_dated": False,
         "example_source": {"dir": "data/example_source", "pattern": "*.csv"},
     }
-    assert fn_resolve(dict_inputs, "example_source") == {
+    assert fn_resolve(dict_inputs, str_source="example_source") == {
         "dir": "data/example_source",
         "pattern": "*.csv",
     }
@@ -251,14 +255,16 @@ def test_missing_reference_files_key_entirely_is_the_same_as_empty() -> None:
 
 def test_neither_override_nor_real_spec_returns_none() -> None:
     """An unknown source with no override and no real input resolves to ``None``."""
-    fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
-    assert fn_resolve({}, "unknown_source") is None
+    fn_resolve = _load_pure_function(_startup_tree(), str_name="resolve_reference_spec")
+    assert fn_resolve({}, str_source="unknown_source") is None
 
 
 def test_non_mapping_real_key_without_override_returns_none() -> None:
     """A top-level scalar key (like ``daily_infos_base_path``) is never mistaken for a spec."""
-    fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
-    assert fn_resolve({"daily_infos_base_path": "logs"}, "daily_infos_base_path") is None
+    fn_resolve = _load_pure_function(_startup_tree(), str_name="resolve_reference_spec")
+    assert (
+        fn_resolve({"daily_infos_base_path": "logs"}, str_source="daily_infos_base_path") is None
+    )
 
 
 def test_null_reference_files_block_falls_back_to_the_real_spec() -> None:
@@ -268,26 +274,35 @@ def test_null_reference_files_block_falls_back_to_the_real_spec() -> None:
     rather than the default — so the naive chained ``.get`` raised ``AttributeError`` on the
     most natural way to comment the whole block out.
     """
-    fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+    fn_resolve = _load_pure_function(_startup_tree(), str_name="resolve_reference_spec")
     dict_inputs = {"reference_files": None, "example_source": {"dir": "data", "pattern": "*.csv"}}
-    assert fn_resolve(dict_inputs, "example_source") == {"dir": "data", "pattern": "*.csv"}
+    assert fn_resolve(dict_inputs, str_source="example_source") == {
+        "dir": "data",
+        "pattern": "*.csv",
+    }
 
 
 def test_scalar_reference_files_block_falls_back_to_the_real_spec() -> None:
     """A scalar where a mapping belongs is a config error, not a crash."""
-    fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+    fn_resolve = _load_pure_function(_startup_tree(), str_name="resolve_reference_spec")
     dict_inputs = {
         "reference_files": "typo",
         "example_source": {"dir": "data", "pattern": "*.csv"},
     }
-    assert fn_resolve(dict_inputs, "example_source") == {"dir": "data", "pattern": "*.csv"}
+    assert fn_resolve(dict_inputs, str_source="example_source") == {
+        "dir": "data",
+        "pattern": "*.csv",
+    }
 
 
 def test_null_override_entry_falls_back_to_the_real_spec() -> None:
     """A null ENTRY under ``reference_files`` must fall back, not return ``None``."""
-    fn_resolve = _load_pure_function(_startup_tree(), "resolve_reference_spec")
+    fn_resolve = _load_pure_function(_startup_tree(), str_name="resolve_reference_spec")
     dict_inputs = {
         "reference_files": {"example_source": None},
         "example_source": {"dir": "data", "pattern": "*.csv"},
     }
-    assert fn_resolve(dict_inputs, "example_source") == {"dir": "data", "pattern": "*.csv"}
+    assert fn_resolve(dict_inputs, str_source="example_source") == {
+        "dir": "data",
+        "pattern": "*.csv",
+    }

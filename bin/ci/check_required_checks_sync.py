@@ -117,7 +117,7 @@ def matrix_text(value: object) -> str:
     return str(value).lower() if isinstance(value, bool) else str(value)
 
 
-def expand_name(str_name: str, dict_job: dict) -> list:
+def expand_name(str_name: str, *, dict_job: dict) -> list:
     """Job check names; interpolates `${{ matrix.k }}` or appends GitHub's `(v1, v2)`."""
     dict_strategy = dict_job.get("strategy") or {}
     dict_matrix = dict_strategy.get("matrix") if isinstance(dict_strategy, dict) else None
@@ -148,7 +148,7 @@ def expand_name(str_name: str, dict_job: dict) -> list:
     return list_names
 
 
-def job_flags(str_file: str, dict_job_map: dict, flag_wf: bool) -> dict:
+def job_flags(str_file: str, *, dict_job_map: dict, flag_wf: bool) -> dict:
     """{job id: unconditional}; a job that `needs` a conditional job is conditional too."""
     dict_flag = {}
     for str_id, dict_job in dict_job_map.items():
@@ -175,10 +175,10 @@ def load_workflow(path_file: pathlib.Path) -> dict:
     return yaml.safe_load(path_file.read_text(encoding="utf-8")) or {}
 
 
-def job_names(dict_job_map: dict, str_id: str) -> list:
+def job_names(dict_job_map: dict, *, str_id: str) -> list:
     """Check names one job emits."""
     dict_job = dict_job_map[str_id]
-    return expand_name(str(dict_job.get("name", str_id)), dict_job)
+    return expand_name(str(dict_job.get("name", str_id)), dict_job=dict_job)
 
 
 def pr_jobs(path_dir: pathlib.Path) -> tuple:
@@ -191,9 +191,11 @@ def pr_jobs(path_dir: pathlib.Path) -> tuple:
             continue
         dict_job_map = dict_wf.get("jobs") or {}
         try:
-            dict_flag = job_flags(path_file.name, dict_job_map, pr_trigger_unfiltered(dict_on))
+            dict_flag = job_flags(
+                path_file.name, dict_job_map=dict_job_map, flag_wf=pr_trigger_unfiltered(dict_on)
+            )
             for str_id in dict_job_map:
-                for str_name in job_names(dict_job_map, str_id):
+                for str_name in job_names(dict_job_map, str_id=str_id):
                     dict_jobs[str_name] = dict_jobs.get(str_name, False) or dict_flag[str_id]
         except UnsupportedError as exc:
             list_problems.append(f"{path_file.name}: {exc}")
@@ -209,14 +211,14 @@ def emitting_files(path_dir: pathlib.Path) -> tuple:
             for str_id, dict_job in dict_job_map.items():
                 if "uses" in dict_job:
                     continue
-                for str_name in job_names(dict_job_map, str_id):
+                for str_name in job_names(dict_job_map, str_id=str_id):
                     dict_files.setdefault(str_name, set()).add(path_file.name)
         except UnsupportedError as exc:
             list_problems.append(f"{path_file.name}: {exc}")
     return dict_files, list_problems
 
 
-def inactive_emitters(set_req: set, dict_files: dict, dict_states: dict) -> list:
+def inactive_emitters(set_req: set, *, dict_files: dict, dict_states: dict) -> list:
     """List required contexts whose emitting workflow file is not `active` in the Actions UI."""
     list_err = []
     for str_name in sorted(set_req & set(dict_files)):
@@ -303,7 +305,7 @@ def read_expected(path_file: pathlib.Path) -> dict:
     return {k: set(v) for k, v in dict_raw.items()}
 
 
-def compare_live(dict_exp: dict, dict_live: dict) -> list:
+def compare_live(dict_exp: dict, *, dict_live: dict) -> list:
     """Per layer, the contexts the JSON and the live settings disagree on."""
     list_err = []
     for str_layer in ("classic", "ruleset"):
@@ -314,7 +316,7 @@ def compare_live(dict_exp: dict, dict_live: dict) -> list:
     return list_err
 
 
-def compare(set_req: set, dict_jobs: dict, dict_policy: dict) -> list:
+def compare(set_req: set, *, dict_jobs: dict, dict_policy: dict) -> list:
     """Every finding, as a message; empty means in sync."""
     list_err = []
     set_always = {n for n, f in dict_jobs.items() if f}
@@ -361,8 +363,8 @@ def check_required_list(args: argparse.Namespace) -> int:
     dict_jobs, list_problems = pr_jobs(pathlib.Path(args.workflows))
     list_err = list_problems + compare(
         set_req,
-        dict_jobs,
-        {"optional": {n: "" for n, f in dict_jobs.items() if f}, "external": {}},
+        dict_jobs=dict_jobs,
+        dict_policy={"optional": {n: "" for n, f in dict_jobs.items() if f}, "external": {}},
     )
     for str_msg in list_err:
         print(f"::error::{str_msg}", file=sys.stderr)
@@ -390,11 +392,11 @@ def main() -> int:
     if args.live:
         dict_files, list_problems = emitting_files(pathlib.Path(args.workflows))
         list_err = (
-            compare_live(dict_exp, dict_live)
+            compare_live(dict_exp, dict_live=dict_live)
             + inactive_emitters(
                 dict_exp["classic"] | dict_exp["ruleset"],
-                dict_files,
-                dict_live["states"],
+                dict_files=dict_files,
+                dict_states=dict_live["states"],
             )
             + list_problems
         )
@@ -402,8 +404,8 @@ def main() -> int:
         dict_jobs, list_problems = pr_jobs(pathlib.Path(args.workflows))
         list_err = list_problems + compare(
             dict_exp["classic"] | dict_exp["ruleset"],
-            dict_jobs,
-            read_policy(pathlib.Path(args.policy)),
+            dict_jobs=dict_jobs,
+            dict_policy=read_policy(pathlib.Path(args.policy)),
         )
     for str_msg in list_err:
         print(f"::error::{str_msg}", file=sys.stderr)

@@ -150,9 +150,7 @@ _RE_SHARED_SOURCE_CP = re.compile(
 
 _RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
 _RE_UTILS_LOOP = re.compile(r"^[^\S\n]*(?!#)\S*\s*for\s+util\s+in\s+(.*?);\s*do", re.M | re.S)
-_RE_UTILS_ARRAY = re.compile(
-    r"^[^\S\n]*(?!#)\S*\s*local\s+-a\s+utils=\((.*?)\)", re.M | re.S
-)
+_RE_UTILS_ARRAY = re.compile(r"^[^\S\n]*(?!#)\S*\s*local\s+-a\s+utils=\((.*?)\)", re.M | re.S)
 _RE_UTIL_NAME = re.compile(r"[a-z][a-z0-9_]*")
 _RE_UTILS_TEST_CP = re.compile(
     r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*tests/unit/test_\$\{util\}\.py", re.M
@@ -244,7 +242,9 @@ def reachable_docs(str_source: str, set_shared: set) -> set:
             set_reachable.add(str_operand)
         elif str_operand.endswith("/."):
             str_prefix = str_operand[:-1]
-            set_reachable.update(str_doc for str_doc in set_shared if str_doc.startswith(str_prefix))
+            set_reachable.update(
+                str_doc for str_doc in set_shared if str_doc.startswith(str_prefix)
+            )
     return set_reachable
 
 
@@ -427,30 +427,34 @@ def scaffold_problems(
     """
     str_source = scaffold_source_text(path_scaffold)
 
-    return asset_problems(
-        path_scaffold,
-        set_docs,
-        reachable_docs(str_source, set_docs),
-        DICT_DOCS_EXPECTED_ABSENT.get(path_scaffold.name, {}),
-        "doc",
-        "templates/python-common/",
-        "the doc would be written, committed, and never read in any generated project",
-    ) + asset_problems(
-        path_scaffold,
-        set_shared,
-        reachable_tests(str_source),
-        DICT_EXPECTED_ABSENT.get(path_scaffold.name, {}),
-        "test",
-        "templates/python-common/tests/unit/",
-        "it would be written, committed, and never run in any generated project",
-    ) + asset_problems(
-        path_scaffold,
-        set_workflows,
-        reachable_workflows(str_source),
-        DICT_WORKFLOWS_EXPECTED_ABSENT.get(path_scaffold.name, {}),
-        "workflow",
-        "templates/python-common/.github/workflows/",
-        "that CI gate would not exist at all in any generated project",
+    return (
+        asset_problems(
+            path_scaffold,
+            set_docs,
+            reachable_docs(str_source, set_docs),
+            DICT_DOCS_EXPECTED_ABSENT.get(path_scaffold.name, {}),
+            "doc",
+            "templates/python-common/",
+            "the doc would be written, committed, and never read in any generated project",
+        )
+        + asset_problems(
+            path_scaffold,
+            set_shared,
+            reachable_tests(str_source),
+            DICT_EXPECTED_ABSENT.get(path_scaffold.name, {}),
+            "test",
+            "templates/python-common/tests/unit/",
+            "it would be written, committed, and never run in any generated project",
+        )
+        + asset_problems(
+            path_scaffold,
+            set_workflows,
+            reachable_workflows(str_source),
+            DICT_WORKFLOWS_EXPECTED_ABSENT.get(path_scaffold.name, {}),
+            "workflow",
+            "templates/python-common/.github/workflows/",
+            "that CI gate would not exist at all in any generated project",
+        )
     )
 
 
@@ -483,9 +487,7 @@ def main() -> int:
 
     list_problems = []
     for path_scaffold in list_scaffolds:
-        list_problems.extend(
-            scaffold_problems(path_scaffold, set_shared, set_workflows, set_docs)
-        )
+        list_problems.extend(scaffold_problems(path_scaffold, set_shared, set_workflows, set_docs))
 
     for str_problem in list_problems:
         print(str_problem)

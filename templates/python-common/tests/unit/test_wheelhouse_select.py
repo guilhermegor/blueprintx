@@ -97,7 +97,12 @@ def test_an_unknown_implementation_is_returned_unchanged_not_guessed() -> None:
 
 def test_the_marker_environment_carries_the_canonical_implementation() -> None:
     """The end-to-end assertion: the fix has to reach the dict the marker reads."""
-    dict_env = gate.target_environment("3.12.1", "linux", "x86_64", "cpython")
+    dict_env = gate.target_environment(
+        "3.12.1",
+        str_sys_platform="linux",
+        str_platform_machine="x86_64",
+        str_implementation="cpython",
+    )
 
     assert dict_env["platform_python_implementation"] == "CPython"
 
@@ -115,7 +120,7 @@ def test_a_manifest_whose_declared_count_disagrees_is_refused(tmp_path: Path) ->
     )
 
     with pytest.raises(SystemExit, match="declares 3 part"):
-        gate.verify_parts(tmp_path, dict_manifest)
+        gate.verify_parts(tmp_path, dict_manifest=dict_manifest)
 
 
 def test_a_manifest_whose_declared_count_agrees_still_passes(tmp_path: Path) -> None:
@@ -123,7 +128,9 @@ def test_a_manifest_whose_declared_count_agrees_still_passes(tmp_path: Path) -> 
     (tmp_path / "a.part").write_bytes(b"x")
     dict_manifest = _manifest([{"name": "a.part", "sha256": gate.sha256_of(tmp_path / "a.part")}])
 
-    assert gate.verify_parts(tmp_path, dict_manifest) == [(tmp_path / "a.part").resolve()]
+    assert gate.verify_parts(tmp_path, dict_manifest=dict_manifest) == [
+        (tmp_path / "a.part").resolve()
+    ]
 
 
 def test_a_non_positive_part_size_is_refused_instead_of_packing_nothing(tmp_path: Path) -> None:
@@ -132,7 +139,7 @@ def test_a_non_positive_part_size_is_refused_instead_of_packing_nothing(tmp_path
     path_zip.write_bytes(b"x")
 
     with pytest.raises(SystemExit, match="positive"):
-        gate.split_into_parts(path_zip, 0)
+        gate.split_into_parts(path_zip, int_part_mb=0)
 
 
 def test_an_absolute_part_name_cannot_escape_the_transfer_directory(tmp_path: Path) -> None:
@@ -143,7 +150,7 @@ def test_an_absolute_part_name_cannot_escape_the_transfer_directory(tmp_path: Pa
     dict_manifest = _manifest([{"name": "/etc/passwd", "sha256": "0" * 64}])
 
     with pytest.raises(SystemExit, match="escapes"):
-        gate.verify_parts(tmp_path, dict_manifest)
+        gate.verify_parts(tmp_path, dict_manifest=dict_manifest)
 
 
 def test_a_parent_relative_part_name_cannot_escape_either(tmp_path: Path) -> None:
@@ -151,21 +158,21 @@ def test_a_parent_relative_part_name_cannot_escape_either(tmp_path: Path) -> Non
     dict_manifest = _manifest([{"name": "../../etc/shadow", "sha256": "0" * 64}])
 
     with pytest.raises(SystemExit, match="escapes"):
-        gate.verify_parts(tmp_path, dict_manifest)
+        gate.verify_parts(tmp_path, dict_manifest=dict_manifest)
 
 
 def test_an_ordinary_part_name_is_still_accepted(tmp_path: Path) -> None:
     """The negative control for containment: a plain basename must keep working."""
     (tmp_path / "wheelhouse.zip.001").write_bytes(b"x")
 
-    assert gate._contained_path(tmp_path, "wheelhouse.zip.001").is_file()
+    assert gate._contained_path(tmp_path, str_name="wheelhouse.zip.001").is_file()
 
 
 def test_a_nested_part_name_inside_the_directory_is_accepted(tmp_path: Path) -> None:
     """Containment is the rule, not basename-only — a subdirectory is still inside."""
     (tmp_path / "sub").mkdir()
 
-    assert gate._contained_path(tmp_path, "sub/a.part").parent.name == "sub"
+    assert gate._contained_path(tmp_path, str_name="sub/a.part").parent.name == "sub"
 
 
 def _wheel_dir(tmp_path: Path, *list_names: str) -> Path:
@@ -189,7 +196,7 @@ def _wheel_dir(tmp_path: Path, *list_names: str) -> Path:
     return dir_wheels
 
 
-def _pack_args(tmp_path: Path, dir_wheels: Path) -> argparse.Namespace:
+def _pack_args(tmp_path: Path, *, dir_wheels: Path) -> argparse.Namespace:
     """Build the ``pack`` arguments for a payload written next to ``tmp_path``.
 
     Parameters
@@ -217,13 +224,13 @@ def test_a_non_wheel_download_is_refused_instead_of_silently_dropped(tmp_path: P
     dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl", "b-2.0.tar.gz")
 
     with pytest.raises(SystemExit, match=r"b-2\.0\.tar\.gz"):
-        gate.build_zip(dir_wheels, tmp_path / "w.zip")
+        gate.build_zip(dir_wheels, path_zip=tmp_path / "w.zip")
 
 
 def test_pack_then_assemble_round_trips_the_wheels(tmp_path: Path) -> None:
     """The shipped payload shape must reassemble to the wheels that were packed."""
     dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl", "b-2.0-py3-none-any.whl")
-    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels=dir_wheels))
     dir_out = tmp_path / "wheels"
 
     gate.assemble_wheelhouse(
@@ -246,7 +253,7 @@ def test_a_hand_made_zip_with_a_nested_folder_extracts_flat(tmp_path: Path) -> N
     with zipfile.ZipFile(path_zip, "w") as zip_out:
         zip_out.writestr("wheels/a-1.0-py3-none-any.whl", b"x")
 
-    gate.unzip_wheels(path_zip, tmp_path / "out")
+    gate.unzip_wheels(path_zip, dir_out=tmp_path / "out")
 
     assert (tmp_path / "out" / "a-1.0-py3-none-any.whl").is_file()
 
@@ -256,7 +263,7 @@ def test_loose_wheels_that_disagree_with_the_manifest_do_not_shadow_it(tmp_path:
     path_manifest = tmp_path / "manifest.json"
     path_manifest.write_text('{"wheel_count": 2}', encoding="utf-8")
 
-    assert gate._loose_wheels_match_manifest(path_manifest, ["a.whl"]) is False
+    assert gate._loose_wheels_match_manifest(path_manifest, list_loose=["a.whl"]) is False
 
 
 def test_loose_wheels_matching_the_manifest_count_are_accepted(tmp_path: Path) -> None:
@@ -264,13 +271,13 @@ def test_loose_wheels_matching_the_manifest_count_are_accepted(tmp_path: Path) -
     path_manifest = tmp_path / "manifest.json"
     path_manifest.write_text('{"wheel_count": 2}', encoding="utf-8")
 
-    assert gate._loose_wheels_match_manifest(path_manifest, ["a.whl", "b.whl"]) is True
+    assert gate._loose_wheels_match_manifest(path_manifest, list_loose=["a.whl", "b.whl"]) is True
 
 
 def test_a_zip_name_that_collides_with_a_part_is_refused(tmp_path: Path) -> None:
     """``zip_name`` pointing at an input would truncate it before it is read."""
     dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl")
-    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels=dir_wheels))
     path_manifest = tmp_path / "out" / "manifest.json"
     dict_manifest = json.loads(path_manifest.read_text(encoding="utf-8"))
     dict_manifest["zip_name"] = dict_manifest["parts"][0]["name"]
@@ -293,7 +300,7 @@ def test_a_rebuild_with_fewer_parts_removes_the_stale_ones(tmp_path: Path) -> No
     path_stale.parent.mkdir()
     path_stale.write_bytes(b"old")
 
-    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels=dir_wheels))
 
     assert not path_stale.exists()
 
@@ -322,7 +329,7 @@ def test_pack_records_the_sorted_wheel_names_in_the_manifest(tmp_path: Path) -> 
     """Names, not just a count, are what tell a stale ``wheels/`` from the payload."""
     dir_wheels = _wheel_dir(tmp_path, "b-2.0-py3-none-any.whl", "a-1.0-py3-none-any.whl")
 
-    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels=dir_wheels))
 
     dict_manifest = json.loads((tmp_path / "out" / "manifest.json").read_text(encoding="utf-8"))
     assert dict_manifest["wheel_names"] == ["a-1.0-py3-none-any.whl", "b-2.0-py3-none-any.whl"]
@@ -333,7 +340,7 @@ def test_loose_wheels_with_the_manifest_names_are_accepted(tmp_path: Path) -> No
     path_manifest = tmp_path / "manifest.json"
     path_manifest.write_text('{"wheel_count": 2, "wheel_names": ["a.whl", "b.whl"]}')
 
-    assert gate._loose_wheels_match_manifest(path_manifest, ["b.whl", "a.whl"]) is True
+    assert gate._loose_wheels_match_manifest(path_manifest, list_loose=["b.whl", "a.whl"]) is True
 
 
 def test_loose_wheels_with_other_names_but_the_same_count_are_rejected(tmp_path: Path) -> None:
@@ -341,13 +348,16 @@ def test_loose_wheels_with_other_names_but_the_same_count_are_rejected(tmp_path:
     path_manifest = tmp_path / "manifest.json"
     path_manifest.write_text('{"wheel_count": 2, "wheel_names": ["a.whl", "b.whl"]}')
 
-    assert gate._loose_wheels_match_manifest(path_manifest, ["a.whl", "stale.whl"]) is False
+    assert (
+        gate._loose_wheels_match_manifest(path_manifest, list_loose=["a.whl", "stale.whl"])
+        is False
+    )
 
 
 def test_stale_wheels_of_the_same_count_do_not_short_circuit_assemble(tmp_path: Path) -> None:
     """End to end: N stale wheels from another lock must not skip extracting the payload."""
     dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl", "b-2.0-py3-none-any.whl")
-    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels=dir_wheels))
     dir_out = tmp_path / "wheels"
     dir_out.mkdir()
     (dir_out / "x-9.0-py3-none-any.whl").write_bytes(b"stale")
@@ -361,7 +371,7 @@ def test_stale_wheels_of_the_same_count_do_not_short_circuit_assemble(tmp_path: 
 def test_stale_wheels_are_removed_once_the_payload_is_verified(tmp_path: Path) -> None:
     """A wheel the manifest does not name must not survive next to the extracted payload."""
     dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl", "b-2.0-py3-none-any.whl")
-    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels=dir_wheels))
     dir_out = tmp_path / "wheels"
     dir_out.mkdir()
     (dir_out / "x-9.0-py3-none-any.whl").write_bytes(b"stale")
@@ -378,7 +388,7 @@ def test_a_sha_mismatch_does_not_leave_the_reassembled_zip_behind(tmp_path: Path
     """A failed archive left as ``wheelhouse.zip`` could later be extracted as unverified."""
     # one-assert-ok: the raises block IS the failure under test; the assert is its cleanup
     dir_wheels = _wheel_dir(tmp_path, "a-1.0-py3-none-any.whl")
-    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels))
+    gate.pack_wheelhouse(_pack_args(tmp_path, dir_wheels=dir_wheels))
     path_manifest = tmp_path / "out" / "manifest.json"
     dict_manifest = json.loads(path_manifest.read_text(encoding="utf-8"))
     dict_manifest["zip_sha256"] = "0" * 64

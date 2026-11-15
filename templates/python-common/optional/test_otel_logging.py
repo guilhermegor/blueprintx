@@ -37,7 +37,7 @@ def test_signal_override_prefers_a_set_but_empty_signal_variable(
     monkeypatch.setenv("BX_TEST_SIGNAL", "")
     monkeypatch.setenv("BX_TEST_GENERIC", "http://generic.example:4318")
 
-    assert _signal_override("BX_TEST_SIGNAL", "BX_TEST_GENERIC") == ""
+    assert _signal_override("BX_TEST_SIGNAL", str_generic_var="BX_TEST_GENERIC") == ""
 
 
 def test_signal_override_falls_back_when_the_signal_variable_is_absent(
@@ -47,7 +47,10 @@ def test_signal_override_falls_back_when_the_signal_variable_is_absent(
     monkeypatch.delenv("BX_TEST_SIGNAL", raising=False)
     monkeypatch.setenv("BX_TEST_GENERIC", "http://generic.example:4318")
 
-    assert _signal_override("BX_TEST_SIGNAL", "BX_TEST_GENERIC") == "http://generic.example:4318"
+    assert (
+        _signal_override("BX_TEST_SIGNAL", str_generic_var="BX_TEST_GENERIC")
+        == "http://generic.example:4318"
+    )
 
 
 def test_reject_redirects_sets_max_redirects_to_zero() -> None:
@@ -106,7 +109,7 @@ def test_configure_otel_logging_with_endpoint_adds_handler_without_removing_exis
 
 
 def test_cleartext_endpoint_with_headers_is_refused_and_warns(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch, *, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Credentials + an off-host http:// endpoint -> no handler, and a WARNING.
 
@@ -211,7 +214,10 @@ def test_unparseable_endpoint_with_credentials_is_refused_not_raised(
     ],
 )
 def test_is_cleartext_with_credentials_truth_table(
-    str_endpoint: str, bool_has_headers: bool, bool_expected: bool
+    str_endpoint: str, *, bool_has_headers: bool, bool_expected: bool
 ) -> None:
     """Pin the predicate: off-host cleartext or unparseable endpoint, with headers, is refused."""
-    assert _is_cleartext_with_credentials(str_endpoint, bool_has_headers) is bool_expected
+    assert (
+        _is_cleartext_with_credentials(str_endpoint, bool_has_headers=bool_has_headers)
+        is bool_expected
+    )

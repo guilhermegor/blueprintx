@@ -156,7 +156,7 @@ def _meaningful_lines(path_yaml: pathlib.Path) -> list:
     ]
 
 
-def _apply_line(dict_rule: dict, tuple_state: tuple, str_line: str) -> tuple:
+def _apply_line(dict_rule: dict, *, tuple_state: tuple, str_line: str) -> tuple:
     """Fold one registry line into the rule dict being built; return the parser state.
 
     Parameters
@@ -229,7 +229,7 @@ def parse_registry(path_yaml: pathlib.Path) -> list:
             continue
         if dict_rule is None:
             raise RegistryError(f"content before the first '- id:' entry: {str_line!r}")
-        tuple_state = _apply_line(dict_rule, tuple_state, str_line)
+        tuple_state = _apply_line(dict_rule, tuple_state=tuple_state, str_line=str_line)
     if not list_rules:
         raise RegistryError("no rules parsed — the registry is empty or unreadable")
     return list_rules
@@ -260,7 +260,7 @@ def discovered_languages(path_root: pathlib.Path) -> set:
     return set_languages
 
 
-def language_coverage_problems(list_rules: list, set_languages: set) -> list:
+def language_coverage_problems(list_rules: list, *, set_languages: set) -> list:
     """Return findings for a rule missing a declared, non-empty ``tool``/``rule`` entry.
 
     Parameters
@@ -347,7 +347,7 @@ def _declared_patterns(dict_entry: dict) -> list:
     return list_patterns
 
 
-def config_pattern_problems(list_rules: list, path_root: pathlib.Path) -> list:
+def config_pattern_problems(list_rules: list, *, path_root: pathlib.Path) -> list:
     """Return findings where a declared ``file``/``pattern`` no longer matches reality.
 
     Parameters
@@ -385,7 +385,7 @@ def config_pattern_problems(list_rules: list, path_root: pathlib.Path) -> list:
     return list_problems
 
 
-def docs_anchor_problems(list_rules: list, path_root: pathlib.Path) -> list:
+def docs_anchor_problems(list_rules: list, *, path_root: pathlib.Path) -> list:
     """Return findings for a ``docs:`` reference whose anchor does not resolve.
 
     Parameters
@@ -492,10 +492,10 @@ def main(list_argv: list) -> int:
     set_languages = discovered_languages(PATH_ROOT)
     list_problems = [
         *structure_problems(list_rules),
-        *language_coverage_problems(list_rules, set_languages),
+        *language_coverage_problems(list_rules, set_languages=set_languages),
         *reason_required_problems(list_rules),
-        *config_pattern_problems(list_rules, PATH_ROOT),
-        *docs_anchor_problems(list_rules, PATH_ROOT),
+        *config_pattern_problems(list_rules, path_root=PATH_ROOT),
+        *docs_anchor_problems(list_rules, path_root=PATH_ROOT),
     ]
 
     for str_problem in list_problems:
