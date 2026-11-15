@@ -18,10 +18,6 @@ from src.utils.tabular_reader import (
 )
 
 
-_INT_2 = 2
-_INT_3 = 3
-
-
 def _write_csv(path_dir: Path) -> Path:
     """Write a small ``;``-separated CSV and return its path.
 
@@ -274,7 +270,7 @@ def test_empty_contract_constrains_nothing(tmp_path: Path) -> None:
         dict_dtypes={"code": "str", "amount": "int64"},
         cls_contract=cls_contract,
     )
-    assert len(df_out) == _INT_2
+    assert len(df_out) == 2
 
 
 def _write_malformed_quote_csv(path_dir: Path) -> Path:
@@ -341,7 +337,7 @@ def test_read_table_quote_none_keeps_every_row(df_quote_none_read: object) -> No
     df_quote_none_read : object
         The frame read with ``QUOTE_NONE``.
     """
-    assert len(df_quote_none_read) == _INT_3
+    assert len(df_quote_none_read) == 3
 
 
 def test_read_table_quote_none_keeps_the_stray_quote_literal(df_quote_none_read: object) -> None:

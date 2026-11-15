@@ -19,8 +19,6 @@ from utils.spec_gap_registry import SpecGapRegistry
 
 _STR_REGIME_CLASSE = "cnpj_classe_keyed"
 _STR_REGIME_PLAIN = "cnpj_keyed"
-_INT_2 = 2
-_INT_202311 = 202311
 
 
 @pytest.fixture
@@ -87,7 +85,7 @@ def test_default_period_for_closed_regime_returns_its_last_covered_period(
     -------
     None
     """
-    assert cls_registry.default_period("cnpj_keyed") == _INT_202311
+    assert cls_registry.default_period("cnpj_keyed") == 202311
 
 
 def test_default_period_for_open_regime_raises(cls_registry: RegimeRegistry) -> None:
@@ -176,7 +174,7 @@ def test_adapter_with_no_period_defaults_to_its_regimes_last_covered_period(
     None
     """
     cls_adapter = RegimeBoundAdapter(cls_registry=cls_registry, str_regime_name="cnpj_keyed")
-    assert cls_adapter.int_period == _INT_202311
+    assert cls_adapter.int_period == 202311
 
 
 def test_unlisted_regime_has_no_known_gaps() -> None:
@@ -279,7 +277,7 @@ def test_adjacent_windows_that_do_not_overlap_are_accepted() -> None:
             ),
         ]
     )
-    assert len(cls_built.list_windows) == _INT_2
+    assert len(cls_built.list_windows) == 2
 
 
 def test_covers_rejects_a_month_outside_01_12() -> None:

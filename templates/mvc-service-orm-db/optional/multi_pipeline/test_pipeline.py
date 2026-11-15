@@ -20,9 +20,6 @@ from controller.pipeline_reconcile import ReconcilePipeline
 from controller.pipeline_send import SendPipeline
 
 
-_INT_EXIT_USAGE = 2
-
-
 def _build_kwargs(tmp_path: Path) -> dict:
     """Return the keyword collaborators every ``pipeline_<intent>`` constructor accepts.
 
@@ -90,7 +87,7 @@ def test_resolve_intent_raises_systemexit_on_unknown_spelling() -> None:
     """
     with pytest.raises(SystemExit) as cls_exc_info:
         resolve_intent("not-a-real-intent")
-    assert cls_exc_info.value.code == _INT_EXIT_USAGE
+    assert cls_exc_info.value.code == 2
 
 
 def test_build_pipeline_returns_send_pipeline_for_send_intent(tmp_path: Path) -> None:
@@ -139,4 +136,4 @@ def test_build_pipeline_raises_systemexit_on_unregistered_intent(tmp_path: Path)
     """
     with pytest.raises(SystemExit) as cls_exc_info:
         build_pipeline("not-a-real-intent", **_build_kwargs(tmp_path))
-    assert cls_exc_info.value.code == _INT_EXIT_USAGE
+    assert cls_exc_info.value.code == 2

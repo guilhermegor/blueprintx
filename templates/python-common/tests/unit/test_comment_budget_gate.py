@@ -21,9 +21,6 @@ from types import ModuleType
 import pytest
 
 
-_INT_2 = 2
-
-
 _BIN = Path(__file__).resolve().parents[2] / "bin"
 
 
@@ -165,7 +162,7 @@ def test_a_pragma_line_splits_one_block_into_two() -> None:
     """Two five-line blocks separated by one pragma are two findings, not one."""
     list_lines = ["# a"] * 5 + ["# noqa"] + ["# b"] * 5
     list_blocks = gate.marker_blocks("\n".join(list_lines), str_marker="#")
-    assert len(list_blocks) == _INT_2
+    assert len(list_blocks) == 2
 
 
 def test_a_hash_inside_a_python_string_literal_is_not_a_comment() -> None:
@@ -469,7 +466,7 @@ def test_an_oversized_run_split_by_a_rule_line_yields_exactly_two_findings(
     list_split_run_problems : list[str]
         The gate's findings for the probe file.
     """
-    assert len(list_split_run_problems) == _INT_2
+    assert len(list_split_run_problems) == 2
 
 
 @pytest.fixture
@@ -1644,7 +1641,7 @@ def test_a_here_string_and_a_comment_mentioning_a_heredoc_open_nothing(tmp_path:
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
     """
-    assert _count(tmp_path, str_name="s.sh", str_text="x <<< y\n# cat <<EOF\n# real\n") == _INT_2
+    assert _count(tmp_path, str_name="s.sh", str_text="x <<< y\n# cat <<EOF\n# real\n") == 2
 
 
 def test_a_docstring_mentioning_a_heredoc_hides_nothing_in_python(tmp_path: Path) -> None:
@@ -1679,8 +1676,7 @@ def test_a_toml_string_with_a_heredoc_marker_hides_nothing(tmp_path: Path) -> No
         A throwaway directory pytest provides per test.
     """
     assert (
-        _count(tmp_path, str_name="c.toml", str_text='k = "a <<EOF"\n# real\nEOF\n# real2\n')
-        == _INT_2
+        _count(tmp_path, str_name="c.toml", str_text='k = "a <<EOF"\n# real\nEOF\n# real2\n') == 2
     )
 
 
@@ -1758,7 +1754,7 @@ def test_an_unterminated_opener_counts_its_lines(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
     """
-    assert _count(tmp_path, str_name="s.sh", str_text="cat <<EOF\n# one\n# two\n") == _INT_2
+    assert _count(tmp_path, str_name="s.sh", str_text="cat <<EOF\n# one\n# two\n") == 2
 
 
 def _commit_tree(path_root: Path) -> str:

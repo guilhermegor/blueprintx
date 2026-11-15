@@ -9,9 +9,6 @@ import logging
 import pytest
 
 
-_INT_2 = 2
-
-
 try:
     from utils.otel_logging import (
         _is_cleartext_with_credentials,
@@ -107,7 +104,7 @@ def test_configure_otel_logging_with_endpoint_adds_handler_without_removing_exis
     configure_otel_logging(cls_logger)
 
     assert cls_existing_handler in cls_logger.handlers
-    assert len(cls_logger.handlers) == _INT_2
+    assert len(cls_logger.handlers) == 2
     cls_logger.handlers.clear()
 
 

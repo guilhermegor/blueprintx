@@ -14,9 +14,6 @@ import pytest
 from src.utils import dates
 
 
-_INT_5 = 5
-
-
 class _FakeCalendar:
     """Recording stand-in for ``DatesBRAnbima`` that returns typed values."""
 
@@ -89,7 +86,7 @@ def test_add_working_days_forwards_the_date_and_count(cls_calendar: _FakeCalenda
 
 def test_delta_working_days_returns_the_calendar_result(cls_calendar: _FakeCalendar) -> None:
     """``delta_working_days`` returns the shared calendar's count."""
-    assert dates.delta_working_days(date(2026, 6, 1), dt_end=date(2026, 6, 8)) == _INT_5
+    assert dates.delta_working_days(date(2026, 6, 1), dt_end=date(2026, 6, 8)) == 5
 
 
 def test_delta_working_days_forwards_both_endpoints(cls_calendar: _FakeCalendar) -> None:

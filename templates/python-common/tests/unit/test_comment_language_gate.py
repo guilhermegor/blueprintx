@@ -24,9 +24,6 @@ from types import ModuleType
 import pytest
 
 
-_INT_2 = 2
-
-
 _BIN = Path(__file__).resolve().parents[2] / "bin"
 
 
@@ -187,7 +184,7 @@ def test_a_quotation_spanning_lines_does_not_charge_the_comment() -> None:
 def test_a_blank_line_separates_two_blocks() -> None:
     """Joining must not run past a non-comment line, or unrelated comments merge."""
     str_source = "# first block\nx = 1\n# second block\n"
-    assert len(gate.marker_comments(str_source, str_marker="#")) == _INT_2
+    assert len(gate.marker_comments(str_source, str_marker="#")) == 2
 
 
 def test_redaction_preserves_length_so_offsets_survive() -> None:
