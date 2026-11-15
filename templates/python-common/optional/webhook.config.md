@@ -1,3 +1,4 @@
+
 ## Webhook notification (opt-in)
 
 Added when the project was scaffolded with the webhook notifier. The platform (Slack or
