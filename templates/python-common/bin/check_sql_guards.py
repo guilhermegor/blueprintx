@@ -82,7 +82,7 @@ def _hatch_reason(str_line: str) -> str | None:
     return str_line.split(_ALLOW_MARKER, 1)[1].strip() or None
 
 
-def _line_allowed(list_lines: list[str], int_line: int) -> bool:
+def _line_allowed(list_lines: list[str], *, int_line: int) -> bool:
     """Return whether a 1-indexed line carries a valid escape-hatch reason.
 
     Parameters
@@ -190,7 +190,7 @@ def _downward_chain_names(cls_call: ast.Call) -> list[str]:
     return list_names
 
 
-def _upward_chain_names(cls_call: ast.Call, dict_parents: dict[int, ast.AST]) -> list[str]:
+def _upward_chain_names(cls_call: ast.Call, *, dict_parents: dict[int, ast.AST]) -> list[str]:
     """Collect method names chained AFTER this call, e.g. ``.where(...)`` appended on top.
 
     ``delete(comments).where(...)`` yields ``["where"]`` when called with the inner
@@ -222,7 +222,7 @@ def _upward_chain_names(cls_call: ast.Call, dict_parents: dict[int, ast.AST]) ->
     return list_names
 
 
-def _whereless_message(path_file: pathlib.Path, int_line: int, str_verb: str) -> str:
+def _whereless_message(path_file: pathlib.Path, *, int_line: int, str_verb: str) -> str:
     """Return the WHERE-less mutation finding, naming the failure mode and the fix.
 
     Parameters
@@ -249,7 +249,7 @@ def _whereless_message(path_file: pathlib.Path, int_line: int, str_verb: str) ->
 
 
 def _mutation_verb(
-    cls_call: ast.Call, set_core_aliases: set[str], set_module_aliases: set[str]
+    cls_call: ast.Call, *, set_core_aliases: set[str], set_module_aliases: set[str]
 ) -> tuple[str | None, bool]:
     """Return the mutation verb a call invokes, and whether it needs the ``query`` anchor.
 
@@ -283,7 +283,7 @@ def _mutation_verb(
 
 
 def _whereless_mutation_problems(
-    cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
+    cls_tree: ast.Module, *, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
     """Report every WHERE-less ``delete``/``update`` mutation in one parsed module.
 
@@ -312,25 +312,29 @@ def _whereless_mutation_problems(
         if not isinstance(cls_node, ast.Call):
             continue
         str_verb, bool_is_query_style = _mutation_verb(
-            cls_node, set_core_aliases, set_module_aliases
+            cls_node, set_core_aliases=set_core_aliases, set_module_aliases=set_module_aliases
         )
         if str_verb is None:
             continue
 
-        list_chain = _downward_chain_names(cls_node) + _upward_chain_names(cls_node, dict_parents)
+        list_chain = _downward_chain_names(cls_node) + _upward_chain_names(
+            cls_node, dict_parents=dict_parents
+        )
 
         if bool_is_query_style and "query" not in list_chain:
             continue
         if any(str_name in list_chain for str_name in _WHERE_NAMES):
             continue
-        if _line_allowed(list_lines, cls_node.lineno):
+        if _line_allowed(list_lines, int_line=cls_node.lineno):
             continue
 
-        list_problems.append(_whereless_message(path_file, cls_node.lineno, str_verb))
+        list_problems.append(
+            _whereless_message(path_file, int_line=cls_node.lineno, str_verb=str_verb)
+        )
     return list_problems
 
 
-def _nolock_message(path_file: pathlib.Path, int_line: int) -> str:
+def _nolock_message(path_file: pathlib.Path, *, int_line: int) -> str:
     """Return the ``WITH (NOLOCK)`` finding, naming the failure mode and the fix.
 
     Parameters
@@ -355,7 +359,7 @@ def _nolock_message(path_file: pathlib.Path, int_line: int) -> str:
 
 
 def _nolock_problems_in_python(
-    cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
+    cls_tree: ast.Module, *, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
     """Report every ``WITH (NOLOCK)`` hint inside a Python string/f-string literal.
 
@@ -381,8 +385,8 @@ def _nolock_problems_in_python(
         str_segment = ast.get_source_segment(str_source, cls_node) or ""
         for cls_match in _RE_NOLOCK.finditer(str_segment):
             int_line = cls_node.lineno + str_segment.count("\n", 0, cls_match.start())
-            if not _line_allowed(list_lines, int_line):
-                list_problems.append(_nolock_message(path_file, int_line))
+            if not _line_allowed(list_lines, int_line=int_line):
+                list_problems.append(_nolock_message(path_file, int_line=int_line))
     return list_problems
 
 
@@ -405,7 +409,7 @@ def _nolock_problems_in_sql(path_file: pathlib.Path) -> list[str]:
     for cls_match in _RE_NOLOCK.finditer(str_text):
         int_no = str_text.count("\n", 0, cls_match.start()) + 1
         if _hatch_reason(list_lines[int_no - 1]) is None:
-            list_problems.append(_nolock_message(path_file, int_no))
+            list_problems.append(_nolock_message(path_file, int_line=int_no))
     return list_problems
 
 
@@ -429,8 +433,12 @@ def check_python_file(path_file: pathlib.Path) -> list[str]:
         return [f"{path_file}: could not parse ({cls_exc})"]
 
     list_lines = str_source.splitlines()
-    list_problems = _whereless_mutation_problems(cls_tree, path_file, list_lines)
-    list_problems += _nolock_problems_in_python(cls_tree, path_file, list_lines)
+    list_problems = _whereless_mutation_problems(
+        cls_tree, path_file=path_file, list_lines=list_lines
+    )
+    list_problems += _nolock_problems_in_python(
+        cls_tree, path_file=path_file, list_lines=list_lines
+    )
     return list_problems
 
 

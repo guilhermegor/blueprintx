@@ -48,7 +48,7 @@ class DatabaseSession:
     ...     session.commit()
     """
 
-    def __init__(self, database_url: str, echo: bool = False) -> None:
+    def __init__(self, *, database_url: str, echo: bool = False) -> None:
         self.engine = create_engine(database_url, echo=echo)
         self._session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
 

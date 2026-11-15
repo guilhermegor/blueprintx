@@ -67,7 +67,7 @@ def split_cells(str_line: str) -> list:
     return [str_cell.strip() for str_cell in str_line.strip().strip("|").split("|")]
 
 
-def seeded_name(list_cells: list, int_column: int) -> str:
+def seeded_name(list_cells: list, *, int_column: int) -> str:
     """Return the variable a table row marks as seeded, or an empty string.
 
     Parameters
@@ -112,7 +112,7 @@ def seeded_rows(str_text: str) -> set:
         if STR_COLUMN in list_lower:
             int_column = list_lower.index(STR_COLUMN)
         else:
-            set_names.add(seeded_name(list_cells, int_column))
+            set_names.add(seeded_name(list_cells, int_column=int_column))
     set_names.discard("")
     return set_names
 

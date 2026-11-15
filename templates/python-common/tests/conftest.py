@@ -93,7 +93,7 @@ class _BlockedSocket(socket.socket):
 
 
 @pytest.fixture(autouse=True)
-def block_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+def block_network(request: pytest.FixtureRequest, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """Swap the socket primitives so no test can open a real connection.
 
     Applied automatically to every test. A test marked ``allow_network`` is left

@@ -112,7 +112,7 @@ def mask_cnpj(str_value: str) -> str:
 
 
 @type_checker
-def _cnpj_check_digit(str_base: str, tuple_weights: tuple[int, ...]) -> int:
+def _cnpj_check_digit(str_base: str, *, tuple_weights: tuple[int, ...]) -> int:
     """Compute one CNPJ check digit via ASCII-48 mod-11 weighting.
 
     Parameters
@@ -174,8 +174,8 @@ def _cnpj_check_digits(str_base: str) -> str:
     str
         The two check digits, concatenated.
     """
-    int_dv1 = _cnpj_check_digit(str_base, _CNPJ_WEIGHTS_DV1)
-    int_dv2 = _cnpj_check_digit(f"{str_base}{int_dv1}", _CNPJ_WEIGHTS_DV2)
+    int_dv1 = _cnpj_check_digit(str_base, tuple_weights=_CNPJ_WEIGHTS_DV1)
+    int_dv2 = _cnpj_check_digit(f"{str_base}{int_dv1}", tuple_weights=_CNPJ_WEIGHTS_DV2)
     return f"{int_dv1}{int_dv2}"
 
 
@@ -222,7 +222,7 @@ def mask_cpf(str_value: str) -> str:
 
 
 @type_checker
-def _cpf_check_digit(str_base: str, int_start_weight: int) -> int:
+def _cpf_check_digit(str_base: str, *, int_start_weight: int) -> int:
     """Compute one CPF check digit via descending mod-11 weighting.
 
     Parameters
@@ -282,6 +282,6 @@ def _cpf_check_digits(str_clean: str) -> str:
     str
         The two check digits, concatenated.
     """
-    int_dv1 = _cpf_check_digit(str_clean[:9], 10)
-    int_dv2 = _cpf_check_digit(str_clean[:10], 11)
+    int_dv1 = _cpf_check_digit(str_clean[:9], int_start_weight=10)
+    int_dv2 = _cpf_check_digit(str_clean[:10], int_start_weight=11)
     return f"{int_dv1}{int_dv2}"

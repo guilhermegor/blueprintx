@@ -78,7 +78,7 @@ def _init_identity(path_repo: Path) -> None:
     _git_in(path_repo, "config", "commit.gpgsign", "false")
 
 
-def _commit_file(path_repo: Path, str_name: str) -> None:
+def _commit_file(path_repo: Path, *, str_name: str) -> None:
     """Write one file and commit it.
 
     Parameters
@@ -129,10 +129,10 @@ def path_origin(tmp_path: Path) -> Path:
     path_seed.mkdir()
     _git_in(path_seed, "init", "-q", "--initial-branch=main")
     _init_identity(path_seed)
-    _commit_file(path_seed, "README.md")
+    _commit_file(path_seed, str_name="README.md")
     _git_in(path_seed, "branch", "develop")
     _git_in(path_seed, "checkout", "-q", "-b", "feature")
-    _commit_file(path_seed, "src/mod.py")
+    _commit_file(path_seed, str_name="src/mod.py")
     path_remote = tmp_path / "origin.git"
     _git_in(tmp_path, "init", "-q", "--bare", str(path_remote))
     _git_in(path_seed, "push", "-q", str(path_remote), "main", "develop", "feature")
@@ -140,7 +140,7 @@ def path_origin(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def path_ci(tmp_path: Path, path_origin: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def path_ci(tmp_path: Path, *, path_origin: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Return a checkout shaped like ``actions/checkout``: detached, no local branch, no HEAD ref.
 
     Parameters
@@ -189,7 +189,7 @@ def path_ci_merge(path_ci: Path) -> Path:
 
 
 @pytest.fixture
-def path_no_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def path_no_default(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Return a repo with commits on ``feature`` and no branch the gate can call the default.
 
     Parameters
@@ -208,8 +208,8 @@ def path_no_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path_repo.mkdir()
     _git_in(path_repo, "init", "-q", "--initial-branch=feature")
     _init_identity(path_repo)
-    _commit_file(path_repo, "README.md")
-    _commit_file(path_repo, "src/mod.py")
+    _commit_file(path_repo, str_name="README.md")
+    _commit_file(path_repo, str_name="src/mod.py")
     monkeypatch.chdir(path_repo)
     return path_repo
 
@@ -220,7 +220,7 @@ def test_main_ci_checkout_without_local_main_demands_a_ledger(path_ci: Path) -> 
 
 
 def test_main_ci_checkout_names_the_missing_ledger(
-    path_ci: Path, capsys: pytest.CaptureFixture[str]
+    path_ci: Path, *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The refusal in a CI checkout is the ledger message, not silence."""
     ledger.main()
@@ -233,7 +233,7 @@ def test_default_branch_ci_checkout_resolves_the_remote_tracking_ref(path_ci: Pa
 
 
 def test_default_branch_prefers_the_pull_request_base_ref(
-    path_ci: Path, monkeypatch: pytest.MonkeyPatch
+    path_ci: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A PR targeting ``develop`` is diffed against ``origin/develop``, not ``origin/main``."""
     monkeypatch.setenv("GITHUB_BASE_REF", "develop")
@@ -241,7 +241,7 @@ def test_default_branch_prefers_the_pull_request_base_ref(
 
 
 def test_default_branch_refuses_to_fall_back_from_an_unresolvable_base_ref(
-    path_ci: Path, monkeypatch: pytest.MonkeyPatch
+    path_ci: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A known PR base that was not fetched must not be swapped for another branch."""
     monkeypatch.setenv("GITHUB_BASE_REF", "does-not-exist")
@@ -249,7 +249,7 @@ def test_default_branch_refuses_to_fall_back_from_an_unresolvable_base_ref(
 
 
 def test_main_unresolvable_pull_request_base_fails(
-    path_ci: Path, monkeypatch: pytest.MonkeyPatch
+    path_ci: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A narrow fetch that lacks the PR base is reported, never judged against ``origin/main``.
 
@@ -266,7 +266,7 @@ def test_main_unresolvable_base_on_a_feature_branch_fails(path_no_default: Path)
 
 
 def test_main_unresolvable_base_says_it_could_not_resolve(
-    path_no_default: Path, capsys: pytest.CaptureFixture[str]
+    path_no_default: Path, *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The failure names the cause so the reader is not left guessing."""
     ledger.main()
@@ -279,7 +279,7 @@ def test_main_pull_request_merge_commit_demands_a_ledger(path_ci_merge: Path) ->
 
 
 def test_main_unresolvable_base_names_a_local_remedy(
-    path_no_default: Path, capsys: pytest.CaptureFixture[str]
+    path_no_default: Path, *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A developer with no CI to reconfigure is told to fetch or create the default branch."""
     ledger.main()
@@ -298,7 +298,7 @@ def test_main_on_the_default_branch_is_still_a_no_op(path_ci: Path) -> None:
 
 
 def test_main_repository_without_commits_is_a_no_op(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The first commit of a new repo has no HEAD to compare, and must not be refused."""
     path_empty = tmp_path / "empty"

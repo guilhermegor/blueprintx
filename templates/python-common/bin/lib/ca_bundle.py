@@ -31,7 +31,7 @@ TUPLE_CA_ENV_VARS = ("PIP_CERT", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "CURL_CA
 RE_PEM_BLOCK = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.DOTALL)
 
 
-def collect_sources(str_corporate: str, path_out: pathlib.Path) -> list:
+def collect_sources(str_corporate: str, *, path_out: pathlib.Path) -> list:
     """Return every candidate CA source, corporate certificate first.
 
     Order matters: index 0 is the corporate CA, so the caller can tell "trust we added"
@@ -111,7 +111,7 @@ def main() -> int:
         replacement.
     """
     path_out = pathlib.Path(os.environ["BX_CA_OUT"])
-    list_sources = collect_sources(os.environ["BX_CA_CORPORATE"], path_out)
+    list_sources = collect_sources(os.environ["BX_CA_CORPORATE"], path_out=path_out)
     list_blocks, int_non_corporate = dedupe_certificates(list_sources)
 
     if not list_blocks:

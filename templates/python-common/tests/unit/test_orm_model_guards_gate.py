@@ -39,7 +39,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_orm_model_guards")
 
 
-def _python_file(path_dir: Path, str_source: str, str_name: str = "sample.py") -> Path:
+def _python_file(path_dir: Path, *, str_source: str, str_name: str = "sample.py") -> Path:
     """Write a Python source file and return its path.
 
     Parameters
@@ -77,7 +77,7 @@ def list_bitwise_and_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import select\n\n"
+        str_source="from sqlalchemy import select\n\n"
         "stmt = select(User).where(User.age == 18 & User.is_active == True)\n",
     )
     return gate.check_python_file(path_file)[0]
@@ -96,7 +96,7 @@ def test_bitwise_and_inside_where_is_reported(list_bitwise_and_problems: list[st
 
 @pytest.mark.parametrize("str_needle", ["bitwise operator", "orm-guard-ok:"])
 def test_bitwise_and_finding_names_the_hazard_and_the_hatch(
-    list_bitwise_and_problems: list[str], str_needle: str
+    list_bitwise_and_problems: list[str], *, str_needle: str
 ) -> None:
     """The finding names the hazard and how to justify a deliberate exception.
 
@@ -114,7 +114,9 @@ def test_bitwise_or_inside_filter_is_reported(tmp_path: Path) -> None:
     """``|`` inside ``.filter(...)`` is the same hazard as ``&`` inside ``.where(...)``."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy.orm import Session\n\nsession.query(User).filter(User.a | User.b)\n",
+        str_source=(
+            "from sqlalchemy.orm import Session\n\nsession.query(User).filter(User.a | User.b)\n"
+        ),
     )
 
     assert len(gate.check_python_file(path_file)[0]) == 1
@@ -124,7 +126,7 @@ def test_and_or_house_form_inside_where_passes(tmp_path: Path) -> None:
     """``and_()``/``or_()`` cannot be mis-parenthesised and must never be flagged."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import select, and_\n\n"
+        str_source="from sqlalchemy import select, and_\n\n"
         "stmt = select(User).where(and_(User.age == 18, User.is_active == True))\n",
     )
 
@@ -135,7 +137,7 @@ def test_bitwise_operator_outside_where_filter_is_not_flagged(tmp_path: Path) ->
     """A ``&`` used elsewhere (e.g. real bit-flag arithmetic) is out of this gate's scope."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import select\n\nint_mask = 0b1010 & 0b0110\n",
+        str_source="from sqlalchemy import select\n\nint_mask = 0b1010 & 0b0110\n",
     )
 
     assert gate.check_python_file(path_file)[0] == []
@@ -146,14 +148,14 @@ def test_no_sqlalchemy_import_skips_the_bitwise_check(tmp_path: Path) -> None:
 
     The receiver is not named like a frame, so only the import scope check can skip this.
     """
-    path_file = _python_file(tmp_path, "qs.filter(Q(a) & Q(b))\n")
+    path_file = _python_file(tmp_path, str_source="qs.filter(Q(a) & Q(b))\n")
 
     assert gate.check_python_file(path_file)[0] == []
 
 
 @pytest.fixture
 def tuple_two_bases_run(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> tuple:
     """Run the gate over a tree holding two ``DeclarativeBase`` subclasses.
 
@@ -201,7 +203,9 @@ def test_two_declarative_base_subclasses_across_the_tree_are_reported(
 
 
 @pytest.mark.parametrize("str_name", ["a.py", "b.py"])
-def test_two_declarative_bases_name_both_files(tuple_two_bases_run: tuple, str_name: str) -> None:
+def test_two_declarative_bases_name_both_files(
+    tuple_two_bases_run: tuple, *, str_name: str
+) -> None:
     """The violation is for BOTH files, so both are named.
 
     Parameters
@@ -214,7 +218,9 @@ def test_two_declarative_bases_name_both_files(tuple_two_bases_run: tuple, str_n
     assert str_name in tuple_two_bases_run[1]
 
 
-def test_single_declarative_base_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_single_declarative_base_passes(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Exactly one ``DeclarativeBase`` subclass in the tree is the expected, safe shape."""
     path_src = tmp_path / "src"
     path_src.mkdir()
@@ -242,7 +248,7 @@ def list_create_all_problems(tmp_path: Path) -> list[str]:
         The gate's findings.
     """
     path_file = _python_file(
-        tmp_path, "from .base import Base\n\nBase.metadata.create_all(engine)\n"
+        tmp_path, str_source="from .base import Base\n\nBase.metadata.create_all(engine)\n"
     )
     return gate.check_python_file(path_file)[0]
 
@@ -275,7 +281,9 @@ def test_create_all_inside_a_function_passes(tmp_path: Path) -> None:
     """``create_all`` deferred into a function (run after models import) is the safe shape."""
     path_file = _python_file(
         tmp_path,
-        "from .base import Base\n\ndef init() -> None:\n\tBase.metadata.create_all(engine)\n",
+        str_source=(
+            "from .base import Base\n\ndef init() -> None:\n\tBase.metadata.create_all(engine)\n"
+        ),
     )
 
     assert gate.check_python_file(path_file)[0] == []
@@ -283,7 +291,7 @@ def test_create_all_inside_a_function_passes(tmp_path: Path) -> None:
 
 def test_unrelated_create_all_method_is_not_flagged(tmp_path: Path) -> None:
     """A ``.create_all()`` not chained off ``.metadata`` is out of scope (low false-positive)."""
-    path_file = _python_file(tmp_path, "cache.create_all()\n")
+    path_file = _python_file(tmp_path, str_source="cache.create_all()\n")
 
     assert gate.check_python_file(path_file)[0] == []
 
@@ -308,7 +316,7 @@ def list_two_mixin_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import UniqueConstraint\n\n"
+        str_source="from sqlalchemy import UniqueConstraint\n\n"
         "class MixinA:\n"
         "\t__table_args__ = (UniqueConstraint('a', name='uq_x'),)\n\n"
         "class MixinB:\n"
@@ -334,7 +342,7 @@ def test_two_mixins_declaring_table_args_report_the_shadowing(
 
 @pytest.mark.parametrize("str_needle", ["MixinB", "discards", "orm-guard-ok:"])
 def test_two_mixin_finding_names_the_shadowed_mixin(
-    list_two_mixin_problems: list[str], str_needle: str
+    list_two_mixin_problems: list[str], *, str_needle: str
 ) -> None:
     """The finding names the shadowed mixin, says it is discarded, and names the hatch.
 
@@ -352,7 +360,7 @@ def test_mapped_parent_and_child_each_declaring_table_args_is_clean(tmp_path: Pa
     """A mapped parent keeps its own table's ``__table_args__`` — only mixins are shadowed."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import UniqueConstraint\n\n"
+        str_source="from sqlalchemy import UniqueConstraint\n\n"
         "class Parent:\n"
         "\t__tablename__ = 'parent'\n"
         "\t__table_args__ = (UniqueConstraint('a', name='uq_parent'),)\n\n"
@@ -368,7 +376,7 @@ def test_pandas_mask_on_a_df_receiver_is_not_flagged(tmp_path: Path) -> None:
     """A frame named by the house ``df_`` prefix is pandas, whose masks use ``&`` by design."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import select\n\ndf_out = df_in.where(mask_a & mask_b)\n",
+        str_source="from sqlalchemy import select\n\ndf_out = df_in.where(mask_a & mask_b)\n",
     )
 
     assert gate.check_python_file(path_file)[0] == []
@@ -390,7 +398,7 @@ def list_distinct_names_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import UniqueConstraint\n\n"
+        str_source="from sqlalchemy import UniqueConstraint\n\n"
         "class MixinA:\n"
         "\t__table_args__ = (UniqueConstraint('a', name='uq_x'),)\n\n"
         "class MixinB:\n"
@@ -431,7 +439,7 @@ def test_one_mixin_declaring_table_args_is_clean(tmp_path: Path) -> None:
     """Only one declaration in the MRO: nothing is shadowed, nothing to report."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import UniqueConstraint\n\n"
+        str_source="from sqlalchemy import UniqueConstraint\n\n"
         "class MixinA:\n"
         "\t__table_args__ = (UniqueConstraint('a', name='uq_x'),)\n\n"
         "class MixinB:\n"
@@ -461,7 +469,7 @@ def list_duplicate_name_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import UniqueConstraint\n\n"
+        str_source="from sqlalchemy import UniqueConstraint\n\n"
         "class Model:\n"
         "\t__table_args__ = (\n"
         "\t\tUniqueConstraint('a', name='uq_x'),\n"
@@ -518,7 +526,7 @@ def list_empty_table_args_problems(tmp_path: Path) -> list[str]:
     """
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import UniqueConstraint\n\n"
+        str_source="from sqlalchemy import UniqueConstraint\n\n"
         "class MixinA:\n"
         "\t__table_args__ = ()\n\n"
         "class MixinB:\n"
@@ -559,7 +567,7 @@ def test_single_class_with_no_bases_never_flags_its_own_constraint(tmp_path: Pat
     """A lone model with one constraint has nothing to collide with."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy import UniqueConstraint\n\n"
+        str_source="from sqlalchemy import UniqueConstraint\n\n"
         "class Model:\n"
         "\t__table_args__ = (UniqueConstraint('a', name='uq_x'),)\n",
     )
@@ -571,7 +579,7 @@ def test_escape_hatch_with_reason_suppresses_the_finding(tmp_path: Path) -> None
     """A written reason after the marker is accepted."""
     path_file = _python_file(
         tmp_path,
-        "from .base import Base\n\n"
+        str_source="from .base import Base\n\n"
         "Base.metadata.create_all(engine)  # orm-guard-ok: single-tenant script, reviewed\n",
     )
 
@@ -582,20 +590,22 @@ def test_escape_hatch_with_empty_reason_still_fails(tmp_path: Path) -> None:
     """A bare marker with no reason (or whitespace only) is rejected, not accepted."""
     path_file = _python_file(
         tmp_path,
-        "from .base import Base\n\nBase.metadata.create_all(engine)  # orm-guard-ok:   \n",
+        str_source=(
+            "from .base import Base\n\nBase.metadata.create_all(engine)  # orm-guard-ok:   \n"
+        ),
     )
 
     assert len(gate.check_python_file(path_file)[0]) == 1
 
 
-def test_main_skips_when_src_is_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_skips_when_src_is_absent(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """No ``src/`` directory at all is a legitimate skip."""
     monkeypatch.chdir(tmp_path)
 
     assert gate.main() == 0
 
 
-def test_main_fails_on_zero_discovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_fails_on_zero_discovery(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """``src/`` exists but holds no Python files — that must FAIL, not pass silently."""
     (tmp_path / "src").mkdir()
     monkeypatch.chdir(tmp_path)
@@ -603,7 +613,7 @@ def test_main_fails_on_zero_discovery(tmp_path: Path, monkeypatch: pytest.Monkey
     assert gate.main() == 1
 
 
-def test_main_passes_on_a_clean_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_passes_on_a_clean_tree(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """A real file with no violations reports success."""
     path_src = tmp_path / "src"
     path_src.mkdir()
@@ -618,7 +628,7 @@ _SA = "from sqlalchemy import UniqueConstraint, Index, select\n"
 
 def test_bitwise_invert_inside_where_is_reported(tmp_path: Path) -> None:
     """``~`` binds tighter than ``==`` in the same way ``&`` does, so it is the same hazard."""
-    path_file = _python_file(tmp_path, _SA + "stmt = select(U).where(~U.active)\n")
+    path_file = _python_file(tmp_path, str_source=_SA + "stmt = select(U).where(~U.active)\n")
 
     assert len(gate.check_python_file(path_file)[0]) == 1
 
@@ -627,7 +637,7 @@ def test_model_composing_its_mixins_explicitly_is_clean(tmp_path: Path) -> None:
     """The fix the shadow message recommends must itself pass, with neither mixin discarded."""
     path_file = _python_file(
         tmp_path,
-        _SA + "class MixinA:\n"
+        str_source=_SA + "class MixinA:\n"
         "\t__table_args__ = (UniqueConstraint('a', name='uq_a'),)\n\n"
         "class MixinB:\n"
         "\t__table_args__ = (UniqueConstraint('b', name='uq_b'),)\n\n"
@@ -642,7 +652,7 @@ def test_composed_mixins_that_repeat_a_name_are_reported(tmp_path: Path) -> None
     """Composing is not a free pass: the repeated name now sits in ONE effective declaration."""
     path_file = _python_file(
         tmp_path,
-        _SA + "class MixinA:\n"
+        str_source=_SA + "class MixinA:\n"
         "\t__table_args__ = (UniqueConstraint('a', name='uq_x'),)\n\n"
         "class MixinB:\n"
         "\t__table_args__ = (UniqueConstraint('b', name='uq_x'),)\n\n"
@@ -657,7 +667,7 @@ def test_diamond_reports_the_discarded_class_not_the_live_one(tmp_path: Path) ->
     """Python's real MRO is Model, TsMixin, AuditMixin, Common: ``AuditMixin`` wins."""
     path_file = _python_file(
         tmp_path,
-        _SA + "class Common:\n"
+        str_source=_SA + "class Common:\n"
         "\t__table_args__ = ()\n\n"
         "class TsMixin(Common):\n"
         "\tpass\n\n"
@@ -676,7 +686,7 @@ def test_declared_attr_table_args_is_seen_as_a_declaration(tmp_path: Path) -> No
     """A ``@declared_attr`` mixin wins the MRO here, so the plain-assign mixin is the one lost."""
     path_file = _python_file(
         tmp_path,
-        _SA + "class MixinA:\n"
+        str_source=_SA + "class MixinA:\n"
         "\t@declared_attr\n"
         "\tdef __table_args__(cls):\n"
         "\t\treturn (UniqueConstraint('a', name='uq_a'),)\n\n"
@@ -695,7 +705,7 @@ def test_create_all_under_the_main_guard_is_not_flagged(tmp_path: Path) -> None:
     """``if __name__ == "__main__":`` never runs on import, which is what the finding describes."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy.orm import DeclarativeBase\n"
+        str_source="from sqlalchemy.orm import DeclarativeBase\n"
         "class Base(DeclarativeBase): pass\n"
         "if __name__ == '__main__':\n"
         "\tBase.metadata.create_all(engine)\n",
@@ -708,7 +718,7 @@ def test_a_mixin_inherited_by_two_models_is_reported_once(tmp_path: Path) -> Non
     """One defect in the mixin is one finding, however many models inherit it."""
     path_file = _python_file(
         tmp_path,
-        _SA + "class Mx:\n"
+        str_source=_SA + "class Mx:\n"
         "\t__table_args__ = (\n"
         "\t\tUniqueConstraint('a', name='uq_x'),\n"
         "\t\tUniqueConstraint('b', name='uq_x'),\n"
@@ -724,7 +734,7 @@ def test_duplicate_index_names_given_positionally_are_reported(tmp_path: Path) -
     """``Index`` takes its name as the first positional argument, not ``name=``."""
     path_file = _python_file(
         tmp_path,
-        _SA + "class M:\n\t__table_args__ = (Index('ix_x', 'a'), Index('ix_x', 'b'))\n",
+        str_source=_SA + "class M:\n\t__table_args__ = (Index('ix_x', 'a'), Index('ix_x', 'b'))\n",
     )
 
     assert "ix_x" in gate.check_python_file(path_file)[0][0]
@@ -734,7 +744,7 @@ def test_a_nested_class_does_not_overwrite_a_model_of_the_same_name(tmp_path: Pa
     """Only module-level classes are models; an inner ``Meta`` must not shadow a real one."""
     path_file = _python_file(
         tmp_path,
-        _SA + "class Meta:\n"
+        str_source=_SA + "class Meta:\n"
         "\t__table_args__ = (UniqueConstraint('a', name='uq_a'),)\n\n"
         "class Model(Meta):\n"
         "\tclass Meta:\n"
@@ -751,7 +761,7 @@ def test_base_variants_beyond_declarative_base_are_found(tmp_path: Path) -> None
     """``DeclarativeBaseNoMeta`` and ``registry().generate_base()`` also create a second Base."""
     path_file = _python_file(
         tmp_path,
-        "from sqlalchemy.orm import DeclarativeBaseNoMeta, registry\n"
+        str_source="from sqlalchemy.orm import DeclarativeBaseNoMeta, registry\n"
         "class B1(DeclarativeBaseNoMeta): pass\n"
         "B2 = registry().generate_base()\n",
     )

@@ -59,6 +59,7 @@ class RegimeBoundAdapter(metaclass=TypeChecker):
 
     def __init__(  # complexity-ok: default + refuse-wrong-regime IS the constructor contract
         self,
+        *,
         cls_registry: RegimeRegistry,
         str_regime_name: str,
         int_period: int | None = None,

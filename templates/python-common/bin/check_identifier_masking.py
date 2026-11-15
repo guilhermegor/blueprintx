@@ -99,7 +99,7 @@ def _hatch_reason(str_line: str) -> str | None:
     return str_line.split(_ALLOW_MARKER, 1)[1].strip() or None
 
 
-def _line_allowed(list_lines: list[str], int_line: int) -> bool:
+def _line_allowed(list_lines: list[str], *, int_line: int) -> bool:
     """Return whether a 1-indexed line carries a valid escape-hatch reason.
 
     Parameters
@@ -119,7 +119,7 @@ def _line_allowed(list_lines: list[str], int_line: int) -> bool:
     return _hatch_reason(list_lines[int_line - 1]) is not None
 
 
-def _mask_message(path_file: pathlib.Path, int_line: int, str_value: str) -> str:
+def _mask_message(path_file: pathlib.Path, *, int_line: int, str_value: str) -> str:
     """Return the masked-identifier finding, naming the failure mode and the fix.
 
     Parameters
@@ -146,7 +146,7 @@ def _mask_message(path_file: pathlib.Path, int_line: int, str_value: str) -> str
 
 
 def _text_problems(
-    str_text: str, path_file: pathlib.Path, int_line_offset: int
+    str_text: str, *, path_file: pathlib.Path, int_line_offset: int
 ) -> list[tuple[int, str]]:
     """Find every masked-identifier comparison in a block of SQL-shaped text.
 
@@ -191,15 +191,15 @@ def _sql_file_problems(path_file: pathlib.Path) -> list[str]:
     str_text = path_file.read_text(encoding="utf-8")
     list_lines = str_text.splitlines()
     list_problems: list[str] = []
-    for int_line, str_value in _text_problems(str_text, path_file, 1):
-        if _line_allowed(list_lines, int_line):
+    for int_line, str_value in _text_problems(str_text, path_file=path_file, int_line_offset=1):
+        if _line_allowed(list_lines, int_line=int_line):
             continue
-        list_problems.append(_mask_message(path_file, int_line, str_value))
+        list_problems.append(_mask_message(path_file, int_line=int_line, str_value=str_value))
     return list_problems
 
 
 def _string_literal_problems(
-    cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
+    cls_tree: ast.Module, *, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
     """Report masked-identifier comparisons inside Python string/f-string literals.
 
@@ -227,10 +227,12 @@ def _string_literal_problems(
         if not (isinstance(cls_node, ast.Constant) and isinstance(cls_node.value, str)):
             continue
         str_segment = ast.get_source_segment(str_source, cls_node) or ""
-        for int_line, str_value in _text_problems(str_segment, path_file, cls_node.lineno):
-            if _line_allowed(list_lines, int_line):
+        for int_line, str_value in _text_problems(
+            str_segment, path_file=path_file, int_line_offset=cls_node.lineno
+        ):
+            if _line_allowed(list_lines, int_line=int_line):
                 continue
-            list_problems.append(_mask_message(path_file, int_line, str_value))
+            list_problems.append(_mask_message(path_file, int_line=int_line, str_value=str_value))
     return list_problems
 
 
@@ -255,7 +257,7 @@ def _orm_name(cls_node: ast.expr) -> str | None:
 
 
 def _compare_problems(
-    cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
+    cls_tree: ast.Module, *, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
     """Report ``Model.cpf == "<masked>"``-shaped ORM comparisons.
 
@@ -288,13 +290,15 @@ def _compare_problems(
         ]
         bool_ident = any(str_name and _RE_IDENT_NAME.search(str_name) for str_name in list_names)
         list_masked = [str_v for str_v in list_values if _is_masked_value(str_v)]
-        if bool_ident and list_masked and not _line_allowed(list_lines, cls_node.lineno):
-            list_problems.append(_mask_message(path_file, cls_node.lineno, list_masked[0]))
+        if bool_ident and list_masked and not _line_allowed(list_lines, int_line=cls_node.lineno):
+            list_problems.append(
+                _mask_message(path_file, int_line=cls_node.lineno, str_value=list_masked[0])
+            )
     return list_problems
 
 
 def _keyword_problems(
-    cls_tree: ast.Module, path_file: pathlib.Path, list_lines: list[str]
+    cls_tree: ast.Module, *, path_file: pathlib.Path, list_lines: list[str]
 ) -> list[str]:
     """Report ``filter_by(cpf="<masked>")``-shaped keyword-argument comparisons.
 
@@ -323,9 +327,11 @@ def _keyword_problems(
             continue
         if not _is_masked_value(cls_value.value):
             continue
-        if _line_allowed(list_lines, cls_value.lineno):
+        if _line_allowed(list_lines, int_line=cls_value.lineno):
             continue
-        list_problems.append(_mask_message(path_file, cls_value.lineno, cls_value.value))
+        list_problems.append(
+            _mask_message(path_file, int_line=cls_value.lineno, str_value=cls_value.value)
+        )
     return list_problems
 
 
@@ -349,9 +355,9 @@ def check_python_file(path_file: pathlib.Path) -> list[str]:
         return [f"{path_file}: could not parse ({cls_exc})"]
 
     list_lines = str_source.splitlines()
-    list_problems = _string_literal_problems(cls_tree, path_file, list_lines)
-    list_problems += _compare_problems(cls_tree, path_file, list_lines)
-    list_problems += _keyword_problems(cls_tree, path_file, list_lines)
+    list_problems = _string_literal_problems(cls_tree, path_file=path_file, list_lines=list_lines)
+    list_problems += _compare_problems(cls_tree, path_file=path_file, list_lines=list_lines)
+    list_problems += _keyword_problems(cls_tree, path_file=path_file, list_lines=list_lines)
     return list_problems
 
 

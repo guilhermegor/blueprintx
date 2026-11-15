@@ -104,7 +104,7 @@ def _canonical_type_tokens(text: str) -> list:
     return sorted(list_tokens)
 
 
-def compare_types(hint: object, doc: str) -> bool:
+def compare_types(hint: object, *, doc: str) -> bool:
     """Check if a type hint matches a docstring type description.
 
     Comparison is NumPy-docstring aware: ``Path | None`` matches
@@ -317,7 +317,7 @@ def _extract_documented_return(doc_lines: list) -> str | None:
     return None
 
 
-def _check_return_type(node: ast.AST, docstring: str, filepath: str) -> tuple:
+def _check_return_type(node: ast.AST, *, docstring: str, filepath: str) -> tuple:
     """Check the documented return type against the annotation.
 
     Parameters
@@ -345,7 +345,7 @@ def _check_return_type(node: ast.AST, docstring: str, filepath: str) -> tuple:
             f" {node.name}() at line {node.lineno} ({filepath})"
         )
         return 0, 1
-    if not compare_types(returns, doc_type):
+    if not compare_types(returns, doc=doc_type):
         print(f"❌ Return type mismatch in {node.name}() at line {node.lineno} ({filepath}):")
         print(f"   Type hint: {returns}")
         print(f"   Docstring: {doc_type}")
@@ -353,7 +353,7 @@ def _check_return_type(node: ast.AST, docstring: str, filepath: str) -> tuple:
     return 0, 0
 
 
-def _documented_param_type(arg_name: str, param_lines: list) -> str | None:
+def _documented_param_type(arg_name: str, *, param_lines: list) -> str | None:
     """Return the documented type for a parameter, or ``None`` if undocumented.
 
     Recognises the combined NumPy form (``a, b : type``) and joins multi-line
@@ -391,7 +391,7 @@ def _documented_param_type(arg_name: str, param_lines: list) -> str | None:
     return None
 
 
-def _check_parameters(node: ast.AST, docstring: str, filepath: str) -> tuple:
+def _check_parameters(node: ast.AST, *, docstring: str, filepath: str) -> tuple:
     """Check each annotated parameter's documented type against its annotation.
 
     Parameters
@@ -415,7 +415,7 @@ def _check_parameters(node: ast.AST, docstring: str, filepath: str) -> tuple:
         if arg.arg == "self" or not arg.annotation:
             continue
         hint = ast.unparse(arg.annotation)
-        doc_type = _documented_param_type(arg.arg, param_lines)
+        doc_type = _documented_param_type(arg.arg, param_lines=param_lines)
         if doc_type is None:
             print(
                 f"⚠️  Missing docstring for parameter {arg.arg}"
@@ -423,7 +423,7 @@ def _check_parameters(node: ast.AST, docstring: str, filepath: str) -> tuple:
             )
             warnings += 1
             continue
-        if not compare_types(hint, doc_type):
+        if not compare_types(hint, doc=doc_type):
             print(
                 f"❌ Parameter type mismatch in {node.name}({arg.arg})"
                 f" at line {node.lineno} ({filepath}):"
@@ -434,7 +434,7 @@ def _check_parameters(node: ast.AST, docstring: str, filepath: str) -> tuple:
     return errors, warnings
 
 
-def _check_raises(node: ast.AST, docstring: str, filepath: str) -> int:
+def _check_raises(node: ast.AST, *, docstring: str, filepath: str) -> int:
     """Compare the documented Raises section against exceptions actually raised.
 
     Convention enforced: a ``Raises`` section documents **only** exceptions the
@@ -504,13 +504,17 @@ def check_file(filepath: str) -> int:
             warnings += 1
             continue
         if node.returns is not None:
-            ret_errors, ret_warnings = _check_return_type(node, docstring, filepath)
+            ret_errors, ret_warnings = _check_return_type(
+                node, docstring=docstring, filepath=filepath
+            )
             errors += ret_errors
             warnings += ret_warnings
-        param_errors, param_warnings = _check_parameters(node, docstring, filepath)
+        param_errors, param_warnings = _check_parameters(
+            node, docstring=docstring, filepath=filepath
+        )
         errors += param_errors
         warnings += param_warnings
-        warnings += _check_raises(node, docstring, filepath)
+        warnings += _check_raises(node, docstring=docstring, filepath=filepath)
     if warnings:
         print(f"   ({warnings} warning(s) in {filepath} — not counted as errors)")
     return errors

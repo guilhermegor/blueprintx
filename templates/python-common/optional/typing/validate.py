@@ -42,7 +42,7 @@ R = TypeVar("R")
 _type_check = beartype(conf=CONF)
 
 
-def validate_type(value: object, expected_type: object, param_name: str) -> None:
+def validate_type(value: object, *, expected_type: object, param_name: str) -> None:
     """Raise ``TypeError`` when ``value`` does not satisfy ``expected_type``.
 
     Parameters
