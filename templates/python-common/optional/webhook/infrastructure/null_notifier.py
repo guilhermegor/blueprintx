@@ -1,7 +1,20 @@
 """No-op webhook adapter — the opt-out path when no URL is configured."""
 
+from typing import TYPE_CHECKING
 
-class NullNotifier:
+
+if TYPE_CHECKING:
+
+    class TypeChecker(type):
+        """Type-only stub — see src/utils/CLAUDE.md."""
+else:
+    try:
+        from utils.typing import TypeChecker
+    except ModuleNotFoundError:
+        from chassis.typing import TypeChecker
+
+
+class NullNotifier(metaclass=TypeChecker):
     """Null-object adapter satisfying the ``WebhookNotifier`` port.
 
     Returned when no ``WEBHOOK_URL`` is configured so the notifier can always be

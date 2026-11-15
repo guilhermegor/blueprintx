@@ -6,11 +6,26 @@ caller passes only ``WEBHOOK_URL``. A blank URL yields a :class:`NullNotifier`
 """
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from chassis.webhook.domain.ports import WebhookNotifier
 from chassis.webhook.infrastructure.null_notifier import NullNotifier
 from chassis.webhook.infrastructure.slack_notifier import SlackNotifier
 from chassis.webhook.infrastructure.teams_notifier import TeamsNotifier
+
+
+if TYPE_CHECKING:
+    from typing import TypeVar
+
+    _F = TypeVar("_F")
+
+    def type_checker(fn: _F) -> _F:
+        """Type-only stub — see src/utils/CLAUDE.md."""
+else:
+    try:
+        from utils.typing import type_checker
+    except ModuleNotFoundError:
+        from chassis.typing import type_checker
 
 
 _DICT_PLATFORM_SIGNATURES = {
@@ -25,6 +40,7 @@ _DICT_BUILDERS: dict[str, Callable[[str], WebhookNotifier]] = {
 }
 
 
+@type_checker
 def detect_platform(str_url: str) -> str:  # complexity-ok: signature scan
     """Infer the webhook platform from its URL.
 
@@ -53,6 +69,7 @@ def detect_platform(str_url: str) -> str:  # complexity-ok: signature scan
     )
 
 
+@type_checker
 def build_webhook(str_url: str) -> WebhookNotifier:
     """Build a webhook notifier from a URL, auto-detecting the platform.
 

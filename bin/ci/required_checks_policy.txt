@@ -30,3 +30,5 @@ optional|Generated TS project - npm ci, lint, jest (ts-lib)|new job; require onc
 optional|Scaffold + lint + test (webhook opt-in) — api-service-native-db|new job; require once it has a green record on main
 optional|Scaffold + lint + test (webhook opt-in) — ddd-service-native-db|new job; require once it has a green record on main
 optional|Scaffold + lint + test (webhook opt-in) — ddd-service-orm-db|new job; require once it has a green record on main
+optional|Scaffold + lint + test (webhook opt-in) — mvc-service-native-db|new job; require once it has a green record on main
+optional|Scaffold + lint + test (webhook opt-in) — mvc-service-orm-db|new job; require once it has a green record on main
