@@ -200,7 +200,9 @@ def reachable(dict_modules: dict[str, pathlib.Path], *, list_extra_roots: list[s
         set_seen.add(str_module)
         path_file = dict_modules[str_module]
         cls_tree = ast.parse(path_file.read_bytes(), filename=str(path_file))
-        for str_name in imported_names(cls_tree, str_package=package_of(str_module, path_file=path_file)):
+        for str_name in imported_names(
+            cls_tree, str_package=package_of(str_module, path_file=path_file)
+        ):
             list_queue.extend(with_ancestors(str_name, dict_modules=dict_modules))
     return set_seen
 
@@ -263,7 +265,9 @@ def dead_modules(
         for str_module in list_dead
         if any(fnmatch.fnmatchcase(str_module, str_pattern) for str_pattern in list_patterns)
     ]
-    return list_dead, sorted(set(dict_modules) - reachable(dict_modules, list_extra_roots=list_allowed))
+    return list_dead, sorted(
+        set(dict_modules) - reachable(dict_modules, list_extra_roots=list_allowed)
+    )
 
 
 def audit(path_root: pathlib.Path, *, path_allowlist: pathlib.Path) -> tuple[list[str], int]:

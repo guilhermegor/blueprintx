@@ -186,7 +186,11 @@ def test_an_allowlisted_module_with_a_reason_passes(path_dead_tree: Path) -> Non
     path_dead_tree : pathlib.Path
         A project with one unreachable module.
     """
-    _write(path_dead_tree, str_rel=".unreachable-modules.txt", str_source="pkg._dead | loaded by entry point\n")
+    _write(
+        path_dead_tree,
+        str_rel=".unreachable-modules.txt",
+        str_source="pkg._dead | loaded by entry point\n",
+    )
 
     assert _run(path_dead_tree) == 0
 
@@ -207,7 +211,11 @@ def test_an_allowlist_entry_without_a_reason_fails(path_dead_tree: Path) -> None
 def test_a_stale_allowlist_entry_fails(tmp_path: Path) -> None:
     """An entry that matches no unreachable module is reported, so the list cannot rot."""
     _write(tmp_path, str_rel="src/pkg/__init__.py")
-    _write(tmp_path, str_rel=".unreachable-modules.txt", str_source="pkg._gone | loaded by entry point\n")
+    _write(
+        tmp_path,
+        str_rel=".unreachable-modules.txt",
+        str_source="pkg._gone | loaded by entry point\n",
+    )
 
     assert _run(tmp_path) == 1
 
@@ -217,7 +225,11 @@ def test_an_allowlist_glob_covers_a_family_of_modules(tmp_path: Path) -> None:
     _write(tmp_path, str_rel="src/pkg/__init__.py")
     _write(tmp_path, str_rel="src/pkg/_plugins/__init__.py")
     _write(tmp_path, str_rel="src/pkg/_plugins/a.py")
-    _write(tmp_path, str_rel=".unreachable-modules.txt", str_source="pkg._plugins* | plugins loaded by name\n")
+    _write(
+        tmp_path,
+        str_rel=".unreachable-modules.txt",
+        str_source="pkg._plugins* | plugins loaded by name\n",
+    )
 
     assert _run(tmp_path) == 0
 
@@ -270,7 +282,11 @@ def test_an_allowlist_glob_is_case_sensitive(path_dead_tree: Path) -> None:
     path_dead_tree : pathlib.Path
         A project with one unreachable module.
     """
-    _write(path_dead_tree, str_rel=".unreachable-modules.txt", str_source="PKG._DEAD | loaded by entry point\n")
+    _write(
+        path_dead_tree,
+        str_rel=".unreachable-modules.txt",
+        str_source="PKG._DEAD | loaded by entry point\n",
+    )
 
     assert _run(path_dead_tree) == 1
 
@@ -290,7 +306,9 @@ def test_an_import_under_type_checking_counts_as_reached(tmp_path: Path) -> None
     _write(
         tmp_path,
         str_rel="src/pkg/api.py",
-        str_source="from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from pkg import _impl\n",
+        str_source=(
+            "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from pkg import _impl\n"
+        ),
     )
     _write(tmp_path, str_rel="src/pkg/_impl.py")
 
@@ -300,7 +318,11 @@ def test_an_import_under_type_checking_counts_as_reached(tmp_path: Path) -> None
 def test_an_import_inside_a_function_counts_as_reached(tmp_path: Path) -> None:
     """A deferred import reaches its module."""
     _write(tmp_path, str_rel="src/pkg/__init__.py")
-    _write(tmp_path, str_rel="src/pkg/api.py", str_source="def load() -> None:\n    from pkg import _impl\n")
+    _write(
+        tmp_path,
+        str_rel="src/pkg/api.py",
+        str_source="def load() -> None:\n    from pkg import _impl\n",
+    )
     _write(tmp_path, str_rel="src/pkg/_impl.py")
 
     assert _run(tmp_path) == 0
@@ -311,7 +333,11 @@ def test_an_allowlisted_module_reaches_what_it_imports(tmp_path: Path) -> None:
     _write(tmp_path, str_rel="src/pkg/__init__.py")
     _write(tmp_path, str_rel="src/pkg/_plugin.py", str_source="from pkg import _helper\n")
     _write(tmp_path, str_rel="src/pkg/_helper.py")
-    _write(tmp_path, str_rel=".unreachable-modules.txt", str_source="pkg._plugin | loaded by entry point\n")
+    _write(
+        tmp_path,
+        str_rel=".unreachable-modules.txt",
+        str_source="pkg._plugin | loaded by entry point\n",
+    )
 
     assert _run(tmp_path) == 0
 
@@ -322,7 +348,11 @@ def test_a_module_only_an_unlisted_private_module_imports_stays_dead(tmp_path: P
     _write(tmp_path, str_rel="src/pkg/_plugin.py")
     _write(tmp_path, str_rel="src/pkg/_other.py", str_source="from pkg import _helper\n")
     _write(tmp_path, str_rel="src/pkg/_helper.py")
-    _write(tmp_path, str_rel=".unreachable-modules.txt", str_source="pkg._plugin | loaded by entry point\n")
+    _write(
+        tmp_path,
+        str_rel=".unreachable-modules.txt",
+        str_source="pkg._plugin | loaded by entry point\n",
+    )
 
     assert _run(tmp_path) == 1
 
