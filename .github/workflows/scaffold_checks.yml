@@ -862,8 +862,6 @@ jobs:
           - ddd-service-native-db
           - ddd-service-orm-db
           - api-service-native-db
-          - mvc-service-native-db
-          - mvc-service-orm-db
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
