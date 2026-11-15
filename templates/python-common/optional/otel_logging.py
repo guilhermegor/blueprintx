@@ -45,7 +45,7 @@ _TUPLE_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 
 @type_checker
-def _signal_override(str_signal_var: str, str_generic_var: str) -> str:
+def _signal_override(str_signal_var: str, *, str_generic_var: str) -> str:
     """Resolve a signal-specific OTLP variable over its generic fallback.
 
     ⚠️ Presence decides, never truthiness. ``OTLPLogExporter`` reads the environment when it
@@ -69,7 +69,7 @@ def _signal_override(str_signal_var: str, str_generic_var: str) -> str:
 
     Examples
     --------
-    >>> isinstance(_signal_override("A_MISSING_VAR", "ANOTHER_MISSING_VAR"), str)
+    >>> isinstance(_signal_override("A_MISSING_VAR", str_generic_var="ANOTHER_MISSING_VAR"), str)
     True
     """
     str_signal = os.getenv(str_signal_var)
@@ -100,9 +100,11 @@ def _effective_otlp_logs_config() -> tuple[str, bool]:
     True
     """
     str_endpoint = _signal_override(
-        "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "OTEL_EXPORTER_OTLP_ENDPOINT"
+        "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", str_generic_var="OTEL_EXPORTER_OTLP_ENDPOINT"
     )
-    str_headers = _signal_override("OTEL_EXPORTER_OTLP_LOGS_HEADERS", "OTEL_EXPORTER_OTLP_HEADERS")
+    str_headers = _signal_override(
+        "OTEL_EXPORTER_OTLP_LOGS_HEADERS", str_generic_var="OTEL_EXPORTER_OTLP_HEADERS"
+    )
     return str_endpoint, bool(str_headers)
 
 
@@ -135,7 +137,7 @@ def _is_offhost_cleartext(str_endpoint: str) -> bool:
 
 
 @type_checker
-def _is_cleartext_with_credentials(str_endpoint: str, bool_has_headers: bool) -> bool:
+def _is_cleartext_with_credentials(str_endpoint: str, *, bool_has_headers: bool) -> bool:
     """Report whether credentials would be sent over an unencrypted, off-host connection.
 
     Parameters
@@ -152,11 +154,11 @@ def _is_cleartext_with_credentials(str_endpoint: str, bool_has_headers: bool) ->
 
     Examples
     --------
-    >>> _is_cleartext_with_credentials("http://collector.example:4318", True)
+    >>> _is_cleartext_with_credentials("http://collector.example:4318", bool_has_headers=True)
     True
-    >>> _is_cleartext_with_credentials("http://localhost:4318", True)
+    >>> _is_cleartext_with_credentials("http://localhost:4318", bool_has_headers=True)
     False
-    >>> _is_cleartext_with_credentials("http://collector.example:4318", False)
+    >>> _is_cleartext_with_credentials("http://collector.example:4318", bool_has_headers=False)
     False
     """
     return bool_has_headers and bool(str_endpoint) and _is_offhost_cleartext(str_endpoint)
@@ -188,7 +190,7 @@ def _exportable_endpoint(logger: logging.Logger) -> str:
     True
     """
     str_endpoint, bool_has_headers = _effective_otlp_logs_config()
-    if _is_cleartext_with_credentials(str_endpoint, bool_has_headers):
+    if _is_cleartext_with_credentials(str_endpoint, bool_has_headers=bool_has_headers):
         logger.warning(
             "OTel log export refused: OTLP headers are set but the endpoint %r is neither "
             "https:// nor loopback, so the credentials would cross the network in cleartext. "

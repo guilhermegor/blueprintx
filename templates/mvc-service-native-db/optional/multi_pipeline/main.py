@@ -36,7 +36,9 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 
 CLS_EMAIL_HANDLER = None
 
-STR_INTENT = resolve_intent(raw_intent(sys.argv, os.getenv("PIPELINE_INTENT", "send")))
+STR_INTENT = resolve_intent(
+    raw_intent(sys.argv, str_env_value=os.getenv("PIPELINE_INTENT", "send"))
+)
 
 build_pipeline(
     STR_INTENT,

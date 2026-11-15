@@ -65,7 +65,7 @@ class BrowserPage(Protocol):
         """
         ...
 
-    async def fill(self, selector: str, value: str) -> None:
+    async def fill(self, *, selector: str, value: str) -> None:
         """Type ``value`` into the element matched by ``selector``."""
         ...
 
@@ -73,7 +73,7 @@ class BrowserPage(Protocol):
         """Click the element matched by ``selector``."""
         ...
 
-    async def select_option(self, selector: str, value: str) -> object:
+    async def select_option(self, *, selector: str, value: str) -> object:
         """Choose ``value`` from the ``<select>`` (the real page returns ``list[str]``)."""
         ...
 

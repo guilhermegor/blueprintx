@@ -170,6 +170,7 @@ class ProblemReport(metaclass=TypeChecker):
 @type_checker
 def read_table(  # noqa: PLR0913 — the public reader API; each argument is a real read option
     path_file: Path,
+    *,
     str_sheet: str,
     dict_dtypes: dict[str, str],
     cls_contract: FileContract,
@@ -243,20 +244,27 @@ def read_table(  # noqa: PLR0913 — the public reader API; each argument is a r
     """
     df_raw = _read_raw(
         path_file,
-        str_sheet,
-        "str",
-        str_csv_sep,
-        list_columns,
-        str_encoding,
-        int_header_row,
-        int_csv_quoting,
+        str_sheet=str_sheet,
+        str_dtype="str",
+        str_csv_sep=str_csv_sep,
+        list_columns=list_columns,
+        str_encoding=str_encoding,
+        int_header_row=int_header_row,
+        int_csv_quoting=int_csv_quoting,
     )
-    return _finalize(df_raw, dict_dtypes, list_date_cols, cls_contract, list_decimal_cols)
+    return _finalize(
+        df_raw,
+        dict_dtypes=dict_dtypes,
+        list_date_cols=list_date_cols,
+        cls_contract=cls_contract,
+        list_decimal_cols=list_decimal_cols,
+    )
 
 
 @type_checker
 def read_query(
     cls_connection: DbConnection,
+    *,
     str_sql: str,
     dict_dtypes: dict[str, str],
     cls_contract: FileContract,
@@ -297,12 +305,14 @@ def read_query(
         When the result violates ``cls_contract``.
     """
     df_raw = pd.read_sql_query(str_sql, cls_connection, params=list_params)  # noqa: TID251 -- the one authorized read seam
-    return _finalize(df_raw, dict_dtypes, list_date_cols, cls_contract)
+    return _finalize(
+        df_raw, dict_dtypes=dict_dtypes, list_date_cols=list_date_cols, cls_contract=cls_contract
+    )
 
 
 @type_checker
 def find_file_problems(
-    cls_contract: FileContract, path_file: Path, str_sheet: str, str_csv_sep: str = ";"
+    cls_contract: FileContract, *, path_file: Path, str_sheet: str, str_csv_sep: str = ";"
 ) -> ProblemReport:
     """Validate a file against its contract; return a severity-split report (never raises).
 
@@ -325,12 +335,12 @@ def find_file_problems(
     """
     if not path_file.exists():
         return ProblemReport(list_fatal=[f"File not found: {path_file}"], list_warnings=[])
-    df_raw = _read_raw(path_file, str_sheet, "str", str_csv_sep)
-    return find_contract_problems(df_raw, cls_contract)
+    df_raw = _read_raw(path_file, str_sheet=str_sheet, str_dtype="str", str_csv_sep=str_csv_sep)
+    return find_contract_problems(df_raw, cls_contract=cls_contract)
 
 
 @type_checker
-def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -> ProblemReport:
+def find_contract_problems(df_input: pd.DataFrame, *, cls_contract: FileContract) -> ProblemReport:
     """Return the contract problems of an already-read frame, split by severity (never raises).
 
     A required column that is simply absent is **fatal** — there is no way to proceed, every
@@ -363,7 +373,9 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
         for str_col in cls_contract.tuple_cnpj_cols
         if str_col in df_input.columns
         for str_problem in [
-            _cnpj_column_problem(df_input[str_col], str_col, cls_contract.str_name)
+            _cnpj_column_problem(
+                df_input[str_col], str_col=str_col, str_contract=cls_contract.str_name
+            )
         ]
         if str_problem is not None
     ]
@@ -372,7 +384,7 @@ def find_contract_problems(df_input: pd.DataFrame, cls_contract: FileContract) -
 
 @type_checker
 def _cnpj_column_problem(  # complexity-ok: two acceptance rules, empty-column one load-bearing
-    series_col: pd.Series, str_col: str, str_contract: str
+    series_col: pd.Series, *, str_col: str, str_contract: str
 ) -> str | None:
     """Return the problem with a CNPJ column, or ``None`` when it is acceptable.
 
@@ -407,7 +419,7 @@ def _cnpj_column_problem(  # complexity-ok: two acceptance rules, empty-column o
 
 @type_checker
 def decode_positional_payload(  # complexity-ok: two rejection rules, never invent or drop data
-    list_columns: Sequence[str], list_rows: Sequence[Sequence[object]]
+    list_columns: Sequence[str], *, list_rows: Sequence[Sequence[object]]
 ) -> pd.DataFrame:
     """Decode an API payload whose rows are positional arrays beside a separate header.
 
@@ -476,7 +488,7 @@ def decode_positional_payload(  # complexity-ok: two rejection rules, never inve
 
 @type_checker
 def resolve_sheet_name(  # complexity-ok: three documented resolution outcomes, one branch each
-    path_file: Path, tuple_known_names: tuple[str, ...]
+    path_file: Path, *, tuple_known_names: tuple[str, ...]
 ) -> str:
     """Resolve which worksheet to read from a workbook whose sheet name varies by source.
 
@@ -531,6 +543,7 @@ def resolve_sheet_name(  # complexity-ok: three documented resolution outcomes, 
 @type_checker
 def _finalize(
     df_raw: pd.DataFrame,
+    *,
     dict_dtypes: dict[str, str],
     list_date_cols: Sequence[str] | None,
     cls_contract: FileContract,
@@ -564,7 +577,7 @@ def _finalize(
         STRICT twin: unlike a caller reading :class:`ProblemReport` directly, it aborts on
         either kind rather than choosing per severity.
     """
-    cls_report = find_contract_problems(df_raw, cls_contract)
+    cls_report = find_contract_problems(df_raw, cls_contract=cls_contract)
     if cls_report.list_fatal or cls_report.list_warnings:
         raise ContractError(cls_report.list_fatal + cls_report.list_warnings)
     return apply_dtypes(
@@ -578,6 +591,7 @@ def _finalize(
 @type_checker
 def _read_raw(
     path_file: Path,
+    *,
     str_sheet: str,
     str_dtype: str | None,
     str_csv_sep: str,
@@ -601,13 +615,13 @@ def _read_raw(
     """
     df_raw = _read_raw_dispatch(
         path_file,
-        str_sheet,
-        str_dtype,
-        str_csv_sep,
-        list_columns,
-        str_encoding,
-        int_header_row,
-        int_csv_quoting,
+        str_sheet=str_sheet,
+        str_dtype=str_dtype,
+        str_csv_sep=str_csv_sep,
+        list_columns=list_columns,
+        str_encoding=str_encoding,
+        int_header_row=int_header_row,
+        int_csv_quoting=int_csv_quoting,
     )
     list_normalised = [str(col).strip() for col in df_raw.columns]
     dict_counts = Counter(list_normalised)
@@ -627,6 +641,7 @@ def _read_raw(
 @type_checker
 def _read_raw_dispatch(
     path_file: Path,
+    *,
     str_sheet: str,
     str_dtype: str | None,
     str_csv_sep: str,
@@ -687,6 +702,7 @@ def _read_raw_dispatch(
 @type_checker
 def _read_csv_raw(
     path_file: Path,
+    *,
     str_dtype: str | None = None,
     str_csv_sep: str = ",",
     list_columns: Sequence[str] | None = None,
@@ -732,6 +748,7 @@ def _read_csv_raw(
 @type_checker
 def _read_json_raw(
     path_file: Path,
+    *,
     str_dtype: str | None = None,
     str_encoding: str = "utf-8-sig",
     **_kwargs: object,
@@ -766,7 +783,7 @@ def _read_json_raw(
     )
     bool_positional = isinstance(obj_json, dict) and {"columns", "rows"} <= set(obj_json)
     df_json = (
-        decode_positional_payload(obj_json["columns"], obj_json["rows"])
+        decode_positional_payload(obj_json["columns"], list_rows=obj_json["rows"])
         if bool_positional
         else pd.DataFrame(obj_json)
     )
@@ -776,6 +793,7 @@ def _read_json_raw(
 @type_checker
 def _read_excel_raw(
     path_file: Path,
+    *,
     str_sheet: str = "",
     str_dtype: str | None = None,
     int_header_row: int = 0,

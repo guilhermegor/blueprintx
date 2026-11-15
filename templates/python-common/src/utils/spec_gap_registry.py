@@ -49,7 +49,7 @@ class SpecGapRegistry(metaclass=TypeChecker):
         self.dict_known_gaps = dict_known_gaps
 
     @type_checker
-    def is_known_gap(self, str_regime_name: str, str_column: str) -> bool:
+    def is_known_gap(self, *, str_regime_name: str, str_column: str) -> bool:
         """Return whether ``str_column`` is a registered, expected gap for the regime.
 
         Parameters
@@ -69,7 +69,7 @@ class SpecGapRegistry(metaclass=TypeChecker):
 
     @type_checker
     def unexplained(  # complexity-ok: filtering by membership is the narrowing itself
-        self, str_regime_name: str, set_reported_columns: frozenset[str]
+        self, *, str_regime_name: str, set_reported_columns: frozenset[str]
     ) -> frozenset[str]:
         """Narrow a reported set of "not in spec" columns to the genuinely unexplained ones.
 
@@ -93,5 +93,5 @@ class SpecGapRegistry(metaclass=TypeChecker):
         return frozenset(
             str_column
             for str_column in set_reported_columns
-            if not self.is_known_gap(str_regime_name, str_column)
+            if not self.is_known_gap(str_regime_name=str_regime_name, str_column=str_column)
         )

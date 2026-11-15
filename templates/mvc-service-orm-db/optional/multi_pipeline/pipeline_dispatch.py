@@ -39,7 +39,7 @@ _INTENT_BUILDERS: dict[str, type[SendPipeline] | type[ReconcilePipeline]] = {
 
 
 @type_checker
-def raw_intent(list_argv: list[str], str_env_value: str) -> str:
+def raw_intent(list_argv: list[str], *, str_env_value: str) -> str:
     """Pick the raw intent token: an explicit CLI argument beats the inherited env value.
 
     ``poe run <intent>`` (and poe-the-poet's task runner in general) appends extra CLI words
@@ -98,6 +98,7 @@ def resolve_intent(str_raw: str) -> str:
 @type_checker
 def build_pipeline(  # noqa: PLR0913
     str_intent: str,
+    *,
     cls_logger: Logger | None,
     fn_build_engine: Callable[[], Engine],
     fn_output_path: Callable[[str], Path],

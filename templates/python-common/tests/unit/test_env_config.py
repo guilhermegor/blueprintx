@@ -16,14 +16,17 @@ def test_plain_file_wins_regardless_of_env(tmp_path: Path) -> None:
         Pytest-provided throwaway directory holding the config file.
     """
     (tmp_path / "inputs.yaml").write_text("a: 1\n", encoding="utf-8")
-    assert resolve_config_path("anything", "inputs", tmp_path) == tmp_path / "inputs.yaml"
+    assert (
+        resolve_config_path("anything", str_kind="inputs", path_dir=tmp_path)
+        == tmp_path / "inputs.yaml"
+    )
 
 
 @pytest.mark.parametrize(
     ("str_env", "str_file"),
     [("production", "inputs_prd.yaml"), ("dev", "inputs_dev.yaml")],
 )
-def test_env_wise_selects_suffix(tmp_path: Path, str_env: str, str_file: str) -> None:
+def test_env_wise_selects_suffix(tmp_path: Path, *, str_env: str, str_file: str) -> None:
     """With no plain file, ENV picks the dev/prd suffixed file.
 
     Parameters
@@ -37,14 +40,16 @@ def test_env_wise_selects_suffix(tmp_path: Path, str_env: str, str_file: str) ->
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
     (tmp_path / "inputs_prd.yaml").write_text("a: 2\n", encoding="utf-8")
-    assert resolve_config_path(str_env, "inputs", tmp_path) == tmp_path / str_file
+    assert (
+        resolve_config_path(str_env, str_kind="inputs", path_dir=tmp_path) == tmp_path / str_file
+    )
 
 
 @pytest.mark.parametrize(
     "str_env",
     ["PRODUCTION", " prod ", "Produção", "PRD", "produção"],
 )
-def test_env_spelling_variants_resolve(tmp_path: Path, str_env: str) -> None:
+def test_env_spelling_variants_resolve(tmp_path: Path, *, str_env: str) -> None:
     """Case, trailing spaces and diacritics on a known ENV value all resolve (normalised).
 
     Parameters
@@ -55,7 +60,10 @@ def test_env_spelling_variants_resolve(tmp_path: Path, str_env: str) -> None:
         A spelling variant of a known ENV value that must normalise to ``prd``.
     """
     (tmp_path / "inputs_prd.yaml").write_text("a: 1\n", encoding="utf-8")
-    assert resolve_config_path(str_env, "inputs", tmp_path) == tmp_path / "inputs_prd.yaml"
+    assert (
+        resolve_config_path(str_env, str_kind="inputs", path_dir=tmp_path)
+        == tmp_path / "inputs_prd.yaml"
+    )
 
 
 def test_unknown_env_aborts(tmp_path: Path) -> None:
@@ -68,7 +76,7 @@ def test_unknown_env_aborts(tmp_path: Path) -> None:
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
     with pytest.raises(SystemExit, match=r"^2$"):
-        resolve_config_path("staging", "inputs", tmp_path)
+        resolve_config_path("staging", str_kind="inputs", path_dir=tmp_path)
 
 
 def test_missing_env_file_aborts(tmp_path: Path) -> None:
@@ -81,4 +89,4 @@ def test_missing_env_file_aborts(tmp_path: Path) -> None:
     """
     (tmp_path / "inputs_dev.yaml").write_text("a: 1\n", encoding="utf-8")
     with pytest.raises(SystemExit, match=r"^2$"):
-        resolve_config_path("production", "inputs", tmp_path)
+        resolve_config_path("production", str_kind="inputs", path_dir=tmp_path)

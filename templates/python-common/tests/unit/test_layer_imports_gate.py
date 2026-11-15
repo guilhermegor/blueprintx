@@ -46,7 +46,7 @@ _POLICY = {
 _FIRST_PARTY = {"src", "model", "utils", "config", "view", "controller", "chassis"}
 
 
-def _problems(tmp_path: Path, str_source: str, str_layer: str = "model") -> list[str]:
+def _problems(tmp_path: Path, *, str_source: str, str_layer: str = "model") -> list[str]:
     """Run the gate over one synthetic module and return its problems.
 
     Parameters
@@ -66,7 +66,9 @@ def _problems(tmp_path: Path, str_source: str, str_layer: str = "model") -> list
     cls_gate = _load_gate()
     path_file = tmp_path / "probe.py"
     path_file.write_text(str_source, encoding="utf-8")
-    return cls_gate.find_file_problems(path_file, str_layer, _POLICY, _FIRST_PARTY)
+    return cls_gate.find_file_problems(
+        path_file, str_layer=str_layer, dict_policy=_POLICY, set_first_party=_FIRST_PARTY
+    )
 
 
 def _sole(list_problems: list[str]) -> str:
@@ -92,7 +94,7 @@ def _sole(list_problems: list[str]) -> str:
     return list_problems[0]
 
 
-def _sole_problem(tmp_path: Path, str_source: str, str_layer: str = "model") -> str:
+def _sole_problem(tmp_path: Path, *, str_source: str, str_layer: str = "model") -> str:
     """Run the gate over one synthetic module and return its single problem.
 
     Parameters
@@ -109,7 +111,7 @@ def _sole_problem(tmp_path: Path, str_source: str, str_layer: str = "model") -> 
     str
         The one problem the gate reported.
     """
-    return _sole(_problems(tmp_path, str_source, str_layer))
+    return _sole(_problems(tmp_path, str_source=str_source, str_layer=str_layer))
 
 
 def test_vendor_at_the_top_of_a_layer_is_rejected(tmp_path: Path) -> None:
@@ -118,7 +120,7 @@ def test_vendor_at_the_top_of_a_layer_is_rejected(tmp_path: Path) -> None:
     Measured in two independent projects (blueprintx#171).
     """
     assert "opendata_cvm" in _sole_problem(
-        tmp_path, "from opendata_cvm.submission import Submission\n"
+        tmp_path, str_source="from opendata_cvm.submission import Submission\n"
     )
 
 
@@ -135,7 +137,7 @@ _STR_DEFERRED_VENDOR = (
 
 @pytest.mark.parametrize("str_fragment", ["opendata_cvm", "inside a function"])
 def test_vendor_deferred_into_a_function_is_still_rejected(
-    tmp_path: Path, str_fragment: str
+    tmp_path: Path, *, str_fragment: str
 ) -> None:
     """Deferring the import buys no exemption, even under an ``ImportError`` guard.
 
@@ -144,7 +146,7 @@ def test_vendor_deferred_into_a_function_is_still_rejected(
     coupling is identical to a top-level import. The optional-dependency pattern is fine — in
     the ``utils/`` seam that owns the dependency, which then returns the degraded result.
     """
-    assert str_fragment in _sole_problem(tmp_path, _STR_DEFERRED_VENDOR)
+    assert str_fragment in _sole_problem(tmp_path, str_source=_STR_DEFERRED_VENDOR)
 
 
 _STR_PANDAS_AS_API = (
@@ -157,10 +159,10 @@ _STR_PANDAS_AS_API = (
 
 @pytest.mark.parametrize("str_fragment", ["TYPE only", "utils.frames.from_cursor"])
 def test_annotation_only_vendor_called_as_an_api_is_rejected(
-    tmp_path: Path, str_fragment: str
+    tmp_path: Path, *, str_fragment: str
 ) -> None:
     """``pandas`` is the layers' vocabulary, not an API they may call."""
-    assert str_fragment in _sole_problem(tmp_path, _STR_PANDAS_AS_API)
+    assert str_fragment in _sole_problem(tmp_path, str_source=_STR_PANDAS_AS_API)
 
 
 def test_annotation_only_vendor_used_as_a_type_passes(tmp_path: Path) -> None:
@@ -175,13 +177,13 @@ def test_annotation_only_vendor_used_as_a_type_passes(tmp_path: Path) -> None:
         '\t"""Load."""\n'
         '\treturn from_cursor(cls_cursor, {"id": "int64"})\n'
     )
-    assert _problems(tmp_path, str_source) == []
+    assert _problems(tmp_path, str_source=str_source) == []
 
 
 def test_the_seam_layer_may_use_the_vendor_freely(tmp_path: Path) -> None:
     """``utils/`` is where vendors are SUPPOSED to live — the gate must not fight its own fix."""
     str_source = 'import pandas as pd\ndef f() -> object:\n\t"""F."""\n\treturn pd.DataFrame()\n'
-    assert _problems(tmp_path, str_source, str_layer="utils") == []
+    assert _problems(tmp_path, str_source=str_source, str_layer="utils") == []
 
 
 def test_the_layout_shim_is_first_party_not_a_vendor(tmp_path: Path) -> None:
@@ -196,16 +198,18 @@ def test_the_layout_shim_is_first_party_not_a_vendor(tmp_path: Path) -> None:
         "except ModuleNotFoundError:\n"
         "\tfrom chassis.typing import type_checker\n"
     )
-    assert _problems(tmp_path, str_source, str_layer="utils") == []
+    assert _problems(tmp_path, str_source=str_source, str_layer="utils") == []
 
 
 def test_stdlib_is_unrestricted_in_every_layer(tmp_path: Path) -> None:
     """The standard library carries no coupling risk and is never gated."""
-    assert _problems(tmp_path, "import json\nfrom pathlib import Path\n") == []
+    assert _problems(tmp_path, str_source="import json\nfrom pathlib import Path\n") == []
 
 
 @pytest.mark.parametrize("str_layer", ["model", "view", "controller"])
-def test_one_statement_binding_many_names_is_one_violation(tmp_path: Path, str_layer: str) -> None:
+def test_one_statement_binding_many_names_is_one_violation(
+    tmp_path: Path, *, str_layer: str
+) -> None:
     """A single import binding several names must not report once per name.
 
     A gate that multiplies its own findings trains people to skim the output.
@@ -217,7 +221,9 @@ def test_one_statement_binding_many_names_is_one_violation(tmp_path: Path, str_l
     str_layer : str
         The layer the synthetic module is treated as belonging to.
     """
-    list_problems = _problems(tmp_path, "from opendata_cvm import a, b, c\n", str_layer)
+    list_problems = _problems(
+        tmp_path, str_source="from opendata_cvm import a, b, c\n", str_layer=str_layer
+    )
     assert len(list_problems) == 1
 
 
@@ -238,7 +244,10 @@ def test_a_module_directly_under_src_is_not_skipped(tmp_path: Path) -> None:
 
     dict_policy = cls_gate.load_policy(tmp_path)
     list_problems = cls_gate.find_file_problems(
-        path_src / "main.py", cls_gate._ROOT_LAYER, dict_policy, {"src"}
+        path_src / "main.py",
+        str_layer=cls_gate._ROOT_LAYER,
+        dict_policy=dict_policy,
+        set_first_party={"src"},
     )
 
     assert "opendata_cvm" in _sole(list_problems)
@@ -270,7 +279,7 @@ def _run_main(path_root: Path) -> tuple[int, str]:
     return cls_run.returncode, cls_run.stdout + cls_run.stderr
 
 
-def _output_at(tuple_result: tuple[int, str], int_expected: int) -> str:
+def _output_at(tuple_result: tuple[int, str], *, int_expected: int) -> str:
     """Return a run's output, asserting its exit code first.
 
     "Exited N" and "said the right thing" are two claims that used to sit as two asserts in
@@ -313,7 +322,7 @@ layers:
 """
 
 
-def _lib_project(tmp_path: Path, str_rel: str) -> None:
+def _lib_project(tmp_path: Path, *, str_rel: str) -> None:
     """Write a lib-shaped project with a pydantic model at ``src/pkg/<str_rel>``.
 
     Parameters
@@ -331,14 +340,14 @@ def _lib_project(tmp_path: Path, str_rel: str) -> None:
 
 def test_pydantic_model_at_package_root_is_flagged(tmp_path: Path) -> None:
     """A root-level ``schemas/`` package importing pydantic fails the layer gate."""
-    _lib_project(tmp_path, "schemas/doc.py")
-    assert "pydantic" in _output_at(_run_main(tmp_path), 1)
+    _lib_project(tmp_path, str_rel="schemas/doc.py")
+    assert "pydantic" in _output_at(_run_main(tmp_path), int_expected=1)
 
 
 def test_pydantic_under_a_non_internal_config_dir_is_flagged(tmp_path: Path) -> None:
     """``src/pkg/schemas/config/`` has the remainder ``config/`` but no ``_internal`` marker."""
-    _lib_project(tmp_path, "schemas/config/doc.py")
-    assert "pydantic" in _output_at(_run_main(tmp_path), 1)
+    _lib_project(tmp_path, str_rel="schemas/config/doc.py")
+    assert "pydantic" in _output_at(_run_main(tmp_path), int_expected=1)
 
 
 def test_pydantic_model_defined_in_internal_utils_is_flagged(tmp_path: Path) -> None:
@@ -349,13 +358,13 @@ def test_pydantic_model_defined_in_internal_utils_is_flagged(tmp_path: Path) -> 
         "from pydantic import BaseModel\n\n\nclass Doc(BaseModel):\n    pass\n", encoding="utf-8"
     )
     (tmp_path / ".layer-policy.yaml").write_text(_STR_LIB_POLICY, encoding="utf-8")
-    assert "subclasses BaseModel" in _output_at(_run_main(tmp_path), 1)
+    assert "subclasses BaseModel" in _output_at(_run_main(tmp_path), int_expected=1)
 
 
 def test_pydantic_model_in_internal_config_passes(tmp_path: Path) -> None:
     """The same model under ``_internal/config/schemas`` is the sanctioned home."""
-    _lib_project(tmp_path, "_internal/config/schemas/doc.py")
-    assert "OK" in _output_at(_run_main(tmp_path), 0)
+    _lib_project(tmp_path, str_rel="_internal/config/schemas/doc.py")
+    assert "OK" in _output_at(_run_main(tmp_path), int_expected=0)
 
 
 _DICT_BASE_POLICY = {
@@ -370,7 +379,7 @@ _DICT_BASE_POLICY = {
 }
 
 
-def _class_base_problems(tmp_path: Path, str_source: str) -> list[str]:
+def _class_base_problems(tmp_path: Path, *, str_source: str) -> list[str]:
     """Run ``class_base_problems`` over one synthetic ``utils`` module.
 
     Parameters
@@ -387,7 +396,9 @@ def _class_base_problems(tmp_path: Path, str_source: str) -> list[str]:
     """
     path_file = tmp_path / "probe.py"
     path_file.write_text(str_source, encoding="utf-8")
-    return _load_gate().class_base_problems(path_file, "utils", _DICT_BASE_POLICY)
+    return _load_gate().class_base_problems(
+        path_file, str_layer="utils", dict_policy=_DICT_BASE_POLICY
+    )
 
 
 @pytest.mark.parametrize(
@@ -416,9 +427,11 @@ def _class_base_problems(tmp_path: Path, str_source: str) -> list[str]:
         ),
     ],
 )
-def test_denied_base_is_resolved_through_the_import_table(tmp_path: Path, str_source: str) -> None:
+def test_denied_base_is_resolved_through_the_import_table(
+    tmp_path: Path, *, str_source: str
+) -> None:
     """Aliases, dotted access, ``RootModel`` and subscripted bases all reach the rule."""
-    assert "subclasses" in _sole(_class_base_problems(tmp_path, str_source))
+    assert "subclasses" in _sole(_class_base_problems(tmp_path, str_source=str_source))
 
 
 @pytest.mark.parametrize(
@@ -438,10 +451,10 @@ def test_denied_base_is_resolved_through_the_import_table(tmp_path: Path, str_so
     ],
 )
 def test_unrelated_class_named_like_a_denied_base_is_not_flagged(
-    tmp_path: Path, str_source: str
+    tmp_path: Path, *, str_source: str
 ) -> None:
     """A class that merely shares the name, and is not imported, is not the vendor's type."""
-    assert _class_base_problems(tmp_path, str_source) == []
+    assert _class_base_problems(tmp_path, str_source=str_source) == []
 
 
 def test_a_dotted_deny_key_matches_the_full_path_only(tmp_path: Path) -> None:
@@ -451,7 +464,10 @@ def test_a_dotted_deny_key_matches_the_full_path_only(tmp_path: Path) -> None:
         "from other import BaseModel\n\n\nclass Doc(BaseModel):\n    pass\n", encoding="utf-8"
     )
     dict_policy = {"layers": {"utils": {"deny_class_bases": {"pydantic.BaseModel": "why"}}}}
-    assert _load_gate().class_base_problems(path_file, "utils", dict_policy) == []
+    assert (
+        _load_gate().class_base_problems(path_file, str_layer="utils", dict_policy=dict_policy)
+        == []
+    )
 
 
 def test_a_dotted_deny_key_matches_an_aliased_import(tmp_path: Path) -> None:
@@ -462,7 +478,9 @@ def test_a_dotted_deny_key_matches_an_aliased_import(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     dict_policy = {"layers": {"utils": {"deny_class_bases": {"pydantic.BaseModel": "why"}}}}
-    assert "subclasses" in _sole(_load_gate().class_base_problems(path_file, "utils", dict_policy))
+    assert "subclasses" in _sole(
+        _load_gate().class_base_problems(path_file, str_layer="utils", dict_policy=dict_policy)
+    )
 
 
 def test_prefix_marker_without_prefix_depth_is_a_policy_error(tmp_path: Path) -> None:
@@ -472,7 +490,7 @@ def test_prefix_marker_without_prefix_depth_is_a_policy_error(tmp_path: Path) ->
     (tmp_path / ".layer-policy.yaml").write_text(
         "src_prefix_marker: _internal\n" + _STR_MINIMAL_POLICY, encoding="utf-8"
     )
-    assert "src_prefix_depth" in _output_at(_run_main(tmp_path), 1)
+    assert "src_prefix_depth" in _output_at(_run_main(tmp_path), int_expected=1)
 
 
 def test_prefix_marker_with_a_zero_depth_is_a_policy_error(tmp_path: Path) -> None:
@@ -483,10 +501,10 @@ def test_prefix_marker_with_a_zero_depth_is_a_policy_error(tmp_path: Path) -> No
         "src_prefix_marker: _internal\nsrc_prefix_depth: 0\n" + _STR_MINIMAL_POLICY,
         encoding="utf-8",
     )
-    assert "src_prefix_depth" in _output_at(_run_main(tmp_path), 1)
+    assert "src_prefix_depth" in _output_at(_run_main(tmp_path), int_expected=1)
 
 
-def _seed_project(path_root: Path, str_module: str = "import os\n") -> None:
+def _seed_project(path_root: Path, *, str_module: str = "import os\n") -> None:
     """Build a minimal project tree holding one module under ``src/model/``.
 
     Writing the policy is left to the caller: whether one exists is the very thing several of
@@ -512,7 +530,7 @@ _STR_MINIMAL_POLICY = "layers:\n  model:\n    allow: {}\n"
 
 @pytest.mark.parametrize("str_fragment", [".layer-policy.yaml", "no import boundary"])
 def test_modules_with_no_policy_file_fail_rather_than_pass_silently(
-    tmp_path: Path, str_fragment: str
+    tmp_path: Path, *, str_fragment: str
 ) -> None:
     """⚠️ The negative control for the defect this fixed.
 
@@ -522,14 +540,14 @@ def test_modules_with_no_policy_file_fail_rather_than_pass_silently(
     """
     _seed_project(tmp_path)
 
-    assert str_fragment in _output_at(_run_main(tmp_path), 1)
+    assert str_fragment in _output_at(_run_main(tmp_path), int_expected=1)
 
 
 def test_a_tree_with_no_modules_and_no_policy_is_not_a_failure(tmp_path: Path) -> None:
     """The positive control: nothing to check is not the same as failing to check."""
     (tmp_path / "src").mkdir()
 
-    assert "nothing to do" in _output_at(_run_main(tmp_path), 0)
+    assert "nothing to do" in _output_at(_run_main(tmp_path), int_expected=0)
 
 
 def test_a_clean_tree_prints_what_it_checked(tmp_path: Path) -> None:
@@ -537,7 +555,7 @@ def test_a_clean_tree_prints_what_it_checked(tmp_path: Path) -> None:
     _seed_project(tmp_path)
     (tmp_path / ".layer-policy.yaml").write_text(_STR_MINIMAL_POLICY, encoding="utf-8")
 
-    assert "module(s) checked" in _output_at(_run_main(tmp_path), 0)
+    assert "module(s) checked" in _output_at(_run_main(tmp_path), int_expected=0)
 
 
 def test_layers_nested_inside_a_package_resolve_via_src_prefix_depth(tmp_path: Path) -> None:
@@ -554,7 +572,7 @@ def test_layers_nested_inside_a_package_resolve_via_src_prefix_depth(tmp_path: P
         "src_prefix_depth: 2\n" + _STR_MINIMAL_POLICY, encoding="utf-8"
     )
 
-    assert "module(s) checked" in _output_at(_run_main(tmp_path), 0)
+    assert "module(s) checked" in _output_at(_run_main(tmp_path), int_expected=0)
 
 
 def test_the_same_nested_tree_without_the_prefix_is_rejected(tmp_path: Path) -> None:
@@ -601,12 +619,12 @@ def _seed_layers(path_root: Path) -> None:
     -------
     None
     """
-    _seed_one_layer(path_root, "utils")
-    _seed_one_layer(path_root, "model")
-    _seed_one_layer(path_root, "config")
+    _seed_one_layer(path_root, str_layer="utils")
+    _seed_one_layer(path_root, str_layer="model")
+    _seed_one_layer(path_root, str_layer="config")
 
 
-def _seed_one_layer(path_root: Path, str_layer: str) -> None:
+def _seed_one_layer(path_root: Path, *, str_layer: str) -> None:
     """Create one layer package under ``src/``.
 
     Parameters
@@ -624,7 +642,7 @@ def _seed_one_layer(path_root: Path, str_layer: str) -> None:
     (path_root / "src" / str_layer / "__init__.py").write_text("", encoding="utf-8")
 
 
-def _direction_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
+def _direction_case(tmp_path: Path, *, str_source: str) -> tuple[int, str]:
     """Run the gate over one module placed in ``utils/`` under a direction policy.
 
     Parameters
@@ -647,7 +665,7 @@ def _direction_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
 
 @pytest.mark.parametrize("str_fragment", ["must not import", "not a consumer"])
 def test_a_seam_importing_the_layer_it_serves_is_rejected(
-    tmp_path: Path, str_fragment: str
+    tmp_path: Path, *, str_fragment: str
 ) -> None:
     """⚠️ No vendor is involved, and that is the point.
 
@@ -656,13 +674,15 @@ def test_a_seam_importing_the_layer_it_serves_is_rejected(
     cycle the vendor rule cannot see. It was prose only (src/utils/CLAUDE.md: "utils/ is
     imported by them, never the reverse") and prose does not fail a build.
     """
-    assert str_fragment in _output_at(_direction_case(tmp_path, "from model import thing\n"), 1)
+    assert str_fragment in _output_at(
+        _direction_case(tmp_path, str_source="from model import thing\n"), int_expected=1
+    )
 
 
 def test_a_wrong_direction_deferred_into_a_function_is_still_rejected(tmp_path: Path) -> None:
     """Deferring the import does not undo the coupling — same rule as for a vendor."""
     int_code, _ = _direction_case(
-        tmp_path, 'def f() -> None:\n\t"""D."""\n\timport model\n\n\tprint(model)\n'
+        tmp_path, str_source='def f() -> None:\n\t"""D."""\n\timport model\n\n\tprint(model)\n'
     )
 
     assert int_code == 1
@@ -670,7 +690,7 @@ def test_a_wrong_direction_deferred_into_a_function_is_still_rejected(tmp_path: 
 
 def test_an_allowed_direction_passes(tmp_path: Path) -> None:
     """The positive control: a sibling not named in deny_layers is fine."""
-    int_code, _ = _direction_case(tmp_path, "from config import settings\n")
+    int_code, _ = _direction_case(tmp_path, str_source="from config import settings\n")
 
     assert int_code == 0
 
@@ -700,7 +720,7 @@ def test_a_layer_declaring_no_direction_is_unrestricted(tmp_path: Path) -> None:
     ids=["names-the-defect", "readable-in-ci-output"],
 )
 def test_a_duplicate_policy_key_is_rejected(
-    tmp_path: Path, str_fragment: str, bool_present: bool
+    tmp_path: Path, *, str_fragment: str, bool_present: bool
 ) -> None:
     """⚠️ A repeated mapping key must FAIL, because YAML keeps only the last one.
 
@@ -716,7 +736,7 @@ def test_a_duplicate_policy_key_is_rejected(
         encoding="utf-8",
     )
 
-    assert (str_fragment in _output_at(_run_main(tmp_path), 1)) is bool_present
+    assert (str_fragment in _output_at(_run_main(tmp_path), int_expected=1)) is bool_present
 
 
 _STR_SUBLAYER_POLICY = (
@@ -732,7 +752,7 @@ _STR_SUBLAYER_POLICY = (
 )
 
 
-def _sublayer_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
+def _sublayer_case(tmp_path: Path, *, str_source: str) -> tuple[int, str]:
     """Run the gate over one module inside a capability's ``domain/``.
 
     Parameters
@@ -757,7 +777,9 @@ def _sublayer_case(tmp_path: Path, str_source: str) -> tuple[int, str]:
 
 
 @pytest.mark.parametrize("str_fragment", ["capabilities/*/domain", "names ports, not providers"])
-def test_a_glob_layer_key_governs_a_capability_sublayer(tmp_path: Path, str_fragment: str) -> None:
+def test_a_glob_layer_key_governs_a_capability_sublayer(
+    tmp_path: Path, *, str_fragment: str
+) -> None:
     """⚠️ The three DDD sublayers have DIFFERENT rules, and one key cannot hold them.
 
     The tier's own CLAUDE.md says domain depends on nothing, application on the domain only,
@@ -766,7 +788,7 @@ def test_a_glob_layer_key_governs_a_capability_sublayer(tmp_path: Path, str_frag
     nobody can enforce.
     """
     assert str_fragment in _output_at(
-        _sublayer_case(tmp_path, "from chassis.db_schema import Repo\n"), 1
+        _sublayer_case(tmp_path, str_source="from chassis.db_schema import Repo\n"), int_expected=1
     )
 
 
@@ -777,7 +799,7 @@ def test_a_dotted_deny_spares_the_sibling_subpackage(tmp_path: Path) -> None:
     project mandates on every class, the domain included. A root-level `chassis:` deny would
     therefore fire on correct code — and a rule that cries wolf is a rule someone deletes.
     """
-    int_code, str_out = _sublayer_case(tmp_path, "from chassis.typing import Meta\n")
+    int_code, str_out = _sublayer_case(tmp_path, str_source="from chassis.typing import Meta\n")
 
     assert int_code == 0, str_out
 
@@ -798,7 +820,7 @@ def test_a_glob_governs_packages_nested_below_the_sublayer(tmp_path: Path) -> No
     (tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
     (tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
 
-    assert "capabilities/*/domain" in _output_at(_run_main(tmp_path), 1)
+    assert "capabilities/*/domain" in _output_at(_run_main(tmp_path), int_expected=1)
 
 
 def test_a_dotted_deny_also_catches_the_relative_form(tmp_path: Path) -> None:
@@ -818,4 +840,4 @@ def test_a_dotted_deny_also_catches_the_relative_form(tmp_path: Path) -> None:
     (tmp_path / "src" / "chassis" / "__init__.py").write_text("", encoding="utf-8")
     (tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
 
-    assert "chassis.db_schema" in _output_at(_run_main(tmp_path), 1)
+    assert "chassis.db_schema" in _output_at(_run_main(tmp_path), int_expected=1)

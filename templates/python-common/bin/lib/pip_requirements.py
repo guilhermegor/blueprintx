@@ -157,7 +157,7 @@ def normalize_version_spec(str_spec: str) -> str:
     return f"=={str_spec}"
 
 
-def build_requirement(str_name: str, union_spec: str | dict) -> str | None:
+def build_requirement(str_name: str, *, union_spec: str | dict) -> str | None:
     """Render one Poetry dependency declaration as a pip requirement line.
 
     Parameters
@@ -205,7 +205,7 @@ def build_requirement(str_name: str, union_spec: str | dict) -> str | None:
     raise SystemExit(f"Unsupported dependency format for {str_name}: {union_spec!r}")
 
 
-def pep621_requirements(dict_project: dict, list_groups: list) -> list:
+def pep621_requirements(dict_project: dict, *, list_groups: list) -> list:
     """Collect requirements from a PEP 621 ``[project]`` table.
 
     Parameters
@@ -228,7 +228,7 @@ def pep621_requirements(dict_project: dict, list_groups: list) -> list:
     return list_requirements
 
 
-def poetry_requirements(dict_poetry: dict, list_groups: list) -> list:
+def poetry_requirements(dict_poetry: dict, *, list_groups: list) -> list:
     """Collect requirements from a ``[tool.poetry]`` table.
 
     Parameters
@@ -246,7 +246,7 @@ def poetry_requirements(dict_poetry: dict, list_groups: list) -> list:
     list_requirements: list[str] = []
     if "main" in list_groups:
         for str_name, union_spec in dict_poetry.get("dependencies", {}).items():
-            str_line = build_requirement(str_name, union_spec)
+            str_line = build_requirement(str_name, union_spec=union_spec)
             if str_line:
                 list_requirements.append(str_line)
 
@@ -254,13 +254,13 @@ def poetry_requirements(dict_poetry: dict, list_groups: list) -> list:
     for str_group in list_groups:
         dict_deps = dict_group_table.get(str_group, {}).get("dependencies", {})
         for str_name, union_spec in dict_deps.items():
-            str_line = build_requirement(str_name, union_spec)
+            str_line = build_requirement(str_name, union_spec=union_spec)
             if str_line:
                 list_requirements.append(str_line)
     return list_requirements
 
 
-def select_requirements(dict_pyproject: dict, list_groups: list) -> list:
+def select_requirements(dict_pyproject: dict, *, list_groups: list) -> list:
     """Choose the declaration layout and collect the requested groups from it.
 
     The question this answers is "does this project use the PEP 621 layout at all?", not
@@ -284,8 +284,10 @@ def select_requirements(dict_pyproject: dict, list_groups: list) -> list:
     """
     dict_project = dict_pyproject.get("project") or {}
     if dict_project.get("dependencies") or dict_project.get("optional-dependencies"):
-        return pep621_requirements(dict_project, list_groups)
-    return poetry_requirements(dict_pyproject.get("tool", {}).get("poetry", {}), list_groups)
+        return pep621_requirements(dict_project, list_groups=list_groups)
+    return poetry_requirements(
+        dict_pyproject.get("tool", {}).get("poetry", {}), list_groups=list_groups
+    )
 
 
 def main() -> int:
@@ -304,7 +306,7 @@ def main() -> int:
         path_root.joinpath("pyproject.toml").read_text(encoding="utf-8")
     )
 
-    list_requirements = select_requirements(dict_pyproject, list_groups)
+    list_requirements = select_requirements(dict_pyproject, list_groups=list_groups)
 
     if list_groups and not list_requirements:
         raise SystemExit(

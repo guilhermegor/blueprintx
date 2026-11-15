@@ -42,4 +42,6 @@ def load_query(str_filename: str) -> str:
         engines that do carry it, so a misconfigured ``DB_BACKEND`` and a misspelled
         filename do not read identically.
     """
-    return _load_query_from(str_filename, active_backend(), _PATH_QUERIES_ROOT)
+    return _load_query_from(
+        str_filename, str_backend=active_backend(), path_queries_root=_PATH_QUERIES_ROOT
+    )

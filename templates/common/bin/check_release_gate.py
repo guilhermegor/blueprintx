@@ -53,7 +53,7 @@ def major_of(str_version: str) -> int:
     return int(cls_match.group(1))
 
 
-def gate_applies(str_new: str, str_previous: str) -> bool:
+def gate_applies(str_new: str, *, str_previous: str) -> bool:
     """Say whether the move from ``str_previous`` to ``str_new`` is a 0.x to 1+ jump.
 
     Parameters
@@ -71,7 +71,7 @@ def gate_applies(str_new: str, str_previous: str) -> bool:
     return major_of(str_new) >= 1 and major_of(str_previous) == 0
 
 
-def fetch_page(str_repo: str, int_page: int) -> list[dict]:
+def fetch_page(str_repo: str, *, int_page: int) -> list[dict]:
     """Read one page of open issues and pull requests.
 
     Parameters
@@ -153,7 +153,7 @@ def open_blockers(str_repo: str) -> list[dict]:
     list_found: list[dict] = []
     int_page = 1
     while True:
-        list_page = fetch_page(str_repo, int_page)
+        list_page = fetch_page(str_repo, int_page=int_page)
         list_found.extend(blocking(list_page))
         if len(list_page) < INT_PAGE_SIZE:
             return list_found
@@ -192,7 +192,7 @@ def main(list_argv: list[str] | None = None) -> int:
     cls_parser.add_argument("--previous-version", required=True)
     cls_args = cls_parser.parse_args(list_argv)
     try:
-        if not gate_applies(cls_args.new_version, cls_args.previous_version):
+        if not gate_applies(cls_args.new_version, str_previous=cls_args.previous_version):
             print(
                 f"1.0.0 gate not applicable: {cls_args.previous_version} -> {cls_args.new_version}"
             )

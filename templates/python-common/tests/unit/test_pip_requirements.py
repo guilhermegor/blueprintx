@@ -75,7 +75,7 @@ DICT_POETRY_WITH_EMPTY_PROJECT_TABLE = {
 
 def test_optional_only_pep621_resolves_its_group() -> None:
     """An optional-only PEP 621 project must resolve through the PEP 621 path."""
-    assert MODULE.select_requirements(DICT_PEP621_OPTIONAL_ONLY, ["dev"]) == [
+    assert MODULE.select_requirements(DICT_PEP621_OPTIONAL_ONLY, list_groups=["dev"]) == [
         "pytest>=8.0",
         "ruff>=0.6",
     ]
@@ -83,7 +83,7 @@ def test_optional_only_pep621_resolves_its_group() -> None:
 
 def test_optional_only_pep621_with_main_requested_still_resolves_the_group() -> None:
     """Requesting ``main`` on a project without main deps yields the optional group alone."""
-    assert MODULE.select_requirements(DICT_PEP621_OPTIONAL_ONLY, ["main", "dev"]) == [
+    assert MODULE.select_requirements(DICT_PEP621_OPTIONAL_ONLY, list_groups=["main", "dev"]) == [
         "pytest>=8.0",
         "ruff>=0.6",
     ]
@@ -91,12 +91,14 @@ def test_optional_only_pep621_with_main_requested_still_resolves_the_group() -> 
 
 def test_main_dependencies_are_omitted_when_main_is_not_requested() -> None:
     """``[project.dependencies]`` belongs to the ``main`` group, not to every request."""
-    assert MODULE.select_requirements(DICT_PEP621_WITH_MAIN, ["dev"]) == ["pytest>=8.0"]
+    assert MODULE.select_requirements(DICT_PEP621_WITH_MAIN, list_groups=["dev"]) == [
+        "pytest>=8.0"
+    ]
 
 
 def test_main_dependencies_are_included_when_main_is_requested() -> None:
     """The same table IS emitted once ``main`` is among the requested groups."""
-    assert MODULE.select_requirements(DICT_PEP621_WITH_MAIN, ["main", "dev"]) == [
+    assert MODULE.select_requirements(DICT_PEP621_WITH_MAIN, list_groups=["main", "dev"]) == [
         "httpx>=0.27",
         "pytest>=8.0",
     ]
@@ -104,20 +106,20 @@ def test_main_dependencies_are_included_when_main_is_requested() -> None:
 
 def test_empty_project_table_falls_through_to_poetry() -> None:
     """A bare ``[project]`` name beside a populated ``[tool.poetry]`` must resolve via Poetry."""
-    assert MODULE.select_requirements(DICT_POETRY_WITH_EMPTY_PROJECT_TABLE, ["main"]) == [
-        "pandas>=2.2,<3.0.0"
-    ]
+    assert MODULE.select_requirements(
+        DICT_POETRY_WITH_EMPTY_PROJECT_TABLE, list_groups=["main"]
+    ) == ["pandas>=2.2,<3.0.0"]
 
 
 def test_poetry_group_still_resolves() -> None:
     """The Poetry group path is unchanged by the selector fix."""
-    assert MODULE.select_requirements(DICT_POETRY_WITH_EMPTY_PROJECT_TABLE, ["dev"]) == [
-        "pytest>=8.0,<9.0.0"
-    ]
+    assert MODULE.select_requirements(
+        DICT_POETRY_WITH_EMPTY_PROJECT_TABLE, list_groups=["dev"]
+    ) == ["pytest>=8.0,<9.0.0"]
 
 
 def test_empty_result_for_a_requested_group_fails_loudly(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Zero requirements for a non-empty request must raise, never print nothing and exit 0.
 

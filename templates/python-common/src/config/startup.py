@@ -64,7 +64,7 @@ YAML_INPUTS: dict[str, object] = {}
 
 
 @type_checker
-def _require_mapping(str_label: str, obj_loaded: object) -> dict[object, object]:
+def _require_mapping(str_label: str, *, obj_loaded: object) -> dict[object, object]:
     """Return a parsed YAML document, rejecting one that is not a mapping.
 
     Parameters
@@ -92,7 +92,7 @@ def _require_mapping(str_label: str, obj_loaded: object) -> dict[object, object]
 
 
 @type_checker
-def _require_string_template(dict_outputs: dict[object, object], str_key: str) -> None:
+def _require_string_template(dict_outputs: dict[object, object], *, str_key: str) -> None:
     """Reject an outputs mapping whose ``str_key`` is not a string.
 
     Parameters
@@ -129,11 +129,11 @@ def _validate_outputs_templates(dict_outputs: dict[object, object]) -> None:
     None
     """
     for str_key in ("log_name", "json_name", "txt_name"):
-        _require_string_template(dict_outputs, str_key)
+        _require_string_template(dict_outputs, str_key=str_key)
 
 
 @type_checker
-def _validate_config(obj_outputs: object, obj_inputs: object) -> None:
+def _validate_config(obj_outputs: object, *, obj_inputs: object) -> None:
     """Reject YAML documents that are not mappings or lack a filename template.
 
     Parameters
@@ -147,19 +147,23 @@ def _validate_config(obj_outputs: object, obj_inputs: object) -> None:
     -------
     None
     """
-    dict_checked = _require_mapping("outputs", obj_outputs)
-    _require_mapping("inputs", obj_inputs)
+    dict_checked = _require_mapping("outputs", obj_loaded=obj_outputs)
+    _require_mapping("inputs", obj_loaded=obj_inputs)
     _validate_outputs_templates(dict_checked)
 
 
 try:
     YAML_OUTPUTS = yaml.safe_load(
-        resolve_config_path(ENVIRONMENT, "outputs", _CONFIG_DIR).read_text(encoding="utf-8")
+        resolve_config_path(ENVIRONMENT, str_kind="outputs", path_dir=_CONFIG_DIR).read_text(
+            encoding="utf-8"
+        )
     )
     YAML_INPUTS = yaml.safe_load(
-        resolve_config_path(ENVIRONMENT, "inputs", _CONFIG_DIR).read_text(encoding="utf-8")
+        resolve_config_path(ENVIRONMENT, str_kind="inputs", path_dir=_CONFIG_DIR).read_text(
+            encoding="utf-8"
+        )
     )
-    _validate_config(YAML_OUTPUTS, YAML_INPUTS)
+    _validate_config(YAML_OUTPUTS, obj_inputs=YAML_INPUTS)
 except Exception as cls_exc:  # noqa: BLE001
     _str_config_error = f"{type(cls_exc).__name__}: {cls_exc}"
     YAML_OUTPUTS = dict(_DICT_FALLBACK_OUTPUTS)
@@ -220,7 +224,7 @@ def output_path(str_name_key: str) -> Path:
 
 @type_checker
 def resolve_reference_spec(
-    dict_inputs: Mapping[str, object], str_source: str
+    dict_inputs: Mapping[str, object], *, str_source: str
 ) -> Mapping[object, object] | None:
     """Resolve ``str_source``'s reference ("golden copy") spec, override-first then real-input.
 
