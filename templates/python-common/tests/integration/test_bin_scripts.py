@@ -1359,6 +1359,7 @@ def test_docstrings_gate_fires_on_a_keyword_only_param_type_mismatch(tmp_path: P
     str_all = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode == 1
+    assert "m.py" in str_all
     assert "Parameter type mismatch in f(n)" in str_all
 
 
