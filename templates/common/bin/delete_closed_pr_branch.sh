@@ -12,10 +12,22 @@ note() {
 
 skip_reason() {
 	local str_head="$1" str_base="$2" str_default="$3"
-	[[ -z "$str_default" || -z "$str_base" ]] && { echo "the default or base branch is unknown"; return 0; }
-	[[ "$str_head" == "$str_default" ]] && { echo "it is the default branch"; return 0; }
-	[[ "$str_head" == "$str_base" ]] && { echo "it is the PR's base branch"; return 0; }
-	[[ "$str_head" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "its name has characters that cannot be sent safely in an API path"; return 0; }
+	[[ -z "$str_default" || -z "$str_base" ]] && {
+		echo "the default or base branch is unknown"
+		return 0
+	}
+	[[ "$str_head" == "$str_default" ]] && {
+		echo "it is the default branch"
+		return 0
+	}
+	[[ "$str_head" == "$str_base" ]] && {
+		echo "it is the PR's base branch"
+		return 0
+	}
+	[[ "$str_head" =~ ^[A-Za-z0-9._/-]+$ ]] || {
+		echo "its name has characters that cannot be sent safely in an API path"
+		return 0
+	}
 	is_short_lived_branch "$str_head" && return 0
 	echo "its name is not a short-lived <type>/<N>-<slug> branch"
 }
@@ -49,8 +61,14 @@ used_by_open_pr() {
 			echo "open PRs using it as ${str_role} unreadable: ${STR_ERR}"
 			return 0
 		}
-		[[ "$STR_OUT" =~ ^[0-9]+$ ]] || { echo "open PRs using it as ${str_role} unreadable: unexpected reply"; return 0; }
-		((STR_OUT > 0)) && { echo "${STR_OUT} other open PR(s) use it as their ${str_role} (deleting it would close them)"; return 0; }
+		[[ "$STR_OUT" =~ ^[0-9]+$ ]] || {
+			echo "open PRs using it as ${str_role} unreadable: unexpected reply"
+			return 0
+		}
+		((STR_OUT > 0)) && {
+			echo "${STR_OUT} other open PR(s) use it as their ${str_role} (deleting it would close them)"
+			return 0
+		}
 	done
 	return 1
 }
@@ -58,7 +76,10 @@ used_by_open_pr() {
 delete_ref() {
 	local str_url="repos/${GH_REPO}/git/refs/heads/${BRANCH}" str_tip
 	if ! api "repos/${GH_REPO}/git/ref/heads/${BRANCH}" --jq .object.sha; then
-		[[ "${STR_ERR}${STR_OUT}" == *"HTTP 404"* ]] && { note "Branch \`${BRANCH}\` of PR #${PR} is already deleted; nothing to do."; return 0; }
+		[[ "${STR_ERR}${STR_OUT}" == *"HTTP 404"* ]] && {
+			note "Branch \`${BRANCH}\` of PR #${PR} is already deleted; nothing to do."
+			return 0
+		}
 		echo "$STR_ERR" >&2
 		return 1
 	fi
@@ -88,11 +109,20 @@ delete_ref() {
 main() {
 	local str_why
 	str_why=$(skip_reason "$BRANCH" "$BASE_REF" "$DEFAULT_BRANCH")
-	[[ -n "$str_why" ]] && { note "Kept \`${BRANCH}\` of PR #${PR}: ${str_why}."; return 0; }
+	[[ -n "$str_why" ]] && {
+		note "Kept \`${BRANCH}\` of PR #${PR}: ${str_why}."
+		return 0
+	}
 	str_why=$(is_protected)
-	[[ -n "$str_why" ]] && { note "Kept \`${BRANCH}\` of PR #${PR}: ${str_why}."; return 0; }
+	[[ -n "$str_why" ]] && {
+		note "Kept \`${BRANCH}\` of PR #${PR}: ${str_why}."
+		return 0
+	}
 	str_why=$(used_by_open_pr)
-	[[ -n "$str_why" ]] && { note "Kept \`${BRANCH}\` of PR #${PR}: ${str_why}."; return 0; }
+	[[ -n "$str_why" ]] && {
+		note "Kept \`${BRANCH}\` of PR #${PR}: ${str_why}."
+		return 0
+	}
 	delete_ref
 }
 
