@@ -9,9 +9,6 @@ from src.utils.daily_cache import daily_cache_path, download_daily
 from utils.retry import LogEmitter
 
 
-_INT_2 = 2
-
-
 class _RecordingEmitter(LogEmitter):
     """Emitter that keeps every line, so a test can assert WHICH branch ran.
 
@@ -217,7 +214,7 @@ def test_download_daily_refetches_for_a_different_reference_date(tmp_path: Path)
     fn_download, list_calls = _fake_download()
     _call_download(tmp_path, fn_download=fn_download, dt_day=date(2026, 8, 17))
     _call_download(tmp_path, fn_download=fn_download, dt_day=date(2026, 8, 18))
-    assert len(list_calls) == _INT_2
+    assert len(list_calls) == 2
 
 
 def test_download_daily_bypasses_the_read_when_caching_is_off(tmp_path: Path) -> None:
@@ -244,7 +241,7 @@ def test_download_daily_bypasses_the_read_when_caching_is_off(tmp_path: Path) ->
         bool_use_cache=False,
         fn_download=fn_download,
     )
-    assert len(list_calls) == _INT_2
+    assert len(list_calls) == 2
 
 
 def test_download_daily_treats_a_zero_byte_file_as_a_miss(tmp_path: Path) -> None:

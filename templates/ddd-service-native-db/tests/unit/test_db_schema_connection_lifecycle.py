@@ -39,12 +39,12 @@ DICT_OPERATIONS = {
 }
 
 LIST_HANDLERS = [
-    ("sqlite_handler", "SQLiteDatabaseHandler", None, ("unused.db",)),
-    ("mssql_handler", "MSSQLDatabaseHandler", "pyodbc", ("DSN=x",)),
-    ("postgres_handler", "PostgresDatabaseHandler", "psycopg", ("postgresql://u:p@h/db",)),
-    ("mysql_handler", "MySQLDatabaseHandler", "mysql_connector", ("mysql://u:p@h/db",)),
-    ("mariadb_handler", "MariaDBDatabaseHandler", "mysql_connector", ("mariadb://u:p@h/db",)),
-    ("oracle_handler", "OracleDatabaseHandler", "oracledb", ("dsn",)),
+    ("sqlite_handler", "SQLiteDatabaseHandler", None, {"db_path": "unused.db"}),
+    ("mssql_handler", "MSSQLDatabaseHandler", "pyodbc", {"connection_string": "DSN=x"}),
+    ("postgres_handler", "PostgresDatabaseHandler", "psycopg", {"dsn": "postgresql://u:p@h/db"}),
+    ("mysql_handler", "MySQLDatabaseHandler", "mysql_connector", {"dsn": "mysql://u:p@h/db"}),
+    ("mariadb_handler", "MariaDBDatabaseHandler", "mysql_connector", {"dsn": "mariadb://u:p@h/db"}),
+    ("oracle_handler", "OracleDatabaseHandler", "oracledb", {"dsn": "dsn"}),
 ]
 
 
@@ -227,7 +227,7 @@ def test_mssql_handler_closes_every_connection_it_opens(
     monkeypatch : pytest.MonkeyPatch
         Swaps ``_connect`` for a recording pyodbc-like fake.
     """
-    cls_handler = object.__new__(str_name=MSSQLDatabaseHandler)
+    cls_handler = object.__new__(MSSQLDatabaseHandler)
     cls_handler.table = "records"
     cls_handler.id_field = "id"
     list_made: list[PyodbcLikeConnection] = []
@@ -273,14 +273,14 @@ def test_an_unsafe_identifier_is_rejected_naming_the_field(str_value: str) -> No
         validate_sql_identifier(str_value, label="id_field")
 
 
-@pytest.mark.parametrize(("str_stem", "str_class", "str_driver", "tuple_args"), LIST_HANDLERS)
+@pytest.mark.parametrize(("str_stem", "str_class", "str_driver", "dict_args"), LIST_HANDLERS)
 @pytest.mark.parametrize("dict_bad", [{"table": "t; DROP TABLE x"}, {"id_field": "id--"}])
 def test_every_handler_rejects_an_unsafe_identifier_before_touching_the_driver(
     str_stem: str,
     *,
     str_class: str,
     str_driver: str | None,
-    tuple_args: tuple,
+    dict_args: dict,
     dict_bad: dict,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -297,7 +297,7 @@ def test_every_handler_rejects_an_unsafe_identifier_before_touching_the_driver(
         Handler class name.
     str_driver : str or None
         Module attribute holding the optional driver, patched to a sentinel.
-    tuple_args : tuple
+    dict_args : dict
         Leading constructor arguments.
     dict_bad : dict
         The unsafe ``table`` or ``id_field`` keyword.
@@ -309,4 +309,4 @@ def test_every_handler_rejects_an_unsafe_identifier_before_touching_the_driver(
         monkeypatch.setattr(cls_module, str_driver, object())
 
     with pytest.raises(ValueError, match="must match"):
-        getattr(cls_module, str_class)(*tuple_args, **dict_bad)
+        getattr(cls_module, str_class)(**dict_args, **dict_bad)

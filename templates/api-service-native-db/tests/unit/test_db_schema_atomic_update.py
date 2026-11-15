@@ -206,7 +206,7 @@ def _build_handler(str_target: str) -> DatabaseHandler:
     """
     str_module, str_class = str_target.split(".")
     cls_module = importlib.import_module(f"chassis.db_schema.infrastructure.{str_module}")
-    cls_handler = object.__new__(str_name=getattr(cls_module, str_class))
+    cls_handler = object.__new__(getattr(cls_module, str_class))
     cls_handler.table = "records"
     cls_handler.id_field = "id"
     return cls_handler
