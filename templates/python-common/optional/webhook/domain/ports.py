@@ -12,7 +12,7 @@ class WebhookNotifier(Protocol):
     swapping the concrete platform (Teams, Slack, …) never changes the caller.
     """
 
-    def send(self, *, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
+    def send(self, str_message: str, *, str_title: str = "ROUTINE_CONCLUSION") -> None:
         """Deliver a notification.
 
         Parameters

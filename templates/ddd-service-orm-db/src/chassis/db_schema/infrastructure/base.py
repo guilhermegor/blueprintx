@@ -42,7 +42,7 @@ class DatabaseSession:
 
     Examples
     --------
-    >>> db = DatabaseSession("sqlite:///app.db")
+    >>> db = DatabaseSession(database_url="sqlite:///app.db")
     >>> with db.session() as session:
     ...     session.add(some_model)
     ...     session.commit()

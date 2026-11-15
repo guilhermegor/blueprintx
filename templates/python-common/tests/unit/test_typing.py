@@ -151,7 +151,7 @@ def test_decorator_checks_standalone_function() -> None:
 def test_decorator_rejects_a_wrong_type_on_a_standalone_function() -> None:
     """The decorator rejects a wrong-typed argument to a standalone function."""
     with pytest.raises(TypeError):
-        _add(1, b="two")
+        _add(1, b=2.0)
 
 
 def test_bool_is_not_accepted_as_int() -> None:
