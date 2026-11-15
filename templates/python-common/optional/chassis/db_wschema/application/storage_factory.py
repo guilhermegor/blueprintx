@@ -48,11 +48,13 @@ def build_storage_handler() -> DatabaseHandler:
 
     dict_builders: dict[str, Callable[[], DatabaseHandler]] = {
         "json": lambda: JSONDatabaseHandler(
-            path_data_dir / os.getenv("DB_FILE_JSON", "records.json")
+            file_path=path_data_dir / os.getenv("DB_FILE_JSON", "records.json")
         ),
-        "csv": lambda: CSVDatabaseHandler(path_data_dir / os.getenv("DB_FILE_CSV", "records.csv")),
+        "csv": lambda: CSVDatabaseHandler(
+            file_path=path_data_dir / os.getenv("DB_FILE_CSV", "records.csv")
+        ),
         "joblib": lambda: JoblibHandler(
-            path_data_dir / os.getenv("JOBLIB_DIR", "artifacts"),
+            dir_path=path_data_dir / os.getenv("JOBLIB_DIR", "artifacts"),
             secret_key=bytes_secret,
         ),
     }

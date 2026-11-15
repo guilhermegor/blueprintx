@@ -278,10 +278,14 @@ def test_sqlite_update_interleaved_writers_keep_both_fields(
     )
     cls_barrier = threading.Barrier(2)
     cls_alpha = threading.Thread(
-        target=_update_one_field, args=(cls_sqlite_handler, "alpha", cls_barrier)
+        target=_update_one_field,
+        args=(cls_sqlite_handler,),
+        kwargs={"str_field": "alpha", "cls_barrier": cls_barrier},
     )
     cls_beta = threading.Thread(
-        target=_update_one_field, args=(cls_sqlite_handler, "beta", cls_barrier)
+        target=_update_one_field,
+        args=(cls_sqlite_handler,),
+        kwargs={"str_field": "beta", "cls_barrier": cls_barrier},
     )
     cls_alpha.start()
     cls_beta.start()
@@ -310,7 +314,9 @@ def test_update_reads_and_writes_one_locked_transaction(str_target: str, *, str_
     list_connects: list[str] = []
     list_sql: list[str] = []
     str_stored = json.dumps({"id": STR_RECORD_ID, "alpha": "initial", "beta": "initial"})
-    cls_handler._connect = partial(_open_connection, list_connects, list_sql, str_stored)  # noqa: SLF001
+    cls_handler._connect = partial(  # noqa: SLF001
+        _open_connection, list_connects, list_sql=list_sql, str_stored=str_stored
+    )
     dict_updated = cls_handler.update(record_id=STR_RECORD_ID, updates={"beta": "written"})
     assert (len(list_connects), str_lock in list_sql[0], list_sql[1][:6], dict_updated) == (
         1,
