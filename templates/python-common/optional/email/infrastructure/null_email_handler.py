@@ -11,6 +11,7 @@ class NullEmailHandler:
 
     def send_email(  # noqa: PLR6301 -- fixed foreign/port signature
         self,
+        *,
         str_subject: str,
         list_to: list[str],
         list_cc: list[str],

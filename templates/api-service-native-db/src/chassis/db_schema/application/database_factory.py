@@ -61,17 +61,19 @@ def _sqlite() -> SQLiteDatabaseHandler:
     """Open a SQLite handler at ``DB_PATH``, creating the parent directory."""
     path_db = Path(os.getenv("DB_PATH", "./data/app.db"))
     path_db.parent.mkdir(parents=True, exist_ok=True)
-    return SQLiteDatabaseHandler(path_db)
+    return SQLiteDatabaseHandler(db_path=path_db)
 
 
 _DICT_BUILDERS: dict[str, Callable[[str], DatabaseHandler]] = {
     "sqlite": lambda _: _sqlite(),
-    "postgresql": lambda b: PostgresDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
-    "mariadb": lambda b: MariaDBDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
-    "mysql": lambda b: MySQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
-    "mssql": lambda b: MSSQLDatabaseHandler(os.getenv("DB_DSN") or _compose_dsn(b)),
+    "postgresql": lambda b: PostgresDatabaseHandler(dsn=os.getenv("DB_DSN") or _compose_dsn(b)),
+    "mariadb": lambda b: MariaDBDatabaseHandler(dsn=os.getenv("DB_DSN") or _compose_dsn(b)),
+    "mysql": lambda b: MySQLDatabaseHandler(dsn=os.getenv("DB_DSN") or _compose_dsn(b)),
+    "mssql": lambda b: MSSQLDatabaseHandler(
+        connection_string=os.getenv("DB_DSN") or _compose_dsn(b)
+    ),
     "oracle": lambda b: OracleDatabaseHandler(
-        os.getenv("DB_DSN") or _compose_dsn(b),
+        dsn=os.getenv("DB_DSN") or _compose_dsn(b),
         user=os.getenv("DB_USER", "app"),
         password=os.getenv("DB_PASSWORD", ""),
     ),

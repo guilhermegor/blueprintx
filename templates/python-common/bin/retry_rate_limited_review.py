@@ -134,7 +134,7 @@ def load_gate(path_bin: pathlib.Path) -> types.ModuleType | None:
 
 
 def newest_roster_comment(
-    list_comments: list[dict], set_roster: set[str], fn_norm: Callable[[str], str]
+    list_comments: list[dict], *, set_roster: set[str], fn_norm: Callable[[str], str]
 ) -> dict | None:
     """Return the newest roster-authored comment, whole.
 
@@ -165,7 +165,7 @@ def newest_roster_comment(
 
 
 def newest_roster_notice(
-    list_comments: list[dict], set_roster: set[str], fn_norm: Callable[[str], str]
+    list_comments: list[dict], *, set_roster: set[str], fn_norm: Callable[[str], str]
 ) -> str:
     """Return the newest roster-authored comment body, untruncated.
 
@@ -183,7 +183,7 @@ def newest_roster_notice(
     str
         The newest roster comment's body, or ``""`` when the roster has said nothing.
     """
-    dict_comment = newest_roster_comment(list_comments, set_roster, fn_norm)
+    dict_comment = newest_roster_comment(list_comments, set_roster=set_roster, fn_norm=fn_norm)
     if dict_comment is None:
         return ""
     return dict_comment.get("body") or ""
@@ -213,7 +213,7 @@ def parse_declared_wait(str_notice: str) -> int | None:
     return int_wait
 
 
-def declared_wait_still_open(dict_notice: dict | None, dt_now: datetime) -> bool:
+def declared_wait_still_open(dict_notice: dict | None, *, dt_now: datetime) -> bool:
     """Return whether the reviewer's own declared wait has yet to elapse.
 
     ⚠️ Measured from the NOTICE, never from our last request. The reviewer says "available in N
@@ -252,6 +252,7 @@ def declared_wait_still_open(dict_notice: dict | None, dt_now: datetime) -> bool
 
 def asked_recently(
     list_comments: list[dict],
+    *,
     str_self_login: str,
     fn_norm: Callable[[str], str],
     dt_now: datetime,
@@ -314,7 +315,7 @@ def parse_timestamp(str_stamp: str) -> datetime | None:
         return None
 
 
-def fetch_comments(str_repo: str, int_number: int) -> list[dict]:
+def fetch_comments(str_repo: str, *, int_number: int) -> list[dict]:
     """Return one PR's issue comments, oldest first, normalised with timestamps.
 
     Parameters
@@ -356,6 +357,7 @@ def fetch_comments(str_repo: str, int_number: int) -> list[dict]:
 
 def pr_needs_retry(
     dict_pr: dict,
+    *,
     list_comments: list[dict],
     set_reviewers: set[str],
     cls_gate: types.ModuleType,
@@ -388,28 +390,32 @@ def pr_needs_retry(
     """
     list_reviews = ((dict_pr.get("reviews") or {}).get("nodes")) or []
     str_head = dict_pr.get("headRefOid") or ""
-    if cls_gate.reviewers_who_reported(list_reviews, set_reviewers, str_head):
+    if cls_gate.reviewers_who_reported(
+        list_reviews, set_roster=set_reviewers, str_commit_oid=str_head
+    ):
         return False
 
-    dict_notice = newest_roster_comment(list_comments, set_reviewers, cls_gate.normalise_login)
+    dict_notice = newest_roster_comment(
+        list_comments, set_roster=set_reviewers, fn_norm=cls_gate.normalise_login
+    )
     str_notice = (dict_notice or {}).get("body") or ""
     if not _RE_RATE_LIMIT.search(str_notice):
         return False
 
     dt_when = dt_now or datetime.now(UTC)
 
-    if declared_wait_still_open(dict_notice, dt_when):
+    if declared_wait_still_open(dict_notice, dt_now=dt_when):
         return False
 
     return not asked_recently(
         list_comments,
-        str_self_login,
-        cls_gate.normalise_login,
-        dt_when,
+        str_self_login=str_self_login,
+        fn_norm=cls_gate.normalise_login,
+        dt_now=dt_when,
     )
 
 
-def request_review(str_repo: str, int_number: int) -> bool:
+def request_review(str_repo: str, *, int_number: int) -> bool:
     """Post the full-review request on one PR.
 
     Parameters
@@ -494,6 +500,7 @@ def resolve_self_login() -> str:
 
 def build_candidate(
     str_repo: str,
+    *,
     int_number: int,
     str_created_at: str,
     set_reviewers: set[str],
@@ -524,19 +531,26 @@ def build_candidate(
     str_owner, _, str_name = str_repo.partition("/")
     try:
         dict_pr = cls_gate.fetch_pull_request(
-            str_owner, str_name, int_number, frozenset(set_reviewers)
+            str_owner,
+            str_repo=str_name,
+            int_number=int_number,
+            set_declared=frozenset(set_reviewers),
         )
-        list_comments = fetch_comments(str_repo, int_number)
+        list_comments = fetch_comments(str_repo, int_number=int_number)
     except Exception as cls_error:  # noqa: BLE001 - see the block above: degrade per PR
         print(f"::warning::could not read #{int_number}, skipping it: {str(cls_error)[:200]}")
         return None
 
     list_reviews = ((dict_pr.get("reviews") or {}).get("nodes")) or []
     str_head = dict_pr.get("headRefOid") or ""
-    if cls_gate.reviewers_who_reported(list_reviews, set_reviewers, str_head):
+    if cls_gate.reviewers_who_reported(
+        list_reviews, set_roster=set_reviewers, str_commit_oid=str_head
+    ):
         return None
 
-    dict_notice = newest_roster_comment(list_comments, set_reviewers, cls_gate.normalise_login)
+    dict_notice = newest_roster_comment(
+        list_comments, set_roster=set_reviewers, fn_norm=cls_gate.normalise_login
+    )
     if not _RE_RATE_LIMIT.search((dict_notice or {}).get("body") or ""):
         return None
 
@@ -550,7 +564,7 @@ def build_candidate(
 
 
 def count_self_asks(
-    list_comments: list[dict], str_self_login: str, fn_norm: Callable[[str], str]
+    list_comments: list[dict], *, str_self_login: str, fn_norm: Callable[[str], str]
 ) -> int:
     """Count how many times we have already posted the marker on this PR.
 
@@ -582,7 +596,7 @@ def count_self_asks(
     )
 
 
-def notice_deadline(dict_notice: dict, dt_now: datetime) -> datetime | None:
+def notice_deadline(dict_notice: dict, *, dt_now: datetime) -> datetime | None:
     """Return the moment a notice's declared wait elapses, or ``None`` when it is not binding.
 
     ``None`` covers every case that carries no ongoing deadline: no declared wait, an unreadable
@@ -611,7 +625,7 @@ def notice_deadline(dict_notice: dict, dt_now: datetime) -> datetime | None:
     return dt_deadline if dt_deadline > dt_now else None
 
 
-def account_blocked_until(list_notices: list[dict], dt_now: datetime) -> datetime | None:
+def account_blocked_until(list_notices: list[dict], *, dt_now: datetime) -> datetime | None:
     """Return when the account-level quota frees up, or ``None`` when nothing is blocking.
 
     Parameters
@@ -630,7 +644,7 @@ def account_blocked_until(list_notices: list[dict], dt_now: datetime) -> datetim
         dt_deadline
         for dict_notice in list_notices
         if dict_notice
-        for dt_deadline in (notice_deadline(dict_notice, dt_now),)
+        for dt_deadline in (notice_deadline(dict_notice, dt_now=dt_now),)
         if dt_deadline is not None
     ]
     return max(list_deadlines, default=None)
@@ -638,6 +652,7 @@ def account_blocked_until(list_notices: list[dict], dt_now: datetime) -> datetim
 
 def select_pr_for_retry(
     list_candidates: list[dict],
+    *,
     set_reviewers: set[str],
     cls_gate: types.ModuleType,
     str_self_login: str,
@@ -670,15 +685,17 @@ def select_pr_for_retry(
     for dict_candidate in sorted(list_candidates, key=lambda d: d["created_at"]):
         if not pr_needs_retry(
             dict_candidate["pr"],
-            dict_candidate["comments"],
-            set_reviewers,
-            cls_gate,
-            str_self_login,
-            dt_now,
+            list_comments=dict_candidate["comments"],
+            set_reviewers=set_reviewers,
+            cls_gate=cls_gate,
+            str_self_login=str_self_login,
+            dt_now=dt_now,
         ):
             continue
         int_attempts = count_self_asks(
-            dict_candidate["comments"], str_self_login, cls_gate.normalise_login
+            dict_candidate["comments"],
+            str_self_login=str_self_login,
+            fn_norm=cls_gate.normalise_login,
         )
         if int_attempts >= int_max_attempts:
             print(
@@ -748,7 +765,7 @@ def resolve_setup(path_bin: pathlib.Path) -> tuple[types.ModuleType, set[str]] |
 
 
 def collect_waiting_prs(
-    str_repo: str, set_reviewers: set, cls_gate: object
+    str_repo: str, *, set_reviewers: set, cls_gate: object
 ) -> tuple[list, list[dict]] | None:
     """List the open PRs and the subset waiting on a rate-limited review.
 
@@ -776,7 +793,11 @@ def collect_waiting_prs(
     list_candidates: list[dict] = []
     for dict_open_pr in list_open:
         dict_candidate = build_candidate(
-            str_repo, dict_open_pr["number"], dict_open_pr["created_at"], set_reviewers, cls_gate
+            str_repo,
+            int_number=dict_open_pr["number"],
+            str_created_at=dict_open_pr["created_at"],
+            set_reviewers=set_reviewers,
+            cls_gate=cls_gate,
         )
         if dict_candidate is not None:
             list_candidates.append(dict_candidate)
@@ -785,6 +806,7 @@ def collect_waiting_prs(
 
 def choose_pr_to_retry(
     list_open: list,
+    *,
     list_candidates: list[dict],
     set_reviewers: set,
     cls_gate: types.ModuleType,
@@ -817,7 +839,7 @@ def choose_pr_to_retry(
         print(f"open PRs checked: {len(list_open)}; none are waiting on a rate-limited review.")
         return None
 
-    dt_blocked_until = account_blocked_until([d["notice"] for d in list_candidates], dt_now)
+    dt_blocked_until = account_blocked_until([d["notice"] for d in list_candidates], dt_now=dt_now)
     if dt_blocked_until is not None:
         print(
             f"account-level quota blocked until {dt_blocked_until.isoformat()} (newest refusal "
@@ -826,7 +848,11 @@ def choose_pr_to_retry(
         return None
 
     int_chosen = select_pr_for_retry(
-        list_candidates, set_reviewers, cls_gate, str_self_login, dt_now
+        list_candidates,
+        set_reviewers=set_reviewers,
+        cls_gate=cls_gate,
+        str_self_login=str_self_login,
+        dt_now=dt_now,
     )
     if int_chosen is None:
         print(
@@ -855,7 +881,7 @@ def main() -> int:
         return 0
     cls_gate, set_reviewers = tuple_setup
 
-    tuple_waiting = collect_waiting_prs(str_repo, set_reviewers, cls_gate)
+    tuple_waiting = collect_waiting_prs(str_repo, set_reviewers=set_reviewers, cls_gate=cls_gate)
     if tuple_waiting is None:
         return 0
     list_open, list_candidates = tuple_waiting
@@ -863,7 +889,12 @@ def main() -> int:
     str_self_login = resolve_self_login()
     dt_now = datetime.now(UTC)
     int_chosen = choose_pr_to_retry(
-        list_open, list_candidates, set_reviewers, cls_gate, str_self_login, dt_now
+        list_open,
+        list_candidates=list_candidates,
+        set_reviewers=set_reviewers,
+        cls_gate=cls_gate,
+        str_self_login=str_self_login,
+        dt_now=dt_now,
     )
     if int_chosen is None:
         return 0
@@ -875,7 +906,7 @@ def main() -> int:
         )
         return 0
 
-    bool_asked = request_review(str_repo, int_chosen)
+    bool_asked = request_review(str_repo, int_number=int_chosen)
     print(f"open PRs checked: {len(list_open)}; requested #{int_chosen}: {bool_asked}.")
     return 0
 

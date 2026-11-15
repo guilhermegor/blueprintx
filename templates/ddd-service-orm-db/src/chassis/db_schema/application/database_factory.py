@@ -113,4 +113,4 @@ def build_database_session(echo: bool = False) -> DatabaseSession:
     ...     session.commit()
     """
     str_url = build_database_url()
-    return DatabaseSession(str_url, echo=echo)
+    return DatabaseSession(database_url=str_url, echo=echo)

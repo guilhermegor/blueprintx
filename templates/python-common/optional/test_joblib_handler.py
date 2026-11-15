@@ -21,6 +21,11 @@ import pytest
 from chassis.db_wschema.infrastructure.joblib_handler import JoblibHandler
 
 
+_INT_3 = 3
+_INT_5 = 5
+_INT_7 = 7
+
+
 TUPLE_COMPRESS = ("zlib", 3)
 
 LIST_BAD_ID_SUFFIXES = [
@@ -46,7 +51,7 @@ def str_outside_id(tmp_path: Path) -> str:
     str
         Identifier of an artifact that sits one level above ``tmp_path / "store"``.
     """
-    return JoblibHandler(tmp_path, compress=TUPLE_COMPRESS).create(
+    return JoblibHandler(dir_path=tmp_path, compress=TUPLE_COMPRESS).create(
         {"_name": "payload", "value": 1}
     )
 
@@ -65,12 +70,12 @@ def cls_store(tmp_path: Path) -> JoblibHandler:
     JoblibHandler
         Handler under test, without a ``secret_key``.
     """
-    return JoblibHandler(tmp_path / "store", compress=TUPLE_COMPRESS)
+    return JoblibHandler(dir_path=tmp_path / "store", compress=TUPLE_COMPRESS)
 
 
 @pytest.mark.parametrize("str_template", LIST_BAD_ID_SUFFIXES)
 def test_read_rejects_a_path_like_record_id(
-    cls_store: JoblibHandler, str_outside_id: str, str_template: str
+    cls_store: JoblibHandler, *, str_outside_id: str, str_template: str
 ) -> None:
     """A traversal id is refused instead of loading the artifact it points at."""
     with pytest.raises(ValueError, match="record_id"):
@@ -79,7 +84,7 @@ def test_read_rejects_a_path_like_record_id(
 
 @pytest.mark.parametrize("str_template", LIST_BAD_ID_SUFFIXES)
 def test_delete_rejects_a_path_like_record_id(
-    cls_store: JoblibHandler, str_outside_id: str, str_template: str
+    cls_store: JoblibHandler, *, str_outside_id: str, str_template: str
 ) -> None:
     """A traversal id is refused instead of unlinking the artifact it points at."""
     with pytest.raises(ValueError, match="record_id"):
@@ -87,7 +92,7 @@ def test_delete_rejects_a_path_like_record_id(
 
 
 def test_delete_leaves_the_file_outside_the_store(
-    cls_store: JoblibHandler, str_outside_id: str, tmp_path: Path
+    cls_store: JoblibHandler, *, str_outside_id: str, tmp_path: Path
 ) -> None:
     """The outside artifact survives a delete attempt through ``../``."""
     with contextlib.suppress(ValueError):
@@ -97,7 +102,7 @@ def test_delete_leaves_the_file_outside_the_store(
 
 
 def test_read_rejects_an_absolute_record_id(
-    cls_store: JoblibHandler, str_outside_id: str, tmp_path: Path
+    cls_store: JoblibHandler, *, str_outside_id: str, tmp_path: Path
 ) -> None:
     """``Path('store') / '/abs/x'`` discards the store, so an absolute id must be refused."""
     with pytest.raises(ValueError, match="record_id"):
@@ -105,7 +110,7 @@ def test_read_rejects_an_absolute_record_id(
 
 
 def test_delete_rejects_an_absolute_record_id(
-    cls_store: JoblibHandler, str_outside_id: str, tmp_path: Path
+    cls_store: JoblibHandler, *, str_outside_id: str, tmp_path: Path
 ) -> None:
     """An absolute id is refused by ``delete`` as well."""
     with pytest.raises(ValueError, match="record_id"):
@@ -114,7 +119,7 @@ def test_delete_rejects_an_absolute_record_id(
 
 @pytest.mark.parametrize("str_bad_id", ["", "no-shape", "Upper_20260101_000000_deadbeef"])
 def test_read_rejects_an_id_off_the_documented_shape(
-    cls_store: JoblibHandler, str_bad_id: str
+    cls_store: JoblibHandler, *, str_bad_id: str
 ) -> None:
     """Only ``{kebab-name}_{YYYYMMDD}_{HHMMSS}_{sha8}`` is a record id."""
     with pytest.raises(ValueError, match="record_id"):
@@ -122,7 +127,7 @@ def test_read_rejects_an_id_off_the_documented_shape(
 
 
 def test_read_rejects_a_symlink_that_leaves_the_store(
-    cls_store: JoblibHandler, str_outside_id: str, tmp_path: Path
+    cls_store: JoblibHandler, *, str_outside_id: str, tmp_path: Path
 ) -> None:
     """A well-formed id whose file is a symlink out of the store is caught by the resolve check."""
     (tmp_path / "store" / f"{str_outside_id}.joblib").symlink_to(
@@ -134,7 +139,7 @@ def test_read_rejects_a_symlink_that_leaves_the_store(
 
 
 @pytest.fixture
-def str_stored_id_with_escaping_sig(cls_store: JoblibHandler, tmp_path: Path) -> str:
+def str_stored_id_with_escaping_sig(cls_store: JoblibHandler, *, tmp_path: Path) -> str:
     """Store an artifact whose ``.sig`` sidecar is a symlink out of the store.
 
     Parameters
@@ -156,7 +161,7 @@ def str_stored_id_with_escaping_sig(cls_store: JoblibHandler, tmp_path: Path) ->
 
 
 def test_delete_rejects_a_signature_that_leaves_the_store(
-    cls_store: JoblibHandler, str_stored_id_with_escaping_sig: str
+    cls_store: JoblibHandler, *, str_stored_id_with_escaping_sig: str
 ) -> None:
     """A ``.sig`` symlinked out of the store is refused, not followed."""
     with pytest.raises(ValueError, match="escapes"):
@@ -164,7 +169,7 @@ def test_delete_rejects_a_signature_that_leaves_the_store(
 
 
 def test_delete_leaves_the_artifact_when_its_signature_is_refused(
-    cls_store: JoblibHandler, str_stored_id_with_escaping_sig: str, tmp_path: Path
+    cls_store: JoblibHandler, *, str_stored_id_with_escaping_sig: str, tmp_path: Path
 ) -> None:
     """Both paths are checked before anything is unlinked, so a refusal deletes nothing."""
     with contextlib.suppress(ValueError):
@@ -175,7 +180,7 @@ def test_delete_leaves_the_artifact_when_its_signature_is_refused(
 
 @pytest.mark.parametrize("str_name", ["../evil", "a/b", "..", "a\\b", "/abs", ""])
 def test_create_rejects_a_name_outside_the_kebab_charset(
-    cls_store: JoblibHandler, str_name: str
+    cls_store: JoblibHandler, *, str_name: str
 ) -> None:
     """A ``_name`` carrying a separator or ``..`` is refused before anything is written."""
     with pytest.raises(ValueError, match="_name"):
@@ -183,7 +188,7 @@ def test_create_rejects_a_name_outside_the_kebab_charset(
 
 
 def test_create_writes_nothing_outside_the_store_for_a_traversal_name(
-    cls_store: JoblibHandler, tmp_path: Path
+    cls_store: JoblibHandler, *, tmp_path: Path
 ) -> None:
     """The rejected ``_name`` leaves no artifact next to the store."""
     with contextlib.suppress(ValueError):
@@ -196,14 +201,14 @@ def test_a_created_record_reads_back(cls_store: JoblibHandler) -> None:
     """The check does not reject the ids ``create`` itself produces (underscores in a name)."""
     str_record_id = cls_store.create({"_name": "my_model", "value": 7})
 
-    assert cls_store.read(str_record_id)["value"] == 7
+    assert cls_store.read(str_record_id)["value"] == _INT_7
 
 
 def test_a_record_without_a_name_reads_back(cls_store: JoblibHandler) -> None:
     """The uuid-hex fallback name is inside the allowed charset."""
     str_record_id = cls_store.create({"value": 3})
 
-    assert cls_store.read(str_record_id)["value"] == 3
+    assert cls_store.read(str_record_id)["value"] == _INT_3
 
 
 def test_a_created_record_can_be_deleted(cls_store: JoblibHandler) -> None:
@@ -214,7 +219,7 @@ def test_a_created_record_can_be_deleted(cls_store: JoblibHandler) -> None:
 
 
 def test_the_default_codec_needs_no_extra_package(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A handler built with no ``compress=`` round-trips with ``lz4`` made unimportable.
 
@@ -223,12 +228,12 @@ def test_the_default_codec_needs_no_extra_package(
     load time, so the witness patches that cached module, not ``sys.modules``.
     """
     monkeypatch.setattr("joblib.compressor.lz4", None)
-    cls_default = JoblibHandler(tmp_path / "default")
+    cls_default = JoblibHandler(dir_path=tmp_path / "default")
 
-    assert cls_default.read(cls_default.create({"_name": "plain", "value": 5}))["value"] == 5
+    assert cls_default.read(cls_default.create({"_name": "plain", "value": 5}))["value"] == _INT_5
 
 
 def test_update_raises_because_artifacts_are_immutable(cls_store: JoblibHandler) -> None:
     """``update()`` is part of the port but not of this backend (see the factory docstring)."""
     with pytest.raises(NotImplementedError):
-        cls_store.update("any_20260101_000000_deadbeef", {"value": 2})
+        cls_store.update(record_id="any_20260101_000000_deadbeef", updates={"value": 2})

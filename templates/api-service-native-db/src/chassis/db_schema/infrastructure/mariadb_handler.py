@@ -44,15 +44,15 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         If ``mysql-connector-python`` is not installed when instantiating the handler.
     """
 
-    def __init__(self, dsn: str, table: str = "records", id_field: str = "id") -> None:
+    def __init__(self, *, dsn: str, table: str = "records", id_field: str = "id") -> None:
         if mysql_connector is None:
             raise ImportError(
                 "mysql-connector-python is required for MariaDBDatabaseHandler; "
                 "install it to use this backend."
             )
         self.dsn = dsn
-        validate_sql_identifier(table, "table")
-        validate_sql_identifier(id_field, "id_field")
+        validate_sql_identifier(table, label="table")
+        validate_sql_identifier(id_field, label="id_field")
         self.table = table
         self.id_field = id_field
         self.connection_kwargs: DsnParts = self._parse_dsn(dsn)
@@ -61,7 +61,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         self.user = self.connection_kwargs.get("user") or "root"
         self.password = self.connection_kwargs.get("password") or ""
         self.dbname = self.connection_kwargs.get("database") or "app"
-        validate_not_flag(self.dbname, "database name")
+        validate_not_flag(self.dbname, label="database name")
         self._ensure_table()
 
     def create(self, record: Record) -> str:
@@ -77,7 +77,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
         str
             Identifier assigned to the stored record.
         """
-        record = ensure_id(record, self.id_field)
+        record = ensure_id(record, id_field=self.id_field)
         json_payload = json.dumps(record)
         with self._connect() as cls_conn:
             cls_cur = cls_conn.cursor()
@@ -113,7 +113,7 @@ class MariaDBDatabaseHandler(DatabaseHandler):
             return None
         return decode_record(tuple_row[0])
 
-    def update(self, record_id: str, updates: Record) -> Record | None:
+    def update(self, *, record_id: str, updates: Record) -> Record | None:
         """Update an existing record atomically.
 
         The read and the write share one transaction and the row is held by

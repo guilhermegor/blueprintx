@@ -40,6 +40,7 @@ _STRATEGIES: frozenset[str] = frozenset(_STRATEGY_WAITS)
 @type_checker
 def _compute_backoff_wait(
     str_strategy: str,
+    *,
     float_base_wait_s: float,
     float_factor: float,
     int_attempt: int,

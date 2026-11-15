@@ -42,7 +42,7 @@ class LogsEmitter(LogEmitter):
         super().__init__(cls_logger)
         self._cls_create_log = CreateLog()
 
-    def log_message(self, str_message: str, str_level: str) -> None:
+    def log_message(self, *, str_message: str, str_level: str) -> None:
         """Emit ``str_message`` at ``str_level`` through the rich printer.
 
         Parameters
@@ -57,4 +57,6 @@ class LogsEmitter(LogEmitter):
         log_level = cast(
             LogLevel, str_normalized if str_normalized in _VALID_LOG_LEVELS else "warning"
         )
-        self._cls_create_log.log_message(self._cls_logger_or_none, str_message, log_level)
+        self._cls_create_log.log_message(
+            logger=self._cls_logger_or_none, message=str_message, log_level=log_level
+        )

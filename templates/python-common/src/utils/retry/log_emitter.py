@@ -40,7 +40,7 @@ class LogEmitter(metaclass=TypeChecker):
         """
         self._cls_logger = cls_logger if cls_logger is not None else _LOGGER
 
-    def log_message(self, str_message: str, str_level: str) -> None:
+    def log_message(self, *, str_message: str, str_level: str) -> None:
         """Emit ``str_message`` at the named level.
 
         Parameters

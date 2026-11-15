@@ -27,14 +27,13 @@ source change?".
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import date, datetime
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from utils.http_downloader import download_file
+from utils.http_downloader import DownloadFn, download_file
 from utils.retry import LogEmitter
 
 
@@ -75,7 +74,7 @@ def _is_usable_cache_entry(path_cached: Path) -> bool:
 
 @type_checker
 def daily_cache_path(
-    path_cache_dir: Path, str_key: str, dt_reference: date, str_suffix: str
+    path_cache_dir: Path, *, str_key: str, dt_reference: date, str_suffix: str
 ) -> Path:
     """Build the cache path for one source on one reference day.
 
@@ -102,13 +101,14 @@ def daily_cache_path(
 @type_checker
 def download_daily(
     str_url: str,
+    *,
     path_cache_dir: Path,
     str_key: str,
     dt_reference: date,
     str_suffix: str = "",
     bool_use_cache: bool = True,
     cls_logger: LogEmitter | None = None,
-    fn_download: Callable[[str, Path], Path] = download_file,
+    fn_download: DownloadFn = download_file,
 ) -> Path:
     """Return the artifact for ``dt_reference``, from disk when already fetched today.
 
@@ -134,7 +134,7 @@ def download_daily(
         READ and fetches from the network — it still WRITES, refreshing the cached copy.
     cls_logger : LogEmitter, optional
         Emitter for the branch line; defaults to :class:`utils.retry.LogEmitter`.
-    fn_download : Callable[[str, pathlib.Path], pathlib.Path], optional
+    fn_download : DownloadFn, optional
         The download seam, by default :func:`utils.http_downloader.download_file`. Injected so
         tests never touch the network.
 
@@ -163,21 +163,25 @@ def download_daily(
     _require_reference_date(dt_reference)
 
     cls_emitter: LogEmitter = cls_logger if cls_logger is not None else LogEmitter()
-    path_cached = daily_cache_path(path_cache_dir, str_key, dt_reference, str_suffix)
+    path_cached = daily_cache_path(
+        path_cache_dir, str_key=str_key, dt_reference=dt_reference, str_suffix=str_suffix
+    )
     str_day = f"{dt_reference:%Y-%m-%d}"
 
     if bool_use_cache and _is_usable_cache_entry(path_cached):
         cls_emitter.log_message(
-            f"daily cache HIT for {str_key} ({str_day}): {path_cached}", "info"
+            str_message=f"daily cache HIT for {str_key} ({str_day}): {path_cached}",
+            str_level="info",
         )
         return path_cached
 
     str_reason = "bypassed by caller" if not bool_use_cache else "miss"
     cls_emitter.log_message(
-        f"daily cache {str_reason} for {str_key} ({str_day}) — downloading {str_url}", "info"
+        str_message=f"daily cache {str_reason} for {str_key} ({str_day}) — downloading {str_url}",
+        str_level="info",
     )
     path_cache_dir.mkdir(parents=True, exist_ok=True)
-    _download_and_publish(str_url, path_cached, fn_download)
+    _download_and_publish(str_url, path_cached=path_cached, fn_download=fn_download)
     return path_cached
 
 
@@ -211,9 +215,7 @@ def _require_reference_date(dt_reference: date) -> None:
 
 
 @type_checker
-def _download_and_publish(
-    str_url: str, path_cached: Path, fn_download: Callable[[str, Path], Path]
-) -> None:
+def _download_and_publish(str_url: str, *, path_cached: Path, fn_download: DownloadFn) -> None:
     """Download to a staging file and publish it atomically under the cache name.
 
     The rename is what makes the entry appear only once it is COMPLETE: ``write_bytes`` is
@@ -226,7 +228,7 @@ def _download_and_publish(
         The source URL.
     path_cached : pathlib.Path
         Final cache path; created by rename once the download completed.
-    fn_download : Callable[[str, pathlib.Path], pathlib.Path]
+    fn_download : DownloadFn
         The download transport.
 
     Returns
@@ -240,7 +242,7 @@ def _download_and_publish(
     """
     path_staging = path_cached.with_name(f"{path_cached.name}.{uuid4().hex}.part")
     try:
-        path_written = fn_download(str_url, path_staging)
+        path_written = fn_download(str_url=str_url, path_dest=path_staging)
         if not path_written.is_file() or path_written.stat().st_size == 0:
             raise OSError(f"daily cache download produced an empty artifact for {str_url!r}")
         os.replace(path_written, path_cached)

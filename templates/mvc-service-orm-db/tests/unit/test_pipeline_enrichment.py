@@ -20,7 +20,7 @@ from pytest_mock import MockerFixture
 from src.controller._pipeline import PipelineOrchestrator
 
 
-def _build_orchestrator(tmp_path: Path, path_labels: Path | None) -> PipelineOrchestrator:
+def _build_orchestrator(tmp_path: Path, *, path_labels: Path | None) -> PipelineOrchestrator:
     """Build a minimal orchestrator for exercising ``_enrich`` in isolation.
 
     Parameters
@@ -56,7 +56,7 @@ def _report() -> pd.DataFrame:
     return pd.DataFrame({"id": [1], "title": ["Hello from MVC native-db service!"]})
 
 
-def _degraded_run(tmp_path: Path, mocker: MockerFixture, path_labels: Path | None) -> tuple:
+def _degraded_run(tmp_path: Path, *, mocker: MockerFixture, path_labels: Path | None) -> tuple:
     """Run ``_enrich`` once and return the result, the input report and the joined log text.
 
     Parameters
@@ -75,13 +75,13 @@ def _degraded_run(tmp_path: Path, mocker: MockerFixture, path_labels: Path | Non
     """
     mock_log = mocker.patch("src.controller._pipeline.log_message")
     df_report = _report()
-    df_result = _build_orchestrator(tmp_path, path_labels)._enrich(df_report)
-    str_log = "\n".join(call.args[1] for call in mock_log.call_args_list)
+    df_result = _build_orchestrator(tmp_path, path_labels=path_labels)._enrich(df_report)
+    str_log = "\n".join(call.kwargs["str_message"] for call in mock_log.call_args_list)
     return df_result, df_report, str_log
 
 
 @pytest.fixture
-def tuple_unconfigured(tmp_path: Path, mocker: MockerFixture) -> tuple:
+def tuple_unconfigured(tmp_path: Path, *, mocker: MockerFixture) -> tuple:
     """Mode 1: no ``path_labels`` configured — no call attempted.
 
     Parameters
@@ -96,11 +96,11 @@ def tuple_unconfigured(tmp_path: Path, mocker: MockerFixture) -> tuple:
     tuple
         ``(df_result, df_report, str_log)``.
     """
-    return _degraded_run(tmp_path, mocker, None)
+    return _degraded_run(tmp_path, mocker=mocker, path_labels=None)
 
 
 @pytest.fixture
-def tuple_absent_file(tmp_path: Path, mocker: MockerFixture) -> tuple:
+def tuple_absent_file(tmp_path: Path, *, mocker: MockerFixture) -> tuple:
     """Mode 2: the configured file does not exist on disk (real read attempt).
 
     Parameters
@@ -115,11 +115,11 @@ def tuple_absent_file(tmp_path: Path, mocker: MockerFixture) -> tuple:
     tuple
         ``(df_result, df_report, str_log)``.
     """
-    return _degraded_run(tmp_path, mocker, tmp_path / "does-not-exist.json")
+    return _degraded_run(tmp_path, mocker=mocker, path_labels=tmp_path / "does-not-exist.json")
 
 
 @pytest.fixture
-def tuple_malformed_file(tmp_path: Path, mocker: MockerFixture) -> tuple:
+def tuple_malformed_file(tmp_path: Path, *, mocker: MockerFixture) -> tuple:
     """Mode 3: the file exists but is not valid JSON (real read attempt).
 
     Parameters
@@ -136,11 +136,11 @@ def tuple_malformed_file(tmp_path: Path, mocker: MockerFixture) -> tuple:
     """
     path_labels = tmp_path / "labels.json"
     path_labels.write_text("{not valid json")
-    return _degraded_run(tmp_path, mocker, path_labels)
+    return _degraded_run(tmp_path, mocker=mocker, path_labels=path_labels)
 
 
 @pytest.fixture
-def tuple_permission_error(tmp_path: Path, mocker: MockerFixture) -> tuple:
+def tuple_permission_error(tmp_path: Path, *, mocker: MockerFixture) -> tuple:
     """Mode 4 (canonical regression, #151): the file exists but cannot be read.
 
     This is the exact shape of the measured incident: an unreadable file must degrade, not
@@ -161,11 +161,11 @@ def tuple_permission_error(tmp_path: Path, mocker: MockerFixture) -> tuple:
     path_labels = tmp_path / "labels.json"
     path_labels.write_text('{"1": "demo"}')
     mocker.patch.object(Path, "open", side_effect=PermissionError("labels.json"))
-    return _degraded_run(tmp_path, mocker, path_labels)
+    return _degraded_run(tmp_path, mocker=mocker, path_labels=path_labels)
 
 
 @pytest.fixture
-def tuple_unforeseen_failure(tmp_path: Path, mocker: MockerFixture) -> tuple:
+def tuple_unforeseen_failure(tmp_path: Path, *, mocker: MockerFixture) -> tuple:
     """Mode 5: an unforeseen error unrelated to the file's existence or shape.
 
     Patched where the call lives — the model — see the enrichment degradation contract in
@@ -189,7 +189,7 @@ def tuple_unforeseen_failure(tmp_path: Path, mocker: MockerFixture) -> tuple:
     )
     path_labels = tmp_path / "labels.json"
     path_labels.write_text('{"1": "demo"}')
-    return _degraded_run(tmp_path, mocker, path_labels)
+    return _degraded_run(tmp_path, mocker=mocker, path_labels=path_labels)
 
 
 @pytest.mark.parametrize(
@@ -203,7 +203,7 @@ def tuple_unforeseen_failure(tmp_path: Path, mocker: MockerFixture) -> tuple:
     ],
 )
 def test_enrich_degrades_to_the_unchanged_report(
-    request: pytest.FixtureRequest, str_fixture: str
+    request: pytest.FixtureRequest, *, str_fixture: str
 ) -> None:
     """Every failure mode reaches the same explicit degraded value: the report, unchanged.
 
@@ -229,7 +229,7 @@ def test_enrich_degrades_to_the_unchanged_report(
     ],
 )
 def test_enrich_degradation_logs_its_cause(
-    request: pytest.FixtureRequest, str_fixture: str, str_cause: str
+    request: pytest.FixtureRequest, *, str_fixture: str, str_cause: str
 ) -> None:
     """Every failure mode names its cause in the log, never silently.
 
@@ -251,11 +251,11 @@ def test_enrich_merges_labels_when_file_is_valid(tmp_path: Path) -> None:
     df_report = _report()
     path_labels = tmp_path / "labels.json"
     path_labels.write_text('{"1": "demo-label"}')
-    df_result = _build_orchestrator(tmp_path, path_labels)._enrich(df_report)
+    df_result = _build_orchestrator(tmp_path, path_labels=path_labels)._enrich(df_report)
     assert df_result.loc[0, "label"] == "demo-label"
 
 
-def test_run_sequences_enrich_before_render(tmp_path: Path, mocker: MockerFixture) -> None:
+def test_run_sequences_enrich_before_render(tmp_path: Path, *, mocker: MockerFixture) -> None:
     """Phase ordering: ``_enrich`` runs before ``_render``, i.e. before persistence.
 
     A failure inside ``_enrich`` must never be able to invalidate an already-persisted

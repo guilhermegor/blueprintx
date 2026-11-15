@@ -19,7 +19,7 @@ from http.client import HTTPMessage, HTTPResponse
 import ipaddress
 from pathlib import Path
 import socket
-from typing import IO, TYPE_CHECKING
+from typing import IO, TYPE_CHECKING, Protocol, runtime_checkable
 from urllib import error, request
 from urllib.parse import urlsplit
 
@@ -41,6 +41,15 @@ else:
         from utils.typing import TypeChecker, type_checker
     except ModuleNotFoundError:
         from chassis.typing import TypeChecker, type_checker
+
+
+@runtime_checkable
+class DownloadFn(Protocol):
+    """The download seam's call shape: a URL and a destination, both by keyword."""
+
+    def __call__(self, *, str_url: str, path_dest: Path) -> Path:
+        """Fetch ``str_url`` into ``path_dest`` and return the written path."""
+        ...
 
 
 _TIMEOUT_SECONDS: int = 30
@@ -102,7 +111,7 @@ _OPENER: request.OpenerDirector = request.build_opener(_NoRedirectHandler)
     tuple_exceptions=(OSError,),
 )
 @type_checker
-def download_file(str_url: str, path_dest: Path, int_timeout_s: int = _TIMEOUT_SECONDS) -> Path:
+def download_file(str_url: str, *, path_dest: Path, int_timeout_s: int = _TIMEOUT_SECONDS) -> Path:
     """Download ``str_url`` to ``path_dest`` and return the written path.
 
     Validates the URL (scheme + non-internal host), fetches it **without following
@@ -134,7 +143,7 @@ def download_file(str_url: str, path_dest: Path, int_timeout_s: int = _TIMEOUT_S
     """
     _assert_url_allowed(str_url)
     path_dest.parent.mkdir(parents=True, exist_ok=True)
-    path_dest.write_bytes(_fetch_bytes(str_url, int_timeout_s))
+    path_dest.write_bytes(_fetch_bytes(str_url, int_timeout_s=int_timeout_s))
     return path_dest
 
 
@@ -170,7 +179,7 @@ def _assert_url_allowed(
 
 @type_checker
 def _fetch_bytes(
-    str_url: str, int_timeout_s: int
+    str_url: str, *, int_timeout_s: int
 ) -> bytes:  # complexity-ok: transport error handling
     """Fetch a validated URL and return its body, mapping transport failures to ``OSError``.
 

@@ -66,6 +66,7 @@ class OracleDatabaseHandler(DatabaseHandler):
 
     def __init__(
         self,
+        *,
         dsn: str,
         user: str | None = None,
         password: str | None = None,
@@ -80,8 +81,8 @@ class OracleDatabaseHandler(DatabaseHandler):
         self.dsn = dsn
         self.user = user or os.getenv("DB_USER")
         self.password = password or os.getenv("DB_PASSWORD")
-        validate_sql_identifier(table, "table")
-        validate_sql_identifier(id_field, "id_field")
+        validate_sql_identifier(table, label="table")
+        validate_sql_identifier(id_field, label="id_field")
         self.table = table
         self.id_field = id_field
         self._ensure_table()
@@ -99,7 +100,7 @@ class OracleDatabaseHandler(DatabaseHandler):
         str
             Identifier assigned to the stored record.
         """
-        record = ensure_id(record, self.id_field)
+        record = ensure_id(record, id_field=self.id_field)
         payload = json.dumps(record)
         with self._connect() as conn:
             cur = conn.cursor()
@@ -136,7 +137,7 @@ class OracleDatabaseHandler(DatabaseHandler):
             return None
         return json.loads(_read_lob(row[0]))
 
-    def update(self, record_id: str, updates: Record) -> Record | None:
+    def update(self, *, record_id: str, updates: Record) -> Record | None:
         """Merge updates into an existing record atomically.
 
         The read and the write share one transaction and the row is held by

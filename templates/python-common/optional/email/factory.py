@@ -66,7 +66,9 @@ def build_email_handler(
         return NullEmailHandler()
     if str_resolved == "outlook":
         return OutlookEmailHandler(
-            OutlookGateway(str_from, path_signatures_dir=path_signatures_dir, logger=logger)
+            OutlookGateway(
+                str_sender=str_from, path_signatures_dir=path_signatures_dir, logger=logger
+            )
         )
     if str_resolved == "smtp":
         return SmtpEmailHandler(

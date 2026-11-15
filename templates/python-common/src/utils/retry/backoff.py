@@ -49,6 +49,7 @@ _R = TypeVar("_R")
 @type_checker
 def call_with_backoff(  # complexity-ok: the retry loop IS the work of this seam
     fn: Callable[[], _R],
+    *,
     cls_policy: RetryPolicy | None = None,
     cls_logger: LogEmitter | None = None,
     str_label: str | None = None,
@@ -99,15 +100,16 @@ def call_with_backoff(  # complexity-ok: the retry loop IS the work of this seam
                 raise
             float_wait = _compute_backoff_wait(
                 cls_pol.str_strategy,
-                cls_pol.float_base_wait_s,
-                cls_pol.float_factor,
-                int_attempt,
-                cls_pol.float_max_wait_s,
+                float_base_wait_s=cls_pol.float_base_wait_s,
+                float_factor=cls_pol.float_factor,
+                int_attempt=int_attempt,
+                float_max_wait_s=cls_pol.float_max_wait_s,
             )
             cls_emitter.log_message(
-                f"{str_name} failed (attempt {int_attempt}/{cls_pol.int_max_attempts}): "
-                f"{cls_err}. Retrying in {float_wait:.1f}s.",
-                "warning",
+                str_message=f"{str_name} failed "
+                f"(attempt {int_attempt}/{cls_pol.int_max_attempts}): {cls_err}. "
+                f"Retrying in {float_wait:.1f}s.",
+                str_level="warning",
             )
             time.sleep(float_wait)
 
@@ -115,6 +117,7 @@ def call_with_backoff(  # complexity-ok: the retry loop IS the work of this seam
 @type_checker
 def retry_with_backoff(  # complexity-ok: decorator factory, see the note above
     int_max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
+    *,
     float_base_wait_s: float = _DEFAULT_BASE_WAIT_S,
     float_factor: float = _DEFAULT_FACTOR,
     str_strategy: str = _DEFAULT_STRATEGY,
@@ -205,7 +208,10 @@ def retry_with_backoff(  # complexity-ok: decorator factory, see the note above
                 The wrapped callable's return value on the first successful attempt.
             """
             return call_with_backoff(
-                lambda: fn(*args, **kwargs), cls_policy, cls_logger, str_fn_name
+                lambda: fn(*args, **kwargs),
+                cls_policy=cls_policy,
+                cls_logger=cls_logger,
+                str_label=str_fn_name,
             )
 
         return wrapper
