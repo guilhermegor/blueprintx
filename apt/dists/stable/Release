@@ -1,23 +1,23 @@
 Architectures: all
 Codename: stable
 Components: main
-Date: Sun, 15 Nov 2026 20:18:28 +0000
+Date: Sun, 15 Nov 2026 21:06:12 +0000
 Label: blueprintx
 Origin: blueprintx
 Suite: stable
 MD5Sum:
- d8d2868d8bf2ea07f2663396b9b41faa              142 Release
- fc1c77700c9dcb389d1e4e503c8e1482              667 main/binary-all/Packages
- 026015e490b91310d368fe8186fd8926              479 main/binary-all/Packages.gz
+ 505dbb70f13f33f7b2e14196f1b63e1f              142 Release
+ dfdcbb0c16cba859448c2a241b790cff              667 main/binary-all/Packages
+ 89d112351e02cfca4d5864c22884ecd5              476 main/binary-all/Packages.gz
 SHA1:
- 2498d97af2e32a1f358bd20f8e995570061c9023              142 Release
- 2363925fb8f4547a9ba9dc19e9cb6e3395d5e9b9              667 main/binary-all/Packages
- 74aa3598bdc688fb1f99bacf757239dc7a4b31bb              479 main/binary-all/Packages.gz
+ d24095f04fa3dcfacc1d3601d8d6718397b3cf98              142 Release
+ c2d389788e300501ff8bd5481dda474f99e386bb              667 main/binary-all/Packages
+ 330eb45d197955e9d884263ec34c626d379d7b15              476 main/binary-all/Packages.gz
 SHA256:
- b525364c0873ac3700ea7b9b09fc97801a78132ecc7601e067a91867b4d1d83c              142 Release
- 63dfc610acc32c1be26b3ec8309de0f56efac2ada7b0f593ae9d33d24d04a58d              667 main/binary-all/Packages
- e2e2a529c43095a5003d642b8a7225466826c30b241ac8b3b07c7d3ce7200b8c              479 main/binary-all/Packages.gz
+ 811dbd13565248ab342a51bd1f2f62ecb46d524db349d640cbd07fb0fd8bda56              142 Release
+ e61a86a4ddba3d81ccf22fc06360d42f5e599cff79a41ad7a6a03e5fa96cf5e0              667 main/binary-all/Packages
+ 8a7664040f3bda9eb1441cf37a8c0da47736ec641bd71892982d16a18477b10f              476 main/binary-all/Packages.gz
 SHA512:
- b065dbaa0a5dc95904977562bdf890559047b50b65543197d1d86750c62b3ce6ad40db48e39e3189b353119e1c24fc3439d30f33acdc79d4844a46454db96ce7              142 Release
- 34737ccc0a0a157a2a92f85d0aaedafe7f542d9dbe948fb60b318cb29b52a77e1e9303a0cb60007d115514c507b465be47990434a08b4cd055227d71cbc77d4b              667 main/binary-all/Packages
- 8a86ad0d029aed95091d4c8ad449d2cec7199f0760946115b201f9e83304faa46e3ee59dcff4163a20a6254616fd8de0ed06d921ae21c6147d4fa1b3723e5c28              479 main/binary-all/Packages.gz
+ 7bfd04497721d9b6342f545e9a95078acc9c3ae1ae78be90e7844a11c8ebc69bb8acff622d3465035292a0036df315075ec0d5a276bb3537f69edd18b38c4c77              142 Release
+ ff8b1b3ab25aa39235a5d3550499254a350eb8317fdefad3791590fbd7860de66de2f9ba3adeb78513b6abe87521d15f8093d0b8eb116db8de8494ef9559989d              667 main/binary-all/Packages
+ 47d792f0fa19346e1dff8f40539b882384f2d92f86fc3588c9a543b8d915ac8492131505d8649f8e878512201d4476535f7d93b958da3d512c6c6eb7b4a3ca58              476 main/binary-all/Packages.gz
