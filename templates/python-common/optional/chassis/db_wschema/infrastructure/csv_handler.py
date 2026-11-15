@@ -23,7 +23,7 @@ class CSVDatabaseHandler(DatabaseHandler):
         Identifier column name, by default ``"id"``.
     """
 
-    def __init__(self, file_path: str | Path, id_field: str = "id") -> None:
+    def __init__(self, *, file_path: str | Path, id_field: str = "id") -> None:
         self.file_path = Path(file_path)
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         self.id_field = id_field
@@ -43,7 +43,7 @@ class CSVDatabaseHandler(DatabaseHandler):
         str
             Identifier assigned to the stored record.
         """
-        record = ensure_id(record, self.id_field)
+        record = ensure_id(record, id_field=self.id_field)
         list_rows = self._read_all()
         list_rows.append(record)
         self._write_all(list_rows)
@@ -62,9 +62,9 @@ class CSVDatabaseHandler(DatabaseHandler):
         Record or None
             Matching record when found, otherwise ``None``.
         """
-        return find_row(self._read_all(), self.id_field, record_id)
+        return find_row(self._read_all(), str_id_field=self.id_field, record_id=record_id)
 
-    def update(self, record_id: str, updates: Record) -> Record | None:
+    def update(self, *, record_id: str, updates: Record) -> Record | None:
         """Update a stored record.
 
         Parameters
@@ -79,7 +79,9 @@ class CSVDatabaseHandler(DatabaseHandler):
         Record or None
             Updated record when it exists, otherwise ``None``.
         """
-        list_rows, dict_updated = apply_update(self._read_all(), self.id_field, record_id, updates)
+        list_rows, dict_updated = apply_update(
+            self._read_all(), str_id_field=self.id_field, record_id=record_id, dict_updates=updates
+        )
         if dict_updated is not None:
             self._write_all(list_rows)
         return dict_updated

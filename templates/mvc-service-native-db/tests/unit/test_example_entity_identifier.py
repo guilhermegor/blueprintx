@@ -17,7 +17,7 @@ def test_a_plain_table_name_builds_a_working_entity(str_table: str) -> None:
         Identifier that must be accepted.
     """
     cls_connection = sqlite3.connect(":memory:")
-    ExampleEntity(cls_connection, str_table).ensure_table()
+    ExampleEntity(cls_connection=cls_connection, str_table=str_table).ensure_table()
     tuple_row = cls_connection.execute(
         "SELECT name FROM sqlite_master WHERE name = ?", (str_table,)
     ).fetchone()
@@ -36,4 +36,4 @@ def test_an_unsafe_table_name_is_rejected_before_any_sql(str_table: str) -> None
         Identifier that must be rejected.
     """
     with pytest.raises(ValueError, match="str_table must match"):
-        ExampleEntity(sqlite3.connect(":memory:"), str_table)
+        ExampleEntity(cls_connection=sqlite3.connect(":memory:"), str_table=str_table)

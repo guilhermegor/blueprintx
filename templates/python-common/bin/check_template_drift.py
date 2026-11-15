@@ -123,7 +123,7 @@ def review_bot_roster_enabled(path_root: pathlib.Path) -> bool | None:
     return None
 
 
-def _template_roots(path_blueprintx_root: pathlib.Path, str_tier: str) -> list[pathlib.Path]:
+def _template_roots(path_blueprintx_root: pathlib.Path, *, str_tier: str) -> list[pathlib.Path]:
     """Return the template directories whose copies the drift check polices.
 
     Parameters
@@ -150,7 +150,7 @@ def _template_roots(path_blueprintx_root: pathlib.Path, str_tier: str) -> list[p
 
 
 def _dry_run_lines(
-    path_blueprintx_root: pathlib.Path, str_tier: str, bool_roster: bool
+    path_blueprintx_root: pathlib.Path, *, str_tier: str, bool_roster: bool
 ) -> list[str] | None:
     """Run the tier's scaffold entry in ``--list-copies`` mode and return its stdout lines.
 
@@ -220,6 +220,7 @@ def _parse_dry_run(list_lines: list[str]) -> tuple[list[tuple[str, str, str]], s
 
 def _copy_destinations(
     path_blueprintx_root: pathlib.Path,
+    *,
     tuple_copy: tuple[str, str, str],
     dict_tracked: dict[pathlib.Path, set[str]],
 ) -> dict[str, str]:
@@ -252,7 +253,7 @@ def _copy_destinations(
         if str_kind == "dir":
             return {
                 posixpath.join(str_dst, str_rel): posixpath.join(str_src, str_rel)
-                for str_rel in _template_files(path_blueprintx_root, path_src)
+                for str_rel in _template_files(path_blueprintx_root, path_dir=path_src)
             }
         bool_draft = (
             path_src.exists() and path_src.relative_to(path_root).as_posix() not in set_tracked
@@ -262,7 +263,7 @@ def _copy_destinations(
 
 
 def required_relpaths(
-    path_blueprintx_root: pathlib.Path, str_tier: str, bool_roster: bool = False
+    path_blueprintx_root: pathlib.Path, *, str_tier: str, bool_roster: bool = False
 ) -> set[str]:
     """Derive every template-sourced path a scaffold of ``str_tier`` copies.
 
@@ -280,11 +281,11 @@ def required_relpaths(
     set of str
             The keys of :func:`required_sources`.
     """
-    return set(required_sources(path_blueprintx_root, str_tier, bool_roster))
+    return set(required_sources(path_blueprintx_root, str_tier=str_tier, bool_roster=bool_roster))
 
 
 def required_sources(
-    path_blueprintx_root: pathlib.Path, str_tier: str, bool_roster: bool = False
+    path_blueprintx_root: pathlib.Path, *, str_tier: str, bool_roster: bool = False
 ) -> dict[str, str]:
     """Derive every template-sourced path a scaffold of ``str_tier`` copies, with its source.
 
@@ -310,22 +311,24 @@ def required_sources(
             the dry run could not be made — the caller treats that as SKIPPED, never as
             "nothing is required".
     """
-    list_lines = _dry_run_lines(path_blueprintx_root, str_tier, bool_roster)
+    list_lines = _dry_run_lines(path_blueprintx_root, str_tier=str_tier, bool_roster=bool_roster)
     if list_lines is None:
         return {}
     list_copies, set_removed = _parse_dry_run(list_lines)
     dict_tracked = {
-        path_root: set(_template_files(path_blueprintx_root, path_root))
-        for path_root in _template_roots(path_blueprintx_root, str_tier)
+        path_root: set(_template_files(path_blueprintx_root, path_dir=path_root))
+        for path_root in _template_roots(path_blueprintx_root, str_tier=str_tier)
         if path_root.is_dir()
     }
     dict_sources: dict[str, str] = {}
     for tuple_copy in list_copies:
-        dict_sources |= _copy_destinations(path_blueprintx_root, tuple_copy, dict_tracked)
+        dict_sources |= _copy_destinations(
+            path_blueprintx_root, tuple_copy=tuple_copy, dict_tracked=dict_tracked
+        )
     return {
         str_rel: str_src
         for str_rel, str_src in dict_sources.items()
-        if not _is_removed(str_rel, set_removed)
+        if not _is_removed(str_rel, set_removed=set_removed)
     }
 
 
@@ -347,7 +350,7 @@ def is_offline_project(path_root: pathlib.Path) -> bool:
     return bool_tooling and not (path_root / ".github").exists()
 
 
-def _is_removed(str_rel: str, set_removed: set[str]) -> bool:
+def _is_removed(str_rel: str, *, set_removed: set[str]) -> bool:
     """Return whether the scaffold ``rm``s this destination, or a directory above it.
 
     Parameters
@@ -369,7 +372,7 @@ def _is_removed(str_rel: str, set_removed: set[str]) -> bool:
     )
 
 
-def _template_files(path_blueprintx_root: pathlib.Path, path_dir: pathlib.Path) -> list[str]:
+def _template_files(path_blueprintx_root: pathlib.Path, *, path_dir: pathlib.Path) -> list[str]:
     """List the template files under ``path_dir``, relative to it.
 
     Tracked files only when the checkout is a git repo: an untracked artifact (a log, an
@@ -410,7 +413,7 @@ def _template_files(path_blueprintx_root: pathlib.Path, path_dir: pathlib.Path) 
     ]
 
 
-def missing_relpaths(path_root: pathlib.Path, set_required: set[str]) -> list[str]:
+def missing_relpaths(path_root: pathlib.Path, *, set_required: set[str]) -> list[str]:
     """Return the required paths that do not exist under the project root, sorted.
 
     Parameters
@@ -428,7 +431,7 @@ def missing_relpaths(path_root: pathlib.Path, set_required: set[str]) -> list[st
     return sorted(str_rel for str_rel in set_required if not (path_root / str_rel).exists())
 
 
-def _read_stamp_field(path_root: pathlib.Path, str_key: str) -> str | None:
+def _read_stamp_field(path_root: pathlib.Path, *, str_key: str) -> str | None:
     """Return one provenance value, or ``None`` when absent, empty or ``unknown``.
 
     Parameters
@@ -468,7 +471,7 @@ def read_commit(path_root: pathlib.Path) -> str | None:
     str or None
             The stamped commit, or ``None`` when absent, silent on it, or ``unknown``.
     """
-    return _read_stamp_field(path_root, "blueprintx_commit")
+    return _read_stamp_field(path_root, str_key="blueprintx_commit")
 
 
 def read_scaffold_commit(path_root: pathlib.Path) -> str | None:
@@ -485,10 +488,12 @@ def read_scaffold_commit(path_root: pathlib.Path) -> str | None:
             The ``scaffold_commit:`` value; a stamp written before that field existed falls
             back to ``blueprintx_commit:``, and ``None`` when neither is usable.
     """
-    return _read_stamp_field(path_root, "scaffold_commit") or read_commit(path_root)
+    return _read_stamp_field(path_root, str_key="scaffold_commit") or read_commit(path_root)
 
 
-def base_blob(path_blueprintx_root: pathlib.Path, str_commit: str, str_src: str) -> bytes | None:
+def base_blob(
+    path_blueprintx_root: pathlib.Path, *, str_commit: str, str_src: str
+) -> bytes | None:
     """Return a template file as it was at the stamped commit, or ``None``.
 
     Parameters
@@ -521,7 +526,7 @@ def base_blob(path_blueprintx_root: pathlib.Path, str_commit: str, str_src: str)
     return cls_git.stdout if cls_git.returncode == 0 else None
 
 
-def commit_known(path_blueprintx_root: pathlib.Path, str_commit: str) -> bool:
+def commit_known(path_blueprintx_root: pathlib.Path, *, str_commit: str) -> bool:
     """Return whether ``str_commit`` resolves to a commit in the checkout.
 
     Parameters
@@ -552,7 +557,7 @@ def commit_known(path_blueprintx_root: pathlib.Path, str_commit: str) -> bool:
 
 
 def _content_state(
-    path_project_file: pathlib.Path, path_theirs: pathlib.Path, bytes_base: bytes | None
+    path_project_file: pathlib.Path, *, path_theirs: pathlib.Path, bytes_base: bytes | None
 ) -> str:
     """Classify one present file against its base and the current template.
 
@@ -579,6 +584,7 @@ def _content_state(
 
 def content_drift(
     path_root: pathlib.Path,
+    *,
     path_blueprintx_root: pathlib.Path,
     str_commit: str,
     dict_sources: dict[str, str],
@@ -606,15 +612,17 @@ def content_drift(
         path_theirs = path_blueprintx_root / str_src
         if not (path_root / str_rel).is_file() or not path_theirs.is_file():
             continue
-        bytes_base = base_blob(path_blueprintx_root, str_commit, str_src)
-        str_state = _content_state(path_root / str_rel, path_theirs, bytes_base)
+        bytes_base = base_blob(path_blueprintx_root, str_commit=str_commit, str_src=str_src)
+        str_state = _content_state(
+            path_root / str_rel, path_theirs=path_theirs, bytes_base=bytes_base
+        )
         if str_state != "same":
             dict_drift[str_state].append(str_rel)
     return dict_drift
 
 
 def _report_content(
-    path_root: pathlib.Path, path_blueprintx_root: pathlib.Path, dict_sources: dict[str, str]
+    path_root: pathlib.Path, *, path_blueprintx_root: pathlib.Path, dict_sources: dict[str, str]
 ) -> bool | None:
     """Print the content-drift section, or say loudly why it could not be computed.
 
@@ -633,14 +641,19 @@ def _report_content(
             ``True`` when content drifted, ``False`` when clean, ``None`` when not checked.
     """
     str_commit = read_commit(path_root)
-    if str_commit is None or not commit_known(path_blueprintx_root, str_commit):
+    if str_commit is None or not commit_known(path_blueprintx_root, str_commit=str_commit):
         print(
             f"SKIPPED content drift: the stamped blueprintx_commit ({str_commit}) is missing "
             f"or not in {path_blueprintx_root}, so there is no merge base. This run proves "
             f"nothing about content drift."
         )
         return None
-    dict_drift = content_drift(path_root, path_blueprintx_root, str_commit, dict_sources)
+    dict_drift = content_drift(
+        path_root,
+        path_blueprintx_root=path_blueprintx_root,
+        str_commit=str_commit,
+        dict_sources=dict_sources,
+    )
     if not any(dict_drift.values()):
         return False
     for str_label, str_key in _CONTENT_LABELS.items():
@@ -654,7 +667,7 @@ def _report_content(
     return True
 
 
-def _unpack_archive(bytes_tar: bytes, path_dest: pathlib.Path) -> None:
+def _unpack_archive(bytes_tar: bytes, *, path_dest: pathlib.Path) -> None:
     """Write the regular files of a ``git archive`` tarball under ``path_dest``.
 
     Symlinks and any member whose path would land outside ``path_dest`` are skipped.
@@ -681,7 +694,7 @@ def _unpack_archive(bytes_tar: bytes, path_dest: pathlib.Path) -> None:
 
 
 def stamped_sources(
-    path_blueprintx_root: pathlib.Path, str_commit: str, str_tier: str, bool_roster: bool
+    path_blueprintx_root: pathlib.Path, *, str_commit: str, str_tier: str, bool_roster: bool
 ) -> dict[str, str]:
     """Derive the copy list the tier's scaffold made at the stamped commit.
 
@@ -718,11 +731,11 @@ def stamped_sources(
     if cls_git.returncode != 0:
         return {}
     with tempfile.TemporaryDirectory() as str_dir:
-        _unpack_archive(cls_git.stdout, pathlib.Path(str_dir))
-        return required_sources(pathlib.Path(str_dir), str_tier, bool_roster)
+        _unpack_archive(cls_git.stdout, path_dest=pathlib.Path(str_dir))
+        return required_sources(pathlib.Path(str_dir), str_tier=str_tier, bool_roster=bool_roster)
 
 
-def renamed_sources(path_blueprintx_root: pathlib.Path, str_commit: str) -> dict[str, str]:
+def renamed_sources(path_blueprintx_root: pathlib.Path, *, str_commit: str) -> dict[str, str]:
     """Map each template path git renamed between the stamped commit and the checkout.
 
     Parameters
@@ -757,7 +770,7 @@ def renamed_sources(path_blueprintx_root: pathlib.Path, str_commit: str) -> dict
 
 
 def _successors(
-    str_rel: str, str_src: str, dict_renamed: dict[str, str], dict_now: dict[str, str]
+    str_rel: str, *, str_src: str, dict_renamed: dict[str, str], dict_now: dict[str, str]
 ) -> list[str]:
     """Name what replaced one removed path, from a git rename or the rule table.
 
@@ -787,6 +800,7 @@ def _successors(
 
 def removed_files(
     path_root: pathlib.Path,
+    *,
     path_blueprintx_root: pathlib.Path,
     str_commit: str,
     str_tier: str,
@@ -814,13 +828,18 @@ def removed_files(
             sorted; ``None`` when the stamped commit has no copy list to compare against.
     """
     dict_then = stamped_sources(
-        path_blueprintx_root, str_commit, str_tier, bool(review_bot_roster_enabled(path_root))
+        path_blueprintx_root,
+        str_commit=str_commit,
+        str_tier=str_tier,
+        bool_roster=bool(review_bot_roster_enabled(path_root)),
     )
     if not dict_then:
         return None
-    dict_renamed = renamed_sources(path_blueprintx_root, str_commit)
+    dict_renamed = renamed_sources(path_blueprintx_root, str_commit=str_commit)
     return {
-        str_rel: _successors(str_rel, str_src, dict_renamed, dict_now)
+        str_rel: _successors(
+            str_rel, str_src=str_src, dict_renamed=dict_renamed, dict_now=dict_now
+        )
         for str_rel, str_src in sorted(dict_then.items())
         if str_rel not in dict_now and (path_root / str_rel).is_file()
     }
@@ -828,6 +847,7 @@ def removed_files(
 
 def removed_section(
     path_root: pathlib.Path,
+    *,
     path_blueprintx_root: pathlib.Path,
     str_commit: str,
     str_tier: str,
@@ -853,7 +873,13 @@ def removed_section(
     tuple of (list of str, bool or None)
             The lines to print and whether any file was found (``None`` when not checked).
     """
-    dict_removed = removed_files(path_root, path_blueprintx_root, str_commit, str_tier, dict_now)
+    dict_removed = removed_files(
+        path_root,
+        path_blueprintx_root=path_blueprintx_root,
+        str_commit=str_commit,
+        str_tier=str_tier,
+        dict_now=dict_now,
+    )
     if dict_removed is None:
         return [
             f"SKIPPED removed-file check: the scaffold at the stamped blueprintx_commit "
@@ -876,6 +902,7 @@ def removed_section(
 
 def _report_removed(
     path_root: pathlib.Path,
+    *,
     path_blueprintx_root: pathlib.Path,
     str_tier: str,
     dict_now: dict[str, str],
@@ -902,14 +929,18 @@ def _report_removed(
     str_commit = read_scaffold_commit(path_root)
     if str_commit is None:
         return None
-    if not commit_known(path_blueprintx_root, str_commit):
+    if not commit_known(path_blueprintx_root, str_commit=str_commit):
         print(
             f"SKIPPED removed-file check: the scaffold_commit ({str_commit}) is not in "
             f"{path_blueprintx_root}. This run proves nothing about files the template removed."
         )
         return None
     list_lines, bool_found = removed_section(
-        path_root, path_blueprintx_root, str_commit, str_tier, dict_now
+        path_root,
+        path_blueprintx_root=path_blueprintx_root,
+        str_commit=str_commit,
+        str_tier=str_tier,
+        dict_now=dict_now,
     )
     list(map(print, list_lines))
     return bool_found
@@ -942,7 +973,7 @@ def _parse_args(list_argv: list) -> tuple[pathlib.Path, pathlib.Path | None]:
     return path_root, path_blueprintx
 
 
-def _report_missing(str_tier: str, list_missing: list, int_total: int) -> None:
+def _report_missing(str_tier: str, *, list_missing: list, int_total: int) -> None:
     """Print the drift report body for a non-empty ``list_missing``.
 
     Parameters
@@ -972,7 +1003,7 @@ def _report_missing(str_tier: str, list_missing: list, int_total: int) -> None:
 
 
 def managed_sources(
-    path_root: pathlib.Path, path_blueprintx: pathlib.Path | None
+    path_root: pathlib.Path, *, path_blueprintx: pathlib.Path | None
 ) -> tuple[str, dict[str, str], str | None]:
     """Resolve the project's tier and the template-managed paths, or say why it cannot.
 
@@ -1012,7 +1043,7 @@ def managed_sources(
             ),
         )
     dict_sources = required_sources(
-        path_blueprintx, str_tier, bool(review_bot_roster_enabled(path_root))
+        path_blueprintx, str_tier=str_tier, bool_roster=bool(review_bot_roster_enabled(path_root))
     )
     if is_offline_project(path_root):
         dict_sources = {k: v for k, v in dict_sources.items() if not k.startswith(".github/")}
@@ -1044,16 +1075,20 @@ def main(list_argv: list) -> int:
             Always 0 — see the module docstring for why this never gates.
     """
     path_root, path_blueprintx = _parse_args(list_argv)
-    str_tier, dict_sources, str_skip = managed_sources(path_root, path_blueprintx)
+    str_tier, dict_sources, str_skip = managed_sources(path_root, path_blueprintx=path_blueprintx)
     if str_skip is not None:
         print(str_skip)
         return 0
 
-    list_missing = missing_relpaths(path_root, set(dict_sources))
+    list_missing = missing_relpaths(path_root, set_required=set(dict_sources))
     if list_missing:
-        _report_missing(str_tier, list_missing, len(dict_sources))
-    bool_content_drift = _report_content(path_root, path_blueprintx, dict_sources)
-    bool_removed = _report_removed(path_root, path_blueprintx, str_tier, dict_sources)
+        _report_missing(str_tier, list_missing=list_missing, int_total=len(dict_sources))
+    bool_content_drift = _report_content(
+        path_root, path_blueprintx_root=path_blueprintx, dict_sources=dict_sources
+    )
+    bool_removed = _report_removed(
+        path_root, path_blueprintx_root=path_blueprintx, str_tier=str_tier, dict_now=dict_sources
+    )
     if not (list_missing or bool_content_drift or bool_removed):
         bool_all_checked = bool_content_drift is False and bool_removed is False
         str_note = "" if bool_all_checked else " (not every check ran)"

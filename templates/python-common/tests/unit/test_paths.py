@@ -78,7 +78,7 @@ def test_ensure_dir_returns_the_directory_it_created(tmp_path: Path) -> None:
     ("str_token", "str_value"),
     [("date", "2026-04-30"), ("ym", "202604"), ("month_pt", "abril")],
 )
-def test_date_tokens_builds_substitution_map(str_token: str, str_value: str) -> None:
+def test_date_tokens_builds_substitution_map(str_token: str, *, str_value: str) -> None:
     """``date_tokens`` exposes the documented tokens for a reference date.
 
     Parameters
@@ -107,7 +107,7 @@ def path_copied(tmp_path: Path) -> Path:
     """
     path_src = tmp_path / "report.csv"
     path_src.write_text("a;b\n", encoding="utf-8")
-    return copy_into(path_src, tmp_path / "archive", "20260430_120000")
+    return copy_into(path_src, path_dir=tmp_path / "archive", str_stamp="20260430_120000")
 
 
 def test_copy_into_stamps_the_destination_name(path_copied: Path) -> None:
@@ -157,7 +157,7 @@ def path_resolved_input(tmp_path: Path) -> Path | None:
     path_new.write_text("", encoding="utf-8")
     os.utime(path_new, (time.time() + 10, time.time() + 10))
     dict_spec = {"dir": str(tmp_path), "filename_pattern": "data_*.xlsx"}
-    return resolve_input(dict_spec, date(2026, 4, 30))
+    return resolve_input(dict_spec, dt_ref=date(2026, 4, 30))
 
 
 def test_resolve_input_finds_a_match_at_all(path_resolved_input: Path | None) -> None:
@@ -196,11 +196,11 @@ def test_resolve_input_returns_an_absolute_path(path_resolved_input: Path) -> No
 def test_resolve_input_missing_returns_none(tmp_path: Path) -> None:
     """A spec that matches nothing resolves to ``None``."""
     spec = {"dir": str(tmp_path), "filename_pattern": "absent_*.xlsx"}
-    assert resolve_input(spec, date(2026, 4, 30)) is None
+    assert resolve_input(spec, dt_ref=date(2026, 4, 30)) is None
 
 
 def test_to_absolute_relative_path_anchors_to_our_cwd(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A CWD-relative path is anchored here, so a foreign process cannot re-anchor it.
 
@@ -232,7 +232,7 @@ def test_to_absolute_absolute_path_is_returned_unchanged(tmp_path: Path) -> None
     ids=["rooted-but-driveless", "drive-qualified"],
 )
 def test_the_windows_premise_is_that_driveless_is_not_absolute(
-    str_path: str, bool_absolute: bool
+    str_path: str, *, bool_absolute: bool
 ) -> None:
     """The platform premise, on the pure flavour — the reason the branch exists at all.
 
@@ -247,7 +247,7 @@ def test_the_windows_premise_is_that_driveless_is_not_absolute(
 
 
 @pytest.fixture
-def path_driveless_anchored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def path_driveless_anchored(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Call ``to_absolute`` once under a simulated "not absolute" platform verdict.
 
     Parameters
@@ -283,7 +283,7 @@ def test_to_absolute_anchors_a_path_the_platform_calls_driveless(
 
 
 def test_the_anchored_path_lands_under_our_own_cwd(
-    path_driveless_anchored: Path, tmp_path: Path
+    path_driveless_anchored: Path, *, tmp_path: Path
 ) -> None:
     """Absolute is not enough — it has to be absolute against OUR working directory.
 

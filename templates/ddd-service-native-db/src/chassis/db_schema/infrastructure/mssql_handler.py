@@ -37,15 +37,15 @@ class MSSQLDatabaseHandler(DatabaseHandler):
     """
 
     def __init__(
-        self, connection_string: str, table: str = "records", id_field: str = "id"
+        self, *, connection_string: str, table: str = "records", id_field: str = "id"
     ) -> None:
         if pyodbc is None:
             raise ImportError(
                 "pyodbc is required for MSSQLDatabaseHandler; install it to use this backend."
             )
         self.connection_string = connection_string
-        validate_sql_identifier(table, "table")
-        validate_sql_identifier(id_field, "id_field")
+        validate_sql_identifier(table, label="table")
+        validate_sql_identifier(id_field, label="id_field")
         self.table = table
         self.id_field = id_field
         self._ensure_table()
@@ -63,7 +63,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
         str
             Identifier assigned to the stored record.
         """
-        record = ensure_id(record, self.id_field)
+        record = ensure_id(record, id_field=self.id_field)
         payload = json.dumps(record)
         with closing(self._connect()) as conn, conn:
             cur = conn.cursor()
@@ -99,7 +99,7 @@ class MSSQLDatabaseHandler(DatabaseHandler):
             return None
         return decode_record(row[0])
 
-    def update(self, record_id: str, updates: Record) -> Record | None:
+    def update(self, *, record_id: str, updates: Record) -> Record | None:
         """Merge updates into an existing record atomically.
 
         The read and the write share one transaction and the row is held by

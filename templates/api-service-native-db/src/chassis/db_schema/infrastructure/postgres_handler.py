@@ -44,14 +44,14 @@ class PostgresDatabaseHandler(DatabaseHandler):
         If ``psycopg`` is not installed when instantiating the handler.
     """
 
-    def __init__(self, dsn: str, table: str = "records", id_field: str = "id") -> None:
+    def __init__(self, *, dsn: str, table: str = "records", id_field: str = "id") -> None:
         if psycopg is None:
             raise ImportError(
                 "psycopg is required for PostgresDatabaseHandler; install psycopg[binary]."
             )
         self.dsn = dsn
-        validate_sql_identifier(table, "table")
-        validate_sql_identifier(id_field, "id_field")
+        validate_sql_identifier(table, label="table")
+        validate_sql_identifier(id_field, label="id_field")
         self.table = table
         self.id_field = id_field
         dict_parsed = self._parse_dsn(dsn)
@@ -60,7 +60,7 @@ class PostgresDatabaseHandler(DatabaseHandler):
         self.user = dict_parsed.get("user") or os.getenv("DB_USER") or "user"
         self.password = dict_parsed.get("password") or os.getenv("DB_PASSWORD") or "password"
         self.dbname = dict_parsed.get("database") or os.getenv("DB_NAME") or "app"
-        validate_not_flag(self.dbname, "database name")
+        validate_not_flag(self.dbname, label="database name")
         self._ensure_table()
 
     def create(self, record: Record) -> str:
@@ -76,7 +76,7 @@ class PostgresDatabaseHandler(DatabaseHandler):
         str
             Identifier assigned to the stored record.
         """
-        record = ensure_id(record, self.id_field)
+        record = ensure_id(record, id_field=self.id_field)
         json_payload = json.dumps(record)
         with self._connect() as cls_conn, cls_conn.cursor() as cls_cur:
             cls_cur.execute(
@@ -109,7 +109,7 @@ class PostgresDatabaseHandler(DatabaseHandler):
             return None
         return decode_record(tuple_row[0])
 
-    def update(self, record_id: str, updates: Record) -> Record | None:
+    def update(self, *, record_id: str, updates: Record) -> Record | None:
         """Update an existing record atomically.
 
         The read and the write share one transaction and the row is held by

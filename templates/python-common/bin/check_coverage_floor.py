@@ -140,7 +140,7 @@ def logic_bearing_modules(path_capability: pathlib.Path) -> list[pathlib.Path]:
 
 
 def must_stay_covered(
-    path_capabilities: pathlib.Path, set_excluded: set[str]
+    path_capabilities: pathlib.Path, *, set_excluded: set[str]
 ) -> list[pathlib.Path]:
     """Return every logic-bearing module the omit list has no standing excuse to swallow.
 
@@ -170,7 +170,7 @@ def must_stay_covered(
 
 
 def swallowed_by_omit(
-    list_must_stay_covered: list[pathlib.Path], list_patterns: list[str]
+    list_must_stay_covered: list[pathlib.Path], *, list_patterns: list[str]
 ) -> list[str]:
     """Return one message per module the omit list excludes despite defining real behavior.
 
@@ -250,7 +250,7 @@ def main() -> int:
         return 0
 
     set_excluded = whole_capability_exclusions(list_patterns)
-    list_must_stay_covered = must_stay_covered(_CAPABILITIES, set_excluded)
+    list_must_stay_covered = must_stay_covered(_CAPABILITIES, set_excluded=set_excluded)
     if not list_must_stay_covered:
         print(
             "check_coverage_floor: 0 non-excluded capabilities carry domain/application "
@@ -260,7 +260,7 @@ def main() -> int:
         )
         return 0
 
-    list_problems = swallowed_by_omit(list_must_stay_covered, list_patterns)
+    list_problems = swallowed_by_omit(list_must_stay_covered, list_patterns=list_patterns)
     for str_problem in list_problems:
         print(f"❌ {str_problem}", file=sys.stderr)
     if list_problems:

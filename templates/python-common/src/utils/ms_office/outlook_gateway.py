@@ -61,6 +61,7 @@ class OutlookGateway(metaclass=TypeChecker):
 
     def __init__(
         self,
+        *,
         str_sender: str,
         path_signatures_dir: Path | None = None,
         logger: Logger | None = None,
@@ -71,6 +72,7 @@ class OutlookGateway(metaclass=TypeChecker):
 
     def send_email(
         self,
+        *,
         str_subject: str,
         list_to: list[str],
         list_cc: list[str],
@@ -103,14 +105,14 @@ class OutlookGateway(metaclass=TypeChecker):
         if not running_on_windows():
             log_message(
                 self.logger,
-                f"[email] Outlook unavailable (non-Windows); e-mail NOT sent. "
+                str_message=f"[email] Outlook unavailable (non-Windows); e-mail NOT sent. "
                 f"subject='{str_subject}' to={list_to} cc={list_cc} "
                 f"attachments={list_attachments}",
-                "warning",
+                str_level="warning",
             )
             return False
         str_signature = (
-            resolve_signature(self.path_signatures_dir, self.str_sender)
+            resolve_signature(self.path_signatures_dir, str_sender_email=self.str_sender)
             if self.path_signatures_dir is not None
             else ""
         )
@@ -125,11 +127,12 @@ class OutlookGateway(metaclass=TypeChecker):
             bool_auto_send=bool_auto_send,
             str_html_signature=str_signature,
         )
-        log_message(self.logger, f"[email] sent. subject='{str_subject}' to={list_to}")
+        log_message(self.logger, str_message=f"[email] sent. subject='{str_subject}' to={list_to}")
         return True
 
     def download_attachment(  # complexity-ok: COM interop, non-fatal degradation
         self,
+        *,
         str_email_account: str,
         str_folder: str,
         str_subject_substring: str,
@@ -170,10 +173,10 @@ class OutlookGateway(metaclass=TypeChecker):
         if not running_on_windows():
             log_message(
                 self.logger,
-                f"[email] Outlook unavailable (non-Windows); download NOT performed. "
+                str_message=f"[email] Outlook unavailable (non-Windows); download NOT performed. "
                 f"account='{str_email_account}' folder='{str_folder}' "
                 f"subject~='{str_subject_substring}'",
-                "warning",
+                str_level="warning",
             )
             return None
         try:
@@ -188,29 +191,31 @@ class OutlookGateway(metaclass=TypeChecker):
         except Exception as cls_err:  # noqa: BLE001 — e-mail download is optional; caller falls back.
             log_message(
                 self.logger,
-                f"[email] download failed (account='{str_email_account}' folder='{str_folder}' "
+                str_message=f"[email] download failed (account='{str_email_account}' "
+                f"folder='{str_folder}' "
                 f"subject~='{str_subject_substring}'): {cls_err}",
-                "warning",
+                str_level="warning",
             )
             return None
         for str_path, bool_saved in dict_status.items():
             if bool_saved:
                 log_message(
                     self.logger,
-                    f"[email] attachment downloaded: {str_path} "
+                    str_message=f"[email] attachment downloaded: {str_path} "
                     f"(subject~='{str_subject_substring}')",
                 )
                 return Path(str_path)
         log_message(
             self.logger,
-            f"[email] no matching attachment (folder='{str_folder}' "
+            str_message=f"[email] no matching attachment (folder='{str_folder}' "
             f"subject~='{str_subject_substring}')",
-            "warning",
+            str_level="warning",
         )
         return None
 
     def get_body_content(  # complexity-ok: COM interop, non-fatal degradation
         self,
+        *,
         str_email_account: str,
         str_folder: str,
         str_subject_substring: str,
@@ -241,10 +246,10 @@ class OutlookGateway(metaclass=TypeChecker):
         if not running_on_windows():
             log_message(
                 self.logger,
-                f"[email] Outlook unavailable (non-Windows); body read skipped. "
+                str_message=f"[email] Outlook unavailable (non-Windows); body read skipped. "
                 f"account='{str_email_account}' folder='{str_folder}' "
                 f"subject~='{str_subject_substring}'",
-                "warning",
+                str_level="warning",
             )
             return []
         try:
@@ -257,9 +262,10 @@ class OutlookGateway(metaclass=TypeChecker):
         except Exception as cls_err:  # noqa: BLE001 — body read is optional; caller handles empties.
             log_message(
                 self.logger,
-                f"[email] body read failed (account='{str_email_account}' folder='{str_folder}' "
+                str_message=f"[email] body read failed (account='{str_email_account}' "
+                f"folder='{str_folder}' "
                 f"subject~='{str_subject_substring}'): {cls_err}",
-                "warning",
+                str_level="warning",
             )
             return []
 
@@ -279,6 +285,7 @@ def running_on_windows() -> bool:
 @type_checker
 def _com_send_email(  # complexity-ok: COM interop, optional fields and non-fatal failures
     str_subject: str,
+    *,
     str_to: str,
     str_cc: str,
     str_body: str,
@@ -347,6 +354,7 @@ def _com_send_email(  # complexity-ok: COM interop, optional fields and non-fata
 @type_checker
 def _com_download_attachment(  # complexity-ok: COM interop, non-fatal degradation
     str_email_account: str,
+    *,
     str_folder: str,
     str_subject_substring: str,
     str_dest_dir: str,
@@ -403,6 +411,7 @@ def _com_download_attachment(  # complexity-ok: COM interop, non-fatal degradati
 @type_checker
 def _com_get_body_content(  # complexity-ok: COM interop, non-fatal degradation
     str_email_account: str,
+    *,
     str_folder: str,
     str_subject_substring: str,
     str_subfolder: str | None = None,

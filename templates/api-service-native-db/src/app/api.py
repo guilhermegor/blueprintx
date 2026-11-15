@@ -21,7 +21,9 @@ def create_app() -> FastAPI:
     cls_container = build()
     cls_app = FastAPI(title="API Service", version="0.0.1")
     cls_app.include_router(
-        build_example_feature_router(cls_container.create_note, cls_container.list_notes)
+        build_example_feature_router(
+            cls_container.create_note, fn_list_notes=cls_container.list_notes
+        )
     )
 
     @cls_app.get("/health", tags=["health"])

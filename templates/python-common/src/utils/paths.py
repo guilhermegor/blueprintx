@@ -137,7 +137,7 @@ def ensure_dir(path_dir: Path) -> Path:
 
 
 @type_checker
-def copy_into(path_src: Path, path_dir: Path, str_stamp: str | None = None) -> Path:
+def copy_into(path_src: Path, *, path_dir: Path, str_stamp: str | None = None) -> Path:
     """Copy ``path_src`` into ``path_dir`` (created if absent), returning the destination.
 
     Use to archive every input a run reads into its output subfolder, so each run's folder is
@@ -217,7 +217,7 @@ def date_tokens(dt_ref: date) -> dict[str, str]:
 
 
 @type_checker
-def resolve_input(spec: str | dict[str, str] | None, dt_ref: date) -> Path | None:
+def resolve_input(spec: str | dict[str, str] | None, *, dt_ref: date) -> Path | None:
     """Resolve an input spec to an existing absolute file path for the reference date.
 
     A configured input is either a plain path string, or a mapping ``{dir, filename_pattern}``
@@ -240,12 +240,14 @@ def resolve_input(spec: str | dict[str, str] | None, dt_ref: date) -> Path | Non
     """
     dict_tokens = date_tokens(dt_ref)
     if isinstance(spec, dict):
-        return _resolve_mapping_spec(spec, dict_tokens)
-    return _resolve_plain_spec(str(spec or ""), dict_tokens)
+        return _resolve_mapping_spec(spec, dict_tokens=dict_tokens)
+    return _resolve_plain_spec(str(spec or ""), dict_tokens=dict_tokens)
 
 
 @type_checker
-def _resolve_mapping_spec(dict_spec: dict[str, str], dict_tokens: dict[str, str]) -> Path | None:
+def _resolve_mapping_spec(
+    dict_spec: dict[str, str], *, dict_tokens: dict[str, str]
+) -> Path | None:
     """Resolve a ``{dir, filename_pattern}`` spec to the newest matching file.
 
     Parameters
@@ -262,12 +264,12 @@ def _resolve_mapping_spec(dict_spec: dict[str, str], dict_tokens: dict[str, str]
     """
     str_dir = str(dict_spec.get("dir", "")).format(**dict_tokens)
     str_pattern = str(dict_spec.get("filename_pattern", "*")).format(**dict_tokens)
-    path_match = _latest_match(resolve_path(str_dir), str_pattern)
+    path_match = _latest_match(resolve_path(str_dir), str_pattern=str_pattern)
     return to_absolute(path_match) if path_match is not None else None
 
 
 @type_checker
-def _resolve_plain_spec(str_spec: str, dict_tokens: dict[str, str]) -> Path | None:
+def _resolve_plain_spec(str_spec: str, *, dict_tokens: dict[str, str]) -> Path | None:
     """Resolve a plain path-string spec to an existing absolute file.
 
     Parameters
@@ -290,7 +292,7 @@ def _resolve_plain_spec(str_spec: str, dict_tokens: dict[str, str]) -> Path | No
 
 
 @type_checker
-def resolve_input_glob(spec: dict[str, str] | None, dt_ref: date) -> list[Path]:
+def resolve_input_glob(spec: dict[str, str] | None, *, dt_ref: date) -> list[Path]:
     """Resolve a ``{dir, filename_pattern}`` spec to **all** matching files for the date.
 
     Like :func:`resolve_input` but returns every case-insensitive match (sorted by name)
@@ -313,7 +315,7 @@ def resolve_input_glob(spec: dict[str, str] | None, dt_ref: date) -> list[Path]:
     dict_tokens = date_tokens(dt_ref)
     str_dir = str(spec.get("dir", "")).format(**dict_tokens)
     str_pattern = str(spec.get("filename_pattern", "*")).format(**dict_tokens)
-    list_matches = _matching_files(resolve_path(str_dir), str_pattern)
+    list_matches = _matching_files(resolve_path(str_dir), str_pattern=str_pattern)
     return sorted(to_absolute(path) for path in list_matches)
 
 
@@ -350,7 +352,7 @@ def to_absolute(path_resolved: Path) -> Path:
 
 
 @type_checker
-def _latest_match(path_dir: Path, str_pattern: str) -> Path | None:
+def _latest_match(path_dir: Path, *, str_pattern: str) -> Path | None:
     """Return the newest file in ``path_dir`` matching ``str_pattern`` (case-insensitive).
 
     Parameters
@@ -366,14 +368,14 @@ def _latest_match(path_dir: Path, str_pattern: str) -> Path | None:
         The most recently modified matching file, or ``None``.
     """
     return max(
-        _matching_files(path_dir, str_pattern),
+        _matching_files(path_dir, str_pattern=str_pattern),
         key=lambda path: path.stat().st_mtime,
         default=None,
     )
 
 
 @type_checker
-def _matching_files(path_dir: Path, str_pattern: str) -> list[Path]:
+def _matching_files(path_dir: Path, *, str_pattern: str) -> list[Path]:
     """Return every file in ``path_dir`` whose name matches ``str_pattern``, case-insensitively.
 
     The one place the case-insensitive scan lives. It was written twice — once to pick the

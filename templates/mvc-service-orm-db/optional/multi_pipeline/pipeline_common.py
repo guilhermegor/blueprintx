@@ -34,6 +34,7 @@ class EmailHandler(Protocol, metaclass=ProtocolTypeCheckerMeta):
 
     def send_email(
         self,
+        *,
         str_subject: str,
         list_to: list[str],
         list_cc: list[str],
@@ -54,7 +55,7 @@ class WebhookNotifier(Protocol, metaclass=ProtocolTypeCheckerMeta):
     opt-in is chosen. Mirrors :class:`EmailHandler`.
     """
 
-    def send(self, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
+    def send(self, *, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
         """Send one notification."""
         ...
 
@@ -76,6 +77,7 @@ class Pipeline(Protocol, metaclass=ProtocolTypeCheckerMeta):
 @type_checker
 def log_context(
     cls_logger: Logger | None,
+    *,
     dict_context: dict[str, object],
     cls_email_handler: EmailHandler | None,
     cls_webhook: WebhookNotifier | None,
@@ -93,23 +95,24 @@ def log_context(
     cls_webhook : WebhookNotifier | None
         The injected webhook notifier, if any (logged as configured/none).
     """
-    log_message(cls_logger, "Starting variable-definition process")
+    log_message(cls_logger, str_message="Starting variable-definition process")
     for str_key, value in dict_context.items():
-        log_message(cls_logger, f"{str_key}: {value}")
+        log_message(cls_logger, str_message=f"{str_key}: {value}")
     log_message(
         cls_logger,
-        f"Email handler: {'configured' if cls_email_handler is not None else 'none'}",
+        str_message=f"Email handler: {'configured' if cls_email_handler is not None else 'none'}",
     )
     log_message(
         cls_logger,
-        f"Webhook notifier: {'configured' if cls_webhook is not None else 'none'}",
+        str_message=f"Webhook notifier: {'configured' if cls_webhook is not None else 'none'}",
     )
-    log_message(cls_logger, "Finishing variable-definition process")
+    log_message(cls_logger, str_message="Finishing variable-definition process")
 
 
 @type_checker
 def render_report(
     cls_logger: Logger | None,
+    *,
     fn_output_path: Callable[[str], Path],
     df_report: pd.DataFrame,
 ) -> Path:
@@ -129,16 +132,16 @@ def render_report(
     pathlib.Path
         The written report path.
     """
-    log_message(cls_logger, "Starting report-export process")
+    log_message(cls_logger, str_message="Starting report-export process")
     path_report = fn_output_path("xlsx_name")
     RenderToExcel(path_out=path_report).render(df_report)
-    log_message(cls_logger, f"Finishing report-export process ({path_report})")
+    log_message(cls_logger, str_message=f"Finishing report-export process ({path_report})")
     return path_report
 
 
 @type_checker
 def write_summary(
-    cls_logger: Logger | None, path_json: Path, dict_summary: dict[str, object]
+    cls_logger: Logger | None, *, path_json: Path, dict_summary: dict[str, object]
 ) -> None:
     """Write the JSON run summary.
 
@@ -151,15 +154,15 @@ def write_summary(
     dict_summary : dict
         The run summary to serialise.
     """
-    log_message(cls_logger, "Starting summary-export process")
+    log_message(cls_logger, str_message="Starting summary-export process")
     with path_json.open("w", encoding="utf-8") as file_write:
         json.dump(dict_summary, file_write)
-    log_message(cls_logger, f"Summary exported: {path_json}")
+    log_message(cls_logger, str_message=f"Summary exported: {path_json}")
 
 
 @type_checker
 def notify(
-    cls_logger: Logger | None, cls_webhook: WebhookNotifier | None, str_message: str
+    cls_logger: Logger | None, *, cls_webhook: WebhookNotifier | None, str_message: str
 ) -> None:
     """Send the run-summary notification when a webhook is wired (no-op otherwise).
 
@@ -174,13 +177,13 @@ def notify(
     """
     if cls_webhook is None:
         return
-    log_message(cls_logger, "Sending webhook notification")
-    cls_webhook.send(str_message)
-    log_message(cls_logger, "Webhook notification sent")
+    log_message(cls_logger, str_message="Sending webhook notification")
+    cls_webhook.send(str_message=str_message)
+    log_message(cls_logger, str_message="Webhook notification sent")
 
 
 @type_checker
-def log_elapsed(cls_logger: Logger | None, float_elapsed: float) -> None:
+def log_elapsed(cls_logger: Logger | None, *, float_elapsed: float) -> None:
     """Log the elapsed wall time as HH:MM:SS.
 
     Parameters
@@ -193,4 +196,4 @@ def log_elapsed(cls_logger: Logger | None, float_elapsed: float) -> None:
     float_hours, float_remainder = divmod(float_elapsed, 3600)
     float_minutes, float_seconds = divmod(float_remainder, 60)
     str_hms = f"{int(float_hours)}:{int(float_minutes)}:{float_seconds:.2f}"
-    log_message(cls_logger, f"Run finished (HH:MM:SS): {str_hms}")
+    log_message(cls_logger, str_message=f"Run finished (HH:MM:SS): {str_hms}")

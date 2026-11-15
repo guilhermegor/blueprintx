@@ -64,7 +64,7 @@ class FakePage:
         """Record a ``navigate`` step's call."""
         self.list_calls.append(("goto", url))
 
-    async def fill(self, selector: str, value: str) -> None:
+    async def fill(self, *, selector: str, value: str) -> None:
         """Record a ``fill``/``fill_date`` step's call."""
         self.list_calls.append(("fill", selector, value))
 
@@ -72,7 +72,7 @@ class FakePage:
         """Record a ``click``/``datepicker`` step's call."""
         self.list_calls.append(("click", selector))
 
-    async def select_option(self, selector: str, value: str) -> None:
+    async def select_option(self, *, selector: str, value: str) -> None:
         """Record a ``select`` step's call."""
         self.list_calls.append(("select_option", selector, value))
 
@@ -129,7 +129,7 @@ def test_run_browser_steps_dispatches_every_kind_in_order(tmp_path: Path) -> Non
         ("click", "#export"),
     ]
 
-    asyncio.run(run_browser_steps(list_steps, cls_page, tmp_path))
+    asyncio.run(run_browser_steps(list_steps, cls_page=cls_page, path_download_root=tmp_path))
 
     assert cls_page.list_calls == list_expected_calls
     assert cls_page.cls_download.str_saved_to == str(tmp_path.resolve() / "out.xlsx")
@@ -141,7 +141,7 @@ def test_run_browser_steps_rejects_an_unknown_kind() -> None:
     list_steps: list[BrowserStep] = [{"kind": "double_click", "selector": "#x"}]
 
     with pytest.raises(BrowserStepError, match="Step 0: unknown kind 'double_click'"):
-        asyncio.run(run_browser_steps(list_steps, cls_page))
+        asyncio.run(run_browser_steps(list_steps, cls_page=cls_page))
     assert cls_page.list_calls == []
 
 
@@ -167,7 +167,7 @@ def test_resolve_placeholders_fails_fast_on_unset_variable() -> None:
     ["/etc/passwd", "../../outside.xlsx", "sub/../../outside.xlsx"],
 )
 def test_download_refuses_a_save_path_that_escapes_the_root(
-    tmp_path: Path, str_escape: str
+    tmp_path: Path, *, str_escape: str
 ) -> None:
     """A recording is untrusted data: an absolute or ../ save_path must not write out."""
     cls_page = FakePage()
@@ -176,7 +176,11 @@ def test_download_refuses_a_save_path_that_escapes_the_root(
     ]
 
     with pytest.raises(BrowserStepError, match="resolves outside the download root"):
-        asyncio.run(run_browser_steps(list_steps, cls_page, tmp_path / "downloads"))
+        asyncio.run(
+            run_browser_steps(
+                list_steps, cls_page=cls_page, path_download_root=tmp_path / "downloads"
+            )
+        )
     assert cls_page.cls_download.str_saved_to is None
 
 
@@ -192,7 +196,7 @@ def test_download_refuses_an_escape_through_a_symlinked_root(tmp_path: Path) -> 
     ]
 
     with pytest.raises(BrowserStepError, match="resolves outside the download root"):
-        asyncio.run(run_browser_steps(list_steps, cls_page, path_root))
+        asyncio.run(run_browser_steps(list_steps, cls_page=cls_page, path_download_root=path_root))
 
 
 def test_every_handler_kind_declares_its_required_fields() -> None:
@@ -211,7 +215,7 @@ def test_every_handler_kind_declares_its_required_fields() -> None:
     ],
 )
 def test_run_browser_steps_rejects_a_malformed_step(
-    tmp_path: Path, dict_step: BrowserStep, str_match: str
+    tmp_path: Path, *, dict_step: BrowserStep, str_match: str
 ) -> None:
     """A hand-edited recording must fail as a named step, not as a raw KeyError.
 
@@ -221,5 +225,5 @@ def test_run_browser_steps_rejects_a_malformed_step(
     cls_page = FakePage()
 
     with pytest.raises(BrowserStepError, match=str_match):
-        asyncio.run(run_browser_steps([dict_step], cls_page, tmp_path))
+        asyncio.run(run_browser_steps([dict_step], cls_page=cls_page, path_download_root=tmp_path))
     assert cls_page.list_calls == []

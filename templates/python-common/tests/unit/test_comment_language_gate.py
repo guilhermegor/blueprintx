@@ -165,7 +165,7 @@ def test_consecutive_comment_lines_join_into_one_block() -> None:
     It is the load-bearing half: if the lines do not join, the sibling test below passes for
     the wrong reason — a single-line block that happens to hold no function word.
     """
-    assert len(gate.marker_comments(_STR_SPANNING_QUOTE, "#")) == 1
+    assert len(gate.marker_comments(_STR_SPANNING_QUOTE, str_marker="#")) == 1
 
 
 def test_a_quotation_spanning_lines_does_not_charge_the_comment() -> None:
@@ -175,13 +175,16 @@ def test_a_quotation_spanning_lines_does_not_charge_the_comment() -> None:
     English comment around it. Measured against a verbatim user decision quoted across two
     lines. Joining consecutive comment lines into one block is what fixes it.
     """
-    assert gate.portuguese_words(_sole(gate.marker_comments(_STR_SPANNING_QUOTE, "#"))[1]) == []
+    assert (
+        gate.portuguese_words(_sole(gate.marker_comments(_STR_SPANNING_QUOTE, str_marker="#"))[1])
+        == []
+    )
 
 
 def test_a_blank_line_separates_two_blocks() -> None:
     """Joining must not run past a non-comment line, or unrelated comments merge."""
     str_source = "# first block\nx = 1\n# second block\n"
-    assert len(gate.marker_comments(str_source, "#")) == 2
+    assert len(gate.marker_comments(str_source, str_marker="#")) == 2
 
 
 def test_redaction_preserves_length_so_offsets_survive() -> None:
@@ -370,7 +373,7 @@ def _git_init_and_commit(path_repo: Path) -> None:
 
 
 def test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A checkout living under a directory named ``docs`` must still be audited.
 
@@ -405,7 +408,7 @@ def test_skip_dirs_are_matched_relative_to_the_repo_not_the_filesystem(
 
 
 def test_untracked_files_are_invisible_but_tracked_ones_are_not(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The blueprintx#331 property: discovery needs no skip-list entry for a stray worktree.
 
@@ -465,6 +468,7 @@ def test_bare_root_flag_names_the_reason(capsys: pytest.CaptureFixture) -> None:
 
 def test_missing_root_directory_fails_instead_of_checking_nothing(
     tmp_path: Path,
+    *,
     capsys: pytest.CaptureFixture,
 ) -> None:
     """``--root`` naming a directory that does not exist must exit non-zero.
@@ -504,6 +508,7 @@ def test_misplaced_root_flag_fails_instead_of_checking_nothing(list_argv: list[s
 @pytest.mark.parametrize("list_argv", [["a.py", "--root", "x"], ["--root=x"]])
 def test_misplaced_root_flag_names_the_reason(
     list_argv: list[str],
+    *,
     capsys: pytest.CaptureFixture,
 ) -> None:
     """The misplaced-flag failure says why, so a crash (also non-zero) is told apart.
@@ -523,6 +528,7 @@ def test_misplaced_root_flag_names_the_reason(
 
 def test_named_file_resolves_against_root_not_cwd(
     tmp_path: Path,
+    *,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture,
 ) -> None:

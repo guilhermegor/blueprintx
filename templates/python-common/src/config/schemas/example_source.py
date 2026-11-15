@@ -77,7 +77,7 @@ class ExampleSchema(BaseModel):
         ValueError
             When ``value`` is missing, unparsable, or non-finite (``NaN`` / ``±Inf``).
         """
-        cls_quantised = to_decimal(value, 2, default=_UNPARSABLE)
+        cls_quantised = to_decimal(value, int_places=2, default=_UNPARSABLE)
         if cls_quantised.is_nan():
             raise ValueError("valor must be a finite number; got an unparsable value")
         return cls_quantised

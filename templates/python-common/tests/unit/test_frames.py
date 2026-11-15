@@ -9,7 +9,7 @@ def test_map_with_default_relabels_known_and_defaults_unknown() -> None:
     """Known values are mapped; every unmapped value goes to the default."""
     pd = pytest.importorskip("pandas")
     series_in = pd.Series(["a", "b", "z", None])
-    series_out = map_with_default(series_in, {"a": 1, "b": 2}, default=-1)
+    series_out = map_with_default(series_in, dict_mapping={"a": 1, "b": 2}, default=-1)
     assert list(series_out) == [1, 2, -1, -1]
 
 
@@ -18,7 +18,7 @@ def test_map_with_default_is_total_no_nan_leak() -> None:
     pd = pytest.importorskip("pandas")
     series_in = pd.Series(["x", "y"])
 
-    assert not map_with_default(series_in, {"x": "ok"}, default="other").isna().any()
+    assert not map_with_default(series_in, dict_mapping={"x": "ok"}, default="other").isna().any()
 
 
 def test_map_with_default_sends_the_unmapped_value_to_the_default() -> None:
@@ -30,7 +30,10 @@ def test_map_with_default_sends_the_unmapped_value_to_the_default() -> None:
     pd = pytest.importorskip("pandas")
     series_in = pd.Series(["x", "y"])
 
-    assert list(map_with_default(series_in, {"x": "ok"}, default="other")) == ["ok", "other"]
+    assert list(map_with_default(series_in, dict_mapping={"x": "ok"}, default="other")) == [
+        "ok",
+        "other",
+    ]
 
 
 class _FakeCursor:
@@ -47,7 +50,7 @@ class _FakeCursor:
         Rows returned by ``fetchall``.
     """
 
-    def __init__(self, list_description: list | None, list_rows: list) -> None:
+    def __init__(self, *, list_description: list | None, list_rows: list) -> None:
         self.description = list_description
         self.list_rows = list_rows
 
@@ -76,7 +79,10 @@ def df_from_cursor() -> object:
         The coerced pandas frame.
     """
     pytest.importorskip("pandas")
-    return from_cursor(_FakeCursor([("id",), ("title",)], [(1, "a"), (2, "b")]), _DICT_DTYPES)
+    return from_cursor(
+        _FakeCursor(list_description=[("id",), ("title",)], list_rows=[(1, "a"), (2, "b")]),
+        dict_dtypes=_DICT_DTYPES,
+    )
 
 
 @pytest.fixture(scope="module")  # fixture-scope-ok: frame is only read, never mutated
@@ -89,12 +95,12 @@ def df_from_records() -> object:
         The coerced pandas frame.
     """
     pytest.importorskip("pandas")
-    return from_records(_LIST_RECORDS, _DICT_DTYPES)
+    return from_records(_LIST_RECORDS, dict_dtypes=_DICT_DTYPES)
 
 
 @pytest.mark.parametrize("str_fixture", ["df_from_cursor", "df_from_records"])
 def test_every_declared_column_is_present(
-    str_fixture: str, request: pytest.FixtureRequest
+    str_fixture: str, *, request: pytest.FixtureRequest
 ) -> None:
     """Both seams shape the frame from the DECLARED columns, in declaration order.
 
@@ -110,7 +116,7 @@ def test_every_declared_column_is_present(
 
 @pytest.mark.parametrize("str_fixture", ["df_from_cursor", "df_from_records"])
 def test_every_declared_column_is_coerced_to_its_dtype(
-    str_fixture: str, request: pytest.FixtureRequest
+    str_fixture: str, *, request: pytest.FixtureRequest
 ) -> None:
     """Declaring a dtype is only worth anything if the column actually carries it.
 
@@ -126,7 +132,7 @@ def test_every_declared_column_is_coerced_to_its_dtype(
 
 @pytest.mark.parametrize("str_fixture", ["df_from_cursor", "df_from_records"])
 def test_the_row_values_survive_the_coercion(
-    str_fixture: str, request: pytest.FixtureRequest
+    str_fixture: str, *, request: pytest.FixtureRequest
 ) -> None:
     """Shape and dtype are both satisfiable by a frame that lost its data.
 
@@ -150,7 +156,7 @@ def df_empty_from_cursor() -> object:
         The empty-but-shaped pandas frame.
     """
     pytest.importorskip("pandas")
-    return from_cursor(_FakeCursor(None, []), _DICT_DTYPES)
+    return from_cursor(_FakeCursor(list_description=None, list_rows=[]), dict_dtypes=_DICT_DTYPES)
 
 
 @pytest.fixture(scope="module")  # fixture-scope-ok: frame is only read, never mutated
@@ -163,11 +169,13 @@ def df_empty_from_records() -> object:
         The empty-but-shaped pandas frame.
     """
     pytest.importorskip("pandas")
-    return from_records([], _DICT_DTYPES)
+    return from_records([], dict_dtypes=_DICT_DTYPES)
 
 
 @pytest.mark.parametrize("str_fixture", ["df_empty_from_cursor", "df_empty_from_records"])
-def test_no_rows_yields_an_empty_frame(str_fixture: str, request: pytest.FixtureRequest) -> None:
+def test_no_rows_yields_an_empty_frame(
+    str_fixture: str, *, request: pytest.FixtureRequest
+) -> None:
     """No rows in, no rows out — the declared columns must not fabricate one.
 
     Parameters
@@ -182,7 +190,7 @@ def test_no_rows_yields_an_empty_frame(str_fixture: str, request: pytest.Fixture
 
 @pytest.mark.parametrize("str_fixture", ["df_empty_from_cursor", "df_empty_from_records"])
 def test_an_empty_frame_still_carries_the_declared_columns(
-    str_fixture: str, request: pytest.FixtureRequest
+    str_fixture: str, *, request: pytest.FixtureRequest
 ) -> None:
     """The point of the branch: the shape must not depend on whether rows existed.
 
@@ -206,10 +214,14 @@ def tuple_date_col_frames() -> tuple:
         The empty-path and populated-path pandas frames.
     """
     pytest.importorskip("pandas")
-    df_empty = from_cursor(_FakeCursor(None, []), {"id": "int64"}, list_date_cols=["dt_ref"])
+    df_empty = from_cursor(
+        _FakeCursor(list_description=None, list_rows=[]),
+        dict_dtypes={"id": "int64"},
+        list_date_cols=["dt_ref"],
+    )
     df_rows = from_cursor(
-        _FakeCursor([("id",), ("dt_ref",)], [(1, "2026-01-31")]),
-        {"id": "int64"},
+        _FakeCursor(list_description=[("id",), ("dt_ref",)], list_rows=[(1, "2026-01-31")]),
+        dict_dtypes={"id": "int64"},
         list_date_cols=["dt_ref"],
     )
     return df_empty, df_rows

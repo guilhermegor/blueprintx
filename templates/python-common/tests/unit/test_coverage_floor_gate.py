@@ -32,7 +32,7 @@ def _load_gate() -> ModuleType:
     return cls_module
 
 
-def _project(tmp_path: Path, str_omit: str) -> Path:
+def _project(tmp_path: Path, *, str_omit: str) -> Path:
     """Write a minimal project root with a ``.coveragerc`` and empty ``src/``.
 
     Parameters
@@ -54,7 +54,7 @@ def _project(tmp_path: Path, str_omit: str) -> Path:
     return tmp_path
 
 
-def _capability(path_root: Path, str_name: str, str_layer: str, str_source: str) -> None:
+def _capability(path_root: Path, *, str_name: str, str_layer: str, str_source: str) -> None:
     """Write one module under ``src/capabilities/<name>/<layer>/service.py``.
 
     Parameters
@@ -73,65 +73,84 @@ def _capability(path_root: Path, str_name: str, str_layer: str, str_source: str)
     (path_layer / "service.py").write_text(str_source, encoding="utf-8")
 
 
-def test_missing_coveragerc_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_coveragerc_fails(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """No ``.coveragerc`` at all must exit non-zero, never green."""
     (tmp_path / "src").mkdir()
     monkeypatch.chdir(tmp_path)
     assert _load_gate().main() == 1
 
 
-def test_empty_omit_list_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_empty_omit_list_fails(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """An empty declared list is broken discovery, not a clean slate."""
-    _project(tmp_path, "")
+    _project(tmp_path, str_omit="")
     monkeypatch.chdir(tmp_path)
     assert _load_gate().main() == 1
 
 
-def test_no_python_files_under_src_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_python_files_under_src_fails(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Scanning nothing must exit non-zero, never report success."""
-    path_root = _project(tmp_path, "    src/chassis/*\n")
+    path_root = _project(tmp_path, str_omit="    src/chassis/*\n")
     (path_root / "src" / "__init__.py").unlink()
     monkeypatch.chdir(path_root)
     assert _load_gate().main() == 1
 
 
-def test_no_capabilities_dir_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_capabilities_dir_passes(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
     """A layout with no capabilities/ split (e.g. MVC) has nothing for this floor to check."""
-    path_root = _project(tmp_path, "    src/utils/*\n")
+    path_root = _project(tmp_path, str_omit="    src/utils/*\n")
     monkeypatch.chdir(path_root)
     assert _load_gate().main() == 0
 
 
 def test_fresh_scaffold_with_only_excluded_example_passes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A fresh scaffold ships only the example capability, already named outright.
 
     Zero findings here is the EXPECTED result, not a broken detector — the probe test below
     is what proves discovery works.
     """
-    path_root = _project(tmp_path, "    src/capabilities/example_feature/*\n")
-    _capability(path_root, "example_feature", "domain", "def compute():\n    return 1\n")
+    path_root = _project(tmp_path, str_omit="    src/capabilities/example_feature/*\n")
+    _capability(
+        path_root,
+        str_name="example_feature",
+        str_layer="domain",
+        str_source="def compute():\n    return 1\n",
+    )
     monkeypatch.chdir(path_root)
     assert _load_gate().main() == 0
 
 
 def test_narrowly_scoped_omit_does_not_flag_new_capability(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An omit pattern scoped to infrastructure/ leaves a new capability's domain logic in."""
     path_root = _project(
         tmp_path,
-        "    src/capabilities/example_feature/*\n    src/capabilities/*/infrastructure/*\n",
+        str_omit=(
+            "    src/capabilities/example_feature/*\n    src/capabilities/*/infrastructure/*\n"
+        ),
     )
-    _capability(path_root, "example_feature", "domain", "def compute():\n    return 1\n")
-    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    _capability(
+        path_root,
+        str_name="example_feature",
+        str_layer="domain",
+        str_source="def compute():\n    return 1\n",
+    )
+    _capability(
+        path_root,
+        str_name="orders",
+        str_layer="domain",
+        str_source="def place_order():\n    return True\n",
+    )
     monkeypatch.chdir(path_root)
     assert _load_gate().main() == 0
 
 
 def test_widened_omit_swallows_new_capability_logic_is_flagged(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
     """The synthetic probe: widening omit past infrastructure/ must fail, naming the file.
 
@@ -141,9 +160,14 @@ def test_widened_omit_swallows_new_capability_logic_is_flagged(
     """
     path_root = _project(
         tmp_path,
-        "    src/capabilities/example_feature/*\n    src/capabilities/*\n",
+        str_omit="    src/capabilities/example_feature/*\n    src/capabilities/*\n",
     )
-    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    _capability(
+        path_root,
+        str_name="orders",
+        str_layer="domain",
+        str_source="def place_order():\n    return True\n",
+    )
     monkeypatch.chdir(path_root)
     _load_gate().main()
     str_err = capsys.readouterr().err
@@ -151,7 +175,7 @@ def test_widened_omit_swallows_new_capability_logic_is_flagged(
 
 
 def test_widened_omit_swallowing_new_capability_logic_fails(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The same widened-omit probe exits 1, not 0.
 
@@ -164,15 +188,20 @@ def test_widened_omit_swallowing_new_capability_logic_fails(
     """
     path_root = _project(
         tmp_path,
-        "    src/capabilities/example_feature/*\n    src/capabilities/*\n",
+        str_omit="    src/capabilities/example_feature/*\n    src/capabilities/*\n",
     )
-    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    _capability(
+        path_root,
+        str_name="orders",
+        str_layer="domain",
+        str_source="def place_order():\n    return True\n",
+    )
     monkeypatch.chdir(path_root)
     assert _load_gate().main() == 1
 
 
 def test_single_misomitted_file_in_a_narrowly_excluded_capability_is_flagged(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
     """Detection is per MODULE even when the capability carries narrower exclusions.
 
@@ -185,18 +214,23 @@ def test_single_misomitted_file_in_a_narrowly_excluded_capability_is_flagged(
     """
     path_root = _project(
         tmp_path,
-        "    src/capabilities/example_feature/*\n"
+        str_omit="    src/capabilities/example_feature/*\n"
         "    src/capabilities/*/infrastructure/*\n"
         "    src/capabilities/orders/domain/service.py\n",
     )
-    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    _capability(
+        path_root,
+        str_name="orders",
+        str_layer="domain",
+        str_source="def place_order():\n    return True\n",
+    )
     monkeypatch.chdir(path_root)
     _load_gate().main()
     assert "orders/domain/service.py" in capsys.readouterr().err
 
 
 def test_single_misomitted_file_in_a_narrowly_excluded_capability_fails(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The same single mis-omitted module makes the gate exit 1.
 
@@ -209,11 +243,16 @@ def test_single_misomitted_file_in_a_narrowly_excluded_capability_fails(
     """
     path_root = _project(
         tmp_path,
-        "    src/capabilities/example_feature/*\n"
+        str_omit="    src/capabilities/example_feature/*\n"
         "    src/capabilities/*/infrastructure/*\n"
         "    src/capabilities/orders/domain/service.py\n",
     )
-    _capability(path_root, "orders", "domain", "def place_order():\n    return True\n")
+    _capability(
+        path_root,
+        str_name="orders",
+        str_layer="domain",
+        str_source="def place_order():\n    return True\n",
+    )
     monkeypatch.chdir(path_root)
     assert _load_gate().main() == 1
 
@@ -225,8 +264,13 @@ def test_enum_only_module_is_never_in_the_must_cover_set(tmp_path: Path) -> None
     replaces the hardcoded ``domain/enums.py`` exception with a structural one.
     """
     cls_gate = _load_gate()
-    path_root = _project(tmp_path, "")
-    _capability(path_root, "orders", "domain", "class Status:\n    OPEN = 1\n    CLOSED = 2\n")
+    path_root = _project(tmp_path, str_omit="")
+    _capability(
+        path_root,
+        str_name="orders",
+        str_layer="domain",
+        str_source="class Status:\n    OPEN = 1\n    CLOSED = 2\n",
+    )
     path_module = path_root / "src" / "capabilities" / "orders" / "domain" / "service.py"
     assert cls_gate.defines_a_function(path_module) is False
 
@@ -241,7 +285,7 @@ def test_whole_capability_exclusions_reads_only_literal_names() -> None:
 
 
 def test_omit_patterns_expands_environment_variables(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Coverage.py expands ``${VAR}`` before applying omit; the raw text would never match."""
     cls_gate = _load_gate()
@@ -255,31 +299,43 @@ def test_omit_patterns_expands_environment_variables(
 
 
 def test_absolute_omit_pattern_still_swallows_a_relative_module(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An expanded, absolute pattern must match the RELATIVE module path it really omits."""
     cls_gate = _load_gate()
-    path_root = _project(tmp_path, "")
-    _capability(path_root, "orders", "domain", "def place() -> None:\n    return None\n")
+    path_root = _project(tmp_path, str_omit="")
+    _capability(
+        path_root,
+        str_name="orders",
+        str_layer="domain",
+        str_source="def place() -> None:\n    return None\n",
+    )
     monkeypatch.chdir(path_root)
     path_module = Path("src/capabilities/orders/domain/service.py")
     str_absolute_pattern = f"{path_root.resolve().as_posix()}/src/capabilities/*/domain/*"
 
-    list_problems = cls_gate.swallowed_by_omit([path_module], [str_absolute_pattern])
+    list_problems = cls_gate.swallowed_by_omit([path_module], list_patterns=[str_absolute_pattern])
 
     assert len(list_problems) == 1
 
 
 def test_relative_omit_pattern_keeps_working(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Widening to absolute must not break the plain relative form the template ships."""
     cls_gate = _load_gate()
-    path_root = _project(tmp_path, "")
-    _capability(path_root, "orders", "domain", "def place() -> None:\n    return None\n")
+    path_root = _project(tmp_path, str_omit="")
+    _capability(
+        path_root,
+        str_name="orders",
+        str_layer="domain",
+        str_source="def place() -> None:\n    return None\n",
+    )
     monkeypatch.chdir(path_root)
     path_module = Path("src/capabilities/orders/domain/service.py")
 
-    list_problems = cls_gate.swallowed_by_omit([path_module], ["src/capabilities/*/domain/*"])
+    list_problems = cls_gate.swallowed_by_omit(
+        [path_module], list_patterns=["src/capabilities/*/domain/*"]
+    )
 
     assert len(list_problems) == 1

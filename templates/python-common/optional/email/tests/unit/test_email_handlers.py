@@ -37,21 +37,40 @@ def test_build_email_handler_unknown_backend_raises() -> None:
 def test_null_handler_send_email_returns_false() -> None:
     """The opt-out handler dispatches nothing and reports False."""
     cls_null = NullEmailHandler()
-    assert cls_null.send_email("subject", ["to@example.com"], [], "body", []) is False
+    assert (
+        cls_null.send_email(
+            str_subject="subject",
+            list_to=["to@example.com"],
+            list_cc=[],
+            str_body="body",
+            list_attachments=[],
+        )
+        is False
+    )
 
 
 def test_smtp_handler_rejects_missing_recipients() -> None:
     """SMTP refuses to send with no to/cc recipients."""
-    cls_smtp = SmtpEmailHandler("smtp.example.com", 587, "from@example.com")
+    cls_smtp = SmtpEmailHandler(
+        str_host="smtp.example.com", int_port=587, str_sender="from@example.com"
+    )
     with pytest.raises(ValueError, match="no recipients"):
-        cls_smtp.send_email("subject", [], [], "body", [])
+        cls_smtp.send_email(
+            str_subject="subject", list_to=[], list_cc=[], str_body="body", list_attachments=[]
+        )
 
 
 def test_smtp_handler_rejects_unconfigured_host() -> None:
     """SMTP refuses to send when the host/sender is unconfigured."""
-    cls_smtp = SmtpEmailHandler("", 587, "")
+    cls_smtp = SmtpEmailHandler(str_host="", int_port=587, str_sender="")
     with pytest.raises(ValueError, match="host and sender"):
-        cls_smtp.send_email("subject", ["to@example.com"], [], "body", [])
+        cls_smtp.send_email(
+            str_subject="subject",
+            list_to=["to@example.com"],
+            list_cc=[],
+            str_body="body",
+            list_attachments=[],
+        )
 
 
 def test_outlook_handler_returns_the_gateway_send_result() -> None:
@@ -60,13 +79,28 @@ def test_outlook_handler_returns_the_gateway_send_result() -> None:
     cls_gateway.send_email.return_value = True
     cls_handler = OutlookEmailHandler(cls_gateway)
 
-    assert cls_handler.send_email("subject", ["to@example.com"], [], "body", []) is True
+    assert (
+        cls_handler.send_email(
+            str_subject="subject",
+            list_to=["to@example.com"],
+            list_cc=[],
+            str_body="body",
+            list_attachments=[],
+        )
+        is True
+    )
 
 
 def test_outlook_handler_forwards_send_email_to_the_gateway() -> None:
     """The Outlook handler calls the gateway's ``send_email`` exactly once."""
     cls_gateway = MagicMock()
-    OutlookEmailHandler(cls_gateway).send_email("subject", ["to@example.com"], [], "body", [])
+    OutlookEmailHandler(cls_gateway).send_email(
+        str_subject="subject",
+        list_to=["to@example.com"],
+        list_cc=[],
+        str_body="body",
+        list_attachments=[],
+    )
 
     cls_gateway.send_email.assert_called_once()
 
@@ -75,6 +109,11 @@ def test_outlook_handler_forwards_download_attachment_to_the_gateway(tmp_path: P
     """The Outlook handler calls the gateway's ``download_attachment`` exactly once."""
     cls_gateway = MagicMock()
     cls_gateway.download_attachment.return_value = tmp_path / "out.xlsx"
-    OutlookEmailHandler(cls_gateway).download_attachment("acct", "Inbox", "subject~", tmp_path)
+    OutlookEmailHandler(cls_gateway).download_attachment(
+        str_email_account="acct",
+        str_folder="Inbox",
+        str_subject_substring="subject~",
+        path_dest_dir=tmp_path,
+    )
 
     cls_gateway.download_attachment.assert_called_once()

@@ -20,6 +20,7 @@ class SmtpEmailHandler:
 
     def __init__(
         self,
+        *,
         str_host: str,
         int_port: int,
         str_sender: str,
@@ -57,6 +58,7 @@ class SmtpEmailHandler:
 
     def send_email(
         self,
+        *,
         str_subject: str,
         list_to: list[str],
         list_cc: list[str],
@@ -107,7 +109,7 @@ class SmtpEmailHandler:
         if list_cc:
             cls_message["Cc"] = ", ".join(list_cc)
         cls_message.set_content(str_body)
-        self._attach_files(cls_message, list_attachments)
+        self._attach_files(cls_message, list_attachments=list_attachments)
 
         with smtplib.SMTP(self._str_host, self._int_port, timeout=self._int_timeout_s) as cls_smtp:
             if self._bool_use_tls:
@@ -118,7 +120,7 @@ class SmtpEmailHandler:
         return True
 
     @staticmethod
-    def _attach_files(cls_message: EmailMessage, list_attachments: list[str]) -> None:
+    def _attach_files(cls_message: EmailMessage, *, list_attachments: list[str]) -> None:
         """Attach each existing file to the message, guessing its MIME type.
 
         Parameters

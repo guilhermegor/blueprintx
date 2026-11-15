@@ -42,7 +42,7 @@ def cls_engine(tmp_path: Path) -> Iterator[Engine]:
 
 
 def _build_orchestrator(
-    tmp_path: Path, cls_engine: Engine, **kwargs: object
+    tmp_path: Path, *, cls_engine: Engine, **kwargs: object
 ) -> PipelineOrchestrator:
     """Build an orchestrator wired to a real engine and ``tmp_path`` outputs.
 
@@ -82,22 +82,24 @@ def _logged(mock_log: Mock) -> str:
     str
         One line per logged message.
     """
-    return "\n".join(call.args[1] for call in mock_log.call_args_list)
+    return "\n".join(call.kwargs["str_message"] for call in mock_log.call_args_list)
 
 
 def test_log_context_logs_one_line_per_context_item(
-    tmp_path: Path, cls_engine: Engine, mocker: MockerFixture
+    tmp_path: Path, *, cls_engine: Engine, mocker: MockerFixture
 ) -> None:
     """Every ``dict_context`` entry is logged as ``key: value`` (a self-describing log)."""
     mock_log = mocker.patch("src.controller._pipeline.log_message")
-    _build_orchestrator(tmp_path, cls_engine, dict_context={"App": "demo"})._log_context()
+    _build_orchestrator(
+        tmp_path, cls_engine=cls_engine, dict_context={"App": "demo"}
+    )._log_context()
 
     assert "App: demo" in _logged(mock_log)
 
 
 @pytest.mark.parametrize("str_line", ["Email handler: none", "Webhook notifier: none"])
 def test_log_context_reports_no_handlers_when_none_are_wired(
-    tmp_path: Path, cls_engine: Engine, mocker: MockerFixture, str_line: str
+    tmp_path: Path, *, cls_engine: Engine, mocker: MockerFixture, str_line: str
 ) -> None:
     """With no e-mail handler and no webhook, both lines say ``none``.
 
@@ -113,68 +115,74 @@ def test_log_context_reports_no_handlers_when_none_are_wired(
         A line the context log must carry.
     """
     mock_log = mocker.patch("src.controller._pipeline.log_message")
-    _build_orchestrator(tmp_path, cls_engine)._log_context()
+    _build_orchestrator(tmp_path, cls_engine=cls_engine)._log_context()
 
     assert str_line in _logged(mock_log)
 
 
 def test_log_context_reports_a_configured_webhook(
-    tmp_path: Path, cls_engine: Engine, mocker: MockerFixture
+    tmp_path: Path, *, cls_engine: Engine, mocker: MockerFixture
 ) -> None:
     """A wired webhook is reported as ``configured``."""
     mock_log = mocker.patch("src.controller._pipeline.log_message")
     _build_orchestrator(
-        tmp_path, cls_engine, cls_webhook=Mock(spec=WebhookNotifier)
+        tmp_path, cls_engine=cls_engine, cls_webhook=Mock(spec=WebhookNotifier)
     )._log_context()
 
     assert "Webhook notifier: configured" in _logged(mock_log)
 
 
-def test_open_engine_returns_what_the_factory_builds(tmp_path: Path, cls_engine: Engine) -> None:
+def test_open_engine_returns_what_the_factory_builds(
+    tmp_path: Path, *, cls_engine: Engine
+) -> None:
     """``_open_engine`` hands back the engine the injected factory built."""
-    assert _build_orchestrator(tmp_path, cls_engine)._open_engine() is cls_engine
+    assert _build_orchestrator(tmp_path, cls_engine=cls_engine)._open_engine() is cls_engine
 
 
-def test_read_returns_the_seeded_row_through_the_model(tmp_path: Path, cls_engine: Engine) -> None:
+def test_read_returns_the_seeded_row_through_the_model(
+    tmp_path: Path, *, cls_engine: Engine
+) -> None:
     """The read phase creates the table, seeds one row and returns it as a frame."""
-    df_report = _build_orchestrator(tmp_path, cls_engine)._read(cls_engine)
+    df_report = _build_orchestrator(tmp_path, cls_engine=cls_engine)._read(cls_engine)
 
     assert df_report["title"].tolist() == [STR_SEED_TITLE]
 
 
-def test_render_writes_the_report_at_the_resolved_path(tmp_path: Path, cls_engine: Engine) -> None:
+def test_render_writes_the_report_at_the_resolved_path(
+    tmp_path: Path, *, cls_engine: Engine
+) -> None:
     """``_render`` asks the resolver for ``xlsx_name`` and writes the workbook there."""
-    cls_orchestrator = _build_orchestrator(tmp_path, cls_engine)
+    cls_orchestrator = _build_orchestrator(tmp_path, cls_engine=cls_engine)
     path_report = cls_orchestrator._render(cls_orchestrator._read(cls_engine))
 
     assert path_report == tmp_path / "xlsx_name.xlsx"
 
 
-def test_render_leaves_the_workbook_on_disk(tmp_path: Path, cls_engine: Engine) -> None:
+def test_render_leaves_the_workbook_on_disk(tmp_path: Path, *, cls_engine: Engine) -> None:
     """The path ``_render`` returns is a file that exists."""
-    cls_orchestrator = _build_orchestrator(tmp_path, cls_engine)
+    cls_orchestrator = _build_orchestrator(tmp_path, cls_engine=cls_engine)
 
     assert cls_orchestrator._render(cls_orchestrator._read(cls_engine)).exists()
 
 
-def test_write_summary_persists_the_summary_as_json(tmp_path: Path, cls_engine: Engine) -> None:
+def test_write_summary_persists_the_summary_as_json(tmp_path: Path, *, cls_engine: Engine) -> None:
     """``_write_summary`` round-trips the summary through ``summary.json``."""
     dict_summary = {"rows_read": 1, "report_path": "r.xlsx"}
-    _build_orchestrator(tmp_path, cls_engine)._write_summary(dict_summary)
+    _build_orchestrator(tmp_path, cls_engine=cls_engine)._write_summary(dict_summary)
 
     assert json.loads((tmp_path / "summary.json").read_text()) == dict_summary
 
 
-def test_run_returns_the_summary_of_the_rows_read(tmp_path: Path, cls_engine: Engine) -> None:
+def test_run_returns_the_summary_of_the_rows_read(tmp_path: Path, *, cls_engine: Engine) -> None:
     """``run()`` end to end reads the seeded row and reports it in the summary."""
-    dict_summary = _build_orchestrator(tmp_path, cls_engine).run()
+    dict_summary = _build_orchestrator(tmp_path, cls_engine=cls_engine).run()
 
     assert dict_summary["rows_read"] == 1
 
 
 @pytest.fixture
 def mock_dispose_after_failed_read(
-    tmp_path: Path, cls_engine: Engine, mocker: MockerFixture
+    tmp_path: Path, *, cls_engine: Engine, mocker: MockerFixture
 ) -> object:
     """Run the pipeline with a failing read and return the engine's ``dispose`` mock.
 
@@ -194,7 +202,7 @@ def mock_dispose_after_failed_read(
     object
         The ``dispose`` mock.
     """
-    cls_orchestrator = _build_orchestrator(tmp_path, cls_engine)
+    cls_orchestrator = _build_orchestrator(tmp_path, cls_engine=cls_engine)
     mocker.patch.object(cls_orchestrator, "_read", side_effect=RuntimeError("boom"))
     mock_dispose = mocker.patch.object(cls_engine, "dispose")
     with pytest.raises(RuntimeError, match="boom"):

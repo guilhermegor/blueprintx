@@ -149,7 +149,7 @@ def load_allowlist() -> tuple:
     return tuple_entries
 
 
-def matches_entry(str_entry: str, str_text: str, int_line: int) -> bool:
+def matches_entry(str_entry: str, *, str_text: str, int_line: int) -> bool:
     """Return whether one allowlist entry exempts a comment.
 
     Parameters
@@ -173,7 +173,7 @@ def matches_entry(str_entry: str, str_text: str, int_line: int) -> bool:
     return int_line <= INT_BANNER_HEAD and str_entry[1:] in str_text
 
 
-def is_pragma_line(str_content: str, tuple_allowlist: tuple, int_line: int = 1) -> bool:
+def is_pragma_line(str_content: str, *, tuple_allowlist: tuple, int_line: int = 1) -> bool:
     """Return whether a comment line is machine-read configuration, not prose.
 
     Parameters
@@ -193,10 +193,15 @@ def is_pragma_line(str_content: str, tuple_allowlist: tuple, int_line: int = 1) 
         extend — a comment run.
     """
     str_text = str_content.strip().lstrip("*").strip()
-    return any(matches_entry(str_pragma, str_text, int_line) for str_pragma in tuple_allowlist)
+    return any(
+        matches_entry(str_pragma, str_text=str_text, int_line=int_line)
+        for str_pragma in tuple_allowlist
+    )
 
 
-def line_breaks_run(int_line: int, str_raw: str, str_content: str, tuple_allowlist: tuple) -> bool:
+def line_breaks_run(
+    int_line: int, *, str_raw: str, str_content: str, tuple_allowlist: tuple
+) -> bool:
     """Return whether a comment line BREAKS a run rather than extending it.
 
     Shared by ``marker_blocks`` and ``python_blocks`` so the structural/pragma
@@ -222,10 +227,12 @@ def line_breaks_run(int_line: int, str_raw: str, str_content: str, tuple_allowli
     bool_structural = int_line <= INT_STRUCTURAL_LINE_LIMIT and (
         str_raw.startswith("#!") or bool(RE_ENCODING_DECL.search(str_content))
     )
-    return bool_structural or is_pragma_line(str_content, tuple_allowlist, int_line)
+    return bool_structural or is_pragma_line(
+        str_content, tuple_allowlist=tuple_allowlist, int_line=int_line
+    )
 
 
-def _flush_block(list_out: list, int_start: int, list_block: list) -> list:
+def _flush_block(list_out: list, *, int_start: int, list_block: list) -> list:
     """Append a non-empty block to ``list_out`` and return a fresh empty block.
 
     Parameters
@@ -295,7 +302,7 @@ def heredoc_openers(str_line: str) -> list:
     return list_out
 
 
-def is_terminator(str_line: str, tuple_open: tuple, str_kind: str) -> bool:
+def is_terminator(str_line: str, *, tuple_open: tuple, str_kind: str) -> bool:
     """Return whether a body line ends the heredoc that ``tuple_open`` opened.
 
     Parameters
@@ -319,7 +326,7 @@ def is_terminator(str_line: str, tuple_open: tuple, str_kind: str) -> bool:
     return str_line.lstrip("\t") == str_name if str_mode == "-" else str_line == str_name
 
 
-def heredoc_lines(str_source: str, str_kind: str = "shell") -> set:
+def heredoc_lines(str_source: str, *, str_kind: str = "shell") -> set:
     """Return the 1-indexed lines that are heredoc body or terminator.
 
     A heredoc body is data a script writes out, not a comment: a ``#!`` shebang or a
@@ -349,7 +356,7 @@ def heredoc_lines(str_source: str, str_kind: str = "shell") -> set:
             list_queue = heredoc_openers(str_line)
             continue
         list_pending.append(int_line)
-        if is_terminator(str_line, list_queue[0], str_kind):
+        if is_terminator(str_line, tuple_open=list_queue[0], str_kind=str_kind):
             set_out.update(list_pending)
             list_pending = []
             list_queue = list_queue[1:]
@@ -379,7 +386,7 @@ def heredoc_kind(path_file: pathlib.Path) -> str:
     return "shell" if bool_shell else ""
 
 
-def marker_blocks(str_source: str, str_marker: str, str_heredoc: str = "") -> list:
+def marker_blocks(str_source: str, *, str_marker: str, str_heredoc: str = "") -> list:
     """Return consecutive comment-line runs, pragma and structural lines excluded.
 
     ⚠️ A pragma or structural line does not just fail to COUNT — it BREAKS the
@@ -406,15 +413,20 @@ def marker_blocks(str_source: str, str_marker: str, str_heredoc: str = "") -> li
     list_out: list = []
     list_block: list = []
     int_start = 0
-    set_data = heredoc_lines(str_source, str_heredoc) if str_heredoc else set()
+    set_data = heredoc_lines(str_source, str_kind=str_heredoc) if str_heredoc else set()
     for int_line, str_line in enumerate(str_source.splitlines(), 1):
         str_stripped = str_line.lstrip()
         if int_line in set_data or not str_stripped.startswith(str_marker):
-            list_block = _flush_block(list_out, int_start, list_block)
+            list_block = _flush_block(list_out, int_start=int_start, list_block=list_block)
             continue
         str_content = str_stripped[len(str_marker) :]
-        if line_breaks_run(int_line, str_stripped, str_content, tuple_allowlist):
-            list_block = _flush_block(list_out, int_start, list_block)
+        if line_breaks_run(
+            int_line,
+            str_raw=str_stripped,
+            str_content=str_content,
+            tuple_allowlist=tuple_allowlist,
+        ):
+            list_block = _flush_block(list_out, int_start=int_start, list_block=list_block)
             continue
         if not list_block:
             int_start = int_line
@@ -460,12 +472,17 @@ def python_blocks(str_source: str) -> list:
     for cls_token in list_comments:
         int_line = cls_token.start[0]
         str_content = cls_token.string.lstrip("#")
-        if line_breaks_run(int_line, cls_token.string, str_content, tuple_allowlist):
-            list_block = _flush_block(list_out, int_start, list_block)
+        if line_breaks_run(
+            int_line,
+            str_raw=cls_token.string,
+            str_content=str_content,
+            tuple_allowlist=tuple_allowlist,
+        ):
+            list_block = _flush_block(list_out, int_start=int_start, list_block=list_block)
             int_previous = int_line
             continue
         if int_line != int_previous + 1 and list_block:
-            list_block = _flush_block(list_out, int_start, list_block)
+            list_block = _flush_block(list_out, int_start=int_start, list_block=list_block)
         if not list_block:
             int_start = int_line
         list_block.append(str_content)
@@ -499,7 +516,7 @@ def has_valid_escape(list_lines: list) -> bool:
     return bool(str_reason)
 
 
-def banner_findings(int_start: int, list_lines: list) -> list:
+def banner_findings(int_start: int, *, list_lines: list) -> list:
     """Return the decorative-banner defects inside one comment block.
 
     A punctuation-only line is a banner on its own; one flanked by two banner
@@ -540,7 +557,7 @@ def banner_findings(int_start: int, list_lines: list) -> list:
     return list_out
 
 
-def comment_blocks(str_source: str, str_marker: str) -> list:
+def comment_blocks(str_source: str, *, str_marker: str) -> list:
     """Group the counted comments of a file into runs of consecutive lines.
 
     Parameters
@@ -557,7 +574,7 @@ def comment_blocks(str_source: str, str_marker: str) -> list:
     """
     list_out: list = []
     int_prev = 0
-    for int_line, str_text in counted_comments(str_source, str_marker):
+    for int_line, str_text in counted_comments(str_source, str_marker=str_marker):
         if list_out and int_line == int_prev + 1:
             list_out[-1][1].append(str_text)
         else:
@@ -566,7 +583,7 @@ def comment_blocks(str_source: str, str_marker: str) -> list:
     return list_out
 
 
-def blocks_for(path_file: pathlib.Path, str_source: str, str_marker: str) -> list:
+def blocks_for(path_file: pathlib.Path, *, str_source: str, str_marker: str) -> list:
     """Return the comment runs of a file by the grammar its type needs.
 
     Parameters
@@ -587,8 +604,8 @@ def blocks_for(path_file: pathlib.Path, str_source: str, str_marker: str) -> lis
     if path_file.suffix == ".py":
         return python_blocks(str_source)
     if path_file.suffix == ".css":
-        return comment_blocks(str_source, str_marker)
-    return marker_blocks(str_source, str_marker, heredoc_kind(path_file))
+        return comment_blocks(str_source, str_marker=str_marker)
+    return marker_blocks(str_source, str_marker=str_marker, str_heredoc=heredoc_kind(path_file))
 
 
 def file_problems(path_file: pathlib.Path) -> list:
@@ -617,7 +634,7 @@ def file_problems(path_file: pathlib.Path) -> list:
     except ValueError:
         str_shown = str(path_file)
 
-    list_blocks = blocks_for(path_file, str_source, str_marker)
+    list_blocks = blocks_for(path_file, str_source=str_source, str_marker=str_marker)
 
     list_problems = []
     for int_start, list_lines in list_blocks:
@@ -631,7 +648,7 @@ def file_problems(path_file: pathlib.Path) -> list:
                 f"# {STR_ESCAPE} <reason>"
             )
         if not bool_hatched:
-            for int_line, int_span in banner_findings(int_start, list_lines):
+            for int_line, int_span in banner_findings(int_start, list_lines=list_lines):
                 str_shape = (
                     "rule/title/rule" if int_span == INT_BANNER_TRIPLE else "punctuation-only line"
                 )
@@ -714,7 +731,7 @@ RE_SHA_PIN = re.compile(r"@[0-9a-f]{40}\b")
 RE_VERSION_NOTE = re.compile(r"^\s*v?\d+(\.\d+)*\S*\s*$")
 
 
-def scan_comments(str_source: str, str_marker: str) -> list:
+def scan_comments(str_source: str, *, str_marker: str) -> list:
     """Return every comment line in a ``#`` or ``//`` file, trailing and ``/* */`` included.
 
     Strings are skipped so a ``#`` or ``//`` inside one is not a comment. A multi-line
@@ -748,7 +765,7 @@ def scan_comments(str_source: str, str_marker: str) -> list:
     return list_out
 
 
-def counted_comments(str_source: str, str_marker: str, str_heredoc: str = "") -> list:
+def counted_comments(str_source: str, *, str_marker: str, str_heredoc: str = "") -> list:
     """Return the comment lines that count: every one outside the allowlist.
 
     Parameters
@@ -768,12 +785,17 @@ def counted_comments(str_source: str, str_marker: str, str_heredoc: str = "") ->
     """
     tuple_allowlist = load_allowlist()
     list_lines = str_source.split("\n")
-    set_data = heredoc_lines(str_source, str_heredoc) if str_heredoc else set()
+    set_data = heredoc_lines(str_source, str_kind=str_heredoc) if str_heredoc else set()
     return [
         (int_line, str_text)
-        for int_line, str_text in scan_comments(str_source, str_marker)
+        for int_line, str_text in scan_comments(str_source, str_marker=str_marker)
         if int_line not in set_data
-        and not line_breaks_run(int_line, str_marker + str_text, str_text, tuple_allowlist)
+        and not line_breaks_run(
+            int_line,
+            str_raw=str_marker + str_text,
+            str_content=str_text,
+            tuple_allowlist=tuple_allowlist,
+        )
         and not (RE_SHA_PIN.search(list_lines[int_line - 1]) and RE_VERSION_NOTE.match(str_text))
     ]
 
@@ -800,7 +822,9 @@ def comment_line_count(path_file: pathlib.Path) -> int:
         return 0
     if path_file.suffix == ".py":
         return sum(len(list_lines) for _, list_lines in python_blocks(str_source))
-    return len(counted_comments(str_source, str_marker, heredoc_kind(path_file)))
+    return len(
+        counted_comments(str_source, str_marker=str_marker, str_heredoc=heredoc_kind(path_file))
+    )
 
 
 def shown_path(path_file: pathlib.Path) -> str:
@@ -916,7 +940,7 @@ def current_counts(list_paths: list) -> dict:
     return {str_path: int_n for str_path, int_n in dict_counts.items() if int_n}
 
 
-def ratchet_problems(dict_counts: dict, dict_baseline: dict, set_scope: set | None) -> list:
+def ratchet_problems(dict_counts: dict, *, dict_baseline: dict, set_scope: set | None) -> list:
     """Compare counts with the baseline in both directions.
 
     Parameters
@@ -1084,7 +1108,7 @@ def scanned_at_scope_one(str_path: str) -> bool:
 
 
 def raised_rows(
-    dict_new: dict, dict_old: dict, dict_renames: dict, bool_widened: bool = False
+    dict_new: dict, *, dict_old: dict, dict_renames: dict, bool_widened: bool = False
 ) -> list:
     """Return the reasons ``dict_new`` raises the ratchet over ``dict_old``.
 
@@ -1119,7 +1143,7 @@ def raised_rows(
     ]
 
 
-def regenerate_baseline(list_paths: list, bool_audit: bool) -> int:
+def regenerate_baseline(list_paths: list, *, bool_audit: bool) -> int:
     """Rewrite the baseline from a full audit, refusing any increase over an existing one.
 
     Parameters
@@ -1143,7 +1167,12 @@ def regenerate_baseline(list_paths: list, bool_audit: bool) -> int:
     list_raised = (
         []
         if dict_old is None
-        else raised_rows(dict_counts, dict_old, rename_map(default_base()), bool_widened)
+        else raised_rows(
+            dict_counts,
+            dict_old=dict_old,
+            dict_renames=rename_map(default_base()),
+            bool_widened=bool_widened,
+        )
     )
     for str_message in list_raised:
         print(str_message)
@@ -1174,11 +1203,14 @@ def compare_problems(str_reference: str) -> list:
         raise ValueError(f"cannot read the reference baseline {str_reference}") from cls_error
     int_scope, dict_ref = parse_baseline_text(str_ref_text)
     return raised_rows(
-        load_baseline() or {}, dict_ref, rename_map("FETCH_HEAD"), int_scope < INT_SCOPE
+        load_baseline() or {},
+        dict_old=dict_ref,
+        dict_renames=rename_map("FETCH_HEAD"),
+        bool_widened=int_scope < INT_SCOPE,
     )
 
 
-def baseline_problems(list_paths: list, bool_audit: bool, bool_require: bool) -> list:
+def baseline_problems(list_paths: list, *, bool_audit: bool, bool_require: bool) -> list:
     """Return the ratchet findings, or one finding when a required baseline is missing.
 
     Parameters
@@ -1202,7 +1234,9 @@ def baseline_problems(list_paths: list, bool_audit: bool, bool_require: bool) ->
             f"{STR_BASELINE_NAME} is missing but {STR_REQUIRE_BASELINE} was given"
         ] * bool_require
     set_scope = None if bool_audit else {shown_path(path_file) for path_file in list_paths}
-    return ratchet_problems(current_counts(list_paths), dict_baseline, set_scope)
+    return ratchet_problems(
+        current_counts(list_paths), dict_baseline=dict_baseline, set_scope=set_scope
+    )
 
 
 _INT_FLAG_WITH_VALUE = 2
@@ -1339,9 +1373,9 @@ def run(list_argv: list) -> int:
         return 1
 
     if bool_write:
-        return regenerate_baseline(list_paths, bool_audit)
+        return regenerate_baseline(list_paths, bool_audit=bool_audit)
 
-    list_problems = baseline_problems(list_paths, bool_audit, bool_require)
+    list_problems = baseline_problems(list_paths, bool_audit=bool_audit, bool_require=bool_require)
     if str_reference:
         list_problems.extend(compare_problems(str_reference))
     for path_file in list_paths:

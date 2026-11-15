@@ -11,6 +11,11 @@ from src.utils.retry import LogEmitter, RetryPolicy, call_with_backoff, retry_wi
 from src.utils.retry._schedule import _compute_backoff_wait
 
 
+_FLOAT_10_0 = 10.0
+_INT_2 = 2
+_INT_3 = 3
+
+
 class _CapturingEmitter(LogEmitter):
     """Emitter that records messages instead of logging them.
 
@@ -22,7 +27,7 @@ class _CapturingEmitter(LogEmitter):
         super().__init__()
         self.list_messages: list[str] = []
 
-    def log_message(self, str_message: str, str_level: str) -> None:
+    def log_message(self, *, str_message: str, str_level: str) -> None:
         """Record ``str_level``/``str_message`` for assertion.
 
         Parameters
@@ -68,7 +73,7 @@ def test_retry_calls_three_times_for_two_transient_failures() -> None:
     cls_call = Mock(side_effect=[OSError("transient"), OSError("transient"), "ok"])
     retry_with_backoff(int_max_attempts=3, float_base_wait_s=0.0)(cls_call)()
 
-    assert cls_call.call_count == 3
+    assert cls_call.call_count == _INT_3
 
 
 def test_retry_does_not_retry_non_transient() -> None:
@@ -119,7 +124,7 @@ def test_retry_writes_one_warning_per_retry_to_the_injected_logger() -> None:
         cls_call
     )()
 
-    assert len(cls_emitter.list_messages) == 2
+    assert len(cls_emitter.list_messages) == _INT_2
 
 
 def test_retry_messages_on_the_injected_logger_are_warnings() -> None:
@@ -180,7 +185,7 @@ def test_policy_is_frozen() -> None:
     ],
 )
 def test_compute_wait_follows_the_named_schedule(
-    str_strategy: str, int_attempt: int, float_expected: float
+    str_strategy: str, *, int_attempt: int, float_expected: float
 ) -> None:
     """Each strategy computes its documented wait.
 
@@ -193,12 +198,30 @@ def test_compute_wait_follows_the_named_schedule(
     float_expected : float
         The wait the schedule must produce.
     """
-    assert _compute_backoff_wait(str_strategy, 2.0, 2.0, int_attempt, None) == float_expected
+    assert (
+        _compute_backoff_wait(
+            str_strategy,
+            float_base_wait_s=2.0,
+            float_factor=2.0,
+            int_attempt=int_attempt,
+            float_max_wait_s=None,
+        )
+        == float_expected
+    )
 
 
 def test_compute_wait_clamps_to_the_cap() -> None:
     """The cap bounds an exponential schedule that would otherwise grow without limit."""
-    assert _compute_backoff_wait("exponential", 2.0, 2.0, 5, 10.0) == 10.0
+    assert (
+        _compute_backoff_wait(
+            "exponential",
+            float_base_wait_s=2.0,
+            float_factor=2.0,
+            int_attempt=5,
+            float_max_wait_s=10.0,
+        )
+        == _FLOAT_10_0
+    )
 
 
 def test_call_with_backoff_returns_on_first_success() -> None:
@@ -213,7 +236,7 @@ def test_call_with_backoff_retries_transient_then_succeeds() -> None:
     cls_call = Mock(side_effect=[OSError("transient"), "ok"])
     cls_policy = RetryPolicy(int_max_attempts=2, float_base_wait_s=0.0)
 
-    assert call_with_backoff(cls_call, cls_policy) == "ok"
+    assert call_with_backoff(cls_call, cls_policy=cls_policy) == "ok"
 
 
 def test_call_with_backoff_reraises_after_exhausting_attempts() -> None:
@@ -222,7 +245,7 @@ def test_call_with_backoff_reraises_after_exhausting_attempts() -> None:
     cls_policy = RetryPolicy(int_max_attempts=2, float_base_wait_s=0.0)
 
     with pytest.raises(OSError, match="still down"):
-        call_with_backoff(cls_call, cls_policy)
+        call_with_backoff(cls_call, cls_policy=cls_policy)
 
 
 def test_call_with_backoff_label_names_the_caller_not_the_lambda() -> None:
@@ -235,7 +258,9 @@ def test_call_with_backoff_label_names_the_caller_not_the_lambda() -> None:
     cls_call = Mock(side_effect=[OSError("transient"), "ok"])
     cls_policy = RetryPolicy(int_max_attempts=2, float_base_wait_s=0.0)
 
-    call_with_backoff(cls_call, cls_policy, cls_emitter, "download_file")
+    call_with_backoff(
+        cls_call, cls_policy=cls_policy, cls_logger=cls_emitter, str_label="download_file"
+    )
 
     assert "download_file failed" in cls_emitter.list_messages[0]
 

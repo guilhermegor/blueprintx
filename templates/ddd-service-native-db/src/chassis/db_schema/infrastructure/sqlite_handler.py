@@ -25,11 +25,13 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         Identifier field name, by default ``"id"``.
     """
 
-    def __init__(self, db_path: str | Path, table: str = "records", id_field: str = "id") -> None:
+    def __init__(
+        self, *, db_path: str | Path, table: str = "records", id_field: str = "id"
+    ) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        validate_sql_identifier(table, "table")
-        validate_sql_identifier(id_field, "id_field")
+        validate_sql_identifier(table, label="table")
+        validate_sql_identifier(id_field, label="id_field")
         self.table = table
         self.id_field = id_field
         self._ensure_table()
@@ -47,7 +49,7 @@ class SQLiteDatabaseHandler(DatabaseHandler):
         str
             Identifier assigned to the stored record.
         """
-        record = ensure_id(record, self.id_field)
+        record = ensure_id(record, id_field=self.id_field)
         json_payload = json.dumps(record)
         with closing(self._connect()) as cls_conn, cls_conn:
             cls_conn.execute(
@@ -79,7 +81,7 @@ class SQLiteDatabaseHandler(DatabaseHandler):
             return None
         return json.loads(tuple_row[0])
 
-    def update(self, record_id: str, updates: Record) -> Record | None:
+    def update(self, *, record_id: str, updates: Record) -> Record | None:
         """Update an existing record atomically.
 
         ``BEGIN IMMEDIATE`` takes the write lock before the read, so the read and the

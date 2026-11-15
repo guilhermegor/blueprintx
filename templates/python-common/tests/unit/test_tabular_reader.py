@@ -53,7 +53,12 @@ def df_typed_read(tmp_path: Path) -> object:
     pytest.importorskip("pandas")
     path_csv = _write_csv(tmp_path)
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
-    return read_table(path_csv, "", {"code": "str", "amount": "int64"}, cls_contract)
+    return read_table(
+        path_csv,
+        str_sheet="",
+        dict_dtypes={"code": "str", "amount": "int64"},
+        cls_contract=cls_contract,
+    )
 
 
 def test_read_table_keeps_the_contract_columns(df_typed_read: object) -> None:
@@ -123,7 +128,12 @@ def df_padded_read(tmp_path: Path) -> object:
     path_csv = tmp_path / "padded.csv"
     path_csv.write_text("code;amount\n007;1000.50\n042;0.10\n", encoding="utf-8")
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
-    return read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+    return read_table(
+        path_csv,
+        str_sheet="",
+        dict_dtypes={"code": "str", "amount": "str"},
+        cls_contract=cls_contract,
+    )
 
 
 def test_read_table_reads_as_text_preserving_zero_padding(df_padded_read: object) -> None:
@@ -153,21 +163,21 @@ def test_read_table_raises_on_missing_required_column(tmp_path: Path) -> None:
     path_csv = _write_csv(tmp_path)
     cls_contract = FileContract("data", "data", ("code", "missing_col"), ())
     with pytest.raises(ContractError, match="missing_col"):
-        read_table(path_csv, "", {"code": "str"}, cls_contract)
+        read_table(path_csv, str_sheet="", dict_dtypes={"code": "str"}, cls_contract=cls_contract)
 
 
 def test_find_file_problems_reports_without_raising(tmp_path: Path) -> None:
     """find_file_problems returns a ProblemReport instead of raising."""
     path_csv = _write_csv(tmp_path)
     cls_contract = FileContract("data", "data", ("code", "absent"), ())
-    cls_report = find_file_problems(cls_contract, path_csv, "")
+    cls_report = find_file_problems(cls_contract, path_file=path_csv, str_sheet="")
     assert any("absent" in p for p in cls_report.list_fatal)
 
 
 def test_find_file_problems_reports_a_missing_file_as_fatal(tmp_path: Path) -> None:
     """A missing file is a FATAL finding, not a FileNotFoundError (the "never raises" half)."""
     cls_contract = FileContract("t", "t", (), ())
-    cls_report = find_file_problems(cls_contract, tmp_path / "nope.csv", "")
+    cls_report = find_file_problems(cls_contract, path_file=tmp_path / "nope.csv", str_sheet="")
     assert "not found" in " ".join(cls_report.list_fatal)
 
 
@@ -183,7 +193,7 @@ def test_find_file_problems_missing_column_is_fatal_never_a_warning(tmp_path: Pa
     """
     path_csv = _write_csv(tmp_path)
     cls_contract = FileContract("data", "data", ("code", "absent"), ())
-    cls_report = find_file_problems(cls_contract, path_csv, "")
+    cls_report = find_file_problems(cls_contract, path_file=path_csv, str_sheet="")
     assert any("absent" in p for p in cls_report.list_fatal)
 
 
@@ -191,7 +201,7 @@ def test_find_file_problems_missing_column_leaves_warnings_empty(tmp_path: Path)
     """A missing required column is not duplicated into ``list_warnings``."""
     path_csv = _write_csv(tmp_path)
     cls_contract = FileContract("data", "data", ("code", "absent"), ())
-    cls_report = find_file_problems(cls_contract, path_csv, "")
+    cls_report = find_file_problems(cls_contract, path_file=path_csv, str_sheet="")
     assert cls_report.list_warnings == []
 
 
@@ -205,7 +215,7 @@ def test_header_only_file_passes_its_cnpj_contract(tmp_path: Path) -> None:
     path_csv = tmp_path / "empty.csv"
     path_csv.write_text("cnpj;amount\n", encoding="utf-8")
     cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
-    cls_report = find_file_problems(cls_contract, path_csv, "")
+    cls_report = find_file_problems(cls_contract, path_file=path_csv, str_sheet="")
     assert cls_report == ProblemReport(list_fatal=[], list_warnings=[])
 
 
@@ -223,7 +233,7 @@ def test_populated_cnpj_column_with_no_valid_value_is_a_warning_not_fatal(
     path_csv = tmp_path / "garbage.csv"
     path_csv.write_text("cnpj;amount\nnot-a-cnpj;10\nalso-not;20\n", encoding="utf-8")
     cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
-    cls_report = find_file_problems(cls_contract, path_csv, "")
+    cls_report = find_file_problems(cls_contract, path_file=path_csv, str_sheet="")
     assert any("holds no valid CNPJ" in p for p in cls_report.list_warnings)
 
 
@@ -232,7 +242,7 @@ def test_populated_cnpj_column_with_no_valid_value_is_never_fatal(tmp_path: Path
     path_csv = tmp_path / "garbage.csv"
     path_csv.write_text("cnpj;amount\nnot-a-cnpj;10\nalso-not;20\n", encoding="utf-8")
     cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
-    cls_report = find_file_problems(cls_contract, path_csv, "")
+    cls_report = find_file_problems(cls_contract, path_file=path_csv, str_sheet="")
     assert cls_report.list_fatal == []
 
 
@@ -246,7 +256,7 @@ def test_missing_cnpj_value_is_not_stringified_to_nan(tmp_path: Path) -> None:
     path_csv = tmp_path / "blank.csv"
     path_csv.write_text("cnpj;amount\n;10\n11.222.333/0001-81;20\n", encoding="utf-8")
     cls_contract = FileContract("data", "data", ("cnpj", "amount"), ("cnpj",))
-    cls_report = find_file_problems(cls_contract, path_csv, "")
+    cls_report = find_file_problems(cls_contract, path_file=path_csv, str_sheet="")
     assert cls_report == ProblemReport(list_fatal=[], list_warnings=[])
 
 
@@ -254,7 +264,12 @@ def test_empty_contract_constrains_nothing(tmp_path: Path) -> None:
     """An empty contract still declares intent and passes any well-formed file."""
     path_csv = _write_csv(tmp_path)
     cls_contract = FileContract("data", "data", (), ())
-    df_out = read_table(path_csv, "", {"code": "str", "amount": "int64"}, cls_contract)
+    df_out = read_table(
+        path_csv,
+        str_sheet="",
+        dict_dtypes={"code": "str", "amount": "int64"},
+        cls_contract=cls_contract,
+    )
     assert len(df_out) == 2
 
 
@@ -305,7 +320,13 @@ def df_quote_none_read(tmp_path: Path) -> object:
     path_csv = _write_malformed_quote_csv(tmp_path)
     cls_contract = FileContract("data", "data", (), ())
     dict_dtypes = {"code": "str", "amount": "str", "note": "str"}
-    return read_table(path_csv, "", dict_dtypes, cls_contract, int_csv_quoting=csv.QUOTE_NONE)
+    return read_table(
+        path_csv,
+        str_sheet="",
+        dict_dtypes=dict_dtypes,
+        cls_contract=cls_contract,
+        int_csv_quoting=csv.QUOTE_NONE,
+    )
 
 
 def test_read_table_quote_none_keeps_every_row(df_quote_none_read: object) -> None:
@@ -369,7 +390,12 @@ def df_json_read(tmp_path: Path) -> object:
         encoding="utf-8",
     )
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
-    return read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+    return read_table(
+        path_json,
+        str_sheet="",
+        dict_dtypes={"code": "str", "amount": "str"},
+        cls_contract=cls_contract,
+    )
 
 
 def test_read_table_json_preserves_zero_padding(df_json_read: object) -> None:
@@ -405,7 +431,12 @@ def test_padded_column_name_is_stripped_at_the_read_boundary(tmp_path: Path) -> 
     path_csv = tmp_path / "padded_header.csv"
     path_csv.write_text("code ;amount \nABC;10\n", encoding="utf-8")
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
-    df_out = read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+    df_out = read_table(
+        path_csv,
+        str_sheet="",
+        dict_dtypes={"code": "str", "amount": "str"},
+        cls_contract=cls_contract,
+    )
     assert list(df_out.columns) == ["code", "amount"]
 
 
@@ -429,7 +460,12 @@ def df_wide_read(tmp_path: Path) -> object:
         encoding="utf-8",
     )
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
-    return read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+    return read_table(
+        path_json,
+        str_sheet="",
+        dict_dtypes={"code": "str", "amount": "str"},
+        cls_contract=cls_contract,
+    )
 
 
 def test_positional_payload_drops_a_surplus_position_that_is_empty_everywhere(
@@ -472,7 +508,12 @@ def test_positional_payload_raises_when_the_surplus_holds_a_value(tmp_path: Path
     )
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
     with pytest.raises(ContractError, match="surplus position"):
-        read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+        read_table(
+            path_json,
+            str_sheet="",
+            dict_dtypes={"code": "str", "amount": "str"},
+            cls_contract=cls_contract,
+        )
 
 
 def test_positional_payload_raises_on_a_row_narrower_than_its_header(tmp_path: Path) -> None:
@@ -481,7 +522,12 @@ def test_positional_payload_raises_on_a_row_narrower_than_its_header(tmp_path: P
     path_json.write_text('{"columns": ["code", "amount"], "rows": [["ABC"]]}', encoding="utf-8")
     cls_contract = FileContract("data", "data", ("code", "amount"), ())
     with pytest.raises(ContractError, match="narrower"):
-        read_table(path_json, "", {"code": "str", "amount": "str"}, cls_contract)
+        read_table(
+            path_json,
+            str_sheet="",
+            dict_dtypes={"code": "str", "amount": "str"},
+            cls_contract=cls_contract,
+        )
 
 
 def test_column_names_colliding_after_trimming_are_rejected(tmp_path: Path) -> None:
@@ -496,7 +542,12 @@ def test_column_names_colliding_after_trimming_are_rejected(tmp_path: Path) -> N
     path_csv.write_text("code;code ;amount\nABC;DEF;10\n", encoding="utf-8")
     cls_contract = FileContract("data", "data", ("code",), ())
     with pytest.raises(ContractError, match="collide after trimming"):
-        read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+        read_table(
+            path_csv,
+            str_sheet="",
+            dict_dtypes={"code": "str", "amount": "str"},
+            cls_contract=cls_contract,
+        )
 
 
 def test_column_names_both_padded_and_colliding_after_trimming_are_rejected(
@@ -511,10 +562,15 @@ def test_column_names_both_padded_and_colliding_after_trimming_are_rejected(
     path_csv.write_text(" code;code ;amount\nABC;DEF;10\n", encoding="utf-8")
     cls_contract = FileContract("data", "data", ("code",), ())
     with pytest.raises(ContractError, match="collide after trimming"):
-        read_table(path_csv, "", {"code": "str", "amount": "str"}, cls_contract)
+        read_table(
+            path_csv,
+            str_sheet="",
+            dict_dtypes={"code": "str", "amount": "str"},
+            cls_contract=cls_contract,
+        )
 
 
-def _time_collision_check(mocker: MockerFixture, int_cols: int) -> float:
+def _time_collision_check(mocker: MockerFixture, *, int_cols: int) -> float:
     """Time ``_read_raw`` rejecting a header of ``int_cols`` columns holding one collision.
 
     Parameters
@@ -534,7 +590,7 @@ def _time_collision_check(mocker: MockerFixture, int_cols: int) -> float:
     mocker.patch("src.utils.tabular_reader._read_raw_dispatch", return_value=df_wide)
     float_start = time.perf_counter()
     with pytest.raises(ContractError, match="collide after trimming"):
-        _read_raw(Path("wide.csv"), "", None, ";")
+        _read_raw(Path("wide.csv"), str_sheet="", str_dtype=None, str_csv_sep=";")
     return time.perf_counter() - float_start
 
 
@@ -547,4 +603,4 @@ def test_read_raw_collision_check_on_a_very_wide_header_runs_in_linear_time(
     against one linear ``Counter`` pass. The ceiling sits far above the linear cost and
     far below the quadratic one at this width.
     """
-    assert _time_collision_check(mocker, 20_000) < 1.0
+    assert _time_collision_check(mocker, int_cols=20_000) < 1.0

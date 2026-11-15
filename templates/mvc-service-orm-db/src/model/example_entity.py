@@ -91,4 +91,4 @@ class ExampleEntity(metaclass=TypeChecker):
             ]
         finally:
             cls_session.close()
-        return from_records(list_records, _DICT_DTYPES)
+        return from_records(list_records, dict_dtypes=_DICT_DTYPES)

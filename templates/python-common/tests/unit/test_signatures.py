@@ -9,18 +9,18 @@ def test_resolve_signature_prefers_sender_file(tmp_path: Path) -> None:
     """When ``<sender>.html`` exists it is returned in preference to default."""
     (tmp_path / "alice@example.com.html").write_text("<p>Alice</p>", encoding="utf-8")
     (tmp_path / "default.html").write_text("<p>Default</p>", encoding="utf-8")
-    assert resolve_signature(tmp_path, "alice@example.com") == "<p>Alice</p>"
+    assert resolve_signature(tmp_path, str_sender_email="alice@example.com") == "<p>Alice</p>"
 
 
 def test_resolve_signature_falls_back_to_default(tmp_path: Path) -> None:
     """With no sender-specific file, ``default.html`` is returned."""
     (tmp_path / "default.html").write_text("<p>Default</p>", encoding="utf-8")
-    assert resolve_signature(tmp_path, "bob@example.com") == "<p>Default</p>"
+    assert resolve_signature(tmp_path, str_sender_email="bob@example.com") == "<p>Default</p>"
 
 
 def test_resolve_signature_returns_empty_when_none_exist(tmp_path: Path) -> None:
     """With neither file present the result is the empty string."""
-    assert resolve_signature(tmp_path, "carol@example.com") == ""
+    assert resolve_signature(tmp_path, str_sender_email="carol@example.com") == ""
 
 
 def test_to_html_converts_newlines_to_breaks() -> None:

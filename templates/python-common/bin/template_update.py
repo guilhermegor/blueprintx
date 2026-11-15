@@ -57,7 +57,7 @@ def _git_env() -> dict[str, str]:
 
 
 def merge_three_way(
-    bytes_ours: bytes, bytes_base: bytes, bytes_theirs: bytes
+    bytes_ours: bytes, *, bytes_base: bytes, bytes_theirs: bytes
 ) -> tuple[bytes | None, int]:
     """Merge two edits of one base with ``git merge-file``.
 
@@ -95,7 +95,7 @@ def merge_three_way(
 
 
 def plan_file(
-    path_project_file: pathlib.Path, path_theirs: pathlib.Path, bytes_base: bytes | None
+    path_project_file: pathlib.Path, *, path_theirs: pathlib.Path, bytes_base: bytes | None
 ) -> tuple[str, bytes | None]:
     """Decide what to do with one template-managed file.
 
@@ -123,7 +123,9 @@ def plan_file(
         return "same", None
     if bytes_ours == bytes_base:
         return "fast_forward", bytes_theirs
-    bytes_merged, int_conflicts = merge_three_way(bytes_ours, bytes_base or b"", bytes_theirs)
+    bytes_merged, int_conflicts = merge_three_way(
+        bytes_ours, bytes_base=bytes_base or b"", bytes_theirs=bytes_theirs
+    )
     if bytes_merged is None:
         return "error", None
     return ("conflict" if int_conflicts else "merged"), bytes_merged
@@ -131,6 +133,7 @@ def plan_file(
 
 def build_plan(
     path_root: pathlib.Path,
+    *,
     path_blueprintx: pathlib.Path,
     str_commit: str,
     dict_sources: dict[str, str],
@@ -158,8 +161,8 @@ def build_plan(
     dict_plan = {
         str_rel: plan_file(
             path_root / str_rel,
-            path_blueprintx / str_src,
-            drift.base_blob(path_blueprintx, str_commit, str_src),
+            path_theirs=path_blueprintx / str_src,
+            bytes_base=drift.base_blob(path_blueprintx, str_commit=str_commit, str_src=str_src),
         )
         if (path_blueprintx / str_src).is_file()
         else ("error", None)
@@ -168,7 +171,7 @@ def build_plan(
     return {k: v for k, v in dict_plan.items() if v[0] != "same"}
 
 
-def _head(path_blueprintx: pathlib.Path, bool_short: bool) -> str | None:
+def _head(path_blueprintx: pathlib.Path, *, bool_short: bool) -> str | None:
     """Return the checkout's HEAD commit, abbreviated or full.
 
     Parameters
@@ -210,6 +213,7 @@ def _print_plan(dict_plan: dict[str, tuple[str, bytes | None]]) -> None:
 
 def _write_plan(
     path_root: pathlib.Path,
+    *,
     path_blueprintx: pathlib.Path,
     dict_plan: dict,
     dict_sources: dict[str, str],
@@ -257,7 +261,7 @@ def _has_markers(path_file: pathlib.Path) -> bool:
     return bool(_RE_MARKERS.search(path_file.read_text(encoding="utf-8", errors="replace")))
 
 
-def _blocked(path_root: pathlib.Path, dict_plan: dict, bool_resume: bool) -> list[str]:
+def _blocked(path_root: pathlib.Path, *, dict_plan: dict, bool_resume: bool) -> list[str]:
     """List the files that still need a human.
 
     Parameters
@@ -284,7 +288,7 @@ def _blocked(path_root: pathlib.Path, dict_plan: dict, bool_resume: bool) -> lis
     ]
 
 
-def _enter_branch(path_root: pathlib.Path, str_branch: str) -> bool | None:
+def _enter_branch(path_root: pathlib.Path, *, str_branch: str) -> bool | None:
     """Create the update branch, or recognise that it is already checked out.
 
     Parameters
@@ -351,6 +355,7 @@ def _checkout_dirty(path_blueprintx: pathlib.Path) -> bool:
 
 def _apply(
     path_root: pathlib.Path,
+    *,
     path_blueprintx: pathlib.Path,
     dict_plan: dict,
     dict_sources: dict[str, str],
@@ -377,18 +382,20 @@ def _apply(
     int
             0 when every file applied cleanly and the stamp moved, otherwise 1.
     """
-    str_short = _head(path_blueprintx, True)
-    str_full = _head(path_blueprintx, False)
+    str_short = _head(path_blueprintx, bool_short=True)
+    str_full = _head(path_blueprintx, bool_short=False)
     if str_short is None or str_full is None:
         print(f"ERROR: cannot read HEAD of {path_blueprintx}; nothing was changed.")
         return 1
     str_branch = f"chore/template-update-{str_short}"
-    bool_resume = _enter_branch(path_root, str_branch)
+    bool_resume = _enter_branch(path_root, str_branch=str_branch)
     if bool_resume is None:
         return 1
     dict_write = {k: v for k, v in dict_plan.items() if not bool_resume or v[0] in _TRIVIAL}
-    _write_plan(path_root, path_blueprintx, dict_write, dict_sources)
-    list_blocked = _blocked(path_root, dict_plan, bool_resume)
+    _write_plan(
+        path_root, path_blueprintx=path_blueprintx, dict_plan=dict_write, dict_sources=dict_sources
+    )
+    list_blocked = _blocked(path_root, dict_plan=dict_plan, bool_resume=bool_resume)
     if list_blocked:
         print(
             f"\nApplied on branch {str_branch}, but {len(list_blocked)} file(s) need a human; "
@@ -450,20 +457,29 @@ def main(list_argv: list) -> int:
             0 for a dry run, a self-skip or a clean apply; 1 when ``--apply`` could not finish.
     """
     path_root, path_blueprintx, bool_apply = _parse_args(list_argv)
-    str_tier, dict_sources, str_skip = drift.managed_sources(path_root, path_blueprintx)
+    str_tier, dict_sources, str_skip = drift.managed_sources(
+        path_root, path_blueprintx=path_blueprintx
+    )
     if str_skip is not None:
         print(str_skip)
         return 0
     str_commit = drift.read_commit(path_root)
-    if str_commit is None or not drift.commit_known(path_blueprintx, str_commit):
+    if str_commit is None or not drift.commit_known(path_blueprintx, str_commit=str_commit):
         print(
             f"SKIPPED update: the stamped blueprintx_commit ({str_commit}) is missing or not in "
             f"{path_blueprintx}, so there is no merge base. Nothing was changed."
         )
         return 0
-    dict_plan = build_plan(path_root, path_blueprintx, str_commit, dict_sources)
+    dict_plan = build_plan(
+        path_root,
+        path_blueprintx=path_blueprintx,
+        str_commit=str_commit,
+        dict_sources=dict_sources,
+    )
     _print_plan(dict_plan)
-    drift._report_removed(path_root, path_blueprintx, str_tier, dict_sources)
+    drift._report_removed(
+        path_root, path_blueprintx_root=path_blueprintx, str_tier=str_tier, dict_now=dict_sources
+    )
     if not dict_plan:
         print("Template files are up to date.")
         return 0
@@ -473,7 +489,9 @@ def main(list_argv: list) -> int:
     if _checkout_dirty(path_blueprintx):
         print(f"ERROR: {path_blueprintx} has uncommitted changes; nothing was changed.")
         return 1
-    return _apply(path_root, path_blueprintx, dict_plan, dict_sources)
+    return _apply(
+        path_root, path_blueprintx=path_blueprintx, dict_plan=dict_plan, dict_sources=dict_sources
+    )
 
 
 if __name__ == "__main__":

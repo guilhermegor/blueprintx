@@ -49,7 +49,7 @@ def note_to_response_dto(cls_note: Note) -> NoteResponseDTO:
     )
 
 
-def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:
+def create_note(cls_dto: NoteCreateDTO, *, cls_repo: NoteRepository) -> NoteResponseDTO:
     """Translate DTO → entity, persist via use-case, return response DTO.
 
     Parameters

@@ -16,7 +16,7 @@ from src.controller._pipeline import PipelineOrchestrator, WebhookNotifier
 
 
 def _build_orchestrator(
-    tmp_path: Path, cls_webhook: WebhookNotifier | None
+    tmp_path: Path, *, cls_webhook: WebhookNotifier | None
 ) -> PipelineOrchestrator:
     """Build a minimal orchestrator for exercising ``_notify`` in isolation.
 
@@ -44,7 +44,7 @@ def _build_orchestrator(
 
 
 def test_notify_logs_payload_composition_when_gate_short_circuits(
-    tmp_path: Path, mocker: MockerFixture
+    tmp_path: Path, *, mocker: MockerFixture
 ) -> None:
     """The payload measurement fires even when ``cls_webhook is None`` short-circuits the send.
 
@@ -61,12 +61,12 @@ def test_notify_logs_payload_composition_when_gate_short_circuits(
     """
     mock_log = mocker.patch("src.controller._pipeline.log_message")
     _build_orchestrator(tmp_path, cls_webhook=None)._notify()
-    str_log = "\n".join(call.args[1] for call in mock_log.call_args_list)
+    str_log = "\n".join(call.kwargs["str_message"] for call in mock_log.call_args_list)
     assert "Notification payload composed: 18 chars" in str_log
 
 
 def test_notify_does_not_send_when_gate_short_circuits(
-    tmp_path: Path, mocker: MockerFixture
+    tmp_path: Path, *, mocker: MockerFixture
 ) -> None:
     """No send-related log line is emitted when no webhook was injected.
 
@@ -83,12 +83,12 @@ def test_notify_does_not_send_when_gate_short_circuits(
     """
     mock_log = mocker.patch("src.controller._pipeline.log_message")
     _build_orchestrator(tmp_path, cls_webhook=None)._notify()
-    str_log = "\n".join(call.args[1] for call in mock_log.call_args_list)
+    str_log = "\n".join(call.kwargs["str_message"] for call in mock_log.call_args_list)
     assert "Sending webhook notification" not in str_log
 
 
 def test_notify_measures_payload_before_sending_when_webhook_configured(
-    tmp_path: Path, mocker: MockerFixture
+    tmp_path: Path, *, mocker: MockerFixture
 ) -> None:
     """The composition measurement is logged before the send, when a webhook IS wired.
 
@@ -106,7 +106,7 @@ def test_notify_measures_payload_before_sending_when_webhook_configured(
     mock_log = mocker.patch("src.controller._pipeline.log_message")
     cls_webhook = Mock(spec=WebhookNotifier)
     _build_orchestrator(tmp_path, cls_webhook=cls_webhook)._notify()
-    str_log = "\n".join(call.args[1] for call in mock_log.call_args_list)
+    str_log = "\n".join(call.kwargs["str_message"] for call in mock_log.call_args_list)
     assert str_log.index("payload composed") < str_log.index("Sending webhook")
 
 
@@ -124,4 +124,4 @@ def test_notify_sends_through_webhook_when_configured(tmp_path: Path) -> None:
     """
     cls_webhook = Mock(spec=WebhookNotifier)
     _build_orchestrator(tmp_path, cls_webhook=cls_webhook)._notify()
-    cls_webhook.send.assert_called_once_with("hello notification")
+    cls_webhook.send.assert_called_once_with(str_message="hello notification")

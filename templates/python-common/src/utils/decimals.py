@@ -45,6 +45,7 @@ NumericLike = str | int | float | bool | Decimal | None
 @type_checker
 def to_decimal(
     value: NumericLike,
+    *,
     int_places: int,
     default: Decimal = Decimal("0"),
     rounding: str = _DEFAULT_ROUNDING,
@@ -81,12 +82,15 @@ def to_decimal(
     """
     if int_places < 0:
         raise ValueError("int_places must be non-negative")
-    return _quantise(_parse(value, default), int_places, default, rounding)
+    return _quantise(
+        _parse(value, default=default), int_places=int_places, default=default, rounding=rounding
+    )
 
 
 @type_checker
 def to_decimal_strict(
     value: NumericLike,
+    *,
     int_places: int,
     rounding: str = _DEFAULT_ROUNDING,
 ) -> Decimal:
@@ -124,14 +128,14 @@ def to_decimal_strict(
         ``decimal`` context precision.
     """
     cls_sentinel = Decimal("NaN")
-    cls_result = to_decimal(value, int_places, default=cls_sentinel, rounding=rounding)
+    cls_result = to_decimal(value, int_places=int_places, default=cls_sentinel, rounding=rounding)
     if cls_result.is_nan():
         raise ValueError(f"cannot coerce {value!r} to Decimal")
     return cls_result
 
 
 @type_checker
-def _quantise(cls_raw: Decimal, int_places: int, default: Decimal, rounding: str) -> Decimal:
+def _quantise(cls_raw: Decimal, *, int_places: int, default: Decimal, rounding: str) -> Decimal:
     """Quantise ``cls_raw``, falling back to ``default`` when the context is too narrow.
 
     Parameters
@@ -163,7 +167,7 @@ def _quantise(cls_raw: Decimal, int_places: int, default: Decimal, rounding: str
 
 
 @type_checker
-def _parse(value: NumericLike, default: Decimal) -> Decimal:
+def _parse(value: NumericLike, *, default: Decimal) -> Decimal:
     """Parse ``value`` into an unquantised Decimal, falling back to ``default``.
 
     Parameters
@@ -178,12 +182,12 @@ def _parse(value: NumericLike, default: Decimal) -> Decimal:
     Decimal
         The parsed value, or ``default``.
     """
-    return _parse_by_type(value, default)
+    return _parse_by_type(value, default=default)
 
 
 @functools.singledispatch
 @type_checker
-def _parse_by_type(value: object, default: Decimal) -> Decimal:
+def _parse_by_type(value: object, *, default: Decimal) -> Decimal:
     """Parse anything not handled by a registered type: normalise as text, else ``default``.
 
     Parameters
@@ -200,14 +204,14 @@ def _parse_by_type(value: object, default: Decimal) -> Decimal:
     """
     str_clean = _normalise_br_number(str(value))
     try:
-        return _finite_or(Decimal(str_clean), default)
+        return _finite_or(Decimal(str_clean), default=default)
     except InvalidOperation:
         return default
 
 
 @_parse_by_type.register
 @type_checker
-def _parse_none(value: None, default: Decimal) -> Decimal:
+def _parse_none(value: None, *, default: Decimal) -> Decimal:
     """Map a missing value to ``default``.
 
     Parameters
@@ -227,7 +231,7 @@ def _parse_none(value: None, default: Decimal) -> Decimal:
 
 @_parse_by_type.register
 @type_checker
-def _parse_decimal(value: Decimal, default: Decimal) -> Decimal:
+def _parse_decimal(value: Decimal, *, default: Decimal) -> Decimal:
     """Pass a Decimal through, mapping a non-finite one (NaN/Infinity) to ``default``.
 
     Parameters
@@ -242,12 +246,12 @@ def _parse_decimal(value: Decimal, default: Decimal) -> Decimal:
     Decimal
         ``value`` when finite, else ``default``.
     """
-    return _finite_or(value, default)
+    return _finite_or(value, default=default)
 
 
 @_parse_by_type.register
 @type_checker
-def _parse_bool(value: bool, default: Decimal) -> Decimal:
+def _parse_bool(value: bool, *, default: Decimal) -> Decimal:
     """Reject a bool so ``True``/``False`` never become 1/0.
 
     ``bool`` is a subclass of ``int``; without its own handler it would inherit the int one.
@@ -269,7 +273,7 @@ def _parse_bool(value: bool, default: Decimal) -> Decimal:
 
 @_parse_by_type.register
 @type_checker
-def _parse_int(value: int, default: Decimal) -> Decimal:
+def _parse_int(value: int, *, default: Decimal) -> Decimal:
     """Convert an int, which is always finite — no guard needed.
 
     Parameters
@@ -289,7 +293,7 @@ def _parse_int(value: int, default: Decimal) -> Decimal:
 
 @_parse_by_type.register
 @type_checker
-def _parse_float(value: float, default: Decimal) -> Decimal:
+def _parse_float(value: float, *, default: Decimal) -> Decimal:
     """Convert a float via ``repr`` so the shortest round-tripping decimal is used.
 
     The full binary expansion would otherwise leak into the result. A float NaN/Inf maps
@@ -307,11 +311,11 @@ def _parse_float(value: float, default: Decimal) -> Decimal:
     Decimal
         The converted value, or ``default``.
     """
-    return _finite_or(Decimal(repr(value)), default)
+    return _finite_or(Decimal(repr(value)), default=default)
 
 
 @type_checker
-def _finite_or(cls_value: Decimal, default: Decimal) -> Decimal:
+def _finite_or(cls_value: Decimal, *, default: Decimal) -> Decimal:
     """Return ``cls_value`` when it is finite, else ``default``.
 
     Centralises the "non-finite is unusable" rule: a ``NaN`` or ``±Inf`` (from a float,

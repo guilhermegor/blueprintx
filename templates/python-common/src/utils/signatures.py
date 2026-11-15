@@ -27,7 +27,7 @@ else:
 
 
 @type_checker
-def resolve_signature(path_signatures_dir: Path, str_sender_email: str) -> str:
+def resolve_signature(path_signatures_dir: Path, *, str_sender_email: str) -> str:
     """Return the sender's signature HTML, falling back to the default.
 
     Parameters

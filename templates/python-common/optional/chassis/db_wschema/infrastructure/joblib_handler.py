@@ -55,6 +55,7 @@ class JoblibHandler(DatabaseHandler):
 
     def __init__(
         self,
+        *,
         dir_path: str | Path,
         compress: tuple[str, int] = ("zlib", 3),
         secret_key: bytes | None = None,
@@ -93,10 +94,10 @@ class JoblibHandler(DatabaseHandler):
         bytes_data = self._to_bytes(dict_record)
         str_sha256 = hashlib.sha256(bytes_data).hexdigest()[:8]
         str_record_id = f"{str_name}_{str_ts}_{str_sha256}"
-        self._artifact_path(str_record_id, ".joblib").write_bytes(bytes_data)
+        self._artifact_path(record_id=str_record_id, str_suffix=".joblib").write_bytes(bytes_data)
         if self._key:
             bytes_sig = hmac.new(self._key, bytes_data, hashlib.sha256).digest()
-            self._artifact_path(str_record_id, ".sig").write_bytes(bytes_sig)
+            self._artifact_path(record_id=str_record_id, str_suffix=".sig").write_bytes(bytes_sig)
         return str_record_id
 
     def read(self, record_id: str) -> Record | None:
@@ -118,15 +119,15 @@ class JoblibHandler(DatabaseHandler):
             If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
             component, or any integrity factor fails.
         """
-        path_artifact = self._artifact_path(record_id, ".joblib")
+        path_artifact = self._artifact_path(record_id=record_id, str_suffix=".joblib")
         if not path_artifact.exists():
             return None
         bytes_data = path_artifact.read_bytes()
-        self._verify(record_id, bytes_data)
+        self._verify(record_id=record_id, bytes_data=bytes_data)
         buf = io.BytesIO(bytes_data)
         return joblib.load(buf)  # noqa: S301
 
-    def update(self, record_id: str, updates: Record) -> Record | None:
+    def update(self, *, record_id: str, updates: Record) -> Record | None:
         """Not supported — artifacts are immutable.
 
         Raises
@@ -157,8 +158,8 @@ class JoblibHandler(DatabaseHandler):
             If ``record_id`` is not a single ``{name}_{YYYYMMDD}_{HHMMSS}_{sha8}``
             component.
         """
-        path_artifact = self._artifact_path(record_id, ".joblib")
-        path_sig = self._artifact_path(record_id, ".sig")
+        path_artifact = self._artifact_path(record_id=record_id, str_suffix=".joblib")
+        path_sig = self._artifact_path(record_id=record_id, str_suffix=".sig")
         if not path_artifact.exists():
             return False
         path_artifact.unlink()
@@ -218,7 +219,7 @@ class JoblibHandler(DatabaseHandler):
             raise ValueError(f"Invalid _name {str_name!r}: use lowercase letters, digits and '-'")
         return str_name
 
-    def _artifact_path(self, record_id: str, str_suffix: str) -> Path:
+    def _artifact_path(self, *, record_id: str, str_suffix: str) -> Path:
         """Build the path of one artifact file, refusing anything outside the store.
 
         Parameters
@@ -302,7 +303,7 @@ class JoblibHandler(DatabaseHandler):
         joblib.dump(record, buf, compress=self._compress)
         return buf.getvalue()
 
-    def _verify(self, record_id: str, bytes_data: bytes) -> None:
+    def _verify(self, *, record_id: str, bytes_data: bytes) -> None:
         """Run all three integrity checks and raise on the first failure.
 
         Parameters
@@ -319,9 +320,9 @@ class JoblibHandler(DatabaseHandler):
             ``_saved_at`` metadata mismatches, or HMAC verification fails.
         """
         self._validate_record_id(record_id)
-        self._check_sha256(record_id, bytes_data)
-        self._check_hmac(record_id, bytes_data)
-        self._check_saved_at(record_id, bytes_data)
+        self._check_sha256(record_id=record_id, bytes_data=bytes_data)
+        self._check_hmac(record_id=record_id, bytes_data=bytes_data)
+        self._check_saved_at(record_id=record_id, bytes_data=bytes_data)
 
     @staticmethod
     def _id_parts(record_id: str) -> list[str]:
@@ -340,7 +341,7 @@ class JoblibHandler(DatabaseHandler):
         """
         return record_id.rsplit("_", _INT_RECORD_ID_PARTS - 1)
 
-    def _check_sha256(self, record_id: str, bytes_data: bytes) -> None:
+    def _check_sha256(self, *, record_id: str, bytes_data: bytes) -> None:
         """Raise unless the id's hash segment is the SHA-256 prefix of ``bytes_data``.
 
         Parameters
@@ -360,7 +361,7 @@ class JoblibHandler(DatabaseHandler):
                 f"SHA256 prefix mismatch for {record_id!r} — file may be corrupted or substituted"
             )
 
-    def _check_hmac(self, record_id: str, bytes_data: bytes) -> None:
+    def _check_hmac(self, *, record_id: str, bytes_data: bytes) -> None:
         """Verify the ``.sig`` sidecar when a ``secret_key`` is configured.
 
         Parameters
@@ -377,9 +378,9 @@ class JoblibHandler(DatabaseHandler):
         """
         if not self._key:
             return
-        self._check_signature(self._key, record_id, bytes_data)
+        self._check_signature(bytes_key=self._key, record_id=record_id, bytes_data=bytes_data)
 
-    def _check_signature(self, bytes_key: bytes, record_id: str, bytes_data: bytes) -> None:
+    def _check_signature(self, *, bytes_key: bytes, record_id: str, bytes_data: bytes) -> None:
         """Raise unless the stored signature equals the HMAC of ``bytes_data``.
 
         Parameters
@@ -418,12 +419,12 @@ class JoblibHandler(DatabaseHandler):
         ValueError
             If the sidecar does not exist.
         """
-        path_sig = self._artifact_path(record_id, ".sig")
+        path_sig = self._artifact_path(record_id=record_id, str_suffix=".sig")
         if not path_sig.exists():
             raise ValueError(f"HMAC signature missing for {record_id!r}")
         return path_sig.read_bytes()
 
-    def _check_saved_at(self, record_id: str, bytes_data: bytes) -> None:
+    def _check_saved_at(self, *, record_id: str, bytes_data: bytes) -> None:
         """Raise unless the payload's ``_saved_at`` equals the id's timestamp segment.
 
         Parameters

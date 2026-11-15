@@ -218,7 +218,7 @@ def walk_problems(path_docs: pathlib.Path) -> list[str]:
 
 
 def published_pages(
-    path_docs: pathlib.Path, tuple_specs: tuple[pathspec.GitIgnoreSpec, ...]
+    path_docs: pathlib.Path, *, tuple_specs: tuple[pathspec.GitIgnoreSpec, ...]
 ) -> list[str]:
     """List every published (not excluded/drafted, non-``CLAUDE.md``) page under the docs dir.
 
@@ -245,7 +245,7 @@ def published_pages(
 
 
 def check_orphan_pages(
-    list_pages: list[str], set_nav_files: set[str], str_docs: str = "docs"
+    list_pages: list[str], *, set_nav_files: set[str], str_docs: str = "docs"
 ) -> list[str]:
     """Return errors for published pages absent from ``mkdocs.yml`` ``nav:``.
 
@@ -271,7 +271,7 @@ def check_orphan_pages(
     ]
 
 
-def check_nav_ceiling(nav: object, int_ceiling: int = INT_NAV_TOP_LEVEL_CEILING) -> list[str]:
+def check_nav_ceiling(nav: object, *, int_ceiling: int = INT_NAV_TOP_LEVEL_CEILING) -> list[str]:
     """Return an error when ``nav:`` has more top-level entries than the ceiling.
 
     Parameters
@@ -331,6 +331,7 @@ def claude_index_table(path_claude_index: pathlib.Path) -> set[str] | None:
 
 def check_claude_index(
     set_indexed: set[str],
+    *,
     list_pages: list[str],
     path_docs: pathlib.Path,
     str_docs: str = "docs",
@@ -427,7 +428,7 @@ def main(list_argv: list) -> int:
         )
         return 1
 
-    list_pages = published_pages(path_docs, unpublished_specs(dict_mkdocs))
+    list_pages = published_pages(path_docs, tuple_specs=unpublished_specs(dict_mkdocs))
     if not list_pages:
         print(
             "no published documentation pages found — discovery is broken, not clean",
@@ -435,14 +436,20 @@ def main(list_argv: list) -> int:
         )
         return 1
     set_nav_files = nav_files(dict_mkdocs.get("nav"))
-    list_errors = check_orphan_pages(list_pages, set_nav_files, str_docs)
+    list_errors = check_orphan_pages(list_pages, set_nav_files=set_nav_files, str_docs=str_docs)
     list_errors += walk_problems(path_docs)
     list_errors += check_nav_ceiling(dict_mkdocs.get("nav"))
 
     tuple_index = docs_index_table(path_docs)
     if tuple_index is not None:
         str_index, set_indexed = tuple_index
-        list_errors += check_claude_index(set_indexed, list_pages, path_docs, str_docs, str_index)
+        list_errors += check_claude_index(
+            set_indexed,
+            list_pages=list_pages,
+            path_docs=path_docs,
+            str_docs=str_docs,
+            str_index=str_index,
+        )
 
     for str_error in list_errors:
         print(f"docs-gap: {str_error}", file=sys.stderr)

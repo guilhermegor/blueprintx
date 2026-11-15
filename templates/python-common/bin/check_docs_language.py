@@ -148,7 +148,7 @@ def declared_locale(dict_mkdocs: dict) -> str:
     return str_language if isinstance(str_language, str) else ""
 
 
-def page_set(path_root: pathlib.Path, dict_mkdocs: dict) -> list:
+def page_set(path_root: pathlib.Path, *, dict_mkdocs: dict) -> list:
     """Return the pages the gate reads.
 
     Parameters
@@ -166,13 +166,13 @@ def page_set(path_root: pathlib.Path, dict_mkdocs: dict) -> list:
     path_docs = path_root / str(dict_mkdocs.get("docs_dir") or STR_DEFAULT_DOCS_DIR)
     list_pages = [
         path_docs / str_rel
-        for str_rel in published_pages(path_docs, unpublished_specs(dict_mkdocs))
+        for str_rel in published_pages(path_docs, tuple_specs=unpublished_specs(dict_mkdocs))
     ]
     path_readme = path_root / "README.md"
     return sorted({*list_pages, *([path_readme] if path_readme.is_file() else [])})
 
 
-def _fence_toggles(str_open: str, str_marker: str, str_info: str) -> bool:
+def _fence_toggles(str_open: str, *, str_marker: str, str_info: str) -> bool:
     """Say whether a fence line opens a block or closes the open one, as CommonMark does.
 
     Parameters
@@ -219,7 +219,7 @@ def _mask_lines(str_text: str) -> list:
     for str_line in [*str_text.splitlines(), ""]:
         re_marker = RE_FENCE.match(str_line)
         str_marker, str_info = re_marker.groups() if re_marker else ("", "")
-        bool_toggle = _fence_toggles(str_open, str_marker, str_info)
+        bool_toggle = _fence_toggles(str_open, str_marker=str_marker, str_info=str_info)
         if bool_toggle:
             str_open = "" if str_open else str_marker
         re_definition = None if str_open else RE_LINK_DEFINITION.match(str_line)
@@ -313,7 +313,7 @@ def locale_hits(str_paragraph: str) -> dict:
     }
 
 
-def paragraph_locale(str_paragraph: str, str_declared: str) -> str:
+def paragraph_locale(str_paragraph: str, *, str_declared: str) -> str:
     """Return the locale a paragraph reads as, or the declared one when it is not decisive.
 
     Parameters
@@ -353,7 +353,7 @@ def is_untranslated(str_text: str) -> bool:
     return bool(RE_UNTRANSLATED.search("\n".join(_blank_multiline(_mask_lines(str_text)))))
 
 
-def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared: str) -> tuple:
+def page_problems(path_page: pathlib.Path, *, path_root: pathlib.Path, str_declared: str) -> tuple:
     """Return one message per paragraph of a page written in the wrong locale.
 
     Parameters
@@ -378,7 +378,7 @@ def page_problems(path_page: pathlib.Path, path_root: pathlib.Path, str_declared
         return list_out, True, 0
     list_paras = prose_paragraphs(str_text)
     for int_line, str_para in list_paras:
-        str_read = paragraph_locale(str_para, str_declared)
+        str_read = paragraph_locale(str_para, str_declared=str_declared)
         if str_read != str_declared:
             str_flat = " ".join(str_para.split())
             str_tail = "…" if len(str_flat) > INT_EXCERPT else ""
@@ -422,7 +422,7 @@ def _load_config(path_root: pathlib.Path) -> tuple:
     return dict_mkdocs, ""
 
 
-def _resolve(path_root: pathlib.Path, bool_check_locale: bool = True) -> tuple:
+def _resolve(path_root: pathlib.Path, *, bool_check_locale: bool = True) -> tuple:
     """Load the config and the page set, or say why the gate cannot run.
 
     Parameters
@@ -444,7 +444,7 @@ def _resolve(path_root: pathlib.Path, bool_check_locale: bool = True) -> tuple:
         str_error = (
             f"theme.language '{str_declared}' has no function-word set; add one to this gate"
         )
-    list_pages = [] if str_error else page_set(path_root, dict_mkdocs)
+    list_pages = [] if str_error else page_set(path_root, dict_mkdocs=dict_mkdocs)
     if not str_error and not list_pages:
         str_error = f"no page found under {path_root}; this gate would pass vacuously"
     return str_declared, list_pages, str_error
@@ -475,7 +475,7 @@ def main(list_argv: list) -> int:
     if list_rest and not bool_list:
         print("❌ usage: check_docs_language.py [--root <dir>] [--list-pages]")
         return 1
-    str_declared, list_pages, str_error = _resolve(path_root, not bool_list)
+    str_declared, list_pages, str_error = _resolve(path_root, bool_check_locale=not bool_list)
     if str_error:
         print(f"❌ {str_error}")
         return 1
@@ -483,12 +483,15 @@ def main(list_argv: list) -> int:
         print("\n".join(str(path_page) for path_page in list_pages))
         return 0
     return _report(
-        [page_problems(path_page, path_root, str_declared) for path_page in list_pages],
-        str_declared,
+        [
+            page_problems(path_page, path_root=path_root, str_declared=str_declared)
+            for path_page in list_pages
+        ],
+        str_declared=str_declared,
     )
 
 
-def _report(list_results: list, str_declared: str) -> int:
+def _report(list_results: list, *, str_declared: str) -> int:
     """Print the findings and the summary, and return the exit code.
 
     Parameters

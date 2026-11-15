@@ -115,6 +115,7 @@ def resolve_package_version(str_distribution: str) -> str:
 @type_checker
 def stamp_provenance(
     df_input: pd.DataFrame,
+    *,
     str_url: str,
     cls_contract: FileContract,
     str_content_hash: str,

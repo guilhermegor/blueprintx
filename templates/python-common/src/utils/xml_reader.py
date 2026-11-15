@@ -79,6 +79,7 @@ __all__ = [
 @type_checker
 def read_xml(  # noqa: PLR0913 — the public reader API; each argument is a real read option
     path_file: Path,
+    *,
     str_row_anchor: str,
     dict_column_paths: dict[str, tuple[str, ...]],
     dict_dtypes: dict[str, str],
@@ -132,18 +133,18 @@ def read_xml(  # noqa: PLR0913 — the public reader API; each argument is a rea
     cls_root = defused_et.parse(str(path_file)).getroot()
     list_rows = [
         cls_row
-        for cls_row in _find_rows(cls_root, str_row_anchor)
-        if str_row_filter is None or _path_exists(cls_row, str_row_filter)
+        for cls_row in _find_rows(cls_root, str_row_anchor=str_row_anchor)
+        if str_row_filter is None or _path_exists(cls_row, str_path=str_row_filter)
     ]
     list_records = [
         {
-            str_col: _resolve_column(cls_row, cls_root, tuple_paths)
+            str_col: _resolve_column(cls_row, cls_root=cls_root, tuple_paths=tuple_paths)
             for str_col, tuple_paths in dict_column_paths.items()
         }
         for cls_row in list_rows
     ]
     df_raw = pd.DataFrame(list_records, columns=list(dict_column_paths))
-    cls_report = find_contract_problems(df_raw, cls_contract)
+    cls_report = find_contract_problems(df_raw, cls_contract=cls_contract)
     if cls_report.list_fatal or cls_report.list_warnings:
         raise ContractError(cls_report.list_fatal + cls_report.list_warnings)
     return apply_dtypes(
@@ -156,7 +157,7 @@ def read_xml(  # noqa: PLR0913 — the public reader API; each argument is a rea
 
 @type_checker
 def find_xml_row_problems(  # complexity-ok: two independent guards, missing file vs no rows
-    path_file: Path, str_row_anchor: str, cls_contract: FileContract
+    path_file: Path, *, str_row_anchor: str, cls_contract: FileContract
 ) -> ProblemReport:
     """Return whether ``path_file`` has at least one ``str_row_anchor`` element (never raises).
 
@@ -185,7 +186,7 @@ def find_xml_row_problems(  # complexity-ok: two independent guards, missing fil
     if not path_file.exists():
         return ProblemReport(list_fatal=[f"File not found: {path_file}"], list_warnings=[])
     cls_root = defused_et.parse(str(path_file)).getroot()
-    if _find_rows(cls_root, str_row_anchor):
+    if _find_rows(cls_root, str_row_anchor=str_row_anchor):
         return ProblemReport(list_fatal=[], list_warnings=[])
     return ProblemReport(
         list_fatal=[f"No '{str_row_anchor}' element found for contract '{cls_contract.str_name}'"],
@@ -255,7 +256,7 @@ def _local_name(str_tag: str) -> str:
 
 
 @type_checker
-def _find_rows(cls_root: Element, str_row_anchor: str) -> list[Element]:
+def _find_rows(cls_root: Element, *, str_row_anchor: str) -> list[Element]:
     """Find every element anywhere in the tree whose local name is ``str_row_anchor``.
 
     Parameters
@@ -275,7 +276,7 @@ def _find_rows(cls_root: Element, str_row_anchor: str) -> list[Element]:
 
 @type_checker
 def _find_child(  # complexity-ok: wildcard vs exact-name match is the whole child lookup
-    cls_element: Element, str_segment: str
+    cls_element: Element, *, str_segment: str
 ) -> Element | None:
     """Return the first direct child matching a path segment (single level, not recursive).
 
@@ -302,7 +303,7 @@ def _find_child(  # complexity-ok: wildcard vs exact-name match is the whole chi
 
 
 @type_checker
-def _matching_children(cls_element: Element, str_segment: str) -> list[Element]:
+def _matching_children(cls_element: Element, *, str_segment: str) -> list[Element]:
     """Return every direct child matching a path segment, in document order.
 
     Unlike :func:`_find_child`, this returns ALL candidates — required for an INTERMEDIATE
@@ -330,7 +331,7 @@ def _matching_children(cls_element: Element, str_segment: str) -> list[Element]:
 
 @type_checker
 def _get_attribute(  # complexity-ok: linear scan is the whole point of local-name matching
-    cls_element: Element, str_name: str
+    cls_element: Element, *, str_name: str
 ) -> str | None:
     """Return an attribute's value, matched by LOCAL NAME (namespace-agnostic).
 
@@ -359,7 +360,7 @@ def _get_attribute(  # complexity-ok: linear scan is the whole point of local-na
 
 
 @type_checker
-def _resolve_path(cls_element: Element, str_path: str) -> str | None:
+def _resolve_path(cls_element: Element, *, str_path: str) -> str | None:
     """Resolve one path to its element text or attribute value.
 
     Parameters
@@ -375,12 +376,12 @@ def _resolve_path(cls_element: Element, str_path: str) -> str | None:
         The stripped text/attribute value, or ``None`` when unresolved or blank.
     """
     list_segments = [str_segment for str_segment in str_path.split("/") if str_segment]
-    return _resolve_segments(cls_element, list_segments) if list_segments else None
+    return _resolve_segments(cls_element, list_segments=list_segments) if list_segments else None
 
 
 @type_checker
 def _resolve_segments(  # complexity-ok: leaf (attr vs text) vs intermediate (backtracking loop)
-    cls_element: Element, list_segments: list[str]
+    cls_element: Element, *, list_segments: list[str]
 ) -> str | None:
     """Resolve a path's remaining segments, backtracking across an intermediate ``*``/name.
 
@@ -399,20 +400,20 @@ def _resolve_segments(  # complexity-ok: leaf (attr vs text) vs intermediate (ba
     str_segment = list_segments[0]
     if len(list_segments) == 1:
         if str_segment.startswith("@"):
-            return _get_attribute(cls_element, str_segment[1:])
-        cls_target = _find_child(cls_element, str_segment)
+            return _get_attribute(cls_element, str_name=str_segment[1:])
+        cls_target = _find_child(cls_element, str_segment=str_segment)
         if cls_target is None:
             return None
         return (cls_target.text or "").strip() or None
-    for cls_child in _matching_children(cls_element, str_segment):
-        str_value = _resolve_segments(cls_child, list_segments[1:])
+    for cls_child in _matching_children(cls_element, str_segment=str_segment):
+        str_value = _resolve_segments(cls_child, list_segments=list_segments[1:])
         if str_value is not None:
             return str_value
     return None
 
 
 @type_checker
-def _path_exists(cls_element: Element, str_path: str) -> bool:
+def _path_exists(cls_element: Element, *, str_path: str) -> bool:
     """Return whether a path resolves to an element or attribute (presence, not value).
 
     Parameters
@@ -428,12 +429,12 @@ def _path_exists(cls_element: Element, str_path: str) -> bool:
         ``True`` when the path's target exists, regardless of whether it is blank.
     """
     list_segments = [str_segment for str_segment in str_path.split("/") if str_segment]
-    return bool(list_segments) and _segments_exist(cls_element, list_segments)
+    return bool(list_segments) and _segments_exist(cls_element, list_segments=list_segments)
 
 
 @type_checker
 def _segments_exist(  # complexity-ok: mirrors _resolve_segments' two branches, presence only
-    cls_element: Element, list_segments: list[str]
+    cls_element: Element, *, list_segments: list[str]
 ) -> bool:
     """Return whether a path's remaining segments exist, with the same backtracking.
 
@@ -454,17 +455,17 @@ def _segments_exist(  # complexity-ok: mirrors _resolve_segments' two branches, 
     str_segment = list_segments[0]
     if len(list_segments) == 1:
         if str_segment.startswith("@"):
-            return _get_attribute(cls_element, str_segment[1:]) is not None
-        return _find_child(cls_element, str_segment) is not None
+            return _get_attribute(cls_element, str_name=str_segment[1:]) is not None
+        return _find_child(cls_element, str_segment=str_segment) is not None
     return any(
-        _segments_exist(cls_child, list_segments[1:])
-        for cls_child in _matching_children(cls_element, str_segment)
+        _segments_exist(cls_child, list_segments=list_segments[1:])
+        for cls_child in _matching_children(cls_element, str_segment=str_segment)
     )
 
 
 @type_checker
 def _resolve_column(  # complexity-ok: the loop over ordered alternatives IS "first match wins"
-    cls_row: Element, cls_root: Element, tuple_paths: tuple[str, ...]
+    cls_row: Element, *, cls_root: Element, tuple_paths: tuple[str, ...]
 ) -> str | None:
     """Resolve one column's ordered alternative paths; the first that resolves wins.
 
@@ -487,9 +488,9 @@ def _resolve_column(  # complexity-ok: the loop over ordered alternatives IS "fi
     """
     for str_path in tuple_paths:
         str_value = (
-            _resolve_path(cls_root, str_path.lstrip("/"))
+            _resolve_path(cls_root, str_path=str_path.lstrip("/"))
             if str_path.startswith("/")
-            else _resolve_path(cls_row, str_path)
+            else _resolve_path(cls_row, str_path=str_path)
         )
         if str_value is not None:
             return str_value

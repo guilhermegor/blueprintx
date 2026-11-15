@@ -80,7 +80,7 @@ class _StrictLoader(yaml.SafeLoader if yaml is not None else object):  # type: i
                 f"{_POLICY_FILE}: duplicate key(s) {sorted(set_dupes)} — YAML keeps only the "
                 f"last, so the earlier rules would be dropped in silence."
             )
-        return super().construct_mapping(node, deep=deep)
+        return super().construct_mapping(node=node, deep=deep)
 
 
 def load_policy(path_root: pathlib.Path) -> dict | None:
@@ -130,7 +130,7 @@ def _prefix_depth(dict_policy: dict) -> int:
     return int(dict_policy.get("src_prefix_depth") or 0)
 
 
-def first_party_roots(path_src: pathlib.Path, dict_policy: dict) -> set[str]:
+def first_party_roots(path_src: pathlib.Path, *, dict_policy: dict) -> set[str]:
     """Return the top-level package names that belong to this project.
 
     Includes ``first_party_extra`` from the policy, which exists for the **layout shim**: the
@@ -240,7 +240,7 @@ def imported_names(cls_node: ast.Import | ast.ImportFrom) -> list[tuple[str, str
     return list_out
 
 
-def resolve_layer(tuple_rel: tuple, dict_policy: dict) -> str:
+def resolve_layer(tuple_rel: tuple, *, dict_policy: dict) -> str:
     """Return the policy key governing a file, preferring the most SPECIFIC match.
 
     A layer is normally the first path component, but a nested architecture needs finer keys:
@@ -277,7 +277,7 @@ def resolve_layer(tuple_rel: tuple, dict_policy: dict) -> str:
     return str_broad
 
 
-def resolve_layer_policy(dict_policy: dict, str_layer: str) -> tuple[dict, dict]:
+def resolve_layer_policy(dict_policy: dict, *, str_layer: str) -> tuple[dict, dict]:
     """Return the allow-list and annotation-only map that govern one layer.
 
     The annotation-only map is layered: a file-wide default, overridden per layer. A layer
@@ -327,7 +327,7 @@ def function_line_spans(cls_tree: ast.AST) -> list:
     ]
 
 
-def _star_import_problem(path_file: pathlib.Path, int_line: int, str_root: str) -> str:
+def _star_import_problem(path_file: pathlib.Path, *, int_line: int, str_root: str) -> str:
     """Return the message for a star import of an annotation-only vendor.
 
     Parameters
@@ -353,6 +353,7 @@ def _star_import_problem(path_file: pathlib.Path, int_line: int, str_root: str) 
 
 def disallowed_import_problems(
     cls_tree: ast.AST,
+    *,
     path_file: pathlib.Path,
     str_layer: str,
     dict_allow: dict,
@@ -407,7 +408,9 @@ def disallowed_import_problems(
             bool_in_function = any(a < cls_node.lineno <= b for a, b in list_functions)
             str_where = " (inside a function — deferring the import does not change the verdict)"
             if str_alias == "*" and str_root in dict_annotation_only:
-                list_problems.append(_star_import_problem(path_file, cls_node.lineno, str_root))
+                list_problems.append(
+                    _star_import_problem(path_file, int_line=cls_node.lineno, str_root=str_root)
+                )
                 continue
             list_problems.append(
                 f"{path_file}:{cls_node.lineno}: '{str_root}' is not allowed in layer "
@@ -420,6 +423,7 @@ def disallowed_import_problems(
 
 def annotation_only_misuse_problems(
     cls_tree: ast.AST,
+    *,
     path_file: pathlib.Path,
     str_layer: str,
     dict_annotation_aliases: dict,
@@ -467,6 +471,7 @@ def annotation_only_misuse_problems(
 
 def find_file_problems(
     path_file: pathlib.Path,
+    *,
     str_layer: str,
     dict_policy: dict,
     set_first_party: set[str],
@@ -498,19 +503,32 @@ def find_file_problems(
     except SyntaxError as cls_exc:
         return [f"{path_file}: could not parse ({cls_exc})"]
 
-    dict_allow, dict_annotation_only = resolve_layer_policy(dict_policy, str_layer)
+    dict_allow, dict_annotation_only = resolve_layer_policy(dict_policy, str_layer=str_layer)
     list_problems, dict_annotation_aliases = disallowed_import_problems(
-        cls_tree, path_file, str_layer, dict_allow, dict_annotation_only, set_first_party
+        cls_tree,
+        path_file=path_file,
+        str_layer=str_layer,
+        dict_allow=dict_allow,
+        dict_annotation_only=dict_annotation_only,
+        set_first_party=set_first_party,
     )
     list_problems += annotation_only_misuse_problems(
-        cls_tree, path_file, str_layer, dict_annotation_aliases, dict_annotation_only
+        cls_tree,
+        path_file=path_file,
+        str_layer=str_layer,
+        dict_annotation_aliases=dict_annotation_aliases,
+        dict_annotation_only=dict_annotation_only,
     )
     return list_problems + direction_problems(
-        cls_tree, path_file, str_layer, dict_policy, tuple_pkg_parts
+        cls_tree,
+        path_file=path_file,
+        str_layer=str_layer,
+        dict_policy=dict_policy,
+        tuple_pkg_parts=tuple_pkg_parts,
     )
 
 
-def relative_import_target(tuple_pkg_parts: tuple, cls_node: ast.ImportFrom) -> str | None:
+def relative_import_target(tuple_pkg_parts: tuple, *, cls_node: ast.ImportFrom) -> str | None:
     """Resolve a RELATIVE import to the layer it actually targets.
 
     ⚠️ ``imported_names`` deliberately yields nothing for a relative import, because for the
@@ -555,6 +573,7 @@ def relative_import_target(tuple_pkg_parts: tuple, cls_node: ast.ImportFrom) -> 
 
 def direction_problems(
     cls_tree: ast.Module,
+    *,
     path_file: pathlib.Path,
     str_layer: str,
     dict_policy: dict,
@@ -608,14 +627,14 @@ def direction_problems(
         (cls_node, str_target)
         for cls_node in ast.walk(cls_tree)
         if isinstance(cls_node, ast.ImportFrom) and cls_node.level
-        for str_target in [relative_import_target(tuple_pkg_parts, cls_node)]
+        for str_target in [relative_import_target(tuple_pkg_parts, cls_node=cls_node)]
         if str_target is not None
     ]
     return [
         f"{path_file}:{cls_node.lineno}: layer '{str_layer}' must not import "
         f"'{str_target}'. {dict_deny[str_key]}"
         for cls_node, str_target in list_targets
-        for str_key in [_matching_deny_key(str_target, dict_deny)]
+        for str_key in [_matching_deny_key(str_target, dict_deny=dict_deny)]
         if str_key is not None
     ]
 
@@ -642,7 +661,7 @@ def imported_modules(cls_node: ast.AST) -> list[str]:
     return []
 
 
-def _matching_deny_key(str_target: str, dict_deny: dict) -> str | None:
+def _matching_deny_key(str_target: str, *, dict_deny: dict) -> str | None:
     """Return the deny entry a module matches, or ``None``.
 
     A key without a dot matches the module's top-level package; a dotted key must match the
@@ -710,7 +729,7 @@ def _report_absent_policy(int_modules: int) -> int:
     return 1
 
 
-def _under_prefix_marker(tuple_parts: tuple, dict_policy: dict) -> bool:
+def _under_prefix_marker(tuple_parts: tuple, *, dict_policy: dict) -> bool:
     """Return whether a path's last stripped prefix component is the policy's marker.
 
     With ``src_prefix_depth: 2`` the layer is read after ``<pkg>/_internal/``; a file such as
@@ -736,7 +755,9 @@ def _under_prefix_marker(tuple_parts: tuple, dict_policy: dict) -> bool:
     return len(tuple_parts) >= int_prefix and tuple_parts[int_prefix - 1] == str_marker
 
 
-def class_base_problems(path_file: pathlib.Path, str_layer: str, dict_policy: dict) -> list[str]:
+def class_base_problems(
+    path_file: pathlib.Path, *, str_layer: str, dict_policy: dict
+) -> list[str]:
     """Return one problem per class defined in a layer that lists its base in ``deny_class_bases``.
 
     An import allowance says a layer may USE a vendor; it cannot say the layer may not DEFINE
@@ -770,7 +791,7 @@ def class_base_problems(path_file: pathlib.Path, str_layer: str, dict_policy: di
         for cls_node in ast.walk(cls_tree)
         if isinstance(cls_node, ast.ClassDef)
         for cls_base in cls_node.bases
-        for str_base in [denied_base_key(cls_base, dict_table, dict_denied)]
+        for str_base in [denied_base_key(cls_base, dict_table=dict_table, dict_denied=dict_denied)]
         if str_base is not None
     ]
 
@@ -807,7 +828,7 @@ def import_table(cls_tree: ast.Module) -> dict[str, str]:
 
 
 def denied_base_key(
-    cls_base: ast.expr, dict_table: dict[str, str], dict_denied: dict
+    cls_base: ast.expr, *, dict_table: dict[str, str], dict_denied: dict
 ) -> str | None:
     """Return the ``deny_class_bases`` key a class base resolves to, or ``None``.
 
@@ -877,17 +898,27 @@ def main() -> int:
 
     int_prefix = int(dict_policy.get("src_prefix_depth", 0))
 
-    set_first_party = first_party_roots(path_src, dict_policy)
+    set_first_party = first_party_roots(path_src, dict_policy=dict_policy)
     list_all: list[str] = []
     for path_file in list_modules:
         tuple_rel = path_file.relative_to(path_src).parts[int_prefix:]
-        str_layer = resolve_layer(tuple_rel, dict_policy)
-        if not _under_prefix_marker(path_file.relative_to(path_src).parts, dict_policy):
+        str_layer = resolve_layer(tuple_rel, dict_policy=dict_policy)
+        if not _under_prefix_marker(
+            path_file.relative_to(path_src).parts, dict_policy=dict_policy
+        ):
             str_layer = _ROOT_LAYER
         list_all.extend(
-            find_file_problems(path_file, str_layer, dict_policy, set_first_party, tuple_rel[:-1])
+            find_file_problems(
+                path_file,
+                str_layer=str_layer,
+                dict_policy=dict_policy,
+                set_first_party=set_first_party,
+                tuple_pkg_parts=tuple_rel[:-1],
+            )
         )
-        list_all.extend(class_base_problems(path_file, str_layer, dict_policy))
+        list_all.extend(
+            class_base_problems(path_file, str_layer=str_layer, dict_policy=dict_policy)
+        )
 
     for str_problem in list_all:
         print(f"❌ {str_problem}")

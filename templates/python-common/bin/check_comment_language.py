@@ -242,7 +242,7 @@ def portuguese_words(str_text: str) -> list:
     return list_hits
 
 
-def marker_comments(str_source: str, str_marker: str) -> list:
+def marker_comments(str_source: str, *, str_marker: str) -> list:
     """Return the comment BLOCKS of a marker-delimited file.
 
     Only lines whose first non-space characters are the marker count, so a marker appearing
@@ -375,7 +375,7 @@ def _docstring_blocks(str_source: str) -> list:
     ]
 
 
-def _line_offset(str_text: str, str_word: str) -> int:
+def _line_offset(str_text: str, *, str_word: str) -> int:
     """Return how many lines into a block the first occurrence of a word sits.
 
     Parameters
@@ -398,7 +398,7 @@ def _line_offset(str_text: str, str_word: str) -> int:
     return 0
 
 
-def _excerpt_around(str_text: str, str_word: str) -> str:
+def _excerpt_around(str_text: str, *, str_word: str) -> str:
     """Return the offending word in its immediate context.
 
     A block can be forty lines long, so quoting its opening is useless — the reader needs the
@@ -468,16 +468,18 @@ def file_problems(path_file: pathlib.Path) -> list:
     except (OSError, UnicodeDecodeError):
         return []
     list_comments = (
-        python_comments(str_source) if bool_python else marker_comments(str_source, str_marker)
+        python_comments(str_source)
+        if bool_python
+        else marker_comments(str_source, str_marker=str_marker)
     )
     list_out = []
     for int_line, str_text in list_comments:
         list_hits = portuguese_words(str_text)
         if list_hits:
-            int_at = int_line + _line_offset(str_text, list_hits[0])
+            int_at = int_line + _line_offset(str_text, str_word=list_hits[0])
             list_out.append(
                 f"❌ {_display_path(path_file)}:{int_at}: reads as Portuguese "
-                f"[{', '.join(list_hits)}] -- {_excerpt_around(str_text, list_hits[0])}"
+                f"[{', '.join(list_hits)}] -- {_excerpt_around(str_text, str_word=list_hits[0])}"
             )
     return list_out
 

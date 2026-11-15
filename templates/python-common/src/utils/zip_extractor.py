@@ -59,6 +59,7 @@ def _require_zip(path_zip: Path) -> None:
 @type_checker
 def unzip_if_needed(
     path_zip: Path,
+    *,
     path_target: Path,
     bool_enabled: bool,
     str_password: str | None = None,
@@ -90,12 +91,12 @@ def unzip_if_needed(
     bool_should_extract = bool_enabled and not path_target.exists() and path_zip.exists()
     if not bool_should_extract:
         return False
-    extract_all(path_zip, path_target.parent, str_password)
+    extract_all(path_zip, path_dest_dir=path_target.parent, str_password=str_password)
     return True
 
 
 @type_checker
-def extract_members(path_zip: Path, path_dest_dir: Path, list_members: list[str]) -> list[Path]:
+def extract_members(path_zip: Path, *, path_dest_dir: Path, list_members: list[str]) -> list[Path]:
     """Extract only the named members of ``path_zip`` into ``path_dest_dir``.
 
     Members absent from the archive are silently skipped (the caller decides what a missing
@@ -133,7 +134,7 @@ def extract_members(path_zip: Path, path_dest_dir: Path, list_members: list[str]
 
 @type_checker
 def extract_all(
-    path_zip: Path, path_dest_dir: Path, str_password: str | None = None
+    path_zip: Path, *, path_dest_dir: Path, str_password: str | None = None
 ) -> list[Path]:
     """Extract every member of ``path_zip`` into ``path_dest_dir``.
 
@@ -165,7 +166,7 @@ def extract_all(
 
 
 @type_checker
-def find_member(list_members: list[Path], str_name: str) -> Path:
+def find_member(list_members: list[Path], *, str_name: str) -> Path:
     """Select one extracted member by its **exact** file name.
 
     Regulatory archives routinely ship members whose names *prefix one another* — e.g.
@@ -205,7 +206,7 @@ def find_member(list_members: list[Path], str_name: str) -> Path:
 
 
 @type_checker
-def extract_all_to_memory(path_zip: Path, str_password: str | None = None) -> dict[str, bytes]:
+def extract_all_to_memory(path_zip: Path, *, str_password: str | None = None) -> dict[str, bytes]:
     """Read every file member of ``path_zip`` into memory, never touching disk.
 
     The in-memory counterpart of :func:`extract_all` — for when the extracted bytes are
@@ -241,7 +242,7 @@ def extract_all_to_memory(path_zip: Path, str_password: str | None = None) -> di
 
 @type_checker
 def extract_members_to_memory(
-    path_zip: Path, list_members: list[str], str_password: str | None = None
+    path_zip: Path, *, list_members: list[str], str_password: str | None = None
 ) -> dict[str, bytes]:
     """Read only the named members of ``path_zip`` into memory (absent members skipped).
 
@@ -281,7 +282,7 @@ def extract_members_to_memory(
 
 @type_checker
 def extract_member_to_memory(
-    path_zip: Path, str_member: str, str_password: str | None = None
+    path_zip: Path, *, str_member: str, str_password: str | None = None
 ) -> bytes:
     """Read a single named member of ``path_zip`` into memory.
 

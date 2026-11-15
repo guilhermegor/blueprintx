@@ -45,6 +45,6 @@ def build() -> AppContainer:
     """
     cls_note_repo = InMemoryNoteRepository()
     return AppContainer(
-        create_note=lambda cls_dto: create_note(cls_dto, cls_note_repo),
+        create_note=lambda cls_dto: create_note(cls_dto, cls_repo=cls_note_repo),
         list_notes=lambda: list_notes(cls_note_repo),
     )
