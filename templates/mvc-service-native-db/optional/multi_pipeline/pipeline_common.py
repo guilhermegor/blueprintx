@@ -131,7 +131,7 @@ def render_report(
     """
     log_message(cls_logger, "Starting report-export process")
     path_report = fn_output_path("xlsx_name")
-    RenderToExcel(path_report).render(df_report)
+    RenderToExcel(path_out=path_report).render(df_report)
     log_message(cls_logger, f"Finishing report-export process ({path_report})")
     return path_report
 

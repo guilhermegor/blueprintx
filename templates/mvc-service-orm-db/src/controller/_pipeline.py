@@ -266,7 +266,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         """
         log_message(self.logger, "Starting report-export process")
         path_report = self.fn_output_path("xlsx_name")
-        RenderToExcel(path_report).render(df_report)
+        RenderToExcel(path_out=path_report).render(df_report)
         log_message(self.logger, f"Finishing report-export process ({path_report})")
         return path_report
 
