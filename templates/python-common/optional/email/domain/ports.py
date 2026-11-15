@@ -19,6 +19,7 @@ class EmailHandler(Protocol):
 
     def send_email(
         self,
+        *,
         str_subject: str,
         list_to: list[str],
         list_cc: list[str],

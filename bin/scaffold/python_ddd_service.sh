@@ -519,7 +519,7 @@ from src.config.startup import (  # noqa: E402
 )
 
 
-notify(CLS_WEBHOOK if BOOL_WEBHOOK_ENABLED else None, MSG_WEBHOOK)
+notify(CLS_WEBHOOK if BOOL_WEBHOOK_ENABLED else None, str_message=MSG_WEBHOOK)
 PYBLOCK
     print_status "success" "Webhook notify wired as the final lifecycle step (main.py)"
 }

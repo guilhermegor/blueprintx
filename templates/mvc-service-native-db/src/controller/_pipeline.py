@@ -45,6 +45,7 @@ class EmailHandler(Protocol, metaclass=ProtocolTypeCheckerMeta):
 
     def send_email(
         self,
+        *,
         str_subject: str,
         list_to: list[str],
         list_cc: list[str],
@@ -66,7 +67,7 @@ class WebhookNotifier(Protocol, metaclass=ProtocolTypeCheckerMeta):
     seam (mirrors :class:`EmailHandler`).
     """
 
-    def send(self, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
+    def send(self, *, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
         """Send one notification."""
         ...
 
@@ -106,6 +107,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 
     def __init__(
         self,
+        *,
         logger: Logger | None,
         fn_build_connection: Callable[[], DbConnection],
         fn_output_path: Callable[[str], Path],
@@ -139,7 +141,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
             df_report = self._read(cls_connection)
         finally:
             cls_connection.close()
-            log_message(self.logger, "DB connection closed")
+            log_message(self.logger, str_message="DB connection closed")
         df_report = self._enrich(df_report)
         path_report = self._render(df_report)
         dict_summary: dict[str, object] = {
@@ -153,18 +155,20 @@ class PipelineOrchestrator(metaclass=TypeChecker):
 
     def _log_context(self) -> None:
         """Log the run context (one line per item) so a run is self-describing."""
-        log_message(self.logger, "Starting variable-definition process")
+        log_message(self.logger, str_message="Starting variable-definition process")
         for str_key, value in self.dict_context.items():
-            log_message(self.logger, f"{str_key}: {value}")
+            log_message(self.logger, str_message=f"{str_key}: {value}")
         log_message(
             self.logger,
-            f"Email handler: {'configured' if self.cls_email_handler is not None else 'none'}",
+            str_message="Email handler: "
+            f"{'configured' if self.cls_email_handler is not None else 'none'}",
         )
         log_message(
             self.logger,
-            f"Webhook notifier: {'configured' if self.cls_webhook is not None else 'none'}",
+            str_message="Webhook notifier: "
+            f"{'configured' if self.cls_webhook is not None else 'none'}",
         )
-        log_message(self.logger, "Finishing variable-definition process")
+        log_message(self.logger, str_message="Finishing variable-definition process")
 
     def _open_connection(self) -> DbConnection:
         """Open the DB-API connection used by the read phase.
@@ -174,7 +178,7 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         DbConnection
             The open DB-API 2.0 connection (closed by :meth:`run` in a ``finally``).
         """
-        log_message(self.logger, "Opening DB connection")
+        log_message(self.logger, str_message="Opening DB connection")
         return self.fn_build_connection()
 
     def _read(self, cls_connection: DbConnection) -> pd.DataFrame:
@@ -190,12 +194,14 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         pandas.DataFrame
             The rows read by the model.
         """
-        log_message(self.logger, "Starting data-read process")
-        cls_example = ExampleEntity(cls_connection)
+        log_message(self.logger, str_message="Starting data-read process")
+        cls_example = ExampleEntity(cls_connection=cls_connection)
         cls_example.ensure_table()
         cls_example.insert("Hello from MVC native-db service!")
         df_report = cls_example.fetch_all()
-        log_message(self.logger, f"Finishing data-read process ({len(df_report)} rows)")
+        log_message(
+            self.logger, str_message=f"Finishing data-read process ({len(df_report)} rows)"
+        )
         return df_report
 
     def _enrich(  # complexity-ok: two distinct degradation triggers, each its own log line
@@ -237,16 +243,18 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         """
         path_labels = self.dict_context.get("path_labels")
         if not isinstance(path_labels, Path):
-            log_message(self.logger, "Label enrichment skipped: no path_labels configured")
+            log_message(
+                self.logger, str_message="Label enrichment skipped: no path_labels configured"
+            )
             return df_report
         try:
             df_enriched = LabelEnricher(path_labels).enrich(df_report)
         except Exception as exc:  # noqa: BLE001 - modes 2-5 above, see the docstring
             log_message(
                 self.logger,
-                f"Label enrichment degraded: LabelEnricher reading {path_labels.name} "
+                str_message=f"Label enrichment degraded: LabelEnricher reading {path_labels.name} "
                 f"raised {type(exc).__name__}",
-                "warning",
+                str_level="warning",
             )
             return df_report
         return df_enriched
@@ -264,10 +272,10 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         pathlib.Path
             The written report path.
         """
-        log_message(self.logger, "Starting report-export process")
+        log_message(self.logger, str_message="Starting report-export process")
         path_report = self.fn_output_path("xlsx_name")
-        RenderToExcel(path_report).render(df_report)
-        log_message(self.logger, f"Finishing report-export process ({path_report})")
+        RenderToExcel(path_out=path_report).render(df_report)
+        log_message(self.logger, str_message=f"Finishing report-export process ({path_report})")
         return path_report
 
     def _write_summary(self, dict_summary: dict[str, object]) -> None:
@@ -278,10 +286,10 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         dict_summary : dict
             The run summary to serialise.
         """
-        log_message(self.logger, "Starting summary-export process")
+        log_message(self.logger, str_message="Starting summary-export process")
         with self.path_json.open("w", encoding="utf-8") as file_write:
             json.dump(dict_summary, file_write)
-        log_message(self.logger, f"Summary exported: {self.path_json}")
+        log_message(self.logger, str_message=f"Summary exported: {self.path_json}")
 
     def _notify(self) -> None:
         """Send the run-summary notification when a webhook is wired (final phase).
@@ -298,12 +306,14 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         gate in ``main.py``.
         """
         int_payload_chars = len(self.str_webhook_message)
-        log_message(self.logger, f"Notification payload composed: {int_payload_chars} chars")
+        log_message(
+            self.logger, str_message=f"Notification payload composed: {int_payload_chars} chars"
+        )
         if self.cls_webhook is None:
             return
-        log_message(self.logger, "Sending webhook notification")
-        self.cls_webhook.send(self.str_webhook_message)
-        log_message(self.logger, "Webhook notification sent")
+        log_message(self.logger, str_message="Sending webhook notification")
+        self.cls_webhook.send(str_message=self.str_webhook_message)
+        log_message(self.logger, str_message="Webhook notification sent")
 
     def _log_elapsed(self, float_elapsed: float) -> None:
         """Log the elapsed wall time as HH:MM:SS.
@@ -316,4 +326,4 @@ class PipelineOrchestrator(metaclass=TypeChecker):
         float_hours, float_remainder = divmod(float_elapsed, 3600)
         float_minutes, float_seconds = divmod(float_remainder, 60)
         str_hms = f"{int(float_hours)}:{int(float_minutes)}:{float_seconds:.2f}"
-        log_message(self.logger, f"Run finished (HH:MM:SS): {str_hms}")
+        log_message(self.logger, str_message=f"Run finished (HH:MM:SS): {str_hms}")

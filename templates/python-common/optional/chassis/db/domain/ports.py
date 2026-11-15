@@ -59,7 +59,7 @@ class DatabaseHandler(metaclass=ABCTypeCheckerMeta):
         """
 
     @abstractmethod
-    def update(self, record_id: str, updates: Record) -> Record | None:
+    def update(self, *, record_id: str, updates: Record) -> Record | None:
         """Update a record and return the new value if it exists.
 
         ⚠️ **Atomicity is part of this contract, not an implementation detail.** The

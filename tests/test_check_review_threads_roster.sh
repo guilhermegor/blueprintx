@@ -67,7 +67,10 @@ def review(str_login, str_type=None):
 def missing(list_reviews, dict_roster_used=None):
     dict_use = dict_roster if dict_roster_used is None else dict_roster_used
     return cls_gate.find_missing_review_problem(
-        list_reviews, cls_gate.reviewer_logins(dict_use), "someone", str_head_oid=str_head
+        list_reviews,
+        set_reviewers=cls_gate.reviewer_logins(dict_use),
+        str_pr_author="someone",
+        str_head_oid=str_head,
     )
 
 
@@ -83,8 +86,10 @@ def fetched_pr(list_reviews, list_comments=()):
         "reviewThreads": {**dict_page, "nodes": []},
         "comments": {**dict_page, "nodes": list(list_comments)},
     }
-    cls_gate._fetch_page = lambda *args: dict_pr
-    return cls_gate.fetch_pull_request("o", "r", 1, frozenset(dict_roster) | set_posters)
+    cls_gate._fetch_page = lambda *args, **kwargs: dict_pr
+    return cls_gate.fetch_pull_request(
+        "o", str_repo="r", int_number=1, set_declared=frozenset(dict_roster) | set_posters
+    )
 
 
 def fetched(list_reviews):
@@ -109,7 +114,9 @@ def author_problem(str_type):
         "reviews": {"nodes": []},
         "comments": {"nodes": []},
     }
-    return cls_gate._missing_review(dict_pr, "o/r", cls_gate.reviewer_logins(dict_roster))[0]
+    return cls_gate._missing_review(
+        dict_pr, str_repo_full="o/r", set_reviewers=cls_gate.reviewer_logins(dict_roster)
+    )[0]
 
 
 def without_row():

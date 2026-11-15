@@ -15,9 +15,8 @@ this always-shipped seam to one layout's optional package.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from logging import Logger
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from utils.email.dispatch import resolve_dispatch
 from utils.email.html_body import to_html_body
@@ -38,9 +37,28 @@ else:
         from chassis.typing import type_checker
 
 
+@runtime_checkable
+class SendEmailFn(Protocol):
+    """The sender's call shape — ``EmailHandler.send_email`` with every argument by keyword."""
+
+    def __call__(  # noqa: PLR0913 -- mirrors the EmailHandler port
+        self,
+        *,
+        str_subject: str,
+        list_to: list[str],
+        list_cc: list[str],
+        str_body: str,
+        list_attachments: list[str],
+        bool_auto_send: bool,
+    ) -> bool:
+        """Dispatch one e-mail and report whether it was sent."""
+        ...
+
+
 @type_checker
 def send_email_block(  # noqa: PLR0913 — one orchestration call, each argument a real option
-    fn_send_email: Callable[[str, list[str], list[str], str, list[str], bool], bool],
+    fn_send_email: SendEmailFn,
+    *,
     str_block_key: str,
     str_subject: str,
     list_to: list[str],
@@ -53,7 +71,7 @@ def send_email_block(  # noqa: PLR0913 — one orchestration call, each argument
 
     Parameters
     ----------
-    fn_send_email : Callable[[str, list of str, list of str, str, list of str, bool], bool]
+    fn_send_email : SendEmailFn
         The concrete sender, matching ``EmailHandler.send_email``'s signature — pass a bound
         method such as ``cls_handler.send_email``.
     str_block_key : str
@@ -78,17 +96,19 @@ def send_email_block(  # noqa: PLR0913 — one orchestration call, each argument
         ``True`` when ``fn_send_email`` was called and dispatched; ``False`` when the block's
         dispatch policy skipped the send.
     """
-    bool_send, bool_auto_send = resolve_dispatch(str_block_key, logger)
+    bool_send, bool_auto_send = resolve_dispatch(str_block_key, logger=logger)
     if not bool_send:
         log_message(
-            logger, f"[email] block '{str_block_key}' skipped (EMAIL_SEND resolved off)", "info"
+            logger,
+            str_message=f"[email] block '{str_block_key}' skipped (EMAIL_SEND resolved off)",
+            str_level="info",
         )
         return False
     return fn_send_email(
-        str_subject,
-        list_to,
-        list_cc,
-        to_html_body(str_body),
-        list_attachments or [],
-        bool_auto_send,
+        str_subject=str_subject,
+        list_to=list_to,
+        list_cc=list_cc,
+        str_body=to_html_body(str_body),
+        list_attachments=list_attachments or [],
+        bool_auto_send=bool_auto_send,
     )

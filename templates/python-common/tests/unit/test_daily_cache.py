@@ -9,6 +9,9 @@ from src.utils.daily_cache import daily_cache_path, download_daily
 from utils.retry import LogEmitter
 
 
+_INT_2 = 2
+
+
 class _RecordingEmitter(LogEmitter):
     """Emitter that keeps every line, so a test can assert WHICH branch ran.
 
@@ -21,7 +24,7 @@ class _RecordingEmitter(LogEmitter):
         super().__init__()
         self.list_messages: list[str] = []
 
-    def log_message(self, str_message: str, str_level: str) -> None:
+    def log_message(self, *, str_message: str, str_level: str) -> None:
         """Record one line.
 
         Parameters
@@ -49,7 +52,7 @@ class _DownloadRecorder:
         self.bytes_payload = bytes_payload
         self.list_calls: list[str] = []
 
-    def __call__(self, str_url: str, path_dest: Path) -> Path:
+    def __call__(self, *, str_url: str, path_dest: Path) -> Path:
         """Record the URL and write the payload.
 
         Parameters
@@ -69,7 +72,7 @@ class _DownloadRecorder:
         return path_dest
 
 
-def _download_that_dies_midway(str_url: str, path_dest: Path) -> Path:
+def _download_that_dies_midway(str_url: str, *, path_dest: Path) -> Path:
     """Write a truncated artifact, then fail — the partial-write case.
 
     Parameters
@@ -93,7 +96,7 @@ def _download_that_dies_midway(str_url: str, path_dest: Path) -> Path:
     raise OSError("connection dropped mid-transfer")
 
 
-def _download_that_writes_nothing(str_url: str, path_dest: Path) -> Path:
+def _download_that_writes_nothing(str_url: str, *, path_dest: Path) -> Path:
     """Write a zero-byte artifact and return normally.
 
     Parameters
@@ -114,6 +117,7 @@ def _download_that_writes_nothing(str_url: str, path_dest: Path) -> Path:
 
 def _call_download(
     path_root: Path,
+    *,
     fn_download: object,
     dt_day: date = date(2026, 8, 17),
     cls_logger: LogEmitter | None = None,
@@ -138,10 +142,10 @@ def _call_download(
     """
     return download_daily(
         "https://example.com/a.csv",
-        path_root,
-        "src",
-        dt_day,
-        ".csv",
+        path_cache_dir=path_root,
+        str_key="src",
+        dt_reference=dt_day,
+        str_suffix=".csv",
         cls_logger=cls_logger,
         fn_download=fn_download,
     )
@@ -166,7 +170,9 @@ def _fake_download(bytes_payload: bytes = b"payload") -> tuple:
 
 def test_daily_cache_path_keys_on_the_reference_date(tmp_path: Path) -> None:
     """The filename carries the data's reference day, with no time component."""
-    path_out = daily_cache_path(tmp_path, "cvm-register", date(2026, 8, 17), ".csv")
+    path_out = daily_cache_path(
+        tmp_path, str_key="cvm-register", dt_reference=date(2026, 8, 17), str_suffix=".csv"
+    )
     assert path_out.name == "cvm-register_20260817.csv"
 
 
@@ -175,10 +181,10 @@ def test_download_daily_fetches_on_a_miss(tmp_path: Path) -> None:
     fn_download, list_calls = _fake_download()
     download_daily(
         "https://example.com/a.csv",
-        tmp_path / "cache",
-        "src",
-        date(2026, 8, 17),
-        ".csv",
+        path_cache_dir=tmp_path / "cache",
+        str_key="src",
+        dt_reference=date(2026, 8, 17),
+        str_suffix=".csv",
         fn_download=fn_download,
     )
     assert list_calls == ["https://example.com/a.csv"]
@@ -189,10 +195,10 @@ def test_download_daily_writes_the_payload_on_a_miss(tmp_path: Path) -> None:
     fn_download, _ = _fake_download()
     path_out = download_daily(
         "https://example.com/a.csv",
-        tmp_path / "cache",
-        "src",
-        date(2026, 8, 17),
-        ".csv",
+        path_cache_dir=tmp_path / "cache",
+        str_key="src",
+        dt_reference=date(2026, 8, 17),
+        str_suffix=".csv",
         fn_download=fn_download,
     )
     assert path_out.read_bytes() == b"payload"
@@ -201,17 +207,17 @@ def test_download_daily_writes_the_payload_on_a_miss(tmp_path: Path) -> None:
 def test_download_daily_reuses_the_file_on_a_second_call(tmp_path: Path) -> None:
     """The second call for the same reference day does not hit the network."""
     fn_download, list_calls = _fake_download()
-    _call_download(tmp_path, fn_download)
-    _call_download(tmp_path, fn_download)
+    _call_download(tmp_path, fn_download=fn_download)
+    _call_download(tmp_path, fn_download=fn_download)
     assert len(list_calls) == 1
 
 
 def test_download_daily_refetches_for_a_different_reference_date(tmp_path: Path) -> None:
     """A new reference day is a different file, so it downloads again."""
     fn_download, list_calls = _fake_download()
-    _call_download(tmp_path, fn_download, date(2026, 8, 17))
-    _call_download(tmp_path, fn_download, date(2026, 8, 18))
-    assert len(list_calls) == 2
+    _call_download(tmp_path, fn_download=fn_download, dt_day=date(2026, 8, 17))
+    _call_download(tmp_path, fn_download=fn_download, dt_day=date(2026, 8, 18))
+    assert len(list_calls) == _INT_2
 
 
 def test_download_daily_bypasses_the_read_when_caching_is_off(tmp_path: Path) -> None:
@@ -223,36 +229,38 @@ def test_download_daily_bypasses_the_read_when_caching_is_off(tmp_path: Path) ->
     fn_download, list_calls = _fake_download()
     download_daily(
         "https://example.com/a.csv",
-        tmp_path,
-        "src",
-        date(2026, 8, 17),
-        ".csv",
+        path_cache_dir=tmp_path,
+        str_key="src",
+        dt_reference=date(2026, 8, 17),
+        str_suffix=".csv",
         fn_download=fn_download,
     )
     download_daily(
         "https://example.com/a.csv",
-        tmp_path,
-        "src",
-        date(2026, 8, 17),
-        ".csv",
+        path_cache_dir=tmp_path,
+        str_key="src",
+        dt_reference=date(2026, 8, 17),
+        str_suffix=".csv",
         bool_use_cache=False,
         fn_download=fn_download,
     )
-    assert len(list_calls) == 2
+    assert len(list_calls) == _INT_2
 
 
 def test_download_daily_treats_a_zero_byte_file_as_a_miss(tmp_path: Path) -> None:
     """An empty cached file is refetched, not served."""
-    path_cached = daily_cache_path(tmp_path, "src", date(2026, 8, 17), ".csv")
+    path_cached = daily_cache_path(
+        tmp_path, str_key="src", dt_reference=date(2026, 8, 17), str_suffix=".csv"
+    )
     path_cached.parent.mkdir(parents=True, exist_ok=True)
     path_cached.write_bytes(b"")
     fn_download, list_calls = _fake_download()
     download_daily(
         "https://example.com/a.csv",
-        tmp_path,
-        "src",
-        date(2026, 8, 17),
-        ".csv",
+        path_cache_dir=tmp_path,
+        str_key="src",
+        dt_reference=date(2026, 8, 17),
+        str_suffix=".csv",
         fn_download=fn_download,
     )
     assert len(list_calls) == 1
@@ -275,9 +283,11 @@ def path_failed_cache(tmp_path: Path) -> Path:
     pathlib.Path
         The cache path the download would have published.
     """
-    path_cached = daily_cache_path(tmp_path, "src", date(2026, 8, 17), ".csv")
+    path_cached = daily_cache_path(
+        tmp_path, str_key="src", dt_reference=date(2026, 8, 17), str_suffix=".csv"
+    )
     with pytest.raises(OSError, match="connection dropped"):
-        _call_download(tmp_path, _download_that_dies_midway)
+        _call_download(tmp_path, fn_download=_download_that_dies_midway)
     return path_cached
 
 
@@ -296,7 +306,9 @@ def test_a_failed_download_never_publishes_a_partial_file(path_failed_cache: Pat
     assert not path_failed_cache.exists()
 
 
-def test_a_failed_download_leaves_no_staging_file(path_failed_cache: Path, tmp_path: Path) -> None:
+def test_a_failed_download_leaves_no_staging_file(
+    path_failed_cache: Path, *, tmp_path: Path
+) -> None:
     """The staging file must not linger, or the cache fills with debris nobody reads.
 
     Parameters
@@ -327,16 +339,18 @@ def path_good_cache(tmp_path: Path) -> Path:
     pathlib.Path
         The cache path holding the good entry.
     """
-    path_cached = daily_cache_path(tmp_path, "src", date(2026, 8, 17), ".csv")
+    path_cached = daily_cache_path(
+        tmp_path, str_key="src", dt_reference=date(2026, 8, 17), str_suffix=".csv"
+    )
     path_cached.parent.mkdir(parents=True, exist_ok=True)
     path_cached.write_bytes(b"good bytes")
     with pytest.raises(OSError, match="empty artifact"):
         download_daily(
             "https://example.com/a.csv",
-            tmp_path,
-            "src",
-            date(2026, 8, 17),
-            ".csv",
+            path_cache_dir=tmp_path,
+            str_key="src",
+            dt_reference=date(2026, 8, 17),
+            str_suffix=".csv",
             bool_use_cache=False,
             fn_download=_download_that_writes_nothing,
         )
@@ -360,10 +374,10 @@ def test_download_daily_creates_the_cache_directory(tmp_path: Path) -> None:
     path_dir = tmp_path / "a" / "b"
     download_daily(
         "https://example.com/a.csv",
-        path_dir,
-        "src",
-        date(2026, 8, 17),
-        ".csv",
+        path_cache_dir=path_dir,
+        str_key="src",
+        dt_reference=date(2026, 8, 17),
+        str_suffix=".csv",
         fn_download=fn_download,
     )
     assert path_dir.is_dir()
@@ -388,8 +402,8 @@ def run_miss_then_hit(tmp_path: Path) -> tuple:
     """
     cls_emitter = _RecordingEmitter()
     fn_download, list_calls = _fake_download()
-    _call_download(tmp_path, fn_download, cls_logger=cls_emitter)
-    _call_download(tmp_path, fn_download, cls_logger=cls_emitter)
+    _call_download(tmp_path, fn_download=fn_download, cls_logger=cls_emitter)
+    _call_download(tmp_path, fn_download=fn_download, cls_logger=cls_emitter)
     return list_calls, cls_emitter
 
 
@@ -451,10 +465,10 @@ def test_download_daily_rejects_a_datetime_as_the_reference_date(tmp_path: Path)
     with pytest.raises(TypeError):
         download_daily(
             "https://example.com/a.csv",
-            tmp_path,
-            "src",
-            datetime(2026, 8, 17),  # type: ignore[arg-type]
-            ".csv",
+            path_cache_dir=tmp_path,
+            str_key="src",
+            dt_reference=datetime(2026, 8, 17),  # type: ignore[arg-type]
+            str_suffix=".csv",
             fn_download=fn_download,
         )
 
@@ -465,9 +479,9 @@ def test_download_daily_rejects_a_string_reference_date(tmp_path: Path) -> None:
     with pytest.raises(TypeError):
         download_daily(
             "https://example.com/a.csv",
-            tmp_path,
-            "src",
-            "2026-08-17",  # type: ignore[arg-type]
-            ".csv",
+            path_cache_dir=tmp_path,
+            str_key="src",
+            dt_reference="2026-08-17",  # type: ignore[arg-type]
+            str_suffix=".csv",
             fn_download=fn_download,
         )

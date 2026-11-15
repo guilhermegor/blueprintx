@@ -29,7 +29,7 @@ def init() -> float:
     """
     load_dotenv()
     warnings.simplefilter(action="ignore", category=FutureWarning)
-    initiate_logging(LOGGER, DIR_PARENT)
+    initiate_logging(LOGGER, path_log=DIR_PARENT)
     return time()
 
 
@@ -66,13 +66,13 @@ class WebhookNotifier(Protocol, metaclass=ProtocolTypeCheckerMeta):
     chosen. Kept local so the always-shipped bootstrap never imports the opt-in seam.
     """
 
-    def send(self, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
+    def send(self, *, str_message: str, str_title: str = "ROUTINE_CONCLUSION") -> None:
         """Send one notification."""
         ...
 
 
 @type_checker
-def notify(cls_webhook: WebhookNotifier | None, str_message: str) -> None:
+def notify(cls_webhook: WebhookNotifier | None, *, str_message: str) -> None:
     """Send the run-summary notification — the final lifecycle step.
 
     No-op when ``cls_webhook`` is ``None`` (the webhook opt-in was declined or the
@@ -90,7 +90,7 @@ def notify(cls_webhook: WebhookNotifier | None, str_message: str) -> None:
     cls_create_log.log_message(
         logger=LOGGER, message="Sending webhook notification", log_level="info"
     )
-    cls_webhook.send(str_message)
+    cls_webhook.send(str_message=str_message)
     cls_create_log.log_message(
         logger=LOGGER, message="Webhook notification sent", log_level="info"
     )

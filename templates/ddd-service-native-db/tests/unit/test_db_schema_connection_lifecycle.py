@@ -32,7 +32,9 @@ STR_STORED = json.dumps({"id": STR_RECORD_ID, "alpha": "initial"})
 DICT_OPERATIONS = {
     "create": lambda cls_handler, path_dir: cls_handler.create({"id": STR_RECORD_ID}),
     "read": lambda cls_handler, path_dir: cls_handler.read(STR_RECORD_ID),
-    "update": lambda cls_handler, path_dir: cls_handler.update(STR_RECORD_ID, {"beta": "x"}),
+    "update": lambda cls_handler, path_dir: cls_handler.update(
+        record_id=STR_RECORD_ID, updates={"beta": "x"}
+    ),
     "delete": lambda cls_handler, path_dir: cls_handler.delete(STR_RECORD_ID),
 }
 
@@ -127,7 +129,7 @@ class PyodbcLikeConnection:
         """
 
 
-def _open_connections(list_made: list, cls_factory: object) -> object:
+def _open_connections(list_made: list, *, cls_factory: object) -> object:
     """Build a ``_connect`` replacement that records every connection it hands out.
 
     Parameters
@@ -177,6 +179,7 @@ def _sqlite_is_open(cls_conn: sqlite3.Connection) -> bool:
 @pytest.mark.parametrize("str_operation", sorted(DICT_OPERATIONS))
 def test_sqlite_handler_closes_every_connection_it_opens(
     str_operation: str,
+    *,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -191,13 +194,13 @@ def test_sqlite_handler_closes_every_connection_it_opens(
     monkeypatch : pytest.MonkeyPatch
         Swaps ``_connect`` for a recording version, after construction.
     """
-    cls_handler = SQLiteDatabaseHandler(tmp_path / "records.db")
+    cls_handler = SQLiteDatabaseHandler(db_path=tmp_path / "records.db")
     cls_handler.create({"id": STR_RECORD_ID, "alpha": "initial"})
     list_made: list[sqlite3.Connection] = []
     monkeypatch.setattr(
         cls_handler,
         "_connect",
-        _open_connections(list_made, lambda: sqlite3.connect(cls_handler.db_path)),
+        _open_connections(list_made, cls_factory=lambda: sqlite3.connect(cls_handler.db_path)),
     )
 
     DICT_OPERATIONS[str_operation](cls_handler, tmp_path)
@@ -209,6 +212,7 @@ def test_sqlite_handler_closes_every_connection_it_opens(
 @pytest.mark.parametrize("str_operation", [*sorted(DICT_OPERATIONS), "backup"])
 def test_mssql_handler_closes_every_connection_it_opens(
     str_operation: str,
+    *,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -223,12 +227,12 @@ def test_mssql_handler_closes_every_connection_it_opens(
     monkeypatch : pytest.MonkeyPatch
         Swaps ``_connect`` for a recording pyodbc-like fake.
     """
-    cls_handler = object.__new__(MSSQLDatabaseHandler)
+    cls_handler = object.__new__(str_name=MSSQLDatabaseHandler)
     cls_handler.table = "records"
     cls_handler.id_field = "id"
     list_made: list[PyodbcLikeConnection] = []
     monkeypatch.setattr(
-        cls_handler, "_connect", _open_connections(list_made, PyodbcLikeConnection)
+        cls_handler, "_connect", _open_connections(list_made, cls_factory=PyodbcLikeConnection)
     )
     dict_calls = {
         **DICT_OPERATIONS,
@@ -250,7 +254,7 @@ def test_a_plain_identifier_is_accepted(str_value: str) -> None:
     str_value : str
         Identifier that must be accepted.
     """
-    assert validate_sql_identifier(str_value, "table") is None
+    assert validate_sql_identifier(str_value, label="table") is None
 
 
 @pytest.mark.parametrize(
@@ -266,13 +270,14 @@ def test_an_unsafe_identifier_is_rejected_naming_the_field(str_value: str) -> No
         Identifier that must be rejected.
     """
     with pytest.raises(ValueError, match="id_field must match"):
-        validate_sql_identifier(str_value, "id_field")
+        validate_sql_identifier(str_value, label="id_field")
 
 
 @pytest.mark.parametrize(("str_stem", "str_class", "str_driver", "tuple_args"), LIST_HANDLERS)
 @pytest.mark.parametrize("dict_bad", [{"table": "t; DROP TABLE x"}, {"id_field": "id--"}])
 def test_every_handler_rejects_an_unsafe_identifier_before_touching_the_driver(
     str_stem: str,
+    *,
     str_class: str,
     str_driver: str | None,
     tuple_args: tuple,

@@ -22,7 +22,7 @@ def test_resolve_dispatch_falls_back_to_hard_default(monkeypatch: pytest.MonkeyP
 
 
 @pytest.fixture
-def str_dispatch_log(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> str:
+def str_dispatch_log(monkeypatch: pytest.MonkeyPatch, *, caplog: pytest.LogCaptureFixture) -> str:
     """Resolve the ``report`` block with a logger and return what was logged (blueprintx#121).
 
     Parameters
@@ -42,7 +42,7 @@ def str_dispatch_log(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureF
     monkeypatch.delenv("EMAIL_AUTO_SEND__DEFAULTS", raising=False)
     cls_logger = logging.getLogger("test_email_dispatch")
     with caplog.at_level(logging.INFO, logger="test_email_dispatch"):
-        resolve_dispatch("report", cls_logger)
+        resolve_dispatch("report", logger=cls_logger)
     return caplog.text
 
 
@@ -51,7 +51,7 @@ def str_dispatch_log(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureF
     ["EMAIL_SEND__REPORT", "EMAIL_AUTO_SEND__REPORT", "EMAIL_AUTO_SEND__DEFAULTS"],
 )
 def test_resolve_dispatch_logs_every_consulted_variable_name(
-    str_dispatch_log: str, str_variable: str
+    str_dispatch_log: str, *, str_variable: str
 ) -> None:
     """Every consulted env-var name and its set/unset status is logged (blueprintx#121).
 
@@ -66,7 +66,7 @@ def test_resolve_dispatch_logs_every_consulted_variable_name(
 
 
 def test_resolve_dispatch_renamed_key_is_visible_in_the_log(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch, *, caplog: pytest.LogCaptureFixture
 ) -> None:
     """A renamed config key does not resolve silently: the OLD var name is logged as unset.
 
@@ -81,12 +81,12 @@ def test_resolve_dispatch_renamed_key_is_visible_in_the_log(
     monkeypatch.delenv("EMAIL_SEND__DEFAULTS", raising=False)
     cls_logger = logging.getLogger("test_email_dispatch_rename")
     with caplog.at_level(logging.INFO, logger="test_email_dispatch_rename"):
-        resolve_dispatch("report", cls_logger)
+        resolve_dispatch("report", logger=cls_logger)
     assert "EMAIL_SEND__REPORT (unset)" in caplog.text
 
 
 def test_resolve_dispatch_renamed_key_never_consults_the_stale_name(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch, *, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The stale var a rename left behind is not consulted, so it is absent from the log."""
     monkeypatch.setenv("EMAIL_SEND__OLD_NAME", "false")
@@ -94,7 +94,7 @@ def test_resolve_dispatch_renamed_key_never_consults_the_stale_name(
     monkeypatch.delenv("EMAIL_SEND__DEFAULTS", raising=False)
     cls_logger = logging.getLogger("test_email_dispatch_rename")
     with caplog.at_level(logging.INFO, logger="test_email_dispatch_rename"):
-        resolve_dispatch("report", cls_logger)
+        resolve_dispatch("report", logger=cls_logger)
     assert "OLD_NAME" not in caplog.text
 
 

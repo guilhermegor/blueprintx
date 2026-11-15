@@ -47,7 +47,7 @@ _FALSE_TOKENS: frozenset[str] = frozenset(k for k, v in _DICT_ENV_BOOL.items() i
 
 
 @type_checker
-def _parse_env_bool(str_raw: str | None, bool_default: bool) -> bool:
+def _parse_env_bool(str_raw: str | None, *, bool_default: bool) -> bool:
     """Parse an environment flag to ``bool``, returning ``bool_default`` when absent/unknown.
 
     Parameters
@@ -68,7 +68,7 @@ def _parse_env_bool(str_raw: str | None, bool_default: bool) -> bool:
 
 @type_checker
 def _dispatch_flag(
-    str_prefix: str, str_block_key: str, bool_default: bool, logger: Logger | None
+    str_prefix: str, *, str_block_key: str, bool_default: bool, logger: Logger | None
 ) -> bool:
     """Resolve one dispatch flag from the per-block then the default environment variable.
 
@@ -101,25 +101,25 @@ def _dispatch_flag(
     bool_block_set = bool(str_block_var is not None and str_block_var.strip())
     log_message(
         logger,
-        f"[email] dispatch: consulted {str_block_var_name} "
+        str_message=f"[email] dispatch: consulted {str_block_var_name} "
         f"({'set' if bool_block_set else 'unset'})",
     )
     if bool_block_set:
-        return _parse_env_bool(str_block_var, bool_default)
+        return _parse_env_bool(str_block_var, bool_default=bool_default)
 
     str_default_var_name = f"{str_prefix}__{_DISPATCH_DEFAULT_SUFFIX}"
     str_default_var = os.getenv(str_default_var_name)
     bool_default_set = bool(str_default_var is not None and str_default_var.strip())
     log_message(
         logger,
-        f"[email] dispatch: consulted {str_default_var_name} "
+        str_message=f"[email] dispatch: consulted {str_default_var_name} "
         f"({'set' if bool_default_set else 'unset'}, hard default={bool_default})",
     )
-    return _parse_env_bool(str_default_var, bool_default)
+    return _parse_env_bool(str_default_var, bool_default=bool_default)
 
 
 @type_checker
-def resolve_dispatch(str_block_key: str, logger: Logger | None = None) -> tuple[bool, bool]:
+def resolve_dispatch(str_block_key: str, *, logger: Logger | None = None) -> tuple[bool, bool]:
     """Resolve an e-mail block's ``(send, auto_send)`` flags from the environment.
 
     The flags are sourced from ``.env`` (loaded at startup), never from ``emails.yaml``: per
@@ -140,6 +140,10 @@ def resolve_dispatch(str_block_key: str, logger: Logger | None = None) -> tuple[
     tuple of (bool, bool)
         ``(bool_send, bool_auto_send)``.
     """
-    bool_send = _dispatch_flag("EMAIL_SEND", str_block_key, True, logger)
-    bool_auto_send = _dispatch_flag("EMAIL_AUTO_SEND", str_block_key, False, logger)
+    bool_send = _dispatch_flag(
+        "EMAIL_SEND", str_block_key=str_block_key, bool_default=True, logger=logger
+    )
+    bool_auto_send = _dispatch_flag(
+        "EMAIL_AUTO_SEND", str_block_key=str_block_key, bool_default=False, logger=logger
+    )
     return bool_send, bool_auto_send

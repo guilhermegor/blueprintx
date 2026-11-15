@@ -23,6 +23,13 @@ from unittest.mock import Mock, call
 import pytest
 
 
+_INT_1260 = 1260
+_INT_2 = 2
+_INT_277 = 277
+_INT_3 = 3
+_INT_64 = 64
+
+
 def _find_gate_path() -> Path:
     """Locate ``check_review_threads.py``, whether run from the template tree or a scaffold.
 
@@ -158,7 +165,7 @@ def test_a_thread_the_bot_resolved_alone_is_reported() -> None:
         )
     ]
     assert "nobody outside the reviewer roster answered it" in _sole(
-        cls_gate.find_thread_problems(list_threads, _ROSTER)
+        cls_gate.find_thread_problems(list_threads, set_roster=_ROSTER)
     )
 
 
@@ -172,7 +179,7 @@ def test_a_terse_acknowledgement_is_not_an_answer() -> None:
     list_threads = [
         _thread([("coderabbitai[bot]", "**Finding.** " + _LONG), ("guilhermegor", "done")])
     ]
-    assert len(cls_gate.find_thread_problems(list_threads, _ROSTER)) == 1
+    assert len(cls_gate.find_thread_problems(list_threads, set_roster=_ROSTER)) == 1
 
 
 def test_the_bot_may_acknowledge_and_resolve_after_a_real_answer() -> None:
@@ -192,7 +199,7 @@ def test_the_bot_may_acknowledge_and_resolve_after_a_real_answer() -> None:
             ]
         )
     ]
-    assert cls_gate.find_thread_problems(list_threads, _ROSTER) == []
+    assert cls_gate.find_thread_problems(list_threads, set_roster=_ROSTER) == []
 
 
 def test_an_answered_but_open_thread_is_now_reported() -> None:
@@ -219,7 +226,7 @@ def test_an_answered_but_open_thread_is_now_reported() -> None:
         )
     ]
 
-    assert "NOT resolved" in _sole(cls_gate.find_thread_problems(list_threads, _ROSTER))
+    assert "NOT resolved" in _sole(cls_gate.find_thread_problems(list_threads, set_roster=_ROSTER))
 
 
 def test_no_threads_is_not_a_thread_problem() -> None:
@@ -233,10 +240,10 @@ def test_no_threads_is_not_a_thread_problem() -> None:
     reviewed". Keeping the two apart is what lets each say something true.
     """
     cls_gate = _load_gate()
-    assert cls_gate.find_thread_problems([], _ROSTER) == []
+    assert cls_gate.find_thread_problems([], set_roster=_ROSTER) == []
 
 
-def _review(str_login: str, str_oid: str = _HEAD) -> dict:
+def _review(str_login: str, *, str_oid: str = _HEAD) -> dict:
     """Build a submitted review authored by ``str_login`` against ``str_oid``.
 
     Parameters
@@ -258,7 +265,7 @@ def _review(str_login: str, str_oid: str = _HEAD) -> dict:
     }
 
 
-def _notice(str_login: str, str_body: str, str_created: str = "2026-01-02T00:00:00Z") -> dict:
+def _notice(str_login: str, *, str_body: str, str_created: str = "2026-01-02T00:00:00Z") -> dict:
     """Build one of the PR's issue comments.
 
     Parameters
@@ -321,13 +328,13 @@ _ORPHANED_REPLY_NODE = {"replyTo": None}
     ],
 )
 def test_a_head_review_counts_only_with_a_body_or_a_non_reply_comment(
-    dict_shape: dict, bool_satisfies: bool
+    dict_shape: dict, *, bool_satisfies: bool
 ) -> None:
     """A thread reply is not a review of the head; a body or an inline comment is."""
     cls_gate = _load_gate()
     list_reviews = [{**_review("coderabbitai[bot]"), **dict_shape}]
     str_problem = cls_gate.find_missing_review_problem(
-        list_reviews, _ROSTER, "some-human", str_head_oid=_HEAD
+        list_reviews, set_reviewers=_ROSTER, str_pr_author="some-human", str_head_oid=_HEAD
     )
 
     assert (str_problem is None) is bool_satisfies
@@ -348,7 +355,9 @@ def test_a_pr_nobody_reviewed_fails() -> None:
     """
     cls_gate = _load_gate()
     str_problem = _reported(
-        cls_gate.find_missing_review_problem([], _ROSTER, "some-human", str_head_oid=_HEAD)
+        cls_gate.find_missing_review_problem(
+            [], set_reviewers=_ROSTER, str_pr_author="some-human", str_head_oid=_HEAD
+        )
     )
 
     assert "never ran" in str_problem, "the message must not read like 'found nothing'"
@@ -363,7 +372,7 @@ def test_a_reviewer_that_found_nothing_passes() -> None:
     cls_gate = _load_gate()
     assert (
         cls_gate.find_missing_review_problem(
-            [_review("coderabbitai")], _ROSTER, "h", str_head_oid=_HEAD
+            [_review("coderabbitai")], set_reviewers=_ROSTER, str_pr_author="h", str_head_oid=_HEAD
         )
         is None
     )
@@ -378,7 +387,7 @@ def test_the_review_author_spelling_does_not_matter(str_login: str) -> None:
     cls_gate = _load_gate()
     assert (
         cls_gate.find_missing_review_problem(
-            [_review(str_login)], _ROSTER, "h", str_head_oid=_HEAD
+            [_review(str_login)], set_reviewers=_ROSTER, str_pr_author="h", str_head_oid=_HEAD
         )
         is None
     )
@@ -389,7 +398,7 @@ def test_a_review_from_outside_the_roster_is_not_the_declared_review() -> None:
     cls_gate = _load_gate()
     assert (
         cls_gate.find_missing_review_problem(
-            [_review("some-human")], _ROSTER, "h", str_head_oid=_HEAD
+            [_review("some-human")], set_reviewers=_ROSTER, str_pr_author="h", str_head_oid=_HEAD
         )
         is not None
     )
@@ -403,7 +412,7 @@ def test_a_review_from_outside_the_roster_is_not_the_declared_review() -> None:
     ],
     ids=["the-filter-is-present", "and-pending-is-not-in-it"],
 )
-def test_the_query_excludes_unsubmitted_reviews(str_fragment: str, bool_present: bool) -> None:
+def test_the_query_excludes_unsubmitted_reviews(str_fragment: str, *, bool_present: bool) -> None:
     """A PENDING review must not count as "a reviewer reported".
 
     Measured on blueprintx#216: opening a draft review and re-querying showed it in the
@@ -457,7 +466,7 @@ def tuple_paged_fetch() -> tuple[ModuleType, dict, Mock]:
     cls_page = Mock(side_effect=[_DICT_PAGE_ONE, _DICT_PAGE_TWO])
     with pytest.MonkeyPatch.context() as cls_patch:
         cls_patch.setattr(cls_gate, "_fetch_page", cls_page)
-        dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+        dict_pr = cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
     return cls_gate, dict_pr, cls_page
 
 
@@ -473,7 +482,9 @@ def test_the_second_page_is_requested_with_both_cursors(
     """
     _, _, cls_page = tuple_paged_fetch
 
-    assert [tuple_args[3:5] for tuple_args, _ in cls_page.call_args_list] == [
+    assert [
+        (d["str_review_cursor"], d["str_thread_cursor"]) for _, d in cls_page.call_args_list
+    ] == [
         (None, None),
         ("R1", "T1"),
     ]
@@ -491,7 +502,7 @@ def test_page_two_reviews_are_merged_in(
     """
     _, dict_pr, _ = tuple_paged_fetch
 
-    assert len(dict_pr["reviews"]["nodes"]) == 2
+    assert len(dict_pr["reviews"]["nodes"]) == _INT_2
 
 
 def test_page_two_threads_are_merged_in(
@@ -509,7 +520,7 @@ def test_page_two_threads_are_merged_in(
     """
     _, dict_pr, _ = tuple_paged_fetch
 
-    assert len(dict_pr["reviewThreads"]["nodes"]) == 2
+    assert len(dict_pr["reviewThreads"]["nodes"]) == _INT_2
 
 
 def test_the_merged_reviews_reach_the_missing_review_verdict(
@@ -526,7 +537,10 @@ def test_the_merged_reviews_reach_the_missing_review_verdict(
 
     assert (
         cls_gate.find_missing_review_problem(
-            dict_pr["reviews"]["nodes"], _ROSTER, "someone", str_head_oid=_HEAD
+            dict_pr["reviews"]["nodes"],
+            set_reviewers=_ROSTER,
+            str_pr_author="someone",
+            str_head_oid=_HEAD,
         )
         is None
     )
@@ -544,7 +558,10 @@ def test_the_merged_threads_reach_the_thread_verdict(
     """
     cls_gate, dict_pr, _ = tuple_paged_fetch
 
-    assert len(cls_gate.find_thread_problems(dict_pr["reviewThreads"]["nodes"], _ROSTER)) == 2
+    assert (
+        len(cls_gate.find_thread_problems(dict_pr["reviewThreads"]["nodes"], set_roster=_ROSTER))
+        == _INT_2
+    )
 
 
 def test_a_roster_members_own_pr_is_exempt() -> None:
@@ -555,7 +572,9 @@ def test_a_roster_members_own_pr_is_exempt() -> None:
     """
     cls_gate = _load_gate()
     assert (
-        cls_gate.find_missing_review_problem([], _ROSTER, "coderabbitai[bot]", str_head_oid=_HEAD)
+        cls_gate.find_missing_review_problem(
+            [], set_reviewers=_ROSTER, str_pr_author="coderabbitai[bot]", str_head_oid=_HEAD
+        )
         is None
     )
 
@@ -605,7 +624,7 @@ def test_a_swapped_in_reviewer_is_policed_like_any_other(tmp_path: Path) -> None
     list_threads = [_thread([("some-other-reviewer[bot]", "**Finding.** " + _LONG)])]
 
     set_roster = set(cls_gate.load_roster(tmp_path))
-    assert len(cls_gate.find_thread_problems(list_threads, set_roster)) == 1
+    assert len(cls_gate.find_thread_problems(list_threads, set_roster=set_roster)) == 1
 
 
 def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
@@ -636,7 +655,7 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
     )
     monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
     with pytest.raises(RuntimeError):
-        cls_gate.fetch_pull_request("no-such-owner-xyz", "no-such-repo-xyz", 1)
+        cls_gate.fetch_pull_request("no-such-owner-xyz", str_repo="no-such-repo-xyz", int_number=1)
 
 
 @pytest.mark.parametrize(
@@ -650,14 +669,16 @@ def test_an_unreachable_api_is_not_mistaken_for_a_clean_pr(
     ids=["cli-message", "errors-type", "http-403", "errors-type-failed-call"],
 )
 def test_fetch_page_names_the_rate_limit(
-    monkeypatch: pytest.MonkeyPatch, str_stdout: str, str_stderr: str, int_code: int
+    monkeypatch: pytest.MonkeyPatch, *, str_stdout: str, str_stderr: str, int_code: int
 ) -> None:
     """An exhausted GraphQL budget raises ``RateLimitedError``, not a bare failure."""
     cls_gate = _load_gate()
     cls_run = Mock(returncode=int_code, stdout=str_stdout, stderr=str_stderr)
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
     with pytest.raises(cls_gate.RateLimitedError):
-        cls_gate._fetch_page("o", "r", 1, None, None)
+        cls_gate._fetch_page(
+            "o", str_repo="r", int_number=1, str_review_cursor=None, str_thread_cursor=None
+        )
 
 
 def test_fetch_page_ignores_rate_limit_wording_in_a_successful_payload(
@@ -680,7 +701,14 @@ def test_fetch_page_ignores_rate_limit_wording_in_a_successful_payload(
     )
     cls_run = Mock(returncode=0, stdout=json_ok, stderr="")
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
-    dict_pr = cls_gate._fetch_page("o", "r", 1, None, None, None)
+    dict_pr = cls_gate._fetch_page(
+        "o",
+        str_repo="r",
+        int_number=1,
+        str_review_cursor=None,
+        str_thread_cursor=None,
+        str_comment_cursor=None,
+    )
     assert dict_pr["reviewThreads"]["nodes"][0]["body"].startswith("RATE_LIMITED")
 
 
@@ -693,7 +721,14 @@ def test_fetch_page_keeps_a_non_rate_limit_error_a_failure(
     cls_run = Mock(returncode=0, stdout=json_err, stderr="")
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
     with pytest.raises(RuntimeError) as cls_info:
-        cls_gate._fetch_page("o", "r", 1, None, None, None)
+        cls_gate._fetch_page(
+            "o",
+            str_repo="r",
+            int_number=1,
+            str_review_cursor=None,
+            str_thread_cursor=None,
+            str_comment_cursor=None,
+        )
     assert not isinstance(cls_info.value, cls_gate.RateLimitedError)
 
 
@@ -711,12 +746,14 @@ def test_fetch_page_ignores_rate_limit_wording_in_a_failed_calls_data(
     cls_run = Mock(returncode=1, stdout=json_partial, stderr="gh: forbidden")
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
     with pytest.raises(RuntimeError) as cls_info:
-        cls_gate._fetch_page("o", "r", 1, None, None)
+        cls_gate._fetch_page(
+            "o", str_repo="r", int_number=1, str_review_cursor=None, str_thread_cursor=None
+        )
     assert not isinstance(cls_info.value, cls_gate.RateLimitedError)
 
 
 def test_main_json_mode_reports_rate_limit_as_json(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """``--json`` keeps its contract on a rate limit: one parseable object, exit 3."""
     cls_gate = _load_gate()
@@ -748,6 +785,7 @@ def test_main_json_mode_reports_rate_limit_as_json(
 )
 def test_main_reports_rate_limit_in_one_line_with_distinct_exit(
     monkeypatch: pytest.MonkeyPatch,
+    *,
     capsys: pytest.CaptureFixture[str],
     str_reset: str | None,
     str_expected: str,
@@ -763,7 +801,7 @@ def test_main_reports_rate_limit_in_one_line_with_distinct_exit(
     monkeypatch.setattr(
         cls_gate, "fetch_pull_request", Mock(side_effect=cls_gate.RateLimitedError("budget at 0"))
     )
-    assert cls_gate.main([]) == 3
+    assert cls_gate.main([]) == _INT_3
     cls_captured = capsys.readouterr()
     str_out = cls_captured.out.strip()
     assert len(str_out.splitlines()) == 1
@@ -782,7 +820,7 @@ def test_main_reports_rate_limit_in_one_line_with_distinct_exit(
     ids=["rest-spelling", "graphql-spelling", "a-human-is-untouched"],
 )
 def test_graphql_drops_the_bot_suffix_that_the_roster_carries(
-    str_login: str, str_normalised: str
+    str_login: str, *, str_normalised: str
 ) -> None:
     """REST says ``coderabbitai[bot]``; GraphQL's ``author.login`` says ``coderabbitai``.
 
@@ -814,7 +852,7 @@ def test_a_reviewer_comment_in_graphql_spelling_is_not_an_answer(tmp_path: Path)
     set_roster = cls_gate.load_roster(tmp_path)
 
     list_threads = [_thread([("coderabbitai", "**Finding.** " + _LONG)])]
-    assert len(cls_gate.find_thread_problems(list_threads, set_roster)) == 1
+    assert len(cls_gate.find_thread_problems(list_threads, set_roster=set_roster)) == 1
 
 
 def test_a_human_reply_in_the_same_thread_still_answers_it(tmp_path: Path) -> None:
@@ -833,7 +871,7 @@ def test_a_human_reply_in_the_same_thread_still_answers_it(tmp_path: Path) -> No
     set_roster = cls_gate.load_roster(tmp_path)
 
     list_threads = [_thread([("coderabbitai", "**Finding.** " + _LONG), ("guilhermegor", _LONG)])]
-    assert cls_gate.find_thread_problems(list_threads, set_roster) == []
+    assert cls_gate.find_thread_problems(list_threads, set_roster=set_roster) == []
 
 
 def test_an_answered_but_unresolved_thread_is_reported(tmp_path: Path) -> None:
@@ -858,11 +896,13 @@ def test_an_answered_but_unresolved_thread_is_reported(tmp_path: Path) -> None:
         )
     ]
 
-    assert "NOT resolved" in _sole(cls_gate.find_thread_problems(list_threads, set_roster))
+    assert "NOT resolved" in _sole(
+        cls_gate.find_thread_problems(list_threads, set_roster=set_roster)
+    )
 
 
 def test_deleting_the_roster_is_not_a_silent_opt_out(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An absent roster means "never adopted" — unless the default branch still carries it.
 
@@ -885,7 +925,7 @@ def test_deleting_the_roster_is_not_a_silent_opt_out(
 
 
 def test_a_roster_absent_on_the_default_branch_is_not_a_deletion(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The positive control for the test above — and the reason it needs one.
 
@@ -908,7 +948,7 @@ def test_a_roster_absent_on_the_default_branch_is_not_a_deletion(
 
 
 def test_a_deleted_roster_reports_a_json_verdict_not_a_traceback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A roster deleted in the PR yields the ``--json`` missing_roster verdict.
 
@@ -932,13 +972,13 @@ def test_a_deleted_roster_reports_a_json_verdict_not_a_traceback(
     assert '"reason": "missing_roster"' in capsys.readouterr().out
 
 
-def _serve_base(str_base_roster: str | None, list_args: list[str]) -> str | None:
+def _serve_base(list_args: list[str], *, str_base_roster: str | None) -> str | None:
     """Answer the base-ref lookup with ``main`` and every roster read with ``str_base_roster``."""
     return {".base.ref": "main"}.get(list_args[-1], str_base_roster)
 
 
 def _opt_out_checkout(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, str_base_roster: str | None
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, str_base_roster: str | None
 ) -> ModuleType:
     """Stage a PR checkout whose roster opts out, with a stubbed base-branch roster.
 
@@ -961,12 +1001,14 @@ def _opt_out_checkout(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
     monkeypatch.setenv("PR_NUMBER", "1")
-    monkeypatch.setattr(cls_gate, "_gh_api_text", functools.partial(_serve_base, str_base_roster))
+    monkeypatch.setattr(
+        cls_gate, "_gh_api_text", functools.partial(_serve_base, str_base_roster=str_base_roster)
+    )
     return cls_gate
 
 
 def test_opt_out_only_on_the_pr_side_is_rejected(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A PR cannot opt itself out: the base roster must declare it too (blueprintx#952).
 
@@ -979,13 +1021,15 @@ def test_opt_out_only_on_the_pr_side_is_rejected(
     capsys : pytest.CaptureFixture[str]
         Captures the failing verdict.
     """
-    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
+    cls_gate = _opt_out_checkout(
+        tmp_path, monkeypatch=monkeypatch, str_base_roster="reviewers: []\n"
+    )
 
     assert (cls_gate.main([]), "opt-out is refused" in capsys.readouterr().out) == (1, True)
 
 
 def test_opt_out_with_an_unreadable_base_fails_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """When the base roster cannot be read, the PR-side opt-out is not honoured.
 
@@ -998,13 +1042,13 @@ def test_opt_out_with_an_unreadable_base_fails_closed(
     capsys : pytest.CaptureFixture[str]
         Captures the failing verdict.
     """
-    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch=monkeypatch, str_base_roster=None)
 
     assert (cls_gate.main([]), "opt-out is refused" in capsys.readouterr().out) == (1, True)
 
 
 def test_opt_out_declared_on_the_base_side_is_accepted(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """An opt-out present on both the PR and the base branch skips the gate.
 
@@ -1017,12 +1061,14 @@ def test_opt_out_declared_on_the_base_side_is_accepted(
     capsys : pytest.CaptureFixture[str]
         Captures the skip message.
     """
-    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "adopted: false\n")
+    cls_gate = _opt_out_checkout(
+        tmp_path, monkeypatch=monkeypatch, str_base_roster="adopted: false\n"
+    )
 
     assert (cls_gate.main([]), "opted out" in capsys.readouterr().out) == (0, True)
 
 
-def _serve_dot_github_only(str_text: str, list_args: list[str]) -> str | None:
+def _serve_dot_github_only(list_args: list[str], *, str_text: str) -> str | None:
     """Answer a contents call for the ``.github/`` roster only; 404 (``""``) the rest."""
     str_dot_github = "repos/o/r/contents/.github/.review-bots.yaml?ref=main"
     return {".base.ref": "main", str_dot_github: str_text}.get(list_args[-1], "")
@@ -1030,7 +1076,7 @@ def _serve_dot_github_only(str_text: str, list_args: list[str]) -> str | None:
 
 def _github_dir_only(str_text: str) -> Callable[[list[str]], str | None]:
     """Return a ``gh api`` stub that serves ``str_text`` solely for the ``.github/`` roster."""
-    return functools.partial(_serve_dot_github_only, str_text)
+    return functools.partial(_serve_dot_github_only, str_text=str_text)
 
 
 def test_base_opt_out_declared_only_under_dot_github_is_honoured(
@@ -1040,7 +1086,7 @@ def test_base_opt_out_declared_only_under_dot_github_is_honoured(
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "_gh_api_text", _github_dir_only("adopted: false\n"))
 
-    assert cls_gate.base_opted_out("o/r", "1") is True
+    assert cls_gate.base_opted_out("o/r", str_number="1") is True
 
 
 def test_base_roster_at_the_root_wins_over_dot_github(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1055,7 +1101,7 @@ def test_base_roster_at_the_root_wins_over_dot_github(monkeypatch: pytest.Monkey
         cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
     )
 
-    assert cls_gate.base_opted_out("o/r", "1") is False
+    assert cls_gate.base_opted_out("o/r", str_number="1") is False
 
 
 def test_a_root_read_error_does_not_fall_through_to_dot_github(
@@ -1069,7 +1115,7 @@ def test_a_root_read_error_does_not_fall_through_to_dot_github(
         cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
     )
 
-    assert cls_gate.base_opted_out("o/r", "1") is False
+    assert cls_gate.base_opted_out("o/r", str_number="1") is False
 
 
 def test_gh_api_text_reads_a_404_as_empty(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1088,10 +1134,12 @@ def test_gh_api_text_fails_closed_on_a_timeout(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_a_refused_opt_out_reports_its_own_json_reason(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A present roster whose opt-out the base does not back is not ``missing_roster``."""
-    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, "reviewers: []\n")
+    cls_gate = _opt_out_checkout(
+        tmp_path, monkeypatch=monkeypatch, str_base_roster="reviewers: []\n"
+    )
 
     cls_gate.main(["--json"])
 
@@ -1099,7 +1147,7 @@ def test_a_refused_opt_out_reports_its_own_json_reason(
 
 
 def test_missing_pyyaml_reports_the_parser_not_the_roster(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Without PyYAML the failure names the parser and does not blame the roster file.
 
@@ -1112,7 +1160,7 @@ def test_missing_pyyaml_reports_the_parser_not_the_roster(
     capsys : pytest.CaptureFixture[str]
         Captures the failure message.
     """
-    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch=monkeypatch, str_base_roster=None)
     monkeypatch.setattr(cls_gate, "yaml", None)
 
     int_status = cls_gate.main([])
@@ -1138,7 +1186,7 @@ def test_the_resolve_half_can_still_be_switched_off_by_flag() -> None:
     """CI mode tolerates an open-but-answered thread — it could not tell you when it was fixed."""
     assert (
         _load_gate().find_thread_problems(
-            _LIST_OPEN_BUT_ANSWERED, _ROSTER, bool_require_resolved=False
+            _LIST_OPEN_BUT_ANSWERED, set_roster=_ROSTER, bool_require_resolved=False
         )
         == []
     )
@@ -1146,7 +1194,7 @@ def test_the_resolve_half_can_still_be_switched_off_by_flag() -> None:
 
 def test_local_mode_still_catches_an_unresolved_thread() -> None:
     """A local run is always current, so it keeps the half CI gave up."""
-    assert len(_load_gate().find_thread_problems(_LIST_OPEN_BUT_ANSWERED, _ROSTER)) == 1
+    assert len(_load_gate().find_thread_problems(_LIST_OPEN_BUT_ANSWERED, set_roster=_ROSTER)) == 1
 
 
 def test_switching_off_the_resolve_half_does_not_disable_the_reply_half() -> None:
@@ -1158,7 +1206,7 @@ def test_switching_off_the_resolve_half_does_not_disable_the_reply_half() -> Non
     assert (
         len(
             _load_gate().find_thread_problems(
-                _LIST_UNANSWERED, _ROSTER, bool_require_resolved=False
+                _LIST_UNANSWERED, set_roster=_ROSTER, bool_require_resolved=False
             )
         )
         == 1
@@ -1175,7 +1223,10 @@ def test_a_status_only_member_cannot_satisfy_the_missing_review_gate() -> None:
     cls_gate = _load_gate()
     set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
     assert cls_gate.find_missing_review_problem(
-        [_review("github-actions")], set_reviewers, "h", str_head_oid=_HEAD
+        [_review("github-actions")],
+        set_reviewers=set_reviewers,
+        str_pr_author="h",
+        str_head_oid=_HEAD,
     )
 
 
@@ -1184,7 +1235,7 @@ def test_the_missing_review_message_names_only_members_that_can_review() -> None
     cls_gate = _load_gate()
     set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
     assert "github-actions" not in cls_gate.find_missing_review_problem(
-        [], set_reviewers, "h", str_head_oid=_HEAD
+        [], set_reviewers=set_reviewers, str_pr_author="h", str_head_oid=_HEAD
     )
 
 
@@ -1197,7 +1248,9 @@ def test_a_thread_answer_from_a_status_member_is_still_not_an_answer() -> None:
     list_threads = [
         _thread([("coderabbitai", "**Finding.** " + _LONG), ("github-actions", _LONG)])
     ]
-    assert len(cls_gate.find_thread_problems(list_threads, set(_ROSTER_WITH_POSTS))) == 1
+    assert (
+        len(cls_gate.find_thread_problems(list_threads, set_roster=set(_ROSTER_WITH_POSTS))) == 1
+    )
 
 
 def test_reviewer_logins_keeps_only_the_threads_members() -> None:
@@ -1250,7 +1303,7 @@ def test_a_status_member_opening_a_pr_is_not_exempt() -> None:
     cls_gate = _load_gate()
     set_reviewers = cls_gate.reviewer_logins(_ROSTER_WITH_POSTS)
     assert cls_gate.find_missing_review_problem(
-        [], set_reviewers, "github-actions[bot]", str_head_oid=_HEAD
+        [], set_reviewers=set_reviewers, str_pr_author="github-actions[bot]", str_head_oid=_HEAD
     )
 
 
@@ -1278,7 +1331,10 @@ def test_a_review_of_a_superseded_commit_does_not_satisfy_the_gate() -> None:
     cls_gate = _load_gate()
     assert (
         cls_gate.find_missing_review_problem(
-            [_review("coderabbitai", _SUPERSEDED)], _ROSTER, "h", str_head_oid=_HEAD
+            [_review("coderabbitai", str_oid=_SUPERSEDED)],
+            set_reviewers=_ROSTER,
+            str_pr_author="h",
+            str_head_oid=_HEAD,
         )
         is not None
     )
@@ -1292,7 +1348,10 @@ def test_a_review_of_the_head_commit_satisfies_the_gate() -> None:
     cls_gate = _load_gate()
     assert (
         cls_gate.find_missing_review_problem(
-            [_review("coderabbitai", _HEAD)], _ROSTER, "h", str_head_oid=_HEAD
+            [_review("coderabbitai", str_oid=_HEAD)],
+            set_reviewers=_ROSTER,
+            str_pr_author="h",
+            str_head_oid=_HEAD,
         )
         is None
     )
@@ -1307,7 +1366,10 @@ def test_reviewed_older_code_and_never_reviewed_print_different_sentences() -> N
     """
     cls_gate = _load_gate()
     str_stale = cls_gate.find_missing_review_problem(
-        [_review("coderabbitai", _SUPERSEDED)], _ROSTER, "h", str_head_oid=_HEAD
+        [_review("coderabbitai", str_oid=_SUPERSEDED)],
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
+        str_head_oid=_HEAD,
     )
     assert "SUPERSEDED" in str_stale, "the stale-review message must not read like 'no review'"
 
@@ -1320,7 +1382,10 @@ def test_the_stale_review_message_names_the_head_commit() -> None:
     """
     cls_gate = _load_gate()
     str_stale = cls_gate.find_missing_review_problem(
-        [_review("coderabbitai", _SUPERSEDED)], _ROSTER, "h", str_head_oid=_HEAD
+        [_review("coderabbitai", str_oid=_SUPERSEDED)],
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
+        str_head_oid=_HEAD,
     )
     assert _HEAD[:7] in str_stale
 
@@ -1373,11 +1438,11 @@ def test_a_declared_completion_is_evidence_the_reviewer_ran() -> None:
     assert (
         cls_gate.find_missing_review_problem(
             [],
-            _ROSTER,
-            "h",
+            set_reviewers=_ROSTER,
+            str_pr_author="h",
             str_head_oid=_HEAD,
             str_head_date=_HEAD_DATE,
-            list_notices=[_notice("coderabbitai", _NOTICE_PERFORMED)],
+            list_notices=[_notice("coderabbitai", str_body=_NOTICE_PERFORMED)],
         )
         is None
     )
@@ -1395,12 +1460,14 @@ def test_a_completion_predating_the_head_commit_is_not_evidence() -> None:
     assert (
         cls_gate.find_missing_review_problem(
             [],
-            _ROSTER,
-            "h",
+            set_reviewers=_ROSTER,
+            str_pr_author="h",
             str_head_oid=_HEAD,
             str_head_date="2026-06-01T00:00:00Z",
             list_notices=[
-                _notice("coderabbitai", _NOTICE_PERFORMED, "2026-05-01T00:00:00Z"),
+                _notice(
+                    "coderabbitai", str_body=_NOTICE_PERFORMED, str_created="2026-05-01T00:00:00Z"
+                ),
             ],
         )
         is not None
@@ -1417,11 +1484,11 @@ def test_an_unknown_head_date_is_not_evidence() -> None:
     assert (
         cls_gate.find_missing_review_problem(
             [],
-            _ROSTER,
-            "h",
+            set_reviewers=_ROSTER,
+            str_pr_author="h",
             str_head_oid=_HEAD,
             str_head_date="",
-            list_notices=[_notice("coderabbitai", _NOTICE_PERFORMED)],
+            list_notices=[_notice("coderabbitai", str_body=_NOTICE_PERFORMED)],
         )
         is not None
     )
@@ -1438,13 +1505,13 @@ def test_a_superseded_completion_does_not_satisfy_the_gate() -> None:
     assert (
         cls_gate.find_missing_review_problem(
             [],
-            _ROSTER,
-            "h",
+            set_reviewers=_ROSTER,
+            str_pr_author="h",
             str_head_oid=_HEAD,
             str_head_date=_HEAD_DATE,
             list_notices=[
-                _notice("coderabbitai", _NOTICE_PERFORMED),
-                _notice("coderabbitai", _NOTICE_LIMITED),
+                _notice("coderabbitai", str_body=_NOTICE_PERFORMED),
+                _notice("coderabbitai", str_body=_NOTICE_LIMITED),
             ],
         )
         is not None
@@ -1480,11 +1547,11 @@ def test_the_already_reviewed_footnote_never_satisfies_the_gate(str_notice: str)
     assert (
         cls_gate.find_missing_review_problem(
             [],
-            _ROSTER,
-            "h",
+            set_reviewers=_ROSTER,
+            str_pr_author="h",
             str_head_oid=_HEAD,
             str_head_date=_HEAD_DATE,
-            list_notices=[_notice("coderabbitai", str_notice)],
+            list_notices=[_notice("coderabbitai", str_body=str_notice)],
         )
         is not None
     )
@@ -1500,11 +1567,11 @@ def test_the_failure_message_quotes_the_reviewers_latest_notice() -> None:
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
         [],
-        _ROSTER,
-        "h",
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
         str_head_oid=_HEAD,
         str_head_date=_HEAD_DATE,
-        list_notices=[_notice("coderabbitai", _NOTICE_LIMITED)],
+        list_notices=[_notice("coderabbitai", str_body=_NOTICE_LIMITED)],
     )
     assert "Review rate limited." in str_problem
 
@@ -1514,11 +1581,11 @@ def test_the_quoted_notice_is_stripped_of_markup() -> None:
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
         [],
-        _ROSTER,
-        "h",
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
         str_head_oid=_HEAD,
         str_head_date=_HEAD_DATE,
-        list_notices=[_notice("coderabbitai", _NOTICE_FAILED)],
+        list_notices=[_notice("coderabbitai", str_body=_NOTICE_FAILED)],
     )
     assert "<summary>" not in str_problem
 
@@ -1528,11 +1595,13 @@ def test_only_a_roster_notice_is_quoted() -> None:
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
         [],
-        _ROSTER,
-        "h",
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
         str_head_oid=_HEAD,
         str_head_date=_HEAD_DATE,
-        list_notices=[_notice("some-human", "these commits were already reviewed on the old PR")],
+        list_notices=[
+            _notice("some-human", str_body="these commits were already reviewed on the old PR")
+        ],
     )
     assert "already reviewed on the old PR" not in str_problem
 
@@ -1542,13 +1611,13 @@ def test_the_newest_roster_notice_is_the_one_quoted() -> None:
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
         [],
-        _ROSTER,
-        "h",
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
         str_head_oid=_HEAD,
         str_head_date=_HEAD_DATE,
         list_notices=[
-            _notice("coderabbitai", _NOTICE_PERFORMED),
-            _notice("coderabbitai", _NOTICE_LIMITED),
+            _notice("coderabbitai", str_body=_NOTICE_PERFORMED),
+            _notice("coderabbitai", str_body=_NOTICE_LIMITED),
         ],
     )
     assert "Review rate limited." in str_problem
@@ -1564,7 +1633,9 @@ def test_the_remedy_names_a_full_review_not_an_incremental_one() -> None:
     unsatisfiable, and unsatisfiable gates get bypassed with --admin.
     """
     cls_gate = _load_gate()
-    str_problem = cls_gate.find_missing_review_problem([], _ROSTER, "h", str_head_oid=_HEAD)
+    str_problem = cls_gate.find_missing_review_problem(
+        [], set_reviewers=_ROSTER, str_pr_author="h", str_head_oid=_HEAD
+    )
     assert "@coderabbitai full review" in str_problem
 
 
@@ -1580,7 +1651,10 @@ def test_the_superseded_message_also_names_a_full_review() -> None:
     """
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
-        [_review("coderabbitai", _SUPERSEDED)], _ROSTER, "h", str_head_oid=_HEAD
+        [_review("coderabbitai", str_oid=_SUPERSEDED)],
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
+        str_head_oid=_HEAD,
     )
     assert "@coderabbitai full review" in str_problem
 
@@ -1611,7 +1685,7 @@ def test_an_outdated_unresolved_thread_is_reported() -> None:
         bool_resolved=False,
     )
     dict_outdated["isOutdated"] = True
-    assert len(cls_gate.find_thread_problems([dict_outdated], _ROSTER)) == 1
+    assert len(cls_gate.find_thread_problems([dict_outdated], set_roster=_ROSTER)) == 1
 
 
 def test_the_outdated_thread_message_says_the_merge_button_will_not_block() -> None:
@@ -1627,7 +1701,7 @@ def test_the_outdated_thread_message_says_the_merge_button_will_not_block() -> N
         bool_resolved=False,
     )
     dict_outdated["isOutdated"] = True
-    assert "OUTDATED" in cls_gate.find_thread_problems([dict_outdated], _ROSTER)[0]
+    assert "OUTDATED" in cls_gate.find_thread_problems([dict_outdated], set_roster=_ROSTER)[0]
 
 
 def test_a_current_unresolved_thread_does_not_claim_to_be_outdated() -> None:
@@ -1639,7 +1713,7 @@ def test_a_current_unresolved_thread_does_not_claim_to_be_outdated() -> None:
             bool_resolved=False,
         )
     ]
-    assert "OUTDATED" not in cls_gate.find_thread_problems(list_current, _ROSTER)[0]
+    assert "OUTDATED" not in cls_gate.find_thread_problems(list_current, set_roster=_ROSTER)[0]
 
 
 _CHAT_NOTICE = (
@@ -1724,10 +1798,10 @@ def test_a_file_cap_decline_is_still_a_failure() -> None:
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
         [],
-        _ROSTER,
-        "h",
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
         str_head_oid=_HEAD,
-        list_notices=[_notice("coderabbitai", _FILE_CAP_NOTICE)],
+        list_notices=[_notice("coderabbitai", str_body=_FILE_CAP_NOTICE)],
     )
     assert str_problem is not None
 
@@ -1737,10 +1811,10 @@ def test_a_file_cap_decline_message_tells_the_author_to_split_the_pr() -> None:
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
         [],
-        _ROSTER,
-        "h",
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
         str_head_oid=_HEAD,
-        list_notices=[_notice("coderabbitai", _FILE_CAP_NOTICE)],
+        list_notices=[_notice("coderabbitai", str_body=_FILE_CAP_NOTICE)],
     )
     assert "Split this PR" in str_problem
 
@@ -1750,10 +1824,10 @@ def test_a_file_cap_decline_message_does_not_read_like_a_missing_reviewer() -> N
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
         [],
-        _ROSTER,
-        "h",
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
         str_head_oid=_HEAD,
-        list_notices=[_notice("coderabbitai", _FILE_CAP_NOTICE)],
+        list_notices=[_notice("coderabbitai", str_body=_FILE_CAP_NOTICE)],
     )
     assert "never ran" not in str_problem
 
@@ -1767,10 +1841,10 @@ def test_a_reworded_notice_still_fails_rather_than_silently_passing() -> None:
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
         [],
-        _ROSTER,
-        "h",
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
         str_head_oid=_HEAD,
-        list_notices=[_notice("coderabbitai", "too many files, sorry")],
+        list_notices=[_notice("coderabbitai", str_body="too many files, sorry")],
     )
     assert str_problem is not None
 
@@ -1783,7 +1857,10 @@ def test_print_missing_review_json_carries_the_file_cap_classification(
     list_notices = [{"author": {"login": "coderabbitai[bot]"}, "body": _FILE_CAP_NOTICE}]
     set_roster = {cls_gate.normalise_login(str_login) for str_login in _ROSTER}
     cls_gate._print_missing_review(
-        True, "no declared reviewer ever reported", list_notices, set_roster
+        True,
+        str_missing="no declared reviewer ever reported",
+        list_notices=list_notices,
+        set_reviewers=set_roster,
     )
     dict_out = json.loads(capsys.readouterr().out)
     assert dict_out["notice_classification"] == cls_gate.NOTICE_FILE_CAP_EXCEEDED
@@ -1803,10 +1880,10 @@ def test_a_bot_detected_decline_gets_the_generic_remedy_not_split_advice() -> No
     cls_gate = _load_gate()
     str_problem = cls_gate.find_missing_review_problem(
         [],
-        _ROSTER,
-        "h",
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
         str_head_oid=_HEAD,
-        list_notices=[_notice("coderabbitai", _BOT_DETECTED_NOTICE)],
+        list_notices=[_notice("coderabbitai", str_body=_BOT_DETECTED_NOTICE)],
     )
     assert "Split this PR" not in str_problem
 
@@ -1817,10 +1894,10 @@ def test_a_bot_detected_decline_still_fails_the_gate() -> None:
     assert (
         cls_gate.find_missing_review_problem(
             [],
-            _ROSTER,
-            "h",
+            set_reviewers=_ROSTER,
+            str_pr_author="h",
             str_head_oid=_HEAD,
-            list_notices=[_notice("coderabbitai", _BOT_DETECTED_NOTICE)],
+            list_notices=[_notice("coderabbitai", str_body=_BOT_DETECTED_NOTICE)],
         )
         is not None
     )
@@ -1829,13 +1906,13 @@ def test_a_bot_detected_decline_still_fails_the_gate() -> None:
 def test_parse_declared_wait_reads_277_seconds_from_the_real_chat_body() -> None:
     """Pinned exactly on the number blueprintx#364 measured the loop stalling on: 4m37s."""
     cls_gate = _load_gate()
-    assert cls_gate.parse_declared_wait(_CHAT_NOTICE) == 277
+    assert cls_gate.parse_declared_wait(_CHAT_NOTICE) == _INT_277
 
 
 def test_parse_declared_wait_reads_minutes_from_the_real_review_body() -> None:
     """The review quota declares whole minutes; 21 minutes is 1260 seconds."""
     cls_gate = _load_gate()
-    assert cls_gate.parse_declared_wait(_REVIEW_NOTICE) == 1260
+    assert cls_gate.parse_declared_wait(_REVIEW_NOTICE) == _INT_1260
 
 
 def test_parse_declared_wait_returns_none_when_no_wait_is_declared() -> None:
@@ -1860,7 +1937,7 @@ def test_print_skip_prose_mode_prints_the_reason(capsys: pytest.CaptureFixture[s
     """Default mode: the self-skip line is unchanged prose."""
     cls_gate = _load_gate()
     cls_gate._print_skip(
-        False, "No .review-bots.yaml — the review-thread gate is not adopted here"
+        False, str_reason="No .review-bots.yaml — the review-thread gate is not adopted here"
     )
     assert "not adopted here" in capsys.readouterr().out
 
@@ -1868,7 +1945,7 @@ def test_print_skip_prose_mode_prints_the_reason(capsys: pytest.CaptureFixture[s
 def test_print_skip_json_mode_emits_a_status_field(capsys: pytest.CaptureFixture[str]) -> None:
     """``--json`` mode: the same self-skip is machine-readable, never grepped prose."""
     cls_gate = _load_gate()
-    cls_gate._print_skip(True, "nothing to check")
+    cls_gate._print_skip(True, str_reason="nothing to check")
     assert json.loads(capsys.readouterr().out)["status"] == "skipped"
 
 
@@ -1880,7 +1957,10 @@ def test_print_missing_review_json_carries_the_notice_classification(
     list_notices = [{"author": {"login": "coderabbitai[bot]"}, "body": _CHAT_NOTICE}]
     set_roster = {cls_gate.normalise_login(str_login) for str_login in _ROSTER}
     cls_gate._print_missing_review(
-        True, "no declared reviewer ever reported", list_notices, set_roster
+        True,
+        str_missing="no declared reviewer ever reported",
+        list_notices=list_notices,
+        set_reviewers=set_roster,
     )
     dict_out = json.loads(capsys.readouterr().out)
     assert dict_out["notice_classification"] == cls_gate.NOTICE_CHAT_LIMITED
@@ -1891,7 +1971,9 @@ def test_print_thread_verdict_json_pass_has_no_problems(
 ) -> None:
     """An empty problem list must report ``pass``, matching the prose "All N answered" case."""
     cls_gate = _load_gate()
-    cls_gate._print_thread_verdict(True, [], 3, True)
+    cls_gate._print_thread_verdict(
+        True, list_problems=[], int_threads=3, bool_require_resolved=True
+    )
     assert json.loads(capsys.readouterr().out)["status"] == "pass"
 
 
@@ -1905,7 +1987,12 @@ def test_print_thread_verdict_json_fail_reports_fail_status(
     PRs. JSON mode gives it a status field instead.
     """
     cls_gate = _load_gate()
-    cls_gate._print_thread_verdict(True, ["src/thing.py: thread is open"], 1, True)
+    cls_gate._print_thread_verdict(
+        True,
+        list_problems=["src/thing.py: thread is open"],
+        int_threads=1,
+        bool_require_resolved=True,
+    )
     assert json.loads(capsys.readouterr().out)["status"] == "fail"
 
 
@@ -1919,7 +2006,12 @@ def test_print_thread_verdict_json_fail_carries_the_problems(
     outcomes fail independently.
     """
     cls_gate = _load_gate()
-    cls_gate._print_thread_verdict(True, ["src/thing.py: thread is open"], 1, True)
+    cls_gate._print_thread_verdict(
+        True,
+        list_problems=["src/thing.py: thread is open"],
+        int_threads=1,
+        bool_require_resolved=True,
+    )
     assert json.loads(capsys.readouterr().out)["problems"] == ["src/thing.py: thread is open"]
 
 
@@ -1931,7 +2023,7 @@ _BODY_AFTER = "2026-01-03T00:00:00Z"
 _BODY_REPLY = "Fixed in the next commit: the loop now re-raises the last error. " + "x" * 60
 
 
-def _body_review(str_body: str | None, str_login: str = "coderabbitai[bot]") -> dict:
+def _body_review(str_body: str | None, *, str_login: str = "coderabbitai[bot]") -> dict:
     """Build a submitted review on the head carrying a body, as the ladder posts them."""
     return {
         "author": {"login": str_login},
@@ -1944,56 +2036,60 @@ def _body_review(str_body: str | None, str_login: str = "coderabbitai[bot]") -> 
 _LADDER_LOGIN = "guilhermegor-review-ladder[bot]"
 
 
-def _ladder_problems(str_body: str, str_login: str = _LADDER_LOGIN) -> list[str]:
+def _ladder_problems(str_body: str, *, str_login: str = _LADDER_LOGIN) -> list[str]:
     """Problems for one review authored by ``str_login`` under a CodeRabbit + ladder roster."""
-    list_reviews = [_body_review(str_body, str_login)]
-    return _load_gate().find_review_body_problems(list_reviews, [], _BOTH_ROSTER)
+    list_reviews = [_body_review(str_body, str_login=str_login)]
+    return _load_gate().find_review_body_problems(
+        list_reviews, list_notices=[], set_roster=_BOTH_ROSTER
+    )
 
 
-def _body_problems(list_reviews: list[dict], list_notices: list[dict]) -> list[str]:
-    return _load_gate().find_review_body_problems(list_reviews, list_notices, _BODY_ROSTER)
+def _body_problems(list_reviews: list[dict], *, list_notices: list[dict]) -> list[str]:
+    return _load_gate().find_review_body_problems(
+        list_reviews, list_notices=list_notices, set_roster=_BODY_ROSTER
+    )
 
 
 def test_review_body_with_findings_and_no_reply_is_a_problem() -> None:
     """A severity marker in a review body with nobody answering it must fail (#630)."""
-    assert len(_body_problems([_body_review(_BODY_MAJOR)], [])) == 1
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices=[])) == 1
 
 
 def test_review_body_with_findings_answered_after_it_passes() -> None:
     """A substantive non-roster reply posted after the review answers it."""
-    list_notices = [_notice("someone", _BODY_REPLY, _BODY_AFTER)]
-    assert _body_problems([_body_review(_BODY_MAJOR)], list_notices) == []
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created=_BODY_AFTER)]
+    assert _body_problems([_body_review(_BODY_MAJOR)], list_notices=list_notices) == []
 
 
 def test_review_body_reply_shorter_than_the_bar_is_a_problem() -> None:
     """The thread bar applies: 99 characters is not an answer."""
-    list_notices = [_notice("someone", "x" * 99, _BODY_AFTER)]
-    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+    list_notices = [_notice("someone", str_body="x" * 99, str_created=_BODY_AFTER)]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices=list_notices)) == 1
 
 
 def test_review_body_reply_posted_before_the_review_is_a_problem() -> None:
     """A reply that predates the review cannot be an answer to it."""
-    list_notices = [_notice("someone", _BODY_REPLY, "2026-01-01T12:00:00Z")]
-    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-01T12:00:00Z")]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices=list_notices)) == 1
 
 
 def test_review_body_reply_from_the_roster_is_a_problem() -> None:
     """A reviewer replying to itself is not an answer, same as in a thread."""
-    list_notices = [_notice("coderabbitai[bot]", _BODY_REPLY, _BODY_AFTER)]
-    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+    list_notices = [_notice("coderabbitai[bot]", str_body=_BODY_REPLY, str_created=_BODY_AFTER)]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices=list_notices)) == 1
 
 
 def test_review_body_findings_on_a_superseded_commit_still_need_a_reply() -> None:
     """A push must not clear body findings the way it never clears an inline thread."""
     dict_stale = {**_body_review(_BODY_MAJOR), "commit": {"oid": _SUPERSEDED}}
-    assert len(_body_problems([dict_stale], [])) == 1
+    assert len(_body_problems([dict_stale], list_notices=[])) == 1
 
 
 def test_review_body_one_reply_after_both_reviews_answers_both() -> None:
     """Deliberate: one reply posted after the latest findings body covers the earlier ones."""
     dict_late = {**_body_review(_BODY_MAJOR), "submittedAt": "2026-01-02T12:00:00Z"}
-    list_notices = [_notice("someone", _BODY_REPLY, _BODY_AFTER)]
-    assert _body_problems([_body_review(_BODY_MAJOR), dict_late], list_notices) == []
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created=_BODY_AFTER)]
+    assert _body_problems([_body_review(_BODY_MAJOR), dict_late], list_notices=list_notices) == []
 
 
 def test_review_body_reply_from_a_graphql_bot_is_a_problem() -> None:
@@ -2003,44 +2099,46 @@ def test_review_body_reply_from_a_graphql_bot_is_a_problem() -> None:
         "body": _BODY_REPLY,
         "createdAt": _BODY_AFTER,
     }
-    assert len(_body_problems([_body_review(_BODY_MAJOR)], [dict_bot])) == 1
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices=[dict_bot])) == 1
 
 
 def test_review_body_reply_from_a_null_author_is_a_problem() -> None:
     """A deleted (ghost) account is not a known human; it fails closed."""
     dict_ghost = {"author": None, "body": _BODY_REPLY, "createdAt": _BODY_AFTER}
-    assert len(_body_problems([_body_review(_BODY_MAJOR)], [dict_ghost])) == 1
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices=[dict_ghost])) == 1
 
 
 def test_review_body_reply_from_a_rest_bot_login_is_a_problem() -> None:
     """A ``[bot]`` login that is not on the roster is still not an answer."""
-    list_notices = [_notice("github-actions[bot]", _BODY_REPLY, _BODY_AFTER)]
-    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices)) == 1
+    list_notices = [_notice("github-actions[bot]", str_body=_BODY_REPLY, str_created=_BODY_AFTER)]
+    assert len(_body_problems([_body_review(_BODY_MAJOR)], list_notices=list_notices)) == 1
 
 
 def test_review_body_dismissed_review_needs_no_reply() -> None:
     """A dismissal is the maintainer's explicit answer."""
     dict_dismissed = {**_body_review(_BODY_MAJOR), "state": "DISMISSED"}
-    assert _body_problems([dict_dismissed], []) == []
+    assert _body_problems([dict_dismissed], list_notices=[]) == []
 
 
 def test_review_body_problem_quotes_the_matched_line_not_the_first() -> None:
     """CodeRabbit bodies open with boilerplate; the failure must show the finding."""
     str_body = "<!-- auto-generated -->\n**Review profile**: CHILL\n" + _BODY_MAJOR
-    assert "retry loop" in _body_problems([_body_review(str_body)], [])[0]
+    assert "retry loop" in _body_problems([_body_review(str_body)], list_notices=[])[0]
 
 
 def test_print_review_body_problems_json_carries_the_thread_problems(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Both failures reach the caller in one run, not one per round trip."""
-    _load_gate()._print_review_body_problems(True, ["body"], ["an open thread"])
+    _load_gate()._print_review_body_problems(
+        True, list_problems=["body"], list_thread_problems=["an open thread"]
+    )
     assert json.loads(capsys.readouterr().out)["thread_problems"] == ["an open thread"]
 
 
 def test_review_body_findings_from_a_non_roster_author_are_ignored() -> None:
     """Only a roster reviewer's body is held to the bar."""
-    assert _body_problems([_body_review(_BODY_MAJOR, "someone")], []) == []
+    assert _body_problems([_body_review(_BODY_MAJOR, str_login="someone")], list_notices=[]) == []
 
 
 @pytest.mark.parametrize(
@@ -2061,7 +2159,7 @@ def test_review_body_findings_from_a_non_roster_author_are_ignored() -> None:
 )
 def test_review_body_carrying_findings_is_flagged(str_body: str) -> None:
     """Each shape a reviewer writes findings in must demand an answer."""
-    assert len(_body_problems([_body_review(str_body)], [])) == 1
+    assert len(_body_problems([_body_review(str_body)], list_notices=[])) == 1
 
 
 @pytest.mark.parametrize(
@@ -2091,12 +2189,12 @@ def test_review_body_carrying_findings_is_flagged(str_body: str) -> None:
 )
 def test_review_body_reporting_no_findings_stays_green(str_body: str) -> None:
     """A clean review is not a finding: it needs no reply."""
-    assert _body_problems([_body_review(str_body)], []) == []
+    assert _body_problems([_body_review(str_body)], list_notices=[]) == []
 
 
 def test_review_body_that_is_null_stays_green() -> None:
     """GitHub returns a null-ish body for an approval with no text."""
-    assert _body_problems([_body_review(None)], []) == []
+    assert _body_problems([_body_review(None)], list_notices=[]) == []
 
 
 @pytest.mark.parametrize("str_field", ["body", "submittedAt", "state", "__typename"])
@@ -2109,7 +2207,7 @@ def test_print_review_body_problems_json_carries_the_reason(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The JSON verdict names the failure so a caller never greps prose."""
-    _load_gate()._print_review_body_problems(True, ["a review body is unanswered"])
+    _load_gate()._print_review_body_problems(True, list_problems=["a review body is unanswered"])
     assert json.loads(capsys.readouterr().out)["reason"] == "unanswered_review_body"
 
 
@@ -2170,7 +2268,7 @@ _DICT_REVIEW_SHAPES = {
 )
 def test_review_shape_declared_by_structure_demands_an_answer(str_body: str) -> None:
     """Every recognised review shape must fail when nobody answered."""
-    assert len(_body_problems([_body_review(str_body)], [])) == 1
+    assert len(_body_problems([_body_review(str_body)], list_notices=[])) == 1
 
 
 @pytest.mark.parametrize(
@@ -2178,7 +2276,7 @@ def test_review_shape_declared_by_structure_demands_an_answer(str_body: str) -> 
 )
 def test_review_shape_witness_without_its_marker_is_not_a_review(str_witness: str) -> None:
     """Should-fail witness: the same text minus the structural marker must stay green."""
-    assert _body_problems([_body_review(str_witness)], []) == []
+    assert _body_problems([_body_review(str_witness)], list_notices=[]) == []
 
 
 @pytest.mark.parametrize(
@@ -2211,13 +2309,13 @@ def test_review_count_of_zero_beats_prose_markers(str_body: str) -> None:
 def test_coderabbit_header_of_zero_beats_prose_markers() -> None:
     """The same rule for CodeRabbit's own header, authored by CodeRabbit."""
     str_body = "**Actionable comments posted: 0**\n\n🔴 Major stray marker"
-    assert _ladder_problems(str_body, "coderabbitai[bot]") == []
+    assert _ladder_problems(str_body, str_login="coderabbitai[bot]") == []
 
 
 def test_quoted_ladder_count_inside_a_sentence_does_not_declare_zero() -> None:
     """The count must open a line: a quoted '0 finding(s) across' cannot clean a real finding."""
     str_body = f"- **Major** x: {_LOOP} (earlier run said 0 finding(s) across 4 files)"
-    assert len(_body_problems([_body_review(str_body)], [])) == 1
+    assert len(_body_problems([_body_review(str_body)], list_notices=[])) == 1
 
 
 def test_quoted_actionable_header_mid_line_does_not_clear_a_real_finding() -> None:
@@ -2225,7 +2323,7 @@ def test_quoted_actionable_header_mid_line_does_not_clear_a_real_finding() -> No
     str_body = (
         _LADDER_CLAUDE + "- **Major** x: the gate trusts 'Actionable comments posted: 0' anywhere."
     )
-    assert len(_body_problems([_body_review(str_body)], [])) == 1
+    assert len(_body_problems([_body_review(str_body)], list_notices=[])) == 1
 
 
 _FINDING = "- **Major** x: the gate trusts a quoted header."
@@ -2243,7 +2341,7 @@ _FINDING = "- **Major** x: the gate trusts a quoted header."
 def test_quoted_or_fenced_header_cannot_clear_a_ladder_finding(str_quote: str) -> None:
     """Should-fail witness: a quoted CodeRabbit '0' header in a ladder body clears nothing."""
     str_body = f"{_LADDER_CLAUDE}{_FINDING}\n\n{str_quote}\n"
-    assert len(_body_problems([_body_review(str_body)], [])) == 1
+    assert len(_body_problems([_body_review(str_body)], list_notices=[])) == 1
 
 
 @pytest.mark.parametrize(
@@ -2257,24 +2355,24 @@ def test_quoted_or_fenced_header_cannot_clear_a_ladder_finding(str_quote: str) -
     ids=["ladder-attributed", "ladder-attribution-missing", "other-roster", "other-roster-ladder"],
 )
 def test_unquoted_header_from_a_non_coderabbit_author_cannot_clear_a_finding(
-    str_head: str, str_login: str
+    str_head: str, *, str_login: str
 ) -> None:
     """Count authority binds to the author: only CodeRabbit's header speaks."""
     str_body = f"{str_head}{_FINDING}\n\n**Actionable comments posted: 0**\n"
-    assert len(_ladder_problems(str_body, str_login)) == 1
+    assert len(_ladder_problems(str_body, str_login=str_login)) == 1
 
 
 def test_unquoted_header_from_coderabbit_still_clears_inline_findings() -> None:
     """Should-fail witness: the same body authored by CodeRabbit stays green."""
     str_body = f"{_FINDING}\n\n**Actionable comments posted: 0**\n"
-    assert _ladder_problems(str_body, "coderabbitai[bot]") == []
+    assert _ladder_problems(str_body, str_login="coderabbitai[bot]") == []
 
 
 @pytest.mark.parametrize("str_login", ["coderabbitai[bot]", "copilot-pull-request-reviewer[bot]"])
 def test_ladder_count_from_a_non_ladder_author_cannot_clear_a_finding(str_login: str) -> None:
     """The ladder count speaks only for the ladder app, with the attribution line."""
     str_body = f"{_LADDER_CLI}0 finding(s) across 4 reviewed file(s).\n{_FINDING}"
-    assert len(_ladder_problems(str_body, str_login)) == 1
+    assert len(_ladder_problems(str_body, str_login=str_login)) == 1
 
 
 def test_ladder_count_without_attribution_cannot_clear_a_finding() -> None:
@@ -2293,19 +2391,19 @@ def test_ladder_count_without_attribution_cannot_clear_a_finding() -> None:
 def test_quoted_ladder_count_cannot_clear_a_finding(str_quote: str) -> None:
     """A quoted ladder '0 finding(s)' count clears nothing."""
     str_body = f"{_LADDER_CLAUDE}{_FINDING}\n\n{str_quote}\n"
-    assert len(_body_problems([_body_review(str_body)], [])) == 1
+    assert len(_body_problems([_body_review(str_body)], list_notices=[])) == 1
 
 
 def test_ladder_count_without_the_ladder_attribution_is_not_authoritative() -> None:
     """The count speaks only in a body that carries the attribution line."""
     str_body = f"0 finding(s) across 4 reviewed file(s).\n{_FINDING}"
-    assert len(_body_problems([_body_review(str_body)], [])) == 1
+    assert len(_body_problems([_body_review(str_body)], list_notices=[])) == 1
 
 
 def test_actionable_header_at_a_line_start_still_clears_inline_findings() -> None:
     """The real CodeRabbit shape, the bold header opening a line, still wins."""
     str_body = "**Actionable comments posted: 0**\n\n- **Major** x"
-    assert _body_problems([_body_review(str_body)], []) == []
+    assert _body_problems([_body_review(str_body)], list_notices=[]) == []
 
 
 def test_coderabbit_inline_findings_need_no_body_reply() -> None:
@@ -2314,24 +2412,39 @@ def test_coderabbit_inline_findings_need_no_body_reply() -> None:
     An open PR whose inline threads are all answered and resolved must stay green, so the body
     check cannot demand a PR comment for the same findings.
     """
-    assert _body_problems([_body_review(_CR_INLINE_ONLY)], []) == []
+    assert _body_problems([_body_review(_CR_INLINE_ONLY)], list_notices=[]) == []
 
 
 def test_coderabbit_review_boilerplate_is_never_the_quoted_finding() -> None:
     """The message quotes the section, not '**Review profile**: CHILL'."""
-    assert "Outside diff range" in _body_problems([_body_review(_CR_OUTSIDE_DIFF)], [])[0]
+    assert (
+        "Outside diff range"
+        in _body_problems([_body_review(_CR_OUTSIDE_DIFF)], list_notices=[])[0]
+    )
 
 
 def test_ladder_review_posted_as_an_issue_comment_counts_as_a_review() -> None:
     """Some rungs post their review as an issue comment, not a PR review."""
-    list_notices = [_notice("guilhermegor-review-ladder[bot]", _LADDER_CLAUDE + _PROSE)]
-    assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_body=_LADDER_CLAUDE + _PROSE)]
+    assert (
+        len(
+            _load_gate().find_review_body_problems(
+                [], list_notices=list_notices, set_roster=_BOTH_ROSTER
+            )
+        )
+        == 1
+    )
 
 
 def test_ladder_issue_comment_without_its_attribution_is_not_a_review() -> None:
     """Should-fail witness for the issue-comment path."""
-    list_notices = [_notice("guilhermegor-review-ladder[bot]", _PROSE)]
-    assert _load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER) == []
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_body=_PROSE)]
+    assert (
+        _load_gate().find_review_body_problems(
+            [], list_notices=list_notices, set_roster=_BOTH_ROSTER
+        )
+        == []
+    )
 
 
 @pytest.mark.parametrize(
@@ -2344,8 +2457,13 @@ def test_ladder_issue_comment_without_its_attribution_is_not_a_review() -> None:
 )
 def test_ladder_status_notice_is_not_a_review(str_status: str) -> None:
     """A failure or status notice from the ladder must not demand an answer."""
-    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_status)]
-    assert _load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER) == []
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_body=str_status)]
+    assert (
+        _load_gate().find_review_body_problems(
+            [], list_notices=list_notices, set_roster=_BOTH_ROSTER
+        )
+        == []
+    )
 
 
 _WALKTHROUGH = "> [!IMPORTANT]\n> ## Review skipped\n> - **Review profile**: CHILL"
@@ -2356,10 +2474,10 @@ def test_coderabbit_walkthrough_comment_is_not_a_review() -> None:
     str_body = (
         "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n" + _WALKTHROUGH
     )
-    assert _body_problems([], [_notice("coderabbitai[bot]", str_body)]) == []
+    assert _body_problems([], list_notices=[_notice("coderabbitai[bot]", str_body=str_body)]) == []
 
 
-def _pr_page(list_reviews: list[dict], bool_next: bool) -> dict:
+def _pr_page(list_reviews: list[dict], *, bool_next: bool) -> dict:
     """Build one GraphQL page whose reviews connection may have a next page."""
     return {
         "reviews": {
@@ -2374,12 +2492,12 @@ def test_review_on_the_second_page_reaches_the_body_check(monkeypatch: pytest.Mo
     """Pagination extends ``dict_pr`` in place, so a body past the first 100 reviews is seen."""
     cls_gate = _load_gate()
     list_pages = [
-        _pr_page([_body_review("LGTM")], True),
-        _pr_page([_body_review(_BODY_MAJOR)], False),
+        _pr_page([_body_review("LGTM")], bool_next=True),
+        _pr_page([_body_review(_BODY_MAJOR)], bool_next=False),
     ]
-    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: list_pages.pop(0))
-    dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
-    assert len(cls_gate._unanswered_bodies(dict_pr, [], _BODY_ROSTER)) == 1
+    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args, **__: list_pages.pop(0))
+    dict_pr = cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
+    assert len(cls_gate._unanswered_bodies(dict_pr, list_notices=[], set_roster=_BODY_ROSTER)) == 1
 
 
 def test_an_inline_only_review_survives_the_fetch_path_and_counts(
@@ -2393,10 +2511,15 @@ def test_an_inline_only_review_survives_the_fetch_path_and_counts(
         "state": "COMMENTED",
         "comments": {"nodes": [_INLINE_NODE]},
     }
-    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: _pr_page([dict_raw], False))
-    dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+    monkeypatch.setattr(
+        cls_gate, "_fetch_page", lambda *list_args, **__: _pr_page([dict_raw], bool_next=False)
+    )
+    dict_pr = cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
     str_problem = cls_gate.find_missing_review_problem(
-        dict_pr["reviews"]["nodes"], _ROSTER, "some-human", str_head_oid=_HEAD
+        dict_pr["reviews"]["nodes"],
+        set_reviewers=_ROSTER,
+        str_pr_author="some-human",
+        str_head_oid=_HEAD,
     )
 
     assert str_problem is None
@@ -2423,7 +2546,13 @@ _REVIEWED = [_body_review(_BODY_MAJOR)]
 )
 def test_answer_shape_declared_by_structure_answers_at_any_length(str_reply: str) -> None:
     """A recognised answer shape counts even below the length bar."""
-    assert _body_problems(_REVIEWED, [_notice("someone", str_reply, _BODY_AFTER)]) == []
+    assert (
+        _body_problems(
+            _REVIEWED,
+            list_notices=[_notice("someone", str_body=str_reply, str_created=_BODY_AFTER)],
+        )
+        == []
+    )
 
 
 @pytest.mark.parametrize(
@@ -2431,7 +2560,15 @@ def test_answer_shape_declared_by_structure_answers_at_any_length(str_reply: str
 )
 def test_answer_shape_witness_without_its_marker_is_not_an_answer(str_witness: str) -> None:
     """Should-fail witness: the same short text minus the marker is not an answer."""
-    assert len(_body_problems(_REVIEWED, [_notice("someone", str_witness, _BODY_AFTER)])) == 1
+    assert (
+        len(
+            _body_problems(
+                _REVIEWED,
+                list_notices=[_notice("someone", str_body=str_witness, str_created=_BODY_AFTER)],
+            )
+        )
+        == 1
+    )
 
 
 @pytest.mark.parametrize(
@@ -2447,47 +2584,67 @@ def test_answer_shape_witness_without_its_marker_is_not_an_answer(str_witness: s
 )
 def test_a_review_request_or_status_line_is_not_an_answer(str_command: str) -> None:
     """Asking for another review, or saying nothing is answered, answers nothing."""
-    assert len(_body_problems(_REVIEWED, [_notice("someone", str_command, _BODY_AFTER)])) == 1
+    assert (
+        len(
+            _body_problems(
+                _REVIEWED,
+                list_notices=[_notice("someone", str_body=str_command, str_created=_BODY_AFTER)],
+            )
+        )
+        == 1
+    )
 
 
 def test_answer_shape_from_a_bot_is_not_an_answer() -> None:
     """The shape alone never lets a bot clear findings."""
-    list_notices = [_notice("github-actions[bot]", "Reply to review 123456: ok.", _BODY_AFTER)]
-    assert len(_body_problems(_REVIEWED, list_notices)) == 1
+    list_notices = [
+        _notice(
+            "github-actions[bot]", str_body="Reply to review 123456: ok.", str_created=_BODY_AFTER
+        )
+    ]
+    assert len(_body_problems(_REVIEWED, list_notices=list_notices)) == 1
 
 
 def test_answer_shape_posted_before_the_review_is_not_an_answer() -> None:
     """The shape must still be newer than the review it answers."""
-    list_notices = [_notice("someone", "Reply to review 123456: ok.", "2026-01-01T00:00:00Z")]
-    assert len(_body_problems(_REVIEWED, list_notices)) == 1
+    list_notices = [
+        _notice(
+            "someone", str_body="Reply to review 123456: ok.", str_created="2026-01-01T00:00:00Z"
+        )
+    ]
+    assert len(_body_problems(_REVIEWED, list_notices=list_notices)) == 1
 
 
 def test_answer_shape_from_the_roster_is_not_an_answer() -> None:
     """A reviewer answering itself is not an answer, shape or not."""
-    list_notices = [_notice("coderabbitai[bot]", "Reply to review 123456: ok.", _BODY_AFTER)]
-    assert len(_body_problems(_REVIEWED, list_notices)) == 1
+    list_notices = [
+        _notice(
+            "coderabbitai[bot]", str_body="Reply to review 123456: ok.", str_created=_BODY_AFTER
+        )
+    ]
+    assert len(_body_problems(_REVIEWED, list_notices=list_notices)) == 1
 
 
 def test_body_section_without_a_parsable_count_is_a_finding() -> None:
     """A section heading whose count is missing or unparsable is a finding, never a clean 0."""
     str_body = "**Actionable comments posted: 0**\n\n⚠️ Outside diff range comments\n\nx"
-    assert len(_body_problems([_body_review(str_body)], [])) == 1
+    assert len(_body_problems([_body_review(str_body)], list_notices=[])) == 1
 
 
 def test_body_section_with_a_stated_zero_count_is_clean() -> None:
     """Should-fail witness: the same body with an explicit (0) stays green."""
     str_body = "**Actionable comments posted: 0**\n\n⚠️ Outside diff range comments (0)\n\nx"
-    assert _body_problems([_body_review(str_body)], []) == []
+    assert _body_problems([_body_review(str_body)], list_notices=[]) == []
 
 
 def test_ladder_review_with_an_attribution_and_nothing_else_is_a_finding() -> None:
     """A truncated or failed ladder review says nothing, so it cannot read as clean."""
-    assert len(_body_problems([_body_review(_LADDER_CLAUDE)], [])) == 1
+    assert len(_body_problems([_body_review(_LADDER_CLAUDE)], list_notices=[])) == 1
 
 
 def test_ladder_review_that_says_no_findings_is_clean() -> None:
     """Should-fail witness: the explicit clean statement is the positive evidence."""
-    assert _body_problems([_body_review(_LADDER_CLAUDE + "No findings.")], []) == []
+    assert _body_problems([_body_review(_LADDER_CLAUDE + "No findings.")], list_notices=[]) == []
 
 
 @pytest.mark.parametrize("str_typename", ["Bot", "Mannequin", "Organization"])
@@ -2495,44 +2652,60 @@ def test_answer_from_a_non_user_account_type_is_not_an_answer(str_typename: str)
     """Only a ``User`` (or an untyped REST login) answers; any other type fails closed."""
     dict_author = {"login": "someone", "__typename": str_typename}
     dict_reply = {"author": dict_author, "body": _BODY_REPLY, "createdAt": _BODY_AFTER}
-    assert len(_body_problems(_REVIEWED, [dict_reply])) == 1
+    assert len(_body_problems(_REVIEWED, list_notices=[dict_reply])) == 1
 
 
 def test_answer_from_a_user_account_type_is_an_answer() -> None:
     """Should-fail witness: the same reply from a ``User`` answers."""
     dict_author = {"login": "someone", "__typename": "User"}
     dict_reply = {"author": dict_author, "body": _BODY_REPLY, "createdAt": _BODY_AFTER}
-    assert _body_problems(_REVIEWED, [dict_reply]) == []
+    assert _body_problems(_REVIEWED, list_notices=[dict_reply]) == []
 
 
 def test_roster_comment_with_an_auto_marker_and_an_attribution_still_counts() -> None:
     """A marker must not be a skip list: structure decides, so a marked ladder review counts."""
     str_body = "<!-- This is an auto-generated comment: x -->\n" + _LADDER_CLAUDE + _PROSE
-    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_body)]
-    assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
+    list_notices = [_notice("guilhermegor-review-ladder[bot]", str_body=str_body)]
+    assert (
+        len(
+            _load_gate().find_review_body_problems(
+                [], list_notices=list_notices, set_roster=_BOTH_ROSTER
+            )
+        )
+        == 1
+    )
 
 
 def test_roster_issue_comment_with_a_body_section_counts_as_a_review() -> None:
     """An issue comment carrying a non-zero outside-diff section is a review too."""
-    list_notices = [_notice("coderabbitai[bot]", _CR_OUTSIDE_DIFF)]
-    assert len(_body_problems([], list_notices)) == 1
+    list_notices = [_notice("coderabbitai[bot]", str_body=_CR_OUTSIDE_DIFF)]
+    assert len(_body_problems([], list_notices=list_notices)) == 1
 
 
 def test_roster_issue_comment_without_the_body_section_is_not_a_review() -> None:
     """Should-fail witness: the same comment minus its section marker."""
-    list_notices = [_notice("coderabbitai[bot]", _CR_NITPICK_ONLY.replace("🟠 Major", "x"))]
-    assert _body_problems([], list_notices) == []
+    list_notices = [
+        _notice("coderabbitai[bot]", str_body=_CR_NITPICK_ONLY.replace("🟠 Major", "x"))
+    ]
+    assert _body_problems([], list_notices=list_notices) == []
 
 
 def test_ladder_issue_review_without_a_timestamp_fails_closed() -> None:
     """No ``createdAt`` means no ordering evidence, so no answer can postdate it."""
-    dict_review = {**_notice("guilhermegor-review-ladder[bot]", _LADDER_CLAUDE + _PROSE)}
+    dict_review = {**_notice("guilhermegor-review-ladder[bot]", str_body=_LADDER_CLAUDE + _PROSE)}
     dict_review["createdAt"] = None
-    list_notices = [dict_review, _notice("someone", _BODY_REPLY, _BODY_AFTER)]
-    assert len(_load_gate().find_review_body_problems([], list_notices, _BOTH_ROSTER)) == 1
+    list_notices = [dict_review, _notice("someone", str_body=_BODY_REPLY, str_created=_BODY_AFTER)]
+    assert (
+        len(
+            _load_gate().find_review_body_problems(
+                [], list_notices=list_notices, set_roster=_BOTH_ROSTER
+            )
+        )
+        == 1
+    )
 
 
-def _comments_node(list_notices: list[dict], str_cursor: str | None) -> dict:
+def _comments_node(list_notices: list[dict], *, str_cursor: str | None) -> dict:
     """Build one page of issue comments; ``str_cursor`` set means another page follows."""
     return {
         "reviews": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []},
@@ -2544,11 +2717,11 @@ def _comments_node(list_notices: list[dict], str_cursor: str | None) -> dict:
     }
 
 
-def _fetch_comment_pages(monkeypatch: pytest.MonkeyPatch, list_pages: list[dict]) -> dict:
+def _fetch_comment_pages(monkeypatch: pytest.MonkeyPatch, *, list_pages: list[dict]) -> dict:
     """Run ``fetch_pull_request`` over mocked pages and return the merged node."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "_fetch_page", Mock(side_effect=list_pages))
-    return cls_gate.fetch_pull_request("o", "r", 1)
+    return cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
 
 
 def test_review_on_comment_page_one_answered_on_page_three_counts(
@@ -2557,13 +2730,30 @@ def test_review_on_comment_page_one_answered_on_page_three_counts(
     """A PR past 200 comments: the answer on the last page must reach the body check."""
     str_review = "**Actionable comments posted: 1**\n\n♻️ Duplicate comments (1)\n\nx"
     list_pages = [
-        _comments_node([_notice("coderabbitai[bot]", str_review, "2026-01-02T00:00:00Z")], "c1"),
-        _comments_node([_notice("someone", "unrelated chatter", "2026-01-02T06:00:00Z")], "c2"),
-        _comments_node([_notice("someone", _BODY_REPLY, _BODY_AFTER)], None),
+        _comments_node(
+            [
+                _notice(
+                    "coderabbitai[bot]", str_body=str_review, str_created="2026-01-02T00:00:00Z"
+                )
+            ],
+            str_cursor="c1",
+        ),
+        _comments_node(
+            [_notice("someone", str_body="unrelated chatter", str_created="2026-01-02T06:00:00Z")],
+            str_cursor="c2",
+        ),
+        _comments_node(
+            [_notice("someone", str_body=_BODY_REPLY, str_created=_BODY_AFTER)], str_cursor=None
+        ),
     ]
-    dict_pr = _fetch_comment_pages(monkeypatch, list_pages)
+    dict_pr = _fetch_comment_pages(monkeypatch, list_pages=list_pages)
     list_notices = dict_pr["comments"]["nodes"]
-    assert _load_gate().find_review_body_problems([], list_notices, _BODY_ROSTER) == []
+    assert (
+        _load_gate().find_review_body_problems(
+            [], list_notices=list_notices, set_roster=_BODY_ROSTER
+        )
+        == []
+    )
 
 
 def test_comment_review_without_the_page_three_answer_is_a_problem(
@@ -2572,13 +2762,33 @@ def test_comment_review_without_the_page_three_answer_is_a_problem(
     """Should-fail witness: the same review without the last-page answer still fails."""
     str_review = "**Actionable comments posted: 1**\n\n♻️ Duplicate comments (1)\n\nx"
     list_pages = [
-        _comments_node([_notice("coderabbitai[bot]", str_review, "2026-01-02T00:00:00Z")], "c1"),
-        _comments_node([_notice("someone", "unrelated chatter", "2026-01-02T06:00:00Z")], "c2"),
-        _comments_node([_notice("someone", "still chatting", _BODY_AFTER)], None),
+        _comments_node(
+            [
+                _notice(
+                    "coderabbitai[bot]", str_body=str_review, str_created="2026-01-02T00:00:00Z"
+                )
+            ],
+            str_cursor="c1",
+        ),
+        _comments_node(
+            [_notice("someone", str_body="unrelated chatter", str_created="2026-01-02T06:00:00Z")],
+            str_cursor="c2",
+        ),
+        _comments_node(
+            [_notice("someone", str_body="still chatting", str_created=_BODY_AFTER)],
+            str_cursor=None,
+        ),
     ]
-    dict_pr = _fetch_comment_pages(monkeypatch, list_pages)
+    dict_pr = _fetch_comment_pages(monkeypatch, list_pages=list_pages)
     list_notices = dict_pr["comments"]["nodes"]
-    assert len(_load_gate().find_review_body_problems([], list_notices, _BODY_ROSTER)) == 1
+    assert (
+        len(
+            _load_gate().find_review_body_problems(
+                [], list_notices=list_notices, set_roster=_BODY_ROSTER
+            )
+        )
+        == 1
+    )
 
 
 def test_comment_pages_are_requested_with_the_comment_cursor(
@@ -2588,14 +2798,14 @@ def test_comment_pages_are_requested_with_the_comment_cursor(
     cls_gate = _load_gate()
     cls_page = Mock(
         side_effect=[
-            _comments_node([], "c1"),
-            _comments_node([], "c2"),
-            _comments_node([], None),
+            _comments_node([], str_cursor="c1"),
+            _comments_node([], str_cursor="c2"),
+            _comments_node([], str_cursor=None),
         ]
     )
     monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
-    cls_gate.fetch_pull_request("o", "r", 1)
-    assert [tuple_args[5] for tuple_args, _ in cls_page.call_args_list] == [None, "c1", "c2"]
+    cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
+    assert [d["str_comment_cursor"] for _, d in cls_page.call_args_list] == [None, "c1", "c2"]
 
 
 def test_a_failing_comment_page_raises_instead_of_stopping_early(
@@ -2603,10 +2813,12 @@ def test_a_failing_comment_page_raises_instead_of_stopping_early(
 ) -> None:
     """Fail closed: an error on a later page propagates, never a silently short list."""
     cls_gate = _load_gate()
-    cls_page = Mock(side_effect=[_comments_node([], "c1"), RuntimeError("page two failed")])
+    cls_page = Mock(
+        side_effect=[_comments_node([], str_cursor="c1"), RuntimeError("page two failed")]
+    )
     monkeypatch.setattr(cls_gate, "_fetch_page", cls_page)
     with pytest.raises(RuntimeError, match="page two failed"):
-        cls_gate.fetch_pull_request("o", "r", 1)
+        cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
 
 
 _STR_FILLER = "x" * 400
@@ -2619,7 +2831,7 @@ def test_newest_roster_notice_is_not_truncated() -> None:
     cls_gate = _load_gate()
     str_body = f"{_STR_FILLER} Review rate limited."
     assert cls_gate.newest_roster_notice(
-        [_notice("coderabbitai[bot]", str_body)], _ROSTER_NORMALISED
+        [_notice("coderabbitai[bot]", str_body=str_body)], set_roster=_ROSTER_NORMALISED
     ).endswith("Review rate limited.")
 
 
@@ -2627,7 +2839,8 @@ def test_summarise_reviewer_notice_still_truncates_for_display() -> None:
     """The quoted form stays bounded, or a failure message becomes unreadable."""
     cls_gate = _load_gate()
     str_seen = cls_gate.summarise_reviewer_notice(
-        [_notice("coderabbitai[bot]", f"{_STR_FILLER} Review rate limited.")], _ROSTER_NORMALISED
+        [_notice("coderabbitai[bot]", str_body=f"{_STR_FILLER} Review rate limited.")],
+        set_roster=_ROSTER_NORMALISED,
     )
     assert len(str_seen) == cls_gate._INT_NOTICE_DISPLAY_CHARS
 
@@ -2646,9 +2859,11 @@ def test_the_json_verdict_classifies_a_limit_past_the_display_budget(
     cls_gate = _load_gate()
     cls_gate._print_missing_review(
         True,
-        "no declared reviewer ever reported",
-        [_notice("coderabbitai[bot]", f"{_STR_FILLER} Review rate limited.")],
-        _ROSTER_NORMALISED,
+        str_missing="no declared reviewer ever reported",
+        list_notices=[
+            _notice("coderabbitai[bot]", str_body=f"{_STR_FILLER} Review rate limited.")
+        ],
+        set_reviewers=_ROSTER_NORMALISED,
     )
     dict_out = json.loads(capsys.readouterr().out)
     assert dict_out["notice_classification"] == cls_gate.NOTICE_REVIEW_LIMITED
@@ -2658,8 +2873,8 @@ def test_classify_on_the_truncated_form_would_have_missed_it() -> None:
     """Pins the DEFECT itself: the cut string classifies as OK, so a revert cannot be quiet."""
     cls_gate = _load_gate()
     str_cut = cls_gate.summarise_reviewer_notice(
-        [_notice("coderabbitai[bot]", f"{_STR_FILLER} Review rate limited.")],
-        _ROSTER_NORMALISED,
+        [_notice("coderabbitai[bot]", str_body=f"{_STR_FILLER} Review rate limited.")],
+        set_roster=_ROSTER_NORMALISED,
     )
     assert cls_gate.classify_reviewer_notice(str_cut) == cls_gate.NOTICE_OK
 
@@ -2668,9 +2883,9 @@ def test_completion_is_seen_past_the_display_budget() -> None:
     """4 of 112 real notices buried "Review finished" past 200 chars — a false red."""
     cls_gate = _load_gate()
     assert cls_gate.reviewer_declared_completion(
-        [_notice("coderabbitai[bot]", f"{_STR_FILLER} Review finished.")],
-        _ROSTER_NORMALISED,
-        _HEAD_DATE,
+        [_notice("coderabbitai[bot]", str_body=f"{_STR_FILLER} Review finished.")],
+        set_roster=_ROSTER_NORMALISED,
+        str_head_date=_HEAD_DATE,
     )
 
 
@@ -2683,7 +2898,7 @@ _SET_POSTERS = frozenset({"guilhermegor-review-ladder"})
 
 
 def _marker_comment(
-    str_association: str, str_login: str = _LADDER_APP, str_typename: str = "Bot"
+    str_association: str, *, str_login: str = _LADDER_APP, str_typename: str = "Bot"
 ) -> dict:
     return {
         "author": {"login": str_login, "__typename": str_typename},
@@ -2693,11 +2908,11 @@ def _marker_comment(
     }
 
 
-def _missing_with(list_notices: list[dict], tuple_markers: tuple[str, ...]) -> str | None:
+def _missing_with(list_notices: list[dict], *, tuple_markers: tuple[str, ...]) -> str | None:
     return _load_gate().find_missing_review_problem(
         [],
-        {"coderabbitai"},
-        "someone-else",
+        set_reviewers={"coderabbitai"},
+        str_pr_author="someone-else",
         str_head_oid=_HEAD,
         list_notices=list_notices,
         str_head_date=_HEAD_DATE,
@@ -2708,62 +2923,72 @@ def _missing_with(list_notices: list[dict], tuple_markers: tuple[str, ...]) -> s
 
 def test_ladder_marker_from_the_pr_author_owner_is_rejected() -> None:
     """The PR author is the repo OWNER: typing the marker must not self-approve (#761)."""
-    dict_forged = _marker_comment("OWNER", "someone-else")
-    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+    dict_forged = _marker_comment("OWNER", str_login="someone-else")
+    assert _missing_with([dict_forged], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def test_ladder_marker_from_the_ladder_app_is_accepted() -> None:
     """The ladder App posts as a Bot with association NONE; its login is what is trusted."""
-    assert _missing_with([_marker_comment("NONE")], _TUPLE_MARKERS) is None
+    assert _missing_with([_marker_comment("NONE")], tuple_markers=_TUPLE_MARKERS) is None
 
 
 def test_ladder_marker_from_a_user_with_the_bare_app_login_is_rejected() -> None:
     """A human registering `guilhermegor-review-ladder` is a User, not the App's Bot actor."""
-    dict_forged = _marker_comment("NONE", "guilhermegor-review-ladder", "User")
-    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+    dict_forged = _marker_comment(
+        "NONE", str_login="guilhermegor-review-ladder", str_typename="User"
+    )
+    assert _missing_with([dict_forged], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def test_ladder_marker_without_an_author_type_is_rejected() -> None:
     """An author with no `__typename` fails closed."""
     dict_untyped = {**_marker_comment("NONE"), "author": {"login": _LADDER_APP}}
-    assert _missing_with([dict_untyped], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_untyped], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def test_ladder_marker_from_a_non_roster_collaborator_is_rejected() -> None:
     """A COLLABORATOR outside the posters allowlist cannot forge the marker."""
-    dict_forged = _marker_comment("COLLABORATOR", "a-collaborator")
-    assert _missing_with([dict_forged], _TUPLE_MARKERS) is not None
+    dict_forged = _marker_comment("COLLABORATOR", str_login="a-collaborator")
+    assert _missing_with([dict_forged], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def test_ladder_marker_without_any_posters_is_rejected() -> None:
     """An empty allowlist fails closed, even for the ladder App's login."""
     cls_gate = _load_gate()
     assert not cls_gate.ladder_marker_declared(
-        [_marker_comment("NONE")], _TUPLE_MARKERS, _HEAD_DATE, _HEAD
+        [_marker_comment("NONE")],
+        tuple_markers=_TUPLE_MARKERS,
+        str_head_date=_HEAD_DATE,
+        str_head_oid=_HEAD,
     )
 
 
 def test_later_marker_from_a_non_poster_does_not_supersede_a_clean_one() -> None:
     """A forged later marker is ignored, so it can neither approve nor block."""
-    dict_forged = {**_marker_comment("OWNER", "someone-else"), "createdAt": "2099-02-01T00:00:00Z"}
-    assert _missing_with([_marker_comment("NONE"), dict_forged], _TUPLE_MARKERS) is None
+    dict_forged = {
+        **_marker_comment("OWNER", str_login="someone-else"),
+        "createdAt": "2099-02-01T00:00:00Z",
+    }
+    assert (
+        _missing_with([_marker_comment("NONE"), dict_forged], tuple_markers=_TUPLE_MARKERS) is None
+    )
 
 
 def test_ladder_marker_without_the_roster_row_changes_nothing() -> None:
     """No `comment-marker` row, no behaviour change."""
-    assert _missing_with([_marker_comment("OWNER")], ()) is not None
+    assert _missing_with([_marker_comment("OWNER")], tuple_markers=()) is not None
 
 
 def test_ladder_marker_quoted_on_a_later_line_is_rejected() -> None:
     """Only the attribution line itself counts, never a quotation of it."""
     dict_quoted = {**_marker_comment("OWNER"), "body": f"see below\n> {_MARKER}"}
-    assert _missing_with([dict_quoted], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_quoted], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def test_ladder_marker_older_than_the_head_is_rejected() -> None:
     """A marker posted before the head commit describes superseded code."""
     dict_old = {**_marker_comment("OWNER"), "createdAt": "2000-01-01T00:00:00Z"}
-    assert _missing_with([dict_old], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_old], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def test_ladder_marker_for_another_head_is_rejected() -> None:
@@ -2772,7 +2997,7 @@ def test_ladder_marker_for_another_head_is_rejected() -> None:
         **_marker_comment("OWNER"),
         "body": f"{_MARKER}\nReviewed head: {'0' * 40}\n\n0 finding(s) across 3 reviewed file(s).",
     }
-    assert _missing_with([dict_other], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_other], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def test_ladder_marker_with_findings_is_rejected() -> None:
@@ -2781,7 +3006,7 @@ def test_ladder_marker_with_findings_is_rejected() -> None:
         **_marker_comment("OWNER"),
         "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
     }
-    assert _missing_with([dict_found], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_found], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 @pytest.mark.parametrize(
@@ -2794,7 +3019,7 @@ def test_ladder_marker_tolerates_whitespace_around_the_head_line(str_head_line: 
         **_marker_comment("MEMBER"),
         "body": f"{_MARKER}\n{str_head_line}\n\n0 finding(s) across 3 reviewed file(s).",
     }
-    assert _missing_with([dict_ws], _TUPLE_MARKERS) is None
+    assert _missing_with([dict_ws], tuple_markers=_TUPLE_MARKERS) is None
 
 
 def test_ladder_marker_without_a_findings_line_is_rejected() -> None:
@@ -2803,7 +3028,7 @@ def test_ladder_marker_without_a_findings_line_is_rejected() -> None:
         **_marker_comment("OWNER"),
         "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n- a bug",
     }
-    assert _missing_with([dict_prose], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_prose], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def test_later_ladder_comment_with_findings_supersedes_an_earlier_clean_one() -> None:
@@ -2813,8 +3038,14 @@ def test_later_ladder_comment_with_findings_supersedes_an_earlier_clean_one() ->
         "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
         "createdAt": "2099-02-01T00:00:00Z",
     }
-    assert _missing_with([_marker_comment("OWNER"), dict_later], _TUPLE_MARKERS) is not None
-    assert _missing_with([dict_later, _marker_comment("OWNER")], _TUPLE_MARKERS) is not None
+    assert (
+        _missing_with([_marker_comment("OWNER"), dict_later], tuple_markers=_TUPLE_MARKERS)
+        is not None
+    )
+    assert (
+        _missing_with([dict_later, _marker_comment("OWNER")], tuple_markers=_TUPLE_MARKERS)
+        is not None
+    )
 
 
 @pytest.mark.parametrize("str_head_line", ["Reviewed head: " + "0" * 40, "no head line here"])
@@ -2827,7 +3058,10 @@ def test_later_marker_naming_no_valid_head_supersedes_an_earlier_clean_one(
         "body": f"{_MARKER}\n{str_head_line}\n\n0 finding(s) across 3 reviewed file(s).",
         "createdAt": "2099-02-01T00:00:00Z",
     }
-    assert _missing_with([_marker_comment("OWNER"), dict_later], _TUPLE_MARKERS) is not None
+    assert (
+        _missing_with([_marker_comment("OWNER"), dict_later], tuple_markers=_TUPLE_MARKERS)
+        is not None
+    )
 
 
 def test_padded_nonzero_findings_line_beside_a_zero_line_is_rejected() -> None:
@@ -2837,7 +3071,7 @@ def test_padded_nonzero_findings_line_beside_a_zero_line_is_rejected() -> None:
         "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 3 reviewed file(s).\n"
         "  3 finding(s) across 3 reviewed file(s). \r",
     }
-    assert _missing_with([dict_padded], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_padded], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def test_zero_findings_over_zero_files_does_not_clear_the_check() -> None:
@@ -2846,7 +3080,7 @@ def test_zero_findings_over_zero_files_does_not_clear_the_check() -> None:
         **_marker_comment("OWNER"),
         "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n0 finding(s) across 0 reviewed file(s).",
     }
-    assert _missing_with([dict_empty], _TUPLE_MARKERS) is not None
+    assert _missing_with([dict_empty], tuple_markers=_TUPLE_MARKERS) is not None
 
 
 def _marker_findings_comment() -> dict:
@@ -2859,7 +3093,10 @@ def _marker_findings_comment() -> dict:
 def test_marker_comment_with_findings_needs_an_answer() -> None:
     """A trusted marker comment listing findings is read as a review body."""
     list_problems = _load_gate().find_review_body_problems(
-        [], [_marker_findings_comment()], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+        [],
+        list_notices=[_marker_findings_comment()],
+        set_roster=_BOTH_ROSTER,
+        tuple_markers=_TUPLE_MARKERS,
     )
     assert len(list_problems) == 1
 
@@ -2868,7 +3105,10 @@ def test_roster_authored_marker_comment_is_one_problem_not_two() -> None:
     """A marker comment from a roster login is read once, not as a notice AND as a marker."""
     dict_roster_marker = {**_marker_findings_comment(), "author": {"login": "coderabbitai"}}
     list_problems = _load_gate().find_review_body_problems(
-        [], [dict_roster_marker], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+        [],
+        list_notices=[dict_roster_marker],
+        set_roster=_BOTH_ROSTER,
+        tuple_markers=_TUPLE_MARKERS,
     )
     assert len(list_problems) == 1
 
@@ -2876,7 +3116,10 @@ def test_roster_authored_marker_comment_is_one_problem_not_two() -> None:
 def test_clean_marker_comment_needs_no_answer() -> None:
     """A trusted marker comment reporting zero findings is not a review body with findings."""
     list_problems = _load_gate().find_review_body_problems(
-        [], [_marker_comment("OWNER")], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+        [],
+        list_notices=[_marker_comment("OWNER")],
+        set_roster=_BOTH_ROSTER,
+        tuple_markers=_TUPLE_MARKERS,
     )
     assert list_problems == []
 
@@ -2892,7 +3135,10 @@ def test_marker_comment_never_answers_another_reviews_findings() -> None:
     dict_marker = {**_marker_findings_comment(), "createdAt": "2099-01-01T00:00:00Z"}
     dict_marker["author"] = {"login": "owner", "__typename": "User"}
     list_problems = _load_gate().find_review_body_problems(
-        [dict_review], [dict_marker], _BOTH_ROSTER, tuple_markers=_TUPLE_MARKERS
+        [dict_review],
+        list_notices=[dict_marker],
+        set_roster=_BOTH_ROSTER,
+        tuple_markers=_TUPLE_MARKERS,
     )
     assert any("coderabbitai" in str_problem for str_problem in list_problems)
 
@@ -2915,7 +3161,9 @@ def test_load_comment_markers_reads_the_marker_row(path_marker_root: Path) -> No
 
 
 @pytest.mark.parametrize("str_row", ["    marker:\n", '    marker: ""\n', ""])
-def test_load_comment_markers_skips_a_row_without_a_marker(tmp_path: Path, str_row: str) -> None:
+def test_load_comment_markers_skips_a_row_without_a_marker(
+    tmp_path: Path, *, str_row: str
+) -> None:
     """A comment-marker row with no usable marker is dropped, never a KeyError."""
     (tmp_path / ".review-bots.yaml").write_text(
         "reviewers:\n  - kind: comment-marker\n" + str_row, encoding="utf-8"
@@ -2946,7 +3194,9 @@ def test_load_marker_posters_normalises_the_bot_suffix(tmp_path: Path) -> None:
     "str_posters",
     ["    posters: foo\n", "    posters:\n      - 7\n", '    posters:\n      - ""\n'],
 )
-def test_load_marker_posters_rejects_a_malformed_value(tmp_path: Path, str_posters: str) -> None:
+def test_load_marker_posters_rejects_a_malformed_value(
+    tmp_path: Path, *, str_posters: str
+) -> None:
     """A scalar or non-string entry trusts nobody instead of becoming single characters."""
     (tmp_path / ".review-bots.yaml").write_text(
         "reviewers:\n  - kind: comment-marker\n    marker: m\n" + str_posters,
@@ -2995,7 +3245,7 @@ def _git(path_repo: Path, *list_args: str, bool_check: bool = True) -> str:
     return cls_run.stdout.strip()
 
 
-def _commit(path_repo: Path, str_file: str, str_text: str) -> str:
+def _commit(path_repo: Path, *, str_file: str, str_text: str) -> str:
     """Write ``str_text`` to ``str_file``, commit it and return the new commit.
 
     Parameters
@@ -3018,7 +3268,25 @@ def _commit(path_repo: Path, str_file: str, str_text: str) -> str:
     return _git(path_repo, "rev-parse", "HEAD")
 
 
-def _patch_id(path_repo: Path, str_oid: str) -> str:
+def _fetch_fingerprint(str_oid: str, *, cls_gate: ModuleType) -> str:
+    """Return the gate's real ``fetch_patch_fingerprint`` of ``str_oid`` against a fixed base.
+
+    Parameters
+    ----------
+    str_oid : str
+        The commit whose patch is fingerprinted.
+    cls_gate : types.ModuleType
+        The loaded gate module.
+
+    Returns
+    -------
+    str
+        The fingerprint.
+    """
+    return cls_gate.fetch_patch_fingerprint("o", str_repo="r", str_base="base", str_oid=str_oid)
+
+
+def _patch_id(str_oid: str, *, path_repo: Path) -> str:
     """Return ``git patch-id --stable`` of the PR's own patch at ``str_oid``.
 
     Parameters
@@ -3054,7 +3322,7 @@ def _patch_id(path_repo: Path, str_oid: str) -> str:
 _DICT_STATUS = {"A": "added", "M": "modified", "D": "removed", "R": "renamed"}
 
 
-def _file_entry(path_repo: Path, str_base: str, str_oid: str, str_line: str) -> dict:
+def _file_entry(str_line: str, *, path_repo: Path, str_base: str, str_oid: str) -> dict:
     """Build one ``files`` entry of the compare API from a real ``git diff``.
 
     Parameters
@@ -3086,7 +3354,7 @@ def _file_entry(path_repo: Path, str_base: str, str_oid: str, str_line: str) -> 
     }
 
 
-def _compare_files(path_repo: Path, str_oid: str) -> list[dict]:
+def _compare_files(path_repo: Path, *, str_oid: str) -> list[dict]:
     """Return the compare-shaped ``files`` list of the PR's own patch at ``str_oid``.
 
     Parameters
@@ -3103,10 +3371,17 @@ def _compare_files(path_repo: Path, str_oid: str) -> list[dict]:
     """
     str_base = _git(path_repo, "merge-base", "main", str_oid)
     list_lines = _git(path_repo, "diff", "-M", "--name-status", str_base, str_oid).splitlines()
-    return list(map(functools.partial(_file_entry, path_repo, str_base, str_oid), list_lines))
+    return list(
+        map(
+            functools.partial(
+                _file_entry, path_repo=path_repo, str_base=str_base, str_oid=str_oid
+            ),
+            list_lines,
+        )
+    )
 
 
-def _real_fingerprint(path_repo: Path, str_oid: str) -> str:
+def _real_fingerprint(str_oid: str, *, path_repo: Path) -> str:
     """Run the PRODUCTION ``patch_fingerprint`` on compare-shaped files from real diffs.
 
     Parameters
@@ -3121,10 +3396,10 @@ def _real_fingerprint(path_repo: Path, str_oid: str) -> str:
     str
         The gate's own digest.
     """
-    return _load_gate().patch_fingerprint(_compare_files(path_repo, str_oid))
+    return _load_gate().patch_fingerprint(_compare_files(path_repo, str_oid=str_oid))
 
 
-def _overlap_repo(path_repo: Path, str_old: str, str_new: str) -> tuple[str, str]:
+def _overlap_repo(path_repo: Path, *, str_old: str, str_new: str) -> tuple[str, str]:
     """Build a PR that edits line 10, then merge a ``main`` that rewrites ``str_old``.
 
     Parameters
@@ -3144,11 +3419,13 @@ def _overlap_repo(path_repo: Path, str_old: str, str_new: str) -> tuple[str, str
     """
     str_text = "\n".join(map(str, range(1, 21))) + "\n"
     _git(path_repo, "init", "-b", "main")
-    _commit(path_repo, "a.txt", str_text)
+    _commit(path_repo, str_file="a.txt", str_text=str_text)
     _git(path_repo, "checkout", "-b", "feat")
-    str_review = _commit(path_repo, "a.txt", str_text.replace("\n10\n", "\nfeat\n"))
+    str_review = _commit(
+        path_repo, str_file="a.txt", str_text=str_text.replace("\n10\n", "\nfeat\n")
+    )
     _git(path_repo, "checkout", "main")
-    _commit(path_repo, "a.txt", str_text.replace(str_old, str_new, 1))
+    _commit(path_repo, str_file="a.txt", str_text=str_text.replace(str_old, str_new, 1))
     _git(path_repo, "checkout", "feat")
     _git(path_repo, "merge", "--no-edit", "main")
     return str_review, _git(path_repo, "rev-parse", "HEAD")
@@ -3171,23 +3448,23 @@ def dict_repo(tmp_path: Path) -> dict:
     """
     str_text = "1\n{}\n3\n4\n5\n6\n7\n8\n9\n"
     _git(tmp_path, "init", "-b", "main")
-    _commit(tmp_path, "a.txt", str_text.format("2"))
-    _commit(tmp_path, "b.txt", "b\n")
+    _commit(tmp_path, str_file="a.txt", str_text=str_text.format("2"))
+    _commit(tmp_path, str_file="b.txt", str_text="b\n")
     _git(tmp_path, "checkout", "-b", "feat")
-    str_review = _commit(tmp_path, "a.txt", str_text.format("feat"))
+    str_review = _commit(tmp_path, str_file="a.txt", str_text=str_text.format("feat"))
     _git(tmp_path, "checkout", "main")
-    _commit(tmp_path, "b.txt", "b main\n")
-    _commit(tmp_path, "a.txt", str_text.format("main"))
+    _commit(tmp_path, str_file="b.txt", str_text="b main\n")
+    _commit(tmp_path, str_file="a.txt", str_text=str_text.format("main"))
     _git(tmp_path, "checkout", "-b", "clean", str_review)
     _git(tmp_path, "merge", "--no-edit", "main~1")
     str_clean = _git(tmp_path, "rev-parse", "HEAD")
     _git(tmp_path, "checkout", "-b", "conflict", str_review)
     _git(tmp_path, "merge", "--no-edit", "main", bool_check=False)
-    str_conflict = _commit(tmp_path, "a.txt", str_text.format("resolved"))
+    str_conflict = _commit(tmp_path, str_file="a.txt", str_text=str_text.format("resolved"))
     _git(tmp_path, "checkout", "-b", "more", str_review)
-    str_new = _commit(tmp_path, "c.txt", "new\n")
+    str_new = _commit(tmp_path, str_file="c.txt", str_text="new\n")
     _git(tmp_path, "checkout", "-b", "rewrite", "main")
-    str_rewritten = _commit(tmp_path, "a.txt", str_text.format("rewritten"))
+    str_rewritten = _commit(tmp_path, str_file="a.txt", str_text=str_text.format("rewritten"))
     list_oids = [str_review, str_clean, str_conflict, str_new, str_rewritten]
     assert set(map(len, list_oids)) == {40}, "fixture built an empty or malformed commit id"
     assert len(set(list_oids)) == len(list_oids), "fixture built duplicate commits"
@@ -3201,7 +3478,7 @@ def dict_repo(tmp_path: Path) -> dict:
     }
 
 
-def _covers(dict_repo: dict, str_head_key: str) -> bool:
+def _covers(dict_repo: dict, *, str_head_key: str) -> bool:
     """Ask the gate whether the review at ``R`` covers the head named by ``str_head_key``.
 
     Parameters
@@ -3216,10 +3493,13 @@ def _covers(dict_repo: dict, str_head_key: str) -> bool:
     bool
         The gate's verdict, using a real ``git patch-id`` as the fingerprint.
     """
-    fn_fingerprint = functools.partial(_patch_id, dict_repo["path"])
+    fn_fingerprint = functools.partial(_patch_id, path_repo=dict_repo["path"])
     str_head = dict_repo[str_head_key]
     return _load_gate().review_covers_head(
-        fn_fingerprint, dict_repo["review"], str_head, fn_fingerprint(str_head)
+        fn_fingerprint,
+        str_review_oid=dict_repo["review"],
+        str_head_oid=str_head,
+        str_head_digest=fn_fingerprint(str_head),
     )
 
 
@@ -3227,7 +3507,12 @@ def test_review_covers_head_carry_forward_notice_leaves_stdout_empty(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """``--json`` prints the verdict on stdout, so the notice must not share that stream."""
-    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40, "same")
+    _load_gate().review_covers_head(
+        lambda str_oid: "same",
+        str_review_oid="a" * 40,
+        str_head_oid="b" * 40,
+        str_head_digest="same",
+    )
     assert capsys.readouterr().out == ""
 
 
@@ -3235,7 +3520,12 @@ def test_review_covers_head_carry_forward_notice_goes_to_stderr(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The one line saying a review was carried forward is still printed, on stderr."""
-    _load_gate().review_covers_head(lambda str_oid: "same", "a" * 40, "b" * 40, "same")
+    _load_gate().review_covers_head(
+        lambda str_oid: "same",
+        str_review_oid="a" * 40,
+        str_head_oid="b" * 40,
+        str_head_digest="same",
+    )
     assert "still covers" in capsys.readouterr().err
 
 
@@ -3243,29 +3533,34 @@ def test_review_covers_head_merge_of_base_without_conflict_carries_forward(
     dict_repo: dict,
 ) -> None:
     """An update-branch that only merges the base leaves the PR's patch alone."""
-    assert _covers(dict_repo, "clean_merge") is True
+    assert _covers(dict_repo, str_head_key="clean_merge") is True
 
 
 def test_review_covers_head_conflict_resolving_merge_stays_superseded(dict_repo: dict) -> None:
     """Resolving a conflict changes what the PR contributes, so the review is stale."""
-    assert _covers(dict_repo, "conflict_merge") is False
+    assert _covers(dict_repo, str_head_key="conflict_merge") is False
 
 
 def test_review_covers_head_new_commit_stays_superseded(dict_repo: dict) -> None:
     """A new commit adds code nobody reviewed."""
-    assert _covers(dict_repo, "new_commit") is False
+    assert _covers(dict_repo, str_head_key="new_commit") is False
 
 
 def test_review_covers_head_rewritten_code_stays_superseded(dict_repo: dict) -> None:
     """A force-push that rewrites the PR's code is new code under an old review."""
-    assert _covers(dict_repo, "rewritten") is False
+    assert _covers(dict_repo, str_head_key="rewritten") is False
 
 
 def test_review_covers_head_patch_unavailable_fails_closed() -> None:
     """A missing commit or an API error is never read as 'covered'."""
     cls_gate = _load_gate()
     fn_broken = Mock(side_effect=RuntimeError("compare failed"))
-    assert cls_gate.review_covers_head(fn_broken, "a" * 40, _HEAD, "digest") is False
+    assert (
+        cls_gate.review_covers_head(
+            fn_broken, str_review_oid="a" * 40, str_head_oid=_HEAD, str_head_digest="digest"
+        )
+        is False
+    )
 
 
 def test_find_missing_review_problem_carried_review_passes(dict_repo: dict) -> None:
@@ -3273,10 +3568,10 @@ def test_find_missing_review_problem_carried_review_passes(dict_repo: dict) -> N
     cls_gate = _load_gate()
     assert (
         cls_gate.find_missing_review_problem(
-            [_review("coderabbitai[bot]", dict_repo["review"])],
-            {"coderabbitai"},
+            [_review("coderabbitai[bot]", str_oid=dict_repo["review"])],
+            set_reviewers={"coderabbitai"},
             str_head_oid=dict_repo["clean_merge"],
-            fn_fingerprint=lambda str_oid: _patch_id(dict_repo["path"], str_oid),
+            fn_fingerprint=lambda str_oid: _patch_id(str_oid, path_repo=dict_repo["path"]),
         )
         is None
     )
@@ -3364,7 +3659,7 @@ def _ok(dict_body: dict) -> Mock:
     return Mock(returncode=0, stdout=json.dumps(dict_body))
 
 
-def _tree(dict_modes: dict, str_sha: str = "s1") -> Mock:
+def _tree(dict_modes: dict, *, str_sha: str = "s1") -> Mock:
     """Return the ``gh api`` result for a complete git tree holding ``dict_modes``."""
     list_tree = [
         {"path": k, "mode": v, "type": "blob", "sha": str_sha} for k, v in dict_modes.items()
@@ -3374,6 +3669,7 @@ def _tree(dict_modes: dict, str_sha: str = "s1") -> Mock:
 
 def _gh_router(
     list_files: list,
+    *,
     cls_head_tree: Mock,
     cls_base_tree: Mock,
     str_base: str = "base",
@@ -3397,10 +3693,14 @@ def test_fetch_patch_fingerprint_compares_against_the_pinned_base_sha(
     cls_gate = _load_gate()
     list_files = [{"filename": "a", "status": "modified", "patch": "x"}]
     fn_run = _gh_router(
-        list_files, _tree({"a": "100644"}), _tree({"a": "100644"}), "basesha", "headsha"
+        list_files,
+        cls_head_tree=_tree({"a": "100644"}),
+        cls_base_tree=_tree({"a": "100644"}),
+        str_base="basesha",
+        str_head="headsha",
     )
     monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
-    cls_gate.fetch_patch_fingerprint("o", "r", "basesha", "headsha")
+    cls_gate.fetch_patch_fingerprint("o", str_repo="r", str_base="basesha", str_oid="headsha")
     assert fn_run.call_args_list[0][0][0][2].startswith("repos/o/r/compare/basesha...headsha")
 
 
@@ -3408,7 +3708,7 @@ def test_fetch_patch_fingerprint_unknown_base_sha_fails_closed() -> None:
     """No pinned base means no comparison: the gate cannot say which base was measured."""
     cls_gate = _load_gate()
     with pytest.raises(ValueError, match="base commit is unknown"):
-        cls_gate.fetch_patch_fingerprint("o", "r", "", "headsha")
+        cls_gate.fetch_patch_fingerprint("o", str_repo="r", str_base="", str_oid="headsha")
 
 
 @pytest.mark.parametrize(
@@ -3421,13 +3721,16 @@ def test_fetch_patch_fingerprint_unknown_base_sha_fails_closed() -> None:
     ],
 )
 def test_review_covers_head_production_fingerprint_on_real_diffs(
-    dict_repo: dict, str_head_key: str, bool_expected: bool
+    dict_repo: dict, *, str_head_key: str, bool_expected: bool
 ) -> None:
     """The production digest, fed compare-shaped files from real ``git diff``, decides it."""
-    fn_fingerprint = functools.partial(_real_fingerprint, dict_repo["path"])
+    fn_fingerprint = functools.partial(_real_fingerprint, path_repo=dict_repo["path"])
     str_head = dict_repo[str_head_key]
     bool_covered = _load_gate().review_covers_head(
-        fn_fingerprint, dict_repo["review"], str_head, fn_fingerprint(str_head)
+        fn_fingerprint,
+        str_review_oid=dict_repo["review"],
+        str_head_oid=str_head,
+        str_head_digest=fn_fingerprint(str_head),
     )
     assert bool_covered is bool_expected
 
@@ -3441,17 +3744,20 @@ def test_review_covers_head_production_fingerprint_on_real_diffs(
     ],
 )
 def test_review_covers_head_main_edit_relative_to_the_hunk(
-    tmp_path: Path, str_old: str, str_new: str, bool_expected: bool
+    tmp_path: Path, *, str_old: str, str_new: str, bool_expected: bool
 ) -> None:
     """A clean merge carries a review forward even when main edits the hunk's context lines.
 
     The digest hashes the PR's ``+``/``-`` lines only, so no conflict-free base edit,
     inside the 3-line window or outside it, changes it (blueprintx#848).
     """
-    str_review, str_head = _overlap_repo(tmp_path, str_old, str_new)
-    fn_fingerprint = functools.partial(_real_fingerprint, tmp_path)
+    str_review, str_head = _overlap_repo(tmp_path, str_old=str_old, str_new=str_new)
+    fn_fingerprint = functools.partial(_real_fingerprint, path_repo=tmp_path)
     bool_covered = _load_gate().review_covers_head(
-        fn_fingerprint, str_review, str_head, fn_fingerprint(str_head)
+        fn_fingerprint,
+        str_review_oid=str_review,
+        str_head_oid=str_head,
+        str_head_digest=fn_fingerprint(str_head),
     )
     assert bool_covered is bool_expected
 
@@ -3472,14 +3778,18 @@ def _rename_repo(path_repo: Path) -> tuple[str, str]:
     """
     str_text = "\n".join(map(str, range(1, 21))) + "\n"
     _git(path_repo, "init", "-b", "main")
-    _commit(path_repo, "a.txt", str_text)
-    _commit(path_repo, "b.txt", str_text)
+    _commit(path_repo, str_file="a.txt", str_text=str_text)
+    _commit(path_repo, str_file="b.txt", str_text=str_text)
     _git(path_repo, "checkout", "-b", "from-a")
     _git(path_repo, "mv", "a.txt", "c.txt")
-    str_from_a = _commit(path_repo, "c.txt", str_text.replace("\n10\n", "\nfeat\n"))
+    str_from_a = _commit(
+        path_repo, str_file="c.txt", str_text=str_text.replace("\n10\n", "\nfeat\n")
+    )
     _git(path_repo, "checkout", "-b", "from-b", "main")
     _git(path_repo, "mv", "b.txt", "c.txt")
-    return str_from_a, _commit(path_repo, "c.txt", str_text.replace("\n10\n", "\nfeat\n"))
+    return str_from_a, _commit(
+        path_repo, str_file="c.txt", str_text=str_text.replace("\n10\n", "\nfeat\n")
+    )
 
 
 def test_patch_fingerprint_rename_from_another_file_differs_on_a_real_diff(
@@ -3487,7 +3797,9 @@ def test_patch_fingerprint_rename_from_another_file_differs_on_a_real_diff(
 ) -> None:
     """Only ``previous_filename`` tells the two renames apart, so it must be hashed."""
     str_from_a, str_from_b = _rename_repo(tmp_path)
-    assert _real_fingerprint(tmp_path, str_from_a) != _real_fingerprint(tmp_path, str_from_b)
+    assert _real_fingerprint(str_from_a, path_repo=tmp_path) != _real_fingerprint(
+        str_from_b, path_repo=tmp_path
+    )
 
 
 def test_patch_fingerprint_whole_file_page_raises() -> None:
@@ -3507,11 +3819,20 @@ def test_review_covers_head_malformed_file_entry_fails_closed(
     monkeypatch.setattr(
         cls_gate.subprocess, "run", Mock(return_value=Mock(returncode=0, stdout=json_body))
     )
-    fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
-    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
+
+    fn_fingerprint = functools.partial(_fetch_fingerprint, cls_gate=cls_gate)
+    assert (
+        cls_gate.review_covers_head(
+            fn_fingerprint,
+            str_review_oid="a" * 40,
+            str_head_oid="b" * 40,
+            str_head_digest="digest",
+        )
+        is False
+    )
 
 
-def _failing_compare(cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Mock:
+def _failing_compare(cls_gate: ModuleType, *, monkeypatch: pytest.MonkeyPatch) -> Mock:
     """Make every compare call fail, and return the mock that counts them.
 
     Parameters
@@ -3546,7 +3867,7 @@ def _three_reviews() -> list[dict]:
     list of dict
         Three reviews by the roster's CodeRabbit.
     """
-    return [_review("coderabbitai[bot]", str_oid * 40) for str_oid in "abc"]
+    return [_review("coderabbitai[bot]", str_oid=str_oid * 40) for str_oid in "abc"]
 
 
 def test_find_missing_review_problem_failing_head_compare_is_called_once(
@@ -3554,42 +3875,42 @@ def test_find_missing_review_problem_failing_head_compare_is_called_once(
 ) -> None:
     """A head whose patch cannot be read stops the loop; it is not refetched per review."""
     cls_gate = _load_gate()
-    fn_fetch = _failing_compare(cls_gate, monkeypatch)
+    fn_fetch = _failing_compare(cls_gate, monkeypatch=monkeypatch)
     cls_gate.find_missing_review_problem(
         _three_reviews(),
-        {"coderabbitai"},
+        set_reviewers={"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, "o/r"),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, str_repo_full="o/r"),
     )
     assert fn_fetch.call_count == 1
 
 
 def test_find_missing_review_problem_failing_head_compare_reports_the_reason(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str], *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A broken carry-forward is diagnosable: the reason reaches stderr."""
     cls_gate = _load_gate()
-    _failing_compare(cls_gate, monkeypatch)
+    _failing_compare(cls_gate, monkeypatch=monkeypatch)
     cls_gate.find_missing_review_problem(
         _three_reviews(),
-        {"coderabbitai"},
+        set_reviewers={"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, "o/r"),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, str_repo_full="o/r"),
     )
     assert "compare failed: 502" in capsys.readouterr().err
 
 
 def test_find_missing_review_problem_failing_head_compare_leaves_stdout_empty(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str], *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The failure line is a diagnostic: stdout stays clean for ``--json``."""
     cls_gate = _load_gate()
-    _failing_compare(cls_gate, monkeypatch)
+    _failing_compare(cls_gate, monkeypatch=monkeypatch)
     cls_gate.find_missing_review_problem(
         _three_reviews(),
-        {"coderabbitai"},
+        set_reviewers={"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, "o/r"),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_PLAIN, str_repo_full="o/r"),
     )
     assert capsys.readouterr().out == ""
 
@@ -3603,7 +3924,7 @@ def test_find_missing_review_problem_passing_pr_makes_no_compare_call(
     monkeypatch.setattr(cls_gate, "reviewer_declared_completion", lambda *_, **__: True)
     cls_gate.find_missing_review_problem(
         _three_reviews(),
-        {"coderabbitai"},
+        set_reviewers={"coderabbitai"},
         str_head_oid=_HEAD,
         fn_fingerprint=fn_fingerprint,
     )
@@ -3614,13 +3935,22 @@ def test_find_missing_review_problem_passing_pr_makes_no_compare_call(
     "cls_error", [subprocess.TimeoutExpired("gh", 60), FileNotFoundError("gh")]
 )
 def test_review_covers_head_hung_or_missing_gh_fails_closed(
-    monkeypatch: pytest.MonkeyPatch, cls_error: Exception
+    monkeypatch: pytest.MonkeyPatch, *, cls_error: Exception
 ) -> None:
     """A timeout or a missing ``gh`` binary means "not covered", never a crash."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(side_effect=cls_error))
-    fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
-    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
+
+    fn_fingerprint = functools.partial(_fetch_fingerprint, cls_gate=cls_gate)
+    assert (
+        cls_gate.review_covers_head(
+            fn_fingerprint,
+            str_review_oid="a" * 40,
+            str_head_oid="b" * 40,
+            str_head_digest="digest",
+        )
+        is False
+    )
 
 
 def test_fetch_patch_fingerprint_bounds_the_compare_call(
@@ -3629,23 +3959,26 @@ def test_fetch_patch_fingerprint_bounds_the_compare_call(
     """The compare call carries a timeout, so a hung ``gh`` cannot stall the job."""
     cls_gate = _load_gate()
     list_files = [{"filename": "a", "status": "modified", "patch": "x"}]
-    fn_run = _gh_router(list_files, _tree({"a": "100644"}), _tree({"a": "100644"}))
+    fn_run = _gh_router(
+        list_files, cls_head_tree=_tree({"a": "100644"}), cls_base_tree=_tree({"a": "100644"})
+    )
     monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
-    cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+    cls_gate.fetch_patch_fingerprint("o", str_repo="r", str_base="base", str_oid="head")
     assert all(c.kwargs["timeout"] > 0 for c in fn_run.call_args_list)
 
 
 def _digest(
     monkeypatch: pytest.MonkeyPatch,
+    *,
     list_files: list,
     cls_head_tree: Mock,
     cls_base_tree: Mock,
 ) -> str:
     """Fingerprint ``list_files`` with the given head and base git trees."""
     cls_gate = _load_gate()
-    fn_run = _gh_router(list_files, cls_head_tree, cls_base_tree)
+    fn_run = _gh_router(list_files, cls_head_tree=cls_head_tree, cls_base_tree=cls_base_tree)
     monkeypatch.setattr(cls_gate.subprocess, "run", fn_run)
-    return cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+    return cls_gate.fetch_patch_fingerprint("o", str_repo="r", str_base="base", str_oid="head")
 
 
 _LIST_EMPTY_RENAME = [
@@ -3665,8 +3998,18 @@ def test_fetch_patch_fingerprint_exec_bit_flip_on_a_rename_changes_the_digest(
 ) -> None:
     """A rename plus an exec-bit flip keeps the blob ``sha``, so only the tree mode shows it."""
     cls_base = _tree({"a": "100644"})
-    str_plain = _digest(monkeypatch, _LIST_EMPTY_RENAME, _tree({"b": "100644"}), cls_base)
-    str_flipped = _digest(monkeypatch, _LIST_EMPTY_RENAME, _tree({"b": "100755"}), cls_base)
+    str_plain = _digest(
+        monkeypatch,
+        list_files=_LIST_EMPTY_RENAME,
+        cls_head_tree=_tree({"b": "100644"}),
+        cls_base_tree=cls_base,
+    )
+    str_flipped = _digest(
+        monkeypatch,
+        list_files=_LIST_EMPTY_RENAME,
+        cls_head_tree=_tree({"b": "100755"}),
+        cls_base_tree=cls_base,
+    )
     assert str_plain != str_flipped
 
 
@@ -3675,8 +4018,18 @@ def test_fetch_patch_fingerprint_exec_bit_flip_on_a_patched_file_changes_the_dig
 ) -> None:
     """The patch text has no mode lines, so an edit plus a flip needs the tree mode too."""
     cls_base = _tree({"a": "100644"})
-    str_plain = _digest(monkeypatch, _LIST_EDITED, _tree({"a": "100644"}), cls_base)
-    str_flipped = _digest(monkeypatch, _LIST_EDITED, _tree({"a": "100755"}), cls_base)
+    str_plain = _digest(
+        monkeypatch,
+        list_files=_LIST_EDITED,
+        cls_head_tree=_tree({"a": "100644"}),
+        cls_base_tree=cls_base,
+    )
+    str_flipped = _digest(
+        monkeypatch,
+        list_files=_LIST_EDITED,
+        cls_head_tree=_tree({"a": "100755"}),
+        cls_base_tree=cls_base,
+    )
     assert str_plain != str_flipped
 
 
@@ -3686,7 +4039,12 @@ def test_fetch_patch_fingerprint_truncated_tree_fails_closed(
     """A truncated tree is a partial mode map, so it must raise rather than pass."""
     cls_truncated = _ok({"tree": [], "truncated": True})
     with pytest.raises(ValueError, match="truncated"):
-        _digest(monkeypatch, _LIST_EDITED, cls_truncated, _tree({"a": "100644"}))
+        _digest(
+            monkeypatch,
+            list_files=_LIST_EDITED,
+            cls_head_tree=cls_truncated,
+            cls_base_tree=_tree({"a": "100644"}),
+        )
 
 
 def test_fetch_patch_fingerprint_failed_tree_read_fails_closed(
@@ -3695,7 +4053,12 @@ def test_fetch_patch_fingerprint_failed_tree_read_fails_closed(
     """If the tree call fails the gate says "not covered", never a pass."""
     cls_failed = Mock(returncode=1, stdout="", stderr="boom")
     with pytest.raises(RuntimeError, match="gh api failed"):
-        _digest(monkeypatch, _LIST_EDITED, _tree({"a": "100644"}), cls_failed)
+        _digest(
+            monkeypatch,
+            list_files=_LIST_EDITED,
+            cls_head_tree=_tree({"a": "100644"}),
+            cls_base_tree=cls_failed,
+        )
 
 
 def test_fetch_patch_fingerprint_missing_tree_path_fails_closed(
@@ -3703,7 +4066,12 @@ def test_fetch_patch_fingerprint_missing_tree_path_fails_closed(
 ) -> None:
     """A path absent from the tree has no provable mode, so the entry is not trusted."""
     with pytest.raises(ValueError, match="no tree mode"):
-        _digest(monkeypatch, _LIST_EDITED, _tree({}), _tree({"a": "100644"}))
+        _digest(
+            monkeypatch,
+            list_files=_LIST_EDITED,
+            cls_head_tree=_tree({}),
+            cls_base_tree=_tree({"a": "100644"}),
+        )
 
 
 _LIST_ADDED = [{"filename": "n", "status": "added", "patch": "@@ -0,0 +1 @@\n+x"}]
@@ -3714,14 +4082,34 @@ def test_fetch_patch_fingerprint_added_file_needs_only_the_head_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An added file has no base side, so the base tree need not list it."""
-    assert len(_digest(monkeypatch, _LIST_ADDED, _tree({"n": "100644"}), _tree({}))) == 64
+    assert (
+        len(
+            _digest(
+                monkeypatch,
+                list_files=_LIST_ADDED,
+                cls_head_tree=_tree({"n": "100644"}),
+                cls_base_tree=_tree({}),
+            )
+        )
+        == _INT_64
+    )
 
 
 def test_fetch_patch_fingerprint_removed_file_needs_only_the_base_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A removed file has no head side, so the head tree need not list it."""
-    assert len(_digest(monkeypatch, _LIST_REMOVED, _tree({}), _tree({"gone": "100644"}))) == 64
+    assert (
+        len(
+            _digest(
+                monkeypatch,
+                list_files=_LIST_REMOVED,
+                cls_head_tree=_tree({}),
+                cls_base_tree=_tree({"gone": "100644"}),
+            )
+        )
+        == _INT_64
+    )
 
 
 def test_fetch_patch_fingerprint_rename_source_missing_from_base_fails_closed(
@@ -3729,7 +4117,12 @@ def test_fetch_patch_fingerprint_rename_source_missing_from_base_fails_closed(
 ) -> None:
     """A rename whose source is absent from the base tree has no provable previous mode."""
     with pytest.raises(ValueError, match="no tree mode"):
-        _digest(monkeypatch, _LIST_EMPTY_RENAME, _tree({"b": "100644"}), _tree({}))
+        _digest(
+            monkeypatch,
+            list_files=_LIST_EMPTY_RENAME,
+            cls_head_tree=_tree({"b": "100644"}),
+            cls_base_tree=_tree({}),
+        )
 
 
 def test_fetch_patch_fingerprint_base_side_mode_flip_changes_the_digest(
@@ -3737,8 +4130,18 @@ def test_fetch_patch_fingerprint_base_side_mode_flip_changes_the_digest(
 ) -> None:
     """A different mode at the merge base is a different fingerprint."""
     cls_head = _tree({"a": "100644"})
-    str_plain = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}))
-    str_flipped = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100755"}))
+    str_plain = _digest(
+        monkeypatch,
+        list_files=_LIST_EDITED,
+        cls_head_tree=cls_head,
+        cls_base_tree=_tree({"a": "100644"}),
+    )
+    str_flipped = _digest(
+        monkeypatch,
+        list_files=_LIST_EDITED,
+        cls_head_tree=cls_head,
+        cls_base_tree=_tree({"a": "100755"}),
+    )
     assert str_plain != str_flipped
 
 
@@ -3747,8 +4150,18 @@ def test_fetch_patch_fingerprint_renamed_source_blob_moving_in_base_changes_the_
 ) -> None:
     """A patchless rename hashes the source blob too, so a moved base is a new fingerprint."""
     cls_head = _tree({"b": "100644"})
-    str_one = _digest(monkeypatch, _LIST_EMPTY_RENAME, cls_head, _tree({"a": "100644"}, "s1"))
-    str_two = _digest(monkeypatch, _LIST_EMPTY_RENAME, cls_head, _tree({"a": "100644"}, "s2"))
+    str_one = _digest(
+        monkeypatch,
+        list_files=_LIST_EMPTY_RENAME,
+        cls_head_tree=cls_head,
+        cls_base_tree=_tree({"a": "100644"}, str_sha="s1"),
+    )
+    str_two = _digest(
+        monkeypatch,
+        list_files=_LIST_EMPTY_RENAME,
+        cls_head_tree=cls_head,
+        cls_base_tree=_tree({"a": "100644"}, str_sha="s2"),
+    )
     assert str_one != str_two
 
 
@@ -3757,8 +4170,18 @@ def test_fetch_patch_fingerprint_patched_file_ignores_the_base_blob(
 ) -> None:
     """A patched file keeps carrying forward when main edits its base: only the patch counts."""
     cls_head = _tree({"a": "100644"})
-    str_one = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}, "s1"))
-    str_two = _digest(monkeypatch, _LIST_EDITED, cls_head, _tree({"a": "100644"}, "s2"))
+    str_one = _digest(
+        monkeypatch,
+        list_files=_LIST_EDITED,
+        cls_head_tree=cls_head,
+        cls_base_tree=_tree({"a": "100644"}, str_sha="s1"),
+    )
+    str_two = _digest(
+        monkeypatch,
+        list_files=_LIST_EDITED,
+        cls_head_tree=cls_head,
+        cls_base_tree=_tree({"a": "100644"}, str_sha="s2"),
+    )
     assert str_one == str_two
 
 
@@ -3768,7 +4191,12 @@ def test_fetch_patch_fingerprint_tree_entry_that_is_not_an_object_fails_closed(
     """A skipped tree entry would make the mode map partial, so it raises where it is read."""
     cls_bad = _ok({"tree": ["oops"], "truncated": False})
     with pytest.raises(ValueError, match="malformed"):
-        _digest(monkeypatch, _LIST_EDITED, cls_bad, _tree({"a": "100644"}))
+        _digest(
+            monkeypatch,
+            list_files=_LIST_EDITED,
+            cls_head_tree=cls_bad,
+            cls_base_tree=_tree({"a": "100644"}),
+        )
 
 
 def test_fetch_patch_fingerprint_missing_merge_base_fails_closed(
@@ -3779,7 +4207,7 @@ def test_fetch_patch_fingerprint_missing_merge_base_fails_closed(
     cls_body = _ok({"files": _LIST_EDITED, "merge_base_commit": "oops"})
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_body))
     with pytest.raises(ValueError, match="merge base"):
-        cls_gate.fetch_patch_fingerprint("o", "r", "base", "head")
+        cls_gate.fetch_patch_fingerprint("o", str_repo="r", str_base="base", str_oid="head")
 
 
 def test_fetch_patch_fingerprint_tree_entry_without_a_path_fails_closed(
@@ -3788,14 +4216,19 @@ def test_fetch_patch_fingerprint_tree_entry_without_a_path_fails_closed(
     """A tree entry carrying a mode but no path is malformed, not a crash."""
     cls_bad = _ok({"tree": [{"mode": "100644"}], "truncated": False})
     with pytest.raises(ValueError, match="malformed"):
-        _digest(monkeypatch, _LIST_EDITED, cls_bad, _tree({"a": "100644"}))
+        _digest(
+            monkeypatch,
+            list_files=_LIST_EDITED,
+            cls_head_tree=cls_bad,
+            cls_base_tree=_tree({"a": "100644"}),
+        )
 
 
 def test_reviewed_commits_dismissed_review_is_not_revived() -> None:
     """A dismissal retracts the review; a later merge must not bring it back."""
     cls_gate = _load_gate()
-    dict_dismissed = {**_review("coderabbitai[bot]", "a" * 40), "state": "DISMISSED"}
-    assert cls_gate.reviewed_commits([dict_dismissed], {"coderabbitai"}) == []
+    dict_dismissed = {**_review("coderabbitai[bot]", str_oid="a" * 40), "state": "DISMISSED"}
+    assert cls_gate.reviewed_commits([dict_dismissed], set_roster={"coderabbitai"}) == []
 
 
 @pytest.mark.parametrize(
@@ -3804,6 +4237,7 @@ def test_reviewed_commits_dismissed_review_is_not_revived() -> None:
 )
 def test_main_carried_review_still_owes_a_later_findings_body(
     tmp_path: Path,
+    *,
     monkeypatch: pytest.MonkeyPatch,
     str_body: str,
     int_expected: int,
@@ -3832,13 +4266,13 @@ def test_main_carried_review_still_owes_a_later_findings_body(
         "reviews": {
             "nodes": [
                 {
-                    **_review(str_login, "a" * 40),
+                    **_review(str_login, str_oid="a" * 40),
                     "state": "COMMENTED",
                     "body": str_attribution + "0 findings across 3 reviewed files",
                     "submittedAt": "2026-10-01T00:00:00Z",
                 },
                 {
-                    **_review(str_login, "b" * 40),
+                    **_review(str_login, str_oid="b" * 40),
                     "state": "COMMENTED",
                     "body": str_attribution + str_body,
                     "submittedAt": "2026-10-02T00:00:00Z",
@@ -3848,12 +4282,12 @@ def test_main_carried_review_still_owes_a_later_findings_body(
         "reviewThreads": {"nodes": []},
         "commits": {"nodes": []},
     }
-    monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
-    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_, **__: dict_pr)
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
     assert cls_gate.main([]) == int_expected
 
 
-def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: list[str]) -> int:
+def _carried_main(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, list_argv: list[str]) -> int:
     """Run ``main`` on a PR whose only review sits at an older commit with the same patch.
 
     Parameters
@@ -3886,7 +4320,7 @@ def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: li
         "reviews": {
             "nodes": [
                 {
-                    **_review("coderabbitai[bot]", "a" * 40),
+                    **_review("coderabbitai[bot]", str_oid="a" * 40),
                     "author": {"login": "coderabbitai[bot]", "__typename": "Bot"},
                     "state": "COMMENTED",
                 }
@@ -3895,24 +4329,24 @@ def _carried_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, list_argv: li
         "reviewThreads": {"nodes": []},
         "commits": {"nodes": []},
     }
-    monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_: dict_pr)
-    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_, **__: dict_pr)
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
     return cls_gate.main(list_argv)
 
 
 def test_main_carried_review_is_visible_in_the_normal_output(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A pass that rests on a carried-forward review says so in the verdict, not only on stderr."""
-    _carried_main(tmp_path, monkeypatch, [])
+    _carried_main(tmp_path, monkeypatch=monkeypatch, list_argv=[])
     assert "carried forward from aaaaaaa" in capsys.readouterr().out
 
 
 def test_main_carried_review_is_a_json_field_and_nothing_else_on_stdout(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Under ``--json`` stdout stays ONE document, which names the carrying commit."""
-    _carried_main(tmp_path, monkeypatch, ["--json"])
+    _carried_main(tmp_path, monkeypatch=monkeypatch, list_argv=["--json"])
     assert json.loads(capsys.readouterr().out)["carried_forward_from"] == "a" * 40
 
 
@@ -3921,33 +4355,33 @@ def test_find_missing_review_problem_retargeted_pr_stays_superseded(
 ) -> None:
     """An otherwise-equal fingerprint is not enough once the base branch was changed."""
     cls_gate = _load_gate()
-    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
     str_problem = cls_gate.find_missing_review_problem(
         _three_reviews(),
-        {"coderabbitai"},
+        set_reviewers={"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint(_PR_RETARGETED, "o/r"),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_RETARGETED, str_repo_full="o/r"),
     )
     assert "SUPERSEDED" in str_problem
 
 
 def test_find_missing_review_problem_retargeted_pr_says_why_on_stderr(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str], *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The refusal is diagnosable: the reason names the base change."""
     cls_gate = _load_gate()
-    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
     cls_gate.find_missing_review_problem(
         _three_reviews(),
-        {"coderabbitai"},
+        set_reviewers={"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint(_PR_RETARGETED, "o/r"),
+        fn_fingerprint=cls_gate._compare_fingerprint(_PR_RETARGETED, str_repo_full="o/r"),
     )
     assert "base branch was changed" in capsys.readouterr().err
 
 
 def _timed_review(
-    str_time: str, str_login: str = "coderabbitai[bot]", str_state: str = "COMMENTED"
+    str_time: str, *, str_login: str = "coderabbitai[bot]", str_state: str = "COMMENTED"
 ) -> dict:
     """Build a review at ``a * 40`` submitted at ``str_time``.
 
@@ -3965,10 +4399,10 @@ def _timed_review(
     dict
         A review shaped like the GraphQL response.
     """
-    return {**_review(str_login, "a" * 40), "submittedAt": str_time, "state": str_state}
+    return {**_review(str_login, str_oid="a" * 40), "submittedAt": str_time, "state": str_state}
 
 
-def _retargeted_pr(list_change_times: list[str], list_reviews: list[dict]) -> dict:
+def _retargeted_pr(list_change_times: list[str], *, list_reviews: list[dict]) -> dict:
     """Build a PR node whose base changed at each time.
 
     Parameters
@@ -4017,7 +4451,7 @@ _T_AFTER = "2026-10-15T15:29:00Z"
         ([_T_CHANGE], [_timed_review(_T_AFTER), _timed_review(_T_BEFORE)], True),
         (
             [_T_CHANGE],
-            [_timed_review(_T_BEFORE), _timed_review(_T_AFTER, "someone-else")],
+            [_timed_review(_T_BEFORE), _timed_review(_T_AFTER, str_login="someone-else")],
             False,
         ),
         (
@@ -4029,19 +4463,22 @@ _T_AFTER = "2026-10-15T15:29:00Z"
 )
 def test_find_missing_review_problem_carries_only_a_review_newer_than_the_base_change(
     monkeypatch: pytest.MonkeyPatch,
+    *,
     list_change_times: list[str],
     list_reviews: list[dict],
     bool_carries: bool,
 ) -> None:
     """A review carries across a merge-only update only if the latest base change predates it."""
     cls_gate = _load_gate()
-    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_: "same patch")
-    dict_pr = _retargeted_pr(list_change_times, list_reviews)
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
+    dict_pr = _retargeted_pr(list_change_times, list_reviews=list_reviews)
     str_problem = cls_gate.find_missing_review_problem(
         list_reviews,
-        {"coderabbitai"},
+        set_reviewers={"coderabbitai"},
         str_head_oid=_HEAD,
-        fn_fingerprint=cls_gate._compare_fingerprint(dict_pr, "o/r", {"coderabbitai"}),
+        fn_fingerprint=cls_gate._compare_fingerprint(
+            dict_pr, str_repo_full="o/r", set_roster={"coderabbitai"}
+        ),
     )
     assert (str_problem is None) is bool_carries
 
@@ -4054,9 +4491,12 @@ def test_reviewed_before_base_change_ignores_a_reply_only_review_after_the_chang
         "body": "",
         "comments": {"nodes": [{"replyTo": {"id": "thread-root"}}]},
     }
-    dict_pr = _retargeted_pr([_T_CHANGE], [_timed_review(_T_BEFORE), dict_reply])
+    dict_pr = _retargeted_pr([_T_CHANGE], list_reviews=[_timed_review(_T_BEFORE), dict_reply])
     assert cls_gate._reviewed_before_base_change(
-        dict_pr, dict_pr["timelineItems"]["nodes"], "a" * 40, {"coderabbitai"}
+        dict_pr,
+        list_changes=dict_pr["timelineItems"]["nodes"],
+        str_oid="a" * 40,
+        set_roster={"coderabbitai"},
     )
 
 
@@ -4071,17 +4511,25 @@ def test_review_carried_forward_long_review_list_makes_at_most_cap_plus_one_call
     """The head once, then at most the cap of reviewed commits, however many reviews exist."""
     cls_gate = _load_gate()
     fn_fingerprint = Mock(side_effect=lambda str_oid: str_oid)
-    list_reviews = [_review("coderabbitai[bot]", f"{int_n:040d}") for int_n in range(40)]
-    cls_gate.review_carried_forward(fn_fingerprint, list_reviews, {"coderabbitai"}, _HEAD)
+    list_reviews = [_review("coderabbitai[bot]", str_oid=f"{int_n:040d}") for int_n in range(40)]
+    cls_gate.review_carried_forward(
+        fn_fingerprint, list_reviews=list_reviews, set_roster={"coderabbitai"}, str_head_oid=_HEAD
+    )
     assert fn_fingerprint.call_count == cls_gate._INT_MAX_REVIEWED_COMMITS + 1
 
 
 def test_review_carried_forward_tries_the_newest_reviewed_commit_first() -> None:
     """Of two reviews with the head's patch, the more recent one is the one named."""
     cls_gate = _load_gate()
-    list_reviews = [_review("coderabbitai[bot]", "a" * 40), _review("coderabbitai[bot]", "b" * 40)]
+    list_reviews = [
+        _review("coderabbitai[bot]", str_oid="a" * 40),
+        _review("coderabbitai[bot]", str_oid="b" * 40),
+    ]
     str_carried = cls_gate.review_carried_forward(
-        lambda str_oid: "same", list_reviews, {"coderabbitai"}, _HEAD
+        lambda str_oid: "same",
+        list_reviews=list_reviews,
+        set_roster={"coderabbitai"},
+        str_head_oid=_HEAD,
     )
     assert str_carried == "b" * 40
 
@@ -4090,14 +4538,16 @@ def test_review_carried_forward_computes_the_head_digest_once_without_a_cache() 
     """The once-only guarantee lives in the caller: a plain, uncached callable sees it once."""
     cls_gate = _load_gate()
     fn_counting = Mock(side_effect=lambda str_oid: str_oid)
-    cls_gate.review_carried_forward(fn_counting, _three_reviews(), {"coderabbitai"}, _HEAD)
+    cls_gate.review_carried_forward(
+        fn_counting, list_reviews=_three_reviews(), set_roster={"coderabbitai"}, str_head_oid=_HEAD
+    )
     assert fn_counting.call_args_list.count(call(_HEAD)) == 1
 
 
 def test_compare_fingerprint_unknown_retarget_state_fails_closed() -> None:
     """A PR node without the timeline events is "unknown", and unknown is not "not retargeted"."""
     cls_gate = _load_gate()
-    fn_fingerprint = cls_gate._compare_fingerprint({"baseRefOid": "base"}, "o/r")
+    fn_fingerprint = cls_gate._compare_fingerprint({"baseRefOid": "base"}, str_repo_full="o/r")
     with pytest.raises(ValueError, match="retarget state is unknown"):
         fn_fingerprint("a" * 40)
 
@@ -4113,11 +4563,11 @@ def test_fetch_pull_request_keeps_timeline_items_across_pages(
 ) -> None:
     """Later pages extend the first node in place, so the retarget events survive pagination."""
     cls_gate = _load_gate()
-    dict_first = _pr_page([_body_review("LGTM")], True)
+    dict_first = _pr_page([_body_review("LGTM")], bool_next=True)
     dict_first["timelineItems"] = {"nodes": [{"__typename": "BaseRefChangedEvent"}]}
-    list_pages = [dict_first, _pr_page([_body_review("ok")], False)]
-    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args: list_pages.pop(0))
-    dict_pr = cls_gate.fetch_pull_request("o", "r", 1)
+    list_pages = [dict_first, _pr_page([_body_review("ok")], bool_next=False)]
+    monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args, **__: list_pages.pop(0))
+    dict_pr = cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
     assert dict_pr["timelineItems"]["nodes"]
 
 
@@ -4132,15 +4582,24 @@ def test_query_reads_both_retarget_event_types() -> None:
     "json_body", ['{"files": ["x"]}', '{"files": {"a": 1}}', "not json", '{"files": [null]}']
 )
 def test_review_covers_head_malformed_files_body_fails_closed(
-    monkeypatch: pytest.MonkeyPatch, json_body: str
+    monkeypatch: pytest.MonkeyPatch, *, json_body: str
 ) -> None:
     """Malformed ``files`` (wrong container, non-dict entries, non-JSON) is "not covered"."""
     cls_gate = _load_gate()
     monkeypatch.setattr(
         cls_gate.subprocess, "run", Mock(return_value=Mock(returncode=0, stdout=json_body))
     )
-    fn_fingerprint = functools.partial(cls_gate.fetch_patch_fingerprint, "o", "r", "base")
-    assert cls_gate.review_covers_head(fn_fingerprint, "a" * 40, "b" * 40, "digest") is False
+
+    fn_fingerprint = functools.partial(_fetch_fingerprint, cls_gate=cls_gate)
+    assert (
+        cls_gate.review_covers_head(
+            fn_fingerprint,
+            str_review_oid="a" * 40,
+            str_head_oid="b" * 40,
+            str_head_digest="digest",
+        )
+        is False
+    )
 
 
 def test_patch_fingerprint_empty_renames_at_different_names_differ() -> None:
@@ -4193,7 +4652,7 @@ def test_patch_fingerprint_renamed_nonempty_blob_is_fingerprinted() -> None:
         "changes": 0,
         "sha": "3b18e512dba79e4c8300dd08aeb37f8e728b8dad",
     }
-    assert len(cls_gate.patch_fingerprint([dict_rename])) == 64
+    assert len(cls_gate.patch_fingerprint([dict_rename])) == _INT_64
 
 
 def test_patch_fingerprint_renames_of_different_blobs_differ() -> None:
@@ -4259,7 +4718,7 @@ def test_patch_fingerprint_added_empty_file_is_fingerprinted() -> None:
         "changes": 0,
         "sha": _STR_EMPTY_BLOB_SHA,
     }
-    assert len(cls_gate.patch_fingerprint([dict_empty])) == 64
+    assert len(cls_gate.patch_fingerprint([dict_empty])) == _INT_64
 
 
 def test_patch_fingerprint_added_empty_files_at_different_names_differ() -> None:
@@ -4306,8 +4765,8 @@ def test_find_missing_review_problem_returns_the_carried_commit_explicitly() -> 
     """The carrying commit is a return value, not an out-parameter."""
     cls_gate = _load_gate()
     tuple_result = cls_gate.check_missing_review(
-        [_review("coderabbitai[bot]", "a" * 40)],
-        {"coderabbitai"},
+        [_review("coderabbitai[bot]", str_oid="a" * 40)],
+        set_reviewers={"coderabbitai"},
         str_head_oid=_HEAD,
         fn_fingerprint=lambda str_oid: "same",
     )
@@ -4364,6 +4823,7 @@ _WEB_FLOW_SIG = {"isValid": True, "wasSignedByGitHub": True}
 
 def _dep_commit(
     str_type: str = "minor",
+    *,
     str_email: str = _BOT_EMAIL,
     dict_signature: dict | None = _WEB_FLOW_SIG,
 ) -> dict:
@@ -4380,7 +4840,7 @@ def _dep_commit(
 
 
 def _dep_pr(
-    list_commits: list[dict], str_login: str = "dependabot", str_type: str = "Bot"
+    list_commits: list[dict], *, str_login: str = "dependabot", str_type: str = "Bot"
 ) -> dict:
     """Build a ``pullRequest`` node for the exemption."""
     return {
@@ -4393,54 +4853,60 @@ def _dep_pr(
 def test_dependabot_patch_and_minor_are_exempt(str_update: str) -> None:
     """A pure patch or minor bump needs no review."""
     assert _load_gate().dependabot_review_exempt(
-        _dep_pr([_dep_commit(str_update)]), _by_dependabot
+        _dep_pr([_dep_commit(str_update)]), fn_pusher=_by_dependabot
     )
 
 
 def test_dependabot_major_is_not_exempt() -> None:
     """A major still needs a review."""
     assert not _load_gate().dependabot_review_exempt(
-        _dep_pr([_dep_commit("major")]), _by_dependabot
+        _dep_pr([_dep_commit("major")]), fn_pusher=_by_dependabot
     )
 
 
 def test_dependabot_group_with_one_major_is_not_exempt() -> None:
     """One major in a grouped PR makes the whole PR a major."""
     list_commits = [_dep_commit("minor"), _dep_commit("major")]
-    assert not _load_gate().dependabot_review_exempt(_dep_pr(list_commits), _by_dependabot)
+    assert not _load_gate().dependabot_review_exempt(
+        _dep_pr(list_commits), fn_pusher=_by_dependabot
+    )
 
 
 def test_non_dependabot_author_is_not_exempt() -> None:
     """Only the Dependabot bot is exempt."""
     assert not _load_gate().dependabot_review_exempt(
-        _dep_pr([_dep_commit()], "mallory", "User"), _by_dependabot
+        _dep_pr([_dep_commit()], str_login="mallory", str_type="User"), fn_pusher=_by_dependabot
     )
 
 
 def test_user_named_dependabot_is_not_exempt() -> None:
     """The author must be a ``Bot`` actor, not a user."""
     assert not _load_gate().dependabot_review_exempt(
-        _dep_pr([_dep_commit()], "dependabot", "User"), _by_dependabot
+        _dep_pr([_dep_commit()], str_login="dependabot", str_type="User"), fn_pusher=_by_dependabot
     )
 
 
 def test_human_commit_on_a_dependabot_branch_is_not_exempt() -> None:
     """A human push voids the exemption."""
     list_commits = [_dep_commit(), _dep_commit(str_email="human@example.com")]
-    assert not _load_gate().dependabot_review_exempt(_dep_pr(list_commits), _by_dependabot)
+    assert not _load_gate().dependabot_review_exempt(
+        _dep_pr(list_commits), fn_pusher=_by_dependabot
+    )
 
 
 def test_dependabot_without_update_metadata_is_not_exempt() -> None:
     """No ``update-type`` in the commit means unknown, which is not exempt."""
     dict_commit = {"commit": {"message": "Bump x", "author": {"email": _BOT_EMAIL}}}
-    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]), _by_dependabot)
+    assert not _load_gate().dependabot_review_exempt(
+        _dep_pr([dict_commit]), fn_pusher=_by_dependabot
+    )
 
 
 def test_dependabot_with_more_than_one_page_of_commits_is_not_exempt() -> None:
     """A truncated commit list cannot prove every commit is Dependabot's."""
     dict_pr = _dep_pr([_dep_commit()])
     dict_pr["allCommits"]["pageInfo"]["hasNextPage"] = True
-    assert not _load_gate().dependabot_review_exempt(dict_pr, _by_dependabot)
+    assert not _load_gate().dependabot_review_exempt(dict_pr, fn_pusher=_by_dependabot)
 
 
 @pytest.mark.parametrize(
@@ -4457,21 +4923,25 @@ def test_forged_dependabot_author_without_a_web_flow_signature_is_not_exempt(
 ) -> None:
     """A forgeable author email alone never proves the commit is Dependabot's."""
     dict_commit = _dep_commit(dict_signature=dict_signature)
-    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]), _by_dependabot)
+    assert not _load_gate().dependabot_review_exempt(
+        _dep_pr([dict_commit]), fn_pusher=_by_dependabot
+    )
 
 
 def test_dependabot_group_with_an_entry_lacking_update_type_is_not_exempt() -> None:
     """A dependency entry without ``update-type`` cannot hide behind the others."""
     dict_commit = _dep_commit()
     dict_commit["commit"]["message"] += "\n- dependency-name: y\n"
-    assert not _load_gate().dependabot_review_exempt(_dep_pr([dict_commit]), _by_dependabot)
+    assert not _load_gate().dependabot_review_exempt(
+        _dep_pr([dict_commit]), fn_pusher=_by_dependabot
+    )
 
 
 def test_dependabot_commit_pushed_by_a_human_is_not_exempt() -> None:
     """A genuine-looking commit pushed by a human (actor lookup says no) gets no exemption."""
     dict_pr = _dep_pr([_dep_commit()])
     dict_pr["headRefOid"] = "abc"
-    assert not _load_gate().dependabot_review_exempt(dict_pr, lambda str_oid: False)
+    assert not _load_gate().dependabot_review_exempt(dict_pr, fn_pusher=lambda str_oid: False)
 
 
 def test_dependabot_exemption_without_an_actor_lookup_is_closed() -> None:
@@ -4479,7 +4949,7 @@ def test_dependabot_exemption_without_an_actor_lookup_is_closed() -> None:
     assert not _load_gate().dependabot_review_exempt(_dep_pr([_dep_commit()]))
 
 
-def _runs_result(monkeypatch: pytest.MonkeyPatch, str_stdout: str, int_code: int = 0) -> None:
+def _runs_result(monkeypatch: pytest.MonkeyPatch, *, str_stdout: str, int_code: int = 0) -> None:
     """Make ``gh api`` return the given output."""
     cls_done = subprocess.CompletedProcess([], int_code, stdout=str_stdout, stderr="")
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: cls_done)
@@ -4504,27 +4974,27 @@ def _runs_result(monkeypatch: pytest.MonkeyPatch, str_stdout: str, int_code: int
     ],
 )
 def test_dependabot_pushed_head_reads_the_run_actor_and_fails_closed(
-    monkeypatch: pytest.MonkeyPatch, str_stdout: str, int_code: int, bool_want: bool
+    monkeypatch: pytest.MonkeyPatch, *, str_stdout: str, int_code: int, bool_want: bool
 ) -> None:
     """Only a readable, complete run list started solely by Dependabot passes."""
-    _runs_result(monkeypatch, str_stdout, int_code)
-    assert _load_gate().dependabot_pushed_head("o/r", "abc") is bool_want
+    _runs_result(monkeypatch, str_stdout=str_stdout, int_code=int_code)
+    assert _load_gate().dependabot_pushed_head("o/r", str_head_oid="abc") is bool_want
 
 
 def test_dependabot_pushed_head_without_a_head_oid_is_closed() -> None:
     """An empty head oid cannot be looked up."""
-    assert not _load_gate().dependabot_pushed_head("o/r", "")
+    assert not _load_gate().dependabot_pushed_head("o/r", str_head_oid="")
 
 
 def test_dependabot_pushed_head_fails_closed_on_a_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     """A hung ``gh api`` call gives no exemption instead of hanging the gate."""
     cls_hang = Mock(side_effect=subprocess.TimeoutExpired("gh", 20))
     monkeypatch.setattr(subprocess, "run", cls_hang)
-    assert not _load_gate().dependabot_pushed_head("o/r", "abc")
+    assert not _load_gate().dependabot_pushed_head("o/r", str_head_oid="abc")
 
 
 def test_a_malformed_roster_reports_a_verdict_not_a_traceback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A roster that is not valid YAML fails closed with a verdict.
 
@@ -4537,14 +5007,14 @@ def test_a_malformed_roster_reports_a_verdict_not_a_traceback(
     capsys : pytest.CaptureFixture[str]
         Captures the verdict.
     """
-    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch=monkeypatch, str_base_roster=None)
     (tmp_path / ".review-bots.yaml").write_text("adopted: [unclosed\n", encoding="utf-8")
 
     assert (cls_gate.main([]), bool(capsys.readouterr().out)) == (1, True)
 
 
 def test_a_malformed_roster_has_its_own_json_reason(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A present but unparsable roster is ``malformed_roster``, never ``missing_roster``.
 
@@ -4557,7 +5027,7 @@ def test_a_malformed_roster_has_its_own_json_reason(
     capsys : pytest.CaptureFixture[str]
         Captures the verdict.
     """
-    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch=monkeypatch, str_base_roster=None)
     (tmp_path / ".review-bots.yaml").write_text("adopted: [unclosed\n", encoding="utf-8")
     cls_gate.main(["--json"])
 
@@ -4565,7 +5035,7 @@ def test_a_malformed_roster_has_its_own_json_reason(
 
 
 def test_an_unreadable_roster_reports_a_verdict_not_a_traceback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A roster that cannot be read fails closed with a verdict.
 
@@ -4578,7 +5048,7 @@ def test_an_unreadable_roster_reports_a_verdict_not_a_traceback(
     capsys : pytest.CaptureFixture[str]
         Captures the verdict.
     """
-    cls_gate = _opt_out_checkout(tmp_path, monkeypatch, None)
+    cls_gate = _opt_out_checkout(tmp_path, monkeypatch=monkeypatch, str_base_roster=None)
     monkeypatch.setattr(cls_gate, "roster_opted_out", Mock(side_effect=PermissionError("no")))
 
     assert (cls_gate.main([]), bool(capsys.readouterr().out)) == (1, True)
@@ -4599,7 +5069,7 @@ def test_a_rerun_with_a_stale_base_ref_env_cannot_bypass_the_base_check(
         cls_gate, "_gh_api_text", lambda list_args: dict_answers.get(list_args[-1])
     )
 
-    assert cls_gate.base_opted_out("o/r", "1") is False
+    assert cls_gate.base_opted_out("o/r", str_number="1") is False
 
 
 def test_an_invalid_yaml_date_in_the_base_roster_fails_closed(
@@ -4608,14 +5078,14 @@ def test_an_invalid_yaml_date_in_the_base_roster_fails_closed(
     """A ``ValueError`` from the parser is a failed read, not a traceback (#955)."""
     cls_gate = _load_gate()
     monkeypatch.setattr(
-        cls_gate, "_gh_api_text", functools.partial(_serve_base, "d: 2024-13-45\n")
+        cls_gate, "_gh_api_text", functools.partial(_serve_base, str_base_roster="d: 2024-13-45\n")
     )
 
-    assert cls_gate.base_opted_out("o/r", "1") is False
+    assert cls_gate.base_opted_out("o/r", str_number="1") is False
 
 
 def test_a_roster_with_no_threads_member_reports_a_json_verdict(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A roster nobody can satisfy is a ``--json`` verdict, not a traceback (#955)."""
     cls_gate = _load_gate()

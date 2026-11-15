@@ -50,29 +50,29 @@ def str_redirect_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
 def test_download_rejects_empty_url(tmp_path: Path) -> None:
     """An empty URL fails fast with ValueError (not retried)."""
     with pytest.raises(ValueError, match="empty download URL"):
-        download_file("   ", tmp_path / "out.bin")
+        download_file("   ", path_dest=tmp_path / "out.bin")
 
 
 def test_download_rejects_non_http_scheme(tmp_path: Path) -> None:
     """A non-http(s) scheme is rejected before any network access."""
     with pytest.raises(ValueError, match="unsupported URL scheme"):
-        download_file("ftp://example.com/x", tmp_path / "out.bin")
+        download_file("ftp://example.com/x", path_dest=tmp_path / "out.bin")
 
 
 def test_download_rejects_loopback_host(tmp_path: Path) -> None:
     """A loopback host is rejected by the SSRF guard."""
     with pytest.raises(ValueError, match="non-public address"):
-        download_file("http://127.0.0.1/secret", tmp_path / "out.bin")
+        download_file("http://127.0.0.1/secret", path_dest=tmp_path / "out.bin")
 
 
 def test_download_rejects_url_without_host(tmp_path: Path) -> None:
     """A URL with no host is rejected."""
     with pytest.raises(ValueError, match="without host"):
-        download_file("http:///nohost", tmp_path / "out.bin")
+        download_file("http:///nohost", path_dest=tmp_path / "out.bin")
 
 
 @pytest.mark.allow_network
 def test_fetch_bytes_redirect_raises_oserror_not_typeerror(str_redirect_url: str) -> None:
     """A 302 surfaces as the intended OSError, not a TypeChecker TypeError."""
     with pytest.raises(OSError, match="redirect blocked"):
-        _fetch_bytes(str_redirect_url, 5)
+        _fetch_bytes(str_redirect_url, int_timeout_s=5)

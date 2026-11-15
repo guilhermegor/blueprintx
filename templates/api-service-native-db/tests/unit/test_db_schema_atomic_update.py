@@ -66,6 +66,7 @@ def _stalling_loads(str_payload: str) -> Record:
 
 def _update_one_field(
     cls_handler: SQLiteDatabaseHandler,
+    *,
     str_field: str,
     cls_barrier: threading.Barrier,
 ) -> None:
@@ -81,13 +82,13 @@ def _update_one_field(
         Barrier both writers wait on so their updates overlap.
     """
     cls_barrier.wait()
-    cls_handler.update(STR_RECORD_ID, {str_field: "written"})
+    cls_handler.update(record_id=STR_RECORD_ID, updates={str_field: "written"})
 
 
 class RecordingCursor:
     """Cursor stand-in that records every statement and replays one stored row."""
 
-    def __init__(self, list_sql: list[str], str_stored: str) -> None:
+    def __init__(self, *, list_sql: list[str], str_stored: str) -> None:
         """Store the shared statement log and the row to replay.
 
         Parameters
@@ -145,7 +146,7 @@ class RecordingCursor:
 class RecordingConnection:
     """Connection stand-in handing out one :class:`RecordingCursor`."""
 
-    def __init__(self, list_sql: list[str], str_stored: str) -> None:
+    def __init__(self, *, list_sql: list[str], str_stored: str) -> None:
         """Build the connection's single cursor.
 
         Parameters
@@ -155,7 +156,7 @@ class RecordingConnection:
         str_stored : str
             Serialised record the ``SELECT`` returns.
         """
-        self.cls_cursor = RecordingCursor(list_sql, str_stored)
+        self.cls_cursor = RecordingCursor(list_sql=list_sql, str_stored=str_stored)
 
     def cursor(self) -> RecordingCursor:
         """Return this connection's cursor.
@@ -205,7 +206,7 @@ def _build_handler(str_target: str) -> DatabaseHandler:
     """
     str_module, str_class = str_target.split(".")
     cls_module = importlib.import_module(f"chassis.db_schema.infrastructure.{str_module}")
-    cls_handler = object.__new__(getattr(cls_module, str_class))
+    cls_handler = object.__new__(str_name=getattr(cls_module, str_class))
     cls_handler.table = "records"
     cls_handler.id_field = "id"
     return cls_handler
@@ -213,6 +214,7 @@ def _build_handler(str_target: str) -> DatabaseHandler:
 
 def _open_connection(
     list_connects: list[str],
+    *,
     list_sql: list[str],
     str_stored: str,
 ) -> RecordingConnection:
@@ -235,7 +237,7 @@ def _open_connection(
         A fresh recording connection.
     """
     list_connects.append("opened")
-    return RecordingConnection(list_sql, str_stored)
+    return RecordingConnection(list_sql=list_sql, str_stored=str_stored)
 
 
 @pytest.fixture
@@ -252,13 +254,14 @@ def cls_sqlite_handler(tmp_path: Path) -> SQLiteDatabaseHandler:
     SQLiteDatabaseHandler
         Handler seeded with ``r1``.
     """
-    cls_handler = SQLiteDatabaseHandler(tmp_path / "records.db")
+    cls_handler = SQLiteDatabaseHandler(db_path=tmp_path / "records.db")
     cls_handler.create({"id": STR_RECORD_ID, "alpha": "initial", "beta": "initial"})
     return cls_handler
 
 
 def test_sqlite_update_interleaved_writers_keep_both_fields(
     cls_sqlite_handler: SQLiteDatabaseHandler,
+    *,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Two threads writing different fields of one record must both survive.
@@ -293,7 +296,7 @@ def test_sqlite_update_interleaved_writers_keep_both_fields(
 
 
 @pytest.mark.parametrize(("str_target", "str_lock"), sorted(DICT_LOCKED_SELECT.items()))
-def test_update_reads_and_writes_one_locked_transaction(str_target: str, str_lock: str) -> None:
+def test_update_reads_and_writes_one_locked_transaction(str_target: str, *, str_lock: str) -> None:
     """The read and the write share one connection, and the read takes the row lock.
 
     Parameters
@@ -308,7 +311,7 @@ def test_update_reads_and_writes_one_locked_transaction(str_target: str, str_loc
     list_sql: list[str] = []
     str_stored = json.dumps({"id": STR_RECORD_ID, "alpha": "initial", "beta": "initial"})
     cls_handler._connect = partial(_open_connection, list_connects, list_sql, str_stored)  # noqa: SLF001
-    dict_updated = cls_handler.update(STR_RECORD_ID, {"beta": "written"})
+    dict_updated = cls_handler.update(record_id=STR_RECORD_ID, updates={"beta": "written"})
     assert (len(list_connects), str_lock in list_sql[0], list_sql[1][:6], dict_updated) == (
         1,
         True,
