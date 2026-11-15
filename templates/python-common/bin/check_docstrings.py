@@ -411,7 +411,7 @@ def _check_parameters(node: ast.AST, *, docstring: str, filepath: str) -> tuple:
     errors = 0
     warnings = 0
     param_lines = docstring.split("\n")
-    for arg in node.args.args:
+    for arg in [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]:
         if arg.arg == "self" or not arg.annotation:
             continue
         hint = ast.unparse(arg.annotation)
