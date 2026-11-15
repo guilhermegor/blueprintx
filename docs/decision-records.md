@@ -1123,7 +1123,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
   families, never chosen on their merits, so each is settled rule by rule (#434, #1054).
   Re-measured with ruff 0.17.5 and the current `ruff.toml` ignores (`PLC1901`, `S404`)
   as `ruff check --isolated --select PL,S --ignore PLC1901,S404` over
-  `templates/python-common/{src,bin,optional}`: 66 findings stable, 71 with `--preview`. The 5
+  `templates/python-common/{src,bin,optional}`: 63 findings stable, 68 with `--preview`. The 5
   extra are all `PLC2701`, which the shipped `ruff.toml` already settles with a `bin/` and
   `tests/` per-file-ignore and line-scoped `noqa` on the private imports in `optional/`. The older
   figures (21 to 81 on `templates/`, ruff 0.11.13) used a different tree and ignore list and are

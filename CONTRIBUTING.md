@@ -612,7 +612,7 @@ findings today, same as the Python side.
 
 ### `PLR0917` (too-many-positional-arguments) — blueprintx#1054
 
-Enforced with `[lint.pylint] max-positional-args = 1` after three slices that made every
+Enforced with `[lint.pylint] max-positional-args = 1` after three slices that made every linted
 shipped signature keyword-only and moved the call sites. A ceiling above 1 still admits two
 same-typed positional arguments that a caller can swap without any error. At 1, only the subject
 argument is positional. A signature dictated by a

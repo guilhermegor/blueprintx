@@ -42,7 +42,7 @@ class ExampleEntity(metaclass=TypeChecker):
         When ``str_table`` is not ``[A-Za-z_][A-Za-z0-9_]*``.
     """
 
-    def __init__(self, *, cls_connection: DbConnection, str_table: str = "example") -> None:
+    def __init__(self, cls_connection: DbConnection, *, str_table: str = "example") -> None:
         if not RE_SQL_IDENTIFIER.fullmatch(str_table):
             raise ValueError(f"str_table must match [A-Za-z_][A-Za-z0-9_]* (got {str_table!r})")
         self.cls_connection = cls_connection
