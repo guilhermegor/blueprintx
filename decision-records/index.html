@@ -5192,6 +5192,74 @@ put "every open PR merged, closed, or deferred past 1.0" on the Cut 1.0.0 checkl
 owner judges each one. <code>tests/test_check_release_gate.sh</code> pins the decision with a case in which
 a lone unlabelled PR passes the gate. The generated project's <code>docs/releasing-1-0-0.md</code> states
 the decision without naming that suite, because a generated project does not ship it.</p>
+<h2 id="the-unreachable-modules-gate-runs-in-the-100-release-gate-not-in-ci-templatespython-commonbincheck_unreachable_modulespy-1133">The unreachable-modules gate runs in the 1.0.0 release gate, not in CI (<code>templates/python-common/bin/check_unreachable_modules.py</code>, #1133)<a class="headerlink" href="#the-unreachable-modules-gate-runs-in-the-100-release-gate-not-in-ci-templatespython-commonbincheck_unreachable_modulespy-1133" title="Permanent link">&para;</a></h2>
+<p><code>python-common</code> ships every utility seam to every package, and deptry sees unused dependencies
+but not unused modules. The gate walks the import graph from the public modules (no <code>_</code>-prefixed
+path segment) and fails on any <code>src/</code> module left over. The <code>Cut 1.0.0</code> release gate runs it;
+CI does not.</p>
+<p>Re-measured after #1132 added <code>utils/dbapi.py</code> (one more module per tier); first measured 2026-11-14 over a fresh default scaffold of each Python tier:</p>
+<table>
+<thead>
+<tr>
+<th>tier</th>
+<th>modules</th>
+<th>public roots</th>
+<th>unreachable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lib-minimal</code></td>
+<td>37</td>
+<td>2</td>
+<td>26</td>
+</tr>
+<tr>
+<td><code>ddd-service-native-db</code></td>
+<td>84</td>
+<td>83</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>ddd-service-orm-db</code></td>
+<td>75</td>
+<td>74</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>api-service-native-db</code></td>
+<td>87</td>
+<td>86</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>mvc-service-native-db</code></td>
+<td>63</td>
+<td>61</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>mvc-service-orm-db</code></td>
+<td>59</td>
+<td>57</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>The 26 in <code>lib-minimal</code> are all true positives: the vendored <code>_internal/utils</code> and
+<code>_internal/config</code> seams no public module imports yet, which is what the issue asks the gate to
+report. It cannot run in CI because a fresh library scaffold would fail it on the first commit,
+and an allowlist of 26 entries would excuse exactly the modules the gate exists to surface. The
+service tiers pass, but only because "public" covers nearly every module in an application
+(1 or 2 private modules per tier), so a CI run there checks almost nothing. The gate therefore
+sits where its definition of public holds, the library release gate. The script ships to every
+tier through the <code>bin/</code> copy, and the release gate (shipped by <code>lib-minimal</code> and <code>ts-lib</code>) runs
+it when the sibling file exists, so <code>ts-lib</code> skips it.</p>
+<p>Known blind spots, stated in the generated <code>docs/releasing-1-0-0.md</code>: dynamic loading
+(<code>importlib.import_module</code> strings, entry points, pandas engine strings) is invisible, handled
+by the allowlist with a written reason per entry; tests are not roots; an import under
+<code>TYPE_CHECKING</code> counts as reached. Opt-in network seams and a <code>banned-api</code> for no-network
+families (item 3 of the issue) are not part of this change.</p>
 <h2 id="snap-is-no-longer-a-release-channel-1026">Snap is no longer a release channel (#1026)<a class="headerlink" href="#snap-is-no-longer-a-release-channel-1026" title="Permanent link">&para;</a></h2>
 <p>The <code>snap</code> job failed on every recent release (v3.3.0, v3.3.1) with "Waiting for previous
 upload(s) to complete their review process". A classic-confinement snap needs a manual store
