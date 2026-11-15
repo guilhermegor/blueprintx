@@ -106,24 +106,32 @@ def test_mypy_rejects_post_floor_stdlib_name(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("str_floor", list(_DICT_FIRST_NAME_AFTER_FLOOR))
-def test_each_table_name_is_new_after_its_floor(str_floor: str, *, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("bool_next_minor", "str_expected"),
+    [(False, "has no attribute"), (True, "Success")],
+    ids=["on-its-floor", "one-minor-later"],
+)
+def test_each_table_name_is_new_after_its_floor(
+    str_floor: str, *, bool_next_minor: bool, str_expected: str, tmp_path: Path
+) -> None:
     """Every table entry must fail on its own floor and resolve one minor later.
 
     Parameters
     ----------
     str_floor : str
         A floor the table has a fixture import for.
+    bool_next_minor : bool
+        Whether mypy targets the minor after the floor instead of the floor itself.
+    str_expected : str
+        The fragment mypy must print for that target.
     tmp_path : pathlib.Path
         Disposable directory holding the fixture module and the mypy cache.
     """
     path_fixture = tmp_path / "uses_post_floor_name.py"
     path_fixture.write_text(f"{_import_after(str_floor)}\n", encoding="utf-8")
-    str_next = f"3.{int(str_floor.split('.')[1]) + 1}"
-    assert "has no attribute" in _mypy_stdout(
-        path_fixture, tmp_path=tmp_path, list_extra=["--python-version", str_floor]
-    )
-    assert "Success" in _mypy_stdout(
-        path_fixture, tmp_path=tmp_path, list_extra=["--python-version", str_next]
+    str_target = f"3.{int(str_floor.split('.')[1]) + int(bool_next_minor)}"
+    assert str_expected in _mypy_stdout(
+        path_fixture, tmp_path=tmp_path, list_extra=["--python-version", str_target]
     )
 
 
