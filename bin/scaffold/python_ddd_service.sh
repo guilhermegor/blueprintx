@@ -484,15 +484,17 @@ from utils.text import normalize_text  # noqa: E402
 # Accent/case-insensitive, so "Prod"/"PRODUÇÃO"/"production" all match — and a
 # mistyped ENV on a dev box stays silent (unlike a "!= development" deny-list).
 _SET_ENV_PRODUCTION = frozenset({"prod", "production", "producao"})
-YAML_WEBHOOKS: dict = yaml.safe_load((_CONFIG_DIR / "webhooks.yaml").read_text(encoding="utf-8"))
+YAML_WEBHOOKS: dict[str, str] = yaml.safe_load(
+    (_CONFIG_DIR / "webhooks.yaml").read_text(encoding="utf-8")
+)
 BOOL_WEBHOOK_ENABLED: bool = normalize_text(ENVIRONMENT) in _SET_ENV_PRODUCTION
 CLS_WEBHOOK = build_webhook(os.getenv("WEBHOOK_URL", ""))
 MSG_WEBHOOK: str = YAML_WEBHOOKS["message"].format(
-	app_name=APP_NAME,
-	environment=ENVIRONMENT,
-	hostname=HOSTNAME,
-	user=USER,
-	log_path=str(PATH_LOG),
+    app_name=APP_NAME,
+    environment=ENVIRONMENT,
+    hostname=HOSTNAME,
+    user=USER,
+    log_path=str(PATH_LOG),
 )
 PYBLOCK
     print_status "success" "Webhook wiring appended to startup.py"
@@ -512,10 +514,10 @@ conditional_patch_main_py() {
     cat >> "$main_path" <<'PYBLOCK'
 
 # ─── NOTIFY ───────────────────────────────────────────────────────────────────
-from src.config.startup import (  # noqa: E402
-	BOOL_WEBHOOK_ENABLED,
-	CLS_WEBHOOK,
-	MSG_WEBHOOK,
+from config.startup import (  # noqa: E402
+    BOOL_WEBHOOK_ENABLED,
+    CLS_WEBHOOK,
+    MSG_WEBHOOK,
 )
 
 
@@ -533,6 +535,7 @@ conditional_copy_webhooks_yaml() {
     webhook_env=$'\n# Webhook — platform auto-detected from the URL; fires only when ENV is a\n# production value (prod/production/...). Leave WEBHOOK_URL empty to opt out.\nWEBHOOK_URL=\n'
     printf '%s' "$webhook_env" >> "$project_path/.env"
     printf '%s' "$webhook_env" >> "$project_path/.env.example"
+    cat "$COMMON_TEMPLATE_ROOT/optional/webhook.config.md" >> "$project_path/docs/configuration.md"
     print_status "success" "Webhook provider (chassis/webhook) + webhooks.yaml added"
 }
 

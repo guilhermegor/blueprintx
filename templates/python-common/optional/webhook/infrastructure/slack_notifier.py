@@ -8,6 +8,7 @@ webhooks accept a JSON ``POST`` with a ``text`` field
 """
 
 import json
+from typing import TYPE_CHECKING
 from urllib import error, request
 
 
@@ -15,12 +16,22 @@ _HTTP_OK_MIN = 200
 _HTTP_OK_MAX = 299
 _TIMEOUT_SECONDS = 10
 
+if TYPE_CHECKING:
 
-class SlackNotifier:
+    class TypeChecker(type):
+        """Type-only stub — see src/utils/CLAUDE.md."""
+else:
+    try:
+        from utils.typing import TypeChecker
+    except ModuleNotFoundError:
+        from chassis.typing import TypeChecker
+
+
+class SlackNotifier(metaclass=TypeChecker):
     """Adapter that posts notifications to a Slack incoming webhook."""
 
     @staticmethod
-    def _validate_url(str_url: str) -> None:
+    def _validate_url(str_url: str) -> None:  # complexity-ok: two input guards, one error each
         """Validate the webhook URL format.
 
         Parameters
@@ -49,7 +60,9 @@ class SlackNotifier:
         self._validate_url(str_url)
         self._str_url = str_url
 
-    def send(self, str_message: str, *, str_title: str = "ROUTINE_CONCLUSION") -> None:
+    def send(  # complexity-ok: guard + failure map
+        self, str_message: str, *, str_title: str = "ROUTINE_CONCLUSION"
+    ) -> None:
         """Post a message to the configured Slack channel.
 
         The title is rendered as a bold first line (Slack ``mrkdwn``), followed

@@ -37,6 +37,7 @@ layers:
         numpy integers where int is annotated when WIDEN_INT_TO_NUMPY is on, probed with a
         guarded import so a tier without numpy still loads. Legitimate here precisely
         because utils/ IS the seam layer.
+      pymsteams: "Teams webhook transport, the only importer is the opt-in webhook teams_notifier adapter"
       opentelemetry: >-
         OTLP log export behind utils/otel_logging.py (opt-in, blueprintx#438). The ONLY
         place this vendor is imported — application code calls configure_otel_logging(logger),
