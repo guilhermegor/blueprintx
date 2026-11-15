@@ -68,7 +68,7 @@ class _NoRedirectHandler(request.HTTPRedirectHandler, metaclass=TypeChecker):
     here turns any redirect into an error the caller treats as a failed (broken) download.
     """
 
-    def redirect_request(  # noqa: PLR6301 -- overrides the urllib handler signature
+    def redirect_request(  # noqa: PLR0917, PLR6301 -- overrides the urllib handler signature
         self,
         req: request.Request,
         fp: IO[bytes] | HTTPResponse,
