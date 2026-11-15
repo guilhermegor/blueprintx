@@ -19,7 +19,7 @@ cls_db = build_database_handler()
 # All backends implement the same six-method contract
 record_id = cls_db.create({"title": "First record"})
 cls_record = cls_db.read(record_id)
-cls_db.update(record_id, {"title": "Updated"})
+cls_db.update(record_id=record_id, updates={"title": "Updated"})
 cls_db.delete(record_id)
 path_backup = cls_db.backup("./data/backups")
 cls_db.close()
@@ -71,7 +71,7 @@ from capabilities.notes import use_cases
 cls_repo = InMemoryNoteRepository()
 
 # Create
-cls_note = use_cases.create_note(NoteCreateDTO(title="Hello"), cls_repo)
+cls_note = use_cases.create_note(NoteCreateDTO(title="Hello"), cls_repo=cls_repo)
 print(cls_note.id, cls_note.title)
 
 # List

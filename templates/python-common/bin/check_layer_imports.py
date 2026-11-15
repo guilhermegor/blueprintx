@@ -53,7 +53,7 @@ class _StrictLoader(yaml.SafeLoader if yaml is not None else object):  # type: i
     three layer denials, and the file looked correct in the diff.
     """
 
-    def construct_mapping(self, node: object, deep: bool = False) -> dict:
+    def construct_mapping(self, node: object, deep: bool = False) -> dict:  # noqa: PLR0917 -- PyYAML construct_mapping
         """Build a mapping, raising on any key that appears twice.
 
         Parameters

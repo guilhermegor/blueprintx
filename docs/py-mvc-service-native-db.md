@@ -69,7 +69,7 @@ project/
 ```python
 # model/example_entity.py — SQL in, DataFrame out
 class ExampleEntity:
-    def __init__(self, cls_connection, str_table: str = "example") -> None:
+    def __init__(self, cls_connection, *, str_table: str = "example") -> None:
         self.cls_connection = cls_connection
         self.str_table = str_table
 

@@ -860,3 +860,25 @@ def test_test_file_removed_classifies_each_row_shape(
 def test_moving_a_test_into_src_arms_the_expected_value_rule() -> None:
     """Intended: a test moved into ``src/`` is a production-path change for the whole diff."""
     assert gate._touches_production_code([("R", "tests/test_a.py", "src/a.py")])
+
+
+def test_the_failure_says_interactive_terminal_only_when_no_terminal(
+    monkeypatch: pytest.MonkeyPatch, *, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Without a readable ``/dev/tty`` the failure says a person must run the commit."""
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    monkeypatch.setattr(sys.modules["gate_env"], "has_terminal", lambda: False)
+    gate.report(["some finding"], str_base="base-sha", int_changed_count=1)
+
+    assert "honored only in an interactive terminal" in capsys.readouterr().out
+
+
+def test_the_failure_omits_the_terminal_hint_with_a_terminal(
+    monkeypatch: pytest.MonkeyPatch, *, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With a terminal the failure keeps its current text."""
+    monkeypatch.setattr(gate, "_git", lambda _args: "")
+    monkeypatch.setattr(sys.modules["gate_env"], "has_terminal", lambda: True)
+    gate.report(["some finding"], str_base="base-sha", int_changed_count=1)
+
+    assert "interactive terminal" not in capsys.readouterr().out

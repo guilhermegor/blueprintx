@@ -1345,6 +1345,24 @@ def test_docstrings_gate_fires_on_a_return_type_mismatch(tmp_path: Path) -> None
     assert "Return type mismatch" in str_all
 
 
+_STR_KWONLY_PARAM_TYPE_MISMATCH = (
+    '"""M."""\n\n\ndef f(*, n: int) -> None:\n'
+    '\t"""Do.\n\n\tParameters\n\t----------\n\tn : str\n\t\tA thing.\n\t"""\n'
+)
+
+
+def test_docstrings_gate_fires_on_a_keyword_only_param_type_mismatch(tmp_path: Path) -> None:
+    """The should-fail control: a keyword-only parameter is checked like any other."""
+    _write(tmp_path / "src" / "m.py", str_text=_STR_KWONLY_PARAM_TYPE_MISMATCH)
+
+    cls_result = _run_py_gate("check_docstrings.py", path_root=tmp_path)
+    str_all = cls_result.stdout + cls_result.stderr
+
+    assert cls_result.returncode == 1
+    assert "m.py" in str_all
+    assert "Parameter type mismatch in f(n)" in str_all
+
+
 def test_docstrings_gate_refuses_to_report_success_on_zero_discovery(tmp_path: Path) -> None:
     """⚠️ Neither ``src/`` nor ``tests/`` present means a wrong cwd, not a clean tree.
 

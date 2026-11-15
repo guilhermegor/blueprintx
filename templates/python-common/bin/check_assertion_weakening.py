@@ -69,7 +69,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from gate_env import is_ci  # noqa: E402
+from gate_env import is_ci, no_terminal_note  # noqa: E402
 from gate_rename import deleted_message, rename_pairs  # noqa: E402
 
 
@@ -1062,7 +1062,8 @@ def unjustified_advice() -> str:
     """
     str_line = "add a 'test-change-ok: <reason>' line to the PR body or a commit trailer."
     if is_ci():
-        return f"To justify it, {str_line} TEST_CHANGE_OK is ignored under CI."
+        str_ci = f"To justify it, {str_line} TEST_CHANGE_OK is ignored under CI."
+        return str_ci + no_terminal_note()
     return (
         "Locally, prefix this one commit: `TEST_CHANGE_OK='<reason>' git commit -m ...` "
         "(never export it: one stale reason would cover every later finding). "

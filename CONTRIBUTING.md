@@ -610,6 +610,15 @@ Measured 2026-09-16: 4 `catch (err)` sites across both tiers' `src/`
 `.catch(cb)` callbacks and no non-`Error` `throw` — both rules cost zero
 findings today, same as the Python side.
 
+### `PLR0917` (too-many-positional-arguments) — blueprintx#1054
+
+Enforced with `[lint.pylint] max-positional-args = 1` after three slices that made every linted
+shipped signature keyword-only and moved the call sites. A ceiling above 1 still admits two
+same-typed positional arguments that a caller can swap without any error. At 1, only the subject
+argument is positional. A signature dictated by a
+foreign contract takes a line-scoped `# noqa: PLR0917 -- <reason>`; anything else is made keyword-only
+with a bare `*`, never ignored. Rationale: `docs/quality-rules.md`, `docs/decision-records.md`.
+
 ## Migrating a generated project from `docs/backlog/` to `.specs/backlog/`
 
 Scaffolds are generated once and never re-synced, so this applies only to a project that

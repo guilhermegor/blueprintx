@@ -55,7 +55,7 @@ class _MkDocsSafeLoader(yaml.SafeLoader):
     """
 
 
-def _ignore_unknown(loader: _MkDocsSafeLoader, tag_suffix: str, node: yaml.Node) -> None:  # noqa: ARG001
+def _ignore_unknown(loader: _MkDocsSafeLoader, tag_suffix: str, node: yaml.Node) -> None:  # noqa: PLR0917 -- PyYAML multi-constructor signature
     """Resolve any unknown YAML tag to ``None`` (see :class:`_MkDocsSafeLoader`).
 
     Parameters

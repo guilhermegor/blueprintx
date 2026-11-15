@@ -42,7 +42,7 @@ class DbCursor(DbResultCursor, Protocol):
         """Rows affected by the last statement."""
         ...
 
-    def execute(self, operation: str, parameters: QueryParams = ..., /) -> object:
+    def execute(self, operation: str, parameters: QueryParams = ..., /) -> object:  # noqa: PLR0917 -- PEP 249 cursor.execute
         """Run one statement."""
         ...
 
@@ -84,7 +84,7 @@ class DbManagedCursor(DbCursor, Protocol):
         """Enter the cursor scope."""
         ...
 
-    def __exit__(
+    def __exit__(  # noqa: PLR0917 -- context-manager protocol
         self,
         type_exc: type[BaseException] | None,
         exc: BaseException | None,
@@ -107,7 +107,7 @@ class DbManagedConnection(DbConnection, Protocol):
         """Enter the connection scope."""
         ...
 
-    def __exit__(
+    def __exit__(  # noqa: PLR0917 -- context-manager protocol
         self,
         type_exc: type[BaseException] | None,
         exc: BaseException | None,

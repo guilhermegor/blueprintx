@@ -26,7 +26,7 @@ class TypeChecker(type):
     >>> Calculator().add(1, "two")  # raises TypeError
     """
 
-    def __new__(  # complexity-ok: metaclass machinery
+    def __new__(  # complexity-ok: metaclass machinery  # noqa: PLR0917 -- type.__new__ signature
         cls: type[TypeChecker],
         str_name: str,
         tuple_bases: tuple[type, ...],

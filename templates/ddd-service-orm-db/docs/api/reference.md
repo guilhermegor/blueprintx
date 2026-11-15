@@ -29,7 +29,7 @@ Use `.session()` for an explicit context-managed session. The session is committ
 ```python
 with cls_db_session.session() as cls_session:
     cls_repo = SQLNoteRepository(cls_session)
-    cls_note = create_note(NoteCreateDTO(title="Hello"), cls_repo)
+    cls_note = create_note(NoteCreateDTO(title="Hello"), cls_repo=cls_repo)
     cls_session.commit()  # commit happens in the caller, not the repository
 ```
 
@@ -53,7 +53,7 @@ def get_db() -> Session:
 @app.post("/notes")
 def create(cls_dto: NoteCreateDTO, cls_session: Session = Depends(get_db)) -> NoteResponseDTO:
     cls_repo = SQLNoteRepository(cls_session)
-    cls_note = create_note(cls_dto, cls_repo)
+    cls_note = create_note(cls_dto, cls_repo=cls_repo)
     cls_session.commit()
     return cls_note
 ```
@@ -70,7 +70,7 @@ from capabilities.notes import use_cases
 
 with cls_db_session.session() as cls_session:
     cls_repo = SQLNoteRepository(cls_session)
-    cls_note = use_cases.create_note(NoteCreateDTO(title="Hello"), cls_repo)
+    cls_note = use_cases.create_note(NoteCreateDTO(title="Hello"), cls_repo=cls_repo)
     cls_session.commit()
     print(cls_note.id, cls_note.title)
 ```

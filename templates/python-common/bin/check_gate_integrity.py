@@ -128,7 +128,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from gate_env import is_ci  # noqa: E402
+from gate_env import is_ci, no_terminal_note  # noqa: E402
 from gate_rename import deleted_message, rename_pairs  # noqa: E402
 
 
@@ -1329,6 +1329,7 @@ def report(list_problems: list, *, str_base: str, int_changed_count: int) -> int
         f"git commit -m ...`) — a PR body or commit-trailer 'gate-change-ok: <reason>' line is "
         f"CI-only and cannot be read at commit time. The reason is required either way, "
         f"matching '# complexity-ok: <reason>' elsewhere in this repo."
+        f"{no_terminal_note()}"
     )
     return 1
 

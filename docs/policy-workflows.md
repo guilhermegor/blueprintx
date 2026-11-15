@@ -36,6 +36,26 @@ user-owned Projects v2 board, so that stays in a local hook or behind a PAT secr
   allows a name only after a real PR has emitted it. Add them once they have reported.
 - Offline scaffolds drop `.github/` but keep `close_linked_issues.sh` and `check_pr_policy.sh` in `bin/`, and drop `dependabot_auto_merge.sh` (tracked in #727).
 
+## Arming auto-merge from `pr-gate.yml` (blueprintx#1148)
+
+`bin/pr_gate.py` arms native auto-merge with the `enablePullRequestAutoMerge` GraphQL mutation. The
+workflow grants `contents: write` beside `pull-requests: write`, because the mutation needs both
+([mutation reference](https://docs.github.com/en/graphql/reference/mutations#enablepullrequestautomerge),
+[`GITHUB_TOKEN` permissions](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication)).
+
+A `pull_request` run triggered by Dependabot gets a read-only token by default
+([Dependabot on Actions](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions)),
+as does a run in a repository whose default workflow permissions are read-only; a `permissions:` block can raise either. GitHub then answers "Resource not accessible by
+integration". The gate logs `::notice::auto-merge not armed, step skipped: <reason>` and exits on its own verdict;
+labels and the comment still apply, and a refused arming never turns the gate red. `pr_gate.py` never arms a
+Dependabot-authored PR whatever its token can do: `dependabot-auto-merge.yml` owns that path, including the
+review wait on major bumps. The mutation carries `expectedHeadOid`, so a push during the poll is refused rather
+than armed on stale checks. A merge made by auto-merge armed with `GITHUB_TOKEN` does not start `push`
+workflows (release, deploy) on the base branch.
+
+The roughly 13 minutes seen on a refused run were the check poll (`GATE_MAX_POLLS` 26 x `GATE_POLL_SECONDS` 30),
+which runs before arming on purpose. No retry loop wraps the mutation, so an authorization error is never retried.
+
 ## Assignee and linked issue (blueprintx#937)
 
 `check_pr_policy.sh assignee` fails when `ASSIGNEES` is blank. `check_pr_policy.sh linked-issue` reads

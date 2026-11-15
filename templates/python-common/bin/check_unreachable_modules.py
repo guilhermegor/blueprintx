@@ -48,7 +48,7 @@ def module_map(path_src: pathlib.Path) -> dict[str, pathlib.Path]:
     return dict_modules
 
 
-def package_of(str_module: str, path_file: pathlib.Path) -> str:
+def package_of(str_module: str, *, path_file: pathlib.Path) -> str:
     """Return the package a module's relative imports resolve against.
 
     Parameters
@@ -68,7 +68,7 @@ def package_of(str_module: str, path_file: pathlib.Path) -> str:
     return str_module.rpartition(".")[0]
 
 
-def base_of(cls_node: ast.ImportFrom, str_package: str) -> str | None:
+def base_of(cls_node: ast.ImportFrom, *, str_package: str) -> str | None:
     """Resolve the module a ``from ... import`` statement draws from.
 
     Parameters
@@ -97,7 +97,7 @@ def base_of(cls_node: ast.ImportFrom, str_package: str) -> str | None:
     return ".".join(list_parts)
 
 
-def imported_names(cls_tree: ast.AST, str_package: str) -> set[str]:
+def imported_names(cls_tree: ast.AST, *, str_package: str) -> set[str]:
     """Collect every dotted name a module's import statements may refer to.
 
     Parameters
@@ -119,7 +119,7 @@ def imported_names(cls_tree: ast.AST, str_package: str) -> set[str]:
             set_names.update(cls_alias.name for cls_alias in cls_node.names)
         if not isinstance(cls_node, ast.ImportFrom):
             continue
-        str_base = base_of(cls_node, str_package)
+        str_base = base_of(cls_node, str_package=str_package)
         if str_base is None:
             continue
         set_names.add(str_base)
@@ -128,7 +128,7 @@ def imported_names(cls_tree: ast.AST, str_package: str) -> set[str]:
     return set_names
 
 
-def with_ancestors(str_name: str, dict_modules: dict[str, pathlib.Path]) -> list[str]:
+def with_ancestors(str_name: str, *, dict_modules: dict[str, pathlib.Path]) -> list[str]:
     """Return the modules a dotted name reaches: itself and every parent package.
 
     Parameters
@@ -167,7 +167,7 @@ def is_public(str_module: str) -> bool:
     )
 
 
-def reachable(dict_modules: dict[str, pathlib.Path], list_extra_roots: list[str]) -> set[str]:
+def reachable(dict_modules: dict[str, pathlib.Path], *, list_extra_roots: list[str]) -> set[str]:
     """Walk the import graph from the public modules and any extra roots.
 
     Parameters
@@ -200,8 +200,10 @@ def reachable(dict_modules: dict[str, pathlib.Path], list_extra_roots: list[str]
         set_seen.add(str_module)
         path_file = dict_modules[str_module]
         cls_tree = ast.parse(path_file.read_bytes(), filename=str(path_file))
-        for str_name in imported_names(cls_tree, package_of(str_module, path_file)):
-            list_queue.extend(with_ancestors(str_name, dict_modules))
+        for str_name in imported_names(
+            cls_tree, str_package=package_of(str_module, path_file=path_file)
+        ):
+            list_queue.extend(with_ancestors(str_name, dict_modules=dict_modules))
     return set_seen
 
 
@@ -239,7 +241,7 @@ def load_allowlist(path_allowlist: pathlib.Path) -> tuple[list[str], list[str]]:
 
 
 def dead_modules(
-    dict_modules: dict[str, pathlib.Path], list_patterns: list[str]
+    dict_modules: dict[str, pathlib.Path], *, list_patterns: list[str]
 ) -> tuple[list[str], list[str]]:
     """Find the modules no root reaches, before and after the allowlist counts as roots.
 
@@ -257,16 +259,18 @@ def dead_modules(
         The modules the public roots miss, then those still missed once the allowlisted
         ones are roots as well.
     """
-    list_dead = sorted(set(dict_modules) - reachable(dict_modules, []))
+    list_dead = sorted(set(dict_modules) - reachable(dict_modules, list_extra_roots=[]))
     list_allowed = [
         str_module
         for str_module in list_dead
         if any(fnmatch.fnmatchcase(str_module, str_pattern) for str_pattern in list_patterns)
     ]
-    return list_dead, sorted(set(dict_modules) - reachable(dict_modules, list_allowed))
+    return list_dead, sorted(
+        set(dict_modules) - reachable(dict_modules, list_extra_roots=list_allowed)
+    )
 
 
-def audit(path_root: pathlib.Path, path_allowlist: pathlib.Path) -> tuple[list[str], int]:
+def audit(path_root: pathlib.Path, *, path_allowlist: pathlib.Path) -> tuple[list[str], int]:
     """Audit one project tree.
 
     Parameters
@@ -286,7 +290,7 @@ def audit(path_root: pathlib.Path, path_allowlist: pathlib.Path) -> tuple[list[s
         return [f"no module found under {path_root / 'src'}: this gate would pass vacuously"], 0
     list_patterns, list_problems = load_allowlist(path_allowlist)
     try:
-        list_dead, list_open = dead_modules(dict_modules, list_patterns)
+        list_dead, list_open = dead_modules(dict_modules, list_patterns=list_patterns)
     except (SyntaxError, ValueError) as cls_error:
         return [*list_problems, f"could not parse ({cls_error})"], len(dict_modules)
     for str_pattern in list_patterns:
@@ -321,7 +325,7 @@ def main(list_argv: list[str] | None = None) -> int:
     cls_args = cls_parser.parse_args(list_argv)
     path_root = cls_args.root.resolve()
     path_allowlist = cls_args.allowlist or path_root / STR_ALLOWLIST_NAME
-    list_problems, int_checked = audit(path_root, path_allowlist)
+    list_problems, int_checked = audit(path_root, path_allowlist=path_allowlist)
     for str_problem in list_problems:
         print(str_problem)
     if not list_problems:

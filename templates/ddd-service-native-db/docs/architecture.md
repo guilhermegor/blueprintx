@@ -119,7 +119,7 @@ from ..domain.entities import Note
 from ..domain.ports import NoteRepository
 
 
-def create_note(cls_dto: NoteCreateDTO, cls_repo: NoteRepository) -> NoteResponseDTO:
+def create_note(cls_dto: NoteCreateDTO, *, cls_repo: NoteRepository) -> NoteResponseDTO:
     cls_note = Note(title=cls_dto.title)
     cls_stored = cls_repo.add(cls_note)
     return NoteResponseDTO(

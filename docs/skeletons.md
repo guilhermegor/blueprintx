@@ -77,7 +77,7 @@ and framework-swappable without importing `app/`:
 from fastapi import APIRouter, status
 from ..domain.dto import NoteCreateDTO, NoteResponseDTO
 
-def build_example_feature_router(fn_create_note, fn_list_notes) -> APIRouter:
+def build_example_feature_router(fn_create_note, *, fn_list_notes) -> APIRouter:
     cls_router = APIRouter(prefix="/notes", tags=["notes"])
 
     @cls_router.post("", response_model=NoteResponseDTO, status_code=status.HTTP_201_CREATED)
@@ -99,9 +99,7 @@ from capabilities.example_feature.transport import build_example_feature_router
 def create_app() -> FastAPI:
     cls_container = build()
     cls_app = FastAPI(title="API Service", version="0.0.1")
-    cls_app.include_router(
-        build_example_feature_router(cls_container.create_note, cls_container.list_notes)
-    )
+    cls_app.include_router(build_example_feature_router(cls_container.create_note, fn_list_notes=cls_container.list_notes))
     return cls_app
 ```
 

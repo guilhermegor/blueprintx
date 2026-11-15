@@ -25,6 +25,23 @@ def has_terminal() -> bool:
         return False
 
 
+def no_terminal_note() -> str:
+    """Return the hint for a run whose override cannot be honoured, or ``""`` (I/O seam).
+
+    Returns
+    -------
+    str
+        Says the override is honoured only in an interactive terminal and that a person must
+        run the commit when ``/dev/tty`` is unreadable; empty when a terminal exists.
+    """
+    if has_terminal():
+        return ""
+    return (
+        " No readable /dev/tty here: the override is honored only in an interactive terminal, "
+        "so a person must run that commit."
+    )
+
+
 def is_local() -> bool:
     """Return whether positive evidence says this is a local ``pre-commit`` run (I/O seam).
 

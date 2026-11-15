@@ -31,17 +31,17 @@ class _FakeCalendar:
         self.list_calls.append(("is_holiday", date_))
         return False
 
-    def add_working_days(self, date_: date, int_days: int) -> date:
+    def add_working_days(self, date_: date, int_days: int) -> date:  # noqa: PLR0917 -- mirrors stpstone DatesBRAnbima
         """Record the call and return a fixed date."""
         self.list_calls.append(("add_working_days", date_, int_days))
         return date(2026, 6, 11)
 
-    def delta_working_days(self, date_start: date, date_end: date) -> int:
+    def delta_working_days(self, date_start: date, date_end: date) -> int:  # noqa: PLR0917 -- mirrors stpstone DatesBRAnbima
         """Record the call and return a fixed count."""
         self.list_calls.append(("delta_working_days", date_start, date_end))
         return 5
 
-    def nearest_working_day(self, date_: date, bool_next: bool) -> date:
+    def nearest_working_day(self, date_: date, bool_next: bool) -> date:  # noqa: PLR0917 -- mirrors stpstone DatesBRAnbima
         """Record the call and return a fixed date."""
         self.list_calls.append(("nearest_working_day", date_, bool_next))
         return date(2026, 6, 8)

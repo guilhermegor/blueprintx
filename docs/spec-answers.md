@@ -153,6 +153,8 @@ answer shows up as the wrong visibility or the wrong protection payload.
 | `protect_branch` | `n` | `y` protects `main`. Read only when `create_repo=y`. |
 | `human_reviewers` | `n` | `y` requires one approving review. Read only when `protect_branch=y`. |
 
+**Order (`lib-minimal`).** Protection is applied last: the tag-driven versioning commit is pushed and `poetry.lock` is committed first, so a protected scaffold ends with local `main` equal to `origin/main` (blueprintx#1145).
+
 **Protection can fail after the repo exists.** On a free GitHub plan, branch protection on a
 private repo is refused (HTTP 403, "Upgrade to GitHub Pro"). By then the repo is created and
 pushed. The scaffold prints "Failed to protect branch 'main'; adjust settings manually in
