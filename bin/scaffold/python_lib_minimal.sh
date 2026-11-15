@@ -909,7 +909,8 @@ main() {
             print_status "success" "Library: generic service release.yml removed (uses release-pypi instead)"
         fi
         lib_minimal_lock_dependencies "$PROJECT_PATH"
-        commit_online_artifacts "$PROJECT_PATH"
+        (commit_online_artifacts "$PROJECT_PATH") \
+            || print_status "warning" "Versioning commit failed; finish it by hand. Branch protection still follows."
         apply_branch_protection "$PROJECT_PATH"
     fi
 
