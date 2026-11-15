@@ -1204,8 +1204,8 @@ is shaped as it is; a generated project gets the behavior, not the history.
       three slices of signature changes before the rule was turned on): only the subject
       argument is positional, so two same-typed arguments cannot be swapped silently at a call
       site. Every other parameter is keyword-only (`*,`). A signature fixed by a foreign
-      contract (a DB-API cursor, a PyYAML constructor override, a metaclass hook) is the only
-      per-file exemption and is listed in `[lint.per-file-ignores]`.
+      contract (a DB-API cursor, a PyYAML constructor override, a metaclass hook) carries a line-scoped
+      `# noqa: PLR0917 -- <reason>` on its `def`; nothing else is exempt.
     - Re-enabled, with the shipped code made clean: `PLR6301` (a method with no `self` use is
       a `@staticmethod`; an override of a foreign or port signature carries a line-scoped
       `# noqa: PLR6301`), `PLC0415` (stdlib imports hoisted; a deliberately lazy optional

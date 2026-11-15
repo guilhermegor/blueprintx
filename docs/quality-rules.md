@@ -102,8 +102,8 @@ parameter follows a bare `*`.
 Two same-typed positional arguments (`copy(src, dst)`, `window(start, end)`) can be swapped at a
 call site with no error from the type checker or the runtime; a keyword names each one where it
 is passed. `self` and `cls` do not count. A signature fixed by a foreign contract (a DB-API
-cursor, a PyYAML constructor override, a metaclass hook) cannot change, so those files carry a
-per-file `PLR0917` ignore in `ruff.toml`; nothing else does (blueprintx#1054).
+cursor, a PyYAML constructor override, a metaclass hook) cannot change, so that `def` carries a
+line-scoped `# noqa: PLR0917 -- <reason>`; nothing else does (blueprintx#1054).
 
 ## Default arg spacing
 

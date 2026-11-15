@@ -616,7 +616,7 @@ Enforced with `[lint.pylint] max-positional-args = 1` after three slices that ma
 shipped signature keyword-only and moved the call sites. A ceiling above 1 still admits two
 same-typed positional arguments that a caller can swap without any error. At 1, only the subject
 argument is positional. A signature dictated by a
-foreign contract takes a per-file ignore in `ruff.toml`; anything else is made keyword-only
+foreign contract takes a line-scoped `# noqa: PLR0917 -- <reason>`; anything else is made keyword-only
 with a bare `*`, never ignored. Rationale: `docs/quality-rules.md`, `docs/decision-records.md`.
 
 ## Migrating a generated project from `docs/backlog/` to `.specs/backlog/`
