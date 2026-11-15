@@ -69,7 +69,7 @@ def _signal_override(str_signal_var: str, *, str_generic_var: str) -> str:
 
     Examples
     --------
-    >>> isinstance(_signal_override("A_MISSING_VAR", "ANOTHER_MISSING_VAR"), str)
+    >>> isinstance(_signal_override("A_MISSING_VAR", str_generic_var="ANOTHER_MISSING_VAR"), str)
     True
     """
     str_signal = os.getenv(str_signal_var)
@@ -154,11 +154,11 @@ def _is_cleartext_with_credentials(str_endpoint: str, *, bool_has_headers: bool)
 
     Examples
     --------
-    >>> _is_cleartext_with_credentials("http://collector.example:4318", True)
+    >>> _is_cleartext_with_credentials("http://collector.example:4318", bool_has_headers=True)
     True
-    >>> _is_cleartext_with_credentials("http://localhost:4318", True)
+    >>> _is_cleartext_with_credentials("http://localhost:4318", bool_has_headers=True)
     False
-    >>> _is_cleartext_with_credentials("http://collector.example:4318", False)
+    >>> _is_cleartext_with_credentials("http://collector.example:4318", bool_has_headers=False)
     False
     """
     return bool_has_headers and bool(str_endpoint) and _is_offhost_cleartext(str_endpoint)
