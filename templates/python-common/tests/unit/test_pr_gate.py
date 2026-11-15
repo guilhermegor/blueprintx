@@ -477,10 +477,17 @@ def _set_main_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_TOKEN", "tkn")
     monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
     monkeypatch.setenv("PR_NUMBER", "7")
-    monkeypatch.setattr(gate, "_api", _fake_api_for_main)
     dict_green = {"tests": "success"}
     monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: (dict_green, {}))
-    monkeypatch.setattr(gate, "_enable_auto_merge", lambda *a, **k: _STR_NOT_ACCESSIBLE)
+    monkeypatch.setattr(
+        gate,
+        "_api",
+        lambda str_method, *, str_url, dict_payload=None: (
+            _DICT_REFUSED
+            if str_url.endswith("/graphql")
+            else _fake_api_for_main(str_method, str_url=str_url, dict_payload=dict_payload)
+        ),
+    )
 
 
 def test_enable_auto_merge_reports_a_read_only_token_as_a_skip_reason(
@@ -488,13 +495,13 @@ def test_enable_auto_merge_reports_a_read_only_token_as_a_skip_reason(
 ) -> None:
     """A refused mutation yields the refusal text as the skip reason, never an exception."""
     monkeypatch.setattr(gate, "_api", lambda *a, **k: _DICT_REFUSED)
-    assert gate._enable_auto_merge("PR_NODE") == _STR_NOT_ACCESSIBLE
+    assert gate._enable_auto_merge("PR_NODE", str_head_sha="abc") == _STR_NOT_ACCESSIBLE
 
 
 def test_enable_auto_merge_returns_none_when_armed(monkeypatch: pytest.MonkeyPatch) -> None:
     """A clean response means auto-merge is armed, so there is no skip reason."""
     monkeypatch.setattr(gate, "_api", lambda *a, **k: {"data": {"clientMutationId": None}})
-    assert gate._enable_auto_merge("PR_NODE") is None
+    assert gate._enable_auto_merge("PR_NODE", str_head_sha="abc") is None
 
 
 def test_enable_auto_merge_reports_a_transport_failure_as_a_skip_reason(
@@ -502,7 +509,34 @@ def test_enable_auto_merge_reports_a_transport_failure_as_a_skip_reason(
 ) -> None:
     """An HTTP error (``_api`` returns ``None``) is a skip too, not a crash."""
     monkeypatch.setattr(gate, "_api", lambda *a, **k: None)
-    assert "failed" in gate._enable_auto_merge("PR_NODE")
+    str_reason = gate._enable_auto_merge("PR_NODE", str_head_sha="abc")
+    assert isinstance(str_reason, str)
+    assert "failed" in str_reason
+
+
+def test_enable_auto_merge_never_reports_a_refusal_as_armed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ``errors`` list with no message text is still a skip with a non-empty reason."""
+    monkeypatch.setattr(gate, "_api", lambda *a, **k: {"errors": ["opaque"]})
+    assert gate._enable_auto_merge("PR_NODE", str_head_sha="abc")
+
+
+def test_enable_auto_merge_binds_the_mutation_to_the_polled_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``expectedHeadOid`` carries the polled head so a later push cannot be armed."""
+    list_payloads: list = []
+    monkeypatch.setattr(
+        gate, "_api", lambda *a, dict_payload=None, **k: list_payloads.append(dict_payload)
+    )
+    gate._enable_auto_merge("PR_NODE", str_head_sha="abc")
+    assert list_payloads[0]["variables"]["sha"] == "abc"
+
+
+def test_is_dependabot_matches_only_the_dependabot_author() -> None:
+    """The generic gate leaves Dependabot PRs to ``dependabot-auto-merge.yml``."""
+    assert gate._is_dependabot({"user": {"login": "dependabot[bot]"}})
 
 
 def test_graphql_refusal_is_a_warning_annotation_not_an_error(

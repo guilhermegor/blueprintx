@@ -43,12 +43,15 @@ workflow grants `contents: write` beside `pull-requests: write`, because the mut
 ([mutation reference](https://docs.github.com/en/graphql/reference/mutations#enablepullrequestautomerge),
 [`GITHUB_TOKEN` permissions](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication)).
 
-A `pull_request` run triggered by Dependabot always gets a read-only token, whatever the job declares
+A `pull_request` run triggered by Dependabot gets a read-only token by default
 ([Dependabot on Actions](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions)),
-as does a run in a repository whose settings forbid write tokens. GitHub then answers "Resource not accessible by
+as does a run in a repository whose default workflow permissions are read-only; a `permissions:` block can raise either. GitHub then answers "Resource not accessible by
 integration". The gate logs `::notice::auto-merge not armed, step skipped: <reason>` and exits on its own verdict;
-labels and the comment still apply, and a refused arming never turns the gate red. Dependabot PRs are armed by
-`dependabot-auto-merge.yml`.
+labels and the comment still apply, and a refused arming never turns the gate red. `pr_gate.py` never arms a
+Dependabot-authored PR whatever its token can do: `dependabot-auto-merge.yml` owns that path, including the
+review wait on major bumps. The mutation carries `expectedHeadOid`, so a push during the poll is refused rather
+than armed on stale checks. A merge made by auto-merge armed with `GITHUB_TOKEN` does not start `push`
+workflows (release, deploy) on the base branch.
 
 The roughly 13 minutes seen on a refused run were the check poll (`GATE_MAX_POLLS` 26 x `GATE_POLL_SECONDS` 30),
 which runs before arming on purpose. No retry loop wraps the mutation, so an authorization error is never retried.
