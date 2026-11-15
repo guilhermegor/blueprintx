@@ -1118,8 +1118,9 @@ is shaped as it is; a generated project gets the behavior, not the history.
   authored before the tree was tabified); no per-file ANN401 ignore remains (#1054). `lib-minimal` vendors the typing engine at a nested private path whose imports are
   rewritten to `<pkg>._internal.*` and can exceed the line length, so it is excluded in full
   (mypy excludes it too).
-- **Preview mode is for PLR1702 only** (too-many-nested-blocks, still preview-only in ruff
-  0.17.5: `ruff rule PLR1702`). It also activates tag-along preview rules in the `PL` and `S`
+- **Preview mode is for PLR1702 and PLR0917 only** (too-many-nested-blocks and
+  too-many-positional-arguments, both preview-only in ruff 0.17.5: `ruff rule PLR1702`,
+  `ruff rule PLR0917`; turning preview off silently disables the keyword-only gate). It also activates tag-along preview rules in the `PL` and `S`
   families, never chosen on their merits, so each is settled rule by rule (#434, #1054).
   Re-measured with ruff 0.17.5 and the current `ruff.toml` ignores (`PLC1901`, `S404`)
   as `ruff check --isolated --select PL,S --ignore PLC1901,S404` over
@@ -1127,7 +1128,8 @@ is shaped as it is; a generated project gets the behavior, not the history.
   extra are all `PLC2701`, which the shipped `ruff.toml` already settles with a `bin/` and
   `tests/` per-file-ignore and line-scoped `noqa` on the private imports in `optional/`. The older
   figures (21 to 81 on `templates/`, ruff 0.11.13) used a different tree and ignore list and are
-  not comparable. Revisit
+  not comparable. That command runs `--isolated`, so it never reads `max-positional-args = 1`;
+  it counts the other `PL`/`S` rules, and the shipped tree is `PLR0917`-clean by `ruff check`. Revisit
   each on its own measurement the day PLR1702 leaves preview. Why nesting is gated at all is in
   `check_complexity.sh`'s header and [Complexity ceilings](complexity-ceilings-measured.md).
 - **PLR1702 pairs with `max-complexity = 3` for `src/` only.** Ceiling 3 alone would admit the

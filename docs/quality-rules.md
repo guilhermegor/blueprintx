@@ -103,7 +103,10 @@ Two same-typed positional arguments (`copy(src, dst)`, `window(start, end)`) can
 call site with no error from the type checker or the runtime; a keyword names each one where it
 is passed. `self` and `cls` do not count. A signature fixed by a foreign contract (a DB-API
 cursor, a PyYAML constructor override, a metaclass hook) cannot change, so that `def` carries a
-line-scoped `# noqa: PLR0917 -- <reason>`; nothing else does (blueprintx#1054).
+line-scoped `# noqa: PLR0917 -- <reason>`; nothing else does (blueprintx#1054). The trees
+`ruff.toml` excludes (`migrations`, `src/chassis`, `src/capabilities/example_feature`) are not
+checked. TypeScript has no keyword-only parameters, so this entry is Python-only: its nearest
+idiom is an options object, and no ESLint `max-params` rule is wired in the TS templates.
 
 ## Default arg spacing
 
