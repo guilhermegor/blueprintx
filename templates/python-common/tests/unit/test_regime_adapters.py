@@ -17,6 +17,12 @@ from utils.regime_window import RegimeWindow
 from utils.spec_gap_registry import SpecGapRegistry
 
 
+_STR_REGIME_CLASSE = "cnpj_classe_keyed"
+_STR_REGIME_PLAIN = "cnpj_keyed"
+_INT_2 = 2
+_INT_202311 = 202311
+
+
 @pytest.fixture
 def cls_registry() -> RegimeRegistry:
     """Build the two-regime registry from the issue's measured cutover (202311 / 202312).
@@ -81,7 +87,7 @@ def test_default_period_for_closed_regime_returns_its_last_covered_period(
     -------
     None
     """
-    assert cls_registry.default_period("cnpj_keyed") == 202311
+    assert cls_registry.default_period("cnpj_keyed") == _INT_202311
 
 
 def test_default_period_for_open_regime_raises(cls_registry: RegimeRegistry) -> None:
@@ -125,7 +131,9 @@ def test_adapter_bound_to_the_right_regime_accepts_its_own_period(
     -------
     None
     """
-    cls_adapter = RegimeBoundAdapter(cls_registry, "cnpj_classe_keyed", int_period=202312)
+    cls_adapter = RegimeBoundAdapter(
+        cls_registry=cls_registry, str_regime_name=_STR_REGIME_CLASSE, int_period=202312
+    )
     assert cls_adapter.cls_window.str_name == "cnpj_classe_keyed"
 
 
@@ -148,7 +156,9 @@ def test_adapter_bound_to_the_wrong_regime_refuses_naming_the_sibling(
     None
     """
     with pytest.raises(ValueError, match="cnpj_classe_keyed"):
-        RegimeBoundAdapter(cls_registry, "cnpj_keyed", int_period=202312)
+        RegimeBoundAdapter(
+            cls_registry=cls_registry, str_regime_name=_STR_REGIME_PLAIN, int_period=202312
+        )
 
 
 def test_adapter_with_no_period_defaults_to_its_regimes_last_covered_period(
@@ -165,8 +175,8 @@ def test_adapter_with_no_period_defaults_to_its_regimes_last_covered_period(
     -------
     None
     """
-    cls_adapter = RegimeBoundAdapter(cls_registry, "cnpj_keyed")
-    assert cls_adapter.int_period == 202311
+    cls_adapter = RegimeBoundAdapter(cls_registry=cls_registry, str_regime_name="cnpj_keyed")
+    assert cls_adapter.int_period == _INT_202311
 
 
 def test_unlisted_regime_has_no_known_gaps() -> None:
@@ -177,7 +187,10 @@ def test_unlisted_regime_has_no_known_gaps() -> None:
     None
     """
     cls_registry = SpecGapRegistry({})
-    assert cls_registry.is_known_gap("cnpj_keyed", "TP_FUNDO_CLASSE") is False
+    assert (
+        cls_registry.is_known_gap(str_regime_name="cnpj_keyed", str_column="TP_FUNDO_CLASSE")
+        is False
+    )
 
 
 def test_registered_gap_is_recognised() -> None:
@@ -188,7 +201,10 @@ def test_registered_gap_is_recognised() -> None:
     None
     """
     cls_registry = SpecGapRegistry({"cnpj_keyed": frozenset({"TP_FUNDO_CLASSE"})})
-    assert cls_registry.is_known_gap("cnpj_keyed", "TP_FUNDO_CLASSE") is True
+    assert (
+        cls_registry.is_known_gap(str_regime_name="cnpj_keyed", str_column="TP_FUNDO_CLASSE")
+        is True
+    )
 
 
 def test_unexplained_suppresses_only_the_registered_gap() -> None:
@@ -204,7 +220,9 @@ def test_unexplained_suppresses_only_the_registered_gap() -> None:
     """
     cls_registry = SpecGapRegistry({"cnpj_keyed": frozenset({"TP_FUNDO_CLASSE"})})
     set_reported = frozenset({"TP_FUNDO_CLASSE", "UNEXPECTED_COLUMN"})
-    assert cls_registry.unexplained("cnpj_keyed", set_reported) == frozenset({"UNEXPECTED_COLUMN"})
+    assert cls_registry.unexplained(
+        str_regime_name="cnpj_keyed", set_reported_columns=set_reported
+    ) == frozenset({"UNEXPECTED_COLUMN"})
 
 
 def test_overlapping_windows_are_rejected_at_construction() -> None:
@@ -261,7 +279,7 @@ def test_adjacent_windows_that_do_not_overlap_are_accepted() -> None:
             ),
         ]
     )
-    assert len(cls_built.list_windows) == 2
+    assert len(cls_built.list_windows) == _INT_2
 
 
 def test_covers_rejects_a_month_outside_01_12() -> None:

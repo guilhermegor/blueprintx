@@ -46,7 +46,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_template_drift")
 
 
-def _copy(str_src: str, str_dst: str, str_kind: str = "file") -> str:
+def _copy(str_src: str, *, str_dst: str, str_kind: str = "file") -> str:
     """Return one ``--list-copies`` COPY line.
 
     Parameters
@@ -68,6 +68,7 @@ def _copy(str_src: str, str_dst: str, str_kind: str = "file") -> str:
 
 def _checkout(
     path_tmp: Path,
+    *,
     list_off: list[str],
     list_on: list[str] | None = None,
     list_files: tuple[str, ...] = (),
@@ -122,7 +123,7 @@ def _git(path_root: Path, *tuple_args: str) -> None:
     subprocess.run(["git", "-C", str(path_root), *tuple_args], check=True)  # noqa: S603, S607
 
 
-def _project(path_tmp: Path, str_stamp: str) -> Path:
+def _project(path_tmp: Path, *, str_stamp: str) -> Path:
     """Create a project directory holding only a provenance stamp.
 
     Parameters
@@ -163,145 +164,160 @@ def test_a_project_keeping_its_github_dir_is_online(tmp_path: Path) -> None:
 def test_a_printed_copy_is_required(tmp_path: Path) -> None:
     """Whatever the dry run prints is what the scaffold copies, so it is required."""
     path_root = _checkout(
-        tmp_path, [_copy(f"{_COMMON}/a.txt", "a.txt")], list_files=(f"{_COMMON}/a.txt",)
+        tmp_path,
+        list_off=[_copy(f"{_COMMON}/a.txt", str_dst="a.txt")],
+        list_files=(f"{_COMMON}/a.txt",),
     )
 
-    assert gate.required_relpaths(path_root, "t") == {"a.txt"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"a.txt"}
 
 
 def test_a_copy_in_a_form_no_regex_read_is_required(tmp_path: Path) -> None:
     """The dry run reports the copy that happened, not the shell text that spelt it."""
-    list_off = [_copy(f"{_COMMON}/d/x.md", "docs/renamed.md")]
-    path_root = _checkout(tmp_path, list_off, list_files=(f"{_COMMON}/d/x.md",))
+    list_off = [_copy(f"{_COMMON}/d/x.md", str_dst="docs/renamed.md")]
+    path_root = _checkout(tmp_path, list_off=list_off, list_files=(f"{_COMMON}/d/x.md",))
 
-    assert gate.required_relpaths(path_root, "t") == {"docs/renamed.md"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"docs/renamed.md"}
 
 
 def test_the_roster_copy_is_not_required_by_default(tmp_path: Path) -> None:
     """`.review-bots.yaml` is copied only when the scaffold answered yes (blueprintx#374)."""
-    list_on = [_copy(f"{_COMMON}/.review-bots.yaml", ".review-bots.yaml")]
-    path_root = _checkout(tmp_path, [], list_on, (f"{_COMMON}/.review-bots.yaml",))
+    list_on = [_copy(f"{_COMMON}/.review-bots.yaml", str_dst=".review-bots.yaml")]
+    path_root = _checkout(
+        tmp_path, list_off=[], list_on=list_on, list_files=(f"{_COMMON}/.review-bots.yaml",)
+    )
 
-    assert gate.required_relpaths(path_root, "t") == set()
+    assert gate.required_relpaths(path_root, str_tier="t") == set()
 
 
 def test_the_roster_copy_is_required_after_opting_in(tmp_path: Path) -> None:
     """The opt-in flag is passed to the dry run, which then prints the guarded copy."""
-    list_on = [_copy(f"{_COMMON}/.review-bots.yaml", ".review-bots.yaml")]
-    path_root = _checkout(tmp_path, [], list_on, (f"{_COMMON}/.review-bots.yaml",))
+    list_on = [_copy(f"{_COMMON}/.review-bots.yaml", str_dst=".review-bots.yaml")]
+    path_root = _checkout(
+        tmp_path, list_off=[], list_on=list_on, list_files=(f"{_COMMON}/.review-bots.yaml",)
+    )
 
-    assert gate.required_relpaths(path_root, "t", bool_roster=True) == {".review-bots.yaml"}
+    assert gate.required_relpaths(path_root, str_tier="t", bool_roster=True) == {
+        ".review-bots.yaml"
+    }
 
 
 def test_provenance_records_the_roster_choice(tmp_path: Path) -> None:
     """The stamp is what lets the checker recover an opt-out instead of guessing."""
-    path_project = _project(tmp_path, "tier: mvc-service-native-db\nreview_bot_roster: false\n")
+    path_project = _project(
+        tmp_path, str_stamp="tier: mvc-service-native-db\nreview_bot_roster: false\n"
+    )
 
     assert gate.review_bot_roster_enabled(path_project) is False
 
 
 def test_a_project_predating_the_stamp_reads_as_unknown(tmp_path: Path) -> None:
     """`None`, never `False` — the caller must not assume either answer for old projects."""
-    path_project = _project(tmp_path, "tier: mvc-service-native-db\n")
+    path_project = _project(tmp_path, str_stamp="tier: mvc-service-native-db\n")
 
     assert gate.review_bot_roster_enabled(path_project) is None
 
 
 def test_a_directory_copy_requires_every_file_under_it(tmp_path: Path) -> None:
     """`cp -r dir/. dst` ships every file in dir, nested ones included."""
-    list_off = [_copy(f"{_COMMON}/bin", "bin", "dir")]
+    list_off = [_copy(f"{_COMMON}/bin", str_dst="bin", str_kind="dir")]
     list_files = (f"{_COMMON}/bin/a.sh", f"{_COMMON}/bin/lib/b.sh")
-    path_root = _checkout(tmp_path, list_off, list_files=list_files)
+    path_root = _checkout(tmp_path, list_off=list_off, list_files=list_files)
 
-    assert gate.required_relpaths(path_root, "t") == {"bin/a.sh", "bin/lib/b.sh"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"bin/a.sh", "bin/lib/b.sh"}
 
 
 def test_bytecode_under_a_copied_directory_is_not_required(tmp_path: Path) -> None:
     """A `__pycache__` in the checkout's bin/ is an untracked artifact, never a template file."""
-    list_off = [_copy(f"{_COMMON}/bin", "bin", "dir")]
+    list_off = [_copy(f"{_COMMON}/bin", str_dst="bin", str_kind="dir")]
     list_files = (f"{_COMMON}/bin/__pycache__/x.cpython-312.pyc", f"{_COMMON}/bin/a.sh")
-    path_root = _checkout(tmp_path, list_off, list_files=list_files)
+    path_root = _checkout(tmp_path, list_off=list_off, list_files=list_files)
 
-    assert gate.required_relpaths(path_root, "t") == {"bin/a.sh"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"bin/a.sh"}
 
 
 def test_untracked_files_in_a_git_checkout_are_not_required(tmp_path: Path) -> None:
     """Only tracked files are template files; a stray untracked one is never 'missing'."""
-    list_off = [_copy(f"{_COMMON}/bin", "bin", "dir")]
+    list_off = [_copy(f"{_COMMON}/bin", str_dst="bin", str_kind="dir")]
     list_files = (f"{_COMMON}/bin/tracked.sh", f"{_COMMON}/bin/stray.log")
-    path_root = _checkout(tmp_path, list_off, list_files=list_files)
+    path_root = _checkout(tmp_path, list_off=list_off, list_files=list_files)
     _git(path_root, "init", "-q")
     _git(path_root, "add", "-f", f"{_COMMON}/bin/tracked.sh")
 
-    assert gate.required_relpaths(path_root, "t") == {"bin/tracked.sh"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"bin/tracked.sh"}
 
 
 def test_an_untracked_file_a_glob_matched_is_not_required(tmp_path: Path) -> None:
     """A draft the shell glob picked up but git does not track is not a template file."""
-    list_off = [_copy(f"{_COMMON}/a.md", "a.md"), _copy(f"{_COMMON}/draft.md", "draft.md")]
+    list_off = [
+        _copy(f"{_COMMON}/a.md", str_dst="a.md"),
+        _copy(f"{_COMMON}/draft.md", str_dst="draft.md"),
+    ]
     path_root = _checkout(
-        tmp_path, list_off, list_files=(f"{_COMMON}/a.md", f"{_COMMON}/draft.md")
+        tmp_path, list_off=list_off, list_files=(f"{_COMMON}/a.md", f"{_COMMON}/draft.md")
     )
     _git(path_root, "init", "-q")
     _git(path_root, "add", "-f", f"{_COMMON}/a.md")
 
-    assert gate.required_relpaths(path_root, "t") == {"a.md"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"a.md"}
 
 
 def test_a_copy_from_the_language_agnostic_root_is_required(tmp_path: Path) -> None:
     """`templates/common/` copies are shipped to every project too."""
-    list_off = [_copy("templates/common/bin/ship.sh", "bin/ship.sh")]
-    path_root = _checkout(tmp_path, list_off, list_files=("templates/common/bin/ship.sh",))
+    list_off = [_copy("templates/common/bin/ship.sh", str_dst="bin/ship.sh")]
+    path_root = _checkout(
+        tmp_path, list_off=list_off, list_files=("templates/common/bin/ship.sh",)
+    )
 
-    assert gate.required_relpaths(path_root, "t") == {"bin/ship.sh"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"bin/ship.sh"}
 
 
 @pytest.mark.parametrize("str_src", ["templates/mvc-service-native-db/AGENTS.md", "bin/ci/x.sh"])
 def test_a_copy_from_outside_the_policed_roots_is_not_required(
-    tmp_path: Path, str_src: str
+    tmp_path: Path, *, str_src: str
 ) -> None:
     """Tier-specific and BlueprintX-internal sources are out of scope, as they always were."""
-    path_root = _checkout(tmp_path, [_copy(str_src, "x")], list_files=(str_src,))
+    path_root = _checkout(tmp_path, list_off=[_copy(str_src, str_dst="x")], list_files=(str_src,))
 
-    assert gate.required_relpaths(path_root, "t") == set()
+    assert gate.required_relpaths(path_root, str_tier="t") == set()
 
 
 def test_a_destination_the_scaffold_removes_is_not_required(tmp_path: Path) -> None:
     """`rm -f dst/.keep` after a directory copy: the project never has it, so not drift."""
-    list_off = [_copy(f"{_COMMON}/d", "d", "dir"), "RM\td/.keep"]
+    list_off = [_copy(f"{_COMMON}/d", str_dst="d", str_kind="dir"), "RM\td/.keep"]
     path_root = _checkout(
-        tmp_path, list_off, list_files=(f"{_COMMON}/d/.keep", f"{_COMMON}/d/real.py")
+        tmp_path, list_off=list_off, list_files=(f"{_COMMON}/d/.keep", f"{_COMMON}/d/real.py")
     )
 
-    assert gate.required_relpaths(path_root, "t") == {"d/real.py"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"d/real.py"}
 
 
 def test_a_removal_with_a_doubled_separator_still_matches(tmp_path: Path) -> None:
     """`d//.keep` and `d/.keep` are the same file."""
-    list_off = [_copy(f"{_COMMON}/d", "d", "dir"), "RM\td//.keep"]
+    list_off = [_copy(f"{_COMMON}/d", str_dst="d", str_kind="dir"), "RM\td//.keep"]
     path_root = _checkout(
-        tmp_path, list_off, list_files=(f"{_COMMON}/d/.keep", f"{_COMMON}/d/real.py")
+        tmp_path, list_off=list_off, list_files=(f"{_COMMON}/d/.keep", f"{_COMMON}/d/real.py")
     )
 
-    assert gate.required_relpaths(path_root, "t") == {"d/real.py"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"d/real.py"}
 
 
 def test_a_removed_directory_removes_everything_under_it(tmp_path: Path) -> None:
     """`rm -rf dst/sub` takes its contents with it."""
-    list_off = [_copy(f"{_COMMON}/d", "d", "dir"), "RM\td/sub"]
+    list_off = [_copy(f"{_COMMON}/d", str_dst="d", str_kind="dir"), "RM\td/sub"]
     path_root = _checkout(
-        tmp_path, list_off, list_files=(f"{_COMMON}/d/sub/x.py", f"{_COMMON}/d/y.py")
+        tmp_path, list_off=list_off, list_files=(f"{_COMMON}/d/sub/x.py", f"{_COMMON}/d/y.py")
     )
 
-    assert gate.required_relpaths(path_root, "t") == {"d/y.py"}
+    assert gate.required_relpaths(path_root, str_tier="t") == {"d/y.py"}
 
 
 def test_a_lib_that_prints_nothing_requires_nothing_and_says_skipped(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """Zero required paths is blindness, not a clean comparison: it must SKIP loudly."""
-    path_root = _checkout(tmp_path / "bx", [])
-    path_project = _project(tmp_path, "tier: mvc-service-native-db\n")
+    path_root = _checkout(tmp_path / "bx", list_off=[])
+    path_project = _project(tmp_path, str_stamp="tier: mvc-service-native-db\n")
 
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
 
@@ -309,13 +325,13 @@ def test_a_lib_that_prints_nothing_requires_nothing_and_says_skipped(
 
 
 def test_a_failing_dry_run_is_skipped_not_reported_clean(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """A lib that exits non-zero must not read as 'no required paths, no drift'."""
     path_lib = tmp_path / "bx" / gate._SCAFFOLD_LIB_RELPATH
     path_lib.parent.mkdir(parents=True)
     path_lib.write_text("exit 3\n", encoding="utf-8")
-    path_project = _project(tmp_path, "tier: mvc-service-native-db\n")
+    path_project = _project(tmp_path, str_stamp="tier: mvc-service-native-db\n")
 
     gate.main(["--root", str(path_project), "--blueprintx-root", str(tmp_path / "bx")])
 
@@ -323,10 +339,12 @@ def test_a_failing_dry_run_is_skipped_not_reported_clean(
 
 
 def test_roster_opt_in_against_a_checkout_without_the_lib_skips_instead_of_crashing(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """A checkout with no scaffold lib at all is a SKIP, never a traceback."""
-    path_project = _project(tmp_path, "tier: mvc-service-native-db\nreview_bot_roster: true\n")
+    path_project = _project(
+        tmp_path, str_stamp="tier: mvc-service-native-db\nreview_bot_roster: true\n"
+    )
     path_empty_checkout = tmp_path / "checkout"
     path_empty_checkout.mkdir()
 
@@ -336,12 +354,16 @@ def test_roster_opt_in_against_a_checkout_without_the_lib_skips_instead_of_crash
 
 
 def test_an_opted_in_project_is_told_about_the_missing_roster_file(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """End to end: the stamp's roster choice reaches the dry run and the report names the file."""
-    list_on = [_copy(f"{_COMMON}/.review-bots.yaml", ".review-bots.yaml")]
-    path_root = _checkout(tmp_path / "bx", [], list_on, (f"{_COMMON}/.review-bots.yaml",))
-    path_project = _project(tmp_path, "tier: mvc-service-native-db\nreview_bot_roster: true\n")
+    list_on = [_copy(f"{_COMMON}/.review-bots.yaml", str_dst=".review-bots.yaml")]
+    path_root = _checkout(
+        tmp_path / "bx", list_off=[], list_on=list_on, list_files=(f"{_COMMON}/.review-bots.yaml",)
+    )
+    path_project = _project(
+        tmp_path, str_stamp="tier: mvc-service-native-db\nreview_bot_roster: true\n"
+    )
 
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
 
@@ -349,13 +371,17 @@ def test_an_opted_in_project_is_told_about_the_missing_roster_file(
 
 
 def test_a_project_that_declined_the_roster_is_not_told_it_is_missing(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """The false positive blueprintx#374 removed must stay removed."""
-    list_off = [_copy(f"{_COMMON}/a.txt", "a.txt")]
-    list_on = [*list_off, _copy(f"{_COMMON}/.review-bots.yaml", ".review-bots.yaml")]
-    path_root = _checkout(tmp_path / "bx", list_off, list_on, (f"{_COMMON}/a.txt",))
-    path_project = _project(tmp_path, "tier: mvc-service-native-db\nreview_bot_roster: false\n")
+    list_off = [_copy(f"{_COMMON}/a.txt", str_dst="a.txt")]
+    list_on = [*list_off, _copy(f"{_COMMON}/.review-bots.yaml", str_dst=".review-bots.yaml")]
+    path_root = _checkout(
+        tmp_path / "bx", list_off=list_off, list_on=list_on, list_files=(f"{_COMMON}/a.txt",)
+    )
+    path_project = _project(
+        tmp_path, str_stamp="tier: mvc-service-native-db\nreview_bot_roster: false\n"
+    )
     (path_project / "a.txt").touch()
 
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
@@ -382,7 +408,7 @@ def _no_git(*args: object, **kwargs: object) -> None:
 
 
 def test_a_missing_git_executable_falls_back_to_the_directory_walk(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """No ``git`` on PATH is treated like a failed git command, not a crash."""
     path_dir = tmp_path / "tpl"
@@ -391,11 +417,11 @@ def test_a_missing_git_executable_falls_back_to_the_directory_walk(
 
     monkeypatch.setattr(subprocess, "run", _no_git)
 
-    assert gate._template_files(tmp_path, path_dir) == ["a.txt"]
+    assert gate._template_files(tmp_path, path_dir=path_dir) == ["a.txt"]
 
 
 def test_lib_minimal_reads_its_own_scaffold_entry_not_the_shared_lib(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """lib-minimal answers ``--list-copies`` from its own script, so its copies are required.
 
@@ -406,13 +432,13 @@ def test_lib_minimal_reads_its_own_scaffold_entry_not_the_shared_lib(
     capsys : pytest.CaptureFixture
         Captures the printed report.
     """
-    path_root = _checkout(tmp_path / "bx", [], list_files=(f"{_COMMON}/a.txt",))
+    path_root = _checkout(tmp_path / "bx", list_off=[], list_files=(f"{_COMMON}/a.txt",))
     path_entry = path_root / gate._TIER_LIST_SCRIPTS["lib-minimal"]
     path_entry.parent.mkdir(parents=True, exist_ok=True)
     path_entry.write_text(
         f"# --list-copies\nprintf 'COPY\\tfile\\t{_COMMON}/a.txt\\ta.txt\\n'\n", encoding="utf-8"
     )
-    path_project = _project(tmp_path, "tier: lib-minimal\n")
+    path_project = _project(tmp_path, str_stamp="tier: lib-minimal\n")
 
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
 
@@ -433,7 +459,9 @@ def _versioned_checkout(path_tmp: Path) -> tuple[Path, str]:
             The checkout root and the commit that holds the base content.
     """
     path_root = _checkout(
-        path_tmp / "bx", [_copy(f"{_COMMON}/a.txt", "a.txt")], list_files=(f"{_COMMON}/a.txt",)
+        path_tmp / "bx",
+        list_off=[_copy(f"{_COMMON}/a.txt", str_dst="a.txt")],
+        list_files=(f"{_COMMON}/a.txt",),
     )
     (path_root / _COMMON / "a.txt").write_text("base\n", encoding="utf-8")
     _git(path_root, "init", "-q")
@@ -454,6 +482,7 @@ def _versioned_checkout(path_tmp: Path) -> tuple[Path, str]:
 
 def _drift_output(
     path_tmp: Path,
+    *,
     capsys: pytest.CaptureFixture,
     str_ours: str,
     str_theirs: str,
@@ -482,7 +511,7 @@ def _drift_output(
     path_root, str_sha = _versioned_checkout(path_tmp)
     (path_root / _COMMON / "a.txt").write_text(str_theirs, encoding="utf-8")
     str_commit_line = f"blueprintx_commit: {str_sha}\n" if bool_stamp_commit else ""
-    path_project = _project(path_tmp, f"tier: mvc-service-native-db\n{str_commit_line}")
+    path_project = _project(path_tmp, str_stamp=f"tier: mvc-service-native-db\n{str_commit_line}")
     (path_project / "a.txt").write_text(str_ours, encoding="utf-8")
     capsys.readouterr()
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
@@ -490,42 +519,44 @@ def _drift_output(
 
 
 def test_an_untouched_file_the_template_changed_is_reported(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """Project equals base, template moved on: the fast-forward case."""
-    str_out = _drift_output(tmp_path, capsys, "base\n", "new\n")
+    str_out = _drift_output(tmp_path, capsys=capsys, str_ours="base\n", str_theirs="new\n")
 
     assert "template changed since scaffold: a.txt" in str_out
 
 
 def test_a_file_changed_on_both_sides_is_reported_as_both(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """Project and template both moved off base: the merge case."""
-    str_out = _drift_output(tmp_path, capsys, "mine\n", "new\n")
+    str_out = _drift_output(tmp_path, capsys=capsys, str_ours="mine\n", str_theirs="new\n")
 
     assert "both changed: a.txt" in str_out
 
 
 def test_a_local_edit_the_template_never_touched_is_not_drift(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """A project's own edit, with the template unchanged, must stay silent."""
-    str_out = _drift_output(tmp_path, capsys, "mine\n", "base\n")
+    str_out = _drift_output(tmp_path, capsys=capsys, str_ours="mine\n", str_theirs="base\n")
 
     assert "changed" not in str_out
 
 
 def test_a_stamp_without_a_commit_skips_content_drift_loudly(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """No merge base is a SKIPPED line, never a clean content verdict."""
-    str_out = _drift_output(tmp_path, capsys, "base\n", "new\n", bool_stamp_commit=False)
+    str_out = _drift_output(
+        tmp_path, capsys=capsys, str_ours="base\n", str_theirs="new\n", bool_stamp_commit=False
+    )
 
     assert "SKIPPED content drift" in str_out
 
 
-def _write_files(path_root: Path, dict_files: dict[str, str]) -> None:
+def _write_files(path_root: Path, *, dict_files: dict[str, str]) -> None:
     """Write text files under ``path_root``, creating parent directories.
 
     Parameters
@@ -544,7 +575,7 @@ def _write_files(path_root: Path, dict_files: dict[str, str]) -> None:
     list(map(Path.write_text, list_paths, dict_files.values()))
 
 
-def _commit_all(path_root: Path, str_message: str) -> str:
+def _commit_all(path_root: Path, *, str_message: str) -> str:
     """Stage everything, commit without signing and return the new commit.
 
     Parameters
@@ -587,11 +618,12 @@ def _copy_lines(dict_files: dict[str, str]) -> list[str]:
     list of str
             One COPY line per path.
     """
-    return [_copy(f"{_COMMON}/{str_rel}", str_rel) for str_rel in dict_files]
+    return [_copy(f"{_COMMON}/{str_rel}", str_dst=str_rel) for str_rel in dict_files]
 
 
 def _removal_output(
     path_tmp: Path,
+    *,
     capsys: pytest.CaptureFixture,
     dict_then: dict[str, str],
     dict_now: dict[str, str],
@@ -623,18 +655,18 @@ def _removal_output(
     """
     path_root = path_tmp / "bx"
     path_tpl = path_root / _COMMON
-    _checkout(path_root, _copy_lines(dict_then))
-    _write_files(path_tpl, dict_then)
+    _checkout(path_root, list_off=_copy_lines(dict_then))
+    _write_files(path_tpl, dict_files=dict_then)
     _git(path_root, "init", "-q")
-    str_sha = _commit_all(path_root, "base")
+    str_sha = _commit_all(path_root, str_message="base")
     list(map(lambda str_rel: (path_tpl / str_rel).unlink(), set(dict_then) - set(dict_now)))
-    _write_files(path_tpl, dict_now)
-    _checkout(path_root, _copy_lines(dict_now))
-    _commit_all(path_root, "template moves on")
+    _write_files(path_tpl, dict_files=dict_now)
+    _checkout(path_root, list_off=_copy_lines(dict_now))
+    _commit_all(path_root, str_message="template moves on")
     path_project = _project(
-        path_tmp, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+        path_tmp, str_stamp=f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
     )
-    _write_files(path_project, dict_then)
+    _write_files(path_project, dict_files=dict_then)
     list(map(lambda str_rel: (path_project / str_rel).unlink(), tuple_deleted))
     capsys.readouterr()
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
@@ -647,21 +679,25 @@ _RENAMED = {"old_name.txt": "renamed\n" * 8}
 
 
 def test_a_file_the_template_dropped_is_reported_as_removed(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """The template stopped shipping it and the project still has it."""
-    str_out = _removal_output(tmp_path, capsys, _KEPT | _DROPPED | _RENAMED, _KEPT)
+    str_out = _removal_output(
+        tmp_path, capsys=capsys, dict_then=_KEPT | _DROPPED | _RENAMED, dict_now=_KEPT
+    )
 
     assert "removed: dropped.txt" in str_out
 
 
 def test_a_file_the_template_renamed_names_its_successor(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """A git rename between the two commits is the successor."""
     dict_now = _KEPT | {"new_name.txt": _RENAMED["old_name.txt"]}
 
-    str_out = _removal_output(tmp_path, capsys, _KEPT | _RENAMED, dict_now)
+    str_out = _removal_output(
+        tmp_path, capsys=capsys, dict_then=_KEPT | _RENAMED, dict_now=dict_now
+    )
 
     assert "replaced by new_name.txt: old_name.txt" in str_out
 
@@ -675,46 +711,57 @@ def test_a_file_the_template_renamed_names_its_successor(
     ],
 )
 def test_a_known_non_rename_successor_comes_from_the_rule_table(
-    tmp_path: Path, capsys: pytest.CaptureFixture, str_old: str, str_new: str
+    tmp_path: Path, *, capsys: pytest.CaptureFixture, str_old: str, str_new: str
 ) -> None:
     """The make-to-poe move is a rewrite, not a rename, so git cannot name the successor."""
     str_out = _removal_output(
-        tmp_path, capsys, _KEPT | {str_old: "old\n" * 8}, _KEPT | {str_new: "[tool.poe]\n" * 8}
+        tmp_path,
+        capsys=capsys,
+        dict_then=_KEPT | {str_old: "old\n" * 8},
+        dict_now=_KEPT | {str_new: "[tool.poe]\n" * 8},
     )
 
     assert f"replaced by {str_new}: {str_old}" in str_out
 
 
 def test_a_rule_table_successor_the_template_no_longer_ships_is_only_removed(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """The table is consulted only for a successor the current copy list really holds."""
-    str_out = _removal_output(tmp_path, capsys, _KEPT | {"Makefile": "old\n" * 8}, _KEPT)
+    str_out = _removal_output(
+        tmp_path, capsys=capsys, dict_then=_KEPT | {"Makefile": "old\n" * 8}, dict_now=_KEPT
+    )
 
     assert "removed: Makefile" in str_out
 
 
 def test_a_dropped_file_the_project_already_deleted_is_not_reported(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """Only files that still exist in the project are drift."""
-    str_out = _removal_output(tmp_path, capsys, _KEPT | _DROPPED, _KEPT, ("dropped.txt",))
+    str_out = _removal_output(
+        tmp_path,
+        capsys=capsys,
+        dict_then=_KEPT | _DROPPED,
+        dict_now=_KEPT,
+        tuple_deleted=("dropped.txt",),
+    )
 
     assert "dropped.txt" not in str_out
 
 
 def test_a_stamped_commit_whose_dry_run_cannot_be_made_is_skipped_loudly(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """A commit predating ``--list-copies`` has no copy list, which is not 'nothing removed'."""
     path_root = tmp_path / "bx"
-    _write_files(path_root / _COMMON, _KEPT)
+    _write_files(path_root / _COMMON, dict_files=_KEPT)
     _git(path_root, "init", "-q")
-    str_sha = _commit_all(path_root, "before the dry run existed")
-    _checkout(path_root, _copy_lines(_KEPT))
-    _commit_all(path_root, "dry run added")
+    str_sha = _commit_all(path_root, str_message="before the dry run existed")
+    _checkout(path_root, list_off=_copy_lines(_KEPT))
+    _commit_all(path_root, str_message="dry run added")
     path_project = _project(
-        tmp_path, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+        tmp_path, str_stamp=f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
     )
     capsys.readouterr()
 
@@ -729,27 +776,27 @@ def test_a_lib_that_predates_list_copies_is_never_executed(tmp_path: Path) -> No
     path_lib.parent.mkdir(parents=True)
     path_lib.write_text(f"touch {tmp_path}/ran\necho COPY\n", encoding="utf-8")
 
-    gate.required_sources(tmp_path, "mvc-service-native-db")
+    gate.required_sources(tmp_path, str_tier="mvc-service-native-db")
 
     assert not (tmp_path / "ran").exists()
 
 
 def test_a_source_kept_but_copied_to_a_new_path_names_its_successor(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """No git rename exists when only the destination moved, so the same source is the link."""
-    list_then = [_copy(f"{_COMMON}/shared.txt", "old/shared.txt")]
+    list_then = [_copy(f"{_COMMON}/shared.txt", str_dst="old/shared.txt")]
     path_root = tmp_path / "bx"
-    _checkout(path_root, list_then)
-    _write_files(path_root / _COMMON, {"shared.txt": "shared\n" * 8})
+    _checkout(path_root, list_off=list_then)
+    _write_files(path_root / _COMMON, dict_files={"shared.txt": "shared\n" * 8})
     _git(path_root, "init", "-q")
-    str_sha = _commit_all(path_root, "base")
-    _checkout(path_root, [_copy(f"{_COMMON}/shared.txt", "new/shared.txt")])
-    _commit_all(path_root, "destination moves")
+    str_sha = _commit_all(path_root, str_message="base")
+    _checkout(path_root, list_off=[_copy(f"{_COMMON}/shared.txt", str_dst="new/shared.txt")])
+    _commit_all(path_root, str_message="destination moves")
     path_project = _project(
-        tmp_path, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+        tmp_path, str_stamp=f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
     )
-    _write_files(path_project, {"old/shared.txt": "shared\n" * 8})
+    _write_files(path_project, dict_files={"old/shared.txt": "shared\n" * 8})
     capsys.readouterr()
 
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
@@ -758,22 +805,22 @@ def test_a_source_kept_but_copied_to_a_new_path_names_its_successor(
 
 
 def test_a_skipped_removed_check_is_not_summed_up_as_a_clean_run(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """A check that did not run must not leave a bare 'No template drift detected'."""
     path_root = tmp_path / "bx"
-    _write_files(path_root / _COMMON, _KEPT)
-    _checkout(path_root, _copy_lines(_KEPT))
+    _write_files(path_root / _COMMON, dict_files=_KEPT)
+    _checkout(path_root, list_off=_copy_lines(_KEPT))
     path_lib = path_root / gate._SCAFFOLD_LIB_RELPATH
     path_lib.write_text("exit 0\n", encoding="utf-8")
     _git(path_root, "init", "-q")
-    str_sha = _commit_all(path_root, "base predates the flag")
-    _checkout(path_root, _copy_lines(_KEPT))
-    _commit_all(path_root, "flag added")
+    str_sha = _commit_all(path_root, str_message="base predates the flag")
+    _checkout(path_root, list_off=_copy_lines(_KEPT))
+    _commit_all(path_root, str_message="flag added")
     path_project = _project(
-        tmp_path, f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+        tmp_path, str_stamp=f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
     )
-    _write_files(path_project, _KEPT)
+    _write_files(path_project, dict_files=_KEPT)
     capsys.readouterr()
 
     gate.main(["--root", str(path_project), "--blueprintx-root", str(path_root)])
@@ -785,37 +832,41 @@ def test_a_stamp_without_scaffold_commit_falls_back_to_the_stamped_commit(
     tmp_path: Path,
 ) -> None:
     """Projects scaffolded before the field existed still have a measuring point."""
-    path_project = _project(tmp_path, "tier: lib-minimal\nblueprintx_commit: abc123\n")
+    path_project = _project(tmp_path, str_stamp="tier: lib-minimal\nblueprintx_commit: abc123\n")
 
     assert gate.read_scaffold_commit(path_project) == "abc123"
 
 
 def test_the_removed_summary_counts_the_orphans(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """The count line says how many files the template no longer ships."""
-    str_out = _removal_output(tmp_path, capsys, _KEPT | _DROPPED | _RENAMED, _KEPT)
+    str_out = _removal_output(
+        tmp_path, capsys=capsys, dict_then=_KEPT | _DROPPED | _RENAMED, dict_now=_KEPT
+    )
 
     assert "2 file(s) the template no longer ships" in str_out
 
 
 def test_a_removal_is_not_summed_up_as_no_drift(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """Orphans alone suppress the clean-run line."""
-    str_out = _removal_output(tmp_path, capsys, _KEPT | _DROPPED, _KEPT)
+    str_out = _removal_output(tmp_path, capsys=capsys, dict_then=_KEPT | _DROPPED, dict_now=_KEPT)
 
     assert "No template drift detected" not in str_out
 
 
 def test_a_non_ascii_rename_names_its_successor(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """NUL-separated output keeps unusual paths intact, so the rename is still found."""
     dict_old = {"ação.txt": "renamed\n" * 8}
     dict_now = _KEPT | {"action.txt": dict_old["ação.txt"]}
 
-    str_out = _removal_output(tmp_path, capsys, _KEPT | dict_old, dict_now)
+    str_out = _removal_output(
+        tmp_path, capsys=capsys, dict_then=_KEPT | dict_old, dict_now=dict_now
+    )
 
     assert "replaced by action.txt: ação.txt" in str_out
 
@@ -828,23 +879,23 @@ def test_an_archive_member_outside_the_destination_is_not_written(tmp_path: Path
         cls_info.size = 1
         cls_tar.addfile(cls_info, io.BytesIO(b"x"))
 
-    gate._unpack_archive(cls_buf.getvalue(), tmp_path / "dest")
+    gate._unpack_archive(cls_buf.getvalue(), path_dest=tmp_path / "dest")
 
     assert not (tmp_path / "escaped.txt").exists()
 
 
 def test_a_scaffold_commit_the_checkout_does_not_know_is_skipped_loudly(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """A usable but unreachable scaffold commit must say why the check did not run."""
     path_root = tmp_path / "bx"
-    _write_files(path_root / _COMMON, _KEPT)
-    _checkout(path_root, _copy_lines(_KEPT))
+    _write_files(path_root / _COMMON, dict_files=_KEPT)
+    _checkout(path_root, list_off=_copy_lines(_KEPT))
     _git(path_root, "init", "-q")
-    str_sha = _commit_all(path_root, "base")
+    str_sha = _commit_all(path_root, str_message="base")
     path_project = _project(
         tmp_path,
-        f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
+        str_stamp=f"tier: mvc-service-native-db\nblueprintx_commit: {str_sha}\n"
         f"scaffold_commit: {'0' * 40}\n",
     )
     capsys.readouterr()

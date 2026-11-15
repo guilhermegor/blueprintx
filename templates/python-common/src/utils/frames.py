@@ -38,7 +38,7 @@ _KeyT = TypeVar("_KeyT")
 
 @type_checker
 def _empty_frame(
-    dict_dtypes: dict[str, str], list_date_cols: list[str] | None = None
+    dict_dtypes: dict[str, str], *, list_date_cols: list[str] | None = None
 ) -> pd.DataFrame:
     """Build the zero-row frame both construction seams return when there is nothing to read.
 
@@ -73,6 +73,7 @@ def _empty_frame(
 @type_checker
 def from_cursor(
     cls_cursor: DbResultCursor,
+    *,
     dict_dtypes: dict[str, str],
     list_date_cols: list[str] | None = None,
 ) -> pd.DataFrame:
@@ -104,7 +105,7 @@ def from_cursor(
         One row per record, every declared column typed.
     """
     if cls_cursor.description is None:
-        return _empty_frame(dict_dtypes, list_date_cols)
+        return _empty_frame(dict_dtypes, list_date_cols=list_date_cols)
 
     list_cols = [col[0] for col in cls_cursor.description]
     df_records = pd.DataFrame.from_records(cls_cursor.fetchall(), columns=list_cols)
@@ -114,6 +115,7 @@ def from_cursor(
 @type_checker
 def from_records(
     list_records: Sequence[Mapping[str, object]],
+    *,
     dict_dtypes: dict[str, str],
     list_date_cols: list[str] | None = None,
 ) -> pd.DataFrame:
@@ -142,7 +144,7 @@ def from_records(
         One row per record, every declared column typed.
     """
     if not list_records:
-        return _empty_frame(dict_dtypes, list_date_cols)
+        return _empty_frame(dict_dtypes, list_date_cols=list_date_cols)
 
     df_records = pd.DataFrame(list(list_records))
     return apply_dtypes(df_records, dict_dtypes=dict_dtypes, list_date_cols=list_date_cols)
@@ -150,7 +152,7 @@ def from_records(
 
 @type_checker
 def map_with_default(
-    series_value: pd.Series, dict_mapping: Mapping[_KeyT, object], default: object
+    series_value: pd.Series, *, dict_mapping: Mapping[_KeyT, object], default: object
 ) -> pd.Series:
     """Relabel a Series via a mapping, sending every unmapped value to ``default``.
 

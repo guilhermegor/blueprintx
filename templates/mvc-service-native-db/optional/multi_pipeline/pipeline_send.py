@@ -124,7 +124,7 @@ class SendPipeline(metaclass=TypeChecker):
             The rows read by the model.
         """
         log_message(self.cls_logger, "Starting data-read process")
-        cls_example = ExampleEntity(cls_connection)
+        cls_example = ExampleEntity(cls_connection=cls_connection)
         cls_example.ensure_table()
         cls_example.insert("Hello from the 'send' intent (MVC native-db service)!")
         df_report = cls_example.fetch_all()

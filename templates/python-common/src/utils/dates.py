@@ -85,7 +85,7 @@ def is_holiday(dt_date: date | datetime) -> bool:
 
 
 @type_checker
-def add_working_days(dt_date: date | datetime, int_days: int) -> date:
+def add_working_days(dt_date: date | datetime, *, int_days: int) -> date:
     """Return the business day ``int_days`` ANBIMA working days from ``dt_date``.
 
     Parameters
@@ -104,7 +104,7 @@ def add_working_days(dt_date: date | datetime, int_days: int) -> date:
 
 
 @type_checker
-def delta_working_days(dt_start: date | datetime, dt_end: date | datetime) -> int:
+def delta_working_days(dt_start: date | datetime, *, dt_end: date | datetime) -> int:
     """Return the count of ANBIMA working days between two dates.
 
     Parameters
@@ -123,7 +123,7 @@ def delta_working_days(dt_start: date | datetime, dt_end: date | datetime) -> in
 
 
 @type_checker
-def nearest_working_day(dt_date: date | datetime, bool_next: bool = True) -> date:
+def nearest_working_day(dt_date: date | datetime, *, bool_next: bool = True) -> date:
     """Return the nearest ANBIMA working day to ``dt_date``.
 
     Parameters

@@ -71,7 +71,7 @@ def _git(path_root: Path, *tuple_args: str) -> str:
     return cls_run.stdout.strip()
 
 
-def _commit_all(path_root: Path, str_message: str) -> None:
+def _commit_all(path_root: Path, *, str_message: str) -> None:
     """Stage everything and commit it without signing.
 
     Parameters
@@ -89,7 +89,7 @@ def _commit_all(path_root: Path, str_message: str) -> None:
     _git(path_root, "-c", "commit.gpgsign=false", "commit", "-q", "-m", str_message)
 
 
-def _write(path_root: Path, str_rel: str, str_text: str) -> None:
+def _write(path_root: Path, *, str_rel: str, str_text: str) -> None:
     """Write a text file, creating its parent directories.
 
     Parameters
@@ -110,7 +110,7 @@ def _write(path_root: Path, str_rel: str, str_text: str) -> None:
     path_file.write_text(str_text, encoding="utf-8")
 
 
-def _write_all(path_root: Path, dict_files: dict[str, str]) -> None:
+def _write_all(path_root: Path, *, dict_files: dict[str, str]) -> None:
     """Write several text files.
 
     Parameters
@@ -124,7 +124,12 @@ def _write_all(path_root: Path, dict_files: dict[str, str]) -> None:
     -------
     None
     """
-    list(map(lambda tuple_item: _write(path_root, *tuple_item), dict_files.items()))
+    list(
+        map(
+            lambda tuple_item: _write(path_root, str_rel=tuple_item[0], str_text=tuple_item[1]),
+            dict_files.items(),
+        )
+    )
 
 
 def _copy_line(str_rel: str) -> str:
@@ -145,6 +150,7 @@ def _copy_line(str_rel: str) -> str:
 
 def _scenario(
     path_tmp: Path,
+    *,
     dict_base: dict[str, str],
     dict_ours: dict[str, str],
     dict_theirs: dict[str, str],
@@ -172,29 +178,33 @@ def _scenario(
     """
     path_bx = path_tmp / "bx"
     _git(path_tmp, "init", "-q", str(path_bx))
-    _write_all(path_bx / _COMMON, dict_base)
-    _commit_all(path_bx, "base")
+    _write_all(path_bx / _COMMON, dict_files=dict_base)
+    _commit_all(path_bx, str_message="base")
     str_base = _git(path_bx, "rev-parse", "HEAD")
-    _write_all(path_bx / _COMMON, dict_theirs)
+    _write_all(path_bx / _COMMON, dict_files=dict_theirs)
     _write(
         path_bx,
-        _LIB,
-        '[[ "$1" == --list-copies ]] || exit 2\n'
+        str_rel=_LIB,
+        str_text='[[ "$1" == --list-copies ]] || exit 2\n'
         + "cat <<'X'\n"
         + "\n".join(map(_copy_line, dict_theirs))
         + "\nX\n",
     )
-    _commit_all(path_bx, "template moves on")
+    _commit_all(path_bx, str_message="template moves on")
     path_project = path_tmp / "project"
     _git(path_tmp, "init", "-q", str(path_project))
     str_commit_line = f"blueprintx_commit: {str_base}\n" if bool_stamp_commit else ""
-    _write(path_project, drift._PROVENANCE_FILENAME, f"tier: {_TIER}\n{str_commit_line}")
-    _write_all(path_project, dict_ours)
-    _commit_all(path_project, "scaffold")
+    _write(
+        path_project,
+        str_rel=drift._PROVENANCE_FILENAME,
+        str_text=f"tier: {_TIER}\n{str_commit_line}",
+    )
+    _write_all(path_project, dict_files=dict_ours)
+    _commit_all(path_project, str_message="scaffold")
     return path_project, path_bx, _git(path_bx, "rev-parse", "HEAD")
 
 
-def _update(path_project: Path, path_bx: Path, *tuple_flags: str) -> int:
+def _update(path_project: Path, *tuple_flags: str, path_bx: Path) -> int:
     """Run the updater against a project and a checkout.
 
     Parameters
@@ -222,29 +232,35 @@ _THREE_LINES = {"a.txt": "l1\nl2\nl3\n"}
 
 def test_a_dry_run_writes_nothing(tmp_path: Path) -> None:
     """Without ``--apply`` the project is left exactly as it was."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs={"a.txt": "new\n"}
+    )
 
-    _update(path_project, path_bx)
+    _update(path_project, path_bx=path_bx)
 
     assert (path_project / "a.txt").read_text(encoding="utf-8") == "base\n"
 
 
 def test_a_dry_run_names_the_file_it_would_fast_forward(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """The dry run is the report: it lists the file and says nothing was written."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs={"a.txt": "new\n"}
+    )
 
-    _update(path_project, path_bx)
+    _update(path_project, path_bx=path_bx)
 
     assert "fast-forward: a.txt" in capsys.readouterr().out
 
 
 def test_an_untouched_file_is_fast_forwarded(tmp_path: Path) -> None:
     """Project equals base, template moved on: take theirs."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs={"a.txt": "new\n"}
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert (path_project / "a.txt").read_text(encoding="utf-8") == "new\n"
 
@@ -252,18 +268,22 @@ def test_an_untouched_file_is_fast_forwarded(tmp_path: Path) -> None:
 def test_a_file_the_project_lacks_is_added(tmp_path: Path) -> None:
     """A template path absent from the project is created, parent directories included."""
     dict_theirs = {"a.txt": "base\n", "docs/b.txt": "fresh\n"}
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, _BASE, dict_theirs)
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs=dict_theirs
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert (path_project / "docs/b.txt").read_text(encoding="utf-8") == "fresh\n"
 
 
 def test_a_local_edit_the_template_never_touched_is_left_alone(tmp_path: Path) -> None:
     """Theirs equals base: the project's own edit is not drift and is not rewritten."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, {"a.txt": "mine\n"}, _BASE)
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours={"a.txt": "mine\n"}, dict_theirs=_BASE
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert (path_project / "a.txt").read_text(encoding="utf-8") == "mine\n"
 
@@ -272,27 +292,33 @@ def test_disjoint_edits_merge_into_one_file(tmp_path: Path) -> None:
     """A local edit and a template edit on different lines both survive."""
     dict_ours = {"a.txt": "mine1\nl2\nl3\n"}
     dict_theirs = {"a.txt": "l1\nl2\nnew3\n"}
-    path_project, path_bx, _ = _scenario(tmp_path, _THREE_LINES, dict_ours, dict_theirs)
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_THREE_LINES, dict_ours=dict_ours, dict_theirs=dict_theirs
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert (path_project / "a.txt").read_text(encoding="utf-8") == "mine1\nl2\nnew3\n"
 
 
 def test_a_clean_apply_moves_the_stamp_to_the_checkout_head(tmp_path: Path) -> None:
     """Every file applied cleanly, so ``blueprintx_commit`` advances."""
-    path_project, path_bx, str_head = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    path_project, path_bx, str_head = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs={"a.txt": "new\n"}
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert drift.read_commit(path_project) == str_head
 
 
 def test_apply_works_on_a_new_branch_named_after_the_checkout_head(tmp_path: Path) -> None:
     """The update never lands on the branch the project was on."""
-    path_project, path_bx, str_head = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    path_project, path_bx, str_head = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs={"a.txt": "new\n"}
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert (
         _git(path_project, "branch", "--show-current") == f"chore/template-update-{str_head[:10]}"
@@ -301,57 +327,71 @@ def test_apply_works_on_a_new_branch_named_after_the_checkout_head(tmp_path: Pat
 
 def test_conflicting_edits_keep_markers_in_the_file(tmp_path: Path) -> None:
     """Both sides changed the same line: the markers are written, nothing is dropped."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, {"a.txt": "mine\n"}, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours={"a.txt": "mine\n"}, dict_theirs={"a.txt": "new\n"}
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert "<<<<<<< ours" in (path_project / "a.txt").read_text(encoding="utf-8")
 
 
 def test_a_conflict_keeps_the_local_edit_inside_the_markers(tmp_path: Path) -> None:
     """The project's line is still in the file after a conflict."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, {"a.txt": "mine\n"}, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours={"a.txt": "mine\n"}, dict_theirs={"a.txt": "new\n"}
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert "mine\n" in (path_project / "a.txt").read_text(encoding="utf-8")
 
 
 def test_a_conflict_leaves_the_stamp_unchanged(tmp_path: Path) -> None:
     """One unresolved file is enough to keep the old merge base."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, {"a.txt": "mine\n"}, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours={"a.txt": "mine\n"}, dict_theirs={"a.txt": "new\n"}
+    )
     str_before = drift.read_commit(path_project)
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert drift.read_commit(path_project) == str_before
 
 
 def test_a_conflict_makes_apply_exit_nonzero(tmp_path: Path) -> None:
     """A caller scripting ``--apply`` must be able to tell it did not finish."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, {"a.txt": "mine\n"}, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours={"a.txt": "mine\n"}, dict_theirs={"a.txt": "new\n"}
+    )
 
-    assert _update(path_project, path_bx, "--apply") == 1
+    assert _update(path_project, "--apply", path_bx=path_bx) == 1
 
 
-def test_a_conflict_is_listed_by_name(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_a_conflict_is_listed_by_name(tmp_path: Path, *, capsys: pytest.CaptureFixture) -> None:
     """The file that needs a human is named in the output."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, {"a.txt": "mine\n"}, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours={"a.txt": "mine\n"}, dict_theirs={"a.txt": "new\n"}
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert "conflict (markers written): a.txt" in capsys.readouterr().out
 
 
 def test_a_stamp_without_a_commit_skips_loudly(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """An old stamp has no merge base: say so, never pretend the project is up to date."""
     path_project, path_bx, _ = _scenario(
-        tmp_path, _BASE, _BASE, {"a.txt": "new\n"}, bool_stamp_commit=False
+        tmp_path,
+        dict_base=_BASE,
+        dict_ours=_BASE,
+        dict_theirs={"a.txt": "new\n"},
+        bool_stamp_commit=False,
     )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert "SKIPPED update" in capsys.readouterr().out
 
@@ -359,17 +399,23 @@ def test_a_stamp_without_a_commit_skips_loudly(
 def test_a_stamp_without_a_commit_changes_nothing(tmp_path: Path) -> None:
     """The self-skip happens before any branch or file is touched."""
     path_project, path_bx, _ = _scenario(
-        tmp_path, _BASE, _BASE, {"a.txt": "new\n"}, bool_stamp_commit=False
+        tmp_path,
+        dict_base=_BASE,
+        dict_ours=_BASE,
+        dict_theirs={"a.txt": "new\n"},
+        bool_stamp_commit=False,
     )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert (path_project / "a.txt").read_text(encoding="utf-8") == "base\n"
 
 
-def test_a_missing_checkout_skips_loudly(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_a_missing_checkout_skips_loudly(tmp_path: Path, *, capsys: pytest.CaptureFixture) -> None:
     """No BlueprintX checkout means nothing to merge from."""
-    path_project, _, _ = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    path_project, _, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs={"a.txt": "new\n"}
+    )
 
     updater.main(["--root", str(path_project), "--blueprintx-root", str(tmp_path / "absent")])
 
@@ -378,27 +424,38 @@ def test_a_missing_checkout_skips_loudly(tmp_path: Path, capsys: pytest.CaptureF
 
 def test_a_dirty_checkout_is_refused(tmp_path: Path) -> None:
     """Theirs is read from the working tree, so uncommitted template edits must stop --apply."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs={"a.txt": "new\n"}
+    )
     (path_bx / _COMMON / "a.txt").write_text("uncommitted\n", encoding="utf-8")
 
-    assert _update(path_project, path_bx, "--apply") == 1
+    assert _update(path_project, "--apply", path_bx=path_bx) == 1
 
 
 def test_a_dirty_checkout_leaves_the_project_untouched(tmp_path: Path) -> None:
     """The refusal happens before any branch or file change."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, _BASE, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs={"a.txt": "new\n"}
+    )
     (path_bx / _COMMON / "a.txt").write_text("uncommitted\n", encoding="utf-8")
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert (path_project / "a.txt").read_text(encoding="utf-8") == "base\n"
 
 
 def test_a_listed_source_the_checkout_lacks_blocks_the_stamp(tmp_path: Path) -> None:
     """A copy whose source is missing is an error, never a silent skip."""
-    path_project, path_bx, str_commit = _scenario(tmp_path, _BASE, _BASE, _BASE)
+    path_project, path_bx, str_commit = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours=_BASE, dict_theirs=_BASE
+    )
 
-    dict_plan = updater.build_plan(path_project, path_bx, str_commit, {"gone.txt": "gone.txt"})
+    dict_plan = updater.build_plan(
+        path_project,
+        path_blueprintx=path_bx,
+        str_commit=str_commit,
+        dict_sources={"gone.txt": "gone.txt"},
+    )
 
     assert dict_plan == {"gone.txt": ("error", None)}
 
@@ -417,9 +474,9 @@ def _conflict_then_resolve(path_tmp: Path) -> tuple[Path, Path, str]:
             The project root, the checkout root and the checkout HEAD.
     """
     path_project, path_bx, str_head = _scenario(
-        path_tmp, _BASE, {"a.txt": "mine\n"}, {"a.txt": "new\n"}
+        path_tmp, dict_base=_BASE, dict_ours={"a.txt": "mine\n"}, dict_theirs={"a.txt": "new\n"}
     )
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
     (path_project / "a.txt").write_text("resolved\n", encoding="utf-8")
     return path_project, path_bx, str_head
 
@@ -428,7 +485,7 @@ def test_rerunning_after_resolving_a_conflict_advances_the_stamp(tmp_path: Path)
     """The branch is reused and a marker-free resolution is accepted."""
     path_project, path_bx, str_head = _conflict_then_resolve(tmp_path)
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert drift.read_commit(path_project) == str_head
 
@@ -437,24 +494,26 @@ def test_rerunning_keeps_the_resolution_text(tmp_path: Path) -> None:
     """A resolved file is never overwritten by a fresh merge on retry."""
     path_project, path_bx, _ = _conflict_then_resolve(tmp_path)
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert (path_project / "a.txt").read_text(encoding="utf-8") == "resolved\n"
 
 
 def test_rerunning_with_markers_still_left_keeps_the_stamp(tmp_path: Path) -> None:
     """Unresolved markers on retry keep blocking the stamp."""
-    path_project, path_bx, _ = _scenario(tmp_path, _BASE, {"a.txt": "mine\n"}, {"a.txt": "new\n"})
+    path_project, path_bx, _ = _scenario(
+        tmp_path, dict_base=_BASE, dict_ours={"a.txt": "mine\n"}, dict_theirs={"a.txt": "new\n"}
+    )
     str_before = drift.read_commit(path_project)
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert drift.read_commit(path_project) == str_before
 
 
 def _removal_scenario(
-    path_tmp: Path, dict_then: dict[str, str], dict_now: dict[str, str]
+    path_tmp: Path, *, dict_then: dict[str, str], dict_now: dict[str, str]
 ) -> tuple[Path, Path]:
     """Build a checkout whose copy list changes between two commits, and a project from the first.
 
@@ -475,37 +534,37 @@ def _removal_scenario(
     path_bx = path_tmp / "bx"
     path_tpl = path_bx / _COMMON
     _git(path_tmp, "init", "-q", str(path_bx))
-    _write_all(path_tpl, dict_then)
+    _write_all(path_tpl, dict_files=dict_then)
     _write(
         path_bx,
-        _LIB,
-        '[[ "$1" == --list-copies ]] || exit 2\n'
+        str_rel=_LIB,
+        str_text='[[ "$1" == --list-copies ]] || exit 2\n'
         + "cat <<'X'\n"
         + "\n".join(map(_copy_line, dict_then))
         + "\nX\n",
     )
-    _commit_all(path_bx, "base")
+    _commit_all(path_bx, str_message="base")
     str_base = _git(path_bx, "rev-parse", "HEAD")
     list(map(lambda str_rel: (path_tpl / str_rel).unlink(), set(dict_then) - set(dict_now)))
-    _write_all(path_tpl, dict_now)
+    _write_all(path_tpl, dict_files=dict_now)
     _write(
         path_bx,
-        _LIB,
-        '[[ "$1" == --list-copies ]] || exit 2\n'
+        str_rel=_LIB,
+        str_text='[[ "$1" == --list-copies ]] || exit 2\n'
         + "cat <<'X'\n"
         + "\n".join(map(_copy_line, dict_now))
         + "\nX\n",
     )
-    _commit_all(path_bx, "template moves on")
+    _commit_all(path_bx, str_message="template moves on")
     path_project = path_tmp / "project"
     _git(path_tmp, "init", "-q", str(path_project))
     _write(
         path_project,
-        drift._PROVENANCE_FILENAME,
-        f"tier: {_TIER}\nblueprintx_commit: {str_base}\nscaffold_commit: {str_base}\n",
+        str_rel=drift._PROVENANCE_FILENAME,
+        str_text=f"tier: {_TIER}\nblueprintx_commit: {str_base}\nscaffold_commit: {str_base}\n",
     )
-    _write_all(path_project, dict_then)
-    _commit_all(path_project, "scaffold")
+    _write_all(path_project, dict_files=dict_then)
+    _commit_all(path_project, str_message="scaffold")
     return path_project, path_bx
 
 
@@ -516,72 +575,82 @@ _REMOVAL_NOW = {"a.txt": "kept\n" * 8, "new.txt": "moved\n" * 8}
 @pytest.mark.parametrize("tuple_flags", [(), ("--apply",)])
 @pytest.mark.parametrize("str_line", ["removed: dropped.txt", "replaced by new.txt: old.txt"])
 def test_removed_files_are_named_in_the_dry_run_and_in_apply(
-    tmp_path: Path, capsys: pytest.CaptureFixture, tuple_flags: tuple[str, ...], str_line: str
+    tmp_path: Path, *, capsys: pytest.CaptureFixture, tuple_flags: tuple[str, ...], str_line: str
 ) -> None:
     """The class is listed with its successor in both modes."""
-    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
+    path_project, path_bx = _removal_scenario(
+        tmp_path, dict_then=_REMOVAL_THEN, dict_now=_REMOVAL_NOW
+    )
 
-    _update(path_project, path_bx, *tuple_flags)
+    _update(path_project, *tuple_flags, path_bx=path_bx)
 
     assert str_line in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("str_rel", ["dropped.txt", "old.txt"])
-def test_apply_never_deletes_a_file_the_template_removed(tmp_path: Path, str_rel: str) -> None:
+def test_apply_never_deletes_a_file_the_template_removed(tmp_path: Path, *, str_rel: str) -> None:
     """Removing a project file stays a human decision."""
-    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
+    path_project, path_bx = _removal_scenario(
+        tmp_path, dict_then=_REMOVAL_THEN, dict_now=_REMOVAL_NOW
+    )
 
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
 
     assert (path_project / str_rel).is_file()
 
 
 def test_removed_files_are_listed_when_nothing_else_needs_updating(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """An otherwise up-to-date project still hears about its orphans."""
     dict_now = {"a.txt": _REMOVAL_THEN["a.txt"]}
-    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, dict_now)
+    path_project, path_bx = _removal_scenario(tmp_path, dict_then=_REMOVAL_THEN, dict_now=dict_now)
 
-    _update(path_project, path_bx)
+    _update(path_project, path_bx=path_bx)
 
     assert "removed: dropped.txt" in capsys.readouterr().out
 
 
 def test_orphans_are_still_listed_after_an_apply_moved_the_stamp(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """The stamp moves on apply, but the scaffold commit it is measured from does not."""
-    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
-    _update(path_project, path_bx, "--apply")
+    path_project, path_bx = _removal_scenario(
+        tmp_path, dict_then=_REMOVAL_THEN, dict_now=_REMOVAL_NOW
+    )
+    _update(path_project, "--apply", path_bx=path_bx)
     capsys.readouterr()
 
-    _update(path_project, path_bx)
+    _update(path_project, path_bx=path_bx)
 
     assert "removed: dropped.txt" in capsys.readouterr().out
 
 
 def test_orphans_survive_an_apply_on_a_stamp_without_scaffold_commit(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """An old stamp gains the baseline on apply instead of losing it to the moved stamp."""
-    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
+    path_project, path_bx = _removal_scenario(
+        tmp_path, dict_then=_REMOVAL_THEN, dict_now=_REMOVAL_NOW
+    )
     path_stamp = path_project / drift._PROVENANCE_FILENAME
     str_stamp = path_stamp.read_text()
     path_stamp.write_text(re.sub(r"scaffold_commit: .*\n", "", str_stamp))
-    _update(path_project, path_bx, "--apply")
+    _update(path_project, "--apply", path_bx=path_bx)
     capsys.readouterr()
 
-    _update(path_project, path_bx)
+    _update(path_project, path_bx=path_bx)
 
     assert "removed: dropped.txt" in capsys.readouterr().out
 
 
 def test_update_says_why_when_the_scaffold_commit_is_unknown_to_the_checkout(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:
     """The reporter's accurate skip message reaches the update output too."""
-    path_project, path_bx = _removal_scenario(tmp_path, _REMOVAL_THEN, _REMOVAL_NOW)
+    path_project, path_bx = _removal_scenario(
+        tmp_path, dict_then=_REMOVAL_THEN, dict_now=_REMOVAL_NOW
+    )
     path_stamp = path_project / drift._PROVENANCE_FILENAME
     str_stamp = path_stamp.read_text()
     path_stamp.write_text(
@@ -589,6 +658,6 @@ def test_update_says_why_when_the_scaffold_commit_is_unknown_to_the_checkout(
     )
     capsys.readouterr()
 
-    _update(path_project, path_bx)
+    _update(path_project, path_bx=path_bx)
 
     assert "SKIPPED removed-file check: the scaffold_commit" in capsys.readouterr().out

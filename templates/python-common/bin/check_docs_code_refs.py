@@ -138,7 +138,7 @@ def in_scope_roots(path_src: pathlib.Path) -> set[str]:
     return first_party_roots(path_src) | set(_TUPLE_KNOWN_LAYER_NAMES)
 
 
-def resolve_module(path_src: pathlib.Path, str_module: str) -> pathlib.Path | None:
+def resolve_module(path_src: pathlib.Path, *, str_module: str) -> pathlib.Path | None:
     """Return the source file a dotted module path names, or ``None`` when it does not exist.
 
     Parameters
@@ -315,7 +315,9 @@ def fenced_python_blocks(path_md: pathlib.Path) -> list[tuple[int, list[str], bo
     return list_blocks
 
 
-def import_statements(list_body: list[str], int_first_lineno: int) -> list[tuple[int, str, str]]:
+def import_statements(
+    list_body: list[str], *, int_first_lineno: int
+) -> list[tuple[int, str, str]]:
     """Return every top-level absolute ``from … import …`` line in a code block.
 
     Parameters
@@ -355,7 +357,7 @@ def import_statements(list_body: list[str], int_first_lineno: int) -> list[tuple
 
 
 def candidate_problem(
-    path_src: pathlib.Path, str_module: str, list_names: list[str]
+    path_src: pathlib.Path, *, str_module: str, list_names: list[str]
 ) -> str | None:
     """Return a finding message for one in-scope import candidate, or ``None`` when it is fine.
 
@@ -377,7 +379,7 @@ def candidate_problem(
         resolves as a **submodule** of it is accepted: ``from chassis import widgets`` is
         valid Python whether or not ``chassis/__init__.py`` re-exports the name.
     """
-    path_module = resolve_module(path_src, str_module)
+    path_module = resolve_module(path_src, str_module=str_module)
     if path_module is None:
         return f"module not found: {str_module}"
     set_defined = defined_names(path_module)
@@ -387,7 +389,7 @@ def candidate_problem(
         str_name
         for str_name in list_names
         if str_name not in set_defined
-        and resolve_module(path_src, f"{str_module}.{str_name}") is None
+        and resolve_module(path_src, str_module=f"{str_module}.{str_name}") is None
     ]
     if list_missing:
         str_rel = path_module.relative_to(path_src.parent)
@@ -417,7 +419,7 @@ def doc_files(path_root: pathlib.Path) -> list[pathlib.Path]:
 
 
 def scan_file(
-    path_md: pathlib.Path, path_src: pathlib.Path, set_first_party: set[str]
+    path_md: pathlib.Path, *, path_src: pathlib.Path, set_first_party: set[str]
 ) -> tuple[int, int, list[str]]:
     """Scan one markdown file; return its candidate counts and any findings.
 
@@ -443,12 +445,16 @@ def scan_file(
     for int_start, list_body, bool_exempt in fenced_python_blocks(path_md):
         if bool_exempt:
             continue
-        for int_lineno, str_module, str_names in import_statements(list_body, int_start):
+        for int_lineno, str_module, str_names in import_statements(
+            list_body, int_first_lineno=int_start
+        ):
             int_raw += 1
             if str_module.split(".")[0] not in set_first_party:
                 continue
             int_scoped += 1
-            str_problem = candidate_problem(path_src, str_module, parse_names(str_names))
+            str_problem = candidate_problem(
+                path_src, str_module=str_module, list_names=parse_names(str_names)
+            )
             if str_problem:
                 list_problems.append(f"{path_md}:{int_lineno}: {str_problem}")
     return int_raw, int_scoped, list_problems
@@ -489,7 +495,9 @@ def main(list_argv: list) -> int:
     int_scoped_total = 0
     list_problems: list[str] = []
     for path_md in list_docs:
-        int_raw, int_scoped, list_file_problems = scan_file(path_md, path_src, set_first_party)
+        int_raw, int_scoped, list_file_problems = scan_file(
+            path_md, path_src=path_src, set_first_party=set_first_party
+        )
         int_raw_total += int_raw
         int_scoped_total += int_scoped
         list_problems.extend(list_file_problems)

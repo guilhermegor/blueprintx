@@ -116,6 +116,7 @@ def _canonical_implementation(str_implementation: str) -> str:
 
 def target_environment(
     str_python_version: str,
+    *,
     str_sys_platform: str,
     str_platform_machine: str,
     str_implementation: str,
@@ -160,7 +161,7 @@ def target_environment(
     }
 
 
-def requirement_matches_target(str_line: str, dict_env: dict[str, str]) -> bool:
+def requirement_matches_target(str_line: str, *, dict_env: dict[str, str]) -> bool:
     """Return whether a requirement line's marker applies to the TARGET environment.
 
     Parameters
@@ -198,9 +199,9 @@ def select_requirements(args: argparse.Namespace) -> int:
     """
     dict_env = target_environment(
         args.target_python_version,
-        args.target_sys_platform,
-        args.target_platform_machine,
-        args.target_implementation,
+        str_sys_platform=args.target_sys_platform,
+        str_platform_machine=args.target_platform_machine,
+        str_implementation=args.target_implementation,
     )
     set_drop = {normalize(str_name) for str_name in args.drop}
     list_kept: list[str] = []
@@ -211,7 +212,7 @@ def select_requirements(args: argparse.Namespace) -> int:
         cls_match = _RE_NAME.match(str_stripped)
         if cls_match and normalize(cls_match.group(0)) in set_drop:
             continue
-        if requirement_matches_target(str_stripped, dict_env):
+        if requirement_matches_target(str_stripped, dict_env=dict_env):
             list_kept.append(str_stripped.split(";", 1)[0].strip())
 
     str_suffix = "\n" if list_kept else ""
@@ -221,7 +222,7 @@ def select_requirements(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_zip(dir_wheels: Path, path_zip: Path) -> None:
+def build_zip(dir_wheels: Path, *, path_zip: Path) -> None:
     """Zip every wheel in a directory into one archive, in a deterministic order.
 
     Parameters
@@ -251,7 +252,7 @@ def build_zip(dir_wheels: Path, path_zip: Path) -> None:
             zip_out.write(path_wheel, arcname=path_wheel.name)
 
 
-def split_into_parts(path_file: Path, int_part_mb: int) -> list[Path]:
+def split_into_parts(path_file: Path, *, int_part_mb: int) -> list[Path]:
     """Split a file into fixed-size ``<name>.NNN`` parts, in order.
 
     Parameters
@@ -296,7 +297,7 @@ def pack_wheelhouse(args: argparse.Namespace) -> int:
     dir_wheels = Path(args.wheels_dir)
     path_zip = Path(args.zip_path)
     path_zip.parent.mkdir(parents=True, exist_ok=True)
-    build_zip(dir_wheels, path_zip)
+    build_zip(dir_wheels, path_zip=path_zip)
     for path_stale in path_zip.parent.glob(f"{path_zip.name}.[0-9][0-9][0-9]"):
         path_stale.unlink()
 
@@ -304,7 +305,7 @@ def pack_wheelhouse(args: argparse.Namespace) -> int:
     int_wheel_count = len(list_wheel_names)
     str_zip_sha256 = sha256_of(path_zip)
     int_zip_size = path_zip.stat().st_size
-    list_parts = split_into_parts(path_zip, args.part_size_mb)
+    list_parts = split_into_parts(path_zip, int_part_mb=args.part_size_mb)
     path_zip.unlink()
 
     dict_manifest = {
@@ -332,7 +333,7 @@ def pack_wheelhouse(args: argparse.Namespace) -> int:
     return 0
 
 
-def _contained_path(dir_base: Path, str_name: str) -> Path:
+def _contained_path(dir_base: Path, *, str_name: str) -> Path:
     """Resolve ``str_name`` under ``dir_base``, refusing anything that escapes it.
 
     The manifest is transferred alongside the parts it describes, so it is untrusted
@@ -368,7 +369,7 @@ def _contained_path(dir_base: Path, str_name: str) -> Path:
     return path_resolved
 
 
-def verify_parts(dir_source: Path, dict_manifest: dict) -> list[Path]:
+def verify_parts(dir_source: Path, *, dict_manifest: dict) -> list[Path]:
     """Verify every manifest-listed part is present with a matching sha256.
 
     Parameters
@@ -396,7 +397,9 @@ def verify_parts(dir_source: Path, dict_manifest: dict) -> list[Path]:
             f"wheelhouse assemble: manifest declares {int_declared} part(s) but lists "
             f"{len(list_expected)} — REFUSING, the manifest disagrees with itself"
         )
-    list_paths = [_contained_path(dir_source, dict_part["name"]) for dict_part in list_expected]
+    list_paths = [
+        _contained_path(dir_source, str_name=dict_part["name"]) for dict_part in list_expected
+    ]
     list_missing = [str(path_part) for path_part in list_paths if not path_part.is_file()]
     if list_missing:
         str_names = ", ".join(list_missing)
@@ -415,7 +418,7 @@ def verify_parts(dir_source: Path, dict_manifest: dict) -> list[Path]:
     return list_paths
 
 
-def reassemble_zip(list_parts: list[Path], dict_manifest: dict, path_zip_out: Path) -> None:
+def reassemble_zip(list_parts: list[Path], *, dict_manifest: dict, path_zip_out: Path) -> None:
     """Concatenate verified parts and refuse if the whole file's sha256 disagrees.
 
     Parameters
@@ -443,7 +446,7 @@ def reassemble_zip(list_parts: list[Path], dict_manifest: dict, path_zip_out: Pa
         )
 
 
-def unzip_wheels(path_zip: Path, dir_out: Path) -> int:
+def unzip_wheels(path_zip: Path, *, dir_out: Path) -> int:
     """Extract every ``*.whl`` member of a zip into a directory.
 
     Parameters
@@ -478,7 +481,7 @@ def _remove_loose_wheels(dir_out: Path) -> None:
         path_wheel.unlink()
 
 
-def _loose_wheels_match_manifest(path_manifest: Path, list_loose: list[str]) -> bool:
+def _loose_wheels_match_manifest(path_manifest: Path, *, list_loose: list[str]) -> bool:
     """Return whether loose wheels in the output dir may stand in for the verified payload.
 
     Parameters
@@ -537,23 +540,23 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
     path_manifest = Path(args.manifest)
     list_loose = [path_wheel.name for path_wheel in dir_out.glob("*.whl")]
     int_count = len(list_loose)
-    if int_count and _loose_wheels_match_manifest(path_manifest, list_loose):
+    if int_count and _loose_wheels_match_manifest(path_manifest, list_loose=list_loose):
         print(f"{int_count} wheel(s) already loose in {dir_out} — nothing to assemble")
         return 0
 
     if path_manifest.is_file():
         dict_manifest = json.loads(path_manifest.read_text(encoding="utf-8"))
-        list_parts = verify_parts(dir_source, dict_manifest)
+        list_parts = verify_parts(dir_source, dict_manifest=dict_manifest)
         str_zip_name = dict_manifest.get("zip_name") or "wheelhouse.zip"
-        path_zip_tmp = _contained_path(dir_source, str_zip_name)
+        path_zip_tmp = _contained_path(dir_source, str_name=str_zip_name)
         if path_zip_tmp.resolve() in {path_manifest.resolve(), *list_parts}:
             raise SystemExit(
                 f"wheelhouse assemble: zip_name {str_zip_name!r} collides with an input file"
             )
         try:
-            reassemble_zip(list_parts, dict_manifest, path_zip_tmp)
+            reassemble_zip(list_parts, dict_manifest=dict_manifest, path_zip_out=path_zip_tmp)
             _remove_loose_wheels(dir_out)
-            int_count = unzip_wheels(path_zip_tmp, dir_out)
+            int_count = unzip_wheels(path_zip_tmp, dir_out=dir_out)
         finally:
             path_zip_tmp.unlink(missing_ok=True)
         print(f"assembled {int_count} wheel(s) into {dir_out} (manifest-verified)")
@@ -561,7 +564,7 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
 
     path_zip = dir_source / "wheelhouse.zip"
     if path_zip.is_file():
-        int_count = unzip_wheels(path_zip, dir_out)
+        int_count = unzip_wheels(path_zip, dir_out=dir_out)
         print(f"assembled {int_count} wheel(s) into {dir_out} (no manifest — unverified)")
         return 0
 

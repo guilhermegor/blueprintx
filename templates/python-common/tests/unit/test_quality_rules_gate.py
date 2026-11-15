@@ -56,7 +56,7 @@ _STR_MINIMAL = """- id: sample
 """
 
 
-def _write(path_dir: Path, str_body: str) -> Path:
+def _write(path_dir: Path, *, str_body: str) -> Path:
     """Write a registry file and return its path.
 
     Parameters
@@ -87,7 +87,9 @@ def test_an_inline_comment_on_an_id_is_rejected_not_dropped(tmp_path: Path) -> N
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
     """
-    path_yaml = _write(tmp_path, _STR_MINIMAL.replace("- id: sample", "- id: sample # note"))
+    path_yaml = _write(
+        tmp_path, str_body=_STR_MINIMAL.replace("- id: sample", "- id: sample # note")
+    )
     with pytest.raises(gate.RegistryError):
         gate.parse_registry(path_yaml)
 
@@ -100,7 +102,7 @@ def test_malformed_nonempty_content_is_rejected(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
     """
-    path_yaml = _write(tmp_path, _STR_MINIMAL + "        deeply: indented\n")
+    path_yaml = _write(tmp_path, str_body=_STR_MINIMAL + "        deeply: indented\n")
     with pytest.raises(gate.RegistryError):
         gate.parse_registry(path_yaml)
 
@@ -113,7 +115,7 @@ def test_content_before_the_first_entry_is_rejected(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
     """
-    path_yaml = _write(tmp_path, '  intent: "orphan"\n' + _STR_MINIMAL)
+    path_yaml = _write(tmp_path, str_body='  intent: "orphan"\n' + _STR_MINIMAL)
     with pytest.raises(gate.RegistryError):
         gate.parse_registry(path_yaml)
 
@@ -126,7 +128,7 @@ def test_an_empty_registry_is_rejected(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
     """
-    path_yaml = _write(tmp_path, "# only a comment\n")
+    path_yaml = _write(tmp_path, str_body="# only a comment\n")
     with pytest.raises(gate.RegistryError):
         gate.parse_registry(path_yaml)
 
@@ -139,7 +141,7 @@ def test_a_wellformed_registry_still_parses(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
     """
-    list_rules = gate.parse_registry(_write(tmp_path, _STR_MINIMAL))
+    list_rules = gate.parse_registry(_write(tmp_path, str_body=_STR_MINIMAL))
     assert [dict_rule["id"] for dict_rule in list_rules] == ["sample"]
 
 
@@ -156,7 +158,9 @@ def test_every_declared_pattern_is_checked_not_only_the_first(tmp_path: Path) ->
     """
     (tmp_path / "conf.txt").write_text("first_value=1\n", encoding="utf-8")
     dict_entry = {"file": "conf.txt", "patterns": ["first_value=1", "second_value=2"]}
-    list_problems = gate.config_pattern_problems([{"id": "r", "python": dict_entry}], tmp_path)
+    list_problems = gate.config_pattern_problems(
+        [{"id": "r", "python": dict_entry}], path_root=tmp_path
+    )
     assert len(list_problems) == 1
 
 
@@ -170,7 +174,9 @@ def test_the_drifted_second_pattern_is_named(tmp_path: Path) -> None:
     """
     (tmp_path / "conf.txt").write_text("first_value=1\n", encoding="utf-8")
     dict_entry = {"file": "conf.txt", "patterns": ["first_value=1", "second_value=2"]}
-    list_problems = gate.config_pattern_problems([{"id": "r", "python": dict_entry}], tmp_path)
+    list_problems = gate.config_pattern_problems(
+        [{"id": "r", "python": dict_entry}], path_root=tmp_path
+    )
     assert "second_value=2" in list_problems[0]
 
 
@@ -184,7 +190,9 @@ def test_a_single_pattern_entry_still_works(tmp_path: Path) -> None:
     """
     (tmp_path / "conf.txt").write_text("only_value=7\n", encoding="utf-8")
     dict_entry = {"file": "conf.txt", "pattern": "only_value=7"}
-    assert gate.config_pattern_problems([{"id": "r", "python": dict_entry}], tmp_path) == []
+    assert (
+        gate.config_pattern_problems([{"id": "r", "python": dict_entry}], path_root=tmp_path) == []
+    )
 
 
 def test_an_exception_only_entry_counts_as_coverage() -> None:
@@ -198,7 +206,9 @@ def test_an_exception_only_entry_counts_as_coverage() -> None:
         "python": {"tool": "ruff", "rule": "C901"},
         "typescript": {"status": "not-implemented", "note": "tracked in an issue"},
     }
-    assert gate.language_coverage_problems([dict_rule], {"python", "typescript"}) == []
+    assert (
+        gate.language_coverage_problems([dict_rule], set_languages={"python", "typescript"}) == []
+    )
 
 
 @pytest.mark.parametrize("str_bogus", ["planned", "not_implemented", "todo", "wip"])
@@ -219,7 +229,9 @@ def test_an_unrecognised_status_value_does_not_buy_coverage(str_bogus: str) -> N
         "python": {"tool": "ruff", "rule": "C901"},
         "typescript": {"status": str_bogus, "note": "tracked in an issue"},
     }
-    list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
+    list_problems = gate.language_coverage_problems(
+        [dict_rule], set_languages={"python", "typescript"}
+    )
     assert len(list_problems) == 1, f"{str_bogus!r} was accepted as coverage"
 
 
@@ -237,7 +249,9 @@ def test_an_unrecognised_status_finding_names_the_language(str_bogus: str) -> No
         "python": {"tool": "ruff", "rule": "C901"},
         "typescript": {"status": str_bogus, "note": "tracked in an issue"},
     }
-    list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
+    list_problems = gate.language_coverage_problems(
+        [dict_rule], set_languages={"python", "typescript"}
+    )
     assert "typescript" in list_problems[0]
 
 
@@ -248,7 +262,9 @@ def test_an_entry_with_neither_implementation_nor_exception_is_flagged() -> None
         "python": {"tool": "ruff", "rule": "C901"},
         "typescript": {"note": "no tool, no rule, no stated exception"},
     }
-    list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
+    list_problems = gate.language_coverage_problems(
+        [dict_rule], set_languages={"python", "typescript"}
+    )
     assert len(list_problems) == 1
 
 
@@ -259,7 +275,9 @@ def test_an_entry_with_neither_implementation_nor_exception_names_the_language()
         "python": {"tool": "ruff", "rule": "C901"},
         "typescript": {"note": "no tool, no rule, no stated exception"},
     }
-    list_problems = gate.language_coverage_problems([dict_rule], {"python", "typescript"})
+    list_problems = gate.language_coverage_problems(
+        [dict_rule], set_languages={"python", "typescript"}
+    )
     assert "typescript" in list_problems[0]
 
 

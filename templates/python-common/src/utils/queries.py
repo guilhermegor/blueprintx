@@ -48,7 +48,7 @@ else:
 
 
 @type_checker
-def _require_bare_name(str_value: str, str_label: str, str_why: str) -> None:
+def _require_bare_name(str_value: str, *, str_label: str, str_why: str) -> None:
     """Reject a value that is anything other than a single path segment.
 
     Parameters
@@ -111,7 +111,7 @@ def _engine_dirs(path_queries_root: Path) -> list[Path]:
 
 @type_checker
 def load_query(  # complexity-ok: each branch is a documented lookup failure with its own remedy
-    str_filename: str, str_backend: str, path_queries_root: Path
+    str_filename: str, *, str_backend: str, path_queries_root: Path
 ) -> str:
     """Read the SQL text filed for ``str_backend`` under the queries root.
 
@@ -144,14 +144,16 @@ def load_query(  # complexity-ok: each branch is a documented lookup failure wit
     """
     _require_bare_name(
         str_filename,
-        "Query name",
-        "the engine directory is derived from the configured backend, so spelling one here "
+        str_label="Query name",
+        str_why="the engine directory is derived from the configured backend, so spelling "
+        "one here "
         "would route around the very check this loader exists to make.",
     )
     _require_bare_name(
         str_backend,
-        "Backend",
-        "it names one directory under the queries root. It arrives from a git-ignored .env, "
+        str_label="Backend",
+        str_why="it names one directory under the queries root. It arrives from a "
+        "git-ignored .env, "
         "so it is untrusted input: an absolute value would relocate the lookup entirely and "
         "'..' would escape the queries tree.",
     )

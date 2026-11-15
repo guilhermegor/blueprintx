@@ -14,37 +14,37 @@ from src.utils.decimals import (
 
 def test_to_decimal_truncates_by_default() -> None:
     """The default rounding mode is ROUND_DOWN (truncation)."""
-    assert to_decimal("1.999", 2) == Decimal("1.99")
+    assert to_decimal("1.999", int_places=2) == Decimal("1.99")
 
 
 def test_to_decimal_honours_explicit_rounding() -> None:
     """An explicit rounding mode overrides the truncation default."""
-    assert to_decimal("1.999", 2, rounding=ROUND_HALF_UP) == Decimal("2.00")
+    assert to_decimal("1.999", int_places=2, rounding=ROUND_HALF_UP) == Decimal("2.00")
 
 
 def test_to_decimal_parses_brazilian_formatted_string() -> None:
     """A BR-formatted string (dot thousands, comma decimal) is normalised."""
-    assert to_decimal("2.084.960,76", 2) == Decimal("2084960.76")
+    assert to_decimal("2.084.960,76", int_places=2) == Decimal("2084960.76")
 
 
 def test_to_decimal_float_uses_shortest_repr() -> None:
     """A float is parsed via repr, avoiding binary-expansion noise."""
-    assert to_decimal(0.1, 2) == Decimal("0.10")
+    assert to_decimal(0.1, int_places=2) == Decimal("0.10")
 
 
 def test_to_decimal_none_returns_default() -> None:
     """``None`` falls back to the supplied default."""
-    assert to_decimal(None, 2, default=Decimal("-1")) == Decimal("-1.00")
+    assert to_decimal(None, int_places=2, default=Decimal("-1")) == Decimal("-1.00")
 
 
 def test_to_decimal_unparsable_returns_default() -> None:
     """An unparsable string falls back to the default."""
-    assert to_decimal("not a number", 2) == Decimal("0.00")
+    assert to_decimal("not a number", int_places=2) == Decimal("0.00")
 
 
 def test_to_decimal_rejects_bool() -> None:
     """``bool`` is rejected (never coerced to 1/0) and returns the default."""
-    assert to_decimal(True, 2) == Decimal("0.00")
+    assert to_decimal(True, int_places=2) == Decimal("0.00")
 
 
 @pytest.mark.parametrize(
@@ -70,13 +70,13 @@ def test_to_decimal_non_finite_returns_default(value: float | Decimal | str) -> 
         A non-finite value the coercion contract must map to ``default`` rather than
         leak (a leaked ``Decimal('NaN')`` raises ``InvalidOperation`` downstream).
     """
-    assert to_decimal(value, 2, default=Decimal("-1")) == Decimal("-1.00")
+    assert to_decimal(value, int_places=2, default=Decimal("-1")) == Decimal("-1.00")
 
 
 def test_to_decimal_negative_places_raises() -> None:
     """A negative ``int_places`` fails fast with ``ValueError``."""
     with pytest.raises(ValueError, match="non-negative"):
-        to_decimal("1.0", -1)
+        to_decimal("1.0", int_places=-1)
 
 
 @pytest.mark.parametrize(
@@ -89,7 +89,7 @@ def test_to_decimal_negative_places_raises() -> None:
     ],
 )
 def test_parse_br_number_series_handles_br_and_plain(
-    int_position: int, float_expected: float
+    int_position: int, *, float_expected: float
 ) -> None:
     """BR-formatted cells normalise; plain decimals/floats keep their point.
 
@@ -130,35 +130,37 @@ def test_to_decimal_strict_truncates_by_default() -> None:
     (2.00) at 2 places, so this fails the moment ``to_decimal_strict`` stops
     delegating and re-derives its own rounding.
     """
-    assert to_decimal_strict("1.999", 2) == Decimal("1.99")
+    assert to_decimal_strict("1.999", int_places=2) == Decimal("1.99")
 
 
 def test_to_decimal_strict_matches_to_decimal_on_valid_input() -> None:
     """Both doors agree on the same parseable input — the delegation contract."""
-    assert to_decimal_strict("2.084.960,76", 2) == to_decimal("2.084.960,76", 2)
+    assert to_decimal_strict("2.084.960,76", int_places=2) == to_decimal(
+        "2.084.960,76", int_places=2
+    )
 
 
 def test_to_decimal_strict_honours_explicit_rounding() -> None:
     """An explicit rounding mode overrides the truncation default, like ``to_decimal``."""
-    assert to_decimal_strict("1.999", 2, rounding=ROUND_HALF_UP) == Decimal("2.00")
+    assert to_decimal_strict("1.999", int_places=2, rounding=ROUND_HALF_UP) == Decimal("2.00")
 
 
 def test_to_decimal_strict_raises_on_none() -> None:
     """``None`` raises, unlike ``to_decimal``'s default-fallback contract."""
     with pytest.raises(ValueError, match="cannot coerce"):
-        to_decimal_strict(None, 2)
+        to_decimal_strict(None, int_places=2)
 
 
 def test_to_decimal_strict_raises_on_unparsable() -> None:
     """An unparsable string raises rather than silently defaulting to 0."""
     with pytest.raises(ValueError, match="cannot coerce"):
-        to_decimal_strict("not a number", 2)
+        to_decimal_strict("not a number", int_places=2)
 
 
 def test_to_decimal_strict_negative_places_raises() -> None:
     """A negative ``int_places`` fails fast with ``ValueError``, like ``to_decimal``."""
     with pytest.raises(ValueError, match="non-negative"):
-        to_decimal_strict("1.0", -1)
+        to_decimal_strict("1.0", int_places=-1)
 
 
 def test_to_decimal_returns_the_default_when_the_context_precision_is_too_low() -> None:
@@ -172,7 +174,9 @@ def test_to_decimal_returns_the_default_when_the_context_precision_is_too_low() 
     with localcontext() as cls_ctx:
         cls_ctx.prec = 3
 
-        assert to_decimal("123456789.987654321", 2, default=Decimal("0")) == Decimal("0")
+        assert to_decimal("123456789.987654321", int_places=2, default=Decimal("0")) == Decimal(
+            "0"
+        )
 
 
 def test_to_decimal_strict_raises_value_error_when_quantize_overflows() -> None:
@@ -186,4 +190,4 @@ def test_to_decimal_strict_raises_value_error_when_quantize_overflows() -> None:
         cls_ctx.prec = 3
 
         with pytest.raises(ValueError, match="cannot coerce"):
-            to_decimal_strict("123456789.987654321", 2)
+            to_decimal_strict("123456789.987654321", int_places=2)
