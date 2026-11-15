@@ -5160,7 +5160,9 @@ rest of the suite.</p>
   a shell has a terminal, Jenkins does not. Everything else, including a bare shell, an unknown
   runner, a GUI or IDE commit and a headless agent commit (no <code>/dev/tty</code>), is CI and
   ignores the hatch; the PR-body and trailer
-  justifications remain available there. Known limit: a CI container allocated a pty
+  justifications remain available there. When <code>/dev/tty</code> is unreadable, both rejection messages now also say the
+  override is honored only in an interactive terminal and that a person must run that commit
+  (#1146); the policy is unchanged. Known limit: a CI container allocated a pty
   (<code>docker run -t</code>) with <code>PRE_COMMIT</code> set reads as local. Pinned in
   <code>tests/unit/test_gate_integrity_gate.py</code> for <code>CI=false</code>, <code>CI=""</code>, <code>GITHUB_ACTIONS=true</code>, <code>JENKINS_URL</code>
   and a bare environment.</li>
