@@ -373,6 +373,8 @@ conditional_prune_optin_deps() {
     local project_path="$1"
     scaffold_prune_optin_dependency "$project_path" "$INCLUDE_WEBHOOK" \
         '/^pymsteams = /d'
+    scaffold_prune_optin_dependency "$project_path" "$INCLUDE_EMAIL" \
+        '/^pywin32 = /d'
 }
 
 copy_global_config() {
@@ -399,12 +401,24 @@ copy_global_config() {
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
+copy_email_only_utils() {
+    local project_path="$1"
+    if [[ "$INCLUDE_EMAIL" != "true" ]]; then
+        rm -f "$project_path/src/utils/ms_office/outlook_gateway.py"
+        return
+    fi
+    cp "$COMMON_TEMPLATE_ROOT/src/utils/signatures.py" "$project_path/src/utils/signatures.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_signatures.py" "$project_path/tests/unit/test_signatures.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_outlook_gateway.py" \
+        "$project_path/tests/unit/test_ms_office_outlook_gateway.py"
+}
+
 copy_shared_utils() {
     local project_path="$1"
     local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
     local -a utils=(
-        br_identifiers dtypes decimals logs logs_emitter text paths signatures dates
+        br_identifiers dtypes decimals logs logs_emitter text paths dates
         tabular_reader xml_reader provenance sidecar_metadata retry http_downloader zip_extractor frames dbapi
         ms_office email raw_workspace daily_cache queries
         regime_window regime_registry regime_adapter spec_gap_registry
@@ -420,8 +434,7 @@ copy_shared_utils() {
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi
     done
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_outlook_gateway.py" \
-        "$project_path/tests/unit/test_ms_office_outlook_gateway.py"
+    copy_email_only_utils "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_excel_sheet_names.py" \
         "$project_path/tests/unit/test_ms_office_excel_sheet_names.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_dispatch.py" \
