@@ -201,6 +201,22 @@ describe('assertion weakening gate does not fail open', () => {
   });
 });
 
+describe('assertion weakening gate opaque text and trailing modifiers', () => {
+  it.each(['test.each([[1]]).concurrent', 'test.each([[1]]).skip'])('recognises %s', (chain) => {
+    const src = (matcher: string): string =>
+      `${chain}('c %s', (v) => {\n  expect(v).${matcher}(1);\n});\n`;
+    expect(fileFindings('a.test.ts', src('toBe'), src('toBeGreaterThan'))).toHaveLength(1);
+  });
+
+  it.each(['value /* ) */', 'value /* ( */', 'value // )\n', '/\\)/.test(value)'])(
+    'pairs a subject holding %s',
+    (subject) => {
+      const src = (matcher: string): string => `it('f', () => {\n  expect(${subject}).${matcher}(1);\n});\n`;
+      expect(fileFindings('a.test.ts', src('toBe'), src('toBeLessThan'))).toHaveLength(1);
+    },
+  );
+});
+
 describe('assertion weakening gate matching edge cases', () => {
   it('flags a weakening next to a non-matcher .toFixed() call', () => {
     const before = "it('f', () => {\n  expect(x.toFixed(2)).toBe('1.00');\n});\n";

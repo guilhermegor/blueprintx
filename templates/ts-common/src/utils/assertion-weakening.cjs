@@ -2,7 +2,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 
 const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
-const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.\w+)*(?:\.each\((?:[^()]|\([^()]*\))*\))?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
+const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.\w+)*(?:\.each\((?:[^()]|\([^()]*\))*\)(?:\.\w+)*)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
 const RE_EXPECT = /(?<![.\w])expect(?:\.\w+)?(?:<[^()]*>)?\(/g;
 const RE_MATCHER_TAIL = /^\s*(?:\.(?:resolves|rejects)\s*)?(\.not\s*)?\.\s*(to[A-Z]\w*)\(/;
 const RE_MATCHER_ANYWHERE = /(?:\.(?:resolves|rejects))?(\.not)?\.(to[A-Z]\w*)\(/;
@@ -35,10 +35,36 @@ function skipString(text, from) {
   return index;
 }
 
+function skipRegex(text, from) {
+  let index = from + 1;
+  let inClass = false;
+  while (index < text.length && (inClass || text[index] !== '/')) {
+    if (text[index] === '\\') index += 1;
+    else if (text[index] === '[') inClass = true;
+    else if (text[index] === ']') inClass = false;
+    index += 1;
+  }
+  return index;
+}
+
+function untilOrEnd(text, token, from, last) {
+  const found = text.indexOf(token, from);
+  return found < 0 ? text.length : found + last;
+}
+
+function skipOpaque(text, index) {
+  const char = text[index];
+  if ('\'"`'.includes(char)) return skipString(text, index);
+  if (text.startsWith('/*', index)) return untilOrEnd(text, '*/', index + 2, 1);
+  if (text.startsWith('//', index)) return untilOrEnd(text, '\n', index, 0);
+  if (char === '/' && /(?:^|[(,=:!&|?{;])\s*$/.test(text.slice(0, index))) return skipRegex(text, index);
+  return index;
+}
+
 function closingParen(text, from) {
   let depth = 1;
   for (let index = from; index < text.length; index += 1) {
-    if ('\'"`'.includes(text[index])) index = skipString(text, index);
+    index = skipOpaque(text, index);
     depth += { '(': 1, ')': -1 }[text[index]] ?? 0;
     if (depth === 0) return index;
   }
