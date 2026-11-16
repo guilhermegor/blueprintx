@@ -40,7 +40,7 @@ Further rules:
   for Python libraries, `npm run docs:start` for TypeScript libraries.
 - `install` in the `library` archetype has two `####` subparts, in both languages: "As a
   dependency" (`pip install` and `poetry add`, or `npm install` for ts-lib; pt-BR "Como
-  dependência") and "For development" (clone plus `bin/venv.sh` and `bin/poe_exec.sh init` for
+  dependência") and "For development" (clone plus `bin/venv.sh` and `poetry run poe init` for
   Python, clone plus `npm install` for ts-lib; pt-BR "Para desenvolver"). Service, CLI, SPA and
   USB-tool archetypes keep the single clone-and-bootstrap block, since that is their real
   install. The English Python subparts come from an `only: library` block in
