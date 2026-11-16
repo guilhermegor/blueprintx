@@ -46,11 +46,20 @@ resolve_repo() {
 		echo "$str_slug"
 		return 0
 	fi
-	if str_slug="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1)"; then
+	if ! git remote get-url origin >/dev/null 2>&1; then
+		print_status "warning" "No GitHub remote resolved — push the repo to GitHub first" >&2
+		return 1
+	fi
+	local path_err
+	path_err="$(mktemp)"
+	str_slug="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>"$path_err" || true)"
+	if [ -n "$str_slug" ]; then
+		rm -f "$path_err"
 		echo "$str_slug"
 		return 0
 	fi
-	report_gh_failure "$str_slug"
+	report_gh_failure "$(cat "$path_err")"
+	rm -f "$path_err"
 	return 1
 }
 
