@@ -1,25 +1,19 @@
-"""Unit tests for the sidecar-metadata seam (locate / fetch-or-None / parse).
+"""Unit tests for the sidecar-metadata seam (fetch-or-None / parse).
 
-Doubles as the worked example: a reader builds the descriptor URL (:func:`cvm_meta_url` or a
-sibling locator), fetches it to the bronze layer with :func:`fetch_sidecar_text` (getting the
-text back, or ``None`` when the source has none), and parses it with
-:func:`parse_sidecar_metadata` to define the contract.
+Doubles as the worked example: a reader builds the descriptor URL with its own locator,
+fetches it to the bronze layer with :func:`fetch_sidecar_text` (getting the text back, or ``None``
+when the source has none), and parses it with :func:`parse_sidecar_metadata` to define the
+contract.
 """
 
 from pathlib import Path
 
 import pytest
 
-from utils.sidecar_metadata import cvm_meta_url, fetch_sidecar_text, parse_sidecar_metadata
+from utils.sidecar_metadata import fetch_sidecar_text, parse_sidecar_metadata
 
 
 _META_TEXT = "Campo;Descricao;Tipo;Tamanho\nCNPJ;CNPJ do fundo;string;14\nVALOR;Valor;number;18\n"
-
-
-def test_cvm_meta_url_builds_meta_path() -> None:
-    """The reference locator inserts ``META/meta_<key>.txt`` under the base URL."""
-    str_url = cvm_meta_url("https://dados.cvm.gov.br/dados/FI/DOC/CAD/", str_dataset_key="cad_fi")
-    assert str_url == "https://dados.cvm.gov.br/dados/FI/DOC/CAD/META/meta_cad_fi.txt"
 
 
 def test_parse_sidecar_metadata_maps_fields_by_first_column() -> None:
