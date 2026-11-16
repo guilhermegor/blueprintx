@@ -242,6 +242,20 @@ test_security_adds_one_localized_line() {
     rm -rf "$str_en" "$str_pt"
 }
 
+test_fallback_page_set_marks_contributing() {
+    local str_dir
+    str_dir="$(mktemp -d)"
+    mkdir -p "$str_dir/bin"
+    printf 'import sys\nsys.exit(1)\n' >"$str_dir/bin/check_docs_language.py"
+    printf '# T\n' | tee "$str_dir/README.md" >"$str_dir/CONTRIBUTING.md"
+    DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_mark_untranslated "$2"' _ \
+        "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_dir" 2>/dev/null
+    grep -qx '<!-- docs-lang:untranslated -->' "$str_dir/CONTRIBUTING.md" \
+        && pass "fallback page set marks the root CONTRIBUTING.md" \
+        || fail "fallback page set left the root CONTRIBUTING.md unmarked"
+    rm -rf "$str_dir"
+}
+
 test_ptbr_changelog_says_entries_stay_english() {
     grep -qF 'As entradas abaixo vêm das mensagens de commit, que este projeto escreve em inglês, e por isso ficam em inglês.' \
         "$REPO_ROOT/templates/python-common/docs/pt-BR/changelog.md" \
@@ -253,6 +267,7 @@ main() {
     test_contributing_follows_locale
     test_security_adds_one_localized_line
     test_ptbr_changelog_says_entries_stay_english
+    test_fallback_page_set_marks_contributing
     test_ptbr_twins_cover_shipped_pages
     test_ptbr_readme_keeps_slugs
     test_scaffold_passes_docs_gate en
