@@ -10,6 +10,8 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/gh_preflight.sh"
 # shellcheck source=bin/lib/scaffold_repo_settings.sh
 source "$SCRIPT_DIR/lib/scaffold_repo_settings.sh"
+# shellcheck source=bin/lib/scaffold_gate_parity.sh
+source "$SCRIPT_DIR/lib/scaffold_gate_parity.sh"
 
 TIERS=(ddd-service-native-db ddd-service-orm-db mvc-service-native-db mvc-service-orm-db api-service-native-db lib-minimal react-spa-webpack ts-lib bash-cli)
 
@@ -172,10 +174,12 @@ require_resumable_tree() {
         case "$path" in
             .github/* | SECURITY.md | vercel.json | package.json | poe_tasks.toml | poe_tasks.offline.toml \
                 | .pre-commit-config.yaml | git_diffs/* | bin/git_diff_*.sh | bin/new_branch.sh \
-                | bin/git_merge_to_main.sh | bin/protect_branch.sh) ;;
+                | bin/git_merge_to_main.sh | bin/protect_branch.sh | bin/check_doc_commands.sh \
+                | src/utils/assertion-weakening.cjs | src/utils/assertion-weakening.d.cts \
+                | src/shared/utils/assertion-weakening.cjs | src/shared/utils/assertion-weakening.d.cts) ;;
             *) exit_error "$PROJECT_PATH has changes outside a previous promotion (${path}) — commit or stash them first, then re-run." ;;
         esac
-    done < <(git -C "$PROJECT_PATH" status --porcelain)
+    done < <(git -C "$PROJECT_PATH" status --porcelain --untracked-files=all)
 }
 
 require_gh_ready() {
@@ -218,6 +222,7 @@ copy_online_assets_service_tier() {
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' <"$shared/SECURITY.md" >"$dest/SECURITY.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$common/.github/dependabot.yml" > "$dest/.github/dependabot.yml"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
+    cp "$shared/.github/AGENTS.md" "$dest/.github/AGENTS.md"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$dest/.github/ISSUE_TEMPLATE" && cp "$shared/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$dest/.github/ISSUE_TEMPLATE/feature_or_fix.md"
     print_status "success" "GitHub assets copied (.github, SECURITY.md)"
@@ -241,6 +246,7 @@ copy_online_assets_lib_minimal() {
     envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' <"$shared/SECURITY.md" >"$dest/SECURITY.md"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$common/.github/dependabot.yml" > "$dest/.github/dependabot.yml"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
+    cp "$shared/.github/AGENTS.md" "$dest/.github/AGENTS.md"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$dest/.github/ISSUE_TEMPLATE" && cp "$shared/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$dest/.github/ISSUE_TEMPLATE/feature_or_fix.md"
     print_status "success" "GitHub assets copied (.github, SECURITY.md, publish=$PUBLISH_TARGET)"
@@ -253,9 +259,11 @@ copy_online_assets_react() {
     cp -r "$BLUEPRINTX_ROOT/templates/ts-common/.github/." "$dest/.github"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$BLUEPRINTX_ROOT/templates/ts-common/dependabot.yml" > "$dest/.github/dependabot.yml"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
+    scaffold_render_gate_parity "$shared/.github/AGENTS.md" "$BLUEPRINTX_ROOT/templates/ts-common/gate-parity.md" "$dest/.github/AGENTS.md"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$dest/.github/ISSUE_TEMPLATE" && cp "$shared/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$dest/.github/ISSUE_TEMPLATE/feature_or_fix.md"
+    restore_ts_gate_files
     case "$DEPLOY_TARGET" in
         pages) cp "$deploy_root/pages/deploy-spa.yml" "$dest/.github/workflows/deploy-spa.yml" ;;
         vercel)
@@ -279,7 +287,23 @@ copy_online_assets_ts_lib() {
     done
     envsubst '${PROJECT_NAME}' <"$skeleton/.github/workflows/release-npm.yml" >"$dest/.github/workflows/release-npm.yml"
     copy_shared_github_overlay
+    scaffold_render_gate_parity "$shared/.github/AGENTS.md" "$BLUEPRINTX_ROOT/templates/ts-common/gate-parity.md" "$dest/.github/AGENTS.md"
+    restore_ts_gate_files
     print_status "success" "GitHub assets copied (.github)"
+}
+
+restore_ts_gate_files() {
+    local ts_common="$BLUEPRINTX_ROOT/templates/ts-common" dest="$PROJECT_PATH" utils
+    mkdir -p "$dest/bin"
+    cp "$ts_common/bin/check_doc_commands.sh" "$dest/bin/check_doc_commands.sh"
+    chmod +x "$dest/bin/check_doc_commands.sh"
+    utils="$(dirname "$(find "$dest/src" -name assertion-weakening.cjs -print -quit 2>/dev/null)")"
+    if [ "$utils" = "." ]; then
+        utils="$dest/src/utils"
+        [ "$TIER" != "react-spa-webpack" ] || utils="$dest/src/shared/utils"
+    fi
+    mkdir -p "$utils"
+    cp "$ts_common/src/utils/assertion-weakening.cjs" "$ts_common/src/utils/assertion-weakening.d.cts" "$utils/"
 }
 
 copy_online_assets_bash_cli() {
@@ -295,6 +319,7 @@ copy_online_assets_bash_cli() {
 copy_shared_github_overlay() {
     local shared="$BLUEPRINTX_ROOT/templates/common" dest="$PROJECT_PATH"
     cp "$shared/.github/CLAUDE.md" "$dest/.github/CLAUDE.md"
+    cp "$shared/.github/AGENTS.md" "$dest/.github/AGENTS.md"
     envsubst '${GITHUB_USERNAME}' <"$shared/.github/CODEOWNERS" >"$dest/.github/CODEOWNERS"
     cp "$shared/.github/PULL_REQUEST_TEMPLATE.md" "$dest/.github/PULL_REQUEST_TEMPLATE.md"
     mkdir -p "$dest/.github/ISSUE_TEMPLATE" && cp "$shared/.github/ISSUE_TEMPLATE/feature_or_fix.md" "$dest/.github/ISSUE_TEMPLATE/feature_or_fix.md"
