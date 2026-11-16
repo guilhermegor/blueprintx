@@ -676,7 +676,7 @@ def test_a_crlf_checkout_of_an_unchanged_file_is_not_drift(tmp_path: Path) -> No
 
 
 def test_fold_crlf_leaves_binary_content_untouched() -> None:
-    """A NUL byte marks binary content, whose ``\\r\\n`` pairs are data, not line endings."""
+    """A NUL byte marks binary content, whose CRLF pairs are data, not line endings."""
     bytes_binary = b"\x00\r\n\x01"
 
     assert drift.fold_crlf(bytes_binary) == bytes_binary
