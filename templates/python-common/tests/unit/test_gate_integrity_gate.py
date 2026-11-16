@@ -649,7 +649,7 @@ def _funcs(*tuple_names: str, str_body: str = "assert f() == 1") -> dict:
     [("test_parse_v1", "test_parse_v2"), ("test_parse_v2", "test_parse_v1")],
     ids=["forward", "reversed"],
 )
-def test_pairing_is_independent_of_input_order(tuple_old: tuple) -> None:
+def test_pairing_is_independent_of_input_order(tuple_old: tuple[str, str]) -> None:
     """Two renames that each clear the threshold against both candidates pair the same way."""
     dict_expected = {"test_parse_v1": "test_parse_w1", "test_parse_v2": "test_parse_w2"}
     dict_added = _funcs("test_parse_w1", "test_parse_w2")
