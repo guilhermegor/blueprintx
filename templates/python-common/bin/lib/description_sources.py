@@ -8,6 +8,7 @@ be read (5), so the caller can skip the first and fail the second.
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 import re
@@ -146,10 +147,9 @@ def reads_as_ptbr(str_text: str) -> bool:
             for str_name in tuple_names:
                 setattr(mod_stub, str_name, None)
             sys.modules[str_mod] = mod_stub
-    from check_docs_language import locale_hits, prose_paragraphs
-
-    for _, str_para in prose_paragraphs(str_text + "\n"):
-        dict_hits = locale_hits(str_para)
+    mod_lang = importlib.import_module("check_docs_language")
+    for _, str_para in mod_lang.prose_paragraphs(str_text + "\n"):
+        dict_hits = mod_lang.locale_hits(str_para)
         if dict_hits["pt-BR"] < 1 or dict_hits["pt-BR"] <= dict_hits["en"]:
             return False
     return True
@@ -169,13 +169,14 @@ def main(list_argv: list[str]) -> int:
     Parameters
     ----------
     list_argv : list of str
-        ``["manifest", ROOT]``, ``["mkdocs", FILE]`` or ``["ptbr", TEXT]`` or ``["language", FILE]``.
+        ``["manifest", ROOT]``, ``["mkdocs", FILE]``, ``["ptbr", TEXT]`` or
+        ``["language", FILE]``.
 
     Returns
     -------
     int
-            0 when printed, 3 or 4 when the source is absent, 5 when it is unreadable, 6 when ``ptbr`` text does not
-            read as pt-BR.
+            0 when printed, 3 or 4 when the source is absent, 5 when it is unreadable, 6 when
+            ``ptbr`` text does not read as pt-BR.
     """
     str_kind, str_path = list_argv
     if str_kind == "ptbr":
