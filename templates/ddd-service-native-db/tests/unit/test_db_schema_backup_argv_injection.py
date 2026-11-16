@@ -53,7 +53,7 @@ def _handler_type(str_target: str) -> type:
 
 @pytest.mark.parametrize(("str_target", "str_dsn"), sorted(DICT_MALICIOUS_DSN.items()))
 def test_dashed_dbname_rejected_at_construction(str_target: str, *, str_dsn: str) -> None:
-    """A dashed database name is rejected when the handler is constructed.
+    """A dashed database name is rejected at construction, with ``subprocess.run`` mocked.
 
     Parameters
     ----------
@@ -62,7 +62,7 @@ def test_dashed_dbname_rejected_at_construction(str_target: str, *, str_dsn: str
     str_dsn : str
         DSN whose database segment would be read as a dump-tool option flag.
     """
-    with pytest.raises(ValueError, match="database name"):
+    with patch("subprocess.run"), pytest.raises(ValueError, match="database name"):
         _handler_type(str_target)(str_dsn)
 
 
