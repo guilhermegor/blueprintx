@@ -11,13 +11,16 @@ Tudo o que você precisa para desenvolver, testar e lançar esta biblioteca.
 
 O `poe` é uma dependência de desenvolvimento, então só existe depois que o virtualenv existe. Faça o
 bootstrap primeiro pelo ponto de entrada em shell. Nesse primeiro bootstrap use um shell comum (não
-dentro de `poetry run`, do `poe` ou de um venv ativado); depois deixe o `poe_exec.sh` encontrar o
-`poe` do venv para o resto:
+dentro de `poetry run`, do `poe` ou de um venv ativado); depois use `poetry run poe` para o resto:
 
 ```bash
 bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
-bash bin/poe_exec.sh init  # .env (when the tier ships one), venv, git hooks, GitHub helpers
+poetry run poe init   # .env (when the tier ships one), venv, git hooks, GitHub helpers
 ```
+
+Se o `poetry` não estiver no `PATH`, `bash bin/poe_exec.sh <task>` faz o mesmo: ele encontra o
+`poe` do venv sem depender do `poetry` e monta o bundle de CAs corporativa quando
+`bin/corporate_ca.pem` existe. Veja a tabela "`poetry run poe` ou `bash bin/poe_exec.sh`?" no README.
 
 O `init` compõe `ensure_env` (cria o `.env`; aqui é apenas uma linha informativa, já que uma
 biblioteca não traz `.env.example`), `venv` (cria o virtualenv do Poetry e instala **todas** as

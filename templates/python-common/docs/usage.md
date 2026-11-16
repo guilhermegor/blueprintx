@@ -30,7 +30,8 @@ Poe is a **dev dependency**, so `bash bin/venv.sh` (or `poetry install --with de
 
 ⚠️ The module is `poethepoet`, **not** `poe` — `python -m poe` fails.
 
-If none of those resolve, `bash bin/poe_exec.sh <task>` tries all three in order and tells you
+Day to day, `poetry run poe <task>` is the command to type. If none of the routes above resolve,
+or `poetry` is not on `PATH`, `bash bin/poe_exec.sh <task>` tries them in order and tells you
 how to install it. **Scripts, hooks and workflows always use that wrapper**, never a bare `poe`,
 for the same reason nothing here calls a bare `poetry`: whether a command is on `PATH` is a
 property of the machine, not of this project.
