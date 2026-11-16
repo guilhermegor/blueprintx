@@ -181,4 +181,20 @@ expect "a failing perl stage exits 2 instead of passing" 2 "$?"
 has_text "a failing perl stage is reported as an extraction failure" "extracting npm commands" "$str_out"
 rm -rf "$str_badperl"
 
+printf '{"scripts":{"build":"x"}}\n' >"$str_proj/package.json"
+for str_chain in '&&' ';' '||'; do
+	printf 'Run `npm run missing %s npm install --prefix ./client`.\n' "$str_chain" >"$str_proj/README.md"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "a missing script before '$str_chain' and a --prefix segment fails" 1 "$?"
+	printf 'Run `npm run build %s npm run missing`.\n' "$str_chain" >"$str_proj/README.md"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "a missing script after '$str_chain' fails" 1 "$?"
+	printf 'Run `npm run ghost -w app %s npm run build`.\n' "$str_chain" >"$str_proj/README.md"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "a workspace segment before '$str_chain' stays skipped" 0 "$?"
+done
+printf 'Run `npm run build; npm run build && npm install --prefix ./client`.\n' >"$str_proj/README.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a fully valid chain passes" 0 "$?"
+
 [ "$int_failures" -eq 0 ]
