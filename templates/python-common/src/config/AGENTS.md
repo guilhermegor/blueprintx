@@ -198,8 +198,7 @@ a reader into a machine for false rejections.
 
 Many open-data portals ship a **sidecar descriptor** beside the data (a data dictionary of field
 names/descriptions/types/sizes) — a `;`-separated `.txt` dictionary, a `.xsd`/`.dtd`, an
-OpenAPI doc.
-When a source provides one it is the *authoritative* schema and does two jobs, both served by
+OpenAPI doc. When a source provides one it is the *authoritative* schema and does two jobs, both served by
 the `utils/sidecar_metadata.py` seam:
 
 - **Dev-time — define the contract from it.** Parse it (`parse_sidecar_metadata`) for the column
@@ -215,7 +214,7 @@ the `utils/sidecar_metadata.py` seam:
   contract from the real downloaded artifact. Never *skip the check* — fall back to it.
 - **The seam is generic; the locator is the source-specific part.** The caller writes its own
   locator, building the descriptor URL from whatever its source needs, and passes the finished
-  URL to `fetch_sidecar_text`; the project documents the layout that locator encodes. The download
+  URL to `fetch_sidecar_text`; the project records that URL layout in its own `docs/`. The download
   transport is injectable (defaults to the one `http_downloader.download_file` seam), so tests
   mock at that boundary and the network guard stays satisfied.
 
