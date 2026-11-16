@@ -1,0 +1,39 @@
+"""Smoke test: the dependency-free type_checker resolves in the wheel layout."""
+
+import pytest
+
+from ${PROJECT_PKG_NAME}._internal.utils.typing import type_checker
+
+
+@type_checker
+def _add(a: int, *, b: int) -> int:
+    """Add two ints — the decorated subject, defined at MODULE level.
+
+    Nested inside the test it charged the test 1 for the nested ``def`` (tests/ is capped at
+    complexity 1, ``bin/check_complexity.sh``) while adding nothing: the decorator is applied
+    at definition time either way.
+
+    Parameters
+    ----------
+    a : int
+        First addend.
+    b : int
+        Second addend.
+
+    Returns
+    -------
+    int
+        The sum.
+    """
+    return a + b
+
+
+def test_decorator_accepts_right_type() -> None:
+    """The decorator lets a well-typed standalone call through."""
+    assert _add(1, b=2) == 3
+
+
+def test_decorator_rejects_wrong_type() -> None:
+    """The decorator validates a standalone function's arguments."""
+    with pytest.raises(TypeError):
+        _add(1, b=2.0)

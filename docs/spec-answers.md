@@ -125,8 +125,9 @@ Same as the DDD tiers, **minus `storage`** (MVC has no schema-less storage promp
 
 | Key | Default | Notes |
 |---|---|---|
+| `zero_dependency` | `n` | `y` leaves out the vendored `_internal` toolkit (including `dates.py`), ships a stdlib `type_checker` and empties the runtime dependency list. Asked first. See `py-lib-minimal.md`. |
 | `logs` | `n` | Ships the in-repo logging helper (`utils/logs.py`). |
-| `otel` | `n` | Ships the OTLP log-export helper (`_internal/utils/otel_logging.py`). |
+| `otel` | `n` | Ships the OTLP log-export helper (`_internal/utils/otel_logging.py`). Ignored when `zero_dependency=y`. |
 | `docker_compose` | `n` | Same shape as the service tiers. |
 | `publish_pypi` | `y` | Ship `release-pypi.yaml`. |
 | `publish_test_pypi` | `y` | Ship `release-test-pypi.yaml`. |

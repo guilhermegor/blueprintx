@@ -172,6 +172,18 @@ _spec_answer_publish_targets() {
     spec_yn "$file" consume_private n
 }
 
+_spec_answer_lib_minimal() {
+    local skeleton="$1" file="$2"
+    spec_yn "$file" zero_dependency n
+    _spec_answer_logs "$file"
+    _spec_answer_otel "$file"
+    _spec_answer_docker_compose "$file"
+    _spec_answer_publish_targets "$file"
+    _spec_answer_review_bot "$file"
+    _spec_answer_git_remote "$file"
+    _spec_answer_create_repo "$skeleton" "$file"
+}
+
 _SPEC_SUPPORTED_SKELETONS="ddd-service-native-db ddd-service-orm-db api-service-native-db mvc-service-native-db mvc-service-orm-db lib-minimal ts-lib etcher-chromeos ventoy-usb"
 
 spec_skeleton_supported() {
@@ -215,13 +227,7 @@ spec_stdin_for_skeleton() {
             _spec_answer_create_repo "$skeleton" "$file"
             ;;
         lib-minimal)
-            _spec_answer_logs "$file"
-            _spec_answer_otel "$file"
-            _spec_answer_docker_compose "$file"
-            _spec_answer_publish_targets "$file"
-            _spec_answer_review_bot "$file"
-            _spec_answer_git_remote "$file"
-            _spec_answer_create_repo "$skeleton" "$file"
+            _spec_answer_lib_minimal "$skeleton" "$file"
             ;;
         ts-lib)
             _spec_answer_review_bot "$file"
@@ -270,7 +276,7 @@ _spec_key_map() {
                 protect_branch:n human_reviewers:n)
             ;;
         lib-minimal)
-            keys=(logs:n otel:n docker_compose:n docker_db_backend:postgresql \
+            keys=(zero_dependency:n logs:n otel:n docker_compose:n docker_db_backend:postgresql \
                 publish_pypi:y publish_test_pypi:y consume_private:n \
                 review_bot_roster:n git_remote:n create_repo:n \
                 repo_visibility:private kanban:n kanban_visibility:repo \
