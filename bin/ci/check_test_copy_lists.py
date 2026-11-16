@@ -334,8 +334,8 @@ def required_util_problems(path_scaffold: pathlib.Path, str_source: str) -> list
     """
     set_listed = {
         str_name.removesuffix(".py")
-        for str_array in _RE_UTILS_ARRAYS.findall(str_source)
-        for str_name in re.sub(r"#[^\n]*", "", str_array).split()
+        for str_array in _RE_UTILS_ARRAYS.findall(re.sub(r"\s#[^\n]*", "", str_source))
+        for str_name in str_array.split()
     }
     return [
         f"❌ {path_scaffold.name}: no longer ships {str_util}.py — every Python scaffold must ship it"
