@@ -42,8 +42,8 @@ The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_N
 ### Install
 
 <!-- only: library -->
-Two `####` subparts: "As a dependency" (`pip install` and `poetry add`, extras included) and
-"For development" (clone and bootstrap).
+Two `####` subparts: "As a dependency" (`pip install` and `poetry add`, or `npm install` for
+TypeScript) and "For development" (clone and bootstrap).
 <!-- /only -->
 
 Prerequisites and the clone and bootstrap commands.
