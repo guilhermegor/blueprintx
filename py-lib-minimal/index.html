@@ -2928,6 +2928,11 @@
 <td>Python modules, classes, functions — your library's public API</td>
 </tr>
 <tr>
+<td><code>src/&lt;project_name&gt;/_internal/utils/</code></td>
+<td>Vendored utilities</td>
+<td>Private copies of the shared helpers, including <code>dates.py</code> (Brazilian business days via <code>wwdates</code>) and <code>zip_extractor.py</code>; every Python tier ships both</td>
+</tr>
+<tr>
 <td><code>tests/unit/</code></td>
 <td>Unit tests</td>
 <td>Fast, isolated tests for individual functions and classes</td>
