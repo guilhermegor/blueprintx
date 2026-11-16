@@ -31,6 +31,8 @@ The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_N
 npm install ${PROJECT_NAME}
 ```
 
+This command works once the first release is published to npm.
+
 #### For development
 
 ```bash

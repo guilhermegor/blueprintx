@@ -51,6 +51,8 @@ pip install ${PROJECT_NAME}
 poetry add ${PROJECT_NAME}
 ```
 
+These commands work once the first release is published to PyPI.
+
 #### For development
 
 <!-- /only -->

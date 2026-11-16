@@ -46,7 +46,9 @@ Two `####` subparts: "As a dependency" (`pip install` and `poetry add`, or `npm 
 TypeScript) and "For development" (clone and bootstrap).
 <!-- /only -->
 
+<!-- only: service cli spa usb-tool -->
 Prerequisites and the clone and bootstrap commands.
+<!-- /only -->
 
 <!-- slug: usage -->
 ### Usage

@@ -46,6 +46,8 @@ pip install ${PROJECT_NAME}
 poetry add ${PROJECT_NAME}
 ```
 
+Estes comandos funcionam depois que a primeira versão for publicada no PyPI.
+
 #### Para desenvolver
 
 ```bash
