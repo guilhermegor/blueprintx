@@ -175,6 +175,24 @@ describe('assertion weakening gate chained each and pairing', () => {
 
 });
 
+describe('assertion weakening gate does not fail open', () => {
+  const find = (before: string, after: string): number =>
+    fileFindings('a.test.ts', `it('f', () => {\n${before}\n});\n`, `it('f', () => {\n${after}\n});\n`).length;
+
+  it('sees a matcher chain broken across lines', () => {
+    expect(find('  expect(x)\n    .toBe(1);', '  expect(x)\n    .toBeGreaterThan(1);')).toBe(1);
+  });
+
+  it('sees expect.soft assertions', () => {
+    expect(find('  expect.soft(x).toBe(1);', '  expect.soft(x).toBeGreaterThan(1);')).toBe(1);
+  });
+
+  it.each([`')'`, `'('`, '`)`'])('pairs a subject holding the string %s', (literal) => {
+    const src = (matcher: string): string => `  expect(f(${literal})).${matcher}(1);`;
+    expect(find(src('toBe'), src('toBeLessThan'))).toBe(1);
+  });
+});
+
 describe('assertion weakening gate matching edge cases', () => {
   it('flags a weakening next to a non-matcher .toFixed() call', () => {
     const before = "it('f', () => {\n  expect(x.toFixed(2)).toBe('1.00');\n});\n";

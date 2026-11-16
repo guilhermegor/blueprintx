@@ -3,8 +3,9 @@ const fs = require('node:fs');
 
 const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
 const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.\w+)*(?:\.each\((?:[^()]|\([^()]*\))*\))?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
-const RE_EXPECT = /(?<![.\w])expect\(/g;
-const RE_MATCHER_TAIL = /^(?:\.(?:resolves|rejects))?(\.not)?\.(to[A-Z]\w*)\(/;
+const RE_EXPECT = /(?<![.\w])expect(?:\.\w+)?\(/g;
+const RE_MATCHER_TAIL = /^\s*(?:\.(?:resolves|rejects)\s*)?(\.not\s*)?\.\s*(to[A-Z]\w*)\(/;
+const RE_MATCHER_ANYWHERE = /(?:\.(?:resolves|rejects))?(\.not)?\.(to[A-Z]\w*)\(/;
 const RE_PLACEHOLDER = /^<[^>]*>$/;
 const RE_JUSTIFICATION = /^\s*test-change-ok:[ \t]*(\S.*)$/gim;
 
@@ -27,9 +28,17 @@ function splitTests(source) {
   });
 }
 
+function skipString(text, from) {
+  const quote = text[from];
+  let index = from + 1;
+  while (index < text.length && text[index] !== quote) index += text[index] === '\\' ? 2 : 1;
+  return index;
+}
+
 function closingParen(text, from) {
   let depth = 1;
   for (let index = from; index < text.length; index += 1) {
+    if ('\'"`'.includes(text[index])) index = skipString(text, index);
     depth += { '(': 1, ')': -1 }[text[index]] ?? 0;
     if (depth === 0) return index;
   }
@@ -39,9 +48,10 @@ function closingParen(text, from) {
 function assertionAt(body, match) {
   const from = match.index + match[0].length;
   const close = closingParen(body, from);
-  const tail = close < 0 ? null : RE_MATCHER_TAIL.exec(body.slice(close + 1));
+  const tail = close < 0 ? RE_MATCHER_ANYWHERE.exec(body.slice(from)) : RE_MATCHER_TAIL.exec(body.slice(close + 1));
   if (!tail || tail[1]) return null;
-  return { subject: body.slice(from, close).replace(/\s+/g, ''), matcher: tail[2] };
+  const subject = close < 0 ? '' : body.slice(from, close).replace(/\s+/g, '');
+  return { subject, matcher: tail[2] };
 }
 
 function matchersBySubject(body) {

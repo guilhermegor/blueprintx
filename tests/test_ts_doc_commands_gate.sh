@@ -182,7 +182,7 @@ has_text "a failing perl stage is reported as an extraction failure" "extracting
 rm -rf "$str_badperl"
 
 printf '{"scripts":{"build":"x"}}\n' >"$str_proj/package.json"
-for str_chain in '&&' ';' '||'; do
+for str_chain in '&&' ';' '||' '|'; do
 	printf 'Run `npm run missing %s npm install --prefix ./client`.\n' "$str_chain" >"$str_proj/README.md"
 	bash "$GATE" "$str_proj" >/dev/null 2>&1
 	expect "a missing script before '$str_chain' and a --prefix segment fails" 1 "$?"
@@ -216,7 +216,24 @@ done
 str_promoted="$(mktemp -d)"
 bash -c 'source "$1"; PROJECT_PATH="$2"; TIER=ddd-service-native-db; GITHUB_USERNAME=octo; PROJECT_NAME=demo; export PROJECT_NAME GITHUB_USERNAME; copy_online_assets' \
 	_ "$REPO_ROOT/bin/promote_offline_to_online.sh" "$str_promoted" >/dev/null 2>&1
+expect "a Python promotion runs" 0 "$?"
 has "a Python promotion keeps the Python gate parity text" 'ruff format --check' "$str_promoted/.github/AGENTS.md"
+rm -rf "$str_promoted"
+
+str_promoted="$(mktemp -d)"
+bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_gate_parity.sh"; scaffold_render_gate_parity "$1/templates/common/.github/AGENTS.md" "$2/absent.md" "$2/out.md"' _ "$REPO_ROOT" "$str_promoted" >/dev/null 2>&1
+expect "a missing gate-parity fragment is an error, not a dropped section" 1 "$?"
+rm -rf "$str_promoted"
+
+str_promoted="$(mktemp -d)"
+mkdir -p "$str_promoted/src/utils"
+printf 'weakened\n' >"$str_promoted/src/utils/assertion-weakening.cjs"
+bash -c 'source "$1"; PROJECT_PATH="$2"; TIER=ts-lib; GITHUB_USERNAME=octo; PROJECT_NAME=demo; export PROJECT_NAME GITHUB_USERNAME; copy_online_assets' \
+	_ "$REPO_ROOT/bin/promote_offline_to_online.sh" "$str_promoted" >/dev/null 2>&1
+cmp -s "$str_promoted/src/utils/assertion-weakening.cjs" "$REPO_ROOT/templates/ts-common/src/utils/assertion-weakening.cjs"
+expect "promotion replaces a tampered gate file with the template copy" 0 "$?"
+[ -f "$str_promoted/src/utils/assertion-weakening.d.cts" ]
+expect "promotion restores the missing .d.cts beside an existing gate" 0 "$?"
 rm -rf "$str_promoted"
 
 [ "$int_failures" -eq 0 ]

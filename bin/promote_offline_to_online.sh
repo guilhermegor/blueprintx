@@ -175,7 +175,9 @@ require_resumable_tree() {
             .github/* | SECURITY.md | vercel.json | package.json | poe_tasks.toml | poe_tasks.offline.toml \
                 | .pre-commit-config.yaml | git_diffs/* | bin/git_diff_*.sh | bin/new_branch.sh \
                 | bin/git_merge_to_main.sh | bin/protect_branch.sh | bin/check_doc_commands.sh \
-                | src/utils/assertion-weakening.* | src/shared/utils/assertion-weakening.*) ;;
+                | bin/ | src/ | src/utils/ | src/shared/ | src/shared/utils/ \
+                | src/utils/assertion-weakening.cjs | src/utils/assertion-weakening.d.cts \
+                | src/shared/utils/assertion-weakening.cjs | src/shared/utils/assertion-weakening.d.cts) ;;
             *) exit_error "$PROJECT_PATH has changes outside a previous promotion (${path}) — commit or stash them first, then re-run." ;;
         esac
     done < <(git -C "$PROJECT_PATH" status --porcelain)
@@ -294,15 +296,15 @@ copy_online_assets_ts_lib() {
 restore_ts_gate_files() {
     local ts_common="$BLUEPRINTX_ROOT/templates/ts-common" dest="$PROJECT_PATH" utils
     mkdir -p "$dest/bin"
-    if [ ! -f "$dest/bin/check_doc_commands.sh" ]; then
-        cp "$ts_common/bin/check_doc_commands.sh" "$dest/bin/check_doc_commands.sh"
-        chmod +x "$dest/bin/check_doc_commands.sh"
+    cp "$ts_common/bin/check_doc_commands.sh" "$dest/bin/check_doc_commands.sh"
+    chmod +x "$dest/bin/check_doc_commands.sh"
+    utils="$(dirname "$(find "$dest/src" -name assertion-weakening.cjs -print -quit 2>/dev/null)")"
+    if [ "$utils" = "." ]; then
+        utils="$dest/src/utils"
+        [ "$TIER" != "react-spa-webpack" ] || utils="$dest/src/shared/utils"
     fi
-    [ -z "$(find "$dest/src" -name assertion-weakening.cjs -print -quit 2>/dev/null)" ] || return 0
-    utils="src/utils"
-    [ "$TIER" != "react-spa-webpack" ] || utils="src/shared/utils"
-    mkdir -p "$dest/$utils"
-    cp "$ts_common/src/utils/assertion-weakening.cjs" "$ts_common/src/utils/assertion-weakening.d.cts" "$dest/$utils/"
+    mkdir -p "$utils"
+    cp "$ts_common/src/utils/assertion-weakening.cjs" "$ts_common/src/utils/assertion-weakening.d.cts" "$utils/"
 }
 
 copy_online_assets_bash_cli() {
