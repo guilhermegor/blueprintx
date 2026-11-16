@@ -226,6 +226,17 @@ expect "a missing gate-parity fragment is an error, not a dropped section" 1 "$?
 rm -rf "$str_promoted"
 
 str_promoted="$(mktemp -d)"
+bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_gate_parity.sh"; scaffold_render_gate_parity "$1/templates/common/.github/AGENTS.md" "$1/templates/ts-common/gate-parity.md" "$2/out.md"' _ "$REPO_ROOT" "$str_promoted" >/dev/null 2>&1
+expect "rendering the gate parity fragment succeeds" 0 "$?"
+for str_heading in '## Validating CI locally' '## Kanban board and labels' '## Blocked work' '## Publishing packages'; do
+	has "the rendered AGENTS.md keeps '$str_heading'" "$str_heading" "$str_promoted/out.md"
+done
+printf '# t\n\n```\n## Gate parity\n```\n' >"$str_promoted/fenced.md"
+bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_gate_parity.sh"; scaffold_render_gate_parity "$2/fenced.md" "$1/templates/ts-common/gate-parity.md" "$2/o2.md"' _ "$REPO_ROOT" "$str_promoted" >/dev/null 2>&1
+expect "a Gate parity heading only inside a code fence is an error" 1 "$?"
+rm -rf "$str_promoted"
+
+str_promoted="$(mktemp -d)"
 mkdir -p "$str_promoted/src/utils"
 printf 'weakened\n' >"$str_promoted/src/utils/assertion-weakening.cjs"
 bash -c 'source "$1"; PROJECT_PATH="$2"; TIER=ts-lib; GITHUB_USERNAME=octo; PROJECT_NAME=demo; export PROJECT_NAME GITHUB_USERNAME; copy_online_assets' \

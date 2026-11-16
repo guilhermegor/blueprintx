@@ -3,7 +3,7 @@ const fs = require('node:fs');
 
 const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
 const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.\w+)*(?:\.each\((?:[^()]|\([^()]*\))*\))?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
-const RE_EXPECT = /(?<![.\w])expect(?:\.\w+)?\(/g;
+const RE_EXPECT = /(?<![.\w])expect(?:\.\w+)?(?:<[^()]*>)?\(/g;
 const RE_MATCHER_TAIL = /^\s*(?:\.(?:resolves|rejects)\s*)?(\.not\s*)?\.\s*(to[A-Z]\w*)\(/;
 const RE_MATCHER_ANYWHERE = /(?:\.(?:resolves|rejects))?(\.not)?\.(to[A-Z]\w*)\(/;
 const RE_PLACEHOLDER = /^<[^>]*>$/;
@@ -86,9 +86,21 @@ function testFindings(path, oldTest, newTest) {
   const shared = [...oldBySubject.keys()].filter((subject) => newBySubject.has(subject));
   const unshared = (bySubject) =>
     [...bySubject].filter(([subject]) => !shared.includes(subject)).flatMap(([, names]) => names);
+  const leftovers = shared.map((subject) => {
+    const [oldNames, newNames] = [oldBySubject.get(subject), newBySubject.get(subject)];
+    const removed = surplus(oldNames, newNames, EQUALITY_MATCHERS);
+    const added = surplus(newNames, oldNames, INEQUALITY_MATCHERS);
+    const paired = Math.min(removed.length, added.length);
+    return {
+      findings: removed.slice(0, paired).map((name, index) => `${name} loosened to ${added[index]}`),
+      removed: removed.slice(paired),
+      added: added.slice(paired),
+    };
+  });
+  const pooled = (key, bySubject) => [...unshared(bySubject), ...leftovers.flatMap((entry) => entry[key])];
   return [
-    ...shared.flatMap((subject) => subjectFindings(oldBySubject.get(subject), newBySubject.get(subject))),
-    ...subjectFindings(unshared(oldBySubject), unshared(newBySubject)),
+    ...leftovers.flatMap((entry) => entry.findings),
+    ...subjectFindings(pooled('removed', oldBySubject), pooled('added', newBySubject)),
   ].map((finding) => `${path}: ${newTest.name}: ${finding}`);
 }
 

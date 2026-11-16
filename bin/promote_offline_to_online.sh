@@ -175,12 +175,11 @@ require_resumable_tree() {
             .github/* | SECURITY.md | vercel.json | package.json | poe_tasks.toml | poe_tasks.offline.toml \
                 | .pre-commit-config.yaml | git_diffs/* | bin/git_diff_*.sh | bin/new_branch.sh \
                 | bin/git_merge_to_main.sh | bin/protect_branch.sh | bin/check_doc_commands.sh \
-                | bin/ | src/ | src/utils/ | src/shared/ | src/shared/utils/ \
                 | src/utils/assertion-weakening.cjs | src/utils/assertion-weakening.d.cts \
                 | src/shared/utils/assertion-weakening.cjs | src/shared/utils/assertion-weakening.d.cts) ;;
             *) exit_error "$PROJECT_PATH has changes outside a previous promotion (${path}) — commit or stash them first, then re-run." ;;
         esac
-    done < <(git -C "$PROJECT_PATH" status --porcelain)
+    done < <(git -C "$PROJECT_PATH" status --porcelain --untracked-files=all)
 }
 
 require_gh_ready() {

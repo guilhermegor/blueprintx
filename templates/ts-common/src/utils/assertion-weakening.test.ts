@@ -183,6 +183,14 @@ describe('assertion weakening gate does not fail open', () => {
     expect(find('  expect(x)\n    .toBe(1);', '  expect(x)\n    .toBeGreaterThan(1);')).toBe(1);
   });
 
+  it('flags an inequality moved onto an already-asserted subject while an equality is dropped', () => {
+    expect(find('  expect(a).toBe(1);\n  expect(b).toBe(2);', '  expect(a).toBe(1);\n  expect(a).toBeGreaterThan(0);')).toBe(1);
+  });
+
+  it('sees expect with a generic type argument', () => {
+    expect(find('  expect<number>(x).toBe(1);', '  expect<number>(x).toBeGreaterThan(1);')).toBe(1);
+  });
+
   it('sees expect.soft assertions', () => {
     expect(find('  expect.soft(x).toBe(1);', '  expect.soft(x).toBeGreaterThan(1);')).toBe(1);
   });
