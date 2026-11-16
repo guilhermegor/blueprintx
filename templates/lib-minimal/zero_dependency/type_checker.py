@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import functools
 import inspect
-from typing import ParamSpec, TypeVar, get_type_hints
+from typing import Any, ParamSpec, TypeVar, get_type_hints
 
 
 _P = ParamSpec("_P")
@@ -110,7 +110,7 @@ def _plain_class(hint: object) -> type:
     type
         The class to check against.
     """
-    if isinstance(hint, type):
+    if isinstance(hint, type) and hint is not Any:
         return hint
     return object
 

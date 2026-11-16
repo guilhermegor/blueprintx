@@ -1,8 +1,11 @@
 """Smoke test: the dependency-free type_checker resolves in the wheel layout."""
 
+from typing import Any
+
 import pytest
 
 from ${PROJECT_PKG_NAME}._internal.utils.typing import type_checker
+from ${PROJECT_PKG_NAME}._internal.utils.typing.type_checker import _plain_class
 
 
 @type_checker
@@ -71,6 +74,11 @@ def _scale(factor: float) -> float:
         The same factor.
     """
     return factor
+
+
+def test_any_annotation_is_accept_anything() -> None:
+    """``Any`` resolves to ``object`` instead of becoming an ``isinstance`` target."""
+    assert _plain_class(Any) is object
 
 
 def test_variadic_elements_are_checked_one_by_one() -> None:
