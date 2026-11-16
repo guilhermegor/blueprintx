@@ -51,6 +51,9 @@ bash bin/check_description_sync.sh
 print_status info "function length"
 $POETRY run python bin/check_function_length.py
 
+print_status info "one assertion site per unit test"
+$POETRY run python bin/check_one_assert.py
+
 print_status info "fixture scope (proxy — pair with pytest-randomly, blueprintx#442)"
 $POETRY run python bin/check_fixture_scope.py
 

@@ -15,6 +15,7 @@ would have built is safe.
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 from unittest.mock import patch
 
@@ -32,9 +33,27 @@ DICT_MALICIOUS_DSN = {
 }
 
 
+def _handler_type(str_target: str) -> type:
+    """Resolve a ``<module stem>.<class name>`` target to its handler class.
+
+    Parameters
+    ----------
+    str_target : str
+        ``<module stem>.<class name>`` inside ``chassis.db_schema.infrastructure``.
+
+    Returns
+    -------
+    type
+        The handler class.
+    """
+    str_module, str_class = str_target.split(".")
+    cls_module = importlib.import_module(f"chassis.db_schema.infrastructure.{str_module}")
+    return getattr(cls_module, str_class)
+
+
 @pytest.mark.parametrize(("str_target", "str_dsn"), sorted(DICT_MALICIOUS_DSN.items()))
-def test_dashed_dbname_rejected_before_subprocess_runs(str_target: str, *, str_dsn: str) -> None:
-    """A dashed database name is rejected at construction, never reaching ``subprocess.run``.
+def test_dashed_dbname_rejected_at_construction(str_target: str, *, str_dsn: str) -> None:
+    """A dashed database name is rejected at construction, with ``subprocess.run`` mocked.
 
     Parameters
     ----------
@@ -43,9 +62,21 @@ def test_dashed_dbname_rejected_before_subprocess_runs(str_target: str, *, str_d
     str_dsn : str
         DSN whose database segment would be read as a dump-tool option flag.
     """
-    str_module, str_class = str_target.split(".")
-    cls_module = importlib.import_module(f"chassis.db_schema.infrastructure.{str_module}")
-    cls_handler_type = getattr(cls_module, str_class)
-    with patch("subprocess.run") as mock_run, pytest.raises(ValueError, match="database name"):
-        cls_handler_type(str_dsn)
+    with patch("subprocess.run"), pytest.raises(ValueError, match="database name"):
+        _handler_type(str_target)(str_dsn)
+
+
+@pytest.mark.parametrize(("str_target", "str_dsn"), sorted(DICT_MALICIOUS_DSN.items()))
+def test_dashed_dbname_never_reaches_subprocess_run(str_target: str, *, str_dsn: str) -> None:
+    """A dashed database name never reaches ``subprocess.run``.
+
+    Parameters
+    ----------
+    str_target : str
+        ``<module stem>.<class name>`` inside ``chassis.db_schema.infrastructure``.
+    str_dsn : str
+        DSN whose database segment would be read as a dump-tool option flag.
+    """
+    with patch("subprocess.run") as mock_run, contextlib.suppress(ValueError):
+        _handler_type(str_target)(str_dsn)
     assert mock_run.call_count == 0

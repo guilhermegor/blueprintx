@@ -4,6 +4,7 @@ Layout-agnostic import shim — the same file serves the chassis (DDD) and utils
 placements, mirroring ``tests/unit/test_typing.py``.
 """
 
+from collections.abc import Iterator
 import logging
 
 import pytest
@@ -85,14 +86,21 @@ def test_configure_otel_logging_no_endpoint_sends_nothing(monkeypatch: pytest.Mo
     assert cls_logger.handlers == []
 
 
-def test_configure_otel_logging_with_endpoint_adds_handler_without_removing_existing(
+@pytest.fixture
+def tuple_endpoint_logger(
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An endpoint configured -> the OTLP handler is attached; the FileHandler stays.
+) -> Iterator[tuple[logging.Logger, logging.Handler]]:
+    """Configure a logger that already has a local handler, with an endpoint set.
 
-    The positive-direction witness: the exporter IS invoked (a handler backed by it is
-    installed), and the project's existing local logger handler is untouched — OTel adds,
-    it never replaces.
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Pytest-provided environment patcher.
+
+    Yields
+    ------
+    tuple[logging.Logger, logging.Handler]
+        The configured logger and the handler it carried before OTel was attached.
     """
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", raising=False)
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
@@ -100,23 +108,43 @@ def test_configure_otel_logging_with_endpoint_adds_handler_without_removing_exis
     cls_logger.handlers.clear()
     cls_existing_handler = logging.NullHandler()
     cls_logger.addHandler(cls_existing_handler)
-
     configure_otel_logging(cls_logger)
-
-    assert cls_existing_handler in cls_logger.handlers
-    assert len(cls_logger.handlers) == 2
+    yield cls_logger, cls_existing_handler
     cls_logger.handlers.clear()
 
 
-def test_cleartext_endpoint_with_headers_is_refused_and_warns(
-    monkeypatch: pytest.MonkeyPatch, *, caplog: pytest.LogCaptureFixture
+def test_configure_otel_logging_with_endpoint_keeps_the_existing_handler(
+    tuple_endpoint_logger: tuple[logging.Logger, logging.Handler],
 ) -> None:
-    """Credentials + an off-host http:// endpoint -> no handler, and a WARNING.
+    """An endpoint configured -> the project's existing local handler is untouched."""
+    cls_logger, cls_existing_handler = tuple_endpoint_logger
+    assert cls_existing_handler in cls_logger.handlers
 
-    The should-fail witness for the TLS guard. Asserting only "no handler" would not
-    distinguish the guard from a broken exporter, so the warning is asserted too: the install
-    path is fire-and-forget, and a silent refusal is indistinguishable from an exporter that
-    runs and never delivers.
+
+def test_configure_otel_logging_with_endpoint_adds_exactly_one_handler(
+    tuple_endpoint_logger: tuple[logging.Logger, logging.Handler],
+) -> None:
+    """An endpoint configured -> the OTLP handler is attached beside the existing one."""
+    cls_logger, _ = tuple_endpoint_logger
+    assert len(cls_logger.handlers) == 2
+
+
+def _configure_cleartext_with_headers(
+    monkeypatch: pytest.MonkeyPatch, *, caplog: pytest.LogCaptureFixture
+) -> logging.Logger:
+    """Configure a logger against an off-host http:// endpoint that carries credentials.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Pytest-provided environment patcher.
+    caplog : pytest.LogCaptureFixture
+        Pytest-provided log capture.
+
+    Returns
+    -------
+    logging.Logger
+        The logger after ``configure_otel_logging`` ran.
     """
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", raising=False)
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_LOGS_HEADERS", raising=False)
@@ -124,12 +152,32 @@ def test_cleartext_endpoint_with_headers_is_refused_and_warns(
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-token")
     cls_logger = logging.getLogger("test_otel_logging_cleartext")
     cls_logger.handlers.clear()
-
     with caplog.at_level(logging.WARNING):
         configure_otel_logging(cls_logger)
+    return cls_logger
 
+
+def test_cleartext_endpoint_with_headers_is_refused(
+    monkeypatch: pytest.MonkeyPatch, *, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Credentials + an off-host http:// endpoint -> no handler is attached."""
+    cls_logger = _configure_cleartext_with_headers(monkeypatch, caplog=caplog)
     assert cls_logger.handlers == []
+
+
+def test_cleartext_endpoint_with_headers_warns(
+    monkeypatch: pytest.MonkeyPatch, *, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The refusal is announced: a silent refusal looks like an exporter that never delivers."""
+    _configure_cleartext_with_headers(monkeypatch, caplog=caplog)
     assert "cleartext" in caplog.text
+
+
+def test_cleartext_endpoint_with_headers_never_logs_the_secret(
+    monkeypatch: pytest.MonkeyPatch, *, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The warning names the problem without echoing the credential."""
+    _configure_cleartext_with_headers(monkeypatch, caplog=caplog)
     assert "secret-token" not in caplog.text
 
 

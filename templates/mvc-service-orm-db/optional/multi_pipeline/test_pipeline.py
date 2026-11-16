@@ -85,9 +85,8 @@ def test_resolve_intent_raises_systemexit_on_unknown_spelling() -> None:
     -------
     None
     """
-    with pytest.raises(SystemExit) as cls_exc_info:
+    with pytest.raises(SystemExit, match=r"^2$"):
         resolve_intent("not-a-real-intent")
-    assert cls_exc_info.value.code == 2
 
 
 def test_build_pipeline_returns_send_pipeline_for_send_intent(tmp_path: Path) -> None:
@@ -134,6 +133,5 @@ def test_build_pipeline_raises_systemexit_on_unregistered_intent(tmp_path: Path)
     -------
     None
     """
-    with pytest.raises(SystemExit) as cls_exc_info:
+    with pytest.raises(SystemExit, match=r"^2$"):
         build_pipeline("not-a-real-intent", **_build_kwargs(tmp_path))
-    assert cls_exc_info.value.code == 2

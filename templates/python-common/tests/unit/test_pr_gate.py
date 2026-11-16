@@ -504,14 +504,35 @@ def test_enable_auto_merge_returns_none_when_armed(monkeypatch: pytest.MonkeyPat
     assert gate._enable_auto_merge("PR_NODE", str_head_sha="abc") is None
 
 
-def test_enable_auto_merge_reports_a_transport_failure_as_a_skip_reason(
+def _transport_failure_reason(monkeypatch: pytest.MonkeyPatch) -> object:
+    """Return what ``_enable_auto_merge`` reports when ``_api`` fails at the HTTP layer.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Pytest-provided patcher; ``_api`` is made to return ``None``.
+
+    Returns
+    -------
+    object
+        The skip reason ``_enable_auto_merge`` returned.
+    """
+    monkeypatch.setattr(gate, "_api", lambda *a, **k: None)
+    return gate._enable_auto_merge("PR_NODE", str_head_sha="abc")
+
+
+def test_enable_auto_merge_reports_a_transport_failure_as_a_string(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An HTTP error (``_api`` returns ``None``) is a skip too, not a crash."""
-    monkeypatch.setattr(gate, "_api", lambda *a, **k: None)
-    str_reason = gate._enable_auto_merge("PR_NODE", str_head_sha="abc")
-    assert isinstance(str_reason, str)
-    assert "failed" in str_reason
+    """An HTTP error (``_api`` returns ``None``) is a skip reason, not a crash."""
+    assert isinstance(_transport_failure_reason(monkeypatch), str)
+
+
+def test_enable_auto_merge_names_a_transport_failure_as_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The skip reason for an HTTP error says the call failed."""
+    assert "failed" in str(_transport_failure_reason(monkeypatch))
 
 
 def test_enable_auto_merge_never_reports_a_refusal_as_armed(
