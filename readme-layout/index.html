@@ -2899,6 +2899,16 @@ heading (blank lines between are fine): <code>&lt;!-- slug: install --&gt;</code
 <li><code>features</code> is optional: its position is checked only when the section is present.
   <code>documentation</code> is required for <code>library</code> and holds the docs site URL plus the local serve command: <code>bash bin/poe_exec.sh docs_serve</code>
   for Python libraries, <code>npm run docs:start</code> for TypeScript libraries.</li>
+<li><code>install</code> in the <code>library</code> archetype has two <code>####</code> subparts, in both languages: "As a
+  dependency" (<code>pip install</code> and <code>poetry add</code>, or <code>npm install</code> for ts-lib; pt-BR "Como
+  dependência") and "For development" (clone plus <code>bin/venv.sh</code> and <code>poetry run poe init</code> for
+  Python, clone plus <code>npm install</code> for ts-lib; pt-BR "Para desenvolver"). Service, CLI, SPA and
+  USB-tool archetypes keep the single clone-and-bootstrap block, since that is their real
+  install. The English Python subparts come from an <code>only: library</code> block in
+  <code>templates/python-common/README.md</code>, which every Python tier renders; the pt-BR copy is written
+  out in <code>templates/lib-minimal/README.pt-BR.md</code>, so edit both together. The package name is the
+  project name, and the commands work once the first release is published. The gate reads <code>####</code>
+  headings inside a slug section without complaint.</li>
 <li>The logo is centered on its own line under the H1 (<code>&lt;p align="center"&gt;&lt;img ... width="200"&gt;&lt;/p&gt;</code>),
   never inside the heading.</li>
 <li>Badge order: status, python, pypi, downloads, docs, linting, mypy, coverage, license, issues,
