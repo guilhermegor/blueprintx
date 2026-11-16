@@ -212,11 +212,11 @@ the `utils/sidecar_metadata.py` seam:
 - **Tolerate absence — it is a first-class case.** `fetch_sidecar_text` returns `None` (never
   raises) when the source publishes no sidecar; the reader then falls back to inferring the
   contract from the real downloaded artifact. Never *skip the check* — fall back to it.
-- **The seam is generic; the locator is the source-specific part.** The caller writes a `str → str`
-  locator for its source and passes the result to `fetch_sidecar_text`; the project documents the
-  layout that locator encodes. The download transport is
-  injectable (defaults to the one `http_downloader.download_file` seam), so tests mock at that
-  boundary and the network guard stays satisfied.
+- **The seam is generic; the locator is the source-specific part.** The caller writes its own
+  locator, building the descriptor URL from whatever its source needs, and passes the finished
+  URL to `fetch_sidecar_text`; the project documents the layout that locator encodes. The download
+  transport is injectable (defaults to the one `http_downloader.download_file` seam), so tests
+  mock at that boundary and the network guard stays satisfied.
 
 ## Pin every contract to a source-published oracle
 

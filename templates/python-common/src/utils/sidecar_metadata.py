@@ -8,8 +8,8 @@ declares the field names, descriptions, types, and sizes. When a source provides
 2. **Runtime** — fetch it alongside the data and persist it to the bronze layer, so a datalake
    can diff it across runs and detect (and attribute) an upstream schema change.
 
-This module is a **generic seam**: the *locator* (data URL → descriptor URL, a ``str -> str``
-the caller writes) and the *download transport* are injectable. A source that publishes no
+This module is a **generic seam**: the caller builds the descriptor URL with its own *locator*
+and passes the finished URL in; the *download transport* is injectable. A source that publishes no
 sidecar is a first-class case — the fetch returns ``None`` (never raises), so a reader falls back
 to inferring the contract from the real artifact without special-casing.
 

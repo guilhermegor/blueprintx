@@ -2494,5 +2494,5 @@ A locator is a plain function the project writes for its own source and passes t
 `<base>/META/meta_<dataset>.txt`, so its locator is
 `lambda str_base, str_key: f"{str_base.rstrip('/')}/META/meta_{str_key}.txt"`. A source publishing an
 `.xsd`, a `.dtd` or an OpenAPI document writes a different one. This page is the only place the
-CVM layout is kept, as prose; incident-provenance references such as `opendata-cvm#164` stay where
+CVM descriptor path is kept, as prose; incident-provenance references such as `opendata-cvm#164` stay where
 they are.
