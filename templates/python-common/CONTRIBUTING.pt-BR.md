@@ -74,7 +74,7 @@ branch sem o número da issue, exceto `release/`, `dependabot/` e `renovate/`.
 
 ## Padrões de Mensagem de Commit
 
-Todo commit segue a especificação [Conventional Commits](https://www.conventionalcommits.org/): `<tipo>/<escopo>`.
+Todo commit segue a especificação [Conventional Commits](https://www.conventionalcommits.org/): `<tipo>(<escopo>): <descrição>`.
 As mensagens de commit são escritas em inglês, porque fazem parte do registro técnico.
 
 **Tipos disponíveis:**
