@@ -344,27 +344,73 @@ def _graphql(str_query: str, *, dict_vars: dict) -> object:
     )
     list_errors = dict_response.get("errors") if isinstance(dict_response, dict) else None
     if list_errors:
-        print(f"::error::GraphQL mutation refused: {list_errors}", file=sys.stderr)
+        print(f"::warning::GraphQL mutation refused: {list_errors}", file=sys.stderr)
     return dict_response
 
 
-def _enable_auto_merge(str_node_id: str) -> None:
+def _enable_auto_merge(str_node_id: str, *, str_head_sha: str) -> str | None:
     """Arm GitHub's native auto-merge for one PR (see module docstring, decision 1).
+
+    Arming is best-effort: a read-only token (a Dependabot-triggered run, or a repository whose
+    default workflow permissions leave ``contents`` read-only) is refused with "Resource not
+    accessible by integration". That is reported as a skip, never as a failed gate.
 
     Parameters
     ----------
     str_node_id : str
         The pull request's GraphQL node id.
+    str_head_sha : str
+        The head the checks were polled on; GitHub refuses the mutation if the head moved.
+
+    Returns
+    -------
+    str or None
+        ``None`` when armed; otherwise the reason it was skipped.
+    """
+    dict_response = _graphql(
+        "mutation($id:ID!,$sha:GitObjectID){enablePullRequestAutoMerge(input:{pullRequestId:$id,"
+        "expectedHeadOid:$sha,mergeMethod:SQUASH}){clientMutationId}}",
+        dict_vars={"id": str_node_id, "sha": str_head_sha or None},
+    )
+    if not isinstance(dict_response, dict):
+        return "the GraphQL request failed before GitHub answered"
+    list_errors = dict_response.get("errors")
+    if not list_errors:
+        return None
+    str_reason = "; ".join(str(d.get("message", d)) for d in list_errors if isinstance(d, dict))
+    return str_reason or str(list_errors)
+
+
+def _is_dependabot(dict_pr: dict) -> bool:
+    """Tell whether Dependabot opened the PR, so only ``dependabot-auto-merge.yml`` arms it.
+
+    Parameters
+    ----------
+    dict_pr : dict
+        The pull request payload.
+
+    Returns
+    -------
+    bool
+        ``True`` for a Dependabot-authored PR.
+    """
+    return (dict_pr.get("user") or {}).get("login") == "dependabot[bot]"
+
+
+def _report_skip(str_reason: str | None) -> None:
+    """Log a skipped auto-merge arming as a notice; do nothing when it was armed.
+
+    Parameters
+    ----------
+    str_reason : str or None
+        The skip reason from :func:`_enable_auto_merge`, or ``None`` when armed.
 
     Returns
     -------
     None
     """
-    _graphql(
-        "mutation($id:ID!){enablePullRequestAutoMerge(input:{pullRequestId:$id,"
-        "mergeMethod:SQUASH}){clientMutationId}}",
-        dict_vars={"id": str_node_id},
-    )
+    if str_reason:
+        print(f"::notice::auto-merge not armed, step skipped: {str_reason}")
 
 
 def collect_axes(list_check_runs: list, *, dict_axis_rules: dict) -> tuple:
@@ -570,8 +616,8 @@ def main() -> int:
         int_poll_seconds=int_poll_seconds,
     )
 
-    if bool_eligible:
-        _enable_auto_merge(dict_pr.get("node_id"))
+    if bool_eligible and not _is_dependabot(dict_pr):
+        _report_skip(_enable_auto_merge(dict_pr.get("node_id"), str_head_sha=str_head_sha))
 
     sync_gate_labels(
         str_repo,
