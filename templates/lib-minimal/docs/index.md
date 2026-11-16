@@ -17,8 +17,8 @@ A minimal Python library with packaging, tests, CI, and linting pre-configured.
 
 ```bash
 bash bin/venv.sh   # bootstrap the venv (poe lives inside it, so bootstrap is shell)
-bash bin/poe_exec.sh unit_tests    # run the test suite
-bash bin/poe_exec.sh docs_serve   # serve this documentation at http://0.0.0.0:8000
+poetry run poe unit_tests    # run the test suite
+poetry run poe docs_serve   # serve this documentation at http://0.0.0.0:8000
 ```
 
 ---

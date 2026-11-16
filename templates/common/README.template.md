@@ -32,7 +32,7 @@ ${PROJECT_DESCRIPTION}
 <!-- slug: documentation -->
 ## Documentation
 
-The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/. Serve it locally with `bash bin/poe_exec.sh docs_serve`.
+The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/. Serve it locally with `poetry run poe docs_serve`.
 <!-- /only -->
 
 <!-- slug: getting-started -->
