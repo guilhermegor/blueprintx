@@ -25,21 +25,30 @@ run_case() {
     local str_flag="$1" str_want="$2" proj="$WORK_DIR/$1" str_rel
     mkdir -p "$proj/src/utils/ms_office" "$proj/tests/unit"
     printf 'x = 1\n' >"$proj/src/utils/ms_office/outlook_gateway.py"
-    INCLUDE_EMAIL="$str_flag" copy_email_only_utils "$proj"
+    if [ "$str_flag" = unset ]; then
+        (unset INCLUDE_EMAIL; copy_email_only_utils "$proj")
+    else
+        INCLUDE_EMAIL="$str_flag" copy_email_only_utils "$proj"
+    fi
     for str_rel in "${LIST_FILES[@]}"; do
         check "email=$str_flag: $str_rel present=$str_want" "$str_want" "$([ -f "$proj/$str_rel" ] && echo yes || echo no)"
     done
 }
 
+int_scaffolds=0
 for str_script in "$REPO_ROOT"/bin/scaffold/python_*.sh; do
-    if grep -q 'copy_email_only_utils "' "$str_script"; then
-        check "$(basename "$str_script") sources the lib" yes \
-            "$(grep -qF 'lib/scaffold_email_utils.sh"' "$str_script" && echo yes || echo no)"
-    fi
+    grep -q 'copy_email_only_utils' "$str_script" || continue
+    int_scaffolds=$((int_scaffolds + 1))
+    check "$(basename "$str_script") sources the lib" yes \
+        "$(grep -qF 'lib/scaffold_email_utils.sh"' "$str_script" && echo yes || echo no)"
+    check "$(basename "$str_script") has no local definition" no \
+        "$(grep -q '^copy_email_only_utils()' "$str_script" && echo yes || echo no)"
 done
+check "five scaffolds call copy_email_only_utils" 5 "$int_scaffolds"
 
 run_case true yes
 run_case false no
+run_case unset no
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures failure(s)"; exit 1; }
 echo "all passed"
