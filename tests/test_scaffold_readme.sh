@@ -398,6 +398,18 @@ test_spec_accepts_a_ptbr_description_for_a_ptbr_locale() {
     rm -f "$path_out"
 }
 
+test_ptbr_check_rejects_a_short_english_description() {
+    local int_rc=0
+    BLUEPRINTX_ROOT="$REPO_ROOT" description_reads_as_ptbr "Validate, mask and unmask Brazilian document numbers (CPF, alphanumeric CNPJ)" || int_rc=$?
+    expect "a short English description is not pt-BR" "3" "$int_rc"
+}
+
+test_ptbr_check_rejects_text_without_function_words() {
+    local int_rc=0
+    BLUEPRINTX_ROOT="$REPO_ROOT" description_reads_as_ptbr "CNPJ CPF parser" || int_rc=$?
+    expect "a not-decisive description is not pt-BR" "3" "$int_rc"
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do

@@ -203,7 +203,13 @@ happening silently:
    text too when an origin remote, `gh` and a token exist; any comparison it cannot make is
    reported as `SKIPPED`. `tests/test_description_sync.sh` scaffolds every tier with a
    description holding a quote, an apostrophe and a backslash. The drift gate ships to
-   the Python tiers only; the TypeScript tiers are not covered by it yet.
+   the Python tiers only; the TypeScript tiers are not covered by it yet. The tier's
+   `tests.yml` runs it with `GITHUB_TOKEN`, so the About comparison runs in CI (pre-commit
+   has no token and skips it). A pt-BR check needs positive evidence: at least one
+   Portuguese function word and more than English ones, because `paragraph_locale` falls
+   back to the declared locale on short text and a one-line description is always short
+   (blueprintx#1179). The scaffold input check and the gate, when `theme.language` is
+   pt-BR, share that classifier through `lib/description_sources.py ptbr`.
 
 **Docs navigation ceiling** (blueprintx#860). `check_docs_gap.py` fails a `mkdocs.yml` whose `nav:`
 has more than 8 top-level entries (`INT_NAV_TOP_LEVEL_CEILING`), so the sidebar cannot grow

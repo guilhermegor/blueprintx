@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import types
 
 
 try:
@@ -23,8 +24,12 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
 INT_EXIT_NO_MANIFEST = 3
 INT_EXIT_NO_MKDOCS = 4
 INT_EXIT_UNREADABLE = 5
+INT_EXIT_NOT_PTBR = 6
 
 RE_SITE_DESCRIPTION = re.compile(r"^site_description:\s*(.*?)\s*$", re.MULTILINE)
+RE_THEME_LANGUAGE = re.compile(
+    r"^theme:[ \t]*\n(?:[ \t]+.*\n|[ \t]*\n)*?[ \t]+language:[ \t]*[\"']?([\w-]+)", re.MULTILINE
+)
 RE_SINGLE_QUOTED = re.compile(r"'((?:[^']|'')*)'(.*)$")
 
 
@@ -112,21 +117,72 @@ def mkdocs_description(path_mkdocs: Path) -> str | None:
     return None if match is None else parse_yaml_scalar(match.group(1))
 
 
+def reads_as_ptbr(str_text: str) -> bool:
+    """Tell whether every prose paragraph of a description positively reads as pt-BR.
+
+    Unlike ``paragraph_locale``, a paragraph that is not decisive does not fall back to the
+    declared locale: it needs at least one Portuguese function word and more of them than
+    English ones.
+
+    Parameters
+    ----------
+    str_text : str
+        The description.
+
+    Returns
+    -------
+    bool
+        ``True`` when each paragraph carries positive pt-BR evidence.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    for str_mod, tuple_names in (
+        ("yaml", ()),
+        ("check_docs_gap", ("load_mkdocs", "published_pages", "unpublished_specs")),
+    ):
+        try:
+            __import__(str_mod)
+        except ImportError:
+            mod_stub = types.ModuleType(str_mod)
+            for str_name in tuple_names:
+                setattr(mod_stub, str_name, None)
+            sys.modules[str_mod] = mod_stub
+    from check_docs_language import locale_hits, prose_paragraphs
+
+    for _, str_para in prose_paragraphs(str_text + "\n"):
+        dict_hits = locale_hits(str_para)
+        if dict_hits["pt-BR"] < 1 or dict_hits["pt-BR"] <= dict_hits["en"]:
+            return False
+    return True
+
+
+def mkdocs_language(path_mkdocs: Path) -> str | None:
+    """Return ``theme.language`` from an ``mkdocs.yml``, or ``None`` when it is not declared."""
+    if not path_mkdocs.is_file():
+        return None
+    match = RE_THEME_LANGUAGE.search(path_mkdocs.read_text(encoding="utf-8") + "\n")
+    return None if match is None else match.group(1)
+
+
 def main(list_argv: list[str]) -> int:
     """Print the requested description and return the matching exit status.
 
     Parameters
     ----------
     list_argv : list of str
-        ``["manifest", ROOT]`` or ``["mkdocs", FILE]``.
+        ``["manifest", ROOT]``, ``["mkdocs", FILE]`` or ``["ptbr", TEXT]`` or ``["language", FILE]``.
 
     Returns
     -------
     int
-            0 when printed, 3 or 4 when the source is absent, 5 when it is unreadable.
+            0 when printed, 3 or 4 when the source is absent, 5 when it is unreadable, 6 when ``ptbr`` text does not
+            read as pt-BR.
     """
     str_kind, str_path = list_argv
-    fn_read = manifest_description if str_kind == "manifest" else mkdocs_description
+    if str_kind == "ptbr":
+        return 0 if reads_as_ptbr(str_path) else INT_EXIT_NOT_PTBR
+    fn_read = {"manifest": manifest_description, "language": mkdocs_language}.get(
+        str_kind, mkdocs_description
+    )
     int_absent = INT_EXIT_NO_MANIFEST if str_kind == "manifest" else INT_EXIT_NO_MKDOCS
     try:
         str_value = fn_read(Path(str_path))
