@@ -86,7 +86,7 @@ class ExampleSchema(BaseModel):
     def _check_exactly_one_fund_reference(self) -> ExampleSchema:
         """Enforce that exactly one of ``cod_fundo`` / ``cod_subclasse`` is set.
 
-        Mirrors the CVM ``PadrãoXMLInfoDiarioNet`` rule this package is modelled on: a
+        Mirrors a common source rule: a
         record names either a fund or one of its subclasses, never both and never neither.
 
         Returns
