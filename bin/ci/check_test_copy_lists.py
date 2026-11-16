@@ -149,7 +149,9 @@ _RE_SHARED_SOURCE_CP = re.compile(
 
 LIST_REQUIRED_UTILS = ["dates", "zip_extractor"]
 
-_RE_UTILS_ARRAYS = re.compile(r"local\s+-a\s+(?:utils|modules)=\((.*?)\)", re.S)
+_RE_UTILS_ARRAYS = re.compile(
+    r"^[^\S\n]*local\s+-a\s+(?:utils|modules)=\((.*?)\)", re.M | re.S
+)
 
 _RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
 _RE_UTILS_LOOP = re.compile(r"^[^\S\n]*(?!#)\S*\s*for\s+util\s+in\s+(.*?);\s*do", re.M | re.S)
@@ -335,7 +337,7 @@ def required_util_problems(path_scaffold: pathlib.Path, str_source: str) -> list
         for str_name in str_array.split()
     }
     return [
-        f"❌ {path_scaffold.name}: no longer ships {str_util}.py — every Python scaffold must"
+        f"❌ {path_scaffold.name}: no longer ships {str_util}.py — every Python scaffold must ship it"
         for str_util in LIST_REQUIRED_UTILS
         if str_util not in set_listed
     ]
@@ -525,7 +527,7 @@ def main() -> int:
     list_scaffolds = sorted(scaffold_dir().glob("python_*.sh"))
 
     if not list_scaffolds:
-        print(f"❌ no python_*.sh scaffolds found under {_SCAFFOLD_DIR}")
+        print(f"❌ no python_*.sh scaffolds found under {scaffold_dir()}")
         return 1
 
     list_problems = []
