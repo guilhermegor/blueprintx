@@ -2,8 +2,9 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 
 const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
-const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.each\((?:[^()]|\([^()]*\))*\)|\.\w+)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
-const RE_MATCHER = /\.(not\.)?(to[A-Z]\w*)\(/g;
+const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.\w+)*(?:\.each\((?:[^()]|\([^()]*\))*\))?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
+const RE_EXPECT = /(?<![.\w])expect\(/g;
+const RE_MATCHER_TAIL = /^(?:\.(?:resolves|rejects))?(\.not)?\.(to[A-Z]\w*)\(/;
 const RE_PLACEHOLDER = /^<[^>]*>$/;
 const RE_JUSTIFICATION = /^\s*test-change-ok:[ \t]*(\S.*)$/gim;
 
@@ -26,8 +27,30 @@ function splitTests(source) {
   });
 }
 
-function matchers(body) {
-  return [...body.matchAll(RE_MATCHER)].filter((match) => !match[1]).map((match) => match[2]);
+function closingParen(text, from) {
+  let depth = 1;
+  for (let index = from; index < text.length; index += 1) {
+    depth += { '(': 1, ')': -1 }[text[index]] ?? 0;
+    if (depth === 0) return index;
+  }
+  return -1;
+}
+
+function assertionAt(body, match) {
+  const from = match.index + match[0].length;
+  const close = closingParen(body, from);
+  const tail = close < 0 ? null : RE_MATCHER_TAIL.exec(body.slice(close + 1));
+  if (!tail || tail[1]) return null;
+  return { subject: body.slice(from, close).replace(/\s+/g, ''), matcher: tail[2] };
+}
+
+function matchersBySubject(body) {
+  const bySubject = new Map();
+  [...body.matchAll(RE_EXPECT)]
+    .map((match) => assertionAt(body, match))
+    .filter(Boolean)
+    .forEach(({ subject, matcher }) => bySubject.set(subject, [...(bySubject.get(subject) ?? []), matcher]));
+  return bySubject;
 }
 
 function surplus(names, others, allowed) {
@@ -41,14 +64,22 @@ function surplus(names, others, allowed) {
     });
 }
 
-function testFindings(path, oldTest, newTest) {
-  const oldNames = matchers(oldTest.body);
-  const newNames = matchers(newTest.body);
+function subjectFindings(oldNames, newNames) {
   const removed = surplus(oldNames, newNames, EQUALITY_MATCHERS);
   const added = surplus(newNames, oldNames, INEQUALITY_MATCHERS);
-  return removed
-    .slice(0, added.length)
-    .map((name, index) => `${path}: ${newTest.name}: ${name} loosened to ${added[index]}`);
+  return removed.slice(0, added.length).map((name, index) => `${name} loosened to ${added[index]}`);
+}
+
+function testFindings(path, oldTest, newTest) {
+  const oldBySubject = matchersBySubject(oldTest.body);
+  const newBySubject = matchersBySubject(newTest.body);
+  const shared = [...oldBySubject.keys()].filter((subject) => newBySubject.has(subject));
+  const unshared = (bySubject) =>
+    [...bySubject].filter(([subject]) => !shared.includes(subject)).flatMap(([, names]) => names);
+  return [
+    ...shared.flatMap((subject) => subjectFindings(oldBySubject.get(subject), newBySubject.get(subject))),
+    ...subjectFindings(unshared(oldBySubject), unshared(newBySubject)),
+  ].map((finding) => `${path}: ${newTest.name}: ${finding}`);
 }
 
 function fileFindings(path, oldSource, newSource) {
