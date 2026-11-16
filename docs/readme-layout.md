@@ -28,14 +28,32 @@ heading (blank lines between are fine): `<!-- slug: install -->`.
 | Archetype | `library`: `public-api`, `publishing`. `cli`: `releasing`. `spa`: `deployment`. `service`: `configuration`. `usb-tool`: `payload`. `toolkit`: `commands` |
 | Core, last | `contributing`, `license`, `authors`, `useful-links` |
 
-Other sections are allowed anywhere; only the slugged ones are ordered.
+Outside `--strict`, other sections are allowed anywhere and only the slugged ones are ordered.
+
+### Closed H2 vocabulary (`--strict`)
+
+`--strict` closes the list. The gate passes it for `README.template.md`, every
+`templates/*/README.md` and every generated README (`bin/ci/check_readme_structure.sh`); the
+root `README.md` and a vendored copy in another repository run without it.
+
+- Every H2 carries a slug from the table above, narrowed to the README's archetype: `overview`,
+  `features`, `getting-started`, `project-structure`, `development`, `contributing`, `license`,
+  `authors`, `useful-links`, the archetype's own slugs and, for `library`, `documentation`. An
+  unslugged H2, or a slug outside that set (`releasing` in a `usb-tool`), fails.
+- An extra section is an H3 under an existing slug: a Docker recipe is `### Docker` under
+  `deployment`, a manifest reference is `### The manifest` under `usage`. A README that needs an
+  H2 the vocabulary lacks adds the slug to the gate and to this page first.
+- `features` is required in every archetype except `toolkit` (no user-facing surface).
+- Template parity: a template-owned `README.md` keeps the H2 order of
+  `templates/common/README.template.md` for its archetype, because the order check and the
+  vocabulary check run on it too.
 
 Further rules:
 
 - The first line is `<!-- readme-archetype: NAME -->`, one of the archetypes above.
 - No H1 to H6 contains an emoji, `<img>`, `![...]` or `<picture>`. The logo sits on its own
   line under the H1. Badges and images stay allowed in the body.
-- `features` is optional: its position is checked only when the section is present.
+- `features` is optional without `--strict`: its position is checked only when the section is present.
   `documentation` is required for `library` and holds the docs site URL plus the local serve command: `bash bin/poe_exec.sh docs_serve`
   for Python libraries, `npm run docs:start` for TypeScript libraries.
 - The logo is centered on its own line under the H1 (`<p align="center"><img ... width="200"></p>`),
@@ -51,17 +69,15 @@ Further rules:
 - README images use absolute `raw.githubusercontent.com` URLs (logo, coverage badge), because
   `readme = "README.md"` ships to PyPI where relative paths break. `scaffold_render_readme` fills
   them from `GITHUB_USERNAME` and `PROJECT_NAME`.
-- A footer closes the README rendered from `README.template.md` and the Python README (the other
-  skeleton READMEs, ts-lib included, have none): a rule, then `<sub>` text, no heading (so no
+- A footer closes every README, template-owned or rendered: a rule, then `<sub>` text, no heading (so no
   slug), reading "Generated from the <tier> template via
   [BlueprintX](https://github.com/guilhermegor/blueprintx)" (`README_TIER`) followed by
   any project disclaimer. The link is absolute, like the images, because the README ships to
   PyPI where relative links break, and the structure gate reports a footer without it.
-  A missing footer passes by default, because the READMEs without one are deliberate; pass
-  `--require-footer` to fail a README with no `<sub>Generated from` line or whose footer has
-  no `---` rule above it. `bin/ci/check_readme_structure.sh` passes it for
-  `README.template.md`, `python-common/README.md` and every generated project whose skeleton
-  has no `templates/<name>/README.md` of its own.
+  A missing footer passes by default, so a repository that vendors the gate is not forced to
+  add one; pass `--require-footer` to fail a README with no `<sub>Generated from` line or whose
+  footer has no `---` rule above it. `bin/ci/check_readme_structure.sh` passes it for
+  `README.template.md`, every `templates/*/README.md` and every generated project.
   Disclaimers go here, not in the body.
 - Every list item under `authors` carries a `github.com/<user>` link and a
   `linkedin.com/in/<handle>` link, and none uses the placeholder
