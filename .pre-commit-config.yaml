@@ -264,7 +264,7 @@ repos:
         entry: bash tests/test_scaffold_email_utils.sh
         language: system
         pass_filenames: false
-        files: ^(bin/lib/scaffold_email_utils\.sh|bin/scaffold/python_.*\.sh|tests/test_scaffold_email_utils\.sh)$
+        files: ^(bin/lib/scaffold_email_utils\.sh|bin/scaffold/python_.*\.sh|tests/test_scaffold_email_utils\.sh|templates/python-common/(src/utils/signatures|tests/unit/test_signatures|tests/unit/test_ms_office_outlook_gateway)\.py)$
 
       - id: close-linked-issues-tests
         name: close_linked_issues.sh should-fail regression tests (blueprintx#604)

@@ -31,6 +31,13 @@ run_case() {
     done
 }
 
+for str_script in "$REPO_ROOT"/bin/scaffold/python_*.sh; do
+    if grep -q 'copy_email_only_utils "' "$str_script"; then
+        check "$(basename "$str_script") sources the lib" yes \
+            "$(grep -qF 'lib/scaffold_email_utils.sh"' "$str_script" && echo yes || echo no)"
+    fi
+done
+
 run_case true yes
 run_case false no
 
