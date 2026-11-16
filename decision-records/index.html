@@ -5301,6 +5301,18 @@ threshold would let <code>v1</code> replaced by an unrelated <code>v2</code> pas
 exist to catch. Because a pair also suppresses the deletion finding, a rename that drops some
 statements but keeps 0.6 of them is accepted by the integrity gate; lost assertions are still
 counted by the weakening gate, so the two gates are meant to run together.</p>
+<h2 id="the-sidecar-seam-ships-no-source-specific-locator-sidecar_metadatapy-1158">The sidecar seam ships no source-specific locator (<code>sidecar_metadata.py</code>, #1158)<a class="headerlink" href="#the-sidecar-seam-ships-no-source-specific-locator-sidecar_metadatapy-1158" title="Permanent link">&para;</a></h2>
+<p><code>utils/sidecar_metadata.py</code> called itself a generic seam but exported <code>cvm_meta_url()</code>, a locator
+that only fits one portal's layout. Nothing in the template imported it, yet all six Python tiers
+shipped it, so every generated project carried a domain-specific function. It was deleted along
+with its test.</p>
+<p>A locator is a plain callable the project writes for its own source and calls to build the URL it
+passes to <code>fetch_sidecar_text</code>. For example, CVM publishes each dataset's descriptor at
+<code>&lt;base&gt;/META/meta_&lt;dataset&gt;.txt</code>, so its locator is
+<code>lambda str_base, str_key: f"{str_base.rstrip('/')}/META/meta_{str_key}.txt"</code>. A source publishing an
+<code>.xsd</code>, a <code>.dtd</code> or an OpenAPI document writes a different one. This page is the only place the
+CVM descriptor URL path is kept, as prose; incident-provenance references such as <code>opendata-cvm#164</code> stay where
+they are.</p>
 
 
 
