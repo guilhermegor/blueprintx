@@ -118,7 +118,8 @@ def plan_file(
     bytes_theirs = path_theirs.read_bytes()
     if not path_project_file.is_file():
         return "add", bytes_theirs
-    bytes_ours = drift.fold_crlf(path_project_file.read_bytes())
+    bytes_raw = path_project_file.read_bytes()
+    bytes_ours = drift.fold_crlf(bytes_raw)
     bytes_new = drift.fold_crlf(bytes_theirs)
     if bytes_new in {bytes_ours, bytes_base}:
         return "same", None
@@ -129,6 +130,8 @@ def plan_file(
     )
     if bytes_merged is None:
         return "error", None
+    if bytes_ours != bytes_raw:
+        bytes_merged = bytes_merged.replace(b"\n", b"\r\n")
     return ("conflict" if int_conflicts else "merged"), bytes_merged
 
 
@@ -496,4 +499,5 @@ def main(list_argv: list) -> int:
 
 
 if __name__ == "__main__":
+    drift.use_utf8_streams()
     sys.exit(main(sys.argv[1:]))

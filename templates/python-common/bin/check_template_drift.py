@@ -531,6 +531,7 @@ def fold_crlf(bytes_data: bytes) -> bytes:
 
     A blob, an autocrlf checkout and a project file pinned to ``eol=lf`` hold the same text
     with different line endings; comparing raw bytes reports drift that is only an EOL.
+    Content holding a NUL byte is binary and comes back untouched.
 
     Parameters
     ----------
@@ -542,7 +543,19 @@ def fold_crlf(bytes_data: bytes) -> bytes:
     bytes
         The content with LF line endings.
     """
-    return bytes_data.replace(b"\r\n", b"\n")
+    return bytes_data if b"\0" in bytes_data else bytes_data.replace(b"\r\n", b"\n")
+
+
+def use_utf8_streams() -> None:
+    """Make stdout and stderr UTF-8, so a cp1252 console cannot raise on a non-ASCII line.
+
+    Returns
+    -------
+    None
+    """
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 def commit_known(path_blueprintx_root: pathlib.Path, *, str_commit: str) -> bool:
@@ -1118,7 +1131,5 @@ def main(list_argv: list) -> int:
 
 
 if __name__ == "__main__":
-    for cls_stream in (sys.stdout, sys.stderr):
-        if hasattr(cls_stream, "reconfigure"):
-            cls_stream.reconfigure(encoding="utf-8", errors="replace")
+    use_utf8_streams()
     sys.exit(main(sys.argv[1:]))

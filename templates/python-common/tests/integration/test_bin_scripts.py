@@ -3108,7 +3108,7 @@ def _run_track_mode(
         f'[ "$2 $3" = "close {str_fail_close}" ] && exit 1\n[ "$2" = list ] || exit 0\n'
         f"{'exit 1' if bool_fail_list else ':'}\n"
         'while [ $# -gt 0 ]; do [ "$1" = --jq ] && str_jq="$2"; shift; done\n'
-        f'jq -r "$str_jq" "{path_json}" | tr -d "\\r"\n',
+        f'set -o pipefail\njq -r "$str_jq" "{path_json}" | tr -d "\\r"\n',
         encoding="utf-8",
     )
     (path_bin / "gh").chmod(0o755)

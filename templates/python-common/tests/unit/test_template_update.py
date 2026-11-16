@@ -673,3 +673,28 @@ def test_a_crlf_checkout_of_an_unchanged_file_is_not_drift(tmp_path: Path) -> No
     str_action, _ = updater.plan_file(path_ours, path_theirs=path_theirs, bytes_base=b"l1\nl2\n")
 
     assert str_action == "same"
+
+
+def test_fold_crlf_leaves_binary_content_untouched() -> None:
+    """A NUL byte marks binary content, whose ``\\r\\n`` pairs are data, not line endings."""
+    bytes_binary = b"\x00\r\n\x01"
+
+    assert drift.fold_crlf(bytes_binary) == bytes_binary
+
+
+def test_a_merge_keeps_the_crlf_a_project_file_already_has(tmp_path: Path) -> None:
+    """Both sides edited a CRLF file: the merged result stays CRLF instead of flipping to LF."""
+    path_ours = tmp_path / "ours.txt"
+    path_theirs = tmp_path / "theirs.txt"
+    path_ours.write_bytes(b"a\r\nb\r\nc\r\nd\r\ne\r\nf\r\nours\r\n")
+    path_theirs.write_bytes(b"theirs\nb\nc\nd\ne\nf\ng\n")
+
+    str_action, bytes_merged = updater.plan_file(
+        path_ours, path_theirs=path_theirs, bytes_base=b"a\nb\nc\nd\ne\nf\ng\n"
+    )
+
+    assert (str_action, b"\r\n" in bytes_merged, b"\n" in bytes_merged.replace(b"\r\n", b"")) == (
+        "merged",
+        True,
+        False,
+    )
