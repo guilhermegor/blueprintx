@@ -68,7 +68,6 @@ DICT_EXPECTED_ABSENT = {
         "test_verify_venv_imports.py": "lib-minimal ships no bin/lib/pip_fallback.sh bootstrap",
         "test_typing.py": "lib-minimal RENDERS it from a template, not a cp",
         "test_br_identifiers.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
-        "test_dates.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_decimals.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_dtypes.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
         "test_frames.py": "lib-minimal vendors utils under _internal/ (import rewrite)",
@@ -147,6 +146,10 @@ _RE_SHARED_SOURCE_CP = re.compile(
     r"(?:\s|\\\n)+[\"']?([^\s\"']+)",
     re.M,
 )
+
+LIST_REQUIRED_UTILS = ["dates", "zip_extractor"]
+
+_RE_UTILS_ARRAYS = re.compile(r"local\s+-a\s+(?:utils|modules)=\((.*?)\)", re.S)
 
 _RE_UTILS_FN = re.compile(r"^copy_shared_utils\(\)\s*\{(.*?)^\}", re.M | re.S)
 _RE_UTILS_LOOP = re.compile(r"^[^\S\n]*(?!#)\S*\s*for\s+util\s+in\s+(.*?);\s*do", re.M | re.S)
@@ -311,6 +314,33 @@ def reachable_workflows(str_source: str) -> set:
     return set(_RE_WORKFLOW_CP.findall(str_source))
 
 
+def required_util_problems(path_scaffold: pathlib.Path, str_source: str) -> list:
+    """Return the required utilities a scaffold's utils/modules arrays no longer list.
+
+    Parameters
+    ----------
+    path_scaffold : pathlib.Path
+        A ``bin/scaffold/python_*.sh`` script.
+    str_source : str
+        The scaffold's text, joined with the libs it sources.
+
+    Returns
+    -------
+    list of str
+        One message per required utility (``dates``, ``zip_extractor``) that is not listed.
+    """
+    set_listed = {
+        str_name.removesuffix(".py")
+        for str_array in _RE_UTILS_ARRAYS.findall(str_source)
+        for str_name in str_array.split()
+    }
+    return [
+        f"❌ {path_scaffold.name}: no longer ships {str_util}.py — every Python scaffold must"
+        for str_util in LIST_REQUIRED_UTILS
+        if str_util not in set_listed
+    ]
+
+
 def asset_problems(
     path_scaffold: pathlib.Path,
     set_shared: set,
@@ -428,7 +458,8 @@ def scaffold_problems(
     str_source = scaffold_source_text(path_scaffold)
 
     return (
-        asset_problems(
+        required_util_problems(path_scaffold, str_source)
+        + asset_problems(
             path_scaffold,
             set_docs,
             reachable_docs(str_source, set_docs),
@@ -458,6 +489,17 @@ def scaffold_problems(
     )
 
 
+def scaffold_dir() -> pathlib.Path:
+    """Return the scaffold directory, overridable by argv for the should-fail test.
+
+    Returns
+    -------
+    pathlib.Path
+        ``sys.argv[1]`` when given, else ``bin/scaffold``.
+    """
+    return pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else _SCAFFOLD_DIR
+
+
 def main() -> int:
     """Check every Python scaffold's test copy list against the shared source.
 
@@ -480,7 +522,8 @@ def main() -> int:
         print(f"❌ no leaf CLAUDE.md found under {_SHARED_ROOT} — this gate would pass vacuously")
         return 1
 
-    list_scaffolds = sorted(_SCAFFOLD_DIR.glob("python_*.sh"))
+    list_scaffolds = sorted(scaffold_dir().glob("python_*.sh"))
+
     if not list_scaffolds:
         print(f"❌ no python_*.sh scaffolds found under {_SCAFFOLD_DIR}")
         return 1

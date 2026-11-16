@@ -128,5 +128,21 @@ for str_scaffold in bin/scaffold/ts_lib.sh bin/scaffold/python_lib_minimal.sh; d
 	fi
 done
 
+for str_util in dates zip_extractor; do
+	for str_scaffold in "$REPO_ROOT"/bin/scaffold/python_*.sh; do
+		str_mut="$WORK_DIR/mut"
+		rm -rf "$str_mut"
+		mkdir -p "$str_mut"
+		cp "$REPO_ROOT"/bin/scaffold/python_*.sh "$str_mut/"
+		sed -i -E "/(utils|modules)=\\(/,/\\)/ s/\\b${str_util}(\\.py)?\\b//" "$str_mut/$(basename "$str_scaffold")"
+		str_gate="$(python3 "$REPO_ROOT/bin/ci/check_test_copy_lists.py" "$str_mut" 2>&1)"
+		if grep -q "$(basename "$str_scaffold"): no longer ships ${str_util}.py" <<<"$str_gate"; then
+			pass "required-util: dropping $str_util from $(basename "$str_scaffold") is caught"
+		else
+			fail "required-util" "dropping $str_util from $(basename "$str_scaffold") was not caught"
+		fi
+	done
+done
+
 ((int_failures == 0)) || { echo "$int_failures failure(s)"; exit 1; }
 echo "all list-copies checks passed"
