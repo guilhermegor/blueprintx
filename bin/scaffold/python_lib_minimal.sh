@@ -822,6 +822,10 @@ prompt_zero_dependency() {
 prompt_logs() {
     local answer
     prompt_read answer "$(prompt_main "Include the in-repo logging helper (utils/logs.py)? [y/N]: ")"
+    if [[ "$ZERO_DEPENDENCY" == "true" && "$answer" =~ ^[yY]$ ]]; then
+        print_status "warning" "logs.py is part of the vendored toolkit; skipped in zero-dependency mode"
+        answer=n
+    fi
     case "$answer" in
         y|Y) INCLUDE_LOGS=true; print_status "config" "logs.py: included" ;;
         *)   INCLUDE_LOGS=false ;;

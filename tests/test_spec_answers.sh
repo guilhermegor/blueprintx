@@ -218,8 +218,12 @@ test_docs_locale_reaches_the_scaffold() {
 }
 
 test_zero_dependency_reaches_the_scaffold() {
-    local str_temp str_deps
-    str_temp="$(spec_scaffold_root zero-dep "zero_dependency=y")"
+    local str_temp str_deps str_out
+    str_out="$(run_blueprintx new --spec "$(write_spec zero-dep lib-minimal "zero_dependency=y" "logs=y")" --dev)"
+    str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$str_out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
+    if [[ "$str_out" == *"logs.py: included"* ]]; then
+        fail "zero_dependency with logs=y" "summary claims logs.py but zero-dependency mode never copies it"
+    fi
     str_deps="$(python3 -c 'import sys, tomllib; print(sorted(tomllib.load(open(sys.argv[1], "rb"))["tool"]["poetry"]["dependencies"]))' "$str_temp/spec-probe/pyproject.toml" 2>&1)"
     if [ "$str_deps" = "['python']" ] && [ ! -e "$str_temp/spec-probe/src/spec_probe/_internal/utils/dates.py" ]; then
         pass "zero_dependency=y empties the runtime dependencies and omits the vendored toolkit"
