@@ -86,7 +86,7 @@ check_slugs() {
 }
 
 check_h2_vocabulary() {
-	local path_file="$1" i_line str_slug str_text str_all
+	local path_file="$1" i_line str_slug str_text str_all str_seen=" "
 	shift
 	str_all=" $* "
 	if [ -z "$STR_ARCHETYPE" ]; then
@@ -98,6 +98,10 @@ check_h2_vocabulary() {
 			problem "$path_file:$i_line" "H2 without a slug: '$str_text' (make it an H3 under an existing section, or add '<!-- slug: NAME -->')"
 		elif [[ "$str_all" != *" $str_slug "* ]]; then
 			problem "$path_file:$i_line" "H2 slug '$str_slug' is not in this archetype's vocabulary: '$str_text'"
+		elif [[ "$str_seen" == *" $str_slug "* ]]; then
+			problem "$path_file:$i_line" "H2 slug '$str_slug' appears more than once: '$str_text'"
+		else
+			str_seen+="$str_slug "
 		fi
 	done < <(printf '%s\n' "$STR_HEADINGS" | awk -F'\t' '$2 == 2 { print $1 "\t" $3 "\t" $4 }')
 }
