@@ -143,6 +143,9 @@ describe('assertion weakening gate justification in a branch', () => {
     expect(fileFindings('a.test.ts', each('toBe'), each('toBeGreaterThan'))).toHaveLength(1);
   });
 
+});
+
+describe('assertion weakening gate chained each and pairing', () => {
   it.each(['test.concurrent.each', 'it.only.each', 'test.skip.each', 'it.failing.each'])(
     'recognises %s as a test so its weakening is seen',
     (chain) => {
@@ -170,6 +173,9 @@ describe('assertion weakening gate justification in a branch', () => {
     expect(fileFindings('a.test.ts', src('toBe'), src('toBeLessThan'))).toHaveLength(1);
   });
 
+});
+
+describe('assertion weakening gate matching edge cases', () => {
   it('flags a weakening next to a non-matcher .toFixed() call', () => {
     const before = "it('f', () => {\n  expect(x.toFixed(2)).toBe('1.00');\n});\n";
     const after = "it('f', () => {\n  expect(x).toBeGreaterThan(1);\n});\n";
