@@ -10,6 +10,8 @@ source "$SCRIPT_DIR/../lib/scaffold_python_templates.sh"
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
 # shellcheck source=bin/lib/scaffold_readme.sh
 source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
+# shellcheck source=bin/lib/scaffold_email_utils.sh
+source "$SCRIPT_DIR/../lib/scaffold_email_utils.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -313,17 +315,6 @@ copy_global_config() {
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
-copy_email_only_utils() {
-    local project_path="$1"
-    if [[ "$INCLUDE_EMAIL" != "true" ]]; then
-        rm -f "$project_path/src/utils/ms_office/outlook_gateway.py"
-        return
-    fi
-    cp "$COMMON_TEMPLATE_ROOT/src/utils/signatures.py" "$project_path/src/utils/signatures.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_signatures.py" "$project_path/tests/unit/test_signatures.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_outlook_gateway.py" \
-        "$project_path/tests/unit/test_ms_office_outlook_gateway.py"
-}
 
 copy_shared_utils() {
     local project_path="$1"
