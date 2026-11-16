@@ -1,6 +1,6 @@
-"""Unit tests for the sidecar-metadata seam (locate / fetch-or-None / parse).
+"""Unit tests for the sidecar-metadata seam (fetch-or-None / parse).
 
-Doubles as the worked example: a reader builds the descriptor URL (any `str -> str` locator),
+Doubles as the worked example: a reader builds the descriptor URL with its own locator,
 fetches it to the bronze layer with :func:`fetch_sidecar_text` (getting the text back, or ``None``
 when the source has none), and parses it with :func:`parse_sidecar_metadata` to define the
 contract.
