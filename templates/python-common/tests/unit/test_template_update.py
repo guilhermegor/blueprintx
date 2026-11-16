@@ -661,3 +661,15 @@ def test_update_says_why_when_the_scaffold_commit_is_unknown_to_the_checkout(
     _update(path_project, path_bx=path_bx)
 
     assert "SKIPPED removed-file check: the scaffold_commit" in capsys.readouterr().out
+
+
+def test_a_crlf_checkout_of_an_unchanged_file_is_not_drift(tmp_path: Path) -> None:
+    """An autocrlf checkout holds the blob's text; folding CRLF makes the two compare equal."""
+    path_ours = tmp_path / "ours.txt"
+    path_theirs = tmp_path / "theirs.txt"
+    path_ours.write_bytes(b"l1\r\nl2\r\n")
+    path_theirs.write_bytes(b"l1\nl2\n")
+
+    str_action, _ = updater.plan_file(path_ours, path_theirs=path_theirs, bytes_base=b"l1\nl2\n")
+
+    assert str_action == "same"

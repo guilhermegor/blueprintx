@@ -118,13 +118,14 @@ def plan_file(
     bytes_theirs = path_theirs.read_bytes()
     if not path_project_file.is_file():
         return "add", bytes_theirs
-    bytes_ours = path_project_file.read_bytes()
-    if bytes_theirs in {bytes_ours, bytes_base}:
+    bytes_ours = drift.fold_crlf(path_project_file.read_bytes())
+    bytes_new = drift.fold_crlf(bytes_theirs)
+    if bytes_new in {bytes_ours, bytes_base}:
         return "same", None
     if bytes_ours == bytes_base:
         return "fast_forward", bytes_theirs
     bytes_merged, int_conflicts = merge_three_way(
-        bytes_ours, bytes_base=bytes_base or b"", bytes_theirs=bytes_theirs
+        bytes_ours, bytes_base=bytes_base or b"", bytes_theirs=bytes_new
     )
     if bytes_merged is None:
         return "error", None

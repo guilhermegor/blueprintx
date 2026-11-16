@@ -523,7 +523,26 @@ def base_blob(
         )
     except FileNotFoundError:
         return None
-    return cls_git.stdout if cls_git.returncode == 0 else None
+    return fold_crlf(cls_git.stdout) if cls_git.returncode == 0 else None
+
+
+def fold_crlf(bytes_data: bytes) -> bytes:
+    """Return ``bytes_data`` with every CRLF folded to LF, the form drift is compared in.
+
+    A blob, an autocrlf checkout and a project file pinned to ``eol=lf`` hold the same text
+    with different line endings; comparing raw bytes reports drift that is only an EOL.
+
+    Parameters
+    ----------
+    bytes_data : bytes
+        File content in any line-ending form.
+
+    Returns
+    -------
+    bytes
+        The content with LF line endings.
+    """
+    return bytes_data.replace(b"\r\n", b"\n")
 
 
 def commit_known(path_blueprintx_root: pathlib.Path, *, str_commit: str) -> bool:
@@ -575,8 +594,8 @@ def _content_state(
     str
             ``same``, ``template_changed`` (project left it alone) or ``both_changed``.
     """
-    bytes_ours = path_project_file.read_bytes()
-    bytes_theirs = path_theirs.read_bytes()
+    bytes_ours = fold_crlf(path_project_file.read_bytes())
+    bytes_theirs = fold_crlf(path_theirs.read_bytes())
     if bytes_theirs in {bytes_ours, bytes_base}:
         return "same"
     return "template_changed" if bytes_ours == bytes_base else "both_changed"
@@ -1099,4 +1118,7 @@ def main(list_argv: list) -> int:
 
 
 if __name__ == "__main__":
+    for cls_stream in (sys.stdout, sys.stderr):
+        if hasattr(cls_stream, "reconfigure"):
+            cls_stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main(sys.argv[1:]))
