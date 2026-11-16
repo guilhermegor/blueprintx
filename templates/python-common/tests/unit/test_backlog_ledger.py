@@ -43,6 +43,18 @@ ledger = _load("check_backlog_ledger")
 gate_integrity = _load("check_gate_integrity")
 
 
+@pytest.fixture(autouse=True)
+def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start every test with no ``GATE_CHANGE_OK`` exported by the operator's shell.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Removes the local override, which ``justification_reason`` reads before the PR body.
+    """
+    monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
+
+
 def _first_problem(list_problems: list[str]) -> str:
     """Return the first problem reported, asserting the list is not empty.
 
