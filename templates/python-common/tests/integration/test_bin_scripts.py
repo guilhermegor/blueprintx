@@ -112,7 +112,7 @@ def _print_status(str_status: str) -> subprocess.CompletedProcess:
     return subprocess.run(  # noqa: S603
         [str_bash, "-c", f'source "{path_lib}"; print_status {str_status} "probe message"'],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -170,7 +170,7 @@ def _run(
     return subprocess.run(  # noqa: S603
         [str_bash, str(_bin_script(str_script)), *args],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         cwd=str(cwd) if cwd is not None else None,
         env=dict_full_env,
@@ -652,7 +652,7 @@ def test_poe_exec_resolves_the_print_status_it_calls() -> None:
     cls_result = subprocess.run(  # noqa: S603
         [str_bash, str(path_exec), "--version"],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         cwd=str(path_exec.parents[1]),
     )
@@ -795,7 +795,7 @@ def _run_url_hook(path_root: Path) -> subprocess.CompletedProcess:
         [shutil.which("bash") or "bash", str(_bin_script("test_urls_docstrings.sh")), "."],
         cwd=path_root,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         env={**os.environ, "URL_CHECK_CACHE_DIR": str(path_root / ".url_check_cache")},
     )
@@ -880,7 +880,7 @@ def _run_url_hook_with_cache_override(
         [shutil.which("bash") or "bash", str(_bin_script("test_urls_docstrings.sh")), "."],
         cwd=path_root,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         env={**os.environ, "URL_CHECK_CACHE_DIR": str(path_cache)},
     )
@@ -1032,7 +1032,7 @@ def _run_complexity(
             str(path_root),
         ],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         env=dict_env,
     )
@@ -1685,7 +1685,7 @@ def _run_sh_gate(
     return subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script)],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         env=dict_env,
     )
@@ -1829,7 +1829,7 @@ def test_unix_filenames_gate_fires_on_a_filename_with_a_space(tmp_path: Path) ->
         [_STR_BASH, str(_bin_script("check_unix_filenames.sh")), path_bad.name],
         cwd=tmp_path,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
     str_all = cls_result.stdout + cls_result.stderr
@@ -1846,7 +1846,7 @@ def test_unix_filenames_gate_accepts_a_conventional_filename(tmp_path: Path) -> 
         [_STR_BASH, str(_bin_script("check_unix_filenames.sh")), path_ok.name],
         cwd=tmp_path,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -2361,7 +2361,7 @@ def _run_run_sh(path_script: Path, *, list_args: list[str]) -> subprocess.Comple
     return subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script), *list_args],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         timeout=60,
     )
@@ -2428,7 +2428,12 @@ def _link_tool(path_dir: Path, *, str_tool: str) -> None:
     -------
     None
     """
-    (path_dir / str_tool).symlink_to(shutil.which(str_tool) or "/bin/false")
+    path_wrapper = path_dir / str_tool
+    path_wrapper.write_text(
+        f'#!/bin/bash\nexec "{Path(shutil.which(str_tool) or "/bin/false").as_posix()}" "$@"\n',
+        encoding="utf-8",
+    )
+    path_wrapper.chmod(0o755)
 
 
 def _stage_tools_dir(path_root: Path) -> Path:
@@ -2501,14 +2506,14 @@ def _run_venv_sh(
         The completed run.
     """
     dict_env = {
-        "PATH": ":".join(map(str, list_path_dirs)),
+        "PATH": os.pathsep.join(map(str, list_path_dirs)),
         "HOME": str(path_script.parent),
         **dict_extra_env,
     }
     return subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script)],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         timeout=60,
         env=dict_env,
@@ -2718,7 +2723,7 @@ def test_ensure_env_without_an_example_is_an_info_no_op(tmp_path: Path) -> None:
     cls_result = subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script)],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         timeout=60,
     )
@@ -2739,7 +2744,7 @@ def test_ensure_env_with_an_example_still_seeds_the_env_file(tmp_path: Path) -> 
     subprocess.run(  # noqa: S603
         [_STR_BASH, str(path_script)],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         timeout=60,
     )
@@ -2790,7 +2795,7 @@ def test_check_urls_scans_every_filename_passed_not_only_the_first(tmp_path: Pat
             "URL_CHECK_CACHE_DIR": str(tmp_path / "isolated_cache"),
         },
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -2824,7 +2829,7 @@ def _run_url_hook_with_stub_curl(
         cwd=path_root,
         env={**os.environ, "PATH": f"{path_stub_dir}{os.pathsep}{os.environ['PATH']}", **dict_env},
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -3103,7 +3108,7 @@ def _run_track_mode(
         f'[ "$2 $3" = "close {str_fail_close}" ] && exit 1\n[ "$2" = list ] || exit 0\n'
         f"{'exit 1' if bool_fail_list else ':'}\n"
         'while [ $# -gt 0 ]; do [ "$1" = --jq ] && str_jq="$2"; shift; done\n'
-        f'jq -r "$str_jq" "{path_json}"\n',
+        f'set -o pipefail\njq -r "$str_jq" "{path_json}" | tr -d "\\r"\n',
         encoding="utf-8",
     )
     (path_bin / "gh").chmod(0o755)
@@ -3113,7 +3118,7 @@ def _run_track_mode(
         cwd=path_root,
         env={**os.environ, "PATH": f"{path_bin}{os.pathsep}{os.environ['PATH']}"},
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
     path_log.touch()
