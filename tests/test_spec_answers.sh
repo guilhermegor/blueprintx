@@ -35,7 +35,7 @@ write_spec() {
     local file="$WORK_DIR/$name.spec"
     shift 2
     {
-        str_desc=probe
+        local str_desc=probe
         [[ " $* " == *" docs_locale=pt-BR "* ]] && str_desc="Biblioteca de sondagem para os testes"
         printf 'project_name=spec-probe\nproject_description=%s\nlanguage=%s\n' "$str_desc" "${SPEC_LANGUAGE:-python}"
         printf 'skeleton=%s\nlicense=MIT\ngithub_username=ci-bot\n' "$skeleton"

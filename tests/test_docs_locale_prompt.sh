@@ -124,7 +124,8 @@ test_marker_step_is_idempotent() {
 }
 
 scaffold_docs_probe() {
-    local str_locale="$1" str_dir="$2"
+    local str_locale="$1" str_dir="$2" str_description="Docs probe"
+    [ "$str_locale" = "pt-BR" ] && str_description="Projeto de sondagem para os testes de documentação"
     (
         # shellcheck source=bin/lib/spec.sh
         source "$REPO_ROOT/bin/lib/spec.sh"
@@ -132,7 +133,7 @@ scaffold_docs_probe() {
             | DOCS_LOCALE="$str_locale" BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot \
                 LINKEDIN_URL=https://www.linkedin.com/in/ci-bot \
                 bash "$REPO_ROOT/bin/scaffold/python_lib_minimal.sh" \
-                "$str_dir" docs-probe "Docs probe" "0.0.1"
+                "$str_dir" docs-probe "$str_description" "0.0.1"
     ) >"$str_dir/scaffold.log" 2>&1
 }
 

@@ -28,9 +28,7 @@ INT_EXIT_UNREADABLE = 5
 INT_EXIT_NOT_PTBR = 6
 
 RE_SITE_DESCRIPTION = re.compile(r"^site_description:\s*(.*?)\s*$", re.MULTILINE)
-RE_THEME_LANGUAGE = re.compile(
-    r"^theme:[ \t]*\n(?:[ \t]+.*\n|[ \t]*\n)*?[ \t]+language:[ \t]*[\"']?([\w-]+)", re.MULTILINE
-)
+RE_THEME_LANGUAGE = re.compile(r"^[ \t]+language:[ \t]*[\"']?([\w-]+)")
 RE_SINGLE_QUOTED = re.compile(r"'((?:[^']|'')*)'(.*)$")
 
 
@@ -133,7 +131,7 @@ def reads_as_ptbr(str_text: str) -> bool:
     Returns
     -------
     bool
-        ``True`` when each paragraph carries positive pt-BR evidence.
+        ``True`` when there is at least one paragraph and each carries positive pt-BR evidence.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     for str_mod, tuple_names in (
@@ -148,19 +146,27 @@ def reads_as_ptbr(str_text: str) -> bool:
                 setattr(mod_stub, str_name, None)
             sys.modules[str_mod] = mod_stub
     mod_lang = importlib.import_module("check_docs_language")
-    for _, str_para in mod_lang.prose_paragraphs(str_text + "\n"):
+    list_paras = [str_para for _, str_para in mod_lang.prose_paragraphs(str_text + "\n")]
+    for str_para in list_paras:
         dict_hits = mod_lang.locale_hits(str_para)
         if dict_hits["pt-BR"] < 1 or dict_hits["pt-BR"] <= dict_hits["en"]:
             return False
-    return True
+    return bool(list_paras)
 
 
 def mkdocs_language(path_mkdocs: Path) -> str | None:
     """Return ``theme.language`` from an ``mkdocs.yml``, or ``None`` when it is not declared."""
     if not path_mkdocs.is_file():
         return None
-    match = RE_THEME_LANGUAGE.search(path_mkdocs.read_text(encoding="utf-8") + "\n")
-    return None if match is None else match.group(1)
+    bool_in_theme = False
+    for str_line in path_mkdocs.read_text(encoding="utf-8").splitlines():
+        if str_line.startswith("theme:"):
+            bool_in_theme = True
+        elif str_line.strip() and not str_line[0].isspace() and not str_line.startswith("#"):
+            bool_in_theme = False
+        elif bool_in_theme and (match := RE_THEME_LANGUAGE.match(str_line)):
+            return match.group(1)
+    return None
 
 
 def main(list_argv: list[str]) -> int:

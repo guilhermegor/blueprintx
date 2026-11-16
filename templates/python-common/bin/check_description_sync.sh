@@ -34,9 +34,14 @@ check_ptbr() {
 	if [[ "$int_rc" -ne 0 || "$str_language" != "pt-BR" ]]; then
 		return 0
 	fi
-	if python3 "$SCRIPT_DIR/lib/description_sources.py" ptbr "$1"; then
+	int_rc=0
+	python3 "$SCRIPT_DIR/lib/description_sources.py" ptbr "$1" || int_rc=$?
+	if [[ "$int_rc" -eq 0 ]]; then
 		print_status "success" "manifest description reads as pt-BR"
 		return 0
+	elif [[ "$int_rc" -ne 6 ]]; then
+		print_status "error" "the pt-BR classifier crashed (exit $int_rc), so the description was not checked"
+		return 1
 	fi
 	print_status "error" "mkdocs theme.language is pt-BR but the manifest description does not read as pt-BR"
 	print_status "error" "  manifest: $1"
