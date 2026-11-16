@@ -644,13 +644,16 @@ def _funcs(*tuple_names: str, str_body: str = "assert f() == 1") -> dict:
     return gate.test_functions(str_src)
 
 
-def test_pairing_is_independent_of_input_order() -> None:
+@pytest.mark.parametrize(
+    "tuple_old",
+    [("test_parse_v1", "test_parse_v2"), ("test_parse_v2", "test_parse_v1")],
+    ids=["forward", "reversed"],
+)
+def test_pairing_is_independent_of_input_order(tuple_old: tuple[str, str]) -> None:
     """Two renames that each clear the threshold against both candidates pair the same way."""
     dict_expected = {"test_parse_v1": "test_parse_w1", "test_parse_v2": "test_parse_w2"}
-    tuple_fwd, tuple_rev = ("test_parse_v1", "test_parse_v2"), ("test_parse_v2", "test_parse_v1")
     dict_added = _funcs("test_parse_w1", "test_parse_w2")
-    assert gate_rename.rename_pairs(_funcs(*tuple_fwd), dict_added=dict_added) == dict_expected
-    assert gate_rename.rename_pairs(_funcs(*tuple_rev), dict_added=dict_added) == dict_expected
+    assert gate_rename.rename_pairs(_funcs(*tuple_old), dict_added=dict_added) == dict_expected
 
 
 def test_a_better_later_match_is_not_stolen_by_an_earlier_name() -> None:
