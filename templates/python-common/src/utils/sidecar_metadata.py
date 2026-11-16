@@ -61,7 +61,7 @@ def fetch_sidecar_text(
     Parameters
     ----------
     str_descriptor_url : str
-        The descriptor URL, built by the caller's own locator (any callable returning the URL string).
+        The descriptor URL, as built by the caller's own locator.
     path_dest : pathlib.Path
         Bronze-layer path to persist the descriptor to (the ``path_raw`` seam). Its parent is
         created by the transport when missing.
