@@ -1,4 +1,4 @@
-r"""Fail when README.md or a docs page is written in a language other than the declared locale.
+r"""Fail when README.md, CONTRIBUTING.md or a docs page is not in the declared locale.
 
 ``bin/check_comment_language.py`` polices the code half of the documentation boundary and never
 reads ``docs/``. This gate is the other half: the locale a project declares in ``mkdocs.yml``
@@ -8,8 +8,9 @@ minority paragraphs, which is the margin a function-word classifier needs.
 
 How it decides:
 
-1. **Page set.** ``README.md`` plus every page MkDocs publishes under ``docs_dir`` (default
-   ``docs``), found by ``check_docs_gap.published_pages`` so ``exclude_docs`` and the implicit
+1. **Page set.** ``README.md`` and ``CONTRIBUTING.md`` (the root files a reader opens, the second
+   one linked by GitHub from every new-issue and new-PR screen) plus every page MkDocs publishes
+   under ``docs_dir`` (default ``docs``), found by ``check_docs_gap.published_pages`` so ``exclude_docs`` and the implicit
    dot-path and ``templates/`` drops follow MkDocs' own gitignore engine. A ``docs_dir`` that is
    not a directory fails rather than leaving the README alone to pass. A project with no
    ``mkdocs.yml``, or whose page set is empty, fails: a gate that checked nothing must not
@@ -93,6 +94,8 @@ STR_ESCAPE = "docs-lang:ok"
 
 STR_UNTRANSLATED = "docs-lang:untranslated"
 
+TUPLE_ROOT_PAGES = ("README.md", "CONTRIBUTING.md")
+
 STR_DEFAULT_LOCALE = "en"
 
 STR_DEFAULT_DOCS_DIR = "docs"
@@ -161,15 +164,16 @@ def page_set(path_root: pathlib.Path, *, dict_mkdocs: dict) -> list:
     Returns
     -------
     list of pathlib.Path
-        ``README.md`` (when present) and every page MkDocs publishes under ``docs_dir``, sorted.
+        ``README.md`` and ``CONTRIBUTING.md`` (when present) and every page MkDocs publishes under
+        ``docs_dir``, sorted.
     """
     path_docs = path_root / str(dict_mkdocs.get("docs_dir") or STR_DEFAULT_DOCS_DIR)
     list_pages = [
         path_docs / str_rel
         for str_rel in published_pages(path_docs, tuple_specs=unpublished_specs(dict_mkdocs))
     ]
-    path_readme = path_root / "README.md"
-    return sorted({*list_pages, *([path_readme] if path_readme.is_file() else [])})
+    list_root = [path_root / str_name for str_name in TUPLE_ROOT_PAGES]
+    return sorted({*list_pages, *(path_page for path_page in list_root if path_page.is_file())})
 
 
 def _fence_toggles(str_open: str, *, str_marker: str, str_info: str) -> bool:

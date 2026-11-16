@@ -4,7 +4,11 @@
 This file is written in ENGLISH on purpose, even when the project's published docs are
 localized: a security policy is a security-researcher / contributor surface, like code, commit
 messages and CI output. Only the published documentation follows the docs site's own language.
-The language boundary is the AUDIENCE, not the repository.
+The language boundary is the AUDIENCE, not the repository: the language follows who reads the
+text, and each text has one source (the table in BlueprintX's CONTRIBUTING.md, "Language
+boundary", blueprintx#1180). A non-English scaffold adds exactly one localized line under the
+title that names the private reporting channel (scaffold_render_security); the policy itself
+stays English.
 
 GitHub auto-detects a root SECURITY.md and flips "Security policy" to Enabled — no API call.
 The matching intake channel (private vulnerability reporting) is enabled by
