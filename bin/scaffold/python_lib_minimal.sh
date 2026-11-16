@@ -132,11 +132,12 @@ rewrite_internal_imports() {
     while IFS= read -r file; do
         sed_inplace -E \
             -e "s@^([[:space:]]*)(from|import) utils\.@\1\2 ${pkg_prefix}.utils.@" \
+            -e "s@^from src\.utils import@from ${pkg_prefix}.utils import@" \
             -e "s@^([[:space:]]*)(from|import) config\.@\1\2 ${pkg_prefix}.config.@" \
             -e "s@^([[:space:]]*)(from|import) ports\.@\1\2 ${pkg_prefix}.config.ports.@" \
             -e "s@^([[:space:]]*)(from|import) chassis\.typing@\1\2 ${pkg_prefix}.utils.typing@" \
             "$file"
-    done < <(grep -rlE "^[[:space:]]*(from|import) (utils|config|ports|chassis)\." "$internal_dir" 2>/dev/null)
+    done < <(grep -rlE "^from src\.utils import|^[[:space:]]*(from|import) (utils|config|ports|chassis)\." "$internal_dir" 2>/dev/null)
 }
 
 copy_internal_otel() {
@@ -155,7 +156,7 @@ copy_internal_utils() {
     local -a modules=(
         __init__.py dtypes.py br_identifiers.py http_downloader.py
         dbapi.py tabular_reader.py xml_reader.py provenance.py sidecar_metadata.py text.py
-        zip_extractor.py raw_workspace.py daily_cache.py
+        zip_extractor.py dates.py raw_workspace.py daily_cache.py
         regime_window.py regime_registry.py regime_adapter.py spec_gap_registry.py
     )
     local -a packages=(retry)
@@ -184,6 +185,7 @@ copy_internal_utils() {
     mkdir -p "$project_path/tests/unit"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_regime_adapters.py" \
         "$project_path/tests/unit/test_regime_adapters.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dates.py" "$project_path/tests/unit/test_dates.py"
     rewrite_internal_imports "$project_path/tests/unit"
 
     print_status "success" "Private internal utils (_internal/utils) applied"
