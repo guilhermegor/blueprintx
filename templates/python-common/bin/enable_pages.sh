@@ -33,7 +33,7 @@ report_gh_failure() {
 	int_reset="${str_limit##* }"
 	if [ "$int_remaining" = "0" ]; then
 		str_when="$(date -d "@$int_reset" 2>/dev/null || date -r "$int_reset" 2>/dev/null || echo "epoch $int_reset")"
-		print_status "warning" "GitHub GraphQL rate limit exhausted — resets at $str_when; re-run 'poetry run poe enable_pages' then${str_err:+ ($str_err)}" >&2
+		print_status "warning" "GitHub GraphQL rate limit exhausted — resets at $str_when; re-run 'poetry run poe enable_pages' after the reset${str_err:+ — gh said: $str_err}" >&2
 		return 0
 	fi
 	print_status "warning" "gh repo view failed: ${str_err:-no output}" >&2
@@ -46,20 +46,18 @@ resolve_repo() {
 		echo "$str_slug"
 		return 0
 	fi
-	local path_err
-	path_err="$(mktemp)"
-	str_slug="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>"$path_err" || true)"
+	local str_err
+	str_slug="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
 	if [ -n "$str_slug" ]; then
-		rm -f "$path_err"
 		echo "$str_slug"
 		return 0
 	fi
-	if ! git remote get-url origin >/dev/null 2>&1; then
+	str_err="$(gh repo view --json nameWithOwner 2>&1 >/dev/null || true)"
+	if [ -z "$(git remote)" ]; then
 		print_status "warning" "No GitHub remote resolved — push the repo to GitHub first" >&2
 	else
-		report_gh_failure "$(cat "$path_err")"
+		report_gh_failure "$str_err"
 	fi
-	rm -f "$path_err"
 	return 1
 }
 
@@ -102,8 +100,7 @@ set_pages_source() {
 
 enable_pages() {
 	local str_repo
-	if ! str_repo="$(resolve_repo)" || [ -z "$str_repo" ]; then
-		print_status "warning" "Could not resolve the GitHub repository — skipping Pages enablement (see the message above)"
+	if ! str_repo="$(resolve_repo)"; then
 		return 0
 	fi
 	set_pages_source "$str_repo"
