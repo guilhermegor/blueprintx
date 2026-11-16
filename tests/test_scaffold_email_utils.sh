@@ -11,6 +11,7 @@ check() {
     if [ "$2" = "$3" ]; then echo "PASS: $1"; else echo "FAIL: $1 (want '$2', got '$3')"; int_failures=$((int_failures + 1)); fi
 }
 
+# shellcheck source=bin/lib/scaffold_email_utils.sh
 source "$REPO_ROOT/bin/lib/scaffold_email_utils.sh"
 
 COMMON_TEMPLATE_ROOT="$REPO_ROOT/templates/python-common"
@@ -37,12 +38,12 @@ run_case() {
 
 int_scaffolds=0
 for str_script in "$REPO_ROOT"/bin/scaffold/python_*.sh; do
-    grep -q 'copy_email_only_utils' "$str_script" || continue
+    grep -Eq '^[[:space:]]+copy_email_only_utils "' "$str_script" || continue
     int_scaffolds=$((int_scaffolds + 1))
     check "$(basename "$str_script") sources the lib" yes \
-        "$(grep -qF 'lib/scaffold_email_utils.sh"' "$str_script" && echo yes || echo no)"
+        "$(grep -Eq '^source .*lib/scaffold_email_utils.sh"' "$str_script" && echo yes || echo no)"
     check "$(basename "$str_script") has no local definition" no \
-        "$(grep -q '^copy_email_only_utils()' "$str_script" && echo yes || echo no)"
+        "$(grep -Eq '^[[:space:]]*(function[[:space:]]+)?copy_email_only_utils[[:space:]]*\(\)' "$str_script" && echo yes || echo no)"
 done
 check "five scaffolds call copy_email_only_utils" 5 "$int_scaffolds"
 
