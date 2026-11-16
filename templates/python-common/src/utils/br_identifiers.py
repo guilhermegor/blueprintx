@@ -2,7 +2,7 @@
 
 The CNPJ/CPF mask, unmask and validate logic (including the 2026 alphanumeric CNPJ) lives in
 ``pure-docs-br``; this module only keeps the project's ``utils.br_identifiers`` import path
-stable. See ``docs/decision-records.md`` in BlueprintX for the rationale.
+stable.
 """
 
 from __future__ import annotations
