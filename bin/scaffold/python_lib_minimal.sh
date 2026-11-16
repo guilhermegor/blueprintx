@@ -310,8 +310,35 @@ lib_minimal_render_pyproject() {
 lib_minimal_drop_runtime_dependencies() {
     local pyproject="$1/pyproject.toml"
     [[ "$ZERO_DEPENDENCY" == "true" ]] || return 0
-    sed_inplace -E '/^(beartype|pandas|numpy|wwdates|openpyxl|defusedxml) = /d;/^\[tool\.deptry\.per_rule_ignores\]$/,/^$/d' "$pyproject"
-    print_status "success" "Zero-dependency: runtime dependency list emptied"
+    python3 - "$pyproject" <<'PY' || exit_error "Zero-dependency: could not empty the runtime dependency list"
+import re
+import sys
+import tomllib
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as fh:
+    text = fh.read()
+
+text = re.sub(
+    r"(?ms)^(\[tool\.poetry\.dependencies\]\n)(.*?)(?=^\[|\Z)",
+    lambda m: m.group(1) + "".join(
+        line for line in m.group(2).splitlines(keepends=True)
+        if line.startswith("python ") or not line.strip()
+    ),
+    text,
+    count=1,
+)
+text = re.sub(r"(?ms)^\[tool\.deptry\.per_rule_ignores\]\n.*?(?=^\[|\Z)", "", text, count=1)
+
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(text)
+
+with open(path, "rb") as fh:
+    dict_deps = tomllib.load(fh)["tool"]["poetry"]["dependencies"]
+if set(dict_deps) != {"python"}:
+    sys.exit(f"runtime dependencies left after the zero-dependency pass: {sorted(dict_deps)}")
+PY
+    print_status "success" "Zero-dependency: runtime dependency list emptied and verified"
 }
 
 lib_minimal_copy_tooling_configs() {

@@ -36,4 +36,60 @@ def test_decorator_accepts_right_type() -> None:
 def test_decorator_rejects_wrong_type() -> None:
     """The decorator validates a standalone function's arguments."""
     with pytest.raises(TypeError):
-        _add(1, b=2.0)
+        _add(1, b=2.0)  # type: ignore[arg-type]
+
+
+@type_checker
+def _total(*values: int) -> int:
+    """Sum variadic ints.
+
+    Parameters
+    ----------
+    *values : int
+        Numbers to add.
+
+    Returns
+    -------
+    int
+        The sum.
+    """
+    return sum(values)
+
+
+@type_checker
+def _scale(factor: float) -> float:
+    """Return ``factor`` unchanged.
+
+    Parameters
+    ----------
+    factor : float
+        A factor.
+
+    Returns
+    -------
+    float
+        The same factor.
+    """
+    return factor
+
+
+def test_variadic_elements_are_checked_one_by_one() -> None:
+    """``*args`` annotated ``int`` accepts ints."""
+    assert _total(1, 2) == 3
+
+
+def test_variadic_rejects_wrong_element() -> None:
+    """A wrong element inside ``*args`` is rejected."""
+    with pytest.raises(TypeError):
+        _total(1, "2")  # type: ignore[arg-type]
+
+
+def test_int_is_accepted_for_float() -> None:
+    """PEP 484 widening: an int satisfies a ``float`` annotation."""
+    assert _scale(1) == 1
+
+
+def test_bool_is_rejected_for_int() -> None:
+    """A bool is not accepted where ``int`` is annotated."""
+    with pytest.raises(TypeError):
+        _add(True, b=2)
