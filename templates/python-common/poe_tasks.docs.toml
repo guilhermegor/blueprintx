@@ -4,7 +4,3 @@ sequence = [
 	{ cmd = "mkdocs serve -a 0.0.0.0:8000 --livereload" },
 ]
 help = "Install the docs deps and serve the site at http://0.0.0.0:8000"
-
-[tool.poe.tasks.docs_server]
-ref = "docs_serve"
-help = "Deprecated alias of docs_serve, removed after the next tagged release"

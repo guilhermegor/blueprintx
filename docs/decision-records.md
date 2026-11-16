@@ -2481,3 +2481,18 @@ threshold would let `v1` replaced by an unrelated `v2` pass, which is the deleti
 exist to catch. Because a pair also suppresses the deletion finding, a rename that drops some
 statements but keeps 0.6 of them is accepted by the integrity gate; lost assertions are still
 counted by the weakening gate, so the two gates are meant to run together.
+
+## The sidecar seam ships no source-specific locator (`sidecar_metadata.py`, #1158)
+
+`utils/sidecar_metadata.py` called itself a generic seam but exported `cvm_meta_url()`, a locator
+that only fits one portal's layout. Nothing in the template imported it, yet all six Python tiers
+shipped it, so every generated project carried a domain-specific function. It was deleted along
+with its test.
+
+A locator is a plain callable the project writes for its own source and calls to build the URL it
+passes to `fetch_sidecar_text`. For example, CVM publishes each dataset's descriptor at
+`<base>/META/meta_<dataset>.txt`, so its locator is
+`lambda str_base, str_key: f"{str_base.rstrip('/')}/META/meta_{str_key}.txt"`. A source publishing an
+`.xsd`, a `.dtd` or an OpenAPI document writes a different one. This page is the only place the
+CVM descriptor URL path is kept, as prose; incident-provenance references such as `opendata-cvm#164` stay where
+they are.
