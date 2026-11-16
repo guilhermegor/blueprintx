@@ -661,3 +661,78 @@ def test_update_says_why_when_the_scaffold_commit_is_unknown_to_the_checkout(
     _update(path_project, path_bx=path_bx)
 
     assert "SKIPPED removed-file check: the scaffold_commit" in capsys.readouterr().out
+
+
+def test_a_crlf_checkout_of_an_unchanged_file_is_not_drift(tmp_path: Path) -> None:
+    """An autocrlf checkout holds the blob's text; folding CRLF makes the two compare equal."""
+    path_ours = tmp_path / "ours.txt"
+    path_theirs = tmp_path / "theirs.txt"
+    path_ours.write_bytes(b"l1\r\nl2\r\n")
+    path_theirs.write_bytes(b"l1\nl2\n")
+
+    str_action, _ = updater.plan_file(path_ours, path_theirs=path_theirs, bytes_base=b"l1\nl2\n")
+
+    assert str_action == "same"
+
+
+def test_fold_crlf_leaves_binary_content_untouched() -> None:
+    """A NUL byte marks binary content, whose CRLF pairs are data, not line endings."""
+    bytes_binary = b"\x00\r\n\x01"
+
+    assert drift.fold_crlf(bytes_binary) == bytes_binary
+
+
+def test_a_merge_keeps_the_crlf_a_project_file_already_has(tmp_path: Path) -> None:
+    """Both sides edited a CRLF file: the merged result stays CRLF instead of flipping to LF."""
+    path_ours = tmp_path / "ours.txt"
+    path_theirs = tmp_path / "theirs.txt"
+    path_ours.write_bytes(b"a\r\nb\r\nc\r\nd\r\ne\r\nf\r\nours\r\n")
+    path_theirs.write_bytes(b"theirs\nb\nc\nd\ne\nf\ng\n")
+
+    str_action, bytes_merged = updater.plan_file(
+        path_ours, path_theirs=path_theirs, bytes_base=b"a\nb\nc\nd\ne\nf\ng\n"
+    )
+
+    assert (str_action, b"\r\n" in bytes_merged, b"\n" in bytes_merged.replace(b"\r\n", b"")) == (
+        "merged",
+        True,
+        False,
+    )
+
+
+def test_a_fast_forward_keeps_the_crlf_a_project_file_already_has(tmp_path: Path) -> None:
+    """The project left a CRLF file alone, so the template's new content lands as CRLF too."""
+    path_ours = tmp_path / "ours.txt"
+    path_theirs = tmp_path / "theirs.txt"
+    path_ours.write_bytes(b"a\r\nb\r\n")
+    path_theirs.write_bytes(b"a\nb\nc\n")
+
+    str_action, bytes_new = updater.plan_file(
+        path_ours, path_theirs=path_theirs, bytes_base=b"a\nb\n"
+    )
+
+    assert (str_action, bytes_new) == ("fast_forward", b"a\r\nb\r\nc\r\n")
+
+
+def test_a_mixed_ending_file_is_not_rewritten_to_crlf(tmp_path: Path) -> None:
+    """One CRLF line among LF lines is not a CRLF file; the new content stays LF."""
+    path_ours = tmp_path / "ours.txt"
+    path_theirs = tmp_path / "theirs.txt"
+    path_ours.write_bytes(b"a\r\nb\n")
+    path_theirs.write_bytes(b"a\nb\nc\n")
+
+    _, bytes_new = updater.plan_file(path_ours, path_theirs=path_theirs, bytes_base=b"a\nb\n")
+
+    assert bytes_new == b"a\nb\nc\n"
+
+
+def test_drift_sees_a_crlf_checkout_of_an_unchanged_file_as_same(tmp_path: Path) -> None:
+    """``_content_state`` folds the CRLF checkout, so it matches the template's LF text."""
+    path_ours = tmp_path / "ours.txt"
+    path_theirs = tmp_path / "theirs.txt"
+    path_ours.write_bytes(b"l1\r\nl2\r\n")
+    path_theirs.write_bytes(b"l1\nl2\n")
+
+    str_state = drift._content_state(path_ours, path_theirs=path_theirs, bytes_base=b"l1\nl2\n")
+
+    assert str_state == "same"

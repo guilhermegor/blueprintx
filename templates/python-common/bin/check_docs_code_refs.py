@@ -442,6 +442,7 @@ def scan_file(
     int_raw = 0
     int_scoped = 0
     list_problems = []
+    path_shown = path_md.relative_to(PATH_ROOT) if path_md.is_relative_to(PATH_ROOT) else path_md
     for int_start, list_body, bool_exempt in fenced_python_blocks(path_md):
         if bool_exempt:
             continue
@@ -456,7 +457,7 @@ def scan_file(
                 path_src, str_module=str_module, list_names=parse_names(str_names)
             )
             if str_problem:
-                list_problems.append(f"{path_md}:{int_lineno}: {str_problem}")
+                list_problems.append(f"{path_shown.as_posix()}:{int_lineno}: {str_problem}")
     return int_raw, int_scoped, list_problems
 
 
