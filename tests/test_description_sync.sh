@@ -123,6 +123,11 @@ check_ptbr_gate() {
 	if bash "$REPO_ROOT/templates/python-common/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
 		fail "pt-BR gate" "accepted an English description under theme.language pt-BR"
 	fi
+	printf 'site_description: "%s"\ntheme: {name: material, language: pt-BR}\n' "$str_en" >"$path_project/mkdocs.yml"
+	if bash "$REPO_ROOT/templates/python-common/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
+		fail "pt-BR gate" "skipped the check for an inline theme mapping"
+	fi
+	printf 'site_description: "%s"\ntheme:\n  name: material\n  language: pt-BR\n' "$str_en" >"$path_project/mkdocs.yml"
 	str_en="Biblioteca para validar os números de documentos"
 	sed -i "s|^description = .*|description = \"$str_en\"|" "$path_project/pyproject.toml"
 	sed -i "s|^site_description: .*|site_description: \"$str_en\"|" "$path_project/mkdocs.yml"

@@ -28,6 +28,7 @@ INT_EXIT_UNREADABLE = 5
 INT_EXIT_NOT_PTBR = 6
 
 RE_SITE_DESCRIPTION = re.compile(r"^site_description:\s*(.*?)\s*$", re.MULTILINE)
+RE_INLINE_LANGUAGE = re.compile(r"[{,][ \t]*language:[ \t]*[\"']?([\w-]+)")
 RE_THEME_LANGUAGE = re.compile(r"^[ \t]+language:[ \t]*[\"']?([\w-]+)")
 RE_SINGLE_QUOTED = re.compile(r"'((?:[^']|'')*)'(.*)$")
 
@@ -162,6 +163,8 @@ def mkdocs_language(path_mkdocs: Path) -> str | None:
     for str_line in path_mkdocs.read_text(encoding="utf-8").splitlines():
         if str_line.startswith("theme:"):
             bool_in_theme = True
+            if match := RE_INLINE_LANGUAGE.search(str_line):
+                return match.group(1)
         elif str_line.strip() and not str_line[0].isspace() and not str_line.startswith("#"):
             bool_in_theme = False
         elif bool_in_theme and (match := RE_THEME_LANGUAGE.match(str_line)):
