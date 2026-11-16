@@ -460,3 +460,104 @@ def test_main_returns_zero_when_every_axis_is_green(
     monkeypatch.setattr(gate, "_enable_auto_merge", lambda *a, **k: None)
 
     assert gate.main() == 0
+
+
+_STR_NOT_ACCESSIBLE = "Resource not accessible by integration"
+_DICT_REFUSED = {"errors": [{"message": _STR_NOT_ACCESSIBLE}]}
+
+
+def _set_main_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point ``main()`` at a fake pull request whose auto-merge arming is refused.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        The fixture used to set the environment and the seams.
+    """
+    monkeypatch.setenv("GITHUB_TOKEN", "tkn")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "7")
+    dict_green = {"tests": "success"}
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: (dict_green, {}))
+    monkeypatch.setattr(
+        gate,
+        "_api",
+        lambda str_method, *, str_url, dict_payload=None: (
+            _DICT_REFUSED
+            if str_url.endswith("/graphql")
+            else _fake_api_for_main(str_method, str_url=str_url, dict_payload=dict_payload)
+        ),
+    )
+
+
+def test_enable_auto_merge_reports_a_read_only_token_as_a_skip_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused mutation yields the refusal text as the skip reason, never an exception."""
+    monkeypatch.setattr(gate, "_api", lambda *a, **k: _DICT_REFUSED)
+    assert gate._enable_auto_merge("PR_NODE", str_head_sha="abc") == _STR_NOT_ACCESSIBLE
+
+
+def test_enable_auto_merge_returns_none_when_armed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A clean response means auto-merge is armed, so there is no skip reason."""
+    monkeypatch.setattr(gate, "_api", lambda *a, **k: {"data": {"clientMutationId": None}})
+    assert gate._enable_auto_merge("PR_NODE", str_head_sha="abc") is None
+
+
+def test_enable_auto_merge_reports_a_transport_failure_as_a_skip_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An HTTP error (``_api`` returns ``None``) is a skip too, not a crash."""
+    monkeypatch.setattr(gate, "_api", lambda *a, **k: None)
+    str_reason = gate._enable_auto_merge("PR_NODE", str_head_sha="abc")
+    assert isinstance(str_reason, str)
+    assert "failed" in str_reason
+
+
+def test_enable_auto_merge_never_reports_a_refusal_as_armed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ``errors`` list with no message text is still a skip with a non-empty reason."""
+    monkeypatch.setattr(gate, "_api", lambda *a, **k: {"errors": ["opaque"]})
+    assert gate._enable_auto_merge("PR_NODE", str_head_sha="abc")
+
+
+def test_enable_auto_merge_binds_the_mutation_to_the_polled_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``expectedHeadOid`` carries the polled head so a later push cannot be armed."""
+    list_payloads: list = []
+    monkeypatch.setattr(
+        gate, "_api", lambda *a, dict_payload=None, **k: list_payloads.append(dict_payload)
+    )
+    gate._enable_auto_merge("PR_NODE", str_head_sha="abc")
+    assert list_payloads[0]["variables"]["sha"] == "abc"
+
+
+def test_is_dependabot_matches_only_the_dependabot_author() -> None:
+    """The generic gate leaves Dependabot PRs to ``dependabot-auto-merge.yml``."""
+    assert gate._is_dependabot({"user": {"login": "dependabot[bot]"}})
+
+
+def test_graphql_refusal_is_a_warning_annotation_not_an_error(
+    capsys: pytest.CaptureFixture, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refusal must not paint the run with an ``::error::`` annotation."""
+    monkeypatch.setattr(gate, "_api", lambda *a, **k: _DICT_REFUSED)
+    gate._graphql("mutation{}", dict_vars={})
+    assert capsys.readouterr().err.startswith("::warning::")
+
+
+def test_main_exits_zero_when_auto_merge_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused arming leaves the gate's verdict untouched: green axes still exit 0."""
+    _set_main_env(monkeypatch)
+    assert gate.main() == 0
+
+
+def test_main_reports_the_skip_reason_when_auto_merge_is_refused(
+    capsys: pytest.CaptureFixture, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The skip and its reason reach the log so the refusal is never silent."""
+    _set_main_env(monkeypatch)
+    gate.main()
+    assert f"step skipped: {_STR_NOT_ACCESSIBLE}" in capsys.readouterr().out
