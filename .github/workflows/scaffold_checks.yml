@@ -117,6 +117,9 @@ jobs:
       - name: Generated projects ship the comment ratchet
         run: bash tests/test_scaffold_comment_budget.sh
 
+      - name: E-mail-only utils follow the e-mail answer
+        run: bash tests/test_scaffold_email_utils.sh
+
       - name: The baseline must not exceed the base branch's
         if: github.event_name == 'pull_request'
         env:
