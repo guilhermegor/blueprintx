@@ -45,7 +45,7 @@ SET_LINT = {
     "template_drift",
     "check_commit_msg",
 }
-SET_DOCS = {"docs_serve", "docs_server"}
+SET_DOCS = {"docs_serve"}
 SET_DB = {"db_up", "db_backup", "db_restore"}
 SET_MIGRATE = {
     "migrate_new",
