@@ -83,7 +83,7 @@ def daily_cache_path(
     path_cache_dir : pathlib.Path
         Directory the cached artifacts live in.
     str_key : str
-        Kebab-case source name, e.g. ``"cvm-daily-register"``.
+        Kebab-case source name, e.g. ``"example-daily-register"``.
     dt_reference : datetime.date
         The **data's** reference date — not the moment of the run.
     str_suffix : str
