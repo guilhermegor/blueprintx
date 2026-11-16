@@ -43,6 +43,7 @@ bin/ca_bundle.pem
 
 docs/blueprintx-lessons.md
 docs/dotfiles-dev-lessons.md
+.specs/_lessons/
 
 .env
 .env.local
