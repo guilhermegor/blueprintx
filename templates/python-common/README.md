@@ -53,7 +53,8 @@ poetry run poe init
 `poe` lives inside the virtualenv, so `bin/venv.sh` creates it first; `poetry run poe init` then
 runs it without activating anything. If `poetry` is not on `PATH` (for example right after
 `bin/venv.sh` installed it with `--user`), use `bash bin/poe_exec.sh init`, which finds the
-venv's `poe` on its own.
+venv's `poe` on its own. Behind a TLS-inspecting proxy with `bin/corporate_ca.pem` in place, run
+`init` through `bash bin/poe_exec.sh init` so the CA bundle is wired for the downloads.
 
 <!-- slug: usage -->
 ### Usage

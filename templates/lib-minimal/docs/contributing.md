@@ -14,7 +14,7 @@ entry point first. For that very first bootstrap use a plain shell (not inside `
 then use `poetry run poe` for the rest:
 
 ```bash
-bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
+bash bin/venv.sh      # create the Poetry venv + install deps, poethepoet included
 poetry run poe init   # .env (when the tier ships one), venv, git hooks, GitHub helpers
 ```
 

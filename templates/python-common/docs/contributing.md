@@ -13,7 +13,7 @@ Everything you need to develop, test, and ship changes to this service.
 entry point first, then use `poetry run poe` for the rest:
 
 ```bash
-bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
+bash bin/venv.sh      # create the Poetry venv + install deps, poethepoet included
 poetry run poe init   # .env, venv, git hooks, GitHub helpers
 ```
 

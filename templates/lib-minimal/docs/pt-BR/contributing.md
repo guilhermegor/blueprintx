@@ -14,12 +14,12 @@ bootstrap primeiro pelo ponto de entrada em shell. Nesse primeiro bootstrap use 
 dentro de `poetry run`, do `poe` ou de um venv ativado); depois use `poetry run poe` para o resto:
 
 ```bash
-bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
+bash bin/venv.sh      # create the Poetry venv + install deps, poethepoet included
 poetry run poe init   # .env (when the tier ships one), venv, git hooks, GitHub helpers
 ```
 
 Se o `poetry` não estiver no `PATH`, `bash bin/poe_exec.sh <task>` faz o mesmo: ele encontra o
-`poe` do venv sem depender do `poetry` e monta o bundle de CAs corporativa quando
+`poe` do venv sem depender do `poetry` e monta o bundle de CAs corporativas quando
 `bin/corporate_ca.pem` existe. Veja a tabela "`poetry run poe` ou `bash bin/poe_exec.sh`?" no README.
 
 O `init` compõe `ensure_env` (cria o `.env`; aqui é apenas uma linha informativa, já que uma
