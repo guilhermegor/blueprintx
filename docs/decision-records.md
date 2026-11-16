@@ -2489,10 +2489,10 @@ that only fits one portal's layout. Nothing in the template imported it, yet all
 shipped it, so every generated project carried a domain-specific function. It was deleted along
 with its test.
 
-A locator is a plain function the project writes for its own source and calls to build the URL it
+A locator is a plain callable the project writes for its own source and calls to build the URL it
 passes to `fetch_sidecar_text`. For example, CVM publishes each dataset's descriptor at
 `<base>/META/meta_<dataset>.txt`, so its locator is
 `lambda str_base, str_key: f"{str_base.rstrip('/')}/META/meta_{str_key}.txt"`. A source publishing an
 `.xsd`, a `.dtd` or an OpenAPI document writes a different one. This page is the only place the
-CVM descriptor path is kept, as prose; incident-provenance references such as `opendata-cvm#164` stay where
+CVM descriptor URL path is kept, as prose; incident-provenance references such as `opendata-cvm#164` stay where
 they are.

@@ -197,7 +197,8 @@ a reader into a machine for false rejections.
 ## Import the sidecar schema descriptor when the source publishes one
 
 Many open-data portals ship a **sidecar descriptor** beside the data (a data dictionary of field
-names/descriptions/types/sizes) — a `.xsd`/`.dtd`, an OpenAPI doc.
+names/descriptions/types/sizes) — a `;`-separated `.txt` dictionary, a `.xsd`/`.dtd`, an
+OpenAPI doc.
 When a source provides one it is the *authoritative* schema and does two jobs, both served by
 the `utils/sidecar_metadata.py` seam:
 
