@@ -79,8 +79,7 @@ A pure transform written for one value (`to_decimal`, `mask_cnpj`, `is_valid_cnp
 usually also needed over a whole column. Rather than forcing every caller through
 `series.map(fn)` — slow, and it silently turns a per-element exception into `NaN` — the
 convention is to ship **both** forms: the scalar function, plus a vectorised sibling built on
-`numpy`/`pandas` operations, not a `.map()` wrapper. See `decimals.py` and `br_identifiers.py`
-for worked examples.
+`numpy`/`pandas` operations, not a `.map()` wrapper. See `decimals.py` for a worked example.
 
 ## Vendor-scoped subpackages
 
