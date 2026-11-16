@@ -197,4 +197,26 @@ printf 'Run `npm run build; npm run build && npm install --prefix ./client`.\n' 
 bash "$GATE" "$str_proj" >/dev/null 2>&1
 expect "a fully valid chain passes" 0 "$?"
 
+for str_tier in react-spa-webpack ts-lib; do
+	str_promoted="$(mktemp -d)"
+	bash -c 'source "$1"; PROJECT_PATH="$2"; TIER="$3"; GITHUB_USERNAME=octo; PROJECT_NAME=demo; PROJECT_DISPLAY_NAME=Demo; REPOSITORY=octo/demo; export PROJECT_NAME GITHUB_USERNAME PROJECT_DISPLAY_NAME REPOSITORY; copy_online_assets' \
+		_ "$REPO_ROOT/bin/promote_offline_to_online.sh" "$str_promoted" "$str_tier" >/dev/null 2>&1
+	expect "$str_tier promotion runs" 0 "$?"
+	has "$str_tier promotion restores .github/AGENTS.md" '# `.github/`' "$str_promoted/.github/AGENTS.md"
+	has "$str_tier promotion renders the TypeScript gate parity" 'BOTH the git hooks and CI' "$str_promoted/.github/AGENTS.md"
+	str_py="no"
+	grep -qE 'ruff|requires-python|mypy|check-docstrings|\.pre-commit-config' "$str_promoted/.github/AGENTS.md" && str_py="yes"
+	expect "$str_tier promoted AGENTS.md carries no Python gate text" no "$str_py"
+	[ -x "$str_promoted/bin/check_doc_commands.sh" ]
+	expect "$str_tier promotion restores an executable bin/check_doc_commands.sh" 0 "$?"
+	[ -n "$(find "$str_promoted/src" -name assertion-weakening.cjs -print -quit)" ]
+	expect "$str_tier promotion restores the assertion-weakening gate" 0 "$?"
+	rm -rf "$str_promoted"
+done
+str_promoted="$(mktemp -d)"
+bash -c 'source "$1"; PROJECT_PATH="$2"; TIER=ddd-service-native-db; GITHUB_USERNAME=octo; PROJECT_NAME=demo; export PROJECT_NAME GITHUB_USERNAME; copy_online_assets' \
+	_ "$REPO_ROOT/bin/promote_offline_to_online.sh" "$str_promoted" >/dev/null 2>&1
+has "a Python promotion keeps the Python gate parity text" 'ruff format --check' "$str_promoted/.github/AGENTS.md"
+rm -rf "$str_promoted"
+
 [ "$int_failures" -eq 0 ]
