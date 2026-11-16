@@ -43,6 +43,17 @@ Python 3.11+ is the only prerequisite; `bin/venv.sh` installs [Poetry](https://p
 <!-- slug: install -->
 ### Install
 
+<!-- only: library -->
+#### As a dependency
+
+```bash
+pip install ${PROJECT_NAME}
+poetry add ${PROJECT_NAME}
+```
+
+#### For development
+
+<!-- /only -->
 ```bash
 git clone https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git
 cd ${PROJECT_NAME}

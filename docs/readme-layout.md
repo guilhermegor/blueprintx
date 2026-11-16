@@ -38,6 +38,13 @@ Further rules:
 - `features` is optional: its position is checked only when the section is present.
   `documentation` is required for `library` and holds the docs site URL plus the local serve command: `bash bin/poe_exec.sh docs_serve`
   for Python libraries, `npm run docs:start` for TypeScript libraries.
+- `install` in the `library` archetype has two `####` subparts, in both languages: "As a
+  dependency" (`pip install` and `poetry add`, or `npm install` for ts-lib; pt-BR "Como
+  dependência") and "For development" (clone plus `bin/venv.sh` and `bin/poe_exec.sh init`;
+  pt-BR "Para desenvolver"). Service, CLI, SPA and USB-tool archetypes keep the single
+  clone-and-bootstrap block, since that is their real install. The Python subparts come from
+  an `only: library` block in `templates/python-common/README.md`, which every Python tier
+  renders. The gate reads `####` headings inside a slug section without complaint.
 - The logo is centered on its own line under the H1 (`<p align="center"><img ... width="200"></p>`),
   never inside the heading.
 - Badge order: status, python, pypi, downloads, docs, linting, mypy, coverage, license, issues,

@@ -25,8 +25,18 @@ The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_N
 <!-- slug: install -->
 ### Install
 
+#### As a dependency
+
 ```bash
 npm install ${PROJECT_NAME}
+```
+
+#### For development
+
+```bash
+git clone https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git
+cd ${PROJECT_NAME}
+npm install
 ```
 
 <!-- slug: usage -->

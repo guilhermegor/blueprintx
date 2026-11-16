@@ -41,7 +41,12 @@ The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_N
 <!-- slug: install -->
 ### Install
 
-Prerequisites and the install command for pip and Poetry, extras included.
+<!-- only: library -->
+Two `####` subparts: "As a dependency" (`pip install` and `poetry add`, extras included) and
+"For development" (clone and bootstrap).
+<!-- /only -->
+
+Prerequisites and the clone and bootstrap commands.
 
 <!-- slug: usage -->
 ### Usage
