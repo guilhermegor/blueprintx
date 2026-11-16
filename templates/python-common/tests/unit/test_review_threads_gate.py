@@ -712,6 +712,24 @@ def test_fetch_page_ignores_rate_limit_wording_in_a_successful_payload(
     assert dict_pr["reviewThreads"]["nodes"][0]["body"].startswith("RATE_LIMITED")
 
 
+def _runtime_error_from(fn_call: Callable[[], object]) -> RuntimeError:
+    """Return the ``RuntimeError`` that ``fn_call`` raises, failing if it raises none.
+
+    Parameters
+    ----------
+    fn_call : Callable[[], object]
+        The call expected to raise.
+
+    Returns
+    -------
+    RuntimeError
+        The raised error, for the caller to assert on.
+    """
+    with pytest.raises(RuntimeError) as cls_info:
+        fn_call()
+    return cls_info.value
+
+
 def test_fetch_page_keeps_a_non_rate_limit_error_a_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -720,8 +738,8 @@ def test_fetch_page_keeps_a_non_rate_limit_error_a_failure(
     json_err = '{"errors": [{"type": "NOT_FOUND", "message": "mentions a rate limit"}]}'
     cls_run = Mock(returncode=0, stdout=json_err, stderr="")
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
-    with pytest.raises(RuntimeError) as cls_info:
-        cls_gate._fetch_page(
+    cls_error = _runtime_error_from(
+        lambda: cls_gate._fetch_page(
             "o",
             str_repo="r",
             int_number=1,
@@ -729,7 +747,8 @@ def test_fetch_page_keeps_a_non_rate_limit_error_a_failure(
             str_thread_cursor=None,
             str_comment_cursor=None,
         )
-    assert not isinstance(cls_info.value, cls_gate.RateLimitedError)
+    )
+    assert not isinstance(cls_error, cls_gate.RateLimitedError)
 
 
 def test_fetch_page_ignores_rate_limit_wording_in_a_failed_calls_data(
@@ -745,11 +764,12 @@ def test_fetch_page_ignores_rate_limit_wording_in_a_failed_calls_data(
     )
     cls_run = Mock(returncode=1, stdout=json_partial, stderr="gh: forbidden")
     monkeypatch.setattr(cls_gate.subprocess, "run", Mock(return_value=cls_run))
-    with pytest.raises(RuntimeError) as cls_info:
-        cls_gate._fetch_page(
+    cls_error = _runtime_error_from(
+        lambda: cls_gate._fetch_page(
             "o", str_repo="r", int_number=1, str_review_cursor=None, str_thread_cursor=None
         )
-    assert not isinstance(cls_info.value, cls_gate.RateLimitedError)
+    )
+    assert not isinstance(cls_error, cls_gate.RateLimitedError)
 
 
 def test_main_json_mode_reports_rate_limit_as_json(
@@ -801,13 +821,23 @@ def test_main_reports_rate_limit_in_one_line_with_distinct_exit(
     monkeypatch.setattr(
         cls_gate, "fetch_pull_request", Mock(side_effect=cls_gate.RateLimitedError("budget at 0"))
     )
-    assert cls_gate.main([]) == _INT_3
+    int_code = cls_gate.main([])
     cls_captured = capsys.readouterr()
     str_out = cls_captured.out.strip()
-    assert len(str_out.splitlines()) == 1
-    assert "rate limit" in str_out.lower()
-    assert str_expected in str_out
-    assert "budget at 0" in cls_captured.err
+    dict_observed = {
+        "code": int_code,
+        "lines": len(str_out.splitlines()),
+        "names_rate_limit": "rate limit" in str_out.lower(),
+        "has_reset": str_expected in str_out,
+        "err_has_budget": "budget at 0" in cls_captured.err,
+    }
+    assert dict_observed == {
+        "code": _INT_3,
+        "lines": 1,
+        "names_rate_limit": True,
+        "has_reset": True,
+        "err_has_budget": True,
+    }
 
 
 @pytest.mark.parametrize(
@@ -3031,21 +3061,18 @@ def test_ladder_marker_without_a_findings_line_is_rejected() -> None:
     assert _missing_with([dict_prose], tuple_markers=_TUPLE_MARKERS) is not None
 
 
-def test_later_ladder_comment_with_findings_supersedes_an_earlier_clean_one() -> None:
+@pytest.mark.parametrize("int_step", [1, -1], ids=["in-order", "reversed"])
+def test_later_ladder_comment_with_findings_supersedes_an_earlier_clean_one(
+    *, int_step: int
+) -> None:
     """The latest qualifying marker decides: a re-run that found something blocks."""
     dict_later = {
         **_marker_comment("OWNER"),
         "body": f"{_MARKER}\nReviewed head: {_HEAD}\n\n2 finding(s) across 3 reviewed file(s).",
         "createdAt": "2099-02-01T00:00:00Z",
     }
-    assert (
-        _missing_with([_marker_comment("OWNER"), dict_later], tuple_markers=_TUPLE_MARKERS)
-        is not None
-    )
-    assert (
-        _missing_with([dict_later, _marker_comment("OWNER")], tuple_markers=_TUPLE_MARKERS)
-        is not None
-    )
+    list_comments = [_marker_comment("OWNER"), dict_later][::int_step]
+    assert _missing_with(list_comments, tuple_markers=_TUPLE_MARKERS) is not None
 
 
 @pytest.mark.parametrize("str_head_line", ["Reviewed head: " + "0" * 40, "no head line here"])
@@ -4500,11 +4527,16 @@ def test_reviewed_before_base_change_ignores_a_reply_only_review_after_the_chang
     )
 
 
-def test_query_asks_for_the_creation_time_of_both_retarget_events() -> None:
+@pytest.mark.parametrize(
+    "str_fragment",
+    [
+        "... on BaseRefChangedEvent { createdAt }",
+        "... on AutomaticBaseChangeSucceededEvent { createdAt }",
+    ],
+)
+def test_query_asks_for_the_creation_time_of_both_retarget_events(str_fragment: str) -> None:
     """The carry-forward needs ``createdAt`` on the manual and the automatic event alike."""
-    str_query = _load_gate()._QUERY
-    assert "... on BaseRefChangedEvent { createdAt }" in str_query
-    assert "... on AutomaticBaseChangeSucceededEvent { createdAt }" in str_query
+    assert str_fragment in _load_gate()._QUERY
 
 
 def test_review_carried_forward_long_review_list_makes_at_most_cap_plus_one_calls() -> None:
@@ -4571,11 +4603,12 @@ def test_fetch_pull_request_keeps_timeline_items_across_pages(
     assert dict_pr["timelineItems"]["nodes"]
 
 
-def test_query_reads_both_retarget_event_types() -> None:
+@pytest.mark.parametrize(
+    "str_event", ["BASE_REF_CHANGED_EVENT", "AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT"]
+)
+def test_query_reads_both_retarget_event_types(str_event: str) -> None:
     """Manual and automatic retargets both change the base the review was written against."""
-    str_query = _load_gate()._QUERY
-    assert "BASE_REF_CHANGED_EVENT" in str_query
-    assert "AUTOMATIC_BASE_CHANGE_SUCCEEDED_EVENT" in str_query
+    assert str_event in _load_gate()._QUERY
 
 
 @pytest.mark.parametrize(
