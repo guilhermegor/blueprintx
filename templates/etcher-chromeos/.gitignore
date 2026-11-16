@@ -6,3 +6,4 @@
 *.xz
 .tools/
 downloads/
+.specs/_lessons/
