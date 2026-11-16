@@ -39,6 +39,17 @@ O Python 3.11+ é o único pré-requisito; o `bin/venv.sh` instala o [Poetry](ht
 <!-- slug: install -->
 ### Instalação
 
+#### Como dependência
+
+```bash
+pip install ${PROJECT_NAME}
+poetry add ${PROJECT_NAME}
+```
+
+Estes comandos funcionam depois que a primeira versão for publicada no PyPI.
+
+#### Para desenvolver
+
 ```bash
 git clone https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git
 cd ${PROJECT_NAME}

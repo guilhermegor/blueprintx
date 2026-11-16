@@ -38,6 +38,7 @@ project/
 | Folder | Purpose | Expected Content |
 |--------|---------|------------------|
 | `src/<project_name>/` | Library source code | Python modules, classes, functions — your library's public API |
+| `src/<project_name>/_internal/utils/` | Vendored utilities | Private copies of the shared helpers, including `dates.py` (Brazilian business days via `wwdates`) and `zip_extractor.py`; every Python tier ships both |
 | `tests/unit/` | Unit tests | Fast, isolated tests for individual functions and classes |
 | `tests/integration/` | Integration tests | Tests with external dependencies (databases, APIs, file systems) |
 | `tests/performance/` | Performance tests | Benchmarks, load tests, memory profiling |
