@@ -29,7 +29,7 @@ ${PROJECT_DESCRIPTION}
 <!-- slug: documentation -->
 ## Documentação
 
-O site de documentação fica em https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/. Para servi-lo localmente, rode `bash bin/poe_exec.sh docs_serve`.
+O site de documentação fica em https://${GITHUB_USERNAME}.github.io/${PROJECT_NAME}/. Para servi-lo localmente, rode `poetry run poe docs_serve`.
 
 <!-- slug: getting-started -->
 ## Primeiros passos
@@ -43,11 +43,14 @@ O Python 3.11+ é o único pré-requisito; o `bin/venv.sh` instala o [Poetry](ht
 git clone https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git
 cd ${PROJECT_NAME}
 bash bin/venv.sh
-bash bin/poe_exec.sh init
+poetry run poe init
 ```
 
 O `poe` vive dentro do virtualenv, então o `bin/venv.sh` o cria primeiro; em seguida o
-`bin/poe_exec.sh` roda o `poe init` sem ativar nada.
+`poetry run poe init` o executa sem ativar nada. Se o `poetry` não estiver no `PATH` (por exemplo
+logo depois de o `bin/venv.sh` instalá-lo com `--user`), use `bash bin/poe_exec.sh init`, que
+encontra o `poe` do venv sozinho. Atrás de um proxy com inspeção TLS e com `bin/corporate_ca.pem`
+no lugar, rode o `init` por `bash bin/poe_exec.sh init`, para que o bundle de CAs seja usado nos downloads.
 
 <!-- slug: usage -->
 ### Uso
@@ -75,16 +78,28 @@ ${PROJECT_NAME}/
 <!-- slug: development -->
 ## Desenvolvimento
 
-Depois do bootstrap descrito em Instalação, qualquer tarefa pode ser executada pelo script de
-bootstrap: `bash bin/poe_exec.sh <task>`; e `bash bin/poe_exec.sh` sem tarefa lista todas elas.
+Depois do bootstrap descrito em Instalação, qualquer tarefa pode ser executada com
+`poetry run poe <task>`; e `poetry run poe` sem tarefa lista todas elas.
 
 ```bash
-bash bin/poe_exec.sh unit_tests
-bash bin/poe_exec.sh integration_tests
+poetry run poe unit_tests
+poetry run poe integration_tests
 ```
 
 Quando o deploy da documentação do primeiro release tiver criado a branch `gh-pages`, rode
-`bash bin/poe_exec.sh enable_pages` uma vez: até que essa branch exista, o `init` deixa o Pages intocado.
+`poetry run poe enable_pages` uma vez: até que essa branch exista, o `init` deixa o Pages intocado.
+
+### `poetry run poe` ou `bash bin/poe_exec.sh`?
+
+Os dois rodam a mesma tarefa do mesmo `poe` do venv. Use `poetry run poe`, o comando que a
+comunidade conhece; o `bin/poe_exec.sh` cobre os casos em que ele não basta:
+
+| Situação | `poetry run poe` | `bash bin/poe_exec.sh` |
+|---|---|---|
+| Máquina comum, `poetry` no `PATH` | funciona | funciona |
+| `poetry` fora do `PATH` (ex.: recém-instalado com `--user` pelo `bin/venv.sh`) | falha: `poetry: command not found` | funciona: acha `.venv/bin/poe` (ou `.venv/Scripts/poe.exe` no Windows) sem o `poetry` |
+| Rede corporativa com inspeção TLS (`bin/corporate_ca.pem` presente) | tarefas que baixam algo podem falhar com erro de certificado | funciona: monta o bundle de CAs e exporta `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE`, `CURL_CA_BUNDLE` e `PIP_CERT` antes de rodar a tarefa |
+| `poe` não instalado | erro genérico do Poetry | lista as formas de instalar (`bin/venv.sh`, `pipx`, plugin do Poetry) |
 
 <!-- slug: public-api -->
 ## API pública

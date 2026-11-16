@@ -130,7 +130,8 @@ DICT_EXPECTED_ABSENT = {
 }
 
 _RE_EXPLICIT_CP = re.compile(
-    r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*?COMMON_TEMPLATE_ROOT/tests/unit/(test_[a-z0-9_]+\.py)",
+    r"^[^\S\n]*(?!#)\S*\bcp\b[^\n]*?COMMON_TEMPLATE_ROOT(?::\?)?\}?"
+    r"/tests/unit/(test_[a-z0-9_]+\.py)",
     re.M,
 )
 

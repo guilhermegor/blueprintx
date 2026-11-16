@@ -10,12 +10,16 @@ Everything you need to develop, test, and ship changes to this service.
 ## Setting up for development
 
 `poe` is a dev dependency, so it exists only once the virtualenv does. Bootstrap with the shell
-entry point first, then let `poe_exec.sh` find the venv's `poe` for the rest:
+entry point first, then use `poetry run poe` for the rest:
 
 ```bash
-bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
-bash bin/poe_exec.sh init  # .env, venv, git hooks, GitHub helpers
+bash bin/venv.sh      # create the Poetry venv + install deps, poethepoet included
+poetry run poe init   # .env, venv, git hooks, GitHub helpers
 ```
+
+If `poetry` is not on `PATH`, `bash bin/poe_exec.sh <task>` does the same: it finds the venv's
+`poe` without depending on `poetry`, and wires the corporate CA bundle when `bin/corporate_ca.pem`
+exists. See the README's "`poetry run poe` or `bash bin/poe_exec.sh`?" table.
 
 
 ⚠️ **Bootstrap is shell, not `poe`.** Poe is a dev dependency, so it lives inside the venv these
@@ -23,8 +27,8 @@ commands create and cannot be the thing that builds it. After bootstrap, everyth
 task — run bare `poe` to list them. See [Usage](usage.md).
 
 The bare `poe <task>` commands on this page assume the venv is active (`poetry shell`, or
-`source .venv/bin/activate`). Without it, run each one as `bash bin/poe_exec.sh <task>`, which
-finds the venv's `poe` on its own.
+`source .venv/bin/activate`). Without it, run each one as `poetry run poe <task>` (or
+`bash bin/poe_exec.sh <task>` when `poetry` is not on `PATH`).
 
 `init` composes `ensure_env` (seed `.env`), `venv` (create the Poetry virtualenv, install all
 deps), `precommit` (install the git hooks), then `enable_pages`, `enable_repo_rules` and

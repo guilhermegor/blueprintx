@@ -480,8 +480,17 @@ def test_the_unjustified_failure_says_how_to_justify_locally(
     assert str_needle in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("str_text", "bool_present"),
+    [("TEST_CHANGE_OK is ignored under CI", True), ("git commit", False)],
+    ids=["names-the-ignored-env-var", "omits-the-commit-advice"],
+)
 def test_the_ci_failure_leads_with_the_pr_body_line_not_the_env_var(
-    monkeypatch: pytest.MonkeyPatch, *, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    capsys: pytest.CaptureFixture[str],
+    str_text: str,
+    bool_present: bool,
 ) -> None:
     """Under CI the advice names the PR-body line and says the env var is ignored.
 
@@ -491,6 +500,10 @@ def test_the_ci_failure_leads_with_the_pr_body_line_not_the_env_var(
         Sets the CI marker and removes any trailer.
     capsys : pytest.CaptureFixture[str]
         Captures the report text.
+    str_text : str
+        A fragment of the report.
+    bool_present : bool
+        Whether the fragment must appear in the report.
     """
     monkeypatch.setattr(gate, "_git", lambda _args: "")
     monkeypatch.setenv("CI", "true")
@@ -498,8 +511,7 @@ def test_the_ci_failure_leads_with_the_pr_body_line_not_the_env_var(
 
     str_out = capsys.readouterr().out
 
-    assert "TEST_CHANGE_OK is ignored under CI" in str_out
-    assert "git commit" not in str_out
+    assert (str_text in str_out) is bool_present
 
 
 def test_ci_ignores_test_change_ok_end_to_end(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -11,12 +11,16 @@ Everything you need to develop, test, and release this library.
 
 `poe` is a dev dependency, so it exists only once the virtualenv does. Bootstrap with the shell
 entry point first. For that very first bootstrap use a plain shell (not inside `poetry run`, `poe` or an activated venv),
-then let `poe_exec.sh` find the venv's `poe` for the rest:
+then use `poetry run poe` for the rest:
 
 ```bash
-bash bin/venv.sh           # create the Poetry venv + install deps, poethepoet included
-bash bin/poe_exec.sh init  # .env (when the tier ships one), venv, git hooks, GitHub helpers
+bash bin/venv.sh      # create the Poetry venv + install deps, poethepoet included
+poetry run poe init   # .env (when the tier ships one), venv, git hooks, GitHub helpers
 ```
+
+If `poetry` is not on `PATH`, `bash bin/poe_exec.sh <task>` does the same: it finds the venv's
+`poe` without depending on `poetry`, and wires the corporate CA bundle when `bin/corporate_ca.pem`
+exists. See the README's "`poetry run poe` or `bash bin/poe_exec.sh`?" table.
 
 `init` composes `ensure_env` (seed `.env`; an info-line no-op here, since a library ships no
 `.env.example`), `venv` (create the Poetry virtualenv, install **all** dependencies including

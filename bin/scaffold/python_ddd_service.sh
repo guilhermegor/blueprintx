@@ -10,6 +10,8 @@ source "$SCRIPT_DIR/../lib/scaffold_python_templates.sh"
 source "$SCRIPT_DIR/../lib/scaffold_git_remote.sh"
 # shellcheck source=bin/lib/scaffold_readme.sh
 source "$SCRIPT_DIR/../lib/scaffold_readme.sh"
+# shellcheck source=bin/lib/scaffold_email_utils.sh
+source "$SCRIPT_DIR/../lib/scaffold_email_utils.sh"
 
 PROJECT_ROOT="$1"
 PROJECT_NAME="$2"
@@ -313,12 +315,13 @@ copy_global_config() {
     print_status "success" "Global config (startup/env_config/inputs/outputs/CLAUDE.md) applied"
 }
 
+
 copy_shared_utils() {
     local project_path="$1"
     local util
     mkdir -p "$project_path/src/utils" "$project_path/tests/unit"
     local -a utils=(
-        br_identifiers dtypes decimals logs logs_emitter text paths signatures dates
+        br_identifiers dtypes decimals logs logs_emitter text paths dates
         tabular_reader xml_reader provenance sidecar_metadata retry http_downloader zip_extractor frames dbapi
         ms_office email raw_workspace daily_cache queries
         regime_window regime_registry regime_adapter spec_gap_registry
@@ -334,8 +337,7 @@ copy_shared_utils() {
             cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_${util}.py" "$project_path/tests/unit/test_${util}.py"
         fi
     done
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_outlook_gateway.py" \
-        "$project_path/tests/unit/test_ms_office_outlook_gateway.py"
+    copy_email_only_utils "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_ms_office_excel_sheet_names.py" \
         "$project_path/tests/unit/test_ms_office_excel_sheet_names.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_dispatch.py" \
@@ -369,6 +371,8 @@ conditional_prune_optin_deps() {
         '/^joblib = /d'
     scaffold_prune_optin_dependency "$project_path" "$INCLUDE_WEBHOOK" \
         '/^pymsteams = /d'
+    scaffold_prune_optin_dependency "$project_path" "$INCLUDE_EMAIL" \
+        '/^pywin32 = /d'
 }
 
 conditional_copy_storage() {

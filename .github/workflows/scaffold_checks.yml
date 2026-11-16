@@ -27,7 +27,12 @@ jobs:
       - name: Install ShellCheck
         run: command -v shellcheck >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck; }
 
+      - name: Install shfmt
+        run: command -v shfmt >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends shfmt; }
+
       - name: Lint all shell scripts (severity ≥ warning)
+        env:
+          LINT_SHELL_REQUIRED: "1"
         run: bash bin/ci/check_shell.sh
 
   sed-portability:
@@ -111,6 +116,9 @@ jobs:
 
       - name: Generated projects ship the comment ratchet
         run: bash tests/test_scaffold_comment_budget.sh
+
+      - name: E-mail-only utils follow the e-mail answer
+        run: bash tests/test_scaffold_email_utils.sh
 
       - name: The baseline must not exceed the base branch's
         if: github.event_name == 'pull_request'
