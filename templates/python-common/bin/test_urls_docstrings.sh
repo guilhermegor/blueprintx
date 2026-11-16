@@ -30,7 +30,7 @@ get_cache() {
 	if [[ -n "$str_cached" && ! "$str_cached" =~ ^(403|408|429)$ ]]; then
 		local int_timestamp int_ttl=$CACHE_FAIL_TTL
 		[[ "$str_cached" =~ ^2 ]] && int_ttl=$CACHE_TTL
-		int_timestamp=$(stat -c %Y "$str_cache_file")
+		int_timestamp=$(stat -c %Y "$str_cache_file" 2>/dev/null || stat -f %m "$str_cache_file")
 		local int_now
 		int_now=$(date +%s)
 

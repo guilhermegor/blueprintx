@@ -83,7 +83,7 @@ repos:
         entry: bash bin/ci/check_shell.sh
         language: system
         pass_filenames: false
-        files: ^bin/.*\.sh$
+        files: ^(bin|templates/common)/.*\.sh$|^templates/common/\.editorconfig$
 
       - id: sed-portability
         name: sed portability (no bare sed -i, blueprintx#459)
