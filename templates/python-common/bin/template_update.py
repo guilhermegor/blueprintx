@@ -94,6 +94,28 @@ def merge_three_way(
     return cls_run.stdout, cls_run.returncode
 
 
+def _in_project_eol(bytes_new: bytes, *, bytes_raw: bytes) -> bytes:
+    """Return ``bytes_new`` in the line endings of a project file, when that file is all CRLF.
+
+    Parameters
+    ----------
+    bytes_new : bytes
+        The content about to be written.
+    bytes_raw : bytes
+        The project file as it is on disk.
+
+    Returns
+    -------
+    bytes
+        ``bytes_new`` with CRLF endings when every line of ``bytes_raw`` ends in CRLF, else
+        ``bytes_new`` unchanged (an LF, mixed or binary file is left as it was).
+    """
+    int_crlf = bytes_raw.count(b"\r\n")
+    if int_crlf and int_crlf == bytes_raw.count(b"\n") and b"\0" not in bytes_raw:
+        return drift.fold_crlf(bytes_new).replace(b"\n", b"\r\n")
+    return bytes_new
+
+
 def plan_file(
     path_project_file: pathlib.Path, *, path_theirs: pathlib.Path, bytes_base: bytes | None
 ) -> tuple[str, bytes | None]:
@@ -124,14 +146,13 @@ def plan_file(
     if bytes_new in {bytes_ours, bytes_base}:
         return "same", None
     if bytes_ours == bytes_base:
-        return "fast_forward", bytes_theirs
+        return "fast_forward", _in_project_eol(bytes_theirs, bytes_raw=bytes_raw)
     bytes_merged, int_conflicts = merge_three_way(
         bytes_ours, bytes_base=bytes_base or b"", bytes_theirs=bytes_new
     )
     if bytes_merged is None:
         return "error", None
-    if bytes_ours != bytes_raw:
-        bytes_merged = bytes_merged.replace(b"\n", b"\r\n")
+    bytes_merged = _in_project_eol(bytes_merged, bytes_raw=bytes_raw)
     return ("conflict" if int_conflicts else "merged"), bytes_merged
 
 
