@@ -115,12 +115,45 @@ check_drift_gate() {
 	echo "ok: drift gate passes, fails on divergence, names what it skipped"
 }
 
+check_ptbr_gate() {
+	local path_project="$WORK_DIR/ptbr-proj" str_en="Validate, mask and unmask Brazilian document numbers"
+	mkdir -p "$path_project"
+	printf '[project]\nname = "x"\ndescription = "%s"\n' "$str_en" >"$path_project/pyproject.toml"
+	printf 'site_description: "%s"\ntheme:\n  name: material\n  language: pt-BR\n' "$str_en" >"$path_project/mkdocs.yml"
+	if bash "$REPO_ROOT/templates/python-common/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
+		fail "pt-BR gate" "accepted an English description under theme.language pt-BR"
+	fi
+	printf 'site_description: "%s"\ntheme: {name: material, language: pt-BR}\n' "$str_en" >"$path_project/mkdocs.yml"
+	if bash "$REPO_ROOT/templates/python-common/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
+		fail "pt-BR gate" "skipped the check for an inline theme mapping"
+	fi
+	printf 'site_description: "%s"\ntheme: {palette: {primary: red}, language: pt-BR}\n' "$str_en" >"$path_project/mkdocs.yml"
+	if bash "$REPO_ROOT/templates/python-common/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
+		fail "pt-BR gate" "skipped the check when a nested mapping precedes the inline language"
+	fi
+	printf 'site_description: "%s"\ntheme: {palette: {language: pt-BR}}\n' "$str_en" >"$path_project/mkdocs.yml"
+	bash "$REPO_ROOT/templates/python-common/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1 ||
+		fail "pt-BR gate" "read a nested inline language as theme.language"
+	printf 'site_description: "%s"\ntheme:\n  name: material\n  palette:\n    language: pt-BR\n' "$str_en" >"$path_project/mkdocs.yml"
+	bash "$REPO_ROOT/templates/python-common/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1 ||
+		fail "pt-BR gate" "read a nested block language as theme.language"
+	printf 'site_description: "%s"\ntheme:\n  name: material\n  language: pt-BR\n' "$str_en" >"$path_project/mkdocs.yml"
+	str_en="Biblioteca para validar os números de documentos"
+	sed -i "s|^description = .*|description = \"$str_en\"|" "$path_project/pyproject.toml"
+	sed -i "s|^site_description: .*|site_description: \"$str_en\"|" "$path_project/mkdocs.yml"
+	if ! bash "$REPO_ROOT/templates/python-common/bin/check_description_sync.sh" "$path_project" >/dev/null 2>&1; then
+		fail "pt-BR gate" "rejected a pt-BR description under theme.language pt-BR"
+	fi
+	echo "ok: pt-BR gate rejects English and accepts pt-BR"
+}
+
 main() {
 	local str_tier
 	for str_tier in "${LIST_PY_TIERS[@]}" ts-lib react-spa-webpack; do
 		check_tier "$str_tier"
 	done
 	check_drift_gate
+	check_ptbr_gate
 	if [[ "$int_failures" -gt 0 ]]; then
 		echo "$int_failures description-sync case(s) failed"
 		exit 1

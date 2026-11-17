@@ -50,22 +50,14 @@ scaffold_filter_archetype_blocks() {
 }
 
 description_reads_as_ptbr() {
-    python3 -c '
-import sys
-import types
-sys.path.insert(0, sys.argv[1])
-for str_mod, tuple_names in (("yaml", ()), ("check_docs_gap", ("load_mkdocs", "published_pages", "unpublished_specs"))):
-    try:
-        __import__(str_mod)
-    except ImportError:
-        mod_stub = types.ModuleType(str_mod)
-        for str_name in tuple_names:
-            setattr(mod_stub, str_name, None)
-        sys.modules[str_mod] = mod_stub
-from check_docs_language import paragraph_locale, prose_paragraphs
-list_paragraphs = prose_paragraphs(sys.argv[2] + "\n")
-sys.exit(3 if any(paragraph_locale(str_p, str_declared="pt-BR") != "pt-BR" for _, str_p in list_paragraphs) else 0)
-' "$BLUEPRINTX_ROOT/templates/python-common/bin" "$1"
+    local int_rc=0
+
+    python3 "$BLUEPRINTX_ROOT/templates/python-common/bin/lib/description_sources.py" ptbr "$1" || int_rc=$?
+    case "$int_rc" in
+        0) return 0 ;;
+        6) return 3 ;;
+        *) return "$int_rc" ;;
+    esac
 }
 
 scaffold_require_ptbr_description() {

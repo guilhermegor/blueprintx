@@ -75,6 +75,8 @@ case "$DOCS_LOCALE" in
     *) echo "ERROR: DOCS_LOCALE must be en or pt-BR, got '$DOCS_LOCALE'" >&2; exit 1 ;;
 esac
 str_opt_label="${SCAFFOLD_SPEC_FILE:+opt-ins from $SCAFFOLD_SPEC_FILE}"
+str_description="CI scaffold lint+test"
+[ "$DOCS_LOCALE" = "pt-BR" ] && str_description="Projeto de teste para a verificação do andaime"
 echo "::group::Scaffold $SKELETON (offline, docs_locale=$DOCS_LOCALE, ${str_opt_label:-no opt-ins})"
 spec_skeleton_supported "$SKELETON" || {
     echo "ERROR: bin/lib/spec.sh has no named-key prompt map for '$SKELETON'" >&2
@@ -88,7 +90,7 @@ spec_validate_answers "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" || exit 1
 spec_stdin_for_skeleton "$SKELETON" "${SCAFFOLD_SPEC_FILE:-}" \
     | BLUEPRINTX_STDIN_ANSWERS=1 GITHUB_USERNAME=ci-bot LINKEDIN_URL=https://www.linkedin.com/in/ci-bot \
         bash "$REPO_ROOT/$str_scaffold_rel" \
-        "$WORK_DIR" "$PROJECT_NAME" "CI scaffold lint+test" "0.0.1"
+        "$WORK_DIR" "$PROJECT_NAME" "$str_description" "0.0.1"
 echo "::endgroup::"
 
 [[ -f "$PROJECT_PATH/mkdocs.yml" ]] || {

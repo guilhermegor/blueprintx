@@ -28,6 +28,26 @@ github_about() {
 	GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}" gh api "repos/$str_slug" --jq '.description // ""'
 }
 
+check_ptbr() {
+	local str_language int_rc=0
+	str_language="$(python3 "$SCRIPT_DIR/lib/description_sources.py" language "$ROOT/mkdocs.yml")" || int_rc=$?
+	if [[ "$int_rc" -ne 0 || "$str_language" != "pt-BR" ]]; then
+		return 0
+	fi
+	int_rc=0
+	python3 "$SCRIPT_DIR/lib/description_sources.py" ptbr "$1" || int_rc=$?
+	if [[ "$int_rc" -eq 0 ]]; then
+		print_status "success" "manifest description reads as pt-BR"
+		return 0
+	elif [[ "$int_rc" -ne 6 ]]; then
+		print_status "error" "the pt-BR classifier crashed (exit $int_rc), so the description was not checked"
+		return 1
+	fi
+	print_status "error" "mkdocs theme.language is pt-BR but the manifest description does not read as pt-BR"
+	print_status "error" "  manifest: $1"
+	return 1
+}
+
 compare() {
 	local str_label="$1" str_expected="$2" str_actual="$3"
 	if [[ "$str_expected" == "$str_actual" ]]; then
@@ -51,6 +71,8 @@ main() {
 		print_status "error" "the manifest in $ROOT exists but its description cannot be read"
 		return 1
 	fi
+
+	check_ptbr "$str_manifest" || int_status=1
 
 	int_rc=0
 	str_other="$(mkdocs_description)" || int_rc=$?

@@ -145,6 +145,12 @@ jobs:
         if: runner.os == 'Linux'
         run: poetry run python bin/check_docs_language.py
 
+      - name: Run Description Sync
+        if: runner.os == 'Linux'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash bin/check_description_sync.sh
+
       - name: Run Comment Budget Ratchet
         if: runner.os == 'Linux'
         run: poetry run python bin/check_comment_budget.py --require-baseline

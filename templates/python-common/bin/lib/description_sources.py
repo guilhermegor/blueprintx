@@ -8,10 +8,13 @@ be read (5), so the caller can skip the first and fail the second.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+import importlib
 import json
 from pathlib import Path
 import re
 import sys
+import types
 
 
 try:
@@ -23,8 +26,11 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
 INT_EXIT_NO_MANIFEST = 3
 INT_EXIT_NO_MKDOCS = 4
 INT_EXIT_UNREADABLE = 5
+INT_EXIT_NOT_PTBR = 6
 
 RE_SITE_DESCRIPTION = re.compile(r"^site_description:\s*(.*?)\s*$", re.MULTILINE)
+RE_INLINE_VALUE = re.compile(r"[ \t]*[\"']?([\w-]+)")
+RE_THEME_LANGUAGE = re.compile(r"^([ \t]+)language:[ \t]*[\"']?([\w-]+)")
 RE_SINGLE_QUOTED = re.compile(r"'((?:[^']|'')*)'(.*)$")
 
 
@@ -112,21 +118,112 @@ def mkdocs_description(path_mkdocs: Path) -> str | None:
     return None if match is None else parse_yaml_scalar(match.group(1))
 
 
+def reads_as_ptbr(str_text: str) -> bool:
+    """Tell whether every prose paragraph of a description positively reads as pt-BR.
+
+    Unlike ``paragraph_locale``, a paragraph that is not decisive does not fall back to the
+    declared locale: it needs at least one Portuguese function word and more of them than
+    English ones.
+
+    Parameters
+    ----------
+    str_text : str
+        The description.
+
+    Returns
+    -------
+    bool
+        ``True`` when there is at least one paragraph and each carries positive pt-BR evidence.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    for str_mod, tuple_names in (
+        ("yaml", ()),
+        ("check_docs_gap", ("load_mkdocs", "published_pages", "unpublished_specs")),
+    ):
+        try:
+            __import__(str_mod)
+        except ImportError:
+            mod_stub = types.ModuleType(str_mod)
+            for str_name in tuple_names:
+                setattr(mod_stub, str_name, None)
+            sys.modules[str_mod] = mod_stub
+    mod_lang = importlib.import_module("check_docs_language")
+    list_paras = [str_para for _, str_para in mod_lang.prose_paragraphs(str_text + "\n")]
+    for str_para in list_paras:
+        dict_hits = mod_lang.locale_hits(str_para)
+        if dict_hits["pt-BR"] < 1 or dict_hits["pt-BR"] <= dict_hits["en"]:
+            return False
+    return bool(list_paras)
+
+
+def inline_theme_language(str_line: str) -> str | None:
+    """Return ``language`` from an inline ``theme: {...}`` mapping, at its top level only."""
+    str_body = str_line[len("theme:") :].strip()
+    int_depth = 0
+    for int_pos, str_char in enumerate(str_body):
+        int_depth += (str_char == "{") - (str_char == "}")
+        bool_key = str_body[int_pos - 1] in "{, " and str_body.startswith("language:", int_pos)
+        if int_depth == 1 and bool_key:
+            match = RE_INLINE_VALUE.match(str_body, int_pos + len("language:"))
+            return match.group(1) if match else None
+    return None
+
+
+def theme_lines(str_text: str) -> Iterator[str]:
+    """Yield the ``theme:`` header line and the indented lines under it, skipping comments."""
+    bool_in_theme = False
+    for str_line in str_text.splitlines():
+        if not str_line.strip() or str_line.startswith("#"):
+            continue
+        if str_line.startswith("theme:"):
+            bool_in_theme = True
+            yield str_line
+        elif not str_line[0].isspace():
+            bool_in_theme = False
+        elif bool_in_theme:
+            yield str_line
+
+
+def mkdocs_language(path_mkdocs: Path) -> str | None:
+    """Return ``theme.language`` from an ``mkdocs.yml``, or ``None`` when it is not declared."""
+    if not path_mkdocs.is_file():
+        return None
+    int_child_indent = None
+    for str_line in theme_lines(path_mkdocs.read_text(encoding="utf-8")):
+        str_found = None
+        if str_line.startswith("theme:"):
+            str_found, int_child_indent = inline_theme_language(str_line), None
+        else:
+            int_child_indent = int_child_indent or len(str_line) - len(str_line.lstrip())
+            match = RE_THEME_LANGUAGE.match(str_line)
+            bool_direct = match is not None and len(match.group(1)) == int_child_indent
+            str_found = match.group(2) if match and bool_direct else None
+        if str_found:
+            return str_found
+    return None
+
+
 def main(list_argv: list[str]) -> int:
     """Print the requested description and return the matching exit status.
 
     Parameters
     ----------
     list_argv : list of str
-        ``["manifest", ROOT]`` or ``["mkdocs", FILE]``.
+        ``["manifest", ROOT]``, ``["mkdocs", FILE]``, ``["ptbr", TEXT]`` or
+        ``["language", FILE]``.
 
     Returns
     -------
     int
-            0 when printed, 3 or 4 when the source is absent, 5 when it is unreadable.
+            0 when printed, 3 or 4 when the source is absent, 5 when it is unreadable, 6 when
+            ``ptbr`` text does not read as pt-BR.
     """
     str_kind, str_path = list_argv
-    fn_read = manifest_description if str_kind == "manifest" else mkdocs_description
+    if str_kind == "ptbr":
+        return 0 if reads_as_ptbr(str_path) else INT_EXIT_NOT_PTBR
+    fn_read = {"manifest": manifest_description, "language": mkdocs_language}.get(
+        str_kind, mkdocs_description
+    )
     int_absent = INT_EXIT_NO_MANIFEST if str_kind == "manifest" else INT_EXIT_NO_MKDOCS
     try:
         str_value = fn_read(Path(str_path))
