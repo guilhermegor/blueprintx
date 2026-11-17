@@ -275,8 +275,9 @@ nothing reads.
 
 **Why.** A deployed app has one live version, and the platform already keeps the history.
 Vercel treats every deployment as immutable and rolls back by re-pointing a domain at an
-earlier one ([Instant Rollback](https://vercel.com/docs/instant-rollback)); GitHub Pages
-records each deploy in the repository's Deployments view. A SemVer number tells a consumer
+earlier one ([Instant Rollback](https://vercel.com/docs/instant-rollback)); on GitHub
+Pages the `gh-pages` branch history is the record, since a push made with `GITHUB_TOKEN`
+does not create a Deployments entry. A SemVer number tells a consumer
 how risky an upgrade is, and an SPA has no consumers of that kind.
 
 **Measured on 2026-11-17** (GitHub API, tags and releases on each repository):
@@ -290,7 +291,8 @@ how risky an upgrade is, and an SPA has no consumers of that kind.
 | `vitejs/vite` | library | 100+ | 100+ |
 | `TanStack/router` | library | 100+ | 100+ |
 
-Every comparable app template ships release-less; only libraries cut releases.
+Most comparable app templates ship release-less, and `vercel/commerce` has cut a single
+release in its history; the libraries cut one per version.
 release-please and semantic-release target packages: the release PR or publish step is
 their point, and an SPA publishes nothing. A common objection to versioning applications at
 all is that SemVer was designed for APIs
