@@ -1,12 +1,16 @@
 """Smoke test: the dependency-free type_checker resolves in the wheel layout."""
 
 from importlib import import_module
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from ${PROJECT_PKG_NAME}._internal.utils.typing import type_checker
 from ${PROJECT_PKG_NAME}._internal.utils.typing.type_checker import _plain_class
+
+
+if TYPE_CHECKING:
+    from decimal import Decimal
 
 
 str_module_path = "${PROJECT_PKG_NAME}._internal.utils.typing.type_checker"
@@ -134,3 +138,28 @@ def test_hints_resolve_once_across_calls(monkeypatch: pytest.MonkeyPatch) -> Non
     fn_checked(1)
     fn_checked(2)
     assert len(list_calls) == 1
+
+
+@type_checker
+def _probe_mixed(*, int_value: int, value: "Decimal") -> int:
+    """Take one checkable and one ``TYPE_CHECKING``-only annotation.
+
+    Parameters
+    ----------
+    int_value : int
+        A number.
+    value : 'Decimal'
+        A value whose name is unavailable at runtime.
+
+    Returns
+    -------
+    int
+        Always 1.
+    """
+    return 1
+
+
+def test_unavailable_annotation_does_not_disable_other_parameters() -> None:
+    """A ``TYPE_CHECKING``-only name skips its own parameter, not the whole function."""
+    with pytest.raises(TypeError):
+        _probe_mixed(int_value="1", value=2)
