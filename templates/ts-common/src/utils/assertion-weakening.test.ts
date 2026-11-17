@@ -175,6 +175,32 @@ describe('assertion weakening gate chained each and pairing', () => {
 
 });
 
+describe('assertion weakening gate subject pairing', () => {
+  const run = (before: string, after: string): string[] =>
+    fileFindings('a.test.ts', `it('f', () => {\n${before}\n});\n`, `it('f', () => {\n${after}\n});\n`);
+
+  it('flags a weakening when the subject text is edited in the same change', () => {
+    const found = run(
+      '  expect(a).toBe(1);',
+      '  expect(c).toBe(5);\n  expect(d).toBeGreaterThan(0);',
+    );
+    expect(found).toHaveLength(1);
+  });
+
+  it('cancels a removed equality against the same equality on the same subject', () => {
+    expect(run('  expect(a).toBe(1);\n  expect(a).toBe(2);', '  expect(a).toBe(2);\n  expect(a).toBe(1);')).toEqual([]);
+  });
+
+  it('reports a renamed subject', () => {
+    expect(run('  expect(a).toBe(1);', '  expect(renamed).toBeGreaterThan(0);')).toHaveLength(1);
+  });
+
+  it.each(['[/)/.source]', 'v + /)/.source', 'v && (/)/).test(w)'])('pairs a subject holding the regex %s', (subject) => {
+    const src = (matcher: string): string => `  expect(${subject}).${matcher}(1);`;
+    expect(run(src('toBe'), src('toBeLessThan'))).toHaveLength(1);
+  });
+});
+
 describe('assertion weakening gate does not fail open', () => {
   const find = (before: string, after: string): number =>
     fileFindings('a.test.ts', `it('f', () => {\n${before}\n});\n`, `it('f', () => {\n${after}\n});\n`).length;

@@ -57,7 +57,7 @@ function skipOpaque(text, index) {
   if ('\'"`'.includes(char)) return skipString(text, index);
   if (text.startsWith('/*', index)) return untilOrEnd(text, '*/', index + 2, 1);
   if (text.startsWith('//', index)) return untilOrEnd(text, '\n', index, 0);
-  if (char === '/' && /(?:^|[(,=:!&|?{;])\s*$/.test(text.slice(0, index))) return skipRegex(text, index);
+  if (char === '/' && /(?:^|[(,=:!&|?{;[+\-*%<>~^])\s*$/.test(text.slice(0, index))) return skipRegex(text, index);
   return index;
 }
 
@@ -100,34 +100,18 @@ function surplus(names, others, allowed) {
     });
 }
 
-function subjectFindings(oldNames, newNames) {
-  const removed = surplus(oldNames, newNames, EQUALITY_MATCHERS);
-  const added = surplus(newNames, oldNames, INEQUALITY_MATCHERS);
-  return removed.slice(0, added.length).map((name, index) => `${name} loosened to ${added[index]}`);
+function unmatched(from, against, allowed) {
+  return [...from].flatMap(([subject, names]) => surplus(names, against.get(subject) ?? [], allowed));
 }
 
 function testFindings(path, oldTest, newTest) {
   const oldBySubject = matchersBySubject(oldTest.body);
   const newBySubject = matchersBySubject(newTest.body);
-  const shared = [...oldBySubject.keys()].filter((subject) => newBySubject.has(subject));
-  const unshared = (bySubject) =>
-    [...bySubject].filter(([subject]) => !shared.includes(subject)).flatMap(([, names]) => names);
-  const leftovers = shared.map((subject) => {
-    const [oldNames, newNames] = [oldBySubject.get(subject), newBySubject.get(subject)];
-    const removed = surplus(oldNames, newNames, EQUALITY_MATCHERS);
-    const added = surplus(newNames, oldNames, INEQUALITY_MATCHERS);
-    const paired = Math.min(removed.length, added.length);
-    return {
-      findings: removed.slice(0, paired).map((name, index) => `${name} loosened to ${added[index]}`),
-      removed: removed.slice(paired),
-      added: added.slice(paired),
-    };
-  });
-  const pooled = (key, bySubject) => [...unshared(bySubject), ...leftovers.flatMap((entry) => entry[key])];
-  return [
-    ...leftovers.flatMap((entry) => entry.findings),
-    ...subjectFindings(pooled('removed', oldBySubject), pooled('added', newBySubject)),
-  ].map((finding) => `${path}: ${newTest.name}: ${finding}`);
+  const removed = unmatched(oldBySubject, newBySubject, EQUALITY_MATCHERS);
+  const added = unmatched(newBySubject, oldBySubject, INEQUALITY_MATCHERS);
+  return removed
+    .slice(0, added.length)
+    .map((name, index) => `${path}: ${newTest.name}: ${name} loosened to ${added[index]}`);
 }
 
 function fileFindings(path, oldSource, newSource) {
