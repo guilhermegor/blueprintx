@@ -29,7 +29,7 @@ INT_EXIT_UNREADABLE = 5
 INT_EXIT_NOT_PTBR = 6
 
 RE_SITE_DESCRIPTION = re.compile(r"^site_description:\s*(.*?)\s*$", re.MULTILINE)
-RE_INLINE_LANGUAGE = re.compile(r"^theme:[ \t]*\{(?:[^{}]*,)?[ \t]*language:[ \t]*[\"']?([\w-]+)")
+RE_INLINE_VALUE = re.compile(r"[ \t]*[\"']?([\w-]+)")
 RE_THEME_LANGUAGE = re.compile(r"^([ \t]+)language:[ \t]*[\"']?([\w-]+)")
 RE_SINGLE_QUOTED = re.compile(r"'((?:[^']|'')*)'(.*)$")
 
@@ -156,6 +156,19 @@ def reads_as_ptbr(str_text: str) -> bool:
     return bool(list_paras)
 
 
+def inline_theme_language(str_line: str) -> str | None:
+    """Return ``language`` from an inline ``theme: {...}`` mapping, at its top level only."""
+    str_body = str_line[len("theme:") :].strip()
+    int_depth = 0
+    for int_pos, str_char in enumerate(str_body):
+        int_depth += (str_char == "{") - (str_char == "}")
+        bool_key = str_body[int_pos - 1] in "{, " and str_body.startswith("language:", int_pos)
+        if int_depth == 1 and bool_key:
+            match = RE_INLINE_VALUE.match(str_body, int_pos + len("language:"))
+            return match.group(1) if match else None
+    return None
+
+
 def theme_lines(str_text: str) -> Iterator[str]:
     """Yield the ``theme:`` header line and the indented lines under it, skipping comments."""
     bool_in_theme = False
@@ -177,15 +190,16 @@ def mkdocs_language(path_mkdocs: Path) -> str | None:
         return None
     int_child_indent = None
     for str_line in theme_lines(path_mkdocs.read_text(encoding="utf-8")):
+        str_found = None
         if str_line.startswith("theme:"):
-            match = RE_INLINE_LANGUAGE.match(str_line)
-            int_child_indent = None
+            str_found, int_child_indent = inline_theme_language(str_line), None
         else:
             int_child_indent = int_child_indent or len(str_line) - len(str_line.lstrip())
             match = RE_THEME_LANGUAGE.match(str_line)
-            match = match if match and len(match.group(1)) == int_child_indent else None
-        if match:
-            return match.group(match.lastindex)
+            bool_direct = match is not None and len(match.group(1)) == int_child_indent
+            str_found = match.group(2) if match and bool_direct else None
+        if str_found:
+            return str_found
     return None
 
 
