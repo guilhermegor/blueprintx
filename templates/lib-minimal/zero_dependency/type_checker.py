@@ -234,12 +234,12 @@ def type_checker(fn_target: Callable[_P, _R]) -> Callable[_P, _R]:
         The wrapped function, with its signature and docstring preserved.
     """
     cls_signature = inspect.signature(fn_target)
-    dict_cache: dict[str, dict[str, object]] = {}
+    fn_hints = functools.cache(lambda: _resolve_hints(fn_target))
 
     @functools.wraps(fn_target)
     def fn_wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         """Check the bound arguments, then call the wrapped function."""
-        dict_hints = dict_cache.setdefault("hints", _resolve_hints(fn_target))
+        dict_hints = fn_hints()
         _check_call(cls_signature=cls_signature, dict_hints=dict_hints, args=args, kwargs=kwargs)
         return fn_target(*args, **kwargs)
 

@@ -1,11 +1,16 @@
 """Smoke test: the dependency-free type_checker resolves in the wheel layout."""
 
+from importlib import import_module
 from typing import Any
 
 import pytest
 
 from ${PROJECT_PKG_NAME}._internal.utils.typing import type_checker
 from ${PROJECT_PKG_NAME}._internal.utils.typing.type_checker import _plain_class
+
+
+str_module_path = "${PROJECT_PKG_NAME}._internal.utils.typing.type_checker"
+checker_module = import_module(str_module_path)
 
 
 @type_checker
@@ -89,7 +94,7 @@ def test_variadic_elements_are_checked_one_by_one() -> None:
 def test_variadic_rejects_wrong_element() -> None:
     """A wrong element inside ``*args`` is rejected."""
     with pytest.raises(TypeError):
-        _total(1, "2")  # type: ignore[arg-type]
+        _total(1, 2.5)  # type: ignore[arg-type]
 
 
 def test_int_is_accepted_for_float() -> None:
@@ -101,3 +106,31 @@ def test_bool_is_rejected_for_int() -> None:
     """A bool is not accepted where ``int`` is annotated."""
     with pytest.raises(TypeError):
         _add(True, b=2)
+
+
+def _identity(value: int) -> int:
+    """Return ``value`` unchanged, left undecorated so a test can wrap it.
+
+    Parameters
+    ----------
+    value : int
+        A number.
+
+    Returns
+    -------
+    int
+        The same number.
+    """
+    return value
+
+
+def test_hints_resolve_once_across_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Annotations are resolved on the first call only, not on every call."""
+    list_calls: list[int] = []
+    monkeypatch.setattr(
+        checker_module, "_resolve_hints", lambda fn_target: list_calls.append(1) or {}
+    )
+    fn_checked = checker_module.type_checker(_identity)
+    fn_checked(1)
+    fn_checked(2)
+    assert len(list_calls) == 1
