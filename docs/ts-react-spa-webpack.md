@@ -266,3 +266,41 @@ sources by path). Run both with `npm run js-copy`.
 | `context.tsx` | Wiring — the only place infrastructure meets application |
 | `index.ts` | API surface — controls what leaks out of a capability |
 | `shared/` | Reuse — only code with no single owner goes here |
+
+## Versioning and releases
+
+The skeleton is release-less on purpose: a production deploy does not create a tag, a
+GitHub release or a `CHANGELOG.md` (#1196). `package.json` carries a stub version that
+nothing reads.
+
+**Why.** A deployed app has one live version, and the platform already keeps the history.
+Vercel treats every deployment as immutable and rolls back by re-pointing a domain at an
+earlier one ([Instant Rollback](https://vercel.com/docs/instant-rollback)); GitHub Pages
+records each deploy in the repository's Deployments view. A SemVer number tells a consumer
+how risky an upgrade is, and an SPA has no consumers of that kind.
+
+**Measured on 2026-11-17** (GitHub API, tags and releases on each repository):
+
+| Repository | Kind | Tags | Releases |
+|------------|------|------|----------|
+| `alan2207/bulletproof-react` | app template | 0 | 0 |
+| `shadcn-ui/taxonomy` | app template | 0 | 0 |
+| `remix-run/react-router-templates` | app template | 0 | 0 |
+| `vercel/commerce` | app template | 1 | 1 |
+| `vitejs/vite` | library | 100+ | 100+ |
+| `TanStack/router` | library | 100+ | 100+ |
+
+Every comparable app template ships release-less; only libraries cut releases.
+release-please and semantic-release target packages: the release PR or publish step is
+their point, and an SPA publishes nothing. A common objection to versioning applications at
+all is that SemVer was designed for APIs
+([discussion](https://www.reddit.com/r/softwarearchitecture/comments/1egwhxf/how_should_you_actually_implement_semantic)).
+
+**Cost of the alternative.** Release on deploy needs `contents: write`, a third workflow
+beside `deploy-spa.yml` and `deploy-vercel.yml`, and a git-cliff config kept in step with
+`templates/ts-lib/`, for a number nobody consumes.
+
+**Revisit when** something consumes a version: an embeddable widget, a published npm
+package, or an audit trail that must name a release. Use the `ts-lib` approach then
+(git-cliff, CHANGELOG generated in CI, nothing committed by a bot). To pin a state
+meanwhile, tag the commit by hand.
