@@ -860,8 +860,6 @@ apply_docs_locale_pages() {
         }
         { print }' "$path_lib/docs/pt-BR/nav-labels.tsv" "$project_path/mkdocs.yml" >"$path_tmp"
     cat "$path_tmp" >"$project_path/mkdocs.yml"
-    sed 's|^skip = |skip = */docs/*,docs/*,README.md,mkdocs.yml,|' "$project_path/.codespellrc" >"$path_tmp"
-    cat "$path_tmp" >"$project_path/.codespellrc"
     rm -f "$path_tmp"
     print_status "success" "pt-BR pages, README, nav labels and codespell skip applied"
 }

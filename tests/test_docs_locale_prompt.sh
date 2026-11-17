@@ -256,6 +256,24 @@ test_fallback_page_set_marks_contributing() {
     rm -rf "$str_dir"
 }
 
+test_ptbr_codespell_skips_localized_files() {
+    local str_dir
+    str_dir="$(mktemp -d)"
+    cp "$REPO_ROOT/templates/python-common/.codespellrc" "$str_dir/.codespellrc"
+    DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_skip_localized_spelling "$2"; scaffold_skip_localized_spelling "$2"' _ \
+        "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_dir"
+    python3 - "$str_dir/.codespellrc" <<'PY' \
+        && pass "pt-BR .codespellrc skips CONTRIBUTING.md, README.md and docs/, once" \
+        || fail "pt-BR .codespellrc skip misses a localized file or repeats the prefix"
+import fnmatch, sys
+str_skip = next(l for l in open(sys.argv[1]) if l.startswith("skip = "))[7:].strip()
+list_globs = str_skip.split(",")
+bool_hit = all(any(fnmatch.fnmatch(p, g) for g in list_globs) for p in ("CONTRIBUTING.md", "README.md", "docs/index.md"))
+sys.exit(0 if bool_hit and list_globs.count("docs/*") == 1 else 1)
+PY
+    rm -rf "$str_dir"
+}
+
 test_ptbr_changelog_says_entries_stay_english() {
     grep -qF 'As entradas abaixo vêm das mensagens de commit, que este projeto escreve em inglês, e por isso ficam em inglês.' \
         "$REPO_ROOT/templates/python-common/docs/pt-BR/changelog.md" \
@@ -267,6 +285,7 @@ main() {
     test_contributing_follows_locale
     test_security_adds_one_localized_line
     test_ptbr_changelog_says_entries_stay_english
+    test_ptbr_codespell_skips_localized_files
     test_fallback_page_set_marks_contributing
     test_ptbr_twins_cover_shipped_pages
     test_ptbr_readme_keeps_slugs

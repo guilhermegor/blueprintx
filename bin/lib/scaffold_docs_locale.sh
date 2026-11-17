@@ -41,10 +41,21 @@ scaffold_render_security() {
     rm -f "$path_tmp"
 }
 
+scaffold_skip_localized_spelling() {
+    local project_path="$1" str_rc="$1/.codespellrc" path_tmp
+    [ "${DOCS_LOCALE:-en}" != "en" ] && [ -f "$str_rc" ] || return 0
+    grep -q '^skip = .*docs/\*' "$str_rc" && return 0
+    path_tmp="$(mktemp)"
+    sed 's|^skip = |skip = */docs/*,docs/*,README.md,CONTRIBUTING.md,mkdocs.yml,|' "$str_rc" >"$path_tmp"
+    cat "$path_tmp" >"$str_rc"
+    rm -f "$path_tmp"
+}
+
 scaffold_mark_untranslated() {
     local project_path="$1" str_page str_marker='<!-- docs-lang:untranslated -->' str_localized=""
     [ "${DOCS_LOCALE:-en}" != "en" ] || return 0
     scaffold_localize_contributing "$project_path" && str_localized="$project_path/CONTRIBUTING.md"
+    scaffold_skip_localized_spelling "$project_path"
     while IFS= read -r str_page; do
         [ -f "$str_page" ] || continue
         [ -n "$str_localized" ] && [ "$str_page" -ef "$str_localized" ] && continue
