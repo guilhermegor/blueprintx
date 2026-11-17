@@ -3,7 +3,7 @@
 Histórico de lançamentos deste projeto. As entradas são geradas a partir de mensagens de
 [Conventional Commit](https://www.conventionalcommits.org/) pelo
 [commitizen](https://commitizen-tools.github.io/commitizen/), então os títulos de versão abaixo
-acompanham o que de fato foi entregue.
+acompanham o que de fato foi entregue. As entradas abaixo vêm das mensagens de commit, que este projeto escreve em inglês, e por isso ficam em inglês.
 
 **Como é atualizado:** as seções abaixo são geradas pelo `cz changelog` a partir das tags do git e
 do histórico de commits. A página publicada é regenerada **do zero a cada build da documentação**

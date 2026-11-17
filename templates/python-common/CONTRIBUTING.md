@@ -74,7 +74,7 @@ branch without the issue number, except `release/`, `dependabot/` and `renovate/
 
 ## Commit Message Standards
 
-All commits must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification: `<type>/<scope>`
+All commits must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification: `<type>(<scope>): <description>`
 
 **Available types:**
 

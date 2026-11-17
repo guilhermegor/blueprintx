@@ -300,7 +300,7 @@ repos:
         language: python
         additional_dependencies: [pathspec, pyyaml]
         pass_filenames: false
-        files: ^(bin/blueprintx\.sh|bin/lib/scaffold_docs_locale\.sh|bin/scaffold/python_[^/]+\.sh|templates/[^/]+/mkdocs\.yml|tests/test_docs_locale_prompt\.sh)$
+        files: ^(bin/blueprintx\.sh|bin/lib/scaffold_docs_locale\.sh|bin/scaffold/python_[^/]+\.sh|templates/[^/]+/mkdocs\.yml|templates/common/SECURITY\.md|templates/python-common/CONTRIBUTING[^/]*\.md|templates/python-common/docs/pt-BR/changelog\.md|tests/test_docs_locale_prompt\.sh)$
 
       - id: prompt-tty-guard-tests
         name: scaffold prompt tty-guard should-fail tests (blueprintx#539)
