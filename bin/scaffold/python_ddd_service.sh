@@ -433,8 +433,7 @@ copy_github_assets() {
     cp "$SHARED_TEMPLATE_ROOT/docs_version/docs.yml" "$project_path/.github/workflows/docs.yml"
     envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
-        < "$SHARED_TEMPLATE_ROOT/SECURITY.md" > "$project_path/SECURITY.md"
+    scaffold_render_security "$project_path"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" > "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/AGENTS.md" "$project_path/.github/AGENTS.md"

@@ -148,6 +148,36 @@ them touched (`branch-has-issue.yml`, `pr-self-assign.yml`; #971). Job `name:` v
 change, so required-check contexts did not move. The shared source `templates/common/docs_version/`
 `docs.yml` sits outside `.github/workflows/` and is covered by review, not by the gate.
 
+## Language boundary (blueprintx#1180, #1182)
+
+The standing rule for a scaffold whose `docs_locale` is not `en`: **the language follows who
+reads the text, and each text has one source.**
+
+- Anything read by someone who *uses* the library follows `docs_locale`.
+- The technical record and anything read by a tool stays English: code, identifiers, commits,
+  PR and issue bodies and templates, CI output, exception messages, docstrings.
+- **Generated text inherits the language of its source.** A page that frames generated content
+  on a localized site keeps its hand-written framing in the locale and says in one sentence that
+  the generated part stays English.
+
+| Surface | Reader | Language |
+|---|---|---|
+| README, About, `pyproject.toml` `description`, `site_description`, docs pages | user | locale |
+| root `CHANGELOG.md`, changelog entries, release notes | record (generated from commits and PR titles) | English |
+| `docs/<locale>/changelog.md` hand-written intro | user | locale, plus one sentence saying the entries come from commit messages and stay English |
+| root `CONTRIBUTING.md` | contributor | locale: the Python scaffolds ship `templates/python-common/CONTRIBUTING.<locale>.md` as the single source, and the docs-language gate checks it |
+| `SECURITY.md` | security researcher | English, plus one localized line under the title naming the private reporting channel |
+| PR template, issue templates | record | English |
+| code, commits, CI, exception messages | tool, web search | English |
+| docstrings | code, rendered in the API reference | English; each API page opens with a locale intro paragraph |
+| project `keywords`, GitHub topics | search | list both languages (content the scaffold cannot know) |
+
+`scaffold_localize_contributing` and `scaffold_render_security` in
+`bin/lib/scaffold_docs_locale.sh` apply the two rows that change the scaffolded files. A locale
+without a `CONTRIBUTING.<locale>.md` keeps the English file, which the scaffold marks
+`docs-lang:untranslated` like every other untranslated page. The TypeScript and Bash scaffolds
+have no `docs_locale`, so their `CONTRIBUTING.md` stays English.
+
 ## Cross-Language Quality Parity
 
 BlueprintX scaffolds more than one language (Python and TypeScript/JS today), and a quality

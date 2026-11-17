@@ -190,7 +190,104 @@ test_ptbr_readme_keeps_slugs() {
         || fail "pt-BR README slugs differ from the library README: $(diff <(echo "$str_want") <(echo "$str_got"))"
 }
 
+test_contributing_follows_locale() {
+    local str_locale str_want str_dir str_title
+    for str_locale in en pt-BR; do
+        str_want="# Contribution Guidelines"
+        [ "$str_locale" = "pt-BR" ] && str_want="# Guia de Contribuição"
+        str_dir="$(mktemp -d)"
+        if ! scaffold_docs_probe "$str_locale" "$str_dir"; then
+            fail "lib-minimal $str_locale scaffold failed: $(tail -3 "$str_dir/scaffold.log")"
+            rm -rf "$str_dir"
+            continue
+        fi
+        str_title="$(head -1 "$str_dir/docs-probe/CONTRIBUTING.md")"
+        [ "$str_title" = "$str_want" ] \
+            && pass "$str_locale scaffold ships CONTRIBUTING.md titled '$str_want'" \
+            || fail "$str_locale scaffold CONTRIBUTING.md starts '$str_title' (expected '$str_want')"
+        if grep -q 'docs-lang:untranslated' "$str_dir/docs-probe/CONTRIBUTING.md"; then
+            [ "$str_locale" = "en" ] && fail "en CONTRIBUTING.md carries the untranslated marker" \
+                || fail "pt-BR CONTRIBUTING.md is marked untranslated, so the gate would skip it"
+        else
+            pass "$str_locale CONTRIBUTING.md is not marked untranslated"
+        fi
+        rm -rf "$str_dir"
+    done
+}
+
+render_security() {
+    local str_locale="$1" str_dir="$2"
+    DOCS_LOCALE="$str_locale" PROJECT_DISPLAY_NAME=Probe REPOSITORY=https://example.test/p \
+        SHARED_TEMPLATE_ROOT="$REPO_ROOT/templates/common" COMMON_TEMPLATE_ROOT="$REPO_ROOT/templates/python-common" \
+        bash -c 'source "$1"; scaffold_render_security "$2"' _ \
+        "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_dir"
+}
+
+test_security_adds_one_localized_line() {
+    local str_en str_pt
+    str_en="$(mktemp -d)"
+    str_pt="$(mktemp -d)"
+    render_security en "$str_en"
+    render_security pt-BR "$str_pt"
+    if [ "$(sed -n '3p' "$str_pt/SECURITY.md" | cut -c1-17)" != "> Para reportar u" ]; then
+        fail "pt-BR SECURITY.md line 3 is not the localized reporting line"
+    elif [ "$(wc -l <"$str_pt/SECURITY.md")" -ne "$(($(wc -l <"$str_en/SECURITY.md") + 2))" ]; then
+        fail "pt-BR SECURITY.md differs from English by more than the line and its blank"
+    elif ! diff <(sed '2,3d' "$str_pt/SECURITY.md") "$str_en/SECURITY.md" >/dev/null; then
+        fail "pt-BR SECURITY.md body is not the English policy"
+    elif grep -q 'Para reportar' "$str_en/SECURITY.md"; then
+        fail "en SECURITY.md carries the pt-BR line"
+    else
+        pass "pt-BR SECURITY.md is the English policy plus one localized line; en is unchanged"
+    fi
+    rm -rf "$str_en" "$str_pt"
+}
+
+test_fallback_page_set_marks_contributing() {
+    local str_dir
+    str_dir="$(mktemp -d)"
+    mkdir -p "$str_dir/bin"
+    printf 'import sys\nsys.exit(1)\n' >"$str_dir/bin/check_docs_language.py"
+    printf '# T\n' | tee "$str_dir/README.md" >"$str_dir/CONTRIBUTING.md"
+    DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_mark_untranslated "$2"' _ \
+        "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_dir" 2>/dev/null
+    grep -qx '<!-- docs-lang:untranslated -->' "$str_dir/CONTRIBUTING.md" \
+        && pass "fallback page set marks the root CONTRIBUTING.md" \
+        || fail "fallback page set left the root CONTRIBUTING.md unmarked"
+    rm -rf "$str_dir"
+}
+
+test_ptbr_codespell_skips_localized_files() {
+    local str_dir
+    str_dir="$(mktemp -d)"
+    cp "$REPO_ROOT/templates/python-common/.codespellrc" "$str_dir/.codespellrc"
+    DOCS_LOCALE=pt-BR bash -c 'source "$1"; scaffold_skip_localized_spelling "$2"; scaffold_skip_localized_spelling "$2"' _ \
+        "$REPO_ROOT/bin/lib/scaffold_docs_locale.sh" "$str_dir"
+    python3 - "$str_dir/.codespellrc" <<'PY' \
+        && pass "pt-BR .codespellrc skips CONTRIBUTING.md, README.md and docs/, once" \
+        || fail "pt-BR .codespellrc skip misses a localized file or repeats the prefix"
+import fnmatch, sys
+str_skip = next(l for l in open(sys.argv[1]) if l.startswith("skip = "))[7:].strip()
+list_globs = str_skip.split(",")
+bool_hit = all(any(fnmatch.fnmatch(p, g) for g in list_globs) for p in ("CONTRIBUTING.md", "README.md", "docs/index.md"))
+sys.exit(0 if bool_hit and list_globs.count("docs/*") == 1 else 1)
+PY
+    rm -rf "$str_dir"
+}
+
+test_ptbr_changelog_says_entries_stay_english() {
+    grep -qF 'As entradas abaixo vêm das mensagens de commit, que este projeto escreve em inglês, e por isso ficam em inglês.' \
+        "$REPO_ROOT/templates/python-common/docs/pt-BR/changelog.md" \
+        && pass "pt-BR changelog intro carries the entries-stay-English sentence" \
+        || fail "pt-BR changelog intro lacks the entries-stay-English sentence"
+}
+
 main() {
+    test_contributing_follows_locale
+    test_security_adds_one_localized_line
+    test_ptbr_changelog_says_entries_stay_english
+    test_ptbr_codespell_skips_localized_files
+    test_fallback_page_set_marks_contributing
     test_ptbr_twins_cover_shipped_pages
     test_ptbr_readme_keeps_slugs
     test_scaffold_passes_docs_gate en

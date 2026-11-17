@@ -14,6 +14,14 @@
 
 ${PROJECT_DESCRIPTION}
 
+<!-- slug: features -->
+## Features
+
+- Dual ESM and CommonJS output with `.d.ts` typings, built by `tsc` alone.
+- Jest tests, ESLint and Prettier wired into pre-commit and CI.
+- npm publish through OIDC from a GitHub Action.
+- Docusaurus documentation site.
+
 <!-- slug: documentation -->
 ## Documentation
 
@@ -25,8 +33,20 @@ The documentation site lives at https://${GITHUB_USERNAME}.github.io/${PROJECT_N
 <!-- slug: install -->
 ### Install
 
+#### As a dependency
+
 ```bash
 npm install ${PROJECT_NAME}
+```
+
+This command works once the first release is published to npm.
+
+#### For development
+
+```bash
+git clone https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}.git
+cd ${PROJECT_NAME}
+npm install
 ```
 
 <!-- slug: usage -->
@@ -109,3 +129,7 @@ ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 
 - [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME})
 - [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}/issues)
+
+---
+
+<sub>Generated from the ts-lib template via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>
