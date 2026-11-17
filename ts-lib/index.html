@@ -2935,20 +2935,21 @@ verbatim at scaffold time, the same as <code>react-spa-webpack</code>.</p>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span>docs-deploy.yml<span class="w">        </span><span class="c1"># deploy the built site (GitHub Pages)</span>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span>pack-smoke.yml<span class="w">         </span><span class="c1"># npm pack + install smoke test on every push</span>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">    </span>release-npm.yml<span class="w">        </span><span class="c1"># npm OIDC trusted-publishing release</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">  </span>tsconfig.json<span class="w">             </span><span class="c1"># base config (type-check, IDE)</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span>tsconfig.esm.json<span class="w">          </span><span class="c1"># ESM build target</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span>tsconfig.cjs.json<span class="w">          </span><span class="c1"># CJS build target</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">  </span>tsconfig.types.json<span class="w">        </span><span class="c1"># .d.ts-only build target</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">  </span>eslint.config.mjs<span class="w">         </span><span class="c1"># vendor allowlist + function-length + catch-safety rules</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span>jest.config.cjs
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">  </span>babel.config.test.cjs
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">  </span>docusaurus.config.js
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">  </span>sidebars.js
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">  </span>package.json
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">  </span>.gitignore
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">  </span>.vscode/
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">  </span>CONTRIBUTING.md
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">  </span>LICENSE
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">  </span>cliff.toml<span class="w">               </span><span class="c1"># git-cliff changelog groups</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span>tsconfig.json<span class="w">             </span><span class="c1"># base config (type-check, IDE)</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span>tsconfig.esm.json<span class="w">          </span><span class="c1"># ESM build target</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">  </span>tsconfig.cjs.json<span class="w">          </span><span class="c1"># CJS build target</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">  </span>tsconfig.types.json<span class="w">        </span><span class="c1"># .d.ts-only build target</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span>eslint.config.mjs<span class="w">         </span><span class="c1"># vendor allowlist + function-length + catch-safety rules</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">  </span>jest.config.cjs
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">  </span>babel.config.test.cjs
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">  </span>docusaurus.config.js
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">  </span>sidebars.js
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">  </span>package.json
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">  </span>.gitignore
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">  </span>.vscode/
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">  </span>CONTRIBUTING.md
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">  </span>LICENSE
 </span></code></pre></div>
 <hr />
 <h2 id="folder-descriptions">📁 Folder Descriptions<a class="headerlink" href="#folder-descriptions" title="Permanent link">&para;</a></h2>
@@ -3089,7 +3090,12 @@ proving the <code>exports</code> map actually resolves, which a passing <code>ts
 <tr>
 <td><strong>npm OIDC publish</strong></td>
 <td>Release</td>
-<td><code>.github/workflows/release-npm.yml</code> — trusted publishing, no long-lived npm token stored as a secret</td>
+<td><code>.github/workflows/release-npm.yml</code> — trusted publishing, no long-lived npm token stored as a secret; also creates the <code>v&lt;version&gt;</code> tag and a GitHub release</td>
+</tr>
+<tr>
+<td><strong>git-cliff</strong></td>
+<td>Changelog</td>
+<td><code>cliff.toml</code> — same Conventional Commit groups as the Python tiers' <code>.cz.toml</code>; <code>npm run changelog</code> writes a git-ignored <code>CHANGELOG.md</code> plus the Docusaurus <code>docs/changelog.md</code> on every docs build, never committed back by a bot</td>
 </tr>
 </tbody>
 </table>
