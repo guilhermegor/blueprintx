@@ -41,8 +41,9 @@
     "test:watch": "jest --watch",
     "prepublishOnly": "npm run build",
     "pack:smoke": "bash bin/smoke_pack.sh",
-    "docs:start": "docusaurus start",
-    "docs:build": "docusaurus build --out-dir docs-build",
+    "changelog": "npx --yes git-cliff@2.14.2 --output CHANGELOG.md && cp CHANGELOG.md docs/changelog.md",
+    "docs:start": "npm run changelog && docusaurus start",
+    "docs:build": "npm run changelog && docusaurus build --out-dir docs-build",
     "docs:version": "docusaurus docs:version",
     "context:export": "bash bin/export_repo_content.sh"
   },
