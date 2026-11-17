@@ -86,7 +86,7 @@ The default for `--os` is stamped at scaffold time (`DEFAULT_OS` in `bin/${PROJE
 ### Releasing
 
 The version is the git tag; there is no hand-bump. Cut a release from the **Release**
-GitHub Action (`.github/workflows/release.yml`, `workflow_dispatch` with a `version`).
+GitHub Action (`.github/workflows/release.yml`, `workflow_dispatch` with a `version`). Release notes and `CHANGELOG.md` are rendered by git-cliff (`cliff.toml`; Feat, Fix, Refactor, Perf and Breaking changes) from the Conventional Commits in the tag's history; the changelog is generated in CI and attached to the release, never committed.
 
 <!-- slug: contributing -->
 ## Contributing
