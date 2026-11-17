@@ -395,6 +395,24 @@ test_toolkit_archetype_requires_commands() {
         "$(toolkit_readme | awk '/^<!-- slug: contributing -->/ { print "<!-- slug: commands -->"; print "## Commands"; print ""; print "`make setup`."; print "" } 1')" pass
 }
 
+h2_before_contributing() {
+    good_readme | awk -v h="$1" '/^<!-- slug: contributing -->/ { print h; print "" } 1'
+}
+
+test_strict_closed_vocabulary_and_features() {
+    expect_gate "--strict accepts a complete README" "$(good_readme)" pass "" --strict
+    expect_gate "--strict rejects an unslugged H2" "$(h2_before_contributing '## Acknowledgments')" \
+        fail "H2 without a slug: 'Acknowledgments'" --strict
+    expect_gate "--strict rejects a slug outside the archetype vocabulary" \
+        "$(h2_before_contributing $'<!-- slug: releasing -->\n## Releasing')" \
+        fail "H2 slug 'releasing' is not in this archetype's vocabulary" --strict
+    expect_gate "--strict rejects a repeated H2 slug" \
+        "$(h2_before_contributing $'<!-- slug: overview -->\n## Overview')" \
+        fail "H2 slug 'overview' appears more than once" --strict
+    expect_gate "--strict requires features" "$(without_slug features)" fail "missing section 'features'" --strict
+    expect_gate "without --strict an unslugged H2 passes" "$(h2_before_contributing '## Acknowledgments')" pass
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do
