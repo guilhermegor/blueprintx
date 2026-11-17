@@ -2869,6 +2869,13 @@ This is the skeleton <code>publishprobe</code> (greenfield#26) is scaffolded fro
   (<code>workflow_dispatch</code> → <code>version</code> input, creates + pushes <code>vX.Y.Z</code>) followed by a
   <code>github_release</code> job that stamps that version into the tarball's entrypoint the
   same way, then publishes a GitHub Release with the tarball + a <code>.sha256</code> checksum.</li>
+<li><strong>Release notes and changelog</strong> → <code>cliff.toml</code> (git-cliff) groups Feat, Fix,
+  Refactor, Perf and Breaking changes, matching <code>templates/python-common/.cz.toml</code>.
+  The <code>github_release</code> job installs a git-cliff binary pinned by version and
+  SHA-256, renders the notes for the tag, and attaches a generated <code>CHANGELOG.md</code>
+  to the release. <code>CHANGELOG.md</code> is ignored by version control: no bot ever
+  commits it back. <code>etcher-chromeos</code> and <code>ventoy-usb</code> copy this one <code>cliff.toml</code>
+  and <code>release.yml</code> rather than keeping their own.</li>
 </ul>
 <h2 id="deferred-release-channels-backlog">Deferred release channels (backlog)<a class="headerlink" href="#deferred-release-channels-backlog" title="Permanent link">&para;</a></h2>
 <p>BlueprintX itself also ships Homebrew, apt (gh-pages), and (optional)
