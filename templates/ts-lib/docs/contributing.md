@@ -39,7 +39,16 @@ stored. `.github/workflows/release-npm.yml` runs on `workflow_dispatch` with the
 version to release: it runs the test suite, checks the version is not already
 published, then runs `npm stage publish` (npm's staged-publish flow), which holds the
 package on the registry until a maintainer approves it with 2FA. A GitHub release with
-the named `npm pack` tarball is created once staging succeeds.
+the named `npm pack` tarball is created once staging succeeds; that step also creates
+the tag `v<version>`, and the release notes are rendered by
+[git-cliff](https://git-cliff.org) (pinned `2.14.2`) from the Conventional Commits since
+the previous tag, grouped as in `cliff.toml` (Feat, Fix, Refactor, Perf, Breaking changes).
+
+`CHANGELOG.md` is never committed: `npm run changelog` regenerates it (and
+`docs/changelog.md`, the Docusaurus changelog page) from the git history on every docs
+build, so the docs workflows check out with `fetch-depth: 0`. Both files are git-ignored,
+the workflow uses only the built-in `GITHUB_TOKEN` (`contents: write` for the release),
+and no bot commits to `main`.
 
 ### One-time bootstrap (before the first automated release)
 

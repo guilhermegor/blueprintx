@@ -10,6 +10,7 @@ const config = {
   projectName: '${PROJECT_NAME}',
   onBrokenLinks: 'throw',
   markdown: {
+    format: 'detect',
     hooks: {
       onBrokenMarkdownLinks: 'warn',
     },

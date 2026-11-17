@@ -3,7 +3,7 @@
 
 /** @type {import('@docusaurus/plugin-content-docs').SidebarsConfig} */
 const sidebars = {
-  docsSidebar: ['index', 'usage', 'examples', 'faq', 'contributing', 'releasing-1-0-0'],
+  docsSidebar: ['index', 'usage', 'examples', 'faq', 'contributing', 'changelog', 'releasing-1-0-0'],
 };
 
 module.exports = sidebars;
