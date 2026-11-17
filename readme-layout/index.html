@@ -2045,6 +2045,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#closed-h2-vocabulary-strict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closed H2 vocabulary (--strict)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2795,6 +2812,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#closed-h2-vocabulary-strict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closed H2 vocabulary (--strict)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2890,13 +2924,30 @@ heading (blank lines between are fine): <code>&lt;!-- slug: install --&gt;</code
 </tr>
 </tbody>
 </table>
-<p>Other sections are allowed anywhere; only the slugged ones are ordered.</p>
+<p>Outside <code>--strict</code>, other sections are allowed anywhere and only the slugged ones are ordered.</p>
+<h3 id="closed-h2-vocabulary-strict">Closed H2 vocabulary (<code>--strict</code>)<a class="headerlink" href="#closed-h2-vocabulary-strict" title="Permanent link">&para;</a></h3>
+<p><code>--strict</code> closes the list. The gate passes it for <code>README.template.md</code>, every
+<code>templates/*/README.md</code> and every generated README (<code>bin/ci/check_readme_structure.sh</code>); the
+root <code>README.md</code> and a vendored copy in another repository run without it.</p>
+<ul>
+<li>Every H2 carries a slug from the table above, narrowed to the README's archetype: <code>overview</code>,
+  <code>features</code>, <code>getting-started</code>, <code>project-structure</code>, <code>development</code>, <code>contributing</code>, <code>license</code>,
+  <code>authors</code>, <code>useful-links</code>, the archetype's own slugs and, for <code>library</code>, <code>documentation</code>. An
+  unslugged H2, or a slug outside that set (<code>releasing</code> in a <code>usb-tool</code>), fails.</li>
+<li>An extra section is an H3 under an existing slug: a Docker recipe is <code>### Docker</code> under
+  <code>deployment</code>, a manifest reference is <code>### The manifest</code> under <code>usage</code>. A README that needs an
+  H2 the vocabulary lacks adds the slug to the gate and to this page first.</li>
+<li><code>features</code> is required in every archetype except <code>toolkit</code> (no user-facing surface).</li>
+<li>Template parity: a template-owned <code>README.md</code> keeps the H2 order of
+  <code>templates/common/README.template.md</code> for its archetype, because the order check and the
+  vocabulary check run on it too.</li>
+</ul>
 <p>Further rules:</p>
 <ul>
 <li>The first line is <code>&lt;!-- readme-archetype: NAME --&gt;</code>, one of the archetypes above.</li>
 <li>No H1 to H6 contains an emoji, <code>&lt;img&gt;</code>, <code>![...]</code> or <code>&lt;picture&gt;</code>. The logo sits on its own
   line under the H1. Badges and images stay allowed in the body.</li>
-<li><code>features</code> is optional: its position is checked only when the section is present.
+<li><code>features</code> is optional without <code>--strict</code>: its position is checked only when the section is present.
   <code>documentation</code> is required for <code>library</code> and holds the docs site URL plus the local serve command: <code>bash bin/poe_exec.sh docs_serve</code>
   for Python libraries, <code>npm run docs:start</code> for TypeScript libraries.</li>
 <li><code>install</code> in the <code>library</code> archetype has two <code>####</code> subparts, in both languages: "As a
@@ -2922,17 +2973,15 @@ heading (blank lines between are fine): <code>&lt;!-- slug: install --&gt;</code
 <li>README images use absolute <code>raw.githubusercontent.com</code> URLs (logo, coverage badge), because
   <code>readme = "README.md"</code> ships to PyPI where relative paths break. <code>scaffold_render_readme</code> fills
   them from <code>GITHUB_USERNAME</code> and <code>PROJECT_NAME</code>.</li>
-<li>A footer closes the README rendered from <code>README.template.md</code> and the Python README (the other
-  skeleton READMEs, ts-lib included, have none): a rule, then <code>&lt;sub&gt;</code> text, no heading (so no
+<li>A footer closes every README, template-owned or rendered: a rule, then <code>&lt;sub&gt;</code> text, no heading (so no
   slug), reading "Generated from the <tier> template via
   <a href="https://github.com/guilhermegor/blueprintx">BlueprintX</a>" (<code>README_TIER</code>) followed by
   any project disclaimer. The link is absolute, like the images, because the README ships to
   PyPI where relative links break, and the structure gate reports a footer without it.
-  A missing footer passes by default, because the READMEs without one are deliberate; pass
-  <code>--require-footer</code> to fail a README with no <code>&lt;sub&gt;Generated from</code> line or whose footer has
-  no <code>---</code> rule above it. <code>bin/ci/check_readme_structure.sh</code> passes it for
-  <code>README.template.md</code>, <code>python-common/README.md</code> and every generated project whose skeleton
-  has no <code>templates/&lt;name&gt;/README.md</code> of its own.
+  A missing footer passes by default, so a repository that vendors the gate is not forced to
+  add one; pass <code>--require-footer</code> to fail a README with no <code>&lt;sub&gt;Generated from</code> line or whose
+  footer has no <code>---</code> rule above it. <code>bin/ci/check_readme_structure.sh</code> passes it for
+  <code>README.template.md</code>, every <code>templates/*/README.md</code> and every generated project.
   Disclaimers go here, not in the body.</li>
 <li>Every list item under <code>authors</code> carries a <code>github.com/&lt;user&gt;</code> link and a
   <code>linkedin.com/in/&lt;handle&gt;</code> link, and none uses the placeholder
