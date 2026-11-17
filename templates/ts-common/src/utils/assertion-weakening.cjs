@@ -2,8 +2,10 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 
 const RE_TEST_PATH = /\.(test|spec)\.(ts|tsx|js|jsx)$/;
-const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.each\((?:[^()]|\([^()]*\))*\)|\.\w+)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
-const RE_MATCHER = /\.(not\.)?(to[A-Z]\w*)\(/g;
+const RE_TEST_START = /(?<![.\w])[fx]?(?:it|test)(?:\.\w+)*(?:\.each\((?:[^()]|\([^()]*\))*\)(?:\.\w+)*)?\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
+const RE_EXPECT = /(?<![.\w])expect(?:\.\w+)?(?:<[^()]*>)?\(/g;
+const RE_MATCHER_TAIL = /^\s*(?:\.(?:resolves|rejects)\s*)?(\.not\s*)?\.\s*(to[A-Z]\w*)\(/;
+const RE_MATCHER_ANYWHERE = /(?:\.(?:resolves|rejects))?(\.not)?\.(to[A-Z]\w*)\(/;
 const RE_PLACEHOLDER = /^<[^>]*>$/;
 const RE_JUSTIFICATION = /^\s*test-change-ok:[ \t]*(\S.*)$/gim;
 
@@ -26,8 +28,65 @@ function splitTests(source) {
   });
 }
 
-function matchers(body) {
-  return [...body.matchAll(RE_MATCHER)].filter((match) => !match[1]).map((match) => match[2]);
+function skipString(text, from) {
+  const quote = text[from];
+  let index = from + 1;
+  while (index < text.length && text[index] !== quote) index += text[index] === '\\' ? 2 : 1;
+  return index;
+}
+
+function skipRegex(text, from) {
+  let index = from + 1;
+  let inClass = false;
+  while (index < text.length && (inClass || text[index] !== '/')) {
+    if (text[index] === '\\') index += 1;
+    else if (text[index] === '[') inClass = true;
+    else if (text[index] === ']') inClass = false;
+    index += 1;
+  }
+  return index;
+}
+
+function untilOrEnd(text, token, from, last) {
+  const found = text.indexOf(token, from);
+  return found < 0 ? text.length : found + last;
+}
+
+function skipOpaque(text, index) {
+  const char = text[index];
+  if ('\'"`'.includes(char)) return skipString(text, index);
+  if (text.startsWith('/*', index)) return untilOrEnd(text, '*/', index + 2, 1);
+  if (text.startsWith('//', index)) return untilOrEnd(text, '\n', index, 0);
+  if (char === '/' && /(?:^|[(,=:!&|?{;])\s*$/.test(text.slice(0, index))) return skipRegex(text, index);
+  return index;
+}
+
+function closingParen(text, from) {
+  let depth = 1;
+  for (let index = from; index < text.length; index += 1) {
+    index = skipOpaque(text, index);
+    depth += { '(': 1, ')': -1 }[text[index]] ?? 0;
+    if (depth === 0) return index;
+  }
+  return -1;
+}
+
+function assertionAt(body, match) {
+  const from = match.index + match[0].length;
+  const close = closingParen(body, from);
+  const tail = close < 0 ? RE_MATCHER_ANYWHERE.exec(body.slice(from)) : RE_MATCHER_TAIL.exec(body.slice(close + 1));
+  if (!tail || tail[1]) return null;
+  const subject = close < 0 ? '' : body.slice(from, close).replace(/\s+/g, '');
+  return { subject, matcher: tail[2] };
+}
+
+function matchersBySubject(body) {
+  const bySubject = new Map();
+  [...body.matchAll(RE_EXPECT)]
+    .map((match) => assertionAt(body, match))
+    .filter(Boolean)
+    .forEach(({ subject, matcher }) => bySubject.set(subject, [...(bySubject.get(subject) ?? []), matcher]));
+  return bySubject;
 }
 
 function surplus(names, others, allowed) {
@@ -41,14 +100,34 @@ function surplus(names, others, allowed) {
     });
 }
 
-function testFindings(path, oldTest, newTest) {
-  const oldNames = matchers(oldTest.body);
-  const newNames = matchers(newTest.body);
+function subjectFindings(oldNames, newNames) {
   const removed = surplus(oldNames, newNames, EQUALITY_MATCHERS);
   const added = surplus(newNames, oldNames, INEQUALITY_MATCHERS);
-  return removed
-    .slice(0, added.length)
-    .map((name, index) => `${path}: ${newTest.name}: ${name} loosened to ${added[index]}`);
+  return removed.slice(0, added.length).map((name, index) => `${name} loosened to ${added[index]}`);
+}
+
+function testFindings(path, oldTest, newTest) {
+  const oldBySubject = matchersBySubject(oldTest.body);
+  const newBySubject = matchersBySubject(newTest.body);
+  const shared = [...oldBySubject.keys()].filter((subject) => newBySubject.has(subject));
+  const unshared = (bySubject) =>
+    [...bySubject].filter(([subject]) => !shared.includes(subject)).flatMap(([, names]) => names);
+  const leftovers = shared.map((subject) => {
+    const [oldNames, newNames] = [oldBySubject.get(subject), newBySubject.get(subject)];
+    const removed = surplus(oldNames, newNames, EQUALITY_MATCHERS);
+    const added = surplus(newNames, oldNames, INEQUALITY_MATCHERS);
+    const paired = Math.min(removed.length, added.length);
+    return {
+      findings: removed.slice(0, paired).map((name, index) => `${name} loosened to ${added[index]}`),
+      removed: removed.slice(paired),
+      added: added.slice(paired),
+    };
+  });
+  const pooled = (key, bySubject) => [...unshared(bySubject), ...leftovers.flatMap((entry) => entry[key])];
+  return [
+    ...leftovers.flatMap((entry) => entry.findings),
+    ...subjectFindings(pooled('removed', oldBySubject), pooled('added', newBySubject)),
+  ].map((finding) => `${path}: ${newTest.name}: ${finding}`);
 }
 
 function fileFindings(path, oldSource, newSource) {

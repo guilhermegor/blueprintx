@@ -36,6 +36,7 @@ numpy = ">=1.22"
 wwdates = ">=1.0.0"
 openpyxl = ">=3.1.0"
 defusedxml = ">=0.7"
+pure-docs-br = ">=1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 poethepoet = ">=0.35"

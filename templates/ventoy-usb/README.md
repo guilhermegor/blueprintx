@@ -11,6 +11,14 @@ This repo replaces a roughly 50 GB backup of a Ventoy multiboot drive. The repo 
 the persistence image is downloaded, and the small files that cannot be downloaded live in
 `payload/`. On a new machine, `git clone` and `make` rebuild the whole drive tree.
 
+<!-- slug: features -->
+## Features
+
+- Rebuilds a Ventoy multiboot drive from `sources.manifest`, with every ISO re-fetched at its latest version.
+- Verifies downloads against published checksums and signatures.
+- Generates `ventoy.json` and the persistence image.
+- Refuses any target that is not a removable disk.
+
 <!-- slug: getting-started -->
 ## Getting Started
 
@@ -34,7 +42,7 @@ make drive                       # asks for the pendrive path, then installs or 
 make drive TARGET=/media/me/Ventoy
 ```
 
-## What `make drive` does
+### What `make drive` does
 
 It asks for the pendrive path (a mount point or `/dev/sdX`, or `--target`), resolves it to the
 block device and refuses anything that is not a removable disk. Then:
@@ -49,7 +57,7 @@ block device and refuses anything that is not a removable disk. Then:
 The write path never runs in Docker: it needs `--privileged` or `--device`, which breaks
 removable-device detection and partition re-reads, and Ventoy ships no official image.
 
-## The manifest
+### The manifest
 
 `sources.manifest` has one entry per line:
 `id|group|folder|kind|source|pattern|checksum|persist|extract|trust`. Nothing is pinned: each kind
@@ -70,7 +78,7 @@ A failing entry is reported and skipped; the rest continue. A missing checksum f
 `none:<reason>` is the only opt-out. Microsoft sometimes rejects automated requests: download the
 ISO by hand into `payload/isos/Windows/` then.
 
-## Persistence and ventoy.json
+### Persistence and ventoy.json
 
 The persistence image is downloaded from Ventoy's `ventoy/backend` releases and verified against
 the sha256 in the release notes; `CreatePersistentImg.sh` (root) is only the fallback for sizes
@@ -80,7 +88,7 @@ warning because the saved session data is lost. `ventoy.json` is generated from 
 manifest, so the persistence `image` is the path the ISO landed at; `check` fails the build if
 any path in it is missing from the tree.
 
-## Trust
+### Trust
 
 Each manifest entry has a trust level, printed at download time: `gpg` (checksum file signed by a
 key whose fingerprint is in the manifest), `two-origin` (Ventoy: GitHub digest and ventoy.net must
@@ -116,7 +124,7 @@ Anything under `payload/` is copied verbatim onto the drive tree (for example
 `payload/recovery_tools/disk-rescue.sh` or small PDFs). `*.iso *.exe *.zip *.dat *.7z` are
 git-ignored; PDFs and scripts are not, so keep this repo private if they are not yours to share.
 
-## Releasing
+### Releasing
 
 The version is the git tag; there is no hand-bump. Cut a release from the **Release** GitHub
 Action (`.github/workflows/release.yml`).
@@ -142,3 +150,7 @@ ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 
 - [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME})
 - [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}/issues)
+
+---
+
+<sub>Generated from the ventoy-usb template via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>

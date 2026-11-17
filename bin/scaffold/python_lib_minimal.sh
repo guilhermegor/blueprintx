@@ -402,8 +402,7 @@ lib_minimal_copy_github_assets() {
         "$project_path/.github/workflows/docs.yml"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$SHARED_TEMPLATE_ROOT/.github/CODEOWNERS" > "$project_path/.github/CODEOWNERS"
     # dependabot.yml (ordinary VERSION bumps; SECURITY updates are a toggle set by
-    envsubst '${PROJECT_DISPLAY_NAME} ${REPOSITORY}' \
-        < "$SHARED_TEMPLATE_ROOT/SECURITY.md" > "$project_path/SECURITY.md"
+    scaffold_render_security "$project_path"
     GITHUB_USERNAME="$GITHUB_USERNAME" envsubst '${GITHUB_USERNAME}' < "$COMMON_TEMPLATE_ROOT/.github/dependabot.yml" > "$project_path/.github/dependabot.yml"
     cp "$SHARED_TEMPLATE_ROOT/.github/CLAUDE.md" "$project_path/.github/CLAUDE.md"
     cp "$SHARED_TEMPLATE_ROOT/.github/AGENTS.md" "$project_path/.github/AGENTS.md"
@@ -946,8 +945,6 @@ apply_docs_locale_pages() {
         }
         { print }' "$path_lib/docs/pt-BR/nav-labels.tsv" "$project_path/mkdocs.yml" >"$path_tmp"
     cat "$path_tmp" >"$project_path/mkdocs.yml"
-    sed 's|^skip = |skip = */docs/*,docs/*,README.md,mkdocs.yml,|' "$project_path/.codespellrc" >"$path_tmp"
-    cat "$path_tmp" >"$project_path/.codespellrc"
     rm -f "$path_tmp"
     print_status "success" "pt-BR pages, README, nav labels and codespell skip applied"
 }
