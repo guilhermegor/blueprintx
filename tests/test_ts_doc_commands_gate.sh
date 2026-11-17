@@ -181,4 +181,70 @@ expect "a failing perl stage exits 2 instead of passing" 2 "$?"
 has_text "a failing perl stage is reported as an extraction failure" "extracting npm commands" "$str_out"
 rm -rf "$str_badperl"
 
+printf '{"scripts":{"build":"x"}}\n' >"$str_proj/package.json"
+for str_chain in '&&' ';' '||' '|'; do
+	printf 'Run `npm run missing %s npm install --prefix ./client`.\n' "$str_chain" >"$str_proj/README.md"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "a missing script before '$str_chain' and a --prefix segment fails" 1 "$?"
+	printf 'Run `npm run build %s npm run missing`.\n' "$str_chain" >"$str_proj/README.md"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "a missing script after '$str_chain' fails" 1 "$?"
+	printf 'Run `npm run ghost -w app %s npm run build`.\n' "$str_chain" >"$str_proj/README.md"
+	bash "$GATE" "$str_proj" >/dev/null 2>&1
+	expect "a workspace segment before '$str_chain' stays skipped" 0 "$?"
+done
+printf 'Run `npm run build; npm run build && npm install --prefix ./client`.\n' >"$str_proj/README.md"
+bash "$GATE" "$str_proj" >/dev/null 2>&1
+expect "a fully valid chain passes" 0 "$?"
+
+for str_tier in react-spa-webpack ts-lib; do
+	str_promoted="$(mktemp -d)"
+	bash -c 'source "$1"; PROJECT_PATH="$2"; TIER="$3"; GITHUB_USERNAME=octo; PROJECT_NAME=demo; PROJECT_DISPLAY_NAME=Demo; REPOSITORY=octo/demo; export PROJECT_NAME GITHUB_USERNAME PROJECT_DISPLAY_NAME REPOSITORY; copy_online_assets' \
+		_ "$REPO_ROOT/bin/promote_offline_to_online.sh" "$str_promoted" "$str_tier" >/dev/null 2>&1
+	expect "$str_tier promotion runs" 0 "$?"
+	has "$str_tier promotion restores .github/AGENTS.md" '# `.github/`' "$str_promoted/.github/AGENTS.md"
+	has "$str_tier promotion renders the TypeScript gate parity" 'BOTH the git hooks and CI' "$str_promoted/.github/AGENTS.md"
+	str_py="no"
+	grep -qE 'ruff|requires-python|mypy|check-docstrings|\.pre-commit-config' "$str_promoted/.github/AGENTS.md" && str_py="yes"
+	expect "$str_tier promoted AGENTS.md carries no Python gate text" no "$str_py"
+	[ -x "$str_promoted/bin/check_doc_commands.sh" ]
+	expect "$str_tier promotion restores an executable bin/check_doc_commands.sh" 0 "$?"
+	[ -n "$(find "$str_promoted/src" -name assertion-weakening.cjs -print -quit)" ]
+	expect "$str_tier promotion restores the assertion-weakening gate" 0 "$?"
+	rm -rf "$str_promoted"
+done
+str_promoted="$(mktemp -d)"
+bash -c 'source "$1"; PROJECT_PATH="$2"; TIER=ddd-service-native-db; GITHUB_USERNAME=octo; PROJECT_NAME=demo; export PROJECT_NAME GITHUB_USERNAME; copy_online_assets' \
+	_ "$REPO_ROOT/bin/promote_offline_to_online.sh" "$str_promoted" >/dev/null 2>&1
+expect "a Python promotion runs" 0 "$?"
+has "a Python promotion keeps the Python gate parity text" 'ruff format --check' "$str_promoted/.github/AGENTS.md"
+rm -rf "$str_promoted"
+
+str_promoted="$(mktemp -d)"
+bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_gate_parity.sh"; scaffold_render_gate_parity "$1/templates/common/.github/AGENTS.md" "$2/absent.md" "$2/out.md"' _ "$REPO_ROOT" "$str_promoted" >/dev/null 2>&1
+expect "a missing gate-parity fragment is an error, not a dropped section" 1 "$?"
+rm -rf "$str_promoted"
+
+str_promoted="$(mktemp -d)"
+bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_gate_parity.sh"; scaffold_render_gate_parity "$1/templates/common/.github/AGENTS.md" "$1/templates/ts-common/gate-parity.md" "$2/out.md"' _ "$REPO_ROOT" "$str_promoted" >/dev/null 2>&1
+expect "rendering the gate parity fragment succeeds" 0 "$?"
+for str_heading in '## Validating CI locally' '## Kanban board and labels' '## Blocked work' '## Publishing packages'; do
+	has "the rendered AGENTS.md keeps '$str_heading'" "$str_heading" "$str_promoted/out.md"
+done
+printf '# t\n\n```\n## Gate parity\n```\n' >"$str_promoted/fenced.md"
+bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/scaffold_gate_parity.sh"; scaffold_render_gate_parity "$2/fenced.md" "$1/templates/ts-common/gate-parity.md" "$2/o2.md"' _ "$REPO_ROOT" "$str_promoted" >/dev/null 2>&1
+expect "a Gate parity heading only inside a code fence is an error" 1 "$?"
+rm -rf "$str_promoted"
+
+str_promoted="$(mktemp -d)"
+mkdir -p "$str_promoted/src/utils"
+printf 'weakened\n' >"$str_promoted/src/utils/assertion-weakening.cjs"
+bash -c 'source "$1"; PROJECT_PATH="$2"; TIER=ts-lib; GITHUB_USERNAME=octo; PROJECT_NAME=demo; export PROJECT_NAME GITHUB_USERNAME; copy_online_assets' \
+	_ "$REPO_ROOT/bin/promote_offline_to_online.sh" "$str_promoted" >/dev/null 2>&1
+cmp -s "$str_promoted/src/utils/assertion-weakening.cjs" "$REPO_ROOT/templates/ts-common/src/utils/assertion-weakening.cjs"
+expect "promotion replaces a tampered gate file with the template copy" 0 "$?"
+[ -f "$str_promoted/src/utils/assertion-weakening.d.cts" ]
+expect "promotion restores the missing .d.cts beside an existing gate" 0 "$?"
+rm -rf "$str_promoted"
+
 [ "$int_failures" -eq 0 ]

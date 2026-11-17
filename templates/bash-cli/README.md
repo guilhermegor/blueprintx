@@ -6,6 +6,13 @@
 
 ${PROJECT_DESCRIPTION}
 
+<!-- slug: features -->
+## Features
+
+- Git-tag versioning: the version is the tag, with no hand-bump.
+- `bats` tests and `shellcheck` linting wired into pre-commit and CI.
+- Release published from a GitHub Action.
+
 <!-- slug: getting-started -->
 ## Getting Started
 
@@ -76,3 +83,7 @@ ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 
 - [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME})
 - [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}/issues)
+
+---
+
+<sub>Generated from the bash-cli template via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>

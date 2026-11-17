@@ -143,6 +143,81 @@ describe('assertion weakening gate justification in a branch', () => {
     expect(fileFindings('a.test.ts', each('toBe'), each('toBeGreaterThan'))).toHaveLength(1);
   });
 
+});
+
+describe('assertion weakening gate chained each and pairing', () => {
+  it.each(['test.concurrent.each', 'it.only.each', 'test.skip.each', 'it.failing.each'])(
+    'recognises %s as a test so its weakening is seen',
+    (chain) => {
+      const each = (matcher: string): string =>
+        `${chain}([[1]])('second %s', (n) => {\n  expect(n).${matcher}(1);\n});\n`;
+      expect(fileFindings('a.test.ts', each('toBe'), each('toBeGreaterThan'))).toHaveLength(1);
+    },
+  );
+
+  it('flags a weakening when an unrelated equality is added for another subject', () => {
+    const before = "it('f', () => {\n  expect(a).toBe(1);\n});\n";
+    const after = "it('f', () => {\n  expect(a).toBeGreaterThan(0);\n  expect(b).toBe(2);\n});\n";
+    expect(fileFindings('a.test.ts', before, after)).toHaveLength(1);
+  });
+
+  it('does not flag an inequality added beside a kept equality on the same subject', () => {
+    const before = "it('f', () => {\n  expect(a).toBe(1);\n});\n";
+    const after = "it('f', () => {\n  expect(a).toBe(1);\n  expect(a).toBeGreaterThan(0);\n});\n";
+    expect(fileFindings('a.test.ts', before, after)).toEqual([]);
+  });
+
+  it('pairs a subject that holds nested parentheses', () => {
+    const src = (matcher: string): string =>
+      `it('f', () => {\n  expect(fn(a, (b) => b)).${matcher}(1);\n});\n`;
+    expect(fileFindings('a.test.ts', src('toBe'), src('toBeLessThan'))).toHaveLength(1);
+  });
+
+});
+
+describe('assertion weakening gate does not fail open', () => {
+  const find = (before: string, after: string): number =>
+    fileFindings('a.test.ts', `it('f', () => {\n${before}\n});\n`, `it('f', () => {\n${after}\n});\n`).length;
+
+  it('sees a matcher chain broken across lines', () => {
+    expect(find('  expect(x)\n    .toBe(1);', '  expect(x)\n    .toBeGreaterThan(1);')).toBe(1);
+  });
+
+  it('flags an inequality moved onto an already-asserted subject while an equality is dropped', () => {
+    expect(find('  expect(a).toBe(1);\n  expect(b).toBe(2);', '  expect(a).toBe(1);\n  expect(a).toBeGreaterThan(0);')).toBe(1);
+  });
+
+  it('sees expect with a generic type argument', () => {
+    expect(find('  expect<number>(x).toBe(1);', '  expect<number>(x).toBeGreaterThan(1);')).toBe(1);
+  });
+
+  it('sees expect.soft assertions', () => {
+    expect(find('  expect.soft(x).toBe(1);', '  expect.soft(x).toBeGreaterThan(1);')).toBe(1);
+  });
+
+  it.each([`')'`, `'('`, '`)`'])('pairs a subject holding the string %s', (literal) => {
+    const src = (matcher: string): string => `  expect(f(${literal})).${matcher}(1);`;
+    expect(find(src('toBe'), src('toBeLessThan'))).toBe(1);
+  });
+});
+
+describe('assertion weakening gate opaque text and trailing modifiers', () => {
+  it.each(['test.each([[1]]).concurrent', 'test.each([[1]]).skip'])('recognises %s', (chain) => {
+    const src = (matcher: string): string =>
+      `${chain}('c %s', (v) => {\n  expect(v).${matcher}(1);\n});\n`;
+    expect(fileFindings('a.test.ts', src('toBe'), src('toBeGreaterThan'))).toHaveLength(1);
+  });
+
+  it.each(['value /* ) */', 'value /* ( */', 'value // )\n', '/\\)/.test(value)'])(
+    'pairs a subject holding %s',
+    (subject) => {
+      const src = (matcher: string): string => `it('f', () => {\n  expect(${subject}).${matcher}(1);\n});\n`;
+      expect(fileFindings('a.test.ts', src('toBe'), src('toBeLessThan'))).toHaveLength(1);
+    },
+  );
+});
+
+describe('assertion weakening gate matching edge cases', () => {
   it('flags a weakening next to a non-matcher .toFixed() call', () => {
     const before = "it('f', () => {\n  expect(x.toFixed(2)).toBe('1.00');\n});\n";
     const after = "it('f', () => {\n  expect(x).toBeGreaterThan(1);\n});\n";
