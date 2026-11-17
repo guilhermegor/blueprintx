@@ -98,7 +98,7 @@ copy_skeleton_files() {
     scaffold_copy_readme_gate "$project_path"
 
     envsubst '${PROJECT_NAME}' \
-        < "$BASH_CLI_TEMPLATE_ROOT/.github/workflows/release.yml" \
+        < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release.yml" \
         > "$project_path/.github/workflows/release.yml"
 
     cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/ci.yml" "$project_path/.github/workflows/ci.yml"
