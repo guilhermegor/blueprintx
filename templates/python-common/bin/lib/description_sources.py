@@ -8,6 +8,7 @@ be read (5), so the caller can skip the first and fail the second.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 import importlib
 import json
 from pathlib import Path
@@ -28,8 +29,8 @@ INT_EXIT_UNREADABLE = 5
 INT_EXIT_NOT_PTBR = 6
 
 RE_SITE_DESCRIPTION = re.compile(r"^site_description:\s*(.*?)\s*$", re.MULTILINE)
-RE_INLINE_LANGUAGE = re.compile(r"[{,][ \t]*language:[ \t]*[\"']?([\w-]+)")
-RE_THEME_LANGUAGE = re.compile(r"^[ \t]+language:[ \t]*[\"']?([\w-]+)")
+RE_INLINE_LANGUAGE = re.compile(r"^theme:[ \t]*\{(?:[^{}]*,)?[ \t]*language:[ \t]*[\"']?([\w-]+)")
+RE_THEME_LANGUAGE = re.compile(r"^([ \t]+)language:[ \t]*[\"']?([\w-]+)")
 RE_SINGLE_QUOTED = re.compile(r"'((?:[^']|'')*)'(.*)$")
 
 
@@ -155,20 +156,36 @@ def reads_as_ptbr(str_text: str) -> bool:
     return bool(list_paras)
 
 
+def theme_lines(str_text: str) -> Iterator[str]:
+    """Yield the ``theme:`` header line and the indented lines under it, skipping comments."""
+    bool_in_theme = False
+    for str_line in str_text.splitlines():
+        if not str_line.strip() or str_line.startswith("#"):
+            continue
+        if str_line.startswith("theme:"):
+            bool_in_theme = True
+            yield str_line
+        elif not str_line[0].isspace():
+            bool_in_theme = False
+        elif bool_in_theme:
+            yield str_line
+
+
 def mkdocs_language(path_mkdocs: Path) -> str | None:
     """Return ``theme.language`` from an ``mkdocs.yml``, or ``None`` when it is not declared."""
     if not path_mkdocs.is_file():
         return None
-    bool_in_theme = False
-    for str_line in path_mkdocs.read_text(encoding="utf-8").splitlines():
+    int_child_indent = None
+    for str_line in theme_lines(path_mkdocs.read_text(encoding="utf-8")):
         if str_line.startswith("theme:"):
-            bool_in_theme = True
-            if match := RE_INLINE_LANGUAGE.search(str_line):
-                return match.group(1)
-        elif str_line.strip() and not str_line[0].isspace() and not str_line.startswith("#"):
-            bool_in_theme = False
-        elif bool_in_theme and (match := RE_THEME_LANGUAGE.match(str_line)):
-            return match.group(1)
+            match = RE_INLINE_LANGUAGE.match(str_line)
+            int_child_indent = None
+        else:
+            int_child_indent = int_child_indent or len(str_line) - len(str_line.lstrip())
+            match = RE_THEME_LANGUAGE.match(str_line)
+            match = match if match and len(match.group(1)) == int_child_indent else None
+        if match:
+            return match.group(match.lastindex)
     return None
 
 
