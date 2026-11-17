@@ -217,6 +217,22 @@ test_docs_locale_reaches_the_scaffold() {
     fi
 }
 
+test_zero_dependency_reaches_the_scaffold() {
+    local str_temp str_deps str_out
+    str_out="$(run_blueprintx new --spec "$(write_spec zero-dep lib-minimal "zero_dependency=y" "logs=y")" --dev)"
+    str_temp="$(sed -n 's/.*using temp root \(.*\)$/\1/p' <<<"$str_out" | sed 's/\x1b\[[0-9;]*m//g' | tail -1)"
+    if [[ "$str_out" == *"logs.py: included"* ]]; then
+        fail "zero_dependency with logs=y" "summary claims logs.py but zero-dependency mode never copies it"
+    fi
+    str_deps="$(python3 -c 'import sys, tomllib; print(sorted(tomllib.load(open(sys.argv[1], "rb"))["tool"]["poetry"]["dependencies"]))' "$str_temp/spec-probe/pyproject.toml" 2>&1)"
+    if [ "$str_deps" = "['python']" ] && [ ! -e "$str_temp/spec-probe/src/spec_probe/_internal/utils/dates.py" ]; then
+        pass "zero_dependency=y empties the runtime dependencies and omits the vendored toolkit"
+    else
+        fail "zero_dependency pass-through" "dependencies='$str_deps' or dates.py present"
+    fi
+    rm_temp_root "$str_temp"
+}
+
 spec_scaffold_root() {
     local out
     out="$(run_blueprintx new --spec "$(write_spec "$1" lib-minimal "${@:2}")" --dev)"
@@ -978,12 +994,12 @@ main() {
     test_a_failed_answer_stream_stops_the_scaffold_flow
     test_bad_docs_locale_stops_before_anything_is_created
     test_docs_locale_reaches_the_scaffold
+    test_zero_dependency_reaches_the_scaffold
     test_pt_br_scaffold_ships_translated_pages_and_passes_its_own_gate
     test_en_scaffold_leaves_pages_unmarked_and_passes_its_own_gate
     test_absent_docs_locale_is_refused_on_an_mkdocs_skeleton
     test_absent_docs_locale_is_refused_on_every_python_tier
     test_absent_docs_locale_is_accepted_on_a_skeleton_without_mkdocs
-
     if [ "$int_failures" -eq 0 ]; then
         echo "All --spec regression tests passed."
         exit 0

@@ -1,0 +1,165 @@
+"""Smoke test: the dependency-free type_checker resolves in the wheel layout."""
+
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
+
+import pytest
+
+from ${PROJECT_PKG_NAME}._internal.utils.typing import type_checker
+from ${PROJECT_PKG_NAME}._internal.utils.typing.type_checker import _plain_class
+
+
+if TYPE_CHECKING:
+    from decimal import Decimal
+
+
+str_module_path = "${PROJECT_PKG_NAME}._internal.utils.typing.type_checker"
+checker_module = import_module(str_module_path)
+
+
+@type_checker
+def _add(a: int, *, b: int) -> int:
+    """Add two ints — the decorated subject, defined at MODULE level.
+
+    Nested inside the test it charged the test 1 for the nested ``def`` (tests/ is capped at
+    complexity 1, ``bin/check_complexity.sh``) while adding nothing: the decorator is applied
+    at definition time either way.
+
+    Parameters
+    ----------
+    a : int
+        First addend.
+    b : int
+        Second addend.
+
+    Returns
+    -------
+    int
+        The sum.
+    """
+    return a + b
+
+
+def test_decorator_accepts_right_type() -> None:
+    """The decorator lets a well-typed standalone call through."""
+    assert _add(1, b=2) == 3
+
+
+def test_decorator_rejects_wrong_type() -> None:
+    """The decorator validates a standalone function's arguments."""
+    with pytest.raises(TypeError):
+        _add(1, b=2.0)  # type: ignore[arg-type]
+
+
+@type_checker
+def _total(*values: int) -> int:
+    """Sum variadic ints.
+
+    Parameters
+    ----------
+    *values : int
+        Numbers to add.
+
+    Returns
+    -------
+    int
+        The sum.
+    """
+    return sum(values)
+
+
+@type_checker
+def _scale(factor: float) -> float:
+    """Return ``factor`` unchanged.
+
+    Parameters
+    ----------
+    factor : float
+        A factor.
+
+    Returns
+    -------
+    float
+        The same factor.
+    """
+    return factor
+
+
+def test_any_annotation_is_accept_anything() -> None:
+    """``Any`` resolves to ``object`` instead of becoming an ``isinstance`` target."""
+    assert _plain_class(Any) is object
+
+
+def test_variadic_elements_are_checked_one_by_one() -> None:
+    """``*args`` annotated ``int`` accepts ints."""
+    assert _total(1, 2) == 3
+
+
+def test_variadic_rejects_wrong_element() -> None:
+    """A wrong element inside ``*args`` is rejected."""
+    with pytest.raises(TypeError):
+        _total(1, 2.5)  # type: ignore[arg-type]
+
+
+def test_int_is_accepted_for_float() -> None:
+    """PEP 484 widening: an int satisfies a ``float`` annotation."""
+    assert _scale(1) == 1
+
+
+def test_bool_is_rejected_for_int() -> None:
+    """A bool is not accepted where ``int`` is annotated."""
+    with pytest.raises(TypeError):
+        _add(True, b=2)
+
+
+def _identity(value: int) -> int:
+    """Return ``value`` unchanged, left undecorated so a test can wrap it.
+
+    Parameters
+    ----------
+    value : int
+        A number.
+
+    Returns
+    -------
+    int
+        The same number.
+    """
+    return value
+
+
+def test_hints_resolve_once_across_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Annotations are resolved on the first call only, not on every call."""
+    list_calls: list[int] = []
+    monkeypatch.setattr(
+        checker_module, "_resolve_hints", lambda fn_target: list_calls.append(1) or {}
+    )
+    fn_checked = checker_module.type_checker(_identity)
+    fn_checked(1)
+    fn_checked(2)
+    assert len(list_calls) == 1
+
+
+@type_checker
+def _probe_mixed(*, int_value: int, value: "Decimal") -> int:
+    """Take one checkable and one ``TYPE_CHECKING``-only annotation.
+
+    Parameters
+    ----------
+    int_value : int
+        A number.
+    value : 'Decimal'
+        A value whose name is unavailable at runtime.
+
+    Returns
+    -------
+    int
+        Always 1.
+    """
+    return 1
+
+
+def test_unavailable_annotation_does_not_disable_other_parameters() -> None:
+    """A ``TYPE_CHECKING``-only name skips its own parameter, not the whole function."""
+    with pytest.raises(TypeError):
+        _probe_mixed(int_value="1", value=2)

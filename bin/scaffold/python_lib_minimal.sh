@@ -32,6 +32,7 @@ INCLUDE_OTEL=false
 PUBLISH_PYPI=true
 PUBLISH_TEST_PYPI=true
 CONSUME_PRIVATE=false
+ZERO_DEPENDENCY=false
 
 
 validate_inputs() {
@@ -95,6 +96,14 @@ create_directory_structure() {
     print_status "success" "Directory structure created"
 }
 
+lib_minimal_typing_test_template() {
+    if [[ "$ZERO_DEPENDENCY" == "true" ]]; then
+        echo "test_typing_zero_dependency.py.tmpl"
+    else
+        echo "test_typing.py.tmpl"
+    fi
+}
+
 create_python_files() {
     local project_path="$1"
 
@@ -119,7 +128,7 @@ create_python_files() {
         > "$project_path/tests/unit/test_main.py"
 
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
-        < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/test_typing.py.tmpl" \
+        < "$BLUEPRINTX_ROOT/templates/lib-minimal/rendered/$(lib_minimal_typing_test_template)" \
         > "$project_path/tests/unit/test_typing.py"
 
     print_status "success" "Python files created"
@@ -149,8 +158,30 @@ copy_internal_otel() {
     sed_inplace -E "s@^( +)from (utils|chassis)\.otel_logging@\1from ${PROJECT_PKG_NAME}._internal.utils.otel_logging@" "$test_path"
 }
 
+copy_internal_utils_zero_dependency() {
+    local project_path="$1"
+    local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
+    local typing_dir="$internal_dir/utils/typing"
+    local lib_dir="$BLUEPRINTX_ROOT/templates/lib-minimal"
+
+    printf '"""Private internals of the %s package (not a public API)."""\n' "$PROJECT_PKG_NAME" \
+        > "$internal_dir/__init__.py"
+    cp "$COMMON_TEMPLATE_ROOT/src/utils/__init__.py" "$internal_dir/utils/__init__.py"
+    cp "$lib_dir/zero_dependency/type_checker.py" "$typing_dir/type_checker.py"
+    PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
+        < "$lib_dir/rendered/typing_init_zero_dependency.py.tmpl" \
+        > "$typing_dir/__init__.py"
+    cp "$lib_dir/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
+    cp "$lib_dir/utils_AGENTS.md" "$internal_dir/utils/AGENTS.md"
+    print_status "success" "Zero-dependency internals (stdlib type_checker only) applied"
+}
+
 copy_internal_utils() {
     local project_path="$1"
+    if [[ "$ZERO_DEPENDENCY" == "true" ]]; then
+        copy_internal_utils_zero_dependency "$project_path"
+        return
+    fi
     local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
     local utils_src="$COMMON_TEMPLATE_ROOT/src/utils"
     local -a modules=(
@@ -193,6 +224,7 @@ copy_internal_utils() {
 
 copy_internal_config() {
     local project_path="$1"
+    [[ "$ZERO_DEPENDENCY" != "true" ]] || return 0
     local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
     local config_src="$COMMON_TEMPLATE_ROOT/src/config"
 
@@ -209,6 +241,7 @@ copy_internal_config() {
 
 copy_internal_ports() {
     local project_path="$1"
+    [[ "$ZERO_DEPENDENCY" != "true" ]] || return 0
     local internal_dir="$project_path/src/$PROJECT_PKG_NAME/_internal"
     local ports_src="$COMMON_TEMPLATE_ROOT/optional/ports"
 
@@ -271,6 +304,41 @@ lib_minimal_render_pyproject() {
         PROJECT_DISPLAY_NAME HOMEPAGE REPOSITORY BUG_REPORTS_URL SOURCE_URL GITHUB_USERNAME \
         COPYRIGHT_YEAR AUTHOR_NAME PROJECT_LICENSE PROJECT_LICENSE_CLASSIFIER
     envsubst < "$BLUEPRINTX_ROOT/templates/lib-minimal/pyproject.toml" > "$project_path/pyproject.toml"
+    lib_minimal_drop_runtime_dependencies "$project_path"
+}
+
+lib_minimal_drop_runtime_dependencies() {
+    local pyproject="$1/pyproject.toml"
+    [[ "$ZERO_DEPENDENCY" == "true" ]] || return 0
+    python3 - "$pyproject" <<'PY' || exit_error "Zero-dependency: could not empty the runtime dependency list"
+import re
+import sys
+import tomllib
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as fh:
+    text = fh.read()
+
+text = re.sub(
+    r"(?ms)^(\[tool\.poetry\.dependencies\]\n)(.*?)(?=^\[|\Z)",
+    lambda m: m.group(1) + "".join(
+        line for line in m.group(2).splitlines(keepends=True)
+        if line.startswith("python ") or not line.strip()
+    ),
+    text,
+    count=1,
+)
+text = re.sub(r"(?ms)^\[tool\.deptry\.per_rule_ignores\]\n.*?(?=^\[|\Z)", "", text, count=1)
+
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(text)
+
+with open(path, "rb") as fh:
+    dict_deps = tomllib.load(fh)["tool"]["poetry"]["dependencies"]
+if set(dict_deps) != {"python"}:
+    sys.exit(f"runtime dependencies left after the zero-dependency pass: {sorted(dict_deps)}")
+PY
+    print_status "success" "Zero-dependency: runtime dependency list emptied and verified"
 }
 
 lib_minimal_copy_tooling_configs() {
@@ -741,9 +809,22 @@ PY
     print_status "success" "Online: docs website URL wired into pyproject ($docs_url)"
 }
 
+prompt_zero_dependency() {
+    local answer
+    prompt_read answer "$(prompt_main "Zero runtime dependencies (stdlib-only type_checker, no vendored toolkit)? [y/N]: ")"
+    case "$answer" in
+        y|Y) ZERO_DEPENDENCY=true; print_status "config" "Zero-dependency mode: enabled" ;;
+        *)   ZERO_DEPENDENCY=false ;;
+    esac
+}
+
 prompt_logs() {
     local answer
     prompt_read answer "$(prompt_main "Include the in-repo logging helper (utils/logs.py)? [y/N]: ")"
+    if [[ "$ZERO_DEPENDENCY" == "true" && "$answer" =~ ^[yY]$ ]]; then
+        print_status "warning" "logs.py is part of the vendored toolkit; skipped in zero-dependency mode"
+        answer=n
+    fi
     case "$answer" in
         y|Y) INCLUDE_LOGS=true; print_status "config" "logs.py: included" ;;
         *)   INCLUDE_LOGS=false ;;
@@ -753,6 +834,10 @@ prompt_logs() {
 prompt_otel() {
     local answer
     prompt_read answer "$(prompt_main "Include OpenTelemetry OTLP log export (opt-in, sends to an OTel collector)? [y/N]: ")"
+    if [[ "$ZERO_DEPENDENCY" == "true" && "$answer" =~ ^[yY]$ ]]; then
+        print_status "warning" "OTLP log export needs runtime dependencies; skipped in zero-dependency mode"
+        answer=n
+    fi
     case "$answer" in
         y|Y) INCLUDE_OTEL=true; print_status "config" "OTLP log export: enabled" ;;
         *)   INCLUDE_OTEL=false ;;
@@ -872,6 +957,7 @@ main() {
 
     validate_inputs
     resolve_github_username
+    prompt_zero_dependency
     prompt_logs
     prompt_otel
     prompt_docker_compose
