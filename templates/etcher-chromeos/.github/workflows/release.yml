@@ -45,7 +45,24 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: v${{ github.event.inputs.version }}
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Install git-cliff
+        env:
+          GIT_CLIFF_VERSION: "2.10.1"
+          GIT_CLIFF_SHA256: "6abe8a3e112b266dd00abf9089a8052ddf7314f39e1c53e192edf0652abca4eb"
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/git-cliff.tar.gz" \
+            "https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION}/git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${GIT_CLIFF_SHA256}  $RUNNER_TEMP/git-cliff.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/git-cliff.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/git-cliff-${GIT_CLIFF_VERSION}" >> "$GITHUB_PATH"
+
+      - name: Render changelog and release notes
+        run: |
+          git-cliff --output CHANGELOG.md
+          git-cliff --latest --strip header --output "$RUNNER_TEMP/release-notes.md"
 
       - name: Stamp version and build the release tarball
         env:
@@ -63,5 +80,6 @@ jobs:
           gh release create "v${VERSION}" \
             "${PROJECT_NAME}-${VERSION}.tar.gz" \
             "${PROJECT_NAME}-${VERSION}.tar.gz.sha256" \
+            CHANGELOG.md \
             --title "v${VERSION}" \
-            --generate-notes
+            --notes-file "$RUNNER_TEMP/release-notes.md"

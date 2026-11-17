@@ -97,6 +97,7 @@ copy_skeleton_files() {
     cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/ci.yml" "$project_path/.github/workflows/ci.yml"
     cp "$SKELETON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$SKELETON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
+    cp "$SKELETON_TEMPLATE_ROOT/cliff.toml" "$project_path/cliff.toml"
 
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/lib/common.sh"
 

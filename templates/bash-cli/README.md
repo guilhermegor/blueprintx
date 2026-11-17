@@ -60,7 +60,7 @@ make test     # bats tests/
 The version is the git tag — there is no hand-bump. Cut a release from the
 **Release** GitHub Action (`.github/workflows/release.yml`, `workflow_dispatch` →
 `version` field): it tags `vX.Y.Z`, stamps that version into the packaged
-entrypoint, and publishes a GitHub Release with the tarball + checksum.
+entrypoint, and publishes a GitHub Release with the tarball + checksum. Release notes and `CHANGELOG.md` are rendered by git-cliff (`cliff.toml`; Feat, Fix, Refactor, Perf and Breaking changes) from the Conventional Commits in the tag's history; the changelog is generated in CI and attached to the release, never committed.
 
 <!-- slug: contributing -->
 ## Contributing
