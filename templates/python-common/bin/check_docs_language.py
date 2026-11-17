@@ -10,8 +10,9 @@ How it decides:
 
 1. **Page set.** ``README.md`` and ``CONTRIBUTING.md`` (the root files a reader opens, the second
    one linked by GitHub from every new-issue and new-PR screen) plus every page MkDocs publishes
-   under ``docs_dir`` (default ``docs``), found by ``check_docs_gap.published_pages`` so ``exclude_docs`` and the implicit
-   dot-path and ``templates/`` drops follow MkDocs' own gitignore engine. A ``docs_dir`` that is
+   under ``docs_dir`` (default ``docs``), found by ``check_docs_gap.published_pages`` so
+   ``exclude_docs`` and the implicit dot-path and ``templates/`` drops follow MkDocs' own
+   gitignore engine. A ``docs_dir`` that is
    not a directory fails rather than leaving the README alone to pass. A project with no
    ``mkdocs.yml``, or whose page set is empty, fails: a gate that checked nothing must not
    print success.
