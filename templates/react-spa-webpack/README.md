@@ -16,7 +16,8 @@
 
 ${PROJECT_DESCRIPTION}
 
-## Key Features
+<!-- slug: features -->
+## Features
 
 ### Pages & Routes
 - [Page placeholder 1](#)
@@ -141,7 +142,9 @@ npm run lint        # eslint --fix
 ```
 
 <!-- slug: deployment -->
-## Deployment — GitHub Pages
+## Deployment
+
+### GitHub Pages
 
 The scaffold ships `.github/workflows/deploy-spa.yml`, which builds the SPA
 with `PUBLIC_PATH=/<repo-name>/`, adds a `404.html` fallback for client-side
@@ -160,7 +163,7 @@ gh api -X POST repos/${GITHUB_USERNAME}/${PROJECT_NAME}/pages \
 See `CLAUDE.md → Deployment` for the full rationale (token scopes, router
 basename, custom domains).
 
-## Docker (optional)
+### Docker (optional)
 
 If you scaffolded with the Docker option, the project root has a `Dockerfile`,
 `nginx.conf`, and `.dockerignore`. The build is **multi-stage** (Node build →
@@ -178,7 +181,7 @@ docker run --rm -p 8080:80 ${PROJECT_NAME}   # → http://localhost:8080
 To pin the build to the Node version in `.nvmrc`, add
 `--build-arg NODE_VERSION="$(cat .nvmrc)"`. See `CLAUDE.md → Docker` for details.
 
-## Plain-JavaScript delivery copy (optional)
+### Plain-JavaScript delivery copy (optional)
 
 If you scaffolded with the JS-copy option, `scripts/emit-js-copy.mjs` and
 `scripts/verify-js-copy.mjs` are present. Use this when a delivery must not
@@ -213,12 +216,12 @@ This project is licensed under ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 
 - ${AUTHOR_NAME} — [GitHub](https://github.com/${GITHUB_USERNAME}) | [LinkedIn](${LINKEDIN_URL})
 
-## Acknowledgments
-
-- Scaffolded with [BlueprintX](https://github.com/guilhermegor/blueprintx)'s `react-spa-webpack` skeleton.
-
 <!-- slug: useful-links -->
 ## Useful Links
 
 - [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME})
 - [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}/issues)
+
+---
+
+<sub>Generated from the react-spa-webpack template via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>

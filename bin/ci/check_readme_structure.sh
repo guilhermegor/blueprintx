@@ -8,15 +8,10 @@ GATE="$REPO_ROOT/templates/common/bin/check_readme_structure.sh"
 source "$REPO_ROOT/bin/lib/spec.sh"
 
 check_static() {
-    local int_rc=0 path_readme
-    local -a arr_rest=()
+    local int_rc=0
     cd "$REPO_ROOT"
     bash "$GATE" README.md || int_rc=1
-    bash "$GATE" --template --require-footer templates/common/README.template.md templates/python-common/README.md || int_rc=1
-    for path_readme in templates/*/README.md; do
-        [ "$path_readme" = templates/python-common/README.md ] || arr_rest+=("$path_readme")
-    done
-    bash "$GATE" --template "${arr_rest[@]}" || int_rc=1
+    bash "$GATE" --template --strict --require-footer templates/common/README.template.md templates/*/README.md || int_rc=1
     return "$int_rc"
 }
 
@@ -45,11 +40,8 @@ remove_work_dir() {
 
 check_generated() {
     local path_meta str_name str_scaffold path_work path_project int_rc=0
-    local -a arr_footer
     for path_meta in "$REPO_ROOT"/templates/*/skeleton.meta; do
         str_name="$(basename "$(dirname "$path_meta")")"
-        arr_footer=(--require-footer)
-        [ ! -f "$REPO_ROOT/templates/$str_name/README.md" ] || arr_footer=()
         str_scaffold="$(sed -n 's/^scaffold=//p' "$path_meta")"
         path_work="$(mktemp -d)"
         path_project="$path_work/ci-scaffold"
@@ -59,7 +51,7 @@ check_generated() {
         elif [ ! -f "$path_project/bin/check_readme_structure.sh" ]; then
             echo "[x] $str_name: the generated project does not ship bin/check_readme_structure.sh" >&2
             int_rc=1
-        elif ! bash "$path_project/bin/check_readme_structure.sh" ${arr_footer[@]+"${arr_footer[@]}"} "$path_project/README.md"; then
+        elif ! bash "$path_project/bin/check_readme_structure.sh" --strict --require-footer "$path_project/README.md"; then
             echo "[x] $str_name: the generated README fails its own gate" >&2
             int_rc=1
         fi

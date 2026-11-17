@@ -10,6 +10,13 @@ Rebuilds a ChromeOS-family pendrive: pick the target device, pick **ChromeOS Fle
 **FydeOS**, and the CLI fetches (Flex) or verifies (FydeOS) the image and writes it.
 The image defines the partition layout; this tool selects, verifies and flashes.
 
+<!-- slug: features -->
+## Features
+
+- Flashes **ChromeOS Flex** or **FydeOS** to a USB pendrive.
+- Fetches (Flex) or verifies (FydeOS) the image before writing it.
+- Interactive device picker with a guard against the wrong disk.
+
 <!-- slug: getting-started -->
 ## Getting Started
 
@@ -76,8 +83,7 @@ make test     # bats tests/ (network and devices stubbed)
 
 The default for `--os` is stamped at scaffold time (`DEFAULT_OS` in `bin/${PROJECT_NAME}`).
 
-<!-- slug: releasing -->
-## Releasing
+### Releasing
 
 The version is the git tag; there is no hand-bump. Cut a release from the **Release**
 GitHub Action (`.github/workflows/release.yml`, `workflow_dispatch` with a `version`).
@@ -103,3 +109,7 @@ ${PROJECT_LICENSE}; see [LICENSE](LICENSE).
 
 - [GitHub Repository](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME})
 - [Issue Tracker](https://github.com/${GITHUB_USERNAME}/${PROJECT_NAME}/issues)
+
+---
+
+<sub>Generated from the etcher-chromeos template via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>
