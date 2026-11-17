@@ -29,6 +29,13 @@ The version is the git tag, never a hand-bump:
   (`workflow_dispatch` → `version` input, creates + pushes `vX.Y.Z`) followed by a
   `github_release` job that stamps that version into the tarball's entrypoint the
   same way, then publishes a GitHub Release with the tarball + a `.sha256` checksum.
+- **Release notes and changelog** → `cliff.toml` (git-cliff) groups Feat, Fix,
+  Refactor, Perf and Breaking changes, matching `templates/python-common/.cz.toml`.
+  The `github_release` job installs a git-cliff binary pinned by version and
+  SHA-256, renders the notes for the tag, and attaches a generated `CHANGELOG.md`
+  to the release. `CHANGELOG.md` is ignored by version control: no bot ever
+  commits it back. `etcher-chromeos` and `ventoy-usb` copy this one `cliff.toml`
+  and `release.yml` rather than keeping their own.
 
 ## Deferred release channels (backlog)
 

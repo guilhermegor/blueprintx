@@ -127,7 +127,7 @@ git-ignored; PDFs and scripts are not, so keep this repo private if they are not
 ### Releasing
 
 The version is the git tag; there is no hand-bump. Cut a release from the **Release** GitHub
-Action (`.github/workflows/release.yml`).
+Action (`.github/workflows/release.yml`). Release notes and `CHANGELOG.md` are rendered by git-cliff (`cliff.toml`; Feat, Fix, Refactor, Perf and Breaking changes) from the Conventional Commits in the tag's history; the changelog is generated in CI and attached to the release, never committed.
 
 <!-- slug: contributing -->
 ## Contributing

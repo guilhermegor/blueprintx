@@ -18,6 +18,7 @@ GITHUB_USERNAME="${GITHUB_USERNAME:-}"
 DEFAULT_OS="chromeos-flex"
 BLUEPRINTX_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SKELETON_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/etcher-chromeos"
+BASH_CLI_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/bash-cli"
 SHARED_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/common"
 LICENSES_TEMPLATE_ROOT="$BLUEPRINTX_ROOT/templates/licenses"
 DEFAULT_GITHUB_USERNAME="${GITHUB_USERNAME:-your-github-username}"
@@ -97,12 +98,13 @@ copy_skeleton_files() {
     scaffold_copy_readme_gate "$project_path"
 
     envsubst '${PROJECT_NAME}' \
-        < "$SKELETON_TEMPLATE_ROOT/.github/workflows/release.yml" \
+        < "$BASH_CLI_TEMPLATE_ROOT/.github/workflows/release.yml" \
         > "$project_path/.github/workflows/release.yml"
 
     cp "$SKELETON_TEMPLATE_ROOT/.github/workflows/ci.yml" "$project_path/.github/workflows/ci.yml"
     cp "$SKELETON_TEMPLATE_ROOT/.pre-commit-config.yaml" "$project_path/.pre-commit-config.yaml"
     cp "$SKELETON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
+    cp "$BASH_CLI_TEMPLATE_ROOT/cliff.toml" "$project_path/cliff.toml"
 
     cp "$SHARED_TEMPLATE_ROOT/bin/lib/common.sh" "$project_path/lib/common.sh"
 

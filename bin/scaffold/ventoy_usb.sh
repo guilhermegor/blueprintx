@@ -109,6 +109,7 @@ copy_skeleton_files() {
     scaffold_render_readme ventoy-usb "$SKELETON_TEMPLATE_ROOT/README.md" "$project_path/README.md"
     scaffold_copy_readme_gate "$project_path"
     cp "$SKELETON_TEMPLATE_ROOT/.gitignore" "$project_path/.gitignore"
+    cp "$BASH_CLI_TEMPLATE_ROOT/cliff.toml" "$project_path/cliff.toml"
 
     envsubst '${PROJECT_NAME}' \
         < "$BASH_CLI_TEMPLATE_ROOT/.github/workflows/release.yml" \
