@@ -1049,6 +1049,11 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
 
 ## TypeScript and Bash skeleton notes
 
+- **`react-spa-webpack` is release-less on purpose (#1196).** A deployed app has no
+  consumer of a version number and the host keeps the deploy history, so the skeleton ships
+  no tag, GitHub release or CHANGELOG workflow. Measurements and the revisit conditions are
+  in `docs/ts-react-spa-webpack.md`.
+
 The files under `templates/ts-common/`, `templates/ts-lib/`, `templates/react-spa-webpack/`
 and `templates/bash-cli/` carry no comments, so the reasoning behind them lives here. A
 generated project gets the behavior, not the history. `@ts-check` and the `/** @type {...} */`
