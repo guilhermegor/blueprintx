@@ -3281,14 +3281,19 @@ the stored answers.</p>
 </thead>
 <tbody>
 <tr>
+<td><code>zero_dependency</code></td>
+<td><code>n</code></td>
+<td><code>y</code> leaves out the vendored <code>_internal</code> toolkit (including <code>dates.py</code>), ships a stdlib <code>type_checker</code> and empties the runtime dependency list. Asked first. See <code>py-lib-minimal.md</code>.</td>
+</tr>
+<tr>
 <td><code>logs</code></td>
 <td><code>n</code></td>
-<td>Ships the in-repo logging helper (<code>utils/logs.py</code>).</td>
+<td>Ships the in-repo logging helper (<code>utils/logs.py</code>). Ignored with a warning when <code>zero_dependency=y</code>.</td>
 </tr>
 <tr>
 <td><code>otel</code></td>
 <td><code>n</code></td>
-<td>Ships the OTLP log-export helper (<code>_internal/utils/otel_logging.py</code>).</td>
+<td>Ships the OTLP log-export helper (<code>_internal/utils/otel_logging.py</code>). Ignored when <code>zero_dependency=y</code>.</td>
 </tr>
 <tr>
 <td><code>docker_compose</code></td>
