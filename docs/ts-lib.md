@@ -32,6 +32,7 @@ project/
     docs-deploy.yml        # deploy the built site (GitHub Pages)
     pack-smoke.yml         # npm pack + install smoke test on every push
     release-npm.yml        # npm OIDC trusted-publishing release
+  cliff.toml               # git-cliff changelog groups
   tsconfig.json             # base config (type-check, IDE)
   tsconfig.esm.json          # ESM build target
   tsconfig.cjs.json          # CJS build target
@@ -118,7 +119,8 @@ proving the `exports` map actually resolves, which a passing `tsc`/`jest` run al
 | **Jest** | Test runner | `jest.config.cjs` + `babel.config.test.cjs` |
 | **Husky + lint-staged** | Git hooks | `.husky/` (from `ts-common`) + `lint-staged.config.mjs` |
 | **Docusaurus** | Docs site | `docusaurus.config.js` + `sidebars.js`; `npm run docs:start` / `docs:build` |
-| **npm OIDC publish** | Release | `.github/workflows/release-npm.yml` — trusted publishing, no long-lived npm token stored as a secret |
+| **npm OIDC publish** | Release | `.github/workflows/release-npm.yml` — trusted publishing, no long-lived npm token stored as a secret; also creates the `v<version>` tag and a GitHub release |
+| **git-cliff** | Changelog | `cliff.toml` — same Conventional Commit groups as the Python tiers' `.cz.toml`; `npm run changelog` writes a git-ignored `CHANGELOG.md` plus the Docusaurus `docs/changelog.md` on every docs build, never committed back by a bot |
 
 ---
 

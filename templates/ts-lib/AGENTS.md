@@ -144,6 +144,13 @@ strips build metadata and runs with `--ignore-scripts`, and every later step in 
 job sees the rewritten `package.json`; publishing the literal version stays the job of
 `release-npm.yml`.
 
+## Changelog
+
+`cliff.toml` (git-cliff, pinned in `package.json`'s `changelog` script) groups Conventional
+Commits like the Python tiers' `.cz.toml`. `CHANGELOG.md` and `docs/changelog.md` are
+generated, git-ignored, and never committed by a bot; the release job renders the GitHub
+release notes with the same config.
+
 ## Do not
 
 - Do not deep-import from `dist/` or `src/` in consumer code — import from the package name.
