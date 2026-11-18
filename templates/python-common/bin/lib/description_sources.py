@@ -31,9 +31,7 @@ INT_EXIT_NOT_PTBR = 6
 RE_SITE_DESCRIPTION = re.compile(r"^site_description:\s*(.*?)\s*$", re.MULTILINE)
 RE_INLINE_VALUE = re.compile(r"[ \t]*[\"']?([\w-]+)")
 RE_LANGUAGE_KEY = re.compile(r"[\"']?language[\"']?:")
-RE_THEME_LANGUAGE = re.compile(
-    r"^([ \t]+)" + RE_LANGUAGE_KEY.pattern + r"[ \t]*[\"']?([\w-]+)"
-)
+RE_THEME_LANGUAGE = re.compile(r"^([ \t]+)" + RE_LANGUAGE_KEY.pattern + r"[ \t]*[\"']?([\w-]+)")
 RE_SINGLE_QUOTED = re.compile(r"'((?:[^']|'')*)'(.*)$")
 
 
