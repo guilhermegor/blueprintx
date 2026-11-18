@@ -99,7 +99,9 @@ def drops_encoding(cls_call: ast.Call) -> bool:
         could be supplying it.
     """
     dict_kw = {cls_kw.arg: cls_kw.value for cls_kw in cls_call.keywords}
-    if None in dict_kw or "encoding" in dict_kw:
+    cls_encoding = dict_kw.get("encoding")
+    is_none_literal = isinstance(cls_encoding, ast.Constant) and cls_encoding.value is None
+    if None in dict_kw or (cls_encoding is not None and not is_none_literal):
         return False
     return any(
         str_kw in dict_kw

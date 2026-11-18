@@ -68,6 +68,7 @@ def _problems(path_dir: Path, *, str_source: str) -> list[str]:
         "import subprocess\nsubprocess.check_call(['x'], text=True)\n",
         "from subprocess import run\nrun(['x'], text=True)\n",
         "from subprocess import run as go\ngo(['x'], text=True)\n",
+        "import subprocess\nsubprocess.run(['x'], text=True, encoding=None)\n",
     ],
 )
 def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_source: str) -> None:
