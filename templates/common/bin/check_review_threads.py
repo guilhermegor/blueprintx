@@ -2592,7 +2592,7 @@ def _check_pull_request(bool_json: bool) -> int:
         )
 
     list_body_problems = _unanswered_bodies(
-        dict_pr, list_notices=list_notices, set_roster=set_roster
+        dict_pr, list_notices=list_notices, set_roster=set_reviewers
     )
 
     bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"

@@ -5133,3 +5133,27 @@ def test_a_roster_with_no_threads_member_reports_a_json_verdict(
     monkeypatch.setenv("PR_NUMBER", "1")
 
     assert (cls_gate.main(["--json"]), '"status": "fail"' in capsys.readouterr().out) == (1, True)
+
+
+@pytest.mark.parametrize(
+    ("str_login", "bool_evaluated"),
+    [("github-actions", False), ("coderabbitai", True)],
+    ids=["status-row-excluded", "threads-reviewer-kept"],
+)
+def test_main_hands_the_body_check_reviewers_only(
+    monkeypatch: pytest.MonkeyPatch, *, str_login: str, bool_evaluated: bool
+) -> None:
+    """Only a ``posts: threads`` login reaches the review-body check; a status row never does."""
+    cls_gate = _load_gate()
+    cls_bodies = Mock(return_value=[])
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    dict_roster = {"coderabbitai": "threads", "github-actions": "status"}
+    monkeypatch.setattr(cls_gate, "_roster_or_verdict", Mock(return_value=(dict_roster, None)))
+    monkeypatch.setattr(
+        cls_gate, "_fetch_current_pr", Mock(return_value={"reviewThreads": {"nodes": []}})
+    )
+    monkeypatch.setattr(cls_gate, "_missing_review", Mock(return_value=("", "")))
+    monkeypatch.setattr(cls_gate, "_unanswered_bodies", cls_bodies)
+    cls_gate.main([])
+    assert (str_login in cls_bodies.call_args.kwargs["set_roster"]) is bool_evaluated
