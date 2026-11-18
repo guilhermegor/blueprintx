@@ -34,6 +34,8 @@ TUPLE_SKIP_DIRS = (
 
 STR_DOCS_OUTPUT = "site"
 
+TUPLE_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+
 SET_CALLS = frozenset({"run", "check_output", "check_call", "call", "Popen"})
 
 TUPLE_TEXT_KWARGS = ("text", "universal_newlines", "errors")
@@ -83,8 +85,27 @@ def subprocess_module_aliases(cls_tree: ast.AST) -> set:
     }
 
 
+def own_scope_nodes(cls_node: ast.AST) -> Iterator[ast.AST]:
+    """Yield the descendants of a node without entering nested scopes.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        The node to walk.
+
+    Yields
+    ------
+    ast.AST
+        Each descendant; a nested function, lambda or class is yielded but not entered.
+    """
+    for cls_child in ast.iter_child_nodes(cls_node):
+        yield cls_child
+        if not isinstance(cls_child, TUPLE_SCOPE_NODES):
+            yield from own_scope_nodes(cls_child)
+
+
 def imported_names(cls_node: ast.AST) -> set:
-    """Return the local names bound by ``import`` statements under a node.
+    """Return the local names bound by ``import`` statements in a node's own scope.
 
     Parameters
     ----------
@@ -98,7 +119,7 @@ def imported_names(cls_node: ast.AST) -> set:
     """
     return {
         cls_alias.asname or cls_alias.name.split(".")[0]
-        for cls_child in ast.walk(cls_node)
+        for cls_child in own_scope_nodes(cls_node)
         if isinstance(cls_child, ast.Import)
         for cls_alias in cls_child.names
     }

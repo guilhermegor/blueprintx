@@ -104,6 +104,10 @@ def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_sou
         "import subprocess as sp\nsp.run(['x'], text=True, encoding='utf-8')\n",
         "import subprocess\nsubprocess.run(['x'], errors=None)\n",
         "import subprocess as sp\ndef render(sp):\n    sp.run(['x'], text=True)\n",
+        (
+            "def f(subprocess):\n    def g():\n        import subprocess\n"
+            "    subprocess.run(['x'], text=True)\n"
+        ),
         "\ufeffimport subprocess\nsubprocess.run(['x'], text=True, encoding='utf-8')\n",
     ],
 )
