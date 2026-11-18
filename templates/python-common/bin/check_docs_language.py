@@ -85,7 +85,9 @@ SET_EN_WORDS = frozenset(
     }
 )
 
-DICT_LOCALE_WORDS = {"en": SET_EN_WORDS, "pt-BR": SET_PT_WORDS}
+SET_PT_SHORT_WORDS = frozenset({"ao", "da", "de", "em", "os"})
+
+DICT_LOCALE_WORDS = {"en": SET_EN_WORDS, "pt-BR": SET_PT_WORDS | SET_PT_SHORT_WORDS}
 
 INT_MIN_HITS = 2
 
