@@ -83,6 +83,27 @@ def subprocess_module_aliases(cls_tree: ast.AST) -> set:
     }
 
 
+def imported_names(cls_node: ast.AST) -> set:
+    """Return the local names bound by ``import`` statements under a node.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        The node to search.
+
+    Returns
+    -------
+    set of str
+        ``asname`` or the dotted module's first segment for each ``import``.
+    """
+    return {
+        cls_alias.asname or cls_alias.name.split(".")[0]
+        for cls_child in ast.walk(cls_node)
+        if isinstance(cls_child, ast.Import)
+        for cls_alias in cls_child.names
+    }
+
+
 def calls_with_shadowed_names(
     cls_node: ast.AST, *, set_shadowed: frozenset = frozenset()
 ) -> Iterator[tuple]:
@@ -105,6 +126,7 @@ def calls_with_shadowed_names(
         list_all = [*cls_args.posonlyargs, *cls_args.args, *cls_args.kwonlyargs]
         list_all += [cls_arg for cls_arg in (cls_args.vararg, cls_args.kwarg) if cls_arg]
         set_shadowed |= {cls_arg.arg for cls_arg in list_all}
+        set_shadowed -= imported_names(cls_node)
     if isinstance(cls_node, ast.Call):
         yield cls_node, set_shadowed
     for cls_child in ast.iter_child_nodes(cls_node):

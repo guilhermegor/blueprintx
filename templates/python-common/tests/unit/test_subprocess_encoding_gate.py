@@ -207,6 +207,23 @@ def test_main_skips_vendored_directories(tmp_path: Path) -> None:
     assert gate.main(["--root", str(tmp_path)]) == 0
 
 
+def test_gate_nested_import_unshadows_an_outer_parameter(tmp_path: Path) -> None:
+    """A nested function importing ``subprocess`` is judged despite an outer parameter.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    str_source = (
+        "def outer(subprocess):\n    def inner():\n        import subprocess\n"
+        "        subprocess.run(['x'], text=True)\n"
+    )
+    assert _problems(tmp_path, str_source=str_source) == [
+        "sample.py:4: text-mode subprocess call without encoding="
+    ]
+
+
 def test_main_ignores_a_directory_named_like_a_python_file(tmp_path: Path) -> None:
     """A directory called ``demo.py`` is not read as a source file.
 
