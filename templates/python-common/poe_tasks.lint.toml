@@ -18,6 +18,10 @@ help = "Check the README layout: plain headings, slug sections, Authors links"
 cmd = "python bin/check_function_length.py"
 help = "Cap a function at 60 lines of code (docstring excluded)"
 
+[tool.poe.tasks.check_subprocess_encoding]
+cmd = "python bin/check_subprocess_encoding.py"
+help = "Fail a text-mode subprocess call that does not name its encoding (#1203)"
+
 [tool.poe.tasks.check_fixture_scope]
 cmd = "python bin/check_fixture_scope.py"
 help = "Proxy: flag a non-function-scope test fixture with no written reason (#442)"

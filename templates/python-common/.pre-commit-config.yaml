@@ -140,6 +140,13 @@ repos:
         files: \.(py|sh)$
         pass_filenames: false
 
+      - id: subprocess-encoding
+        name: text-mode subprocess calls name their encoding (blueprintx#1203)
+        entry: bash bin/poetry_exec.sh run python bin/check_subprocess_encoding.py
+        language: system
+        files: \.py$
+        pass_filenames: false
+
       - id: dynamic-version-stub
         name: tag-versioned projects keep the 0.0.0 version stub
         entry: bash bin/poetry_exec.sh run python bin/check_dynamic_version_stub.py

@@ -505,6 +505,7 @@ def tracked_files() -> list:
             cwd=PATH_ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
     except (OSError, subprocess.CalledProcessError) as cls_error:

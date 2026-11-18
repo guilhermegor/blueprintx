@@ -169,6 +169,13 @@ repos:
         pass_filenames: false
         files: \.(py|sh)$
 
+      - id: subprocess-encoding
+        name: text-mode subprocess calls name their encoding (blueprintx#1203)
+        entry: python3 templates/python-common/bin/check_subprocess_encoding.py --root .
+        language: system
+        pass_filenames: false
+        files: \.py$
+
       - id: check-comment-budget
         name: comment budget (zero tolerance ratchet, blueprintx#304)
         entry: python3 templates/python-common/bin/check_comment_budget.py --root . --require-baseline

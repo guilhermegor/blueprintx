@@ -35,6 +35,7 @@ SET_LINT = {
     "check_docstrings",
     "check_readme_structure",
     "check_function_length",
+    "check_subprocess_encoding",
     "check_fixture_scope",
     "check_complexity",
     "check_comment_budget",

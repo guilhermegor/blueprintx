@@ -60,6 +60,7 @@ def _git_in(path_repo: Path, *args: str) -> str:
         ["git", "-C", str(path_repo), *args],  # noqa: S607
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     )
     return cls_proc.stdout.strip()
