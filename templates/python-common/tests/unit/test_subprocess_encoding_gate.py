@@ -96,6 +96,7 @@ def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_sou
         "import subprocess\nsubprocess.run(['x'], universal_newlines=None)\n",
         "import subprocess\nsubprocess.run(['x'], **dict_kwargs)\n",
         "import runner\nrunner.run(['x'], text=True)\n",
+        "def f(subprocess):\n    subprocess.run(['x'], text=True)\n",
         "from runner import run\nrun(['x'], text=True)\n",
         "import subprocess as sp\nsp.run(['x'], text=True, encoding='utf-8')\n",
     ],

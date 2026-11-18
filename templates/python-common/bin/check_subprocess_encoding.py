@@ -70,14 +70,14 @@ def subprocess_module_aliases(cls_tree: ast.AST) -> set:
     Returns
     -------
     set of str
-        Names bound by ``import subprocess [as <alias>]``, ``subprocess`` included.
+        Names bound by ``import subprocess [as <alias>]``; empty without such an import.
     """
-    return {"subprocess"} | {
-        cls_alias.asname
+    return {
+        cls_alias.asname or "subprocess"
         for cls_node in ast.walk(cls_tree)
         if isinstance(cls_node, ast.Import)
         for cls_alias in cls_node.names
-        if cls_alias.name == "subprocess" and cls_alias.asname
+        if cls_alias.name == "subprocess"
     }
 
 
