@@ -170,6 +170,7 @@ def _git(list_args: list) -> str:
             ["git", *list_args],  # noqa: S607
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
     except OSError:
@@ -1194,7 +1195,7 @@ def justification_reason(str_base: str) -> str:
     str_env = env_reason()
     if str_env:
         return str_env
-    str_trailers = _git(["log", f"{str_base}..HEAD", "--format=%B"])
+    str_trailers = _git(["log", "--encoding=UTF-8", f"{str_base}..HEAD", "--format=%B"])
     for str_text in (pr_body_text(), str_trailers):
         cls_match = RE_JUSTIFICATION.search(str_text)
         if cls_match and cls_match.group(1).strip():

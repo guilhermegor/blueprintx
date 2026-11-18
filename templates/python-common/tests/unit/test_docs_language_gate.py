@@ -9,6 +9,9 @@ import pytest
 
 PATH_BIN = Path(__file__).resolve().parents[2] / "bin"
 sys.path.insert(0, str(PATH_BIN))
+sys.path.insert(0, str(PATH_BIN / "lib"))
+import description_sources  # noqa: E402
+
 
 SPEC_GATE = importlib.util.spec_from_file_location(
     "check_docs_language", PATH_BIN / "check_docs_language.py"
@@ -79,6 +82,9 @@ def _run(path_root: Path) -> int:
         ("site_name: x\ntheme:\n# note\n  language: pt-BR\n", STR_PT),
         ("site_name: x\ntheme:\n  language: pt-BR  # site language\n", STR_PT),
         ("site_name: x\ntheme: {name: material, language: pt-BR}\n", STR_PT),
+        ('site_name: x\ntheme: {name: material, "language" : pt-BR}\n', STR_PT),
+        ("site_name: x\ntheme:\n  name: material\n  language : pt-BR\n", STR_PT),
+        (STR_MKDOCS_EN, STR_EN + "\nThe de facto em dash rule applies.\n"),
         (STR_MKDOCS_EN, STR_EN + "\n```\n```bash\nque não para com isso, para que não\n```\n"),
         (STR_MKDOCS_EN, STR_EN + "\ndocs-lang:ok Esta é a página que você pode ler, que não.\n"),
     ],
@@ -631,3 +637,18 @@ def test_main_escaped_only_run_names_the_escape_in_its_failure(
     _write(tmp_path / "docs" / "index.md", str_text=f"docs-lang:ok {STR_PT}")
     int_rc = _run(tmp_path)
     assert (int_rc, "docs-lang:ok" in capsys.readouterr().out) == (1, True)
+
+
+@pytest.mark.parametrize(
+    ("str_text", "bool_want"),
+    [
+        ("Ferramenta de leitura em lote", True),
+        ("Leitura rápida de dados em lote", True),
+        ("The de facto rule applies.", False),
+        ("An em dash \u2014 rule", False),
+        ("Fast reader \u2014 de facto", False),
+    ],
+)
+def test_reads_as_ptbr_needs_portuguese_evidence(str_text: str, *, bool_want: bool) -> None:
+    """Short pt-BR words count; an em dash or one stray short word does not."""
+    assert description_sources.reads_as_ptbr(str_text) is bool_want

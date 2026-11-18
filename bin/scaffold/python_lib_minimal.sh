@@ -168,12 +168,13 @@ copy_internal_utils_zero_dependency() {
         > "$internal_dir/__init__.py"
     cp "$COMMON_TEMPLATE_ROOT/src/utils/__init__.py" "$internal_dir/utils/__init__.py"
     cp "$lib_dir/zero_dependency/type_checker.py" "$typing_dir/type_checker.py"
+    cp "$lib_dir/zero_dependency/type_checker_meta.py" "$typing_dir/type_checker_meta.py"
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$lib_dir/rendered/typing_init_zero_dependency.py.tmpl" \
         > "$typing_dir/__init__.py"
     cp "$lib_dir/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
     cp "$lib_dir/utils_AGENTS.md" "$internal_dir/utils/AGENTS.md"
-    print_status "success" "Zero-dependency internals (stdlib type_checker only) applied"
+    print_status "success" "Zero-dependency internals (stdlib type_checker + TypeChecker metaclass) applied"
 }
 
 copy_internal_utils() {
@@ -419,6 +420,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_layer_imports_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_language_gate.py" \
         "$project_path/tests/unit/test_docs_language_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_description_sync_gate.py" \
+        "$project_path/tests/unit/test_description_sync_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_comment_language_gate.py" \
         "$project_path/tests/unit/test_comment_language_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_sql_guards_gate.py" \
@@ -433,6 +436,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_coverage_floor_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_function_length_gate.py" \
         "$project_path/tests/unit/test_function_length_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_subprocess_encoding_gate.py" \
+        "$project_path/tests/unit/test_subprocess_encoding_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_drift_gate.py" \
         "$project_path/tests/unit/test_template_drift_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_template_update.py" \

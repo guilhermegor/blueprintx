@@ -261,6 +261,7 @@ def gh_json(str_path: str) -> object:
         ["gh", "api", str_path],  # noqa: S607 - gh is resolved from PATH on purpose
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     ).stdout
     return json.loads(str_out)
