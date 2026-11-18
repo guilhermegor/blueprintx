@@ -37,6 +37,12 @@ from spec_probe._internal.utils.typing import TypeChecker
 class Probe${str_meta:+(metaclass=TypeChecker)}:
     """Probe subject."""
 
+PY
+    write_probe_methods >>"$path_probe"
+}
+
+write_probe_methods() {
+    cat <<'PY'
     def __init__(self) -> None:
         self._int_base = 10
 
@@ -54,6 +60,38 @@ class Probe${str_meta:+(metaclass=TypeChecker)}:
             The base plus ``value``.
         """
         return self._int_base + value
+
+    @staticmethod
+    def double(*, value: int) -> int:
+        """Return twice ``value``.
+
+        Parameters
+        ----------
+        value : int
+            The number.
+
+        Returns
+        -------
+        int
+            Twice ``value``.
+        """
+        return value * 2
+
+    @classmethod
+    def triple(cls, *, value: int) -> int:
+        """Return three times ``value``.
+
+        Parameters
+        ----------
+        value : int
+            The number.
+
+        Returns
+        -------
+        int
+            Three times ``value``.
+        """
+        return value * 3
 PY
 }
 
@@ -77,13 +115,16 @@ test_class_with_metaclass_passes_and_checks_arguments() {
     str_out="$(cd "$path_proj" && PYTHONPATH=src python3 -c '
 from spec_probe.probe import Probe
 assert Probe().add(value=1) == 11
-try:
-    Probe().add(value="1")
-except TypeError:
-    print("TypeError")
+assert Probe.double(value=2) == 4
+assert Probe.triple(value=2) == 6
+for fn in (Probe().add, Probe.double, Probe.triple):
+    try:
+        fn(value="1")
+    except TypeError:
+        print("TypeError")
 ' 2>&1)"
-    if [ "$str_out" = "TypeError" ]; then
-        pass "metaclass-wrapped method accepts good arguments and raises TypeError on a wrong one"
+    if [ "$str_out" = "$(printf "TypeError\nTypeError\nTypeError")" ]; then
+        pass "metaclass-wrapped method accepts good arguments and raises TypeError on a wrong one (instance, static and class methods)"
     else
         fail "runtime check" "got: $str_out"
     fi

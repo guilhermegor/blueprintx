@@ -186,6 +186,38 @@ class _Adder(metaclass=TypeChecker):
         """
         return self._int_base + value
 
+    @staticmethod
+    def double(*, value: int) -> int:
+        """Return twice ``value``.
+
+        Parameters
+        ----------
+        value : int
+            The number.
+
+        Returns
+        -------
+        int
+            Twice ``value``.
+        """
+        return value * 2
+
+    @classmethod
+    def triple(cls, *, value: int) -> int:
+        """Return three times ``value``.
+
+        Parameters
+        ----------
+        value : int
+            The number.
+
+        Returns
+        -------
+        int
+            Three times ``value``.
+        """
+        return value * 3
+
 
 def test_metaclass_accepts_right_type() -> None:
     """A well-typed call to a metaclass-wrapped method goes through."""
@@ -196,3 +228,25 @@ def test_metaclass_rejects_wrong_type() -> None:
     """A wrong-typed argument to a metaclass-wrapped method raises ``TypeError``."""
     with pytest.raises(TypeError):
         _Adder().add(value="1")  # type: ignore[arg-type]
+
+
+def test_metaclass_staticmethod_accepts_right_type() -> None:
+    """A staticmethod called with a good argument works."""
+    assert _Adder.double(value=2) == 4
+
+
+def test_metaclass_staticmethod_rejects_wrong_type() -> None:
+    """A staticmethod called with a wrong-typed argument raises ``TypeError``."""
+    with pytest.raises(TypeError):
+        _Adder.double(value="2")  # type: ignore[arg-type]
+
+
+def test_metaclass_classmethod_accepts_right_type() -> None:
+    """A classmethod called with a good argument works."""
+    assert _Adder.triple(value=2) == 6
+
+
+def test_metaclass_classmethod_rejects_wrong_type() -> None:
+    """A classmethod called with a wrong-typed argument raises ``TypeError``."""
+    with pytest.raises(TypeError):
+        _Adder.triple(value="2")  # type: ignore[arg-type]

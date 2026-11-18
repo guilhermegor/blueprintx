@@ -6,10 +6,10 @@ from .type_checker import type_checker
 
 
 @type_checker
-def _wrap_attribute(*, str_attr: str, obj_value: object) -> object:
-    """Return ``obj_value`` wrapped in ``type_checker`` when it is a public, undecorated method.
+def _wrap_function(*, str_attr: str, obj_value: object) -> object:
+    """Return ``obj_value`` wrapped in ``type_checker`` when it is a public, undecorated function.
 
-    Dunders, nested classes, properties and already-decorated methods come back unchanged.
+    Dunders, nested classes, properties and already-decorated functions come back unchanged.
 
     Parameters
     ----------
@@ -21,7 +21,7 @@ def _wrap_attribute(*, str_attr: str, obj_value: object) -> object:
     Returns
     -------
     object
-        The wrapped method, or ``obj_value`` itself.
+        The wrapped function, or ``obj_value`` itself.
     """
     if (
         not callable(obj_value)
@@ -31,6 +31,31 @@ def _wrap_attribute(*, str_attr: str, obj_value: object) -> object:
     ):
         return obj_value
     return type_checker(obj_value)
+
+
+@type_checker
+def _wrap_attribute(*, str_attr: str, obj_value: object) -> object:
+    """Return ``obj_value`` with its underlying function wrapped, keeping the descriptor kind.
+
+    ``staticmethod`` and ``classmethod`` objects are unwrapped to ``__func__``, wrapped, and
+    rebuilt as the same descriptor type.
+
+    Parameters
+    ----------
+    str_attr : str
+        The attribute name in the class body.
+    obj_value : object
+        The attribute value.
+
+    Returns
+    -------
+    object
+        The wrapped attribute, or ``obj_value`` itself.
+    """
+    if isinstance(obj_value, (staticmethod, classmethod)):
+        fn_wrapped = _wrap_function(str_attr=str_attr, obj_value=obj_value.__func__)
+        return type(obj_value)(fn_wrapped)  # type: ignore[arg-type]
+    return _wrap_function(str_attr=str_attr, obj_value=obj_value)
 
 
 class TypeChecker(type):
