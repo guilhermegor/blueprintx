@@ -835,7 +835,7 @@ interchangeable until a class crosses between them. Affected modules: `test_dail
   displays as failure while not terminal, and breaking the poll loop on `gate_state() !=
   "pending"` would stop on the first transient red while other checks run, with nothing
   re-rendering the comment afterwards.
-- **`test_regime_adapters`.** `resolve` returns the first covering window while the registry
+- **`test_regime_adapters` (removed in #1161; the logic now lives in `pure-schema-regimes`).** `resolve` returns the first covering window while the registry
   promises windows may arrive in any order, so two overlapping windows bind a period to whichever
   was listed first, a reader parsing a real file against the wrong published header with nothing
   reporting it (#344 review). Validation the caller can undo is not validation, hence the
