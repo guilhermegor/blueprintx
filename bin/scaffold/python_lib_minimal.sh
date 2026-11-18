@@ -635,7 +635,7 @@ lib_minimal_lock_dependencies() {
         print_status "warning" "poetry not found; poetry.lock not generated (run 'poetry lock' and commit it)."
         return 0
     fi
-    (cd "$project_path" && poetry lock >/dev/null 2>&1) \
+    (cd "$project_path" && POETRY_VIRTUALENVS_CREATE=false poetry lock >/dev/null 2>&1) \
         && print_status "success" "poetry.lock generated" \
         || print_status "warning" "poetry lock failed; run it and commit poetry.lock."
 }
