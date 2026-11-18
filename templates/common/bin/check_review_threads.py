@@ -364,7 +364,9 @@ def _fetch_page(
         "-F",
         f"cc={str_comment_cursor}" if str_comment_cursor else "cc=",
     ]
-    cls_run = subprocess.run(list_cmd, capture_output=True, text=True, check=False)  # noqa: S603
+    cls_run = subprocess.run(  # noqa: S603
+        list_cmd, capture_output=True, text=True, encoding="utf-8", check=False
+    )
     if cls_run.returncode != 0:
         if _RE_GRAPHQL_RATE_LIMIT.search(cls_run.stderr) or _errors_say_rate_limited(
             cls_run.stdout
@@ -694,6 +696,7 @@ def _gh_get_object(str_path: str) -> dict:
         ["gh", "api", str_path],  # noqa: S607
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
         timeout=_INT_COMPARE_TIMEOUT_S,
     )
@@ -1994,6 +1997,7 @@ def _gh_api_text(list_args: list[str]) -> str | None:
             ["gh", "api", *list_args],  # noqa: S607
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
             timeout=_INT_COMPARE_TIMEOUT_S,
         )
@@ -2339,7 +2343,12 @@ def dependabot_pushed_head(str_repo_full: str, *, str_head_oid: str) -> bool:
     ]
     try:
         cls_run = subprocess.run(  # noqa: S603
-            list_cmd, capture_output=True, text=True, check=False, timeout=_INT_COMPARE_TIMEOUT_S
+            list_cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            timeout=_INT_COMPARE_TIMEOUT_S,
         )
         dict_out = json.loads(cls_run.stdout)
     except (OSError, ValueError, subprocess.TimeoutExpired):

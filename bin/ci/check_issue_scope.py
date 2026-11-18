@@ -61,6 +61,7 @@ def gh_json(list_args: list[str]) -> dict:
             ["gh", *list_args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
             timeout=60,
         )

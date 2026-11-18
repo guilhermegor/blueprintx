@@ -135,6 +135,7 @@ def _git(list_args: list) -> str:
             ["git", *list_args],  # noqa: S607
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
             cwd=PATH_ROOT,
         )

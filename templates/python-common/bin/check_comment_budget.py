@@ -1041,6 +1041,7 @@ def git_out(*list_args: str) -> str:
             ["git", "-C", str(PATH_ROOT), *list_args],  # noqa: S607
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         ).stdout
     except (OSError, subprocess.CalledProcessError):

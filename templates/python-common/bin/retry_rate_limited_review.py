@@ -87,7 +87,7 @@ def _gh_json(list_args: list[str]) -> object:
     """
     str_gh = shutil.which("gh") or "gh"
     cls_done = subprocess.run(  # noqa: S603
-        [str_gh, *list_args], capture_output=True, text=True, check=False
+        [str_gh, *list_args], capture_output=True, text=True, encoding="utf-8", check=False
     )
     if cls_done.returncode != 0:
         print(f"::warning::gh {' '.join(list_args[:2])} failed: {cls_done.stderr.strip()[:200]}")

@@ -71,6 +71,7 @@ def _run_probe(path_tmp: Path, *, str_module_source: str) -> subprocess.Complete
         [sys.executable, "-m", "pytest", "-c", str(_PATH_PYTEST_INI), str(path_module), "-q"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 

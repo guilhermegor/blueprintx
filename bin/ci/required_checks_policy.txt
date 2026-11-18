@@ -33,3 +33,4 @@ optional|Scaffold + lint + test (webhook opt-in) — ddd-service-native-db|new j
 optional|Scaffold + lint + test (webhook opt-in) — ddd-service-orm-db|new job; require once it has a green record on main
 optional|Scaffold + lint + test (webhook opt-in) — mvc-service-native-db|new job; require once it has a green record on main
 optional|Scaffold + lint + test (webhook opt-in) — mvc-service-orm-db|new job; require once it has a green record on main
+optional|Subprocess encoding — text=True names its encoding (blueprintx#1203)|new gate; require once it has a green record on main
