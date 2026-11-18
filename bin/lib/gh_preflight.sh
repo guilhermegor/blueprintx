@@ -7,6 +7,18 @@
 : "${SCAFFOLD_RERUN_CMD:=the same blueprintx command}"
 : "${SCAFFOLD_GH_REQUIRED_SCOPES=repo project}"
 
+gh_refine_failure() {
+	local str_text="$1" str_probe
+	case "$str_text" in
+	*"unknown owner type"*)
+		str_probe="$(gh api graphql -f query='{viewer{login}}' 2>&1 >/dev/null)" || {
+			[ -z "$str_probe" ] || { printf '%s' "$str_probe"; return 0; }
+		}
+		;;
+	esac
+	printf '%s' "$str_text"
+}
+
 gh_classify_failure() {
 	local str_text="$1"
 	case "$str_text" in
@@ -25,8 +37,6 @@ gh_wait_message() {
 		return 0
 	fi
 	str_epoch="${GH_RESET_EPOCH:-}"
-	[ -n "$str_epoch" ] ||
-		str_epoch="$(gh api rate_limit --jq '([(.resources.core, .resources.graphql) | select(.remaining == 0) | .reset] | max) // .resources.graphql.reset' 2>/dev/null)" || str_epoch=""
 	if [[ "$str_epoch" =~ ^[0-9]+$ ]]; then
 		int_now="$(date +%s)"
 		int_mins=$(((str_epoch - int_now + 59) / 60))
@@ -39,6 +49,7 @@ gh_wait_message() {
 
 gh_stop_online() {
 	local str_step="$1" str_text="${2:-}" str_kind
+	str_text="$(gh_refine_failure "$str_text")"
 	str_kind="$(gh_classify_failure "$str_text")"
 	print_status "error" "GitHub step failed: ${str_step}"
 	case "$str_kind" in
@@ -118,8 +129,13 @@ gh_require_workflow_for_https() {
 		SCAFFOLD_GH_REQUIRED_SCOPES+=" workflow"
 }
 
+gh_reset_epoch() {
+	local str_iso="$1"
+	{ date -u -d "$str_iso" +%s || date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$str_iso" +%s; } 2>/dev/null
+}
+
 gh_preflight() {
-	local str_err str_login str_rl int_left
+	local str_err str_login str_rl int_left str_reset
 	local str_var str_re str_max
 	for str_var in SCAFFOLD_GH_GRAPHQL_COST SCAFFOLD_GH_GRAPHQL_BUDGET; do
 		str_re='^(0|[1-9][0-9]{0,7})$' str_max=8
@@ -129,19 +145,19 @@ gh_preflight() {
 		gh_stop_footer
 	done
 	str_err="$(mktemp)"
-	gh api graphql -f query='{viewer{login}}' >/dev/null 2>"$str_err" ||
+	str_rl="$(gh api graphql -f query='{viewer{login} rateLimit{remaining resetAt}}' \
+		--jq '"\(.data.rateLimit.remaining) \(.data.rateLimit.resetAt)"' 2>"$str_err")" ||
 		gh_stop_online "preflight: GraphQL API" "$(cat "$str_err")"
 	str_login="$(gh api user -q .login 2>"$str_err")" ||
 		gh_stop_online "preflight: REST API (gh api user)" "$(cat "$str_err")"
 	[ -n "$str_login" ] || gh_stop_online "preflight: gh api user returned a blank login" "authentication"
 	gh_check_scopes
-	str_rl="$(gh api rate_limit --jq '.resources.graphql | "\(.remaining) \(.reset)"' 2>"$str_err")" ||
-		gh_stop_online "preflight: gh api rate_limit" "$(cat "$str_err")"
 	rm -f "$str_err"
 	int_left="${str_rl%% *}"
-	[[ "$int_left" =~ ^[0-9]+$ ]] || gh_stop_online "preflight: unreadable rate_limit answer" "$str_rl"
+	[[ "$int_left" =~ ^[0-9]+$ ]] || gh_stop_online "preflight: unreadable rateLimit answer" "$str_rl"
 	if [ "$int_left" -lt "$SCAFFOLD_GH_GRAPHQL_BUDGET" ]; then
-		GH_RESET_EPOCH="${str_rl##* }" gh_stop_online "preflight: GraphQL budget (${int_left} points left, ${SCAFFOLD_GH_GRAPHQL_BUDGET} points needed)" "rate limit"
+		str_reset="$(gh_reset_epoch "${str_rl##* }")" || str_reset=""
+		GH_RESET_EPOCH="$str_reset" gh_stop_online "preflight: GraphQL budget (${int_left} points left, ${SCAFFOLD_GH_GRAPHQL_BUDGET} points needed)" "rate limit"
 	fi
 	[ "$SCAFFOLD_GH_GRAPHQL_BUDGET" -ge "$SCAFFOLD_GH_GRAPHQL_COST" ] ||
 		print_status "warning" "SCAFFOLD_GH_GRAPHQL_BUDGET=${SCAFFOLD_GH_GRAPHQL_BUDGET} is below the ${SCAFFOLD_GH_GRAPHQL_COST} points one scaffold costs; it is in points now, not calls"

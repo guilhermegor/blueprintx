@@ -8,10 +8,20 @@ guessing.
 ## What happens
 
 1. **Preflight.** Before `gh repo create`, `gh_preflight`
-   (`bin/lib/gh_preflight.sh`) calls GraphQL (`{viewer{login}}`), REST
-   (`gh api user`) and `gh api rate_limit`. A failed call, a blank login, or
-   fewer GraphQL points left than `SCAFFOLD_GH_GRAPHQL_BUDGET` stops the run
-   before anything is created.
+   (`bin/lib/gh_preflight.sh`) sends one GraphQL probe,
+   `{viewer{login} rateLimit{remaining resetAt}}`, then calls REST
+   (`gh api user`). A failed call, a blank login, or fewer GraphQL points left
+   than `SCAFFOLD_GH_GRAPHQL_BUDGET` stops the run before anything is created.
+   The budget is read from GraphQL `rateLimit`, not from the REST `rate_limit`
+   endpoint. GitHub documents `GET /rate_limit` as the authenticated user's
+   status, so the cause of the mismatch is unverified: a preflight that read
+   `resources.graphql` printed `4998 GraphQL points left` while the same
+   minute's GraphQL calls failed with `API rate limit already exceeded for
+   user ID ...` (blueprintx#1202). A later side-by-side read gave
+   `rateLimit.remaining` 350 against `resources.graphql.remaining` 4150, with
+   different reset times. The GraphQL probe asks the API that rejects the
+   calls, so it sees an actual rejection whatever the REST allowance says. A rate-limit answer from the probe
+   stops the run with `Cause: GitHub rate limit`, whatever any count says.
    The same preflight reads the token scopes (`gh api -i user`, header
    `X-Oauth-Scopes`) and requires every scope in `SCAFFOLD_GH_REQUIRED_SCOPES`
    (`repo project`): `repo` for the repository, labels, issues and secrets,
@@ -41,10 +51,20 @@ guessing.
    check entirely.
 2. **Cause and wait.** The stop message names the cause and when to retry:
     - rate limit: the reset time as a duration and an absolute time, for
-      example `retry in 14 min, after 00:34Z`; a secondary limit uses the
-      `Retry-After` value; `unknown, retry later` when neither is available;
+      example `retry in 14 min, after 00:34Z`, only when the preflight read
+      the reset from GraphQL `rateLimit.resetAt` (the budget stop); a secondary
+      limit uses the `Retry-After` value; `unknown, retry later` otherwise. The
+      per-user limit has no reset time the scaffold can read, and the REST
+      token bucket's reset is never quoted for it;
     - authentication: run `gh auth login` (or `gh auth refresh -s project`);
     - network: check the connection to `api.github.com`.
+
+    `gh project ...` prints `unknown owner type` when its owner lookup hits
+    the per-user GraphQL limit. On that text the classifier re-probes with
+    `gh api graphql -f query='{viewer{login}}'` and classifies the probe's
+    stderr, so the stop reads `Cause: GitHub rate limit` instead of
+    `unexpected gh failure` (blueprintx#1201). A healthy probe leaves the
+    original text, so a real unknown owner is still reported as it was.
 3. **Fail-closed reads.** A failed read that feeds the board visibility, the
    owner kind (user or organization) or the GitHub login stops the scaffold.
    The default board visibility ("same as repo") is never `PUBLIC` after a
@@ -78,7 +98,7 @@ happened after the repo was created, finish the remaining steps by hand or use
 `tests/test_scaffold_gh_preflight.sh` counts them against a stubbed `gh` and
 fails when the number changes, which is the prompt to re-set the budget.
 
-The budget is in points, the unit `rate_limit` reports, not requests. One
+The budget is in points, the unit `rateLimit` reports, not requests. One
 `gh project field-list` request costs 101 points, because `gh` sends it with
 `items(first:100)` and `fields(first:30)`, so a count of requests says little
 about what a scaffold spends.
