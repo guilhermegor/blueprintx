@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from ${PROJECT_PKG_NAME}._internal.utils.typing import type_checker
+from ${PROJECT_PKG_NAME}._internal.utils.typing import TypeChecker, type_checker
 from ${PROJECT_PKG_NAME}._internal.utils.typing.type_checker import _plain_class
 
 
@@ -163,3 +163,36 @@ def test_unavailable_annotation_does_not_disable_other_parameters() -> None:
     """A ``TYPE_CHECKING``-only name skips its own parameter, not the whole function."""
     with pytest.raises(TypeError):
         _probe_mixed(int_value="1", value=2)
+
+
+class _Adder(metaclass=TypeChecker):
+    """Subject class whose public methods the metaclass wraps."""
+
+    def __init__(self) -> None:
+        self._int_base = 10
+
+    def add(self, *, value: int) -> int:
+        """Add ``value`` to the base.
+
+        Parameters
+        ----------
+        value : int
+            The addend.
+
+        Returns
+        -------
+        int
+            The base plus ``value``.
+        """
+        return self._int_base + value
+
+
+def test_metaclass_accepts_right_type() -> None:
+    """A well-typed call to a metaclass-wrapped method goes through."""
+    assert _Adder().add(value=1) == 11
+
+
+def test_metaclass_rejects_wrong_type() -> None:
+    """A wrong-typed argument to a metaclass-wrapped method raises ``TypeError``."""
+    with pytest.raises(TypeError):
+        _Adder().add(value="1")  # type: ignore[arg-type]
