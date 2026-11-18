@@ -38,7 +38,7 @@ def _load(str_name: str) -> ModuleType:
 gate = _load("check_subprocess_encoding")
 
 
-def _problems(path_dir: Path, str_source: str) -> list[str]:
+def _problems(path_dir: Path, *, str_source: str) -> list[str]:
     """Write a source file and return the gate's findings for it.
 
     Parameters
@@ -55,7 +55,7 @@ def _problems(path_dir: Path, str_source: str) -> list[str]:
     """
     path_file = path_dir / "sample.py"
     path_file.write_text(str_source, encoding="utf-8")
-    return gate.file_problems(path_file, path_dir)
+    return gate.file_problems(path_file, path_root=path_dir)
 
 
 @pytest.mark.parametrize(
@@ -70,7 +70,7 @@ def _problems(path_dir: Path, str_source: str) -> list[str]:
         "from subprocess import run as go\ngo(['x'], text=True)\n",
     ],
 )
-def test_gate_text_mode_without_encoding_is_a_finding(tmp_path: Path, str_source: str) -> None:
+def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_source: str) -> None:
     """A text-mode subprocess call with no ``encoding=`` is reported once, with its line.
 
     Parameters
@@ -80,7 +80,7 @@ def test_gate_text_mode_without_encoding_is_a_finding(tmp_path: Path, str_source
     str_source : str
         A source file the gate must reject.
     """
-    assert len(_problems(tmp_path, str_source)) == 1
+    assert len(_problems(tmp_path, str_source=str_source)) == 1
 
 
 @pytest.mark.parametrize(
@@ -94,7 +94,7 @@ def test_gate_text_mode_without_encoding_is_a_finding(tmp_path: Path, str_source
         "from runner import run\nrun(['x'], text=True)\n",
     ],
 )
-def test_gate_encoded_or_non_text_call_is_clean(tmp_path: Path, str_source: str) -> None:
+def test_gate_encoded_or_non_text_call_is_clean(*, tmp_path: Path, str_source: str) -> None:
     """A call naming its encoding, not in text mode, or not from subprocess passes.
 
     Parameters
@@ -104,7 +104,7 @@ def test_gate_encoded_or_non_text_call_is_clean(tmp_path: Path, str_source: str)
     str_source : str
         A source file the gate must accept.
     """
-    assert _problems(tmp_path, str_source) == []
+    assert _problems(tmp_path, str_source=str_source) == []
 
 
 def test_gate_unparsable_file_is_a_finding(tmp_path: Path) -> None:
@@ -115,7 +115,7 @@ def test_gate_unparsable_file_is_a_finding(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         A throwaway directory pytest provides per test.
     """
-    assert "could not parse" in _problems(tmp_path, "def (:\n")[0]
+    assert "could not parse" in _problems(tmp_path, str_source="def (:\n")[0]
 
 
 def test_main_violating_tree_exits_one(tmp_path: Path) -> None:
@@ -133,7 +133,7 @@ def test_main_violating_tree_exits_one(tmp_path: Path) -> None:
 
 
 def test_main_violation_message_names_the_file(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    *, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The finding names the file and line, so it is fixable without a search.
 

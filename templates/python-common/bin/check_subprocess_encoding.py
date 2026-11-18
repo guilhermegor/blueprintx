@@ -59,7 +59,7 @@ def bare_subprocess_names(cls_tree: ast.AST) -> set:
     }
 
 
-def is_subprocess_call(cls_call: ast.Call, set_bare: set) -> bool:
+def is_subprocess_call(cls_call: ast.Call, *, set_bare: set) -> bool:
     """Return whether a call targets one of the checked subprocess callables.
 
     Parameters
@@ -108,7 +108,7 @@ def drops_encoding(cls_call: ast.Call) -> bool:
     )
 
 
-def file_problems(path_file: pathlib.Path, path_root: pathlib.Path) -> list:
+def file_problems(path_file: pathlib.Path, *, path_root: pathlib.Path) -> list:
     """Return one message per offending call in a Python file.
 
     Parameters
@@ -137,7 +137,7 @@ def file_problems(path_file: pathlib.Path, path_root: pathlib.Path) -> list:
         f"{str_shown}:{cls_node.lineno}: text-mode subprocess call without encoding="
         for cls_node in ast.walk(cls_tree)
         if isinstance(cls_node, ast.Call)
-        and is_subprocess_call(cls_node, set_bare)
+        and is_subprocess_call(cls_node, set_bare=set_bare)
         and drops_encoding(cls_node)
     ]
 
@@ -189,7 +189,7 @@ def main(list_argv: list) -> int:
     list_problems = [
         str_problem
         for path_file in list_paths
-        for str_problem in file_problems(path_file, path_root)
+        for str_problem in file_problems(path_file, path_root=path_root)
     ]
     for str_problem in list_problems:
         print(str_problem)
@@ -198,7 +198,7 @@ def main(list_argv: list) -> int:
         return 0
 
     print(
-        f"\n{len(list_problems)} finding(s). Add encoding=\"utf-8\" next to text=True: without "
+        f'\n{len(list_problems)} finding(s). Add encoding="utf-8" next to text=True: without '
         f"it the pipe is decoded with the locale code page (cp1252 on Windows)."
     )
     return 1
