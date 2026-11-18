@@ -2858,10 +2858,20 @@ guessing.</p>
 <h2 id="what-happens">What happens<a class="headerlink" href="#what-happens" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Preflight.</strong> Before <code>gh repo create</code>, <code>gh_preflight</code>
-   (<code>bin/lib/gh_preflight.sh</code>) calls GraphQL (<code>{viewer{login}}</code>), REST
-   (<code>gh api user</code>) and <code>gh api rate_limit</code>. A failed call, a blank login, or
-   fewer GraphQL points left than <code>SCAFFOLD_GH_GRAPHQL_BUDGET</code> stops the run
-   before anything is created.
+   (<code>bin/lib/gh_preflight.sh</code>) sends one GraphQL probe,
+   <code>{viewer{login} rateLimit{remaining resetAt}}</code>, then calls REST
+   (<code>gh api user</code>). A failed call, a blank login, or fewer GraphQL points left
+   than <code>SCAFFOLD_GH_GRAPHQL_BUDGET</code> stops the run before anything is created.
+   The budget is read from GraphQL <code>rateLimit</code>, not from the REST <code>rate_limit</code>
+   endpoint. GitHub documents <code>GET /rate_limit</code> as the authenticated user's
+   status, so the cause of the mismatch is unverified: a preflight that read
+   <code>resources.graphql</code> printed <code>4998 GraphQL points left</code> while the same
+   minute's GraphQL calls failed with <code>API rate limit already exceeded for
+   user ID ...</code> (blueprintx#1202). A later side-by-side read gave
+   <code>rateLimit.remaining</code> 350 against <code>resources.graphql.remaining</code> 4150, with
+   different reset times. The GraphQL probe asks the API that rejects the
+   calls, so it sees an actual rejection whatever the REST allowance says. A rate-limit answer from the probe
+   stops the run with <code>Cause: GitHub rate limit</code>, whatever any count says.
    The same preflight reads the token scopes (<code>gh api -i user</code>, header
    <code>X-Oauth-Scopes</code>) and requires every scope in <code>SCAFFOLD_GH_REQUIRED_SCOPES</code>
    (<code>repo project</code>): <code>repo</code> for the repository, labels, issues and secrets,
@@ -2889,30 +2899,41 @@ guessing.</p>
    <code>SCAFFOLD_GH_REQUIRED_SCOPES</code> to the scopes you accept, for example
    <code>SCAFFOLD_GH_REQUIRED_SCOPES=repo</code>, or to an empty value to skip the scope
    check entirely.</li>
-<li><strong>Cause and wait.</strong> The stop message names the cause and when to retry:<ul>
+<li>
+<p><strong>Cause and wait.</strong> The stop message names the cause and when to retry:</p>
+<ul>
 <li>rate limit: the reset time as a duration and an absolute time, for
-  example <code>retry in 14 min, after 00:34Z</code>; a secondary limit uses the
-  <code>Retry-After</code> value; <code>unknown, retry later</code> when neither is available;</li>
+  example <code>retry in 14 min, after 00:34Z</code>, only when the preflight read
+  the reset from GraphQL <code>rateLimit.resetAt</code> (the budget stop); a secondary
+  limit uses the <code>Retry-After</code> value; <code>unknown, retry later</code> otherwise. The
+  per-user limit has no reset time the scaffold can read, and the REST
+  token bucket's reset is never quoted for it;</li>
 <li>authentication: run <code>gh auth login</code> (or <code>gh auth refresh -s project</code>);</li>
 <li>network: check the connection to <code>api.github.com</code>.</li>
 </ul>
-</li>
-<li><strong>Fail-closed reads.</strong> A failed read that feeds the board visibility, the
+<p><code>gh project ...</code> prints <code>unknown owner type</code> when its owner lookup hits
+the per-user GraphQL limit. On that text the classifier re-probes with
+<code>gh api graphql -f query='{viewer{login}}'</code> and classifies the probe's
+stderr, so the stop reads <code>Cause: GitHub rate limit</code> instead of
+<code>unexpected gh failure</code> (blueprintx#1201). A healthy probe leaves the
+original text, so a real unknown owner is still reported as it was.
+3. <strong>Fail-closed reads.</strong> A failed read that feeds the board visibility, the
    owner kind (user or organization) or the GitHub login stops the scaffold.
    The default board visibility ("same as repo") is never <code>PUBLIC</code> after a
-   failed read.</li>
-<li><strong>Duplicate board titles stop.</strong> Two boards titled <code>&lt;project&gt; kanban</code> stop
+   failed read.
+4. <strong>Duplicate board titles stop.</strong> Two boards titled <code>&lt;project&gt; kanban</code> stop
    the scaffold and print both board URLs. The scaffold never guesses which one
    to use and never finishes with no board linked. Delete or rename all but
    one, then re-run. The check runs right after the preflight, before
    <code>gh repo create</code>, so a duplicate leaves nothing half-created; it runs even
    if you would later decline the board, because the title is the project's
    own. The same check runs again when the board is set up, and a stop at that
-   point carries the "already exists on GitHub" advice of any mid-run stop.</li>
-<li><strong>Mid-run failures stop too.</strong> A house label, board edit, link, Status
+   point carries the "already exists on GitHub" advice of any mid-run stop.
+5. <strong>Mid-run failures stop too.</strong> A house label, board edit, link, Status
    option, project field, or default-branch edit
    failure after the preflight stops with the same message instead of a
-   warning.</li>
+   warning.</p>
+</li>
 </ol>
 <h2 id="retrying">Retrying<a class="headerlink" href="#retrying" title="Permanent link">&para;</a></h2>
 <p>Re-run the same command once the wait has passed. House labels use <code>--force</code>,
@@ -2926,7 +2947,7 @@ happened after the repo was created, finish the remaining steps by hand or use
 (<code>gh project ...</code>, <code>gh repo view</code>, <code>gh api graphql</code>) a fresh kanban setup makes.
 <code>tests/test_scaffold_gh_preflight.sh</code> counts them against a stubbed <code>gh</code> and
 fails when the number changes, which is the prompt to re-set the budget.</p>
-<p>The budget is in points, the unit <code>rate_limit</code> reports, not requests. One
+<p>The budget is in points, the unit <code>rateLimit</code> reports, not requests. One
 <code>gh project field-list</code> request costs 101 points, because <code>gh</code> sends it with
 <code>items(first:100)</code> and <code>fields(first:30)</code>, so a count of requests says little
 about what a scaffold spends.</p>
