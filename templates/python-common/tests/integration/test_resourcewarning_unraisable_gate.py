@@ -72,6 +72,7 @@ def _run_probe(path_tmp: Path, *, str_module_source: str) -> subprocess.Complete
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
         check=False,
     )
 

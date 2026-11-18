@@ -71,6 +71,7 @@ def _problems(path_dir: Path, *, str_source: str) -> list[str]:
         "import subprocess\nsubprocess.run(['x'], text=True, encoding=None)\n",
         "import subprocess as sp\nsp.run(['x'], text=True)\n",
         "import subprocess as sp\nsp.Popen(['x'], universal_newlines=True)\n",
+        "import subprocess\nsubprocess.run(['x'], capture_output=True, errors='replace')\n",
     ],
 )
 def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_source: str) -> None:
@@ -101,6 +102,9 @@ def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_sou
         "def f(subprocess):\n    subprocess.run(['x'], text=True)\n",
         "from runner import run\nrun(['x'], text=True)\n",
         "import subprocess as sp\nsp.run(['x'], text=True, encoding='utf-8')\n",
+        "import subprocess\nsubprocess.run(['x'], errors=None)\n",
+        "import subprocess as sp\ndef render(sp):\n    sp.run(['x'], text=True)\n",
+        "\ufeffimport subprocess\nsubprocess.run(['x'], text=True, encoding='utf-8')\n",
     ],
 )
 def test_gate_encoded_or_non_text_call_is_clean(*, tmp_path: Path, str_source: str) -> None:
@@ -201,6 +205,35 @@ def test_main_skips_vendored_directories(tmp_path: Path) -> None:
         "import subprocess\nsubprocess.run(['x'], text=True)\n", encoding="utf-8"
     )
     assert gate.main(["--root", str(tmp_path)]) == 0
+
+
+def test_main_ignores_a_directory_named_like_a_python_file(tmp_path: Path) -> None:
+    """A directory called ``demo.py`` is not read as a source file.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    (tmp_path / "ok.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "examples" / "demo.py").mkdir(parents=True)
+    assert gate.main(["--root", str(tmp_path)]) == 0
+
+
+def test_main_scans_a_first_party_site_package(tmp_path: Path) -> None:
+    """Only the top-level ``site`` docs output is skipped, not ``src/site``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    """
+    path_pkg = tmp_path / "src" / "site"
+    path_pkg.mkdir(parents=True)
+    (path_pkg / "runner.py").write_text(
+        "import subprocess\nsubprocess.run(['x'], text=True)\n", encoding="utf-8"
+    )
+    assert gate.main(["--root", str(tmp_path)]) == 1
 
 
 def test_main_shipped_tree_is_clean() -> None:

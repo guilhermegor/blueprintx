@@ -1042,6 +1042,7 @@ def git_out(*list_args: str) -> str:
             capture_output=True,
             text=True,
             encoding="utf-8",
+            errors="surrogateescape",
             check=True,
         ).stdout
     except (OSError, subprocess.CalledProcessError):

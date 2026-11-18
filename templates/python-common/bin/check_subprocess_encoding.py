@@ -6,13 +6,14 @@ cp1252 on Windows. A child that prints UTF-8 then kills the reader thread and le
 covers the subprocess family: ``run``, ``check_output``, ``check_call``, ``call`` and
 ``Popen``, called as ``subprocess.<name>`` or imported from ``subprocess``.
 
-A call is a finding when it passes ``text=True`` (or ``universal_newlines=True``) without
-``encoding=``. A call that forwards ``**kwargs`` is not judged, since the keywords are not
-visible. Rationale and the rule: ``CONTRIBUTING.md`` in BlueprintX.
+A call is a finding when it passes ``text=True`` (or ``universal_newlines=True``, or
+``errors=``) without ``encoding=``. A call that forwards ``**kwargs`` is not judged, since the
+keywords are not visible. Rationale and the rule: ``CONTRIBUTING.md`` in BlueprintX.
 """
 
 import argparse
 import ast
+from collections.abc import Iterator
 import pathlib
 import sys
 
@@ -29,12 +30,13 @@ TUPLE_SKIP_DIRS = (
     "__pycache__",
     "htmlcov",
     "node_modules",
-    "site",
 )
+
+STR_DOCS_OUTPUT = "site"
 
 SET_CALLS = frozenset({"run", "check_output", "check_call", "call", "Popen"})
 
-TUPLE_TEXT_KWARGS = ("text", "universal_newlines")
+TUPLE_TEXT_KWARGS = ("text", "universal_newlines", "errors")
 
 
 def bare_subprocess_names(cls_tree: ast.AST) -> set:
@@ -79,6 +81,34 @@ def subprocess_module_aliases(cls_tree: ast.AST) -> set:
         for cls_alias in cls_node.names
         if cls_alias.name == "subprocess"
     }
+
+
+def calls_with_shadowed_names(
+    cls_node: ast.AST, *, set_shadowed: frozenset = frozenset()
+) -> Iterator[tuple]:
+    """Yield every call with the parameter names of its enclosing functions.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        The node to walk.
+    set_shadowed : frozenset of str
+        Parameter names already bound by enclosing functions.
+
+    Yields
+    ------
+    tuple of (ast.Call, frozenset of str)
+        A call node and the names a parameter shadows at that call.
+    """
+    if isinstance(cls_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        cls_args = cls_node.args
+        list_all = [*cls_args.posonlyargs, *cls_args.args, *cls_args.kwonlyargs]
+        list_all += [cls_arg for cls_arg in (cls_args.vararg, cls_args.kwarg) if cls_arg]
+        set_shadowed |= {cls_arg.arg for cls_arg in list_all}
+    if isinstance(cls_node, ast.Call):
+        yield cls_node, set_shadowed
+    for cls_child in ast.iter_child_nodes(cls_node):
+        yield from calls_with_shadowed_names(cls_child, set_shadowed=set_shadowed)
 
 
 def is_subprocess_call(cls_call: ast.Call, *, set_bare: set, set_modules: set) -> bool:
@@ -154,7 +184,7 @@ def file_problems(path_file: pathlib.Path, *, path_root: pathlib.Path) -> list:
     except ValueError:
         str_shown = str(path_file)
     try:
-        cls_tree = ast.parse(path_file.read_text(encoding="utf-8"), filename=str_shown)
+        cls_tree = ast.parse(path_file.read_bytes(), filename=str_shown)
     except (SyntaxError, UnicodeDecodeError) as cls_err:
         return [f"{str_shown}: could not parse ({cls_err})"]
 
@@ -162,9 +192,10 @@ def file_problems(path_file: pathlib.Path, *, path_root: pathlib.Path) -> list:
     set_modules = subprocess_module_aliases(cls_tree)
     return [
         f"{str_shown}:{cls_node.lineno}: text-mode subprocess call without encoding="
-        for cls_node in ast.walk(cls_tree)
-        if isinstance(cls_node, ast.Call)
-        and is_subprocess_call(cls_node, set_bare=set_bare, set_modules=set_modules)
+        for cls_node, set_shadowed in calls_with_shadowed_names(cls_tree)
+        if is_subprocess_call(
+            cls_node, set_bare=set_bare - set_shadowed, set_modules=set_modules - set_shadowed
+        )
         and drops_encoding(cls_node)
     ]
 
@@ -185,7 +216,9 @@ def audit_paths(path_root: pathlib.Path) -> list:
     return sorted(
         path_file
         for path_file in path_root.rglob("*.py")
-        if not set(path_file.relative_to(path_root).parts) & set(TUPLE_SKIP_DIRS)
+        if path_file.is_file()
+        and not set(path_file.relative_to(path_root).parts) & set(TUPLE_SKIP_DIRS)
+        and path_file.relative_to(path_root).parts[0] != STR_DOCS_OUTPUT
     )
 
 

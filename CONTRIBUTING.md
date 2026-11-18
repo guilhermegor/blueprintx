@@ -515,18 +515,21 @@ annotated tag), never from memory or another repo's copy.
 
 ### Text-mode subprocess calls name their encoding — blueprintx#1203
 
-`subprocess.run(..., text=True)` decodes the pipe with the locale code page, which is cp1252 on
-Windows. A child that prints UTF-8 (the gates print `—` and `→`) kills the reader thread and leaves
-`stdout` as `None`, so the next `+` raises `TypeError`. Linux and macOS run UTF-8 locales, so the bug
-shows only on `windows-latest`, which BlueprintX's own CI never runs; the generated `tests.yml` does.
+`subprocess.run(..., text=True)` decodes the pipe with the locale's encoding. The failure occurs
+whenever the child emits UTF-8 and the parent decodes with something else; POSIX hits it too under a
+non-UTF-8 locale. On Windows the locale code page is typically cp1252, and a child that prints UTF-8
+(the gates print `—` and `→`) kills the reader thread and leaves `stdout` as `None`, so the next `+`
+raises `TypeError`. Linux and macOS run UTF-8 locales, so the bug shows only on `windows-latest`, which BlueprintX's own CI never runs; the generated `tests.yml` does.
 Measured on a fresh `lib-minimal` scaffold: 17 failures in `tests/unit/test_layer_imports_gate.py`.
 
 Every `subprocess.run`/`check_output`/`check_call`/`call`/`Popen` call that passes `text=True` (or
-`universal_newlines=True`) also passes `encoding="utf-8"`. Ruff's `PLW1514` covers `open()` only, so
+`universal_newlines=True`, or a non-empty `errors=`) also passes `encoding="utf-8"`. Ruff's `PLW1514` covers `open()` only, so
 `templates/python-common/bin/check_subprocess_encoding.py` is the gate (pre-commit `subprocess-encoding`,
 the `subprocess-encoding` CI job here, `poe check_subprocess_encoding` in a generated project). It runs
 over this repo with `--root .` and over every generated project, from the one implementation. A call
-forwarding `**kwargs` is not judged and `text=False` passes. Should-fail witnesses are in
+forwarding `**kwargs` is not judged and `text=False` passes. The gate checks that an `encoding=` is
+named, not which codec: `encoding="locale"` also passes and still selects the locale's encoding, and a
+passing gate never proves the codec matches the child's output. `encoding="utf-8"` stays the rule. Should-fail witnesses are in
 `tests/unit/test_subprocess_encoding_gate.py`.
 
 ## Ruff Rule Adoption Log
