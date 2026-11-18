@@ -55,6 +55,7 @@ def _run(path_root: Path, *, str_mkdocs: str, str_desc: str) -> subprocess.Compl
         (STR_MKDOCS_PT, STR_DESC_EN, 1),
         (STR_MKDOCS_PT, STR_DESC_PT, 0),
         (STR_MKDOCS_PT, STR_DESC_SHORT_PT, 0),
+        (STR_MKDOCS_PT, "Reads de facto standards", 1),
         (STR_MKDOCS_EN, STR_DESC_EN, 0),
     ],
 )
@@ -72,6 +73,7 @@ def test_description_language_exit_code(
         'theme:\n  "language": pt-BR\n',
         "theme:\n  'language': pt-BR\n",
         'theme: {"language": pt-BR}\n',
+        'theme: {custom_dir: "language: en", language: pt-BR}\n',
         "theme: {name: material, 'language': pt-BR}\n",
     ],
 )

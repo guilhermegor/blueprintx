@@ -119,6 +119,31 @@ def mkdocs_description(path_mkdocs: Path) -> str | None:
     return None if match is None else parse_yaml_scalar(match.group(1))
 
 
+def has_ptbr_evidence(mod_lang: types.ModuleType, str_para: str) -> bool:
+    """Tell whether a paragraph carries more than one stray short Portuguese word.
+
+    ``de``, ``em`` and the like also occur in English prose ("de facto"), so a paragraph that
+    leans only on them needs a second short hit or an accented letter.
+
+    Parameters
+    ----------
+    mod_lang : types.ModuleType
+        The ``check_docs_language`` module.
+    str_para : str
+        One prose paragraph.
+
+    Returns
+    -------
+    bool
+        ``True`` when a long pt-BR word, two short ones, or an accented letter is present.
+    """
+    list_words = mod_lang.RE_WORD.findall(str_para.lower())
+    int_long = sum(str_word in mod_lang.SET_PT_WORDS for str_word in list_words)
+    int_short = sum(str_word in mod_lang.SET_PT_SHORT_WORDS for str_word in list_words)
+    bool_accent = any(ord(str_char) > 127 for str_char in str_para)
+    return int_long >= 1 or int_short >= 2 or bool_accent
+
+
 def reads_as_ptbr(str_text: str) -> bool:
     """Tell whether every prose paragraph of a description positively reads as pt-BR.
 
@@ -154,6 +179,8 @@ def reads_as_ptbr(str_text: str) -> bool:
         dict_hits = mod_lang.locale_hits(str_para)
         if dict_hits["pt-BR"] < 1 or dict_hits["pt-BR"] <= dict_hits["en"]:
             return False
+        if not has_ptbr_evidence(mod_lang, str_para):
+            return False
     return bool(list_paras)
 
 
@@ -161,10 +188,17 @@ def inline_theme_language(str_line: str) -> str | None:
     """Return ``language`` from an inline ``theme: {...}`` mapping, at its top level only."""
     str_body = str_line[len("theme:") :].strip()
     int_depth = 0
+    str_quote = ""
     for int_pos, str_char in enumerate(str_body):
+        bool_in_value = bool(str_quote)
+        if str_quote:
+            str_quote = "" if str_char == str_quote else str_quote
+        elif str_char in "\"'" and str_body[:int_pos].rstrip()[-1:] == ":":
+            str_quote = str_char
         int_depth += (str_char == "{") - (str_char == "}")
         match_key = RE_LANGUAGE_KEY.match(str_body, int_pos)
-        if int_depth == 1 and match_key and str_body[int_pos - 1] in "{, ":
+        bool_key_start = str_body[:int_pos].rstrip()[-1:] in ("{", ",")
+        if int_depth == 1 and match_key and bool_key_start and not bool_in_value:
             match = RE_INLINE_VALUE.match(str_body, match_key.end())
             return match.group(1) if match else None
     return None
