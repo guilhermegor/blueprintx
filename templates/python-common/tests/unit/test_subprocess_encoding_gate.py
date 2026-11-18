@@ -74,7 +74,7 @@ def _problems(path_dir: Path, *, str_source: str) -> list[str]:
     ],
 )
 def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_source: str) -> None:
-    """A text-mode subprocess call with no ``encoding=`` is reported once, with its line.
+    """A text-mode subprocess call with no ``encoding=`` is reported once, naming the file and line.
 
     Parameters
     ----------
@@ -83,7 +83,9 @@ def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_sou
     str_source : str
         A source file the gate must reject.
     """
-    assert len(_problems(tmp_path, str_source=str_source)) == 1
+    assert _problems(tmp_path, str_source=str_source) == [
+        "sample.py:2: text-mode subprocess call without encoding="
+    ]
 
 
 @pytest.mark.parametrize(
