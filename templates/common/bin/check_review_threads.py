@@ -1822,6 +1822,7 @@ def find_review_body_problems(
     *,
     list_notices: list[dict],
     set_roster: set[str],
+    set_reviewers: set[str] | None = None,
     int_min_chars: int = _MIN_REPLY_CHARS,
     tuple_markers: tuple[str, ...] = (),
 ) -> list[str]:
@@ -1841,7 +1842,9 @@ def find_review_body_problems(
     list_notices : list of dict
         The PR's issue comments, where the author's reply to a review body lands.
     set_roster : set of str
-        Logins that count as reviewers rather than as answers.
+        Every roster login: none of them counts as an answer.
+    set_reviewers : set of str, optional
+        Logins whose bodies need an answer (``posts: threads`` rows). Defaults to ``set_roster``.
     int_min_chars : int, optional
         Minimum length for a reply to count, the same bar a thread reply meets.
     tuple_markers : tuple of str, optional
@@ -1855,6 +1858,11 @@ def find_review_body_problems(
             submitted. A missing ``submittedAt`` fails closed.
     """
     set_roster = {normalise_login(str_login) for str_login in set_roster}
+    set_reviewers = (
+        set_roster
+        if set_reviewers is None
+        else {normalise_login(str_login) for str_login in set_reviewers}
+    )
     list_hits = [
         (
             dict_review,
@@ -1864,13 +1872,14 @@ def find_review_body_problems(
             ),
         )
         for dict_review in list_reviews
-        + _notices_as_reviews(list_notices, set_roster=set_roster)
+        + _notices_as_reviews(list_notices, set_roster=set_reviewers)
         + _marker_notices_as_reviews(
             list_notices, tuple_markers=tuple_markers, set_roster=set_roster
         )
         if dict_review.get("state") != "DISMISSED"
         and (
-            normalise_login((dict_review.get("author") or {}).get("login") or "") in set_roster
+            normalise_login((dict_review.get("author") or {}).get("login") or "")
+            in set_reviewers
             or _is_marker_comment(dict_review, tuple_markers=tuple_markers)
         )
     ]
@@ -2185,13 +2194,14 @@ def _head_committed_date(dict_pr: dict) -> str:
 
 
 def _unanswered_bodies(
-    dict_pr: dict, *, list_notices: list[dict], set_roster: set[str]
+    dict_pr: dict, *, list_notices: list[dict], set_roster: set[str], set_reviewers: set[str]
 ) -> list[str]:
     """Return :func:`find_review_body_problems` for one fetched ``pullRequest`` node."""
     return find_review_body_problems(
         dict_pr.get("reviews", {}).get("nodes", []),
         list_notices=list_notices,
         set_roster=set_roster,
+        set_reviewers=set_reviewers,
         tuple_markers=load_comment_markers(pathlib.Path.cwd()),
     )
 
@@ -2592,7 +2602,7 @@ def _check_pull_request(bool_json: bool) -> int:
         )
 
     list_body_problems = _unanswered_bodies(
-        dict_pr, list_notices=list_notices, set_roster=set_reviewers
+        dict_pr, list_notices=list_notices, set_roster=set_roster, set_reviewers=set_reviewers
     )
 
     bool_require_resolved = os.environ.get("REVIEW_THREADS_REQUIRE_RESOLVED", "1") == "1"

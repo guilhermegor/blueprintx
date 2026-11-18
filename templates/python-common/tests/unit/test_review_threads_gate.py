@@ -2527,7 +2527,10 @@ def test_review_on_the_second_page_reaches_the_body_check(monkeypatch: pytest.Mo
     ]
     monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args, **__: list_pages.pop(0))
     dict_pr = cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
-    assert len(cls_gate._unanswered_bodies(dict_pr, list_notices=[], set_roster=_BODY_ROSTER)) == 1
+    list_problems = cls_gate._unanswered_bodies(
+        dict_pr, list_notices=[], set_roster=_BODY_ROSTER, set_reviewers=_BODY_ROSTER
+    )
+    assert len(list_problems) == 1
 
 
 def test_an_inline_only_review_survives_the_fetch_path_and_counts(
@@ -5156,4 +5159,18 @@ def test_main_hands_the_body_check_reviewers_only(
     monkeypatch.setattr(cls_gate, "_missing_review", Mock(return_value=("", "")))
     monkeypatch.setattr(cls_gate, "_unanswered_bodies", cls_bodies)
     cls_gate.main([])
-    assert (str_login in cls_bodies.call_args.kwargs["set_roster"]) is bool_evaluated
+    assert (str_login in cls_bodies.call_args.kwargs["set_reviewers"]) is bool_evaluated
+
+
+def test_a_status_row_comment_never_answers_a_review_body() -> None:
+    """A long ``github-actions`` comment after a findings body stays a non-answer."""
+    list_notices = [
+        _notice("github-actions", str_body="Workflow output. " + "x" * 120, str_created=_BODY_AFTER)
+    ]
+    list_problems = _load_gate().find_review_body_problems(
+        [_body_review(_BODY_MAJOR)],
+        list_notices=list_notices,
+        set_roster={"coderabbitai", "github-actions"},
+        set_reviewers={"coderabbitai"},
+    )
+    assert len(list_problems) == 1
