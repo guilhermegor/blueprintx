@@ -59,7 +59,29 @@ def bare_subprocess_names(cls_tree: ast.AST) -> set:
     }
 
 
-def is_subprocess_call(cls_call: ast.Call, *, set_bare: set) -> bool:
+def subprocess_module_aliases(cls_tree: ast.AST) -> set:
+    """Return the local names the ``subprocess`` module is bound to.
+
+    Parameters
+    ----------
+    cls_tree : ast.AST
+        The parsed module.
+
+    Returns
+    -------
+    set of str
+        Names bound by ``import subprocess [as <alias>]``, ``subprocess`` included.
+    """
+    return {"subprocess"} | {
+        cls_alias.asname
+        for cls_node in ast.walk(cls_tree)
+        if isinstance(cls_node, ast.Import)
+        for cls_alias in cls_node.names
+        if cls_alias.name == "subprocess" and cls_alias.asname
+    }
+
+
+def is_subprocess_call(cls_call: ast.Call, *, set_bare: set, set_modules: set) -> bool:
     """Return whether a call targets one of the checked subprocess callables.
 
     Parameters
@@ -68,18 +90,20 @@ def is_subprocess_call(cls_call: ast.Call, *, set_bare: set) -> bool:
         A call node.
     set_bare : set of str
         Bare names the module imported from ``subprocess``.
+    set_modules : set of str
+        Local names bound to the ``subprocess`` module.
 
     Returns
     -------
     bool
-        True for ``subprocess.<name>(...)`` or a bare imported name.
+        True for ``<module>.<name>(...)`` or a bare imported name.
     """
     cls_func = cls_call.func
     if isinstance(cls_func, ast.Attribute):
         return (
             cls_func.attr in SET_CALLS
             and isinstance(cls_func.value, ast.Name)
-            and cls_func.value.id == "subprocess"
+            and cls_func.value.id in set_modules
         )
     return isinstance(cls_func, ast.Name) and cls_func.id in set_bare
 
@@ -135,11 +159,12 @@ def file_problems(path_file: pathlib.Path, *, path_root: pathlib.Path) -> list:
         return [f"{str_shown}: could not parse ({cls_err})"]
 
     set_bare = bare_subprocess_names(cls_tree)
+    set_modules = subprocess_module_aliases(cls_tree)
     return [
         f"{str_shown}:{cls_node.lineno}: text-mode subprocess call without encoding="
         for cls_node in ast.walk(cls_tree)
         if isinstance(cls_node, ast.Call)
-        and is_subprocess_call(cls_node, set_bare=set_bare)
+        and is_subprocess_call(cls_node, set_bare=set_bare, set_modules=set_modules)
         and drops_encoding(cls_node)
     ]
 

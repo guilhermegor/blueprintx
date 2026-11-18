@@ -69,6 +69,8 @@ def _problems(path_dir: Path, *, str_source: str) -> list[str]:
         "from subprocess import run\nrun(['x'], text=True)\n",
         "from subprocess import run as go\ngo(['x'], text=True)\n",
         "import subprocess\nsubprocess.run(['x'], text=True, encoding=None)\n",
+        "import subprocess as sp\nsp.run(['x'], text=True)\n",
+        "import subprocess as sp\nsp.Popen(['x'], universal_newlines=True)\n",
     ],
 )
 def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_source: str) -> None:
@@ -95,6 +97,7 @@ def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_sou
         "import subprocess\nsubprocess.run(['x'], **dict_kwargs)\n",
         "import runner\nrunner.run(['x'], text=True)\n",
         "from runner import run\nrun(['x'], text=True)\n",
+        "import subprocess as sp\nsp.run(['x'], text=True, encoding='utf-8')\n",
     ],
 )
 def test_gate_encoded_or_non_text_call_is_clean(*, tmp_path: Path, str_source: str) -> None:
