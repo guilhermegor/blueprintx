@@ -15,7 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/scaffold_repo_settings.sh"
 
 scaffold_prompt_review_bot_roster() {
 	local str_answer
-	prompt_read str_answer "$(prompt_main "Will a review bot review PRs on this repo: CodeRabbit (installed or ask-only) or the reviewer-ladder GitHub App? Human-only review counts as no. [Y/n]: ")"
+	prompt_read str_answer "$(prompt_main "Will a review bot from .review-bots.yaml review PRs on this repo (CodeRabbit, also ask-only; Greptile; Graphite; Copilot; the reviewer-ladder App)? Human-only review counts as no. [Y/n]: ")"
 	case "$str_answer" in
 	n | N)
 		# shellcheck disable=SC2034
