@@ -63,7 +63,9 @@ Measured against the published wheel, both are upstream behaviours the seam does
 
 Every tier declares `pure-schema-regimes` so a project that needs the pattern later already has
 it. A project that never does should delete it. `bin/check_unreachable_modules.py` (the 1.0.0
-release gate) never treats `utils/schema_regimes.py` as a root, so it reports the seam in every
-tier while nothing imports it. Measured on the service tiers before the change: the gate
-reported nothing, because every module under `utils/` was a public root. Dropping the seam
+release gate) never treats `utils/schema_regimes.py` as a root, so it reports the seam while
+nothing imports it. That gate runs only where the `Cut 1.0.0` release gate does (`lib-minimal`);
+run `python3 bin/check_unreachable_modules.py` by hand in a service tier to see the same
+finding. Measured on the service tiers before the change: the gate reported nothing, because
+every module under `utils/` was a public root. Dropping the seam
 means deleting the file, its test and the dependency line.

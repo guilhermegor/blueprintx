@@ -64,3 +64,30 @@ def test_registry_resolves_the_cvm_cutover(*, int_period: int, str_expected: str
         ]
     )
     assert cls_registry.resolve(int_period).str_name == str_expected
+
+
+def test_registry_rejects_overlapping_windows() -> None:
+    """Overlap is refused at construction, so resolution never depends on list order.
+
+    Returns
+    -------
+    None
+    """
+    with pytest.raises(ValueError, match="overlap"):
+        RegimeRegistry(
+            [
+                RegimeWindow(str_name="a", int_period_start=None, int_period_end=202312),
+                RegimeWindow(str_name="b", int_period_start=202312, int_period_end=None),
+            ]
+        )
+
+
+def test_window_rejects_an_impossible_month() -> None:
+    """A queried period with month 13 is refused instead of reported as covered.
+
+    Returns
+    -------
+    None
+    """
+    with pytest.raises(ValueError, match="month 01-12"):
+        RegimeWindow(str_name="a", int_period_start=202001, int_period_end=None).covers(202013)

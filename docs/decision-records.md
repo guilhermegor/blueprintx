@@ -2429,7 +2429,8 @@ The 24 in `lib-minimal` are all true positives: the vendored `_internal/utils` a
 `_internal/config` seams no public module imports yet, which is what the issue asks the gate to
 report. It cannot run in CI because a fresh library scaffold would fail it on the first commit,
 and an allowlist of 24 entries would excuse exactly the modules the gate exists to surface. The
-service tiers report only `utils/schema_regimes.py`, the opt-in seam the gate never treats as a
+service tiers, where nothing runs the gate by default, report only `utils/schema_regimes.py`
+when it is run by hand, the opt-in seam the gate never treats as a
 root (blueprintx#1161); everything else passes because "public" covers nearly every module in an
 application (1 or 2 private modules per tier), so a CI run there checks almost nothing else. The gate therefore
 sits where its definition of public holds, the library release gate. The script ships to every

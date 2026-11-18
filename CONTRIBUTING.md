@@ -1350,7 +1350,7 @@ either layout (blueprintx#360). A few modules stub the metaclass shape instead o
   helpers carry the complexity hatch because every branch is a platform guard, an optional COM
   field, or a failure that must be logged and survived, and that non-fatal contract is the point
   of the gateway.
-- **regime_registry and regime_window.** Ambiguity is rejected at construction, never at
+- **`RegimeRegistry` and `RegimeWindow` (`pure-schema-regimes`).** Ambiguity is rejected at construction, never at
   lookup: `resolve` returns the first covering window, so overlapping windows would bind a
   period to a schema by list order and silently read a real file against the wrong header. The
   registry stores an immutable copy so a later append cannot slip a window past the check, and a
