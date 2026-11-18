@@ -74,7 +74,7 @@ def _problems(path_dir: Path, *, str_source: str) -> list[str]:
     ],
 )
 def test_gate_text_mode_without_encoding_is_a_finding(*, tmp_path: Path, str_source: str) -> None:
-    """A text-mode subprocess call with no ``encoding=`` is reported once, naming the file and line.
+    """A text-mode subprocess call with no ``encoding=`` is reported once with its file and line.
 
     Parameters
     ----------
