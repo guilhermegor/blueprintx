@@ -459,6 +459,9 @@ jobs:
       - name: Run the --spec should-fail suite (blueprintx#629)
         run: bash tests/test_spec_answers.sh
 
+      - name: Run the zero-dependency TypeChecker suite (blueprintx#1204)
+        run: bash tests/test_zero_dependency_type_checker_meta.sh
+
   scaffold-kanban:
     name: scaffold kanban board and labels
     runs-on: ubuntu-latest
