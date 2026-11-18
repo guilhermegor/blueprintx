@@ -746,7 +746,7 @@ parameter with a class it imports bare (`ProblemReport`, `FileContract`, `Regime
 instance built from the other copy. So these tests import bare (`utils.`, `config.`), never
 `src.utils.`; `tests/CLAUDE.md` ("The dual-import-root trap") has the rule. The names are
 interchangeable until a class crosses between them. Affected modules: `test_daily_cache`,
-`test_provenance`, `test_regime_adapters`, `test_ms_office_excel_sheet_names`, `test_xml_reader`,
+`test_provenance`, `test_schema_regimes`, `test_ms_office_excel_sheet_names`, `test_xml_reader`,
 `test_sidecar_metadata`, `test_config_schemas_example`, `test_contract_oracle_example`.
 
 ### Per-suite notes

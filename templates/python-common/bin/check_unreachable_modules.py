@@ -17,6 +17,7 @@ STR_ALLOWLIST_NAME = ".unreachable-modules.txt"
 STR_REASON_SEPARATOR = "|"
 STR_COMMENT_PREFIX = "#"
 STR_ENTRY_MODULE = "__main__"
+TUPLE_SEAM_SUFFIXES = ("utils.schema_regimes",)
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -159,8 +160,12 @@ def is_public(str_module: str) -> bool:
     Returns
     -------
     bool
-        True when no segment of the name starts with an underscore, except ``__main__``.
+        True when no segment of the name starts with an underscore, except ``__main__``,
+        and the module is not an opt-in seam (``TUPLE_SEAM_SUFFIXES``), which a project
+        must import to keep.
     """
+    if any(str_module.endswith(str_seam) for str_seam in TUPLE_SEAM_SUFFIXES):
+        return False
     return not any(
         str_part.startswith("_") and str_part != STR_ENTRY_MODULE
         for str_part in str_module.split(".")

@@ -424,3 +424,37 @@ def test_a_file_that_is_not_utf8_fails_with_a_finding(
     _run(tmp_path)
 
     assert "could not parse" in capsys.readouterr().out
+
+
+def test_an_unimported_schema_regimes_seam_is_reported(tmp_path: Path) -> None:
+    """The opt-in ``utils.schema_regimes`` seam fails the gate when nothing imports it.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided temporary directory.
+
+    Returns
+    -------
+    None
+    """
+    _write(tmp_path, str_rel="src/utils/schema_regimes.py")
+    _write(tmp_path, str_rel="src/utils/text.py")
+    assert _run(tmp_path) == 1
+
+
+def test_an_imported_schema_regimes_seam_passes(tmp_path: Path) -> None:
+    """The same seam passes once a public module imports it.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided temporary directory.
+
+    Returns
+    -------
+    None
+    """
+    _write(tmp_path, str_rel="src/utils/schema_regimes.py")
+    _write(tmp_path, str_rel="src/utils/text.py", str_source="from utils import schema_regimes\n")
+    assert _run(tmp_path) == 0
