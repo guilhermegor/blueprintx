@@ -105,7 +105,7 @@ def drops_encoding(cls_call: ast.Call) -> bool:
         return False
     return any(
         str_kw in dict_kw
-        and not (isinstance(dict_kw[str_kw], ast.Constant) and dict_kw[str_kw].value is False)
+        and not (isinstance(dict_kw[str_kw], ast.Constant) and not dict_kw[str_kw].value)
         for str_kw in TUPLE_TEXT_KWARGS
     )
 
