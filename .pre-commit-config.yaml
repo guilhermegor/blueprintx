@@ -344,6 +344,13 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/(spec|common|scaffold_docs_locale|scaffold_readme)\.sh|templates/python-common/(README\.md|docs/(changelog\.md|pt-BR/.*))|templates/python-common/bin/check_(docs_(language|gap)|comment_language)\.py|bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/lib-minimal/.*|tests/test_spec_answers\.sh)$
 
+      - id: zero-dependency-type-checker-tests
+        name: zero-dependency TypeChecker metaclass tests (blueprintx#1204)
+        entry: bash tests/test_zero_dependency_type_checker_meta.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/lib-minimal/(zero_dependency|rendered)/.*|bin/scaffold/python_lib_minimal\.sh|tests/test_zero_dependency_type_checker_meta\.sh)$
+
       - id: scaffold-kanban-tests
         name: scaffold kanban board and labels should-fail tests (blueprintx#592)
         entry: bash tests/test_scaffold_kanban.sh

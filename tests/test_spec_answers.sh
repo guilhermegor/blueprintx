@@ -516,7 +516,7 @@ echo "$*" >>"$STUB_STATE/calls.log"
 case "$1 $2" in
     "auth status") [ "${STUB_AUTH:-ok}" = ok ] || exit 1 ;;
     "api user") echo ci-bot ;;
-    "api rate_limit") echo "5000 9999999999" ;;
+    "api graphql") echo "5000 2099-01-01T00:00:00Z" ;;
     "api repos/"*) echo true ;;
     "api users/"*) echo User ;;
     "repo view")

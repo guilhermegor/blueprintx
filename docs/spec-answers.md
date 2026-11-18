@@ -172,7 +172,10 @@ before it asks about protection, so a hidden constant would shift every later an
 status` to succeed and `gh repo view <owner>/<project_name>` to fail with a not-found error (the repo must not
 exist). Any other lookup failure (network, token scope) is not read as "absent". Every
 failure stops the run, names the cause and creates nothing. A missing
-`github_username` is taken from `gh api user`. An unknown `repo_visibility`, or
+`github_username` is taken from `gh api user`. A GraphQL rate-limit answer during the preflight, or a
+`gh project` call that prints `unknown owner type` while the per-user limit is exhausted, stops
+the run with `Cause: GitHub rate limit`; the retry time is stated only when GitHub reports one
+(see `online-scaffold-gh-preflight.md`). An unknown `repo_visibility`, or
 `create_repo=y` with `git_remote=n`, stops the run naming the key, like any other bad value.
 `--dry-run` prints every remote answer plus `repo_slug` and calls no `gh`.
 
