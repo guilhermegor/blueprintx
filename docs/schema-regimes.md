@@ -43,8 +43,21 @@ cls_registry.resolve(202311).str_name  # "cnpj_keyed"
 cls_registry.resolve(202312).str_name  # "cnpj_classe_keyed"
 ```
 
+A `lib-minimal` project places the seam under its private package, so its callers import it
+package-qualified: `from <package>._internal.utils.schema_regimes import RegimeRegistry`.
+
 The seam re-exports `RegimeWindow`, `RegimeRegistry`, `RegimeBoundAdapter` and
 `SpecGapRegistry`. Ambiguous (overlapping) windows are rejected when the registry is built.
+
+## Limits of the package at 0.1.0
+
+Measured against the published wheel, both are upstream behaviours the seam does not change:
+
+- `RegimeBoundAdapter` carries the package's own `TypeChecker` metaclass, so a subclass that
+  passes the project's `TypeChecker` as `metaclass=` raises a metaclass conflict. Subclass it
+  without a `metaclass=` argument.
+- `SpecGapRegistry` does not validate its mapping: a plain string value is stored and
+  `is_known_gap` then matches by substring. Pass a `frozenset` of column names per regime.
 
 ## Dropping the seam
 

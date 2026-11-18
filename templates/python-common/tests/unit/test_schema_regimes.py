@@ -12,22 +12,29 @@ from utils.schema_regimes import (
 
 
 @pytest.mark.parametrize(
-    "cls_seam",
-    [RegimeBoundAdapter, RegimeRegistry, RegimeWindow, SpecGapRegistry],
+    ("str_name", "cls_seam"),
+    [
+        ("RegimeBoundAdapter", RegimeBoundAdapter),
+        ("RegimeRegistry", RegimeRegistry),
+        ("RegimeWindow", RegimeWindow),
+        ("SpecGapRegistry", SpecGapRegistry),
+    ],
 )
-def test_seam_reexports_the_package_object(cls_seam: type) -> None:
+def test_seam_reexports_the_package_object(*, str_name: str, cls_seam: type) -> None:
     """Each name the seam exports is the package's own object.
 
     Parameters
     ----------
+    str_name : str
+        The name the package exports.
     cls_seam : type
-        A class imported through the seam.
+        The class imported through the seam under that name.
 
     Returns
     -------
     None
     """
-    assert getattr(pure_schema_regimes, cls_seam.__name__) is cls_seam
+    assert getattr(pure_schema_regimes, str_name) is cls_seam
 
 
 @pytest.mark.parametrize(

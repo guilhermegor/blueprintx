@@ -164,7 +164,10 @@ def is_public(str_module: str) -> bool:
         and the module is not an opt-in seam (``TUPLE_SEAM_SUFFIXES``), which a project
         must import to keep.
     """
-    if any(str_module.endswith(str_seam) for str_seam in TUPLE_SEAM_SUFFIXES):
+    if any(
+        str_module == str_seam or str_module.endswith(f".{str_seam}")
+        for str_seam in TUPLE_SEAM_SUFFIXES
+    ):
         return False
     return not any(
         str_part.startswith("_") and str_part != STR_ENTRY_MODULE
