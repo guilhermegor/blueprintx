@@ -168,12 +168,13 @@ copy_internal_utils_zero_dependency() {
         > "$internal_dir/__init__.py"
     cp "$COMMON_TEMPLATE_ROOT/src/utils/__init__.py" "$internal_dir/utils/__init__.py"
     cp "$lib_dir/zero_dependency/type_checker.py" "$typing_dir/type_checker.py"
+    cp "$lib_dir/zero_dependency/type_checker_meta.py" "$typing_dir/type_checker_meta.py"
     PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
         < "$lib_dir/rendered/typing_init_zero_dependency.py.tmpl" \
         > "$typing_dir/__init__.py"
     cp "$lib_dir/utils_CLAUDE.md" "$internal_dir/utils/CLAUDE.md"
     cp "$lib_dir/utils_AGENTS.md" "$internal_dir/utils/AGENTS.md"
-    print_status "success" "Zero-dependency internals (stdlib type_checker only) applied"
+    print_status "success" "Zero-dependency internals (stdlib type_checker + TypeChecker metaclass) applied"
 }
 
 copy_internal_utils() {
