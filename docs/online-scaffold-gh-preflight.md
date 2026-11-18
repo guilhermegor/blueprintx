@@ -13,11 +13,14 @@ guessing.
    (`gh api user`). A failed call, a blank login, or fewer GraphQL points left
    than `SCAFFOLD_GH_GRAPHQL_BUDGET` stops the run before anything is created.
    The budget is read from GraphQL `rateLimit`, not from the REST `rate_limit`
-   endpoint: that endpoint counts only the current token, while the limit that
-   blocks calls (`API rate limit already exceeded for user ID ...`) is per user
-   and shared by every token and session of the account. A preflight that read
-   the token bucket printed `4998 GraphQL points left` while the same minute's
-   GraphQL calls failed (blueprintx#1202). A rate-limit answer from the probe
+   endpoint. GitHub documents `GET /rate_limit` as the authenticated user's
+   status, so the cause of the mismatch is unverified: a preflight that read
+   `resources.graphql` printed `4998 GraphQL points left` while the same
+   minute's GraphQL calls failed with `API rate limit already exceeded for
+   user ID ...` (blueprintx#1202). A later side-by-side read gave
+   `rateLimit.remaining` 350 against `resources.graphql.remaining` 4150, with
+   different reset times. The GraphQL probe asks the API that rejects the
+   calls, so it sees an actual rejection whatever the REST allowance says. A rate-limit answer from the probe
    stops the run with `Cause: GitHub rate limit`, whatever any count says.
    The same preflight reads the token scopes (`gh api -i user`, header
    `X-Oauth-Scopes`) and requires every scope in `SCAFFOLD_GH_REQUIRED_SCOPES`

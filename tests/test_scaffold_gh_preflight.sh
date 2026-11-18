@@ -385,6 +385,13 @@ test_unknown_owner_type_behind_a_rate_limit_is_named_a_rate_limit() {
     expect_not_said "owner type behind rate limit" "unexpected gh failure"
 }
 
+test_unknown_owner_type_behind_a_secondary_limit_keeps_the_retry_after() {
+    run_fn '' "GH_PROJECT_ERR=unknown owner type" "GH_GRAPHQL_ERR=secondary rate limit, Retry-After: 60" scaffold_kanban_find octo widget
+    expect_stop "owner type retry-after"
+    expect_said "owner type retry-after" "retry in 60 s"
+    expect_not_said "owner type retry-after" "unknown, retry later"
+}
+
 test_unknown_owner_type_with_a_healthy_api_stays_unexpected() {
     run_fn '' "GH_PROJECT_ERR=unknown owner type" scaffold_kanban_find octo widget
     expect_stop "owner type healthy api"
@@ -527,6 +534,7 @@ main() {
     test_board_workflows_print_the_instruction_when_unreadable
     test_board_workflows_name_the_cause_when_rate_limited
     test_unknown_owner_type_behind_a_rate_limit_is_named_a_rate_limit
+    test_unknown_owner_type_behind_a_secondary_limit_keeps_the_retry_after
     test_unknown_owner_type_with_a_healthy_api_stays_unexpected
     test_board_workflows_empty_list_is_not_unreadable
     test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults

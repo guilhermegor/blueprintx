@@ -20,8 +20,7 @@ gh_refine_failure() {
 }
 
 gh_classify_failure() {
-	local str_text
-	str_text="$(gh_refine_failure "$1")"
+	local str_text="$1"
 	case "$str_text" in
 	*[Rr]ate\ limit* | *RATE_LIMIT* | *[Ss]econdary\ rate* | *[Aa]buse* | *[Rr]etry-[Aa]fter*) printf 'rate' ;;
 	*"HTTP 401"* | *"HTTP 403"* | *[Aa]uthentication* | *[Bb]ad\ credentials* | *[Ss]cope* | *INSUFFICIENT_SCOPES* | *"gh auth"* | *"authentication token"*) printf 'auth' ;;
@@ -50,6 +49,7 @@ gh_wait_message() {
 
 gh_stop_online() {
 	local str_step="$1" str_text="${2:-}" str_kind
+	str_text="$(gh_refine_failure "$str_text")"
 	str_kind="$(gh_classify_failure "$str_text")"
 	print_status "error" "GitHub step failed: ${str_step}"
 	case "$str_kind" in
