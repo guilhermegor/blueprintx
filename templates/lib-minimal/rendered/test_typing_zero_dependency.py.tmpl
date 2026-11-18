@@ -168,8 +168,8 @@ def test_unavailable_annotation_does_not_disable_other_parameters() -> None:
 class _Adder(metaclass=TypeChecker):
     """Subject class whose public methods the metaclass wraps."""
 
-    def __init__(self) -> None:
-        self._int_base = 10
+    def __init__(self, *, base: int = 10) -> None:
+        self._int_base = base
 
     def add(self, *, value: int) -> int:
         """Add ``value`` to the base.
@@ -250,3 +250,14 @@ def test_metaclass_classmethod_rejects_wrong_type() -> None:
     """A classmethod called with a wrong-typed argument raises ``TypeError``."""
     with pytest.raises(TypeError):
         _Adder.triple(value="2")  # type: ignore[arg-type]
+
+
+def test_metaclass_init_accepts_right_type() -> None:
+    """A constructor called with a good argument works."""
+    assert _Adder(base=5).add(value=1) == 6
+
+
+def test_metaclass_init_rejects_wrong_type() -> None:
+    """A constructor called with a wrong-typed argument raises ``TypeError``."""
+    with pytest.raises(TypeError):
+        _Adder(base="5")  # type: ignore[arg-type]

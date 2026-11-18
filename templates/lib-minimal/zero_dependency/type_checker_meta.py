@@ -6,10 +6,28 @@ from .type_checker import type_checker
 
 
 @type_checker
+def _is_skipped_dunder(*, str_attr: str) -> bool:
+    """Return whether ``str_attr`` is a dunder the metaclass leaves untouched.
+
+    Parameters
+    ----------
+    str_attr : str
+        The attribute name in the class body.
+
+    Returns
+    -------
+    bool
+        ``True`` for every ``__dunder__`` name except ``__init__``.
+    """
+    return str_attr != "__init__" and str_attr.startswith("__") and str_attr.endswith("__")
+
+
+@type_checker
 def _wrap_function(*, str_attr: str, obj_value: object) -> object:
     """Return ``obj_value`` wrapped in ``type_checker`` when it is a public, undecorated function.
 
-    Dunders, nested classes, properties and already-decorated functions come back unchanged.
+    Dunders other than ``__init__``, nested classes, properties and already-decorated
+    functions come back unchanged.
 
     Parameters
     ----------
@@ -26,7 +44,7 @@ def _wrap_function(*, str_attr: str, obj_value: object) -> object:
     if (
         not callable(obj_value)
         or isinstance(obj_value, type)
-        or (str_attr.startswith("__") and str_attr.endswith("__"))
+        or _is_skipped_dunder(str_attr=str_attr)
         or hasattr(obj_value, "__wrapped__")
     ):
         return obj_value
@@ -59,7 +77,7 @@ def _wrap_attribute(*, str_attr: str, obj_value: object) -> object:
 
 
 class TypeChecker(type):
-    """Wrap every public, non-dunder method of the class in ``type_checker``.
+    """Wrap every public method and ``__init__`` of the class in ``type_checker``.
 
     Mirrors the third-party-backed ``TypeChecker`` the other BlueprintX tiers ship, so the
     ``check_typing`` gate holds in zero-dependency mode too.

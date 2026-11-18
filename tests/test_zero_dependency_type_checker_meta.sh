@@ -43,8 +43,8 @@ PY
 
 write_probe_methods() {
     cat <<'PY'
-    def __init__(self) -> None:
-        self._int_base = 10
+    def __init__(self, *, base: int = 10) -> None:
+        self._int_base = base
 
     def add(self, *, value: int) -> int:
         """Add ``value`` to the base.
@@ -117,14 +117,14 @@ from spec_probe.probe import Probe
 assert Probe().add(value=1) == 11
 assert Probe.double(value=2) == 4
 assert Probe.triple(value=2) == 6
-for fn in (Probe().add, Probe.double, Probe.triple):
+for fn in (Probe().add, Probe.double, Probe.triple, lambda value: Probe(base=value)):
     try:
         fn(value="1")
     except TypeError:
         print("TypeError")
 ' 2>&1)"
-    if [ "$str_out" = "$(printf "TypeError\nTypeError\nTypeError")" ]; then
-        pass "metaclass-wrapped method accepts good arguments and raises TypeError on a wrong one (instance, static and class methods)"
+    if [ "$str_out" = "$(printf "TypeError\nTypeError\nTypeError\nTypeError")" ]; then
+        pass "metaclass-wrapped method accepts good arguments and raises TypeError on a wrong one (instance, static, class methods and __init__)"
     else
         fail "runtime check" "got: $str_out"
     fi
