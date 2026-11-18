@@ -21,6 +21,7 @@ case "$1 $2" in
 "api graphql")
     [ -z "${GH_GRAPHQL_ERR:-}" ] || { echo "$GH_GRAPHQL_ERR" >&2; exit 1; }
     case "$*" in
+    *rateLimit*) echo "${GH_RATE:-5000 2099-01-01T00:00:00Z}"; exit 0 ;;
     *workflows*) ;;
     *) exit 0 ;;
     esac
@@ -39,9 +40,7 @@ case "$1 $2" in
 "api user")
     [ -z "${GH_USER_ERR:-}" ] || { echo "$GH_USER_ERR" >&2; exit 1; }
     echo "${GH_LOGIN-octo}" ;;
-"api rate_limit")
-    str_rate="${GH_RATE:-5000 9999999999}"
-    case "$*" in *"graphql.reset"*) echo "${str_rate##* }" ;; *) echo "$str_rate" ;; esac ;;
+"api rate_limit") echo "4998 9999999999" ;;
 "api users/"*)
     [ -z "${GH_OWNER_ERR:-}" ] || { echo "$GH_OWNER_ERR" >&2; exit 1; }
     echo "User" ;;
@@ -51,7 +50,9 @@ case "$1 $2" in
 "label create")
     [ -z "${GH_LABEL_ERR:-}" ] || { echo "$GH_LABEL_ERR" >&2; exit 1; } ;;
 "repo create") echo "created" ;;
-"project list") echo "${GH_PROJECT_NUMBER:-}" ;;
+"project list")
+    [ -z "${GH_PROJECT_ERR:-}" ] || { echo "$GH_PROJECT_ERR" >&2; exit 1; }
+    echo "${GH_PROJECT_NUMBER:-}" ;;
 "project create") echo 7 ;;
 "project field-list") case "$*" in *'select(.name=="Blocked")'*) echo PVTSO_blocked ;; *".fields[].name"* | *options*) ;; *) echo PVTSSF_status ;; esac ;;
 "project view") echo PVT_board ;;
@@ -101,12 +102,23 @@ expect_not_called() {
     ! grep -qF -- "$2" "$WORK_DIR/gh.log" || fail "$1: gh was called with '$2'"
 }
 
-test_preflight_rate_limit_prints_the_reset_time() {
+test_preflight_user_rate_limit_stops_whatever_the_token_bucket_says() {
+    run_fn '' "GH_GRAPHQL_ERR=GraphQL: API rate limit already exceeded for user ID 1" gh_preflight
+    expect_stop "user rate limit"
+    expect_said "user rate limit" "Cause: GitHub rate limit"
+    expect_said "user rate limit" "unknown, retry later"
+    expect_not_said "user rate limit" "retry in"
+    expect_not_called "user rate limit" "api rate_limit"
+    expect_not_called "user rate limit" "repo create"
+}
+
+test_preflight_budget_comes_from_the_graphql_rate_limit_field() {
     local int_reset=$(($(date +%s) + 840))
-    run_fn '' "GH_GRAPHQL_ERR=GraphQL: API rate limit already exceeded" "GH_RATE=0 ${int_reset}" gh_preflight
-    expect_stop "rate limit"
-    expect_said "rate limit" "retry in 14 min"
-    expect_said "rate limit" "after $(date -u -d "@${int_reset}" +%H:%MZ)"
+    run_fn '' "GH_RATE=0 $(date -u -d "@${int_reset}" +%Y-%m-%dT%H:%M:%SZ)" gh_preflight
+    expect_stop "graphql budget"
+    expect_said "graphql budget" "retry in 14 min"
+    expect_said "graphql budget" "after $(date -u -d "@${int_reset}" +%H:%MZ)"
+    expect_not_called "graphql budget" "api rate_limit"
 }
 
 test_preflight_secondary_limit_uses_retry_after() {
@@ -116,9 +128,9 @@ test_preflight_secondary_limit_uses_retry_after() {
 }
 
 test_preflight_unknown_wait_says_so() {
-    run_fn '' "GH_GRAPHQL_ERR=API rate limit exceeded" "GH_RATE=oops" gh_preflight
+    run_fn '' "GH_RATE=oops" gh_preflight
     expect_stop "unknown wait"
-    expect_said "unknown wait" "unknown, retry later"
+    expect_said "unknown wait" "unreadable rateLimit answer"
 }
 
 test_preflight_stops_on_an_auth_error() {
@@ -136,7 +148,7 @@ test_preflight_stops_on_a_network_error() {
 
 test_preflight_stops_when_the_budget_is_too_low() {
     local int_reset=$(($(date +%s) + 600))
-    run_fn '' "GH_RATE=10 ${int_reset}" gh_preflight
+    run_fn '' "GH_RATE=10 $(date -u -d "@${int_reset}" +%Y-%m-%dT%H:%M:%SZ)" gh_preflight
     expect_stop "low budget"
     expect_said "low budget" "retry in 10 min"
 }
@@ -249,7 +261,7 @@ run_promoter_gate() {
             "auth status") return 0 ;;
             "config get") echo https ;;
             "api -i") printf "HTTP/2 200\r\nX-Oauth-Scopes: %s\r\n\r\n{}\n" "$GH_SCOPES" ;;
-            "api rate_limit") echo "5000 9999999999" ;;
+            "api graphql") echo "5000 2099-01-01T00:00:00Z" ;;
             "api user") echo octo ;;
             esac
         }
@@ -366,6 +378,26 @@ test_board_workflows_name_the_cause_when_rate_limited() {
     expect_said "workflows rate limited" "cause: rate"
 }
 
+test_unknown_owner_type_behind_a_rate_limit_is_named_a_rate_limit() {
+    run_fn '' "GH_PROJECT_ERR=unknown owner type" "GH_GRAPHQL_ERR=GraphQL: API rate limit already exceeded for user ID 1" scaffold_kanban_find octo widget
+    expect_stop "owner type behind rate limit"
+    expect_said "owner type behind rate limit" "Cause: GitHub rate limit"
+    expect_not_said "owner type behind rate limit" "unexpected gh failure"
+}
+
+test_unknown_owner_type_behind_a_secondary_limit_keeps_the_retry_after() {
+    run_fn '' "GH_PROJECT_ERR=unknown owner type" "GH_GRAPHQL_ERR=secondary rate limit, Retry-After: 60" scaffold_kanban_find octo widget
+    expect_stop "owner type retry-after"
+    expect_said "owner type retry-after" "retry in 60 s"
+    expect_not_said "owner type retry-after" "unknown, retry later"
+}
+
+test_unknown_owner_type_with_a_healthy_api_stays_unexpected() {
+    run_fn '' "GH_PROJECT_ERR=unknown owner type" scaffold_kanban_find octo widget
+    expect_stop "owner type healthy api"
+    expect_said "owner type healthy api" "unexpected gh failure: unknown owner type"
+}
+
 test_board_workflows_empty_list_is_not_unreadable() {
     run_fn '' "GH_WORKFLOWS=" scaffold_kanban_workflows octo 7
     [ "$int_rc" -eq 0 ] || fail "workflows empty: must warn, not stop: $str_out"
@@ -465,7 +497,8 @@ test_stop_message_prints_the_real_rerun_command() {
 
 main() {
     make_stub
-    test_preflight_rate_limit_prints_the_reset_time
+    test_preflight_user_rate_limit_stops_whatever_the_token_bucket_says
+    test_preflight_budget_comes_from_the_graphql_rate_limit_field
     test_preflight_secondary_limit_uses_retry_after
     test_preflight_unknown_wait_says_so
     test_preflight_stops_on_an_auth_error
@@ -500,6 +533,9 @@ main() {
     test_board_workflows_report_a_missing_name_not_an_off_toggle
     test_board_workflows_print_the_instruction_when_unreadable
     test_board_workflows_name_the_cause_when_rate_limited
+    test_unknown_owner_type_behind_a_rate_limit_is_named_a_rate_limit
+    test_unknown_owner_type_behind_a_secondary_limit_keeps_the_retry_after
+    test_unknown_owner_type_with_a_healthy_api_stays_unexpected
     test_board_workflows_empty_list_is_not_unreadable
     test_a_fresh_scaffold_pins_the_graphql_cost_and_budget_defaults
     test_the_card_add_path_pins_its_field_list_calls_and_points

@@ -164,7 +164,7 @@ scaffold_kanban_workflows() {
 		-f query='query($o:String!,$n:Int!){repositoryOwner(login:$o){... on ProjectV2Owner{projectV2(number:$n){workflows(first:20){nodes{name enabled}}}}}}' \
 		--jq '.data.repositoryOwner.projectV2.workflows.nodes[] | "\(.enabled)|\(.name)"' 2>"$str_err")" || int_rc=$?
 	if [ "$int_rc" -ne 0 ]; then
-		print_status "warning" "Could not read the board workflows (cause: $(gh_classify_failure "$(cat "$str_err")")); enable 'Item closed' and 'Pull request merged' (cards move to Done) at the board's Workflows page"
+		print_status "warning" "Could not read the board workflows (cause: $(gh_classify_failure "$(gh_refine_failure "$(cat "$str_err")")")); enable 'Item closed' and 'Pull request merged' (cards move to Done) at the board's Workflows page"
 		[ "$str_err" = /dev/null ] || rm -f "$str_err"
 		return 0
 	fi
