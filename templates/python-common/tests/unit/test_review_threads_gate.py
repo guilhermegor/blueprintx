@@ -5165,7 +5165,9 @@ def test_main_hands_the_body_check_reviewers_only(
 def test_a_status_row_comment_never_answers_a_review_body() -> None:
     """A long ``github-actions`` comment after a findings body stays a non-answer."""
     list_notices = [
-        _notice("github-actions", str_body="Workflow output. " + "x" * 120, str_created=_BODY_AFTER)
+        _notice(
+            "github-actions", str_body="Workflow output. " + "x" * 120, str_created=_BODY_AFTER
+        )
     ]
     list_problems = _load_gate().find_review_body_problems(
         [_body_review(_BODY_MAJOR)],
