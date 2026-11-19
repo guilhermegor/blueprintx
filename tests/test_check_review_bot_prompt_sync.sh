@@ -61,6 +61,19 @@ sed -i '/^[[:space:]]*posters:/a\      # a comment\n\n      - newposter[bot]' "$
 expect fail "poster after a comment and blank line is still read" "$str_case" "newposter[bot]"
 
 new_case
+sed -i 's/Copilot, //' "$str_case/bin/lib/scaffold_git_remote.sh" "$str_case/docs/faq.md"
+sed -i '/copilot-pull-request-reviewer/d' "$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "python-common roster is parsed on its own" "$str_case" "templates/python-common/.review-bots.yaml"
+
+new_case
+printf '  - posts: threads\n    login: orderbot[bot]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "posts before login is refused, never skipped" "$str_case" "has no '- login:' line before it"
+
+new_case
+printf '  - kind: comment-marker\n    posters: [flowbot[bot]]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "flow-style posters is refused, never skipped" "$str_case" "must be a block list"
+
+new_case
 rm "$str_case/docs/faq.md"
 expect fail "missing faq checks nothing" "$str_case" "the gate checked nothing"
 

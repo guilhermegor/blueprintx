@@ -29,9 +29,10 @@ fail() {
 
 roster_logins() {
 	awk '
-		/^[[:space:]]*- (login|kind):/ { bool_in = 0 }
+		/^[[:space:]]*- [a-z_]+:/ { bool_in = 0; str_login = "" }
 		/^[[:space:]]*- login:/ { str_login = $3; next }
-		/^[[:space:]]*posts:[[:space:]]*threads/ { if (str_login != "") print str_login; str_login = ""; next }
+		/^[[:space:]]*(- )?posts:[[:space:]]*threads/ { print (str_login != "" ? str_login : "!order"); str_login = ""; next }
+		/^[[:space:]]*posters:[[:space:]]*[^[:space:]#]/ { print "!flow"; next }
 		/^[[:space:]]*posters:/ { bool_in = 1; next }
 		bool_in && /^[[:space:]]*(#.*)?$/ { next }
 		bool_in && /^[[:space:]]*- / { print $2; next }
@@ -59,6 +60,10 @@ for str_roster in "${list_rosters[@]}"; do
 	mapfile -t list_logins < <(roster_logins "$str_roster")
 	[ "${#list_logins[@]}" -gt 0 ] || fail "${str_roster#"$str_root"/}: no threads/poster logins parsed"
 	for str_login in "${list_logins[@]}"; do
+		case "$str_login" in
+		'!order') fail "${str_roster#"$str_root"/}: a 'posts: threads' entry has no '- login:' line before it; put login first" && continue ;;
+		'!flow') fail "${str_roster#"$str_root"/}: 'posters:' must be a block list, one '- login' per line" && continue ;;
+		esac
 		str_stem="${str_login%\[bot\]}"
 		str_name="${dict_names[$str_stem]:-}"
 		if [ -z "$str_name" ]; then
