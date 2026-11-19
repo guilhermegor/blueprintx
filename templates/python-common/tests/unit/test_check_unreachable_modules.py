@@ -424,3 +424,59 @@ def test_a_file_that_is_not_utf8_fails_with_a_finding(
     _run(tmp_path)
 
     assert "could not parse" in capsys.readouterr().out
+
+
+def test_an_unimported_schema_regimes_seam_is_reported(
+    tmp_path: Path, *, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The opt-in ``utils.schema_regimes`` seam fails the gate, by name, when nothing imports it.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided temporary directory.
+    capsys : pytest.CaptureFixture of str
+        Captures the gate's report.
+
+    Returns
+    -------
+    None
+    """
+    _write(tmp_path, str_rel="src/utils/schema_regimes.py")
+    _write(tmp_path, str_rel="src/utils/text.py")
+    int_code = _run(tmp_path)
+    str_seam = str(Path("src") / "utils" / "schema_regimes.py")
+    assert (int_code, str_seam in capsys.readouterr().out) == (1, True)
+
+
+def test_a_module_merely_ending_in_the_seam_name_stays_a_root(tmp_path: Path) -> None:
+    """``myutils.schema_regimes`` is an ordinary public module, not the seam.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided temporary directory.
+
+    Returns
+    -------
+    None
+    """
+    _write(tmp_path, str_rel="src/myutils/schema_regimes.py")
+    assert _run(tmp_path) == 0
+
+
+def test_an_imported_schema_regimes_seam_passes(tmp_path: Path) -> None:
+    """The same seam passes once a public module imports it.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided temporary directory.
+
+    Returns
+    -------
+    None
+    """
+    _write(tmp_path, str_rel="src/utils/schema_regimes.py")
+    _write(tmp_path, str_rel="src/utils/text.py", str_source="from utils import schema_regimes\n")
+    assert _run(tmp_path) == 0

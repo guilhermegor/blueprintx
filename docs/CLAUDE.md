@@ -25,6 +25,7 @@ It must be updated whenever a new file is added, a file is removed, or a major s
 | `changelog.md` | Utility page | Release history — single-sources the root `CHANGELOG.md` (cz-generated) via a snippets include; also links to GitHub Releases |
 | `versioning.md` | Utility page | The v1.0.0 entry bar — what the frozen contract is, the entry-bar checklist, the post-1.0 breaking-change policy |
 | `coverage-floor.md` | Utility page | Design record for `bin/check_coverage_floor.py` (blueprintx#149) — why `.coveragerc`'s `omit` list needed a code-derived floor, how it derives one, and why it stays deliberately coarse |
+| `schema-regimes.md` | Utility page | The `utils/schema_regimes.py` seam over `pure-schema-regimes`, the measured CVM `CNPJ_FUNDO` / `CNPJ_FUNDO_CLASSE` cutover, and how the unreachable-modules gate lets a project drop it (blueprintx#1161) |
 | `conflict-free-registries.md` | Utility page | Sorted one-per-line `__all__`, no stored counts, and the gate (`check_registry_order.py`) that keeps parallel library PRs from conflicting (blueprintx#959) |
 | `decision-records.md` | Utility page | Destination for decision-record comments (the `SUPERSEDED …` blocks moved out of code) — what each record decided and why (blueprintx#239); includes the "Generated-project workflows" section for rationale stripped from `templates/python-common/.github/` |
 | `issue-scope.md` | Utility page | Declaring and enforcing an issue's file surface so a gate can verify dispatched work at PR time (blueprintx#314) |

@@ -37,6 +37,7 @@ wwdates = ">=1.0.0"
 openpyxl = ">=3.1.0"
 defusedxml = ">=0.7"
 pure-docs-br = ">=1.0.0"
+pure-schema-regimes = ">=0.1.0,<0.2"
 
 [tool.poetry.group.dev.dependencies]
 poethepoet = ">=0.35"

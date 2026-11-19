@@ -412,7 +412,7 @@ copy_shared_utils() {
         br_identifiers dtypes decimals logs logs_emitter text paths dates
         tabular_reader xml_reader provenance sidecar_metadata retry http_downloader zip_extractor frames dbapi
         ms_office email raw_workspace daily_cache queries
-        regime_window regime_registry regime_adapter spec_gap_registry
+        schema_regimes
     )
     for util in "${utils[@]}"; do
         if [ -d "$COMMON_TEMPLATE_ROOT/src/utils/${util}" ]; then
@@ -434,8 +434,6 @@ copy_shared_utils() {
         "$project_path/tests/unit/test_email_sender.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_email_html_body.py" \
         "$project_path/tests/unit/test_email_html_body.py"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_regime_adapters.py" \
-        "$project_path/tests/unit/test_regime_adapters.py"
     print_status "success" "Shared utils + their tests applied (${#utils[@]} modules)"
 }
 
