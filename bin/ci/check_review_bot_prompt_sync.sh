@@ -30,12 +30,13 @@ fail() {
 roster_logins() {
 	awk '
 		/^[[:space:]]*- [a-z_]+:/ { bool_in = 0; str_login = "" }
-		/^[[:space:]]*- login:/ { str_login = $3; next }
-		/^[[:space:]]*(- )?posts:[[:space:]]*threads/ { print (str_login != "" ? str_login : "!order"); str_login = ""; next }
+		/^[[:space:]]*- [{]/ { print "!flow"; next }
+		/^[[:space:]]*- login:/ { str_login = $3; gsub(/["\047]/, "", str_login); next }
+		/^[[:space:]]*(- )?posts:[[:space:]]*["\047]?threads["\047]?([[:space:]]|$)/ { print (str_login != "" ? str_login : "!order"); str_login = ""; next }
 		/^[[:space:]]*posters:[[:space:]]*[^[:space:]#]/ { print "!flow"; next }
 		/^[[:space:]]*posters:/ { bool_in = 1; next }
 		bool_in && /^[[:space:]]*(#.*)?$/ { next }
-		bool_in && /^[[:space:]]*- / { print $2; next }
+		bool_in && /^[[:space:]]*- / { str_poster = $2; gsub(/["\047]/, "", str_poster); print str_poster; next }
 		bool_in { bool_in = 0 }
 	' "$1" | sort -u
 }
@@ -53,7 +54,7 @@ for f in "$str_lib" "$str_faq" "${list_rosters[@]}"; do
 	[ -f "$f" ] || { echo "ERROR: missing $f; the gate checked nothing" >&2; exit 1; }
 done
 
-str_prompt="$(prompt_text)"
+str_prompt="$(prompt_text || true)"
 [ -n "$str_prompt" ] || { echo "ERROR: no review-bot prompt found in $str_lib" >&2; exit 1; }
 
 for str_roster in "${list_rosters[@]}"; do
@@ -62,7 +63,7 @@ for str_roster in "${list_rosters[@]}"; do
 	for str_login in "${list_logins[@]}"; do
 		case "$str_login" in
 		'!order') fail "${str_roster#"$str_root"/}: a 'posts: threads' entry has no '- login:' line before it; put login first" && continue ;;
-		'!flow') fail "${str_roster#"$str_root"/}: 'posters:' must be a block list, one '- login' per line" && continue ;;
+		'!flow') fail "${str_roster#"$str_root"/}: flow-style YAML ('[...]' or '{...}') is not read; write 'posters:' and each entry as a block list" && continue ;;
 		esac
 		str_stem="${str_login%\[bot\]}"
 		str_name="${dict_names[$str_stem]:-}"

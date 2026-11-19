@@ -62,7 +62,7 @@ expect fail "poster after a comment and blank line is still read" "$str_case" "n
 
 new_case
 sed -i 's/Copilot, //' "$str_case/bin/lib/scaffold_git_remote.sh" "$str_case/docs/faq.md"
-sed -i '/copilot-pull-request-reviewer/d' "$str_case/templates/ts-common/.github/.review-bots.yaml"
+sed -i '/copilot-pull-request-reviewer/,+2d' "$str_case/templates/ts-common/.github/.review-bots.yaml"
 expect fail "python-common roster is parsed on its own" "$str_case" "templates/python-common/.review-bots.yaml"
 
 new_case
@@ -71,7 +71,19 @@ expect fail "posts before login is refused, never skipped" "$str_case" "has no '
 
 new_case
 printf '  - kind: comment-marker\n    posters: [flowbot[bot]]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "flow-style posters is refused, never skipped" "$str_case" "must be a block list"
+expect fail "flow-style posters is refused, never skipped" "$str_case" "flow-style YAML"
+
+new_case
+printf '  - login: "quotedbot[bot]"\n    posts: "threads"\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "quoted login and posts values are read, never skipped" "$str_case" "'quotedbot[bot]'"
+
+new_case
+printf '  - {login: mapbot[bot], posts: threads}\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "flow-mapping entry is refused, never skipped" "$str_case" "flow-style YAML"
+
+new_case
+sed -i 's/^scaffold_prompt_review_bot_roster()/function scaffold_prompt_review_bot_roster/' "$str_case/bin/lib/scaffold_git_remote.sh"
+expect fail "an unreadable prompt function prints its diagnostic" "$str_case" "no review-bot prompt found"
 
 new_case
 rm "$str_case/docs/faq.md"
