@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/logo.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -2980,7 +2980,7 @@
 <tr>
 <td><code>src/&lt;project_name&gt;/_internal/utils/</code></td>
 <td>Vendored utilities</td>
-<td>Private copies of the shared helpers, including <code>dates.py</code> (Brazilian business days via <code>wwdates</code>) and <code>zip_extractor.py</code>; every Python tier ships both</td>
+<td>Private copies of the shared helpers, including <code>dates.py</code> (Brazilian business days via <code>purecalendars</code>) and <code>zip_extractor.py</code>; every Python tier ships both</td>
 </tr>
 <tr>
 <td><code>tests/unit/</code></td>
@@ -3053,7 +3053,7 @@
 </span></code></pre></div>
 <hr />
 <h2 id="zero-dependency-mode">🪶 Zero-dependency mode<a class="headerlink" href="#zero-dependency-mode" title="Permanent link">&para;</a></h2>
-<p>The scaffold asks "Zero runtime dependencies?" (spec key <code>zero_dependency</code>, default <code>n</code>). The default ships the full vendored <code>_internal</code> toolkit, <code>dates.py</code> included, backed by beartype, pandas, numpy, wwdates, openpyxl and defusedxml.</p>
+<p>The scaffold asks "Zero runtime dependencies?" (spec key <code>zero_dependency</code>, default <code>n</code>). The default ships the full vendored <code>_internal</code> toolkit, <code>dates.py</code> included, backed by beartype, pandas, numpy, purecalendars, openpyxl and defusedxml.</p>
 <p>Answering <code>y</code> leaves the whole toolkit out as one group (dtypes, tabular and XML readers, <code>dates.py</code>, downloaders, regime modules, <code>_internal/config/contracts</code> and <code>_internal/config/ports</code>) together with its tests. It ships a stdlib-only <code>type_checker</code> in <code>_internal/utils/typing/</code> instead of the beartype-backed one, and the generated <code>pyproject.toml</code> has an empty <code>[tool.poetry.dependencies]</code> apart from <code>python</code>. Dev tooling is unchanged.</p>
 <p>The stdlib <code>type_checker</code> validates arguments annotated with a plain class (<code>str</code>, <code>int</code>) and leaves generic, union and string annotations to mypy. A stdlib <code>TypeChecker</code> metaclass (<code>_internal/utils/typing/type_checker_meta.py</code>) applies <code>type_checker</code> to every public, not-yet-wrapped method of a class, plus <code>__init__</code> (other dunders are left alone). <code>check_typing.py</code> requires every root class under <code>src/</code> to declare <code>metaclass=TypeChecker</code> (or <code>ABCTypeCheckerMeta</code> / <code>ProtocolTypeCheckerMeta</code>), so a class in a zero-dependency project writes <code>class Foo(metaclass=TypeChecker)</code>; the ABC and Protocol variants need the vendored toolkit and are not shipped here. The OTLP log export and the in-repo <code>logs.py</code> helper belong to the vendored toolkit, so each is skipped with a warning when chosen together with zero-dependency mode.</p>
 <hr />

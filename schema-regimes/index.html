@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/logo.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -2895,7 +2895,7 @@ with an adapter bound to one regime that refuses a period outside it.</p>
 tiers and once, written separately, in the MVC tier's <code>model/</code>. Two copies drift, and every
 generated project kept its own stale one. The logic now lives in the zero-dependency package
 <a href="https://pypi.org/project/pure-schema-regimes/"><code>pure-schema-regimes</code></a>, a sibling of
-<code>pure-docs-br</code>, and each project keeps only a re-export seam, the same shape as
+<code>purepii-br</code>, and each project keeps only a re-export seam, the same shape as
 <code>utils/br_identifiers.py</code>:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">utils.schema_regimes</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegimeRegistry</span><span class="p">,</span> <span class="n">RegimeWindow</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
