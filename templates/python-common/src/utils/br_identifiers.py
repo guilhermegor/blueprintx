@@ -1,13 +1,13 @@
-"""Brazilian identifier helpers — re-exported from the ``pure-docs-br`` package.
+"""Brazilian identifier helpers — re-exported from the ``purepii-br`` package.
 
 The CNPJ/CPF mask, unmask and validate logic (including the 2026 alphanumeric CNPJ) lives in
-``pure-docs-br``; this module only keeps the project's ``utils.br_identifiers`` import path
+``purepii-br``; this module only keeps the project's ``utils.br_identifiers`` import path
 stable.
 """
 
 from __future__ import annotations
 
-from pure_docs_br import (
+from purepii_br import (
     is_valid_cnpj,
     is_valid_cpf,
     mask_cnpj,

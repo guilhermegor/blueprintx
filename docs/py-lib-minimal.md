@@ -38,7 +38,7 @@ project/
 | Folder | Purpose | Expected Content |
 |--------|---------|------------------|
 | `src/<project_name>/` | Library source code | Python modules, classes, functions — your library's public API |
-| `src/<project_name>/_internal/utils/` | Vendored utilities | Private copies of the shared helpers, including `dates.py` (Brazilian business days via `wwdates`) and `zip_extractor.py`; every Python tier ships both |
+| `src/<project_name>/_internal/utils/` | Vendored utilities | Private copies of the shared helpers, including `dates.py` (Brazilian business days via `purecalendars`) and `zip_extractor.py`; every Python tier ships both |
 | `tests/unit/` | Unit tests | Fast, isolated tests for individual functions and classes |
 | `tests/integration/` | Integration tests | Tests with external dependencies (databases, APIs, file systems) |
 | `tests/performance/` | Performance tests | Benchmarks, load tests, memory profiling |
@@ -83,7 +83,7 @@ def test_main(capsys: pytest.CaptureFixture[str]) -> None:
 
 ## 🪶 Zero-dependency mode
 
-The scaffold asks "Zero runtime dependencies?" (spec key `zero_dependency`, default `n`). The default ships the full vendored `_internal` toolkit, `dates.py` included, backed by beartype, pandas, numpy, wwdates, openpyxl and defusedxml.
+The scaffold asks "Zero runtime dependencies?" (spec key `zero_dependency`, default `n`). The default ships the full vendored `_internal` toolkit, `dates.py` included, backed by beartype, pandas, numpy, purecalendars, openpyxl and defusedxml.
 
 Answering `y` leaves the whole toolkit out as one group (dtypes, tabular and XML readers, `dates.py`, downloaders, regime modules, `_internal/config/contracts` and `_internal/config/ports`) together with its tests. It ships a stdlib-only `type_checker` in `_internal/utils/typing/` instead of the beartype-backed one, and the generated `pyproject.toml` has an empty `[tool.poetry.dependencies]` apart from `python`. Dev tooling is unchanged.
 

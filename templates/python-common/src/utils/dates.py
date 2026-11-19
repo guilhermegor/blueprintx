@@ -1,25 +1,14 @@
 """Brazilian business-day helpers backed by the ANBIMA holiday calendar.
 
-Wraps wwdates' :class:`~wwdates.br.anbima.DatesBRAnbima` so the whole project
+Wraps purecalendars' :class:`~purecalendars.br.anbima.DatesBRAnbima` so the whole project
 shares one calendar instance and a small, intention-revealing function surface
 instead of each caller building its own. Every call is **local** — no network, no
 cache warm-up.
 
-⚠️ That is a property of the pinned floor, not of the name. wwdates 1.0.0 made
-``wwdates.br.anbima.DatesBRAnbima`` the OFFLINE implementation and moved the
-page-scraping one to ``wwdates.br.anbima_web.DatesBRAnbimaWeb``. Under the old
-``>=0.1.0`` floor the same import could resolve to 0.1.0 and silently bring the
-networked semantics back under this exact name, which is why the service tiers pin
-``wwdates >=1.0.0`` (blueprintx#110). Accuracy is not the trade: wwdates measured an
-EMPTY symmetric difference against ANBIMA's published table across 2001-2099, the full
-span ANBIMA publishes. Reach for ``DatesBRAnbimaWeb`` explicitly only to cover dates
-outside that span or to verify against the live source.
-
-The floor is open (``>=``, the repo-wide constraint style), so it resolves to the newest
-wwdates — 2.0.0 at the time of writing. Verified against both wheels rather than assumed:
-1.0.0 and 2.0.0 each export ``DatesBRAnbima`` from ``wwdates.br.anbima`` with no HTTP
-client imported, an all-optional ``__init__``, and every method this module calls. 2.0.0's
-major is the addition of US calendars, not a change to this one.
+Every tier pins ``purecalendars >=3.0.1``, whose ``purecalendars.br.anbima.DatesBRAnbima``
+is the OFFLINE implementation. The page-scraping ``*Web`` classes left purecalendars in
+3.0.0 for the separate ``opendata-calendars`` package. It was measured against ANBIMA's
+published table across 2001-2099, the full span ANBIMA publishes.
 
 Pass dates as :class:`datetime.date` (or :class:`datetime.datetime`); helpers that
 return a calendar day return a :class:`datetime.date`.
@@ -30,7 +19,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from wwdates.br.anbima import DatesBRAnbima
+from purecalendars.br.anbima import DatesBRAnbima
 
 
 if TYPE_CHECKING:
@@ -110,7 +99,7 @@ def delta_working_days(dt_start: date | datetime, *, dt_end: date | datetime) ->
     Parameters
     ----------
     dt_start : datetime.date | datetime.datetime
-        Start date (inclusive per wwdates' convention).
+        Start date, exclusive: the count covers ``(dt_start, dt_end]``.
     dt_end : datetime.date | datetime.datetime
         End date.
 

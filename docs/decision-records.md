@@ -1058,7 +1058,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
   measurement (flip the line locally, scaffold, read the `import-not-found` errors), because a
   hand-written list that misses one turns a green gate red in every generated project.
   Current blocks and their import sites: pandas (the `utils` readers, `dtypes`, `frames`,
-  `provenance`; MVC controller, model and view), wwdates (`utils/dates.py`), defusedxml
+  `provenance`; MVC controller, model and view), purecalendars (`utils/dates.py`), defusedxml
   (`utils/xml_reader.py`), win32com (`utils/ms_office/outlook_gateway.py`), yaml
   (`config/startup.py`), pyodbc (the native-DB MSSQL handler, the only one of the five native
   drivers with no stubs) and joblib (the schema-less opt-in's `joblib_handler.py`, #650, which a

@@ -33,10 +33,10 @@ python = ">=3.11,<4.0"
 beartype = ">=0.22"
 pandas = ">=2.1.0"
 numpy = ">=1.22"
-wwdates = ">=1.0.0"
+purecalendars = ">=3.0.1"
 openpyxl = ">=3.1.0"
 defusedxml = ">=0.7"
-pure-docs-br = ">=1.0.0"
+purepii-br = ">=2.0.0"
 pure-schema-regimes = ">=0.1.0,<0.2"
 
 [tool.poetry.group.dev.dependencies]
