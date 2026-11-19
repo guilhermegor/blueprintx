@@ -71,6 +71,27 @@ jobs:
       - name: Verify INCLUDE_REVIEW_BOT_ROSTER=false omits the roster on all three scaffold shapes
         run: bash bin/ci/check_review_bot_roster_optout.sh
 
+  review-bot-prompt-sync:
+    name: Review-bot prompt names every roster login
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet pyyaml==6.0.3
+
+      - name: Check the prompt and docs/faq.md against both rosters
+        run: bash bin/ci/check_review_bot_prompt_sync.sh
+
+      - name: Should-fail regression tests
+        run: bash tests/test_check_review_bot_prompt_sync.sh
+
   docs-gap:
     name: Docs gap — published pages registered in nav and index
     runs-on: ubuntu-latest
