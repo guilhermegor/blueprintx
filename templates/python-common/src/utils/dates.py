@@ -6,9 +6,9 @@ instead of each caller building its own. Every call is **local** — no network,
 cache warm-up.
 
 The service tiers pin ``purecalendars >=3.0.1``, whose ``purecalendars.br.anbima.DatesBRAnbima``
-is the OFFLINE implementation (the page-scraping one is ``DatesBRAnbimaWeb`` in
-``purecalendars.br.anbima_web``). It was measured against ANBIMA's published table
-across 2001-2099, the full span ANBIMA publishes.
+is the OFFLINE implementation. The page-scraping ``*Web`` classes left purecalendars in
+3.0.0 for the separate ``opendata-calendars`` package. It was measured against ANBIMA's
+published table across 2001-2099, the full span ANBIMA publishes.
 
 Pass dates as :class:`datetime.date` (or :class:`datetime.datetime`); helpers that
 return a calendar day return a :class:`datetime.date`.
@@ -99,7 +99,7 @@ def delta_working_days(dt_start: date | datetime, *, dt_end: date | datetime) ->
     Parameters
     ----------
     dt_start : datetime.date | datetime.datetime
-        Start date (inclusive per purecalendars' convention).
+        Start date, exclusive: the same working day as both ends counts 0.
     dt_end : datetime.date | datetime.datetime
         End date.
 
