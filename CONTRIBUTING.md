@@ -936,8 +936,7 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
 - **Shared utils.** A util is a module or a package (`retry/` became one in #116), and one flat
   roster of names handles both. `cp -r src dst` nests when `dst` exists (`dst/retry/retry/`) and
   leaves a stale unimportable tree on a rerun, so package contents are copied into a directory
-  the script creates. `ms_office/` and `email/` have several test files, and
-  `test_regime_adapters.py` covers four modules in one file, so each rides an explicit `cp` that
+  the script creates. `ms_office/` and `email/` have several test files, so each rides an explicit `cp` that
   `check_test_copy_lists.py`'s static scan recognises (#117, #118, #121). The step prints a
   count and never an enumeration, because the old message listed 15 of 17 names and had
   already drifted. Companion tests for `check_fixture_scope.py` (#442) and
@@ -989,7 +988,7 @@ pinned OTLP block appended to `pyproject.toml`) is output and stays untouched, i
   convention is to inject a logger; `logs_emitter` ships only beside it. `retry/` is a package
   and needs `cp -r`, listed apart from the plain module loop. A smoke test of the typing engine
   guards the rewrite, since lib-minimal is the only tier that rewrites its imports.
-  `test_regime_adapters.py` is copied and rewritten with the modules it covers, unlike the
+  `test_schema_regimes.py` is copied and rewritten with the seam it covers, unlike the
   other vendored utils' shared tests, a documented accepted gap in `check_test_copy_lists.py`,
   so it runs here instead of widening that gap. Ports, contracts and schemas live under
   `_internal/config`, documented by one `_internal/config/CLAUDE.md`.
@@ -1351,7 +1350,7 @@ either layout (blueprintx#360). A few modules stub the metaclass shape instead o
   helpers carry the complexity hatch because every branch is a platform guard, an optional COM
   field, or a failure that must be logged and survived, and that non-fatal contract is the point
   of the gateway.
-- **regime_registry and regime_window.** Ambiguity is rejected at construction, never at
+- **`RegimeRegistry` and `RegimeWindow` (`pure-schema-regimes`).** Ambiguity is rejected at construction, never at
   lookup: `resolve` returns the first covering window, so overlapping windows would bind a
   period to a schema by list order and silently read a real file against the wrong header. The
   registry stores an immutable copy so a later append cannot slip a window past the check, and a

@@ -746,7 +746,7 @@ parameter with a class it imports bare (`ProblemReport`, `FileContract`, `Regime
 instance built from the other copy. So these tests import bare (`utils.`, `config.`), never
 `src.utils.`; `tests/CLAUDE.md` ("The dual-import-root trap") has the rule. The names are
 interchangeable until a class crosses between them. Affected modules: `test_daily_cache`,
-`test_provenance`, `test_regime_adapters`, `test_ms_office_excel_sheet_names`, `test_xml_reader`,
+`test_provenance`, `test_ms_office_excel_sheet_names`, `test_xml_reader`,
 `test_sidecar_metadata`, `test_config_schemas_example`, `test_contract_oracle_example`.
 
 ### Per-suite notes
@@ -835,7 +835,7 @@ interchangeable until a class crosses between them. Affected modules: `test_dail
   displays as failure while not terminal, and breaking the poll loop on `gate_state() !=
   "pending"` would stop on the first transient red while other checks run, with nothing
   re-rendering the comment afterwards.
-- **`test_regime_adapters`.** `resolve` returns the first covering window while the registry
+- **`test_regime_adapters` (removed in #1161; the logic now lives in `pure-schema-regimes`).** `resolve` returns the first covering window while the registry
   promises windows may arrive in any order, so two overlapping windows bind a period to whichever
   was listed first, a reader parsing a real file against the wrong published header with nothing
   reporting it (#344 review). Validation the caller can undo is not validation, hence the
@@ -2414,23 +2414,25 @@ but not unused modules. The gate walks the import graph from the public modules 
 path segment) and fails on any `src/` module left over. The `Cut 1.0.0` release gate runs it;
 CI does not.
 
-Re-measured after #1132 added `utils/dbapi.py` (one more module per tier); first measured 2026-11-14 over a fresh default scaffold of each Python tier:
+Re-measured after #1161 replaced the four regime modules with the one `schema_regimes.py` seam (first measured 2026-11-14, then after #1132 added `utils/dbapi.py`), over a fresh default scaffold of each Python tier:
 
 | tier | modules | public roots | unreachable |
 |---|---|---|---|
-| `lib-minimal` | 37 | 2 | 26 |
-| `ddd-service-native-db` | 84 | 83 | 0 |
-| `ddd-service-orm-db` | 75 | 74 | 0 |
-| `api-service-native-db` | 87 | 86 | 0 |
-| `mvc-service-native-db` | 63 | 61 | 0 |
-| `mvc-service-orm-db` | 59 | 57 | 0 |
+| `lib-minimal` | 35 | 2 | 24 |
+| `ddd-service-native-db` | 79 | 77 | 1 |
+| `ddd-service-orm-db` | 70 | 68 | 1 |
+| `api-service-native-db` | 82 | 80 | 1 |
+| `mvc-service-native-db` | 55 | 52 | 1 |
+| `mvc-service-orm-db` | 54 | 51 | 1 |
 
-The 26 in `lib-minimal` are all true positives: the vendored `_internal/utils` and
+The 24 in `lib-minimal` are all true positives: the vendored `_internal/utils` and
 `_internal/config` seams no public module imports yet, which is what the issue asks the gate to
 report. It cannot run in CI because a fresh library scaffold would fail it on the first commit,
-and an allowlist of 26 entries would excuse exactly the modules the gate exists to surface. The
-service tiers pass, but only because "public" covers nearly every module in an application
-(1 or 2 private modules per tier), so a CI run there checks almost nothing. The gate therefore
+and an allowlist of 24 entries would excuse exactly the modules the gate exists to surface. The
+service tiers, where nothing runs the gate by default, report only `utils/schema_regimes.py`
+when it is run by hand, the opt-in seam the gate never treats as a
+root (blueprintx#1161); everything else passes because "public" covers nearly every module in an
+application (1 or 2 private modules per tier), so a CI run there checks almost nothing else. The gate therefore
 sits where its definition of public holds, the library release gate. The script ships to every
 tier through the `bin/` copy, and the release gate (shipped by `lib-minimal` and `ts-lib`) runs
 it when the sibling file exists, so `ts-lib` skips it.
