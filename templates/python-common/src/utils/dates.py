@@ -5,7 +5,7 @@ shares one calendar instance and a small, intention-revealing function surface
 instead of each caller building its own. Every call is **local** — no network, no
 cache warm-up.
 
-The service tiers pin ``purecalendars >=3.0.1``, whose ``purecalendars.br.anbima.DatesBRAnbima``
+Every tier pins ``purecalendars >=3.0.1``, whose ``purecalendars.br.anbima.DatesBRAnbima``
 is the OFFLINE implementation. The page-scraping ``*Web`` classes left purecalendars in
 3.0.0 for the separate ``opendata-calendars`` package. It was measured against ANBIMA's
 published table across 2001-2099, the full span ANBIMA publishes.

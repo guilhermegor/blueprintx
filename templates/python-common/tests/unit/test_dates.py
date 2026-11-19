@@ -117,3 +117,9 @@ def test_holidays_asks_the_calendar_once(cls_calendar: _FakeCalendar) -> None:
     """``holidays`` makes exactly one call to the shared calendar."""
     dates.holidays()
     assert cls_calendar.list_calls == [("holidays",)]
+
+
+def test_delta_working_days_excludes_the_start_date() -> None:
+    """The real calendar counts the same working day at both ends as 0."""
+    dt = date(2026, 11, 18)
+    assert dates.delta_working_days(dt, dt_end=dt) == 0
