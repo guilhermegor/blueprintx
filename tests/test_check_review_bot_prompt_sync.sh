@@ -42,11 +42,11 @@ expect pass "unmodified copy of the repo" "$str_case"
 
 new_case
 sed -i 's/Graphite, //' "$str_case/bin/lib/scaffold_git_remote.sh" "$str_case/docs/faq.md"
-expect fail "threads login graphite-app has no prompt name" "$str_case" "graphite-app[bot]"
+expect fail "threads login graphite-app has no prompt name" "$str_case" "'graphite-app'"
 
 new_case
 sed -i 's/, reviewer-ladder App//' "$str_case/bin/lib/scaffold_git_remote.sh" "$str_case/docs/faq.md"
-expect fail "comment-marker poster has no prompt name" "$str_case" "guilhermegor-review-ladder[bot]"
+expect fail "comment-marker poster has no prompt name" "$str_case" "'guilhermegor-review-ladder'"
 
 new_case
 sed -i 's/Greptile, //' "$str_case/docs/faq.md"
@@ -54,11 +54,11 @@ expect fail "faq drifted from the prompt" "$str_case" "docs/faq.md does not quot
 
 new_case
 printf '  - login: newbot[bot]\n    posts: threads\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "roster login with no mapping" "$str_case" "newbot[bot]"
+expect fail "roster login with no mapping" "$str_case" "'newbot'"
 
 new_case
 sed -i '/^[[:space:]]*posters:/a\      # a comment\n\n      - newposter[bot]' "$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "poster after a comment and blank line is still read" "$str_case" "newposter[bot]"
+expect fail "poster after a comment and blank line is still read" "$str_case" "'newposter'"
 
 new_case
 sed -i 's/Copilot, //' "$str_case/bin/lib/scaffold_git_remote.sh" "$str_case/docs/faq.md"
@@ -67,19 +67,19 @@ expect fail "python-common roster is parsed on its own" "$str_case" "templates/p
 
 new_case
 printf '  - posts: threads\n    login: orderbot[bot]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "posts before login is refused, never skipped" "$str_case" "has no login read before it"
+expect fail "posts before login is still read" "$str_case" "'orderbot'"
 
 new_case
-printf '  - kind: comment-marker\n    posters: [flowbot[bot]]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "flow-style posters is refused, never skipped" "$str_case" "flow-style YAML"
+printf '  - kind: comment-marker\n    posters: ["flowbot[bot]"]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "flow-style posters is read" "$str_case" "'flowbot'"
 
 new_case
 printf '  - login: "quotedbot[bot]"\n    posts: "threads"\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "quoted login and posts values are read, never skipped" "$str_case" "'quotedbot[bot]'"
+expect fail "quoted login and posts values are read, never skipped" "$str_case" "'quotedbot'"
 
 new_case
-printf '  - {login: mapbot[bot], posts: threads}\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "flow-mapping entry is refused, never skipped" "$str_case" "flow-style YAML"
+printf '  - {login: "mapbot[bot]", posts: threads}\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "flow-mapping entry is read" "$str_case" "'mapbot'"
 
 new_case
 sed -i 's/^scaffold_prompt_review_bot_roster()/function scaffold_prompt_review_bot_roster/' "$str_case/bin/lib/scaffold_git_remote.sh"
@@ -90,12 +90,28 @@ sed -i 's/^\(  - login: \)graphite-app\[bot\]$/\1gonebot[bot]/' "$str_case/templ
 expect fail "a dict_names key with no roster login is refused" "$str_case" "dict_names key 'graphite-app'"
 
 new_case
-printf '  - login: statusbot[bot]\n    posts: status\n  -  login: twospace[bot]\n    posts: threads\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "a login is never carried over to the next entry" "$str_case" "'twospace[bot]'"
+printf '  - login: statusbot[bot]\n    posts: status\n  - login: nextbot[bot]\n    posts: threads\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "a status entry never hides the next threads entry" "$str_case" "'nextbot'"
 
 new_case
 printf '  - login: coderabbitai[bot]\n    posts: [threads]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "flow-list posts is refused, never skipped" "$str_case" "flow-style YAML"
+expect fail "flow-list posts is refused, never skipped" "$str_case" "declares posts:"
+
+new_case
+printf '  - login: blockbot[bot]\n    posts:\n      - threads\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "block-list posts is refused, never skipped" "$str_case" "declares posts:"
+
+new_case
+printf '  - posters:\n      - firstbot[bot]\n    kind: comment-marker\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "posters as an entry's first key is read" "$str_case" "'firstbot'"
+
+new_case
+printf '  - kind: comment-marker\n    "posters":\n      - qposter[bot]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "a quoted posters key is read" "$str_case" "'qposter'"
+
+new_case
+printf '  - login: [unclosed\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "invalid YAML is refused" "$str_case" "unreadable roster"
 
 new_case
 rm "$str_case/docs/faq.md"

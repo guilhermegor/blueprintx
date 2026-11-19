@@ -3,6 +3,7 @@
 set -euo pipefail
 
 str_root="$(cd "$(dirname "$0")/../.." && pwd)"
+str_loader="$str_root/templates/common/bin"
 [ "${1:-}" = "--root" ] && str_root="$(cd "${2:?usage: --root <dir>}" && pwd)"
 
 str_lib="$str_root/bin/lib/scaffold_git_remote.sh"
@@ -29,20 +30,23 @@ fail() {
 }
 
 roster_logins() {
-	awk '
-		/^[[:space:]]*-([[:space:]]|$)/ { str_login = "" }
-		/^[[:space:]]*- [a-z_]+:/ { bool_in = 0 }
-		/^[[:space:]]*-[[:space:]]*[{]/ { print "!flow"; next }
-		/^[[:space:]]*-[[:space:]]+["\047]?login["\047]?:/ { str_login = $3; gsub(/["\047]/, "", str_login); next }
-		/^[[:space:]]*(-[[:space:]]+)?["\047]?posts["\047]?:[[:space:]]*\[/ { print "!flow"; next }
-		/^[[:space:]]*(-[[:space:]]+)?["\047]?posts["\047]?:[[:space:]]*["\047]?threads["\047]?([[:space:]]|$)/ { print (str_login != "" ? str_login : "!order"); str_login = ""; next }
-		/^[[:space:]]*(-[[:space:]]+)?["\047]?posts["\047]?:/ { str_login = ""; next }
-		/^[[:space:]]*posters:[[:space:]]*[^[:space:]#]/ { print "!flow"; next }
-		/^[[:space:]]*posters:/ { bool_in = 1; next }
-		bool_in && /^[[:space:]]*(#.*)?$/ { next }
-		bool_in && /^[[:space:]]*- / { str_poster = $2; gsub(/["\047]/, "", str_poster); print str_poster; next }
-		bool_in { bool_in = 0 }
-	' "$1" | sort -u
+	python3 -I - "$str_loader" "$(dirname "$1")" <<'PY'
+import pathlib
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import check_review_threads as gate
+
+if gate.yaml is None:
+    sys.exit("PyYAML is not installed, so the roster cannot be read")
+path_root = pathlib.Path(sys.argv[2])
+try:
+    set_logins = gate.reviewer_logins(gate.load_roster(path_root))
+    set_logins |= gate.load_marker_posters(path_root)
+except Exception as exc:
+    sys.exit(f"{type(exc).__name__}: {exc}")
+print("\n".join(sorted(set_logins)))
+PY
 }
 
 prompt_text() {
@@ -62,21 +66,17 @@ str_prompt="$(prompt_text || true)"
 [ -n "$str_prompt" ] || { echo "ERROR: no review-bot prompt found in $str_lib" >&2; exit 1; }
 
 for str_roster in "${list_rosters[@]}"; do
-	mapfile -t list_logins < <(roster_logins "$str_roster")
-	[ "${#list_logins[@]}" -gt 0 ] || fail "${str_roster#"$str_root"/}: no threads/poster logins parsed"
+	str_rel="${str_roster#"$str_root"/}"
+	str_logins="$(roster_logins "$str_roster")" || { fail "$str_rel: unreadable roster (error above)"; continue; }
+	[ -n "$str_logins" ] || { fail "$str_rel: no threads/poster logins parsed"; continue; }
+	mapfile -t list_logins <<<"$str_logins"
 	for str_login in "${list_logins[@]}"; do
-		case "$str_login" in
-		'!order') fail "${str_roster#"$str_root"/}: a 'posts: threads' entry has no login read before it; make '- login: <name>' (with a space) the entry's first line" && continue ;;
-		'!flow') fail "${str_roster#"$str_root"/}: flow-style YAML ('[...]' or '{...}') is not read; write 'posters:' and each entry as a block list" && continue ;;
-		esac
-		[ -n "$str_login" ] || continue
-		str_stem="${str_login%\[bot\]}"
-		dict_seen[$str_stem]=1
-		str_name="${dict_names[$str_stem]:-}"
+		dict_seen[$str_login]=1
+		str_name="${dict_names[$str_login]:-}"
 		if [ -z "$str_name" ]; then
-			fail "roster login '$str_login' (${str_roster#"$str_root"/}) has no display name in dict_names of bin/ci/check_review_bot_prompt_sync.sh"
-		elif ! grep -qiF -- "$str_name" <<<"$str_prompt"; then
-			fail "roster login '$str_login' (${str_roster#"$str_root"/}) has no prompt name: '$str_name' is missing from the prompt in bin/lib/scaffold_git_remote.sh"
+			fail "roster login '$str_login' ($str_rel) has no display name in dict_names of bin/ci/check_review_bot_prompt_sync.sh"
+		elif ! grep -qiwF -- "$str_name" <<<"$str_prompt"; then
+			fail "roster login '$str_login' ($str_rel) has no prompt name: '$str_name' is missing from the prompt in bin/lib/scaffold_git_remote.sh"
 		fi
 	done
 done
