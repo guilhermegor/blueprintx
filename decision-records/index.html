@@ -1849,6 +1849,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../schema-regimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Regimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../conflict-free-registries/" class="md-nav__link">
         
   
@@ -3531,7 +3559,7 @@ parameter with a class it imports bare (<code>ProblemReport</code>, <code>FileCo
 instance built from the other copy. So these tests import bare (<code>utils.</code>, <code>config.</code>), never
 <code>src.utils.</code>; <code>tests/CLAUDE.md</code> ("The dual-import-root trap") has the rule. The names are
 interchangeable until a class crosses between them. Affected modules: <code>test_daily_cache</code>,
-<code>test_provenance</code>, <code>test_regime_adapters</code>, <code>test_ms_office_excel_sheet_names</code>, <code>test_xml_reader</code>,
+<code>test_provenance</code>, <code>test_ms_office_excel_sheet_names</code>, <code>test_xml_reader</code>,
 <code>test_sidecar_metadata</code>, <code>test_config_schemas_example</code>, <code>test_contract_oracle_example</code>.</p>
 <h3 id="per-suite-notes">Per-suite notes<a class="headerlink" href="#per-suite-notes" title="Permanent link">&para;</a></h3>
 <ul>
@@ -3621,7 +3649,7 @@ interchangeable until a class crosses between them. Affected modules: <code>test
   displays as failure while not terminal, and breaking the poll loop on <code>gate_state() !=
   "pending"</code> would stop on the first transient red while other checks run, with nothing
   re-rendering the comment afterwards.</li>
-<li><strong><code>test_regime_adapters</code>.</strong> <code>resolve</code> returns the first covering window while the registry
+<li><strong><code>test_regime_adapters</code> (removed in #1161; the logic now lives in <code>pure-schema-regimes</code>).</strong> <code>resolve</code> returns the first covering window while the registry
   promises windows may arrive in any order, so two overlapping windows bind a period to whichever
   was listed first, a reader parsing a real file against the wrong published header with nothing
   reporting it (#344 review). Validation the caller can undo is not validation, hence the
@@ -5204,7 +5232,7 @@ the decision without naming that suite, because a generated project does not shi
 but not unused modules. The gate walks the import graph from the public modules (no <code>_</code>-prefixed
 path segment) and fails on any <code>src/</code> module left over. The <code>Cut 1.0.0</code> release gate runs it;
 CI does not.</p>
-<p>Re-measured after #1132 added <code>utils/dbapi.py</code> (one more module per tier); first measured 2026-11-14 over a fresh default scaffold of each Python tier:</p>
+<p>Re-measured after #1161 replaced the four regime modules with the one <code>schema_regimes.py</code> seam (first measured 2026-11-14, then after #1132 added <code>utils/dbapi.py</code>), over a fresh default scaffold of each Python tier:</p>
 <table>
 <thead>
 <tr>
@@ -5217,48 +5245,50 @@ CI does not.</p>
 <tbody>
 <tr>
 <td><code>lib-minimal</code></td>
-<td>37</td>
+<td>35</td>
 <td>2</td>
-<td>26</td>
+<td>24</td>
 </tr>
 <tr>
 <td><code>ddd-service-native-db</code></td>
-<td>84</td>
-<td>83</td>
-<td>0</td>
+<td>79</td>
+<td>77</td>
+<td>1</td>
 </tr>
 <tr>
 <td><code>ddd-service-orm-db</code></td>
-<td>75</td>
-<td>74</td>
-<td>0</td>
+<td>70</td>
+<td>68</td>
+<td>1</td>
 </tr>
 <tr>
 <td><code>api-service-native-db</code></td>
-<td>87</td>
-<td>86</td>
-<td>0</td>
+<td>82</td>
+<td>80</td>
+<td>1</td>
 </tr>
 <tr>
 <td><code>mvc-service-native-db</code></td>
-<td>63</td>
-<td>61</td>
-<td>0</td>
+<td>55</td>
+<td>52</td>
+<td>1</td>
 </tr>
 <tr>
 <td><code>mvc-service-orm-db</code></td>
-<td>59</td>
-<td>57</td>
-<td>0</td>
+<td>54</td>
+<td>51</td>
+<td>1</td>
 </tr>
 </tbody>
 </table>
-<p>The 26 in <code>lib-minimal</code> are all true positives: the vendored <code>_internal/utils</code> and
+<p>The 24 in <code>lib-minimal</code> are all true positives: the vendored <code>_internal/utils</code> and
 <code>_internal/config</code> seams no public module imports yet, which is what the issue asks the gate to
 report. It cannot run in CI because a fresh library scaffold would fail it on the first commit,
-and an allowlist of 26 entries would excuse exactly the modules the gate exists to surface. The
-service tiers pass, but only because "public" covers nearly every module in an application
-(1 or 2 private modules per tier), so a CI run there checks almost nothing. The gate therefore
+and an allowlist of 24 entries would excuse exactly the modules the gate exists to surface. The
+service tiers, where nothing runs the gate by default, report only <code>utils/schema_regimes.py</code>
+when it is run by hand, the opt-in seam the gate never treats as a
+root (blueprintx#1161); everything else passes because "public" covers nearly every module in an
+application (1 or 2 private modules per tier), so a CI run there checks almost nothing else. The gate therefore
 sits where its definition of public holds, the library release gate. The script ships to every
 tier through the <code>bin/</code> copy, and the release gate (shipped by <code>lib-minimal</code> and <code>ts-lib</code>) runs
 it when the sibling file exists, so <code>ts-lib</code> skips it.</p>
