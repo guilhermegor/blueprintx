@@ -2527,7 +2527,10 @@ def test_review_on_the_second_page_reaches_the_body_check(monkeypatch: pytest.Mo
     ]
     monkeypatch.setattr(cls_gate, "_fetch_page", lambda *list_args, **__: list_pages.pop(0))
     dict_pr = cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
-    assert len(cls_gate._unanswered_bodies(dict_pr, list_notices=[], set_roster=_BODY_ROSTER)) == 1
+    list_problems = cls_gate._unanswered_bodies(
+        dict_pr, list_notices=[], set_roster=_BODY_ROSTER, set_reviewers=_BODY_ROSTER
+    )
+    assert len(list_problems) == 1
 
 
 def test_an_inline_only_review_survives_the_fetch_path_and_counts(
@@ -5133,3 +5136,71 @@ def test_a_roster_with_no_threads_member_reports_a_json_verdict(
     monkeypatch.setenv("PR_NUMBER", "1")
 
     assert (cls_gate.main(["--json"]), '"status": "fail"' in capsys.readouterr().out) == (1, True)
+
+
+@pytest.mark.parametrize(
+    ("str_login", "bool_evaluated"),
+    [("github-actions", False), ("coderabbitai", True)],
+    ids=["status-row-excluded", "threads-reviewer-kept"],
+)
+def test_main_hands_the_body_check_reviewers_only(
+    monkeypatch: pytest.MonkeyPatch, *, str_login: str, bool_evaluated: bool
+) -> None:
+    """Only a ``posts: threads`` login reaches the review-body check; a status row never does."""
+    cls_gate = _load_gate()
+    cls_bodies = Mock(return_value=[])
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "1")
+    dict_roster = {"coderabbitai": "threads", "github-actions": "status"}
+    monkeypatch.setattr(cls_gate, "_roster_or_verdict", Mock(return_value=(dict_roster, None)))
+    monkeypatch.setattr(
+        cls_gate, "_fetch_current_pr", Mock(return_value={"reviewThreads": {"nodes": []}})
+    )
+    monkeypatch.setattr(cls_gate, "_missing_review", Mock(return_value=("", "")))
+    monkeypatch.setattr(cls_gate, "_unanswered_bodies", cls_bodies)
+    cls_gate.main([])
+    dict_kwargs = cls_bodies.call_args.kwargs
+    assert (str_login in dict_kwargs["set_reviewers"], str_login in dict_kwargs["set_roster"]) == (
+        bool_evaluated,
+        True,
+    )
+
+
+def test_a_status_row_comment_never_answers_a_review_body() -> None:
+    """A long ``github-actions`` comment after a findings body stays a non-answer."""
+    list_notices = [
+        _notice(
+            "github-actions", str_body="Workflow output. " + "x" * 120, str_created=_BODY_AFTER
+        )
+    ]
+    list_problems = _load_gate().find_review_body_problems(
+        [_body_review(_BODY_MAJOR)],
+        list_notices=list_notices,
+        set_roster={"coderabbitai", "github-actions"},
+        set_reviewers={"coderabbitai"},
+    )
+    assert len(list_problems) == 1
+
+
+def test_a_status_row_review_carrying_the_ladder_marker_needs_no_answer() -> None:
+    """A ``posts: status`` author cannot reach the body check by quoting the ladder marker."""
+    list_problems = _load_gate().find_review_body_problems(
+        [_body_review(_LADDER_CLAUDE + _PROSE, str_login="github-actions[bot]")],
+        list_notices=[],
+        set_roster={"coderabbitai", "github-actions"},
+        set_reviewers={"coderabbitai"},
+        tuple_markers=("fallback review — runtime:",),
+    )
+    assert list_problems == []
+
+
+def test_a_ladder_review_carrying_the_marker_still_needs_an_answer() -> None:
+    """The ladder's own marker body stays in the body check after status rows leave it."""
+    list_problems = _load_gate().find_review_body_problems(
+        [_body_review(_LADDER_CLAUDE + _PROSE, str_login=_LADDER_LOGIN)],
+        list_notices=[],
+        set_roster={"coderabbitai", "github-actions", "guilhermegor-review-ladder"},
+        set_reviewers={"coderabbitai", "guilhermegor-review-ladder"},
+        tuple_markers=("fallback review — runtime:",),
+    )
+    assert len(list_problems) == 1
