@@ -90,6 +90,14 @@ sed -i 's/^\(  - login: \)graphite-app\[bot\]$/\1gonebot[bot]/' "$str_case/templ
 expect fail "a dict_names key with no roster login is refused" "$str_case" "dict_names key 'graphite-app'"
 
 new_case
+printf '  - login: statusbot[bot]\n    posts: status\n  -  login: twospace[bot]\n    posts: threads\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "a login is never carried over to the next entry" "$str_case" "'twospace[bot]'"
+
+new_case
+printf '  - login: coderabbitai[bot]\n    posts: [threads]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "flow-list posts is refused, never skipped" "$str_case" "flow-style YAML"
+
+new_case
 rm "$str_case/docs/faq.md"
 expect fail "missing faq checks nothing" "$str_case" "the gate checked nothing"
 

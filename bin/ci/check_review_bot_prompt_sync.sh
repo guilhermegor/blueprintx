@@ -30,10 +30,13 @@ fail() {
 
 roster_logins() {
 	awk '
-		/^[[:space:]]*- [a-z_]+:/ { bool_in = 0; str_login = "" }
-		/^[[:space:]]*- [{]/ { print "!flow"; next }
-		/^[[:space:]]*- login:/ { str_login = $3; gsub(/["\047]/, "", str_login); next }
-		/^[[:space:]]*(- )?posts:[[:space:]]*["\047]?threads["\047]?([[:space:]]|$)/ { print (str_login != "" ? str_login : "!order"); str_login = ""; next }
+		/^[[:space:]]*-([[:space:]]|$)/ { str_login = "" }
+		/^[[:space:]]*- [a-z_]+:/ { bool_in = 0 }
+		/^[[:space:]]*-[[:space:]]*[{]/ { print "!flow"; next }
+		/^[[:space:]]*-[[:space:]]+["\047]?login["\047]?:/ { str_login = $3; gsub(/["\047]/, "", str_login); next }
+		/^[[:space:]]*(-[[:space:]]+)?["\047]?posts["\047]?:[[:space:]]*\[/ { print "!flow"; next }
+		/^[[:space:]]*(-[[:space:]]+)?["\047]?posts["\047]?:[[:space:]]*["\047]?threads["\047]?([[:space:]]|$)/ { print (str_login != "" ? str_login : "!order"); str_login = ""; next }
+		/^[[:space:]]*(-[[:space:]]+)?["\047]?posts["\047]?:/ { str_login = ""; next }
 		/^[[:space:]]*posters:[[:space:]]*[^[:space:]#]/ { print "!flow"; next }
 		/^[[:space:]]*posters:/ { bool_in = 1; next }
 		bool_in && /^[[:space:]]*(#.*)?$/ { next }
@@ -66,6 +69,7 @@ for str_roster in "${list_rosters[@]}"; do
 		'!order') fail "${str_roster#"$str_root"/}: a 'posts: threads' entry has no login read before it; make '- login: <name>' (with a space) the entry's first line" && continue ;;
 		'!flow') fail "${str_roster#"$str_root"/}: flow-style YAML ('[...]' or '{...}') is not read; write 'posters:' and each entry as a block list" && continue ;;
 		esac
+		[ -n "$str_login" ] || continue
 		str_stem="${str_login%\[bot\]}"
 		dict_seen[$str_stem]=1
 		str_name="${dict_names[$str_stem]:-}"
