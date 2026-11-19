@@ -5176,3 +5176,15 @@ def test_a_status_row_comment_never_answers_a_review_body() -> None:
         set_reviewers={"coderabbitai"},
     )
     assert len(list_problems) == 1
+
+
+def test_a_status_row_review_carrying_the_ladder_marker_needs_no_answer() -> None:
+    """A ``posts: status`` author cannot reach the body check by quoting the ladder marker."""
+    list_problems = _load_gate().find_review_body_problems(
+        [_body_review(_LADDER_CLAUDE + _PROSE, str_login="github-actions[bot]")],
+        list_notices=[],
+        set_roster={"coderabbitai", "github-actions"},
+        set_reviewers={"coderabbitai"},
+        tuple_markers=("fallback review — runtime:",),
+    )
+    assert list_problems == []

@@ -1879,7 +1879,11 @@ def find_review_body_problems(
         if dict_review.get("state") != "DISMISSED"
         and (
             normalise_login((dict_review.get("author") or {}).get("login") or "") in set_reviewers
-            or _is_marker_comment(dict_review, tuple_markers=tuple_markers)
+            or (
+                _is_marker_comment(dict_review, tuple_markers=tuple_markers)
+                and normalise_login((dict_review.get("author") or {}).get("login") or "")
+                not in set_roster
+            )
         )
     ]
     return [
