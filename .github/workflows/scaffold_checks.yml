@@ -84,7 +84,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install --quiet pyyaml
+      - run: pip install --quiet pyyaml==6.0.3
 
       - name: Check the prompt and docs/faq.md against both rosters
         run: bash bin/ci/check_review_bot_prompt_sync.sh
