@@ -189,7 +189,7 @@ copy_internal_utils() {
         __init__.py dtypes.py br_identifiers.py http_downloader.py
         dbapi.py tabular_reader.py xml_reader.py provenance.py sidecar_metadata.py text.py
         zip_extractor.py dates.py raw_workspace.py daily_cache.py
-        regime_window.py regime_registry.py regime_adapter.py spec_gap_registry.py
+        schema_regimes.py
     )
     local -a packages=(retry)
     if [[ "$INCLUDE_LOGS" == "true" ]]; then
@@ -215,8 +215,8 @@ copy_internal_utils() {
     rewrite_internal_imports "$internal_dir"
 
     mkdir -p "$project_path/tests/unit"
-    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_regime_adapters.py" \
-        "$project_path/tests/unit/test_regime_adapters.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_schema_regimes.py" \
+        "$project_path/tests/unit/test_schema_regimes.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_dates.py" "$project_path/tests/unit/test_dates.py"
     rewrite_internal_imports "$project_path/tests/unit"
 
