@@ -191,6 +191,8 @@ The manifest file itself is the list (per-skeleton `.greptile/rules.md` and `fil
 
 The **generated-references gate** (`bin/ci/check_generated_references.sh --generated`, CI job `generated-references`) scaffolds every skeleton and fails when a `mkdocs.yml` nav page, or a `bin/` script named by `poe_tasks.toml`, the pre-commit config, `package.json`, `.vscode/tasks.json`, a `Makefile`, `make/*.mk`, a workflow or a composite action, is missing from the generated tree. A project with nothing to check fails rather than passing. It scaffolds with default answers only, so workflows and actions that exist only with a GitHub remote, and locale variants, are not scanned (blueprintx#1094).
 
+The **review-bot prompt gate** (`bin/ci/check_review_bot_prompt_sync.sh`, hook and CI job `review-bot-prompt-sync`) fails when a `posts: threads` login or a comment-marker poster in either template roster has no display name in the scaffolder's review-bot prompt, when a name in its `dict_names` matches no roster login, or when `docs/faq.md` stops quoting the prompt; should-fail witness `tests/test_check_review_bot_prompt_sync.sh`. Root-repo-only.
+
 The **dependabot guard** (`bin/ci/check_dependabot_shipped.sh --static`, hook and CI job `dependabot-shipped`) fails when a skeleton stops copying a `dependabot.yml` with a `cooldown`; there is no `--generated` mode because default answers scaffold offline. See `docs/dependabot-config.md`.
 
 The **README structure gate** follows the one-implementation rule too:

@@ -67,7 +67,7 @@ expect fail "python-common roster is parsed on its own" "$str_case" "templates/p
 
 new_case
 printf '  - posts: threads\n    login: orderbot[bot]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "posts before login is refused, never skipped" "$str_case" "has no '- login:' line before it"
+expect fail "posts before login is refused, never skipped" "$str_case" "has no login read before it"
 
 new_case
 printf '  - kind: comment-marker\n    posters: [flowbot[bot]]\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
@@ -86,9 +86,16 @@ sed -i 's/^scaffold_prompt_review_bot_roster()/function scaffold_prompt_review_b
 expect fail "an unreadable prompt function prints its diagnostic" "$str_case" "no review-bot prompt found"
 
 new_case
+sed -i 's/^\(  - login: \)graphite-app\[bot\]$/\1gonebot[bot]/' "$str_case/templates/python-common/.review-bots.yaml" "$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "a dict_names key with no roster login is refused" "$str_case" "dict_names key 'graphite-app'"
+
+new_case
 rm "$str_case/docs/faq.md"
 expect fail "missing faq checks nothing" "$str_case" "the gate checked nothing"
 
 bash "$GATE" >/dev/null || { echo "FAIL: the real tree does not conform" >&2; int_failures=$((int_failures + 1)); }
 
-[ "$int_failures" -eq 0 ] && echo "PASS: check_review_bot_prompt_sync" || exit 1
+if [ "$int_failures" -ne 0 ]; then
+	exit 1
+fi
+echo "PASS: check_review_bot_prompt_sync"

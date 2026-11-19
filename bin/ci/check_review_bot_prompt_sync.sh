@@ -3,7 +3,7 @@
 set -euo pipefail
 
 str_root="$(cd "$(dirname "$0")/../.." && pwd)"
-[ "${1:-}" = "--root" ] && str_root="$(cd "$2" && pwd)"
+[ "${1:-}" = "--root" ] && str_root="$(cd "${2:?usage: --root <dir>}" && pwd)"
 
 str_lib="$str_root/bin/lib/scaffold_git_remote.sh"
 str_faq="$str_root/docs/faq.md"
@@ -21,6 +21,7 @@ declare -A dict_names=(
 )
 
 int_failures=0
+declare -A dict_seen=()
 
 fail() {
 	echo "ERROR: $*" >&2
@@ -47,7 +48,7 @@ prompt_text() {
 }
 
 squash() {
-	tr -s '[:space:]' ' ' | sed 's/\*//g'
+	sed 's/\*//g' | tr -s '[:space:]' ' '
 }
 
 for f in "$str_lib" "$str_faq" "${list_rosters[@]}"; do
@@ -62,10 +63,11 @@ for str_roster in "${list_rosters[@]}"; do
 	[ "${#list_logins[@]}" -gt 0 ] || fail "${str_roster#"$str_root"/}: no threads/poster logins parsed"
 	for str_login in "${list_logins[@]}"; do
 		case "$str_login" in
-		'!order') fail "${str_roster#"$str_root"/}: a 'posts: threads' entry has no '- login:' line before it; put login first" && continue ;;
+		'!order') fail "${str_roster#"$str_root"/}: a 'posts: threads' entry has no login read before it; make '- login: <name>' (with a space) the entry's first line" && continue ;;
 		'!flow') fail "${str_roster#"$str_root"/}: flow-style YAML ('[...]' or '{...}') is not read; write 'posters:' and each entry as a block list" && continue ;;
 		esac
 		str_stem="${str_login%\[bot\]}"
+		dict_seen[$str_stem]=1
 		str_name="${dict_names[$str_stem]:-}"
 		if [ -z "$str_name" ]; then
 			fail "roster login '$str_login' (${str_roster#"$str_root"/}) has no display name in dict_names of bin/ci/check_review_bot_prompt_sync.sh"
@@ -73,6 +75,10 @@ for str_roster in "${list_rosters[@]}"; do
 			fail "roster login '$str_login' (${str_roster#"$str_root"/}) has no prompt name: '$str_name' is missing from the prompt in bin/lib/scaffold_git_remote.sh"
 		fi
 	done
+done
+
+for str_stem in "${!dict_names[@]}"; do
+	[ -n "${dict_seen[$str_stem]:-}" ] || fail "dict_names key '$str_stem' matches no roster login; remove it from bin/ci/check_review_bot_prompt_sync.sh"
 done
 
 if ! squash <"$str_faq" | grep -qF -- "$(squash <<<"$str_prompt" | sed 's/ $//')"; then
