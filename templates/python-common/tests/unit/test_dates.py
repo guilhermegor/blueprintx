@@ -1,7 +1,9 @@
 """Unit tests for the Brazilian business-day helpers.
 
 The purecalendars ANBIMA calendar is replaced with a recording stand-in so the tests
-assert delegation without touching the network or the holiday cache. The stand-in
+assert delegation without touching the network or the holiday cache. The two
+``delta_working_days`` convention tests take no fixture and use the real, offline
+calendar. The stand-in
 returns **correctly-typed** values — the wrappers enforce their return annotations
 at runtime (beartype), so a sentinel of the wrong type would be rejected — and
 records each call so delegation is asserted on the forwarded arguments.
@@ -120,6 +122,10 @@ def test_holidays_asks_the_calendar_once(cls_calendar: _FakeCalendar) -> None:
 
 
 def test_delta_working_days_excludes_the_start_date() -> None:
-    """The real calendar counts the same working day at both ends as 0."""
-    dt = date(2026, 11, 18)
-    assert dates.delta_working_days(dt, dt_end=dt) == 0
+    """The real calendar counts ``(start, end]``: Saturday to Monday is one day."""
+    assert dates.delta_working_days(date(2026, 11, 14), dt_end=date(2026, 11, 16)) == 1
+
+
+def test_delta_working_days_includes_the_end_date() -> None:
+    """The real calendar counts ``(start, end]``: Friday to Saturday is zero days."""
+    assert dates.delta_working_days(date(2026, 11, 13), dt_end=date(2026, 11, 14)) == 0

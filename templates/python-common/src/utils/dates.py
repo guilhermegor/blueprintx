@@ -99,7 +99,7 @@ def delta_working_days(dt_start: date | datetime, *, dt_end: date | datetime) ->
     Parameters
     ----------
     dt_start : datetime.date | datetime.datetime
-        Start date, exclusive: the same working day as both ends counts 0.
+        Start date, exclusive: the count covers ``(dt_start, dt_end]``.
     dt_end : datetime.date | datetime.datetime
         End date.
 
