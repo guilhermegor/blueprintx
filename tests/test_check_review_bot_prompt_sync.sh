@@ -20,10 +20,13 @@ make_tree() {
 }
 
 expect() {
-	local str_expect="$1" str_label="$2" str_root="$3" int_rc=0
-	bash "$GATE" --root "$str_root" >/dev/null 2>&1 || int_rc=$?
+	local str_expect="$1" str_label="$2" str_root="$3" str_needle="${4:-}" str_out int_rc=0
+	str_out="$(bash "$GATE" --root "$str_root" 2>&1)" || int_rc=$?
 	if { [ "$str_expect" = "pass" ] && [ "$int_rc" -ne 0 ]; } || { [ "$str_expect" = "fail" ] && [ "$int_rc" -eq 0 ]; }; then
 		echo "FAIL: $str_label expected $str_expect, rc=$int_rc" >&2
+		int_failures=$((int_failures + 1))
+	elif [ "$str_expect" = "fail" ] && ! grep -qF -- "$str_needle" <<<"$str_out"; then
+		echo "FAIL: $str_label failed without naming '$str_needle': $str_out" >&2
 		int_failures=$((int_failures + 1))
 	fi
 }
@@ -39,23 +42,27 @@ expect pass "unmodified copy of the repo" "$str_case"
 
 new_case
 sed -i 's/Graphite, //' "$str_case/bin/lib/scaffold_git_remote.sh" "$str_case/docs/faq.md"
-expect fail "threads login graphite-app has no prompt name" "$str_case"
+expect fail "threads login graphite-app has no prompt name" "$str_case" "graphite-app[bot]"
 
 new_case
-sed -i 's/ or a review ladder//' "$str_case/bin/lib/scaffold_git_remote.sh" "$str_case/docs/faq.md"
-expect fail "comment-marker poster has no prompt name" "$str_case"
+sed -i 's/, reviewer-ladder App//' "$str_case/bin/lib/scaffold_git_remote.sh" "$str_case/docs/faq.md"
+expect fail "comment-marker poster has no prompt name" "$str_case" "guilhermegor-review-ladder[bot]"
 
 new_case
 sed -i 's/Greptile, //' "$str_case/docs/faq.md"
-expect fail "faq drifted from the prompt" "$str_case"
+expect fail "faq drifted from the prompt" "$str_case" "docs/faq.md does not quote"
 
 new_case
 printf '  - login: newbot[bot]\n    posts: threads\n' >>"$str_case/templates/ts-common/.github/.review-bots.yaml"
-expect fail "roster login with no mapping" "$str_case"
+expect fail "roster login with no mapping" "$str_case" "newbot[bot]"
+
+new_case
+sed -i '/^[[:space:]]*posters:/a\      # a comment\n\n      - newposter[bot]' "$str_case/templates/ts-common/.github/.review-bots.yaml"
+expect fail "poster after a comment and blank line is still read" "$str_case" "newposter[bot]"
 
 new_case
 rm "$str_case/docs/faq.md"
-expect fail "missing faq checks nothing" "$str_case"
+expect fail "missing faq checks nothing" "$str_case" "the gate checked nothing"
 
 bash "$GATE" >/dev/null || { echo "FAIL: the real tree does not conform" >&2; int_failures=$((int_failures + 1)); }
 

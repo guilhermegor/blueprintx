@@ -17,7 +17,7 @@ declare -A dict_names=(
 	["greptile-apps"]="Greptile"
 	["graphite-app"]="Graphite"
 	["copilot-pull-request-reviewer"]="Copilot"
-	["guilhermegor-review-ladder"]="review ladder"
+	["guilhermegor-review-ladder"]="reviewer-ladder"
 )
 
 int_failures=0
@@ -29,16 +29,19 @@ fail() {
 
 roster_logins() {
 	awk '
+		/^[[:space:]]*- (login|kind):/ { bool_in = 0 }
 		/^[[:space:]]*- login:/ { str_login = $3; next }
 		/^[[:space:]]*posts:[[:space:]]*threads/ { if (str_login != "") print str_login; str_login = ""; next }
 		/^[[:space:]]*posters:/ { bool_in = 1; next }
+		bool_in && /^[[:space:]]*(#.*)?$/ { next }
 		bool_in && /^[[:space:]]*- / { print $2; next }
 		bool_in { bool_in = 0 }
 	' "$1" | sort -u
 }
 
 prompt_text() {
-	grep -o 'Do you have[^"]*' "$str_lib" | head -n 1 | sed 's/ \[Y\/n\]: $//'
+	awk '/^scaffold_prompt_review_bot_roster\(\)/ { bool_in = 1 } bool_in && /^}/ { exit } bool_in' "$str_lib" |
+		grep -o 'prompt_main "[^"]*' | head -n 1 | sed 's/^prompt_main "//; s/ \[Y\/n\]: $//'
 }
 
 squash() {

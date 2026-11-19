@@ -19,6 +19,10 @@ reviewers:
     posts: status
     note: Workflow output, never a review finding.
 
+  - login: copilot-pull-request-reviewer[bot]
+    posts: threads
+    note: GitHub's built-in reviewer; enabled per-repo by enable_repo_rules.sh.
+
   - login: guilhermegor-review-ladder[bot]
     posts: threads
     note: >-

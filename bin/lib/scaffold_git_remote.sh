@@ -15,9 +15,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/scaffold_repo_settings.sh"
 
 scaffold_prompt_review_bot_roster() {
 	local str_answer
-	prompt_read str_answer "$(prompt_main "Do you have (or will you install) a PR review bot (CodeRabbit, Greptile, Graphite, Copilot or a review ladder) on this repo? [Y/n]: ")"
+	prompt_read str_answer "$(prompt_main "Will one of these bots review PRs here: CodeRabbit (installed or ask-only), Greptile, Graphite, Copilot, reviewer-ladder App? Human-only review = no. [Y/n]: ")"
 	case "$str_answer" in
-	n | N)
+	[nN] | [nN][oO])
 		# shellcheck disable=SC2034
 		INCLUDE_REVIEW_BOT_ROSTER=false
 		print_status "config" ".review-bots.yaml: shipped with adopted: false — the review-thread required check stays opted out while adopted: false remains; replace the file to opt in"
