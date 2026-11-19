@@ -7,8 +7,8 @@ cache warm-up.
 
 The service tiers pin ``purecalendars >=3.0.1``, whose ``purecalendars.br.anbima.DatesBRAnbima``
 is the OFFLINE implementation (the page-scraping one is ``DatesBRAnbimaWeb`` in
-``purecalendars.br.anbima_web``). It was measured against ANBIMA's published table across 2001-2099, the
-full span ANBIMA publishes.
+``purecalendars.br.anbima_web``). It was measured against ANBIMA's published table
+across 2001-2099, the full span ANBIMA publishes.
 
 Pass dates as :class:`datetime.date` (or :class:`datetime.datetime`); helpers that
 return a calendar day return a :class:`datetime.date`.
