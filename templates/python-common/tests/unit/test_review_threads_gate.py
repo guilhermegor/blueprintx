@@ -5188,3 +5188,15 @@ def test_a_status_row_review_carrying_the_ladder_marker_needs_no_answer() -> Non
         tuple_markers=("fallback review — runtime:",),
     )
     assert list_problems == []
+
+
+def test_a_ladder_review_carrying_the_marker_still_needs_an_answer() -> None:
+    """The ladder's own marker body stays in the body check after status rows leave it."""
+    list_problems = _load_gate().find_review_body_problems(
+        [_body_review(_LADDER_CLAUDE + _PROSE, str_login=_LADDER_LOGIN)],
+        list_notices=[],
+        set_roster={"coderabbitai", "github-actions", "guilhermegor-review-ladder"},
+        set_reviewers={"coderabbitai", "guilhermegor-review-ladder"},
+        tuple_markers=("fallback review — runtime:",),
+    )
+    assert len(list_problems) == 1
