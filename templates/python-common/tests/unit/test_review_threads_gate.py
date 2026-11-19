@@ -5159,7 +5159,11 @@ def test_main_hands_the_body_check_reviewers_only(
     monkeypatch.setattr(cls_gate, "_missing_review", Mock(return_value=("", "")))
     monkeypatch.setattr(cls_gate, "_unanswered_bodies", cls_bodies)
     cls_gate.main([])
-    assert (str_login in cls_bodies.call_args.kwargs["set_reviewers"]) is bool_evaluated
+    dict_kwargs = cls_bodies.call_args.kwargs
+    assert (str_login in dict_kwargs["set_reviewers"], str_login in dict_kwargs["set_roster"]) == (
+        bool_evaluated,
+        True,
+    )
 
 
 def test_a_status_row_comment_never_answers_a_review_body() -> None:
