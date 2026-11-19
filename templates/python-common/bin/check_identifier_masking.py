@@ -7,7 +7,7 @@ docstring lists this as explicitly out of its scope, with its own false-positive
 **The failure mode**: a masked CPF/CNPJ literal (``"123.456.789-01"``) compared against a
 ``cpf``/``cnpj`` column matches **zero rows and raises nothing** — not an error, an empty
 result that reads as "no such customer". ``src/utils/br_identifiers.py`` re-exports
-``unmask_cpf``/``unmask_cnpj`` from ``pure-docs-br`` for exactly this; the gate catches the
+``unmask_cpf``/``unmask_cnpj`` from ``purepii-br`` for exactly this; the gate catches the
 case where a masked literal reaches a comparison without going through them.
 
 **Scope, deliberately narrow** (per the issue's own warning not to build the registry

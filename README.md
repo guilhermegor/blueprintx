@@ -227,7 +227,7 @@ project/
             conexao_db.py     # build_connection() — native DB-API connection factory
             example_entity.py # service-style class: SQL in, pandas DataFrame out
         view/report_renderer.py  # RenderToExcel — DataFrame → .xlsx
-        utils/                # project helpers (BR calendar comes from wwdates)
+        utils/                # project helpers (BR calendar comes from purecalendars)
         config/               # startup.py singletons + YAML (shared with DDD skeletons)
     tests/{unit,integration,performance}/
     bin/ · data/ · assets/ · docs/

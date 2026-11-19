@@ -27,7 +27,7 @@ That pattern used to ship twice in the templates (about 830 lines): once in `uti
 tiers and once, written separately, in the MVC tier's `model/`. Two copies drift, and every
 generated project kept its own stale one. The logic now lives in the zero-dependency package
 [`pure-schema-regimes`](https://pypi.org/project/pure-schema-regimes/), a sibling of
-`pure-docs-br`, and each project keeps only a re-export seam, the same shape as
+`purepii-br`, and each project keeps only a re-export seam, the same shape as
 `utils/br_identifiers.py`:
 
 ```python

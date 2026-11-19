@@ -1058,7 +1058,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
   measurement (flip the line locally, scaffold, read the `import-not-found` errors), because a
   hand-written list that misses one turns a green gate red in every generated project.
   Current blocks and their import sites: pandas (the `utils` readers, `dtypes`, `frames`,
-  `provenance`; MVC controller, model and view), wwdates (`utils/dates.py`), defusedxml
+  `provenance`; MVC controller, model and view), purecalendars (`utils/dates.py`), defusedxml
   (`utils/xml_reader.py`), win32com (`utils/ms_office/outlook_gateway.py`), yaml
   (`config/startup.py`), pyodbc (the native-DB MSSQL handler, the only one of the five native
   drivers with no stubs) and joblib (the schema-less opt-in's `joblib_handler.py`, #650, which a
@@ -1619,14 +1619,14 @@ is shaped as it is.
   reports `-`); `--no-fail` is not passed, the container's status is the verdict.
 - **`lint_deps.sh`** (deptry over `src/`). The rule "every imported package is a direct
   dependency" was written down and nothing checked it. The first run found both DDD tiers using
-  pandas in five `src/utils` modules while declaring it nowhere (it arrived through `wwdates`);
+  pandas in five `src/utils` modules while declaring it nowhere (it arrived through `purecalendars`);
   a calendar library dropping pandas would have broken every DDD project with an `ImportError`
   nobody could predict. It must run inside the project venv with no system fallback: deptry maps
   a module to its distribution through the metadata of the environment it runs in, and outside
   the venv the verdict inverts (9 findings on ddd-native, all false and two contradictory, while
   both real defects vanished). The config lives in `pyproject.toml` per tier, never a shared
   `deptry.toml`: `--config <file>` re-points deptry at that file as the manifest too, and it fell
-  back to `requirements.txt` and relabelled beartype, python-dotenv, wwdates and every DB driver
+  back to `requirements.txt` and relabelled beartype, python-dotenv, purecalendars and every DB driver
   as transitive. `bin/` is out of scope, since one run cannot hold both profiles and each dev
   dependency would become a DEP004. Zero `.py` files under the tree fails.
 - **`check_unix_filenames.sh`** rejects names outside `[a-zA-Z0-9._-]`. It has two callers:

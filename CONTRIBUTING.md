@@ -1508,7 +1508,7 @@ notes" above.
 
 - **Why a dependency is declared.** The direct-dependency gate (deptry, `bin/lint_deps.sh`)
   requires everything `src/` imports to be a declared direct dependency. pandas was once reached
-  only through `wwdates`, and numpy only behind a guarded `try/except ModuleNotFoundError` import;
+  only through `purecalendars`, and numpy only behind a guarded `try/except ModuleNotFoundError` import;
   a guarded import is still an import (blueprintx#238). For a library this matters more, since an
   undeclared import becomes a consumer's `ImportError`.
 - **Opt-in dependencies are pruned, not ignored** (blueprintx#274). When an opt-in is declined,
