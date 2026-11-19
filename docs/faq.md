@@ -42,8 +42,8 @@ projects also switch versioning: online = tag-driven, offline = a local `poe bum
 
 ## I don't use a PR review bot — will the generated project's required check ever pass?
 
-The scaffolder asks *"Do you have (or will you install) a PR review bot such as CodeRabbit
-on this repo?"*. Answer **no** and it ships `.review-bots.yaml` containing `adopted: false`
+The scaffolder asks *"Do you have (or will you install) a PR review bot (CodeRabbit,
+Greptile, Graphite, Copilot or a review ladder) on this repo?"*. Answer **no** and it ships `.review-bots.yaml` containing `adopted: false`
 (`templates/common/review-bots-optout.yaml`) instead of the real roster. The gate fails closed
 on a missing file, and a bare `reviewers: []` is read as "switched off from inside the very PR
 it polices", so the explicit `adopted: false` is the only opt-out: the required check still runs

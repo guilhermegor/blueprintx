@@ -35,6 +35,7 @@
     "Pre-commit and CI run the same checks, both directions (blueprintx#384)",
     "README structure gate — plain headings, slug sections, Authors links",
     "Review threads answered",
+    "Review-bot prompt names every roster login",
     "Review-bot roster opt-out — \"no\" must omit .review-bots.yaml",
     "Scaffold + lint + test (multi-intent) — mvc-service-native-db",
     "Scaffold + lint + test (multi-intent) — mvc-service-orm-db",
