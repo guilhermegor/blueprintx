@@ -3,10 +3,10 @@
 The purecalendars ANBIMA calendar is replaced with a recording stand-in so the tests
 assert delegation without touching the network or the holiday cache. The two
 ``delta_working_days`` convention tests take no fixture and use the real, offline
-calendar. The stand-in
-returns **correctly-typed** values — the wrappers enforce their return annotations
-at runtime (beartype), so a sentinel of the wrong type would be rejected — and
-records each call so delegation is asserted on the forwarded arguments.
+calendar. The stand-in returns **correctly-typed** values — the wrappers enforce
+their return annotations at runtime (beartype), so a sentinel of the wrong type
+would be rejected — and records each call so delegation is asserted on the
+forwarded arguments.
 """
 
 from datetime import date
@@ -121,11 +121,11 @@ def test_holidays_asks_the_calendar_once(cls_calendar: _FakeCalendar) -> None:
     assert cls_calendar.list_calls == [("holidays",)]
 
 
-def test_delta_working_days_excludes_the_start_date() -> None:
-    """The real calendar counts ``(start, end]``: Saturday to Monday is one day."""
+def test_delta_working_days_includes_the_end_date() -> None:
+    """Saturday to Monday is one day: the working-day end (Monday) is counted."""
     assert dates.delta_working_days(date(2026, 11, 14), dt_end=date(2026, 11, 16)) == 1
 
 
-def test_delta_working_days_includes_the_end_date() -> None:
-    """The real calendar counts ``(start, end]``: Friday to Saturday is zero days."""
+def test_delta_working_days_excludes_the_start_date() -> None:
+    """Friday to Saturday is zero days: the working-day start (Friday) is not counted."""
     assert dates.delta_working_days(date(2026, 11, 13), dt_end=date(2026, 11, 14)) == 0
