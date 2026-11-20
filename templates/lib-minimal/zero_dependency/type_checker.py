@@ -5,7 +5,8 @@ checker. It validates every argument whose annotation is a plain class (``str``,
 each member of a union (``date | datetime``, ``str | None``) and the origin class of a
 generic alias (``list[int]`` checks ``list``). ``Literal`` values, container elements,
 string-forward annotations and classes ``isinstance`` rejects (a ``TypedDict``, a Protocol
-not marked ``runtime_checkable``) are left to mypy. Annotations resolve on the first call,
+not marked ``runtime_checkable``) are left to mypy. Such a class, like ``Any``, becomes
+``object``, so a union holding one accepts any value. Annotations resolve on the first call,
 so a class defined later in the module works and a name imported only under
 ``TYPE_CHECKING`` skips that one parameter's check instead of failing the import.
 """

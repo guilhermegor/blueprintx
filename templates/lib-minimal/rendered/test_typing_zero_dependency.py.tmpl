@@ -279,13 +279,12 @@ def _generic_optional(value: list[int] | None) -> object:
     return value
 
 
-@type_checker
-def _any_member(value: int | Any) -> object:
-    """Return ``value`` unchanged; an ``Any`` member makes the union accept anything.
+def _any_member_subject(value: object) -> object:
+    """Return ``value`` unchanged; its annotation is swapped for a union with ``Any`` below.
 
     Parameters
     ----------
-    value : int | Any
+    value : object
         Anything.
 
     Returns
@@ -294,6 +293,10 @@ def _any_member(value: int | Any) -> object:
         The same value.
     """
     return value
+
+
+_any_member_subject.__annotations__["value"] = int | Any
+_any_member = type_checker(_any_member_subject)
 
 
 def test_union_accepts_each_member() -> None:
