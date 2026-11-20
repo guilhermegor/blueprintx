@@ -579,6 +579,9 @@ jobs:
       - name: Two branches adding a module merge clean and pass the gate (blueprintx#959)
         run: bash tests/test_check_registry_order.sh
 
+      - name: Template residue gate should-fail tests (blueprintx#1222)
+        run: bash tests/test_check_template_residue.sh
+
   readme-structure:
     name: README structure gate — plain headings, slug sections, Authors links
     runs-on: ubuntu-latest
