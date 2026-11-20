@@ -131,6 +131,8 @@ test_allowlisted_util_imports_count_as_live() {
     str_root="$(make_project)"
     add_unused_util "$str_root"
     printf 'pkg._internal.utils.unused | loaded by importlib\n' > "$str_root/.unreachable-modules.txt"
+    printf 'import dateutil\n' > "$str_root/src/pkg/_internal/utils/other.py"
+    expect "non-allowlisted residue still reported" pass "$str_root" "pkg._internal.utils.other"
     expect_absent "allowlisted util's own import" "$str_root" "numpy"
     rm -rf "$str_root"
 }

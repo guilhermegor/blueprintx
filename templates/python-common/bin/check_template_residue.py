@@ -306,8 +306,9 @@ def main(list_argv: list[str] | None = None) -> int:
     )
     if cls_args.strict and list_problems and not (list_files or list_residue):
         print(
-            f"❌ {len(list_problems)} allowlist problem(s): give each {unreachable.STR_ALLOWLIST_NAME}"
-            " entry a reason and remove entries that match no unreachable module"
+            f"❌ {len(list_problems)} allowlist problem(s): give each"
+            f" {unreachable.STR_ALLOWLIST_NAME} entry a reason and remove entries that match"
+            " no unreachable module"
         )
     if list_residue:
         print(
