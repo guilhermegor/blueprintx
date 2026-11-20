@@ -13,7 +13,7 @@ int_failures=0
 make_project() {
     local str_root
     str_root="$(mktemp -d)"
-    mkdir -p "$str_root/src/pkg/_internal/utils/typing"
+    mkdir -p "$str_root/src/pkg/_internal/utils"
     printf '[tool.poetry.dependencies]\npython = ">=3.11"\nnumpy = ">=1"\npython-dateutil = "^2"\n' \
         > "$str_root/pyproject.toml"
     printf 'from .main import main\n' > "$str_root/src/pkg/__init__.py"
@@ -23,8 +23,13 @@ make_project() {
     : > "$str_root/src/pkg/_internal/utils/__init__.py"
     printf 'import dateutil\n\n\ndef used() -> None:\n    return None\n' \
         > "$str_root/src/pkg/_internal/utils/used.py"
-    printf 'def type_checker(fn):\n    return fn\n' > "$str_root/src/pkg/_internal/utils/typing/__init__.py"
     printf '%s' "$str_root"
+}
+
+use_placeholder() {
+    mkdir -p "$1/src/pkg/_internal/utils/typing"
+    printf 'def type_checker(fn):\n    return fn\n' > "$1/src/pkg/_internal/utils/typing/__init__.py"
+    cp "$PLACEHOLDER" "$1/src/pkg/main.py"
 }
 
 add_unused_util() {
@@ -64,7 +69,7 @@ test_clean_project_passes_strict() {
 test_template_placeholder_fails() {
     local str_root
     str_root="$(make_project)"
-    cp "$PLACEHOLDER" "$str_root/src/pkg/main.py"
+    use_placeholder "$str_root"
     expect "template placeholder main.py" fail "$str_root" "placeholder"
     rm -rf "$str_root"
 }
@@ -72,6 +77,7 @@ test_template_placeholder_fails() {
 test_reformatted_placeholder_fails() {
     local str_root
     str_root="$(make_project)"
+    use_placeholder "$str_root"
     sed 's/^    /\t/' "$PLACEHOLDER" > "$str_root/src/pkg/main.py"
     expect "tab-indented placeholder main.py" fail "$str_root" "placeholder"
     rm -rf "$str_root"
@@ -80,7 +86,7 @@ test_reformatted_placeholder_fails() {
 test_placeholder_does_not_root_the_walk() {
     local str_root
     str_root="$(make_project)"
-    cp "$PLACEHOLDER" "$str_root/src/pkg/main.py"
+    use_placeholder "$str_root"
     expect "placeholder's own import" fail "$str_root" "pkg._internal.utils.typing"
     rm -rf "$str_root"
 }
