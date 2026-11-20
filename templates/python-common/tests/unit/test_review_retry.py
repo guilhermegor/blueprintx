@@ -1150,3 +1150,85 @@ def test_build_candidate_passes_the_roster_to_the_fetch(
         cls_gate=cls_gate,
     )
     assert mock_fetch.call_args.kwargs["set_declared"] == frozenset({"coderabbitai"})
+
+
+_SET_TWO_REVIEWERS = {"coderabbitai", "greptile-apps"}
+
+
+def test_a_newer_greptile_comment_does_not_hide_a_coderabbit_rate_limit(
+    cls_retry: ModuleType, *, cls_gate: ModuleType
+) -> None:
+    """Only CodeRabbit's notices drive a CodeRabbit request, so another bot cannot mask one.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    cls_gate : types.ModuleType
+        The gate module.
+    """
+    list_comments = [
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED, int_min_ago=30),
+        _comment("greptile-apps", str_body="Greptile summary of this PR.", int_min_ago=5),
+    ]
+    assert cls_retry.pr_needs_retry(
+        _pr(list_comments, list_reviews=[]),
+        list_comments=list_comments,
+        set_reviewers=_SET_TWO_REVIEWERS,
+        cls_gate=cls_gate,
+        str_self_login="guilhermegor",
+        dt_now=_DT_NOW,
+    )
+
+
+def test_a_greptile_rate_limit_does_not_trigger_a_coderabbit_request(
+    cls_retry: ModuleType, *, cls_gate: ModuleType
+) -> None:
+    """A rate limit from another roster bot is not a reason to ask CodeRabbit again.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    cls_gate : types.ModuleType
+        The gate module.
+    """
+    list_comments = [_comment("greptile-apps", str_body="Greptile is rate limited right now.")]
+    assert not cls_retry.pr_needs_retry(
+        _pr(list_comments, list_reviews=[]),
+        list_comments=list_comments,
+        set_reviewers=_SET_TWO_REVIEWERS,
+        cls_gate=cls_gate,
+        str_self_login="guilhermegor",
+        dt_now=_DT_NOW,
+    )
+
+
+def test_build_candidate_selects_the_coderabbit_notice_past_a_newer_greptile_one(
+    cls_retry: ModuleType, *, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The sweep's candidate scan reads CodeRabbit's newest word, not the roster's.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    cls_gate : types.ModuleType
+        The gate module.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub both reads.
+    """
+    list_comments = [
+        _comment("coderabbitai", str_body=_STR_RATE_LIMITED, int_min_ago=30),
+        _comment("greptile-apps", str_body="Greptile summary of this PR.", int_min_ago=5),
+    ]
+    monkeypatch.setattr(cls_gate, "fetch_pull_request", lambda *_, **__: _pr([], list_reviews=[]))
+    monkeypatch.setattr(cls_retry, "fetch_comments", lambda *_, **__: list_comments)
+    dict_candidate = cls_retry.build_candidate(
+        "acme/widget",
+        int_number=7,
+        str_created_at="2026-08-24T00:00:00Z",
+        set_reviewers=_SET_TWO_REVIEWERS,
+        cls_gate=cls_gate,
+    )
+    assert (dict_candidate or {}).get("notice") is list_comments[0]
