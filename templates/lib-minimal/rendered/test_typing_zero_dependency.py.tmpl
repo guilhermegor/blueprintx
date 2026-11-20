@@ -1,7 +1,7 @@
 """Smoke test: the dependency-free type_checker resolves in the wheel layout."""
 
 from importlib import import_module
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
 
 import pytest
 
@@ -126,6 +126,246 @@ def _identity(value: int) -> int:
         The same number.
     """
     return value
+
+
+class _Shape(Protocol):
+    """A Protocol that is not ``runtime_checkable``, so ``isinstance`` rejects it."""
+
+    def area(self) -> int:
+        """Return the area."""
+
+
+class _Record(TypedDict):
+    """A ``TypedDict``, which ``isinstance`` also rejects."""
+
+    name: str
+
+
+@type_checker
+def _union(value: int | str) -> object:
+    """Return ``value`` unchanged; the annotation is a union.
+
+    Parameters
+    ----------
+    value : int | str
+        A number or a string.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
+
+
+@type_checker
+def _optional(value: str | None) -> object:
+    """Return ``value`` unchanged; the annotation is an Optional.
+
+    Parameters
+    ----------
+    value : str | None
+        A string or ``None``.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
+
+
+@type_checker
+def _generic(value: list[int]) -> object:
+    """Return ``value`` unchanged; the annotation is a generic alias.
+
+    Parameters
+    ----------
+    value : list[int]
+        A list.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
+
+
+@type_checker
+def _unsupported(*, mode: Literal["a", "b"], values: dict[str, list[int]]) -> object:
+    """Return ``mode``; ``Literal`` and container elements are not checked.
+
+    Parameters
+    ----------
+    mode : Literal['a', 'b']
+        A mode name.
+    values : dict[str, list[int]]
+        A nested container.
+
+    Returns
+    -------
+    object
+        The mode.
+    """
+    return mode
+
+
+@type_checker
+def _protocol_optional(value: _Shape | None) -> object:
+    """Return ``value`` unchanged; the member cannot be used with ``isinstance``.
+
+    Parameters
+    ----------
+    value : _Shape | None
+        A Protocol member or ``None``.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
+
+
+@type_checker
+def _typeddict_optional(value: _Record | None) -> object:
+    """Return ``value`` unchanged; the member cannot be used with ``isinstance``.
+
+    Parameters
+    ----------
+    value : _Record | None
+        A ``TypedDict`` member or ``None``.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
+
+
+@type_checker
+def _float_optional(value: float | None) -> object:
+    """Return ``value`` unchanged; an ``int`` widens to ``float`` inside a union.
+
+    Parameters
+    ----------
+    value : float | None
+        A float or ``None``.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
+
+
+@type_checker
+def _generic_optional(value: list[int] | None) -> object:
+    """Return ``value`` unchanged; a generic alias sits inside a union.
+
+    Parameters
+    ----------
+    value : list[int] | None
+        A list or ``None``.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
+
+
+def _any_member_subject(value: object) -> object:
+    """Return ``value`` unchanged; its annotation is swapped for a union with ``Any`` below.
+
+    Parameters
+    ----------
+    value : object
+        Anything.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
+
+
+_any_member_subject.__annotations__["value"] = int | Any
+_any_member = type_checker(_any_member_subject)
+
+
+def test_union_accepts_each_member() -> None:
+    """A union accepts a value of any of its member classes."""
+    assert (_union(1), _union("a")) == (1, "a")
+
+
+def test_union_rejects_non_member() -> None:
+    """A union rejects a value matching none of its members."""
+    with pytest.raises(TypeError, match=r"int \| str"):
+        _union(1.5)  # type: ignore[arg-type]
+
+
+def test_optional_accepts_none_and_member() -> None:
+    """An Optional accepts ``None`` and its inner class."""
+    assert (_optional(None), _optional("a")) == (None, "a")
+
+
+def test_optional_rejects_non_member() -> None:
+    """An Optional rejects a value that is neither ``None`` nor the inner class."""
+    with pytest.raises(TypeError, match=r"str \| None, got int"):
+        _optional(1)  # type: ignore[arg-type]
+
+
+def test_generic_alias_accepts_origin_class() -> None:
+    """A generic alias accepts an instance of its origin class."""
+    assert _generic([1]) == [1]
+
+
+def test_generic_alias_rejects_other_class() -> None:
+    """A generic alias rejects a value that is not its origin class."""
+    with pytest.raises(TypeError):
+        _generic((1,))  # type: ignore[arg-type]
+
+
+def test_protocol_member_in_union_is_skipped() -> None:
+    """A Protocol that ``isinstance`` rejects is left unchecked, not crashed on."""
+    assert _protocol_optional(5) == 5  # type: ignore[arg-type]
+
+
+def test_typeddict_member_in_union_is_skipped() -> None:
+    """A ``TypedDict`` that ``isinstance`` rejects is left unchecked, not crashed on."""
+    assert _typeddict_optional(5) == 5  # type: ignore[arg-type]
+
+
+def test_widening_applies_inside_a_union() -> None:
+    """An ``int`` satisfies ``float | None``."""
+    assert _float_optional(1) == 1
+
+
+def test_generic_alias_inside_a_union_accepts_member_and_none() -> None:
+    """``list[int] | None`` accepts a list and ``None``."""
+    assert (_generic_optional([1]), _generic_optional(None)) == ([1], None)
+
+
+def test_generic_alias_inside_a_union_rejects_other_class() -> None:
+    """``list[int] | None`` rejects a value that is neither."""
+    with pytest.raises(TypeError, match=r"list \| None"):
+        _generic_optional("a")  # type: ignore[arg-type]
+
+
+def test_any_member_makes_a_union_accept_anything() -> None:
+    """An ``Any`` member inside a union accepts any value."""
+    assert _any_member("a") == "a"
+
+
+def test_literal_and_deep_elements_stay_unchecked() -> None:
+    """``Literal`` values and container elements are not checked."""
+    assert _unsupported(mode="zzz", values={"k": ["not-int"]}) == "zzz"  # type: ignore[arg-type]
 
 
 def test_hints_resolve_once_across_calls(monkeypatch: pytest.MonkeyPatch) -> None:
