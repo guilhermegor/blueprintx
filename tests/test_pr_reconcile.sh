@@ -22,7 +22,10 @@ case "$*" in
     [[ "$*" == *nameWithOwner* ]] && { echo "null#65"; exit 0; }
     echo "o/r#65" ;;
 *"--json headRefName"*) echo feat-x ;;
-*"pr list"*) [ "${STUB_LIST_FAIL:-}" = 1 ] && { echo "boom" >&2; exit 1; }; echo 7 ;;
+*"pr list"*)
+	[ "${STUB_LIST_FAIL:-}" = 1 ] && { echo "boom" >&2; exit 1; }
+	[ "${STUB_LIST_EMPTY:-}" = 1 ] || echo 7
+	;;
 *"--json isCrossRepository"*) echo false ;;
 *"--json headRefOid"*) echo aaa111 ;;
 *"git/refs/heads/feat-x"*) [[ "$*" == *DELETE* ]] || echo aaa111 ;;
@@ -88,12 +91,29 @@ test_failed_sweep_discovery_is_not_reported_as_nothing_to_do() {
 		"$(STUB_EVENT_PR="" STUB_LIST_FAIL=1 run_reconcile)"
 }
 
+test_failed_sweep_discovery_leaves_the_janitor_green() {
+	assert_has "a failed pr list exits 0" "rc=0" \
+		"$(STUB_EVENT_PR="" STUB_LIST_FAIL=1 run_reconcile)"
+}
+
+test_an_empty_sweep_exits_0() {
+	assert_has "an empty sweep exits 0" "rc=0" "$(STUB_EVENT_PR="" STUB_LIST_EMPTY=1 run_reconcile)"
+}
+
+test_an_empty_sweep_is_not_reported_as_a_failure() {
+	assert_lacks "an empty sweep raises no warning" "::warning::" \
+		"$(STUB_EVENT_PR="" STUB_LIST_EMPTY=1 run_reconcile)"
+}
+
 test_merged_pr_closes_its_issue_in_the_owner_name_repo
 test_branch_delete_carries_an_expected_sha_lease
 test_branch_delete_never_uses_the_unconditional_rest_delete
 test_unreadable_state_is_annotated_in_the_run_summary
 test_unreadable_state_leaves_the_janitor_green
 test_failed_sweep_discovery_is_not_reported_as_nothing_to_do
+test_failed_sweep_discovery_leaves_the_janitor_green
+test_an_empty_sweep_exits_0
+test_an_empty_sweep_is_not_reported_as_a_failure
 
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
