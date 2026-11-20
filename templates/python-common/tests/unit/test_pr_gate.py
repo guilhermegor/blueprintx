@@ -327,7 +327,7 @@ _DICT_MAIN_API_RESPONSES = {
         "labels": [],
         "node_id": "PR_NODE",
     },
-    "https://api.github.com/repos/o/r/pulls/7/files?per_page=100": [
+    "https://api.github.com/repos/o/r/pulls/7/files?per_page=100&page=1": [
         {"filename": "docs/readme.md"}
     ],
     "https://api.github.com/repos/o/r/issues/7/comments": [],
@@ -582,3 +582,232 @@ def test_main_reports_the_skip_reason_when_auto_merge_is_refused(
     _set_main_env(monkeypatch)
     gate.main()
     assert f"step skipped: {_STR_NOT_ACCESSIBLE}" in capsys.readouterr().out
+
+
+_STR_FILES_URL = "https://api.github.com/repos/o/r/pulls/7/files?per_page=100&page="
+_STR_PR_URL = "https://api.github.com/repos/o/r/pulls/7"
+
+
+class _RoutedApi:
+    """Stand in for ``_api``: answer overrides first, then the main fixture, logging methods.
+
+    A PR-URL override may be a list, served one element per read, so a test can make the
+    head move between the two reads ``main()`` makes.
+    """
+
+    def __init__(self, dict_overrides: dict) -> None:
+        """Bind the overrides.
+
+        Parameters
+        ----------
+        dict_overrides : dict
+            URL -> canned response; ``None`` simulates a failed read.
+        """
+        self._dict_overrides = dict_overrides
+        self.list_methods: list = []
+
+    def __call__(
+        self, str_method: str, *, str_url: str, dict_payload: dict | None = None
+    ) -> object:
+        """Answer one call.
+
+        Parameters
+        ----------
+        str_method : str
+            HTTP method, recorded.
+        str_url : str
+            Absolute URL requested.
+        dict_payload : dict, optional
+            JSON body (ignored).
+
+        Returns
+        -------
+        object
+            The canned response.
+        """
+        self.list_methods.append(str_method)
+        return self._dict_overrides.get(str_url, _DICT_MAIN_API_RESPONSES.get(str_url))
+
+
+class _MovingHeadApi(_RoutedApi):
+    """A ``_RoutedApi`` whose PR reads return each queued revision in turn."""
+
+    def __init__(self, list_pr_reads: list) -> None:
+        """Queue the PR revisions.
+
+        Parameters
+        ----------
+        list_pr_reads : list of dict
+            One PR payload per read, in order.
+        """
+        super().__init__({})
+        self._list_pr_reads = list_pr_reads
+
+    def __call__(
+        self, str_method: str, *, str_url: str, dict_payload: dict | None = None
+    ) -> object:
+        """Answer one call, popping the next PR revision for a PR read.
+
+        Parameters
+        ----------
+        str_method : str
+            HTTP method, recorded.
+        str_url : str
+            Absolute URL requested.
+        dict_payload : dict, optional
+            JSON body (ignored).
+
+        Returns
+        -------
+        object
+            The canned response.
+        """
+        self.list_methods.append(str_method)
+        fn_answer = {_STR_PR_URL: lambda: self._list_pr_reads.pop(0)}.get(
+            str_url, lambda: _DICT_MAIN_API_RESPONSES.get(str_url)
+        )
+        return fn_answer()
+
+
+def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point ``main()`` at PR o/r#7 with a one-poll budget.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        The fixture used to set the environment.
+    """
+    monkeypatch.setenv("GITHUB_TOKEN", "tkn")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "7")
+    monkeypatch.setenv("GATE_MAX_POLLS", "1")
+    monkeypatch.setenv("GATE_POLL_SECONDS", "0")
+
+
+def test_list_pr_files_returns_none_when_a_page_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed file-list read is unknown, never an empty (docs-only) diff."""
+    monkeypatch.setattr(gate, "_api", lambda *a, **k: None)
+    assert gate.list_pr_files("o/r", int_pr=7) is None
+
+
+def test_list_pr_files_follows_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A ``src/`` edit on page two is classified, not dropped."""
+    list_docs = [{"filename": f"docs/p{i}.md"} for i in range(100)]
+    dict_pages = {
+        f"{_STR_FILES_URL}1": list_docs,
+        f"{_STR_FILES_URL}2": [{"filename": "src/x.py"}],
+    }
+    monkeypatch.setattr(gate, "_api", _RoutedApi(dict_pages))
+    assert gate.list_pr_files("o/r", int_pr=7)[-1]["filename"] == "src/x.py"
+
+
+def test_list_pr_files_treats_the_listing_cap_as_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GitHub lists at most 3000 files; a full last page means the list may be truncated."""
+    list_full = [{"filename": "docs/p.md"}] * 100
+    monkeypatch.setattr(gate, "_api", lambda *a, **k: list_full)
+    assert gate.list_pr_files("o/r", int_pr=7) is None
+
+
+def test_changed_paths_classifies_both_sides_of_a_rename() -> None:
+    """Moving ``src/old.py`` to ``docs/old.py`` still touches ``src/``."""
+    list_files = [{"filename": "docs/old.py", "previous_filename": "src/old.py"}]
+    assert gate.classify_risk(gate.changed_paths(list_files)) == "src"
+
+
+def test_main_never_arms_when_the_file_list_is_unreadable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HTTP 503 on the file list must not yield a docs/XS verdict that arms auto-merge."""
+    _set_env(monkeypatch)
+    monkeypatch.setattr(gate, "_api", _RoutedApi({f"{_STR_FILES_URL}1": None}))
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: ({}, {}))
+    list_calls: list = []
+    monkeypatch.setattr(
+        gate, "_enable_auto_merge", _CallRecorder(list_target=list_calls, str_label="arm")
+    )
+    gate.main()
+    assert list_calls == []
+
+
+def test_main_exits_nonzero_when_the_file_list_is_unreadable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unreadable file list is an evaluation error, so the required check goes red."""
+    _set_env(monkeypatch)
+    monkeypatch.setattr(gate, "_api", _RoutedApi({f"{_STR_FILES_URL}1": None}))
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: ({}, {}))
+    monkeypatch.setattr(gate, "_enable_auto_merge", lambda *a, **k: None)
+    assert gate.main() == 1
+
+
+def test_main_disarms_auto_merge_when_do_not_merge_is_added(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An already-armed auto-merge is disabled once the opt-out label appears."""
+    _set_env(monkeypatch)
+    dict_pr = {
+        **_DICT_MAIN_API_RESPONSES[_STR_PR_URL],
+        "labels": [{"name": gate.BLOCK_LABEL}],
+        "auto_merge": {"merge_method": "squash"},
+    }
+    monkeypatch.setattr(gate, "_api", _RoutedApi({_STR_PR_URL: dict_pr}))
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: ({}, {}))
+    list_calls: list = []
+    monkeypatch.setattr(
+        gate, "_disable_auto_merge", _CallRecorder(list_target=list_calls, str_label="disarm")
+    )
+    gate.main()
+    assert list_calls == ["disarm"]
+
+
+def test_collect_axes_keeps_a_red_axis_open_while_a_sibling_runs() -> None:
+    """One failed analysis must not end polling while another analysis still runs."""
+    list_runs = [
+        {"name": "Analyze (python)", "status": "completed", "conclusion": "failure"},
+        {"name": "Analyze (actions)", "status": "in_progress", "conclusion": None},
+    ]
+    dict_axes, _ = gate.collect_axes(list_runs, dict_axis_rules={"code scanning": ("Analyze",)})
+    assert not gate.axes_are_terminal(dict_axes)
+
+
+def test_gate_state_shows_a_still_running_red_axis_as_failure() -> None:
+    """The display stays red while the failing axis finishes."""
+    assert gate.gate_state({"code scanning": "failing"}) == "failure"
+
+
+def test_main_exits_nonzero_while_tests_are_still_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pending tests after the poll budget must not pass the required check."""
+    _set_env(monkeypatch)
+    monkeypatch.setattr(gate, "_api", _fake_api_for_main)
+    monkeypatch.setattr(
+        gate, "poll_axes_until_terminal", lambda *a, **k: ({"tests": "pending"}, {})
+    )
+    monkeypatch.setattr(gate, "_enable_auto_merge", lambda *a, **k: None)
+    assert gate.main() == 1
+
+
+def test_main_exits_nonzero_when_every_check_lookup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HTTP 503 on every check-run read is not a pass: the gate never saw a check."""
+    _set_env(monkeypatch)
+    monkeypatch.setattr(gate, "_api", _fake_api_for_main)
+    monkeypatch.setattr(gate, "_enable_auto_merge", lambda *a, **k: None)
+    assert gate.main() == 1
+
+
+def test_main_publishes_nothing_for_a_superseded_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A head that moved during evaluation leaves labels and comment to the newer run."""
+    _set_env(monkeypatch)
+    dict_old = _DICT_MAIN_API_RESPONSES[_STR_PR_URL]
+    cls_api = _MovingHeadApi([dict_old, {**dict_old, "head": {"sha": "sha2"}}])
+    monkeypatch.setattr(gate, "_api", cls_api)
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: ({}, {}))
+    gate.main()
+    assert set(cls_api.list_methods) == {"GET"}
