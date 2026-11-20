@@ -1551,6 +1551,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="🪶 Zero-dependency mode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aligning-an-existing-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aligning an existing library
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2880,6 +2897,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="🪶 Zero-dependency mode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aligning-an-existing-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aligning an existing library
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3056,6 +3090,10 @@
 <p>The scaffold asks "Zero runtime dependencies?" (spec key <code>zero_dependency</code>, default <code>n</code>). The default ships the full vendored <code>_internal</code> toolkit, <code>dates.py</code> included, backed by beartype, pandas, numpy, purecalendars, openpyxl and defusedxml.</p>
 <p>Answering <code>y</code> leaves the whole toolkit out as one group (dtypes, tabular and XML readers, <code>dates.py</code>, downloaders, regime modules, <code>_internal/config/contracts</code> and <code>_internal/config/ports</code>) together with its tests. It ships a stdlib-only <code>type_checker</code> in <code>_internal/utils/typing/</code> instead of the beartype-backed one, and the generated <code>pyproject.toml</code> has an empty <code>[tool.poetry.dependencies]</code> apart from <code>python</code>. Dev tooling is unchanged.</p>
 <p>The stdlib <code>type_checker</code> validates arguments annotated with a plain class (<code>str</code>, <code>int</code>) and leaves generic, union and string annotations to mypy. A stdlib <code>TypeChecker</code> metaclass (<code>_internal/utils/typing/type_checker_meta.py</code>) applies <code>type_checker</code> to every public, not-yet-wrapped method of a class, plus <code>__init__</code> (other dunders are left alone). <code>check_typing.py</code> requires every root class under <code>src/</code> to declare <code>metaclass=TypeChecker</code> (or <code>ABCTypeCheckerMeta</code> / <code>ProtocolTypeCheckerMeta</code>), so a class in a zero-dependency project writes <code>class Foo(metaclass=TypeChecker)</code>; the ABC and Protocol variants need the vendored toolkit and are not shipped here. The OTLP log export and the in-repo <code>logs.py</code> helper belong to the vendored toolkit, so each is skipped with a warning when chosen together with zero-dependency mode.</p>
+<h3 id="aligning-an-existing-library">Aligning an existing library<a class="headerlink" href="#aligning-an-existing-library" title="Permanent link">&para;</a></h3>
+<p>A library that adopts this scaffold file by file must re-decide <code>zero_dependency</code> for itself rather than copy the generic answer. The default ships the vendored toolkit and its runtime dependencies whether or not the library's public modules reach them (purecalendars #97: five required dependencies and the placeholder <code>main.py</code> were one release away from a pure offline calendar library).</p>
+<p>Before the first release after the alignment, run <code>python3 bin/check_template_residue.py</code> in the project. It fails while any <code>src/&lt;pkg&gt;/main.py</code> still holds the template's greeting literal (<code>Hello from lib-minimal!</code>, matched as a string constant so reformatting does not hide it), and it lists the <code>_internal/utils</code> modules no public module reaches through imports (everything outside <code>_internal</code>, plus <code>__init__</code>), with the third-party imports only those modules make. Delete each listed module with its tests and the dependencies only it uses, or allowlist it in <code>.unreachable-modules.txt</code> with the reason it is loaded dynamically.</p>
+<p>The report alone exits 0. <code>release-pypi.yaml</code> and <code>release-test-pypi.yaml</code> both run it with <code>--strict</code> in a <code>template_residue</code> job, before the build, so a release or a Test PyPI dry run fails on any finding, including an allowlist entry with no reason or one that matches no unreachable module. It runs nowhere else: a fresh scaffold carries the placeholder and the unwired toolkit by design, and its tests, lint and pre-commit stay green until the first release asks the question. The cost is that a fresh scaffold cannot rehearse on Test PyPI until the placeholder and unwired utils are dealt with; the dry run is meant to rehearse the release that will ship, so it asks the same question.</p>
 <hr />
 <h2 id="tooling-inherited-from-python-common">🛠️ Tooling (inherited from <code>python-common</code>)<a class="headerlink" href="#tooling-inherited-from-python-common" title="Permanent link">&para;</a></h2>
 <table>
