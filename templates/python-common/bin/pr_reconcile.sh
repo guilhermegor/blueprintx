@@ -67,13 +67,20 @@ push_delete_with_lease() {
 		"https://github.com/$GH_REPO.git" ":refs/heads/$str_ref" >/dev/null 2>&1
 }
 
+warn_annotated() {
+	local str_message="$1"
+
+	echo "::warning::$str_message"
+	print_status "warning" "$str_message"
+}
+
 reconcile_pr() {
 	local str_pr="$1"
 	local str_state
 
 	if ! str_state="$(gh pr view "$str_pr" --json state --jq .state)"; then
-		print_status "error" "PR #$str_pr -> could not read its state"
-		return 1
+		warn_annotated "PR #$str_pr -> could not read its state, leaving it for the next sweep"
+		return 0
 	fi
 	[[ "$str_state" == "MERGED" ]] || return 0
 
@@ -83,17 +90,20 @@ reconcile_pr() {
 
 main() {
 	local str_pr
-	local int_failed=0
+	local str_prs
 
 	if [[ -n "${EVENT_PR:-}" ]]; then
 		reconcile_pr "$EVENT_PR"
 		return
 	fi
 
-	for str_pr in $(gh pr list --state merged --limit "${SWEEP_LIMIT:-30}" --json number --jq '.[].number'); do
-		reconcile_pr "$str_pr" || int_failed=1
+	if ! str_prs="$(gh pr list --state merged --limit "${SWEEP_LIMIT:-30}" --json number --jq '.[].number')"; then
+		warn_annotated "could not list merged PRs; nothing was reconciled this run"
+		return 0
+	fi
+	for str_pr in $str_prs; do
+		reconcile_pr "$str_pr"
 	done
-	return "$int_failed"
 }
 
 main "$@"

@@ -22,6 +22,7 @@ case "$*" in
     [[ "$*" == *nameWithOwner* ]] && { echo "null#65"; exit 0; }
     echo "o/r#65" ;;
 *"--json headRefName"*) echo feat-x ;;
+*"pr list"*) [ "${STUB_LIST_FAIL:-}" = 1 ] && { echo "boom" >&2; exit 1; }; echo 7 ;;
 *"--json isCrossRepository"*) echo false ;;
 *"--json headRefOid"*) echo aaa111 ;;
 *"git/refs/heads/feat-x"*) [[ "$*" == *DELETE* ]] || echo aaa111 ;;
@@ -37,8 +38,8 @@ chmod +x "$WORK_DIR/gh" "$WORK_DIR/git"
 
 run_reconcile() {
 	: >"$WORK_DIR/log"
-	PATH="$WORK_DIR:$PATH" STUB_LOG="$WORK_DIR/log" GH_TOKEN=t GH_REPO=o/r EVENT_PR=7 \
-		STUB_STATE_FAIL="${1:-}" bash "$SCRIPT" >/dev/null 2>&1
+	PATH="$WORK_DIR:$PATH" STUB_LOG="$WORK_DIR/log" GH_TOKEN=t GH_REPO=o/r \
+		EVENT_PR="${STUB_EVENT_PR-7}" STUB_STATE_FAIL="${1:-}" bash "$SCRIPT" >>"$WORK_DIR/log" 2>&1
 	echo "rc=$?" >>"$WORK_DIR/log"
 	cat "$WORK_DIR/log"
 }
@@ -74,14 +75,25 @@ test_branch_delete_never_uses_the_unconditional_rest_delete() {
 	assert_lacks "no unconditional DELETE" "-X DELETE" "$(run_reconcile)"
 }
 
-test_unreadable_state_fails_the_run() {
-	assert_has "a failed state lookup exits non-zero" "rc=1" "$(run_reconcile 1)"
+test_unreadable_state_is_annotated_in_the_run_summary() {
+	assert_has "a failed state lookup is a ::warning::" "::warning::PR #7" "$(run_reconcile 1)"
+}
+
+test_unreadable_state_leaves_the_janitor_green() {
+	assert_has "a janitor reports and exits 0" "rc=0" "$(run_reconcile 1)"
+}
+
+test_failed_sweep_discovery_is_not_reported_as_nothing_to_do() {
+	assert_has "a failed pr list is announced" "::warning::could not list merged PRs" \
+		"$(STUB_EVENT_PR="" STUB_LIST_FAIL=1 run_reconcile)"
 }
 
 test_merged_pr_closes_its_issue_in_the_owner_name_repo
 test_branch_delete_carries_an_expected_sha_lease
 test_branch_delete_never_uses_the_unconditional_rest_delete
-test_unreadable_state_fails_the_run
+test_unreadable_state_is_annotated_in_the_run_summary
+test_unreadable_state_leaves_the_janitor_green
+test_failed_sweep_discovery_is_not_reported_as_nothing_to_do
 
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
