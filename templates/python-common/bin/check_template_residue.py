@@ -199,7 +199,7 @@ def residue_dependencies(
     dict_declared = declared_dependencies(path_root / "pyproject.toml")
     return sorted(
         dict_declared.get(
-            normalized(str_name), f"{str_name} (import name; no declared dependency matches it)"
+            normalized(str_name), f"{str_name} (import name; distribution name unknown)"
         )
         for str_name in set_only
     )
