@@ -19,6 +19,11 @@ cited_tasks() {
 		"$1" | sed -E 's/.*poe //' | sort -u
 }
 
+cited_tasks_in_file() {
+	mkdir -p "$WORK_DIR/one" && cp "$1" "$WORK_DIR/one/doc.md" && cited_tasks "$WORK_DIR/one"
+	rm -rf "$WORK_DIR/one"
+}
+
 path_witness="$WORK_DIR/witness"
 mkdir -p "$path_witness"
 printf -- '- poe missing_task\n' >"$path_witness/list.md"
@@ -60,6 +65,17 @@ print("\n".join(sorted(load_tasks(Path.cwd()))))
 			int_failures=$((int_failures + 1))
 		fi
 	done <<<"$list_cited"
+done
+
+list_offline_tasks="$(sed -nE 's/^\[tool\.poe\.tasks\.([A-Za-z0-9_-]+)\].*/\1/p' \
+	"$REPO_ROOT/templates/common/poe_tasks.offline.toml")"
+for path_doc in "$REPO_ROOT"/templates/python-common/CONTRIBUTING*.md; do
+	while IFS= read -r str_task; do
+		if grep -qxF "$str_task" <<<"$list_offline_tasks"; then
+			echo "FAIL: $(basename "$path_doc") cites offline-only poe $str_task"
+			int_failures=$((int_failures + 1))
+		fi
+	done <<<"$(cited_tasks_in_file "$path_doc")"
 done
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
