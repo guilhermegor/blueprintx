@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/bin/lib/common.sh"
 GATE="$REPO_ROOT/templates/python-common/bin/check_secrets.sh"
 
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
 
 int_failures=0
 LIST_TMP=()
