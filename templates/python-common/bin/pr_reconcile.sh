@@ -11,7 +11,7 @@ close_linked_issues() {
 	local str_link str_issue str_issue_repo str_state
 
 	for str_link in $(gh pr view "$str_pr" --json closingIssuesReferences \
-		--jq '.closingIssuesReferences[] | "\(.repository.nameWithOwner)#\(.number)"' \
+		--jq '.closingIssuesReferences[] | "\(.repository.owner.login)/\(.repository.name)#\(.number)"' \
 		2>/dev/null || true); do
 		str_issue_repo="${str_link%%#*}"
 		str_issue="${str_link##*#}"
@@ -48,17 +48,34 @@ delete_head_branch() {
 		return 0
 	fi
 
-	if gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$str_ref" >/dev/null 2>&1; then
+	if push_delete_with_lease "$str_ref" "$str_merged_sha"; then
 		print_status "success" "PR #$str_pr -> deleted branch $str_ref"
+	else
+		print_status "warning" "PR #$str_pr -> branch $str_ref moved or could not be deleted, leaving it"
 	fi
+}
+
+push_delete_with_lease() {
+	local str_ref="$1"
+	local str_sha="$2"
+	local str_auth
+
+	str_auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+	GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader \
+		GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $str_auth" \
+		git push --force-with-lease="refs/heads/$str_ref:$str_sha" \
+		"https://github.com/$GH_REPO.git" ":refs/heads/$str_ref" >/dev/null 2>&1
 }
 
 reconcile_pr() {
 	local str_pr="$1"
-	local str_merged
+	local str_state
 
-	str_merged="$(gh pr view "$str_pr" --json merged --jq .merged 2>/dev/null || echo "false")"
-	[[ "$str_merged" == "true" ]] || return 0
+	if ! str_state="$(gh pr view "$str_pr" --json state --jq .state)"; then
+		print_status "error" "PR #$str_pr -> could not read its state"
+		return 1
+	fi
+	[[ "$str_state" == "MERGED" ]] || return 0
 
 	close_linked_issues "$str_pr"
 	delete_head_branch "$str_pr"
@@ -66,15 +83,17 @@ reconcile_pr() {
 
 main() {
 	local str_pr
+	local int_failed=0
 
 	if [[ -n "${EVENT_PR:-}" ]]; then
 		reconcile_pr "$EVENT_PR"
-		return 0
+		return
 	fi
 
 	for str_pr in $(gh pr list --state merged --limit "${SWEEP_LIMIT:-30}" --json number --jq '.[].number'); do
-		reconcile_pr "$str_pr"
+		reconcile_pr "$str_pr" || int_failed=1
 	done
+	return "$int_failed"
 }
 
 main "$@"
