@@ -18,6 +18,7 @@ skip loudly otherwise. Explanation: docs/required-status-checks.md.
 """
 
 import argparse
+import functools
 import itertools
 import json
 import os
@@ -32,7 +33,6 @@ try:
 except ImportError:
     yaml = None
 
-REPO = "guilhermegor/blueprintx"
 PR_TYPES = {"opened", "reopened", "synchronize"}
 POLICY_FIELDS = 3
 PR_EVENTS = ("pull_request", "pull_request_target")
@@ -267,9 +267,17 @@ def gh_json(str_path: str) -> object:
     return json.loads(str_out)
 
 
+@functools.cache
+def current_repo() -> str:
+    """Return the `owner/name` to read: `GITHUB_REPOSITORY`, else the checkout's remote."""
+    if str_repo := os.environ.get("GITHUB_REPOSITORY", ""):
+        return str_repo
+    return gh_json("repos/{owner}/{repo}")["full_name"]
+
+
 def classic_required() -> set:
     """Read classic contexts from the public branch view; an unreadable one raises."""
-    dict_prot = gh_json(f"repos/{REPO}/branches/main")["protection"]
+    dict_prot = gh_json(f"repos/{current_repo()}/branches/main")["protection"]
     if not dict_prot["enabled"]:
         return set()
     return set(dict_prot["required_status_checks"]["contexts"])
@@ -278,7 +286,7 @@ def classic_required() -> set:
 def live_required() -> dict:
     """{"classic": set, "ruleset": set} read from the API (the rules in effect on main)."""
     dict_live = {"classic": classic_required(), "ruleset": set()}
-    for dict_rule in gh_json(f"repos/{REPO}/rules/branches/main"):
+    for dict_rule in gh_json(f"repos/{current_repo()}/rules/branches/main"):
         if dict_rule["type"] == "required_status_checks":
             list_chk = dict_rule["parameters"]["required_status_checks"]
             dict_live["ruleset"] |= {c["context"] for c in list_chk}
@@ -289,9 +297,9 @@ def live_workflow_states() -> dict:
     """{workflow file name: state} as the Actions API reports it, every page."""
     dict_states = {}
     int_page = 1
-    while list_wf := gh_json(f"repos/{REPO}/actions/workflows?per_page=100&page={int_page}")[
-        "workflows"
-    ]:
+    while list_wf := gh_json(
+        f"repos/{current_repo()}/actions/workflows?per_page=100&page={int_page}"
+    )["workflows"]:
         for dict_wf in list_wf:
             dict_states[pathlib.PurePosixPath(dict_wf["path"]).name] = dict_wf["state"]
         int_page += 1

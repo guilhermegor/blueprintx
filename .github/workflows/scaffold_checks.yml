@@ -516,6 +516,12 @@ jobs:
       - name: Run the enable_repo_rules suite (blueprintx#944)
         run: bash tests/test_enable_repo_rules.sh
 
+      - name: Run the pr_reconcile suite (blueprintx#1219)
+        run: bash tests/test_pr_reconcile.sh
+
+      - name: Run the review-workflow shape suite (blueprintx#1219)
+        run: bash tests/test_review_workflow_shape.sh
+
       - name: Run the ts-lib pack-smoke shape suite (blueprintx#934)
         run: bash tests/test_ts_lib_pack_smoke_shape.sh
 

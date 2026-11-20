@@ -113,6 +113,7 @@ str_out="$(PATH="$str_tmp/bin:$PATH" run_gate --live)" || int_rc=$?
 check "live read error skips loudly locally" "$int_rc" 0 "SKIPPED" "$str_out"
 
 printf '%s\n' '#!/bin/sh' 'case "$2" in' \
+	'"repos/{owner}/{repo}") echo "{\"full_name\":\"o/self\"}" ;;' \
 	'*rules/branches/main) echo "[{\"type\":\"required_status_checks\",\"parameters\":{\"required_status_checks\":[{\"context\":\"Rule live\"}]}}]" ;;' \
 	'*branches/main) echo "{\"protection\":{\"enabled\":true,\"required_status_checks\":{\"contexts\":[\"Lint gate\",\"Extra live\"]}}}" ;;' \
 	'*actions/workflows*page=1) echo "{\"workflows\":[{\"path\":\".github/workflows/other.yml\",\"state\":\"active\"}]}" ;;' \
@@ -130,6 +131,15 @@ fixture
 int_rc=0
 str_out="$(FAKE_STATE=disabled_manually PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
 check "live disabled workflow emitting a required context fails" "$int_rc" 1 "emitted by a.yml, state disabled_manually" "$str_out"
+
+mkdir -p "$str_tmp/repo_bin"
+printf '%s\n' '#!/bin/sh' 'case "$2" in repos/o/r/*) ;; *) exit 1 ;; esac' \
+	"exec \"$str_tmp/bin/gh\" \"\$@\"" >"$str_tmp/repo_bin/gh"
+chmod +x "$str_tmp/repo_bin/gh"
+fixture
+int_rc=0
+str_out="$(GITHUB_REPOSITORY=o/r PATH="$str_tmp/repo_bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
+check "live mode reads the repository it runs in, not a fixed one" "$int_rc" 1 "not in required-checks.json: Extra live" "$str_out"
 
 fixture
 printf 'name: c\non: pull_request\njobs:\n  t:\n    name: Wrapped true\n    if: ${{ github.event_name == '"'"'pull_request'"'"' }}\n    runs-on: x\n    steps: []\n  c:\n    name: Wrapped cond\n    if: ${{ github.event.pull_request.draft == false }}\n    runs-on: x\n    steps: []\n' >"$str_tmp/wf/c.yml"
@@ -231,6 +241,7 @@ check "live keeps checking everything else" "$int_rc" 1 "not live: App check" "$
 
 gh_stub() {
 	printf '%s\n' '#!/bin/sh' 'case "$2" in' \
+	'"repos/{owner}/{repo}") echo "{\"full_name\":\"o/self\"}" ;;' \
 		'*rules/branches/main) echo "[]" ;;' \
 		"*branches/main) $1 ;;" \
 		'*actions/workflows*page=1) echo "{\"workflows\":[{\"path\":\".github/workflows/a.yml\",\"state\":\"active\"}]}" ;;' \

@@ -92,8 +92,63 @@ test_stranded_pr_list_failure_is_unknown() {
     assert_has "pr list failure is UNKNOWN, not none" "UNKNOWN, not none" "$(STUB_PRLIST_FAIL=1 run_mode stranded)"
 }
 
+mkdir -p "$WORK_DIR/v"
+cat >"$WORK_DIR/v/gh" <<'STUB'
+#!/bin/bash
+[ "$1 $2" = "auth status" ] && exit 0
+[ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
+str_rule='{"type":"required_status_checks","ruleset_id":42,"parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"Review threads answered"}]}}'
+case "$2" in
+repos/o/r) str_json='{"default_branch":"main"}' ;;
+repos/o/r/rulesets) str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
+repos/o/r/rulesets/42) str_json="{\"rules\":[$str_rule]}" ;;
+repos/o/r/rules/branches/main*)
+	case "$STUB_APPLIES" in
+	1) str_json="[$str_rule]" ;;
+	2) [[ " $* " == *" --paginate "* ]] && str_json="[] [$str_rule]" || str_json='[]' ;;
+	*) str_json='[]' ;;
+	esac
+	;;
+*) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
+esac
+str_jq=""
+while [ $# -gt 0 ]; do [ "$1" = "--jq" ] && str_jq="$2"; shift; done
+jq -r "${str_jq:-.}" <<<"$str_json"
+STUB
+chmod +x "$WORK_DIR/v/gh"
+
+run_verify() {
+    PATH="$WORK_DIR/v:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT="$1" STUB_APPLIES="$2" bash "$SCRIPT" "$3" 2>&1
+    echo "rc=$?"
+}
+
+test_verify_refuses_a_disabled_ruleset() {
+    assert_has "a disabled ruleset is not proof of strict" "rc=1" "$(run_verify disabled 1 verify)"
+}
+
+test_verify_refuses_a_ruleset_that_skips_the_default_branch() {
+    assert_has "a ruleset not applying to main is not proof" "rc=1" "$(run_verify active 0 verify)"
+}
+
+test_verify_accepts_an_active_ruleset_on_the_default_branch() {
+    assert_has "an active, applicable ruleset verifies" "rc=0" "$(run_verify active 1 verify)"
+}
+
+test_verify_reads_a_rule_on_a_later_page() {
+    assert_has "a rule on page 2 still verifies" "rc=0" "$(run_verify active 2 verify)"
+}
+
+test_check_ruleset_flags_a_disabled_ruleset() {
+    assert_has "a disabled ruleset is not present" "rc=1" "$(run_verify disabled 1 check_ruleset)"
+}
+
+test_verify_refuses_a_disabled_ruleset
+test_verify_refuses_a_ruleset_that_skips_the_default_branch
+test_verify_accepts_an_active_ruleset_on_the_default_branch
+test_check_ruleset_flags_a_disabled_ruleset
 test_check_ruleset_flags_missing
 test_check_ruleset_passes_when_present
+test_verify_reads_a_rule_on_a_later_page
 test_check_ruleset_unresolved_repo_is_unknown
 test_stranded_names_pr_without_analysis
 test_stranded_lookup_failure_is_unknown_not_stranded

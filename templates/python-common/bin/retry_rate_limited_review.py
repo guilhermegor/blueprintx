@@ -57,7 +57,9 @@ import types
 
 _STR_MARKER = "<!-- retry-rate-limited-review -->"
 
-_STR_REQUEST = f"@coderabbitai full review\n\n{_STR_MARKER}"
+_STR_REQUESTED_REVIEWER = "coderabbitai"
+
+_STR_REQUEST = f"@{_STR_REQUESTED_REVIEWER} full review\n\n{_STR_MARKER}"
 
 _RE_RATE_LIMIT = re.compile(r"rate[\s-]?limit", re.IGNORECASE)
 
@@ -131,6 +133,32 @@ def load_gate(path_bin: pathlib.Path) -> types.ModuleType | None:
         )
         return None
     return cls_module
+
+
+def newest_requested_reviewer_comment(
+    list_comments: list[dict], *, set_reviewers: set[str], fn_norm: Callable[[str], str]
+) -> dict | None:
+    """Return the newest comment by the reviewer this script asks, when it is on the roster.
+
+    The request names one reviewer, so only that reviewer's notices may drive it: another
+    roster bot's newer comment must not hide its rate limit, nor its own rate limit trigger it.
+
+    Parameters
+    ----------
+    list_comments : list of dict
+        Normalised comments (``login``/``body``/``created_at``), oldest first.
+    set_reviewers : set of str
+        Logins that can actually submit a review.
+    fn_norm : Callable[[str], str]
+        The gate's ``normalise_login``.
+
+    Returns
+    -------
+    dict or None
+        The newest such comment, or ``None`` when that reviewer has said nothing.
+    """
+    set_asked = {fn_norm(_STR_REQUESTED_REVIEWER)} & {fn_norm(s) for s in set_reviewers}
+    return newest_roster_comment(list_comments, set_roster=set_asked, fn_norm=fn_norm)
 
 
 def newest_roster_comment(
@@ -388,15 +416,15 @@ def pr_needs_retry(
         ``True`` when nothing has reviewed the head commit, the reviewer's newest word is a
         rate limit, and we have not asked within the cooldown.
     """
-    list_reviews = ((dict_pr.get("reviews") or {}).get("nodes")) or []
+    list_reviews = cls_gate.current_reviews(dict_pr)
     str_head = dict_pr.get("headRefOid") or ""
     if cls_gate.reviewers_who_reported(
         list_reviews, set_roster=set_reviewers, str_commit_oid=str_head
     ):
         return False
 
-    dict_notice = newest_roster_comment(
-        list_comments, set_roster=set_reviewers, fn_norm=cls_gate.normalise_login
+    dict_notice = newest_requested_reviewer_comment(
+        list_comments, set_reviewers=set_reviewers, fn_norm=cls_gate.normalise_login
     )
     str_notice = (dict_notice or {}).get("body") or ""
     if not _RE_RATE_LIMIT.search(str_notice):
@@ -541,15 +569,15 @@ def build_candidate(
         print(f"::warning::could not read #{int_number}, skipping it: {str(cls_error)[:200]}")
         return None
 
-    list_reviews = ((dict_pr.get("reviews") or {}).get("nodes")) or []
+    list_reviews = cls_gate.current_reviews(dict_pr)
     str_head = dict_pr.get("headRefOid") or ""
     if cls_gate.reviewers_who_reported(
         list_reviews, set_roster=set_reviewers, str_commit_oid=str_head
     ):
         return None
 
-    dict_notice = newest_roster_comment(
-        list_comments, set_roster=set_reviewers, fn_norm=cls_gate.normalise_login
+    dict_notice = newest_requested_reviewer_comment(
+        list_comments, set_reviewers=set_reviewers, fn_norm=cls_gate.normalise_login
     )
     if not _RE_RATE_LIMIT.search((dict_notice or {}).get("body") or ""):
         return None

@@ -55,7 +55,7 @@ Measured 2026-09-26 by reading `jobs.*.name` and `on:` in every
 | `Review threads answered` | `review-threads.yml` | `pull_request` (+ `_review`, `_review_comment`), no filter | **yes** — seeded today |
 | `Classify and gate this PR` | `pr-gate.yml` | `pull_request: types: [opened, synchronize, reopened, labeled, unlabeled]` | **yes** — not seeded |
 | `Run Automated Tests (<os>, py<version>)` ×15 | `tests.yml` | `pull_request:` with a `branches:` filter | no — rule 1, the names embed matrix values that drift (`branches: [main]` no longer disqualifies it under rule 2) |
-| `Ask CodeRabbit for a review` | `coderabbit-trigger.yml` | `pull_request`, job `if: draft == false` | no — rule 3, never reports on a draft PR |
+| `Ask CodeRabbit for a review` | `coderabbit-trigger.yml` | `pull_request_target`, job `if: draft == false` | no — rule 3, never reports on a draft PR |
 | `Close linked issues of merged PRs` | `pr-reconcile.yml` | `pull_request: types: [closed]` | no — rule 2, *never* reports on an open PR |
 | `GitGuardian — secret scan` | `secret-scan.yml` | `pull_request` | no — rule 4, copied only when `GITGUARDIAN_API_KEY` was exported at scaffold time |
 | `Re-ask a rate-limited reviewer` | `review-retry.yml` | `schedule`, `workflow_dispatch` | no — rule 2, not a PR event |
