@@ -119,33 +119,36 @@ apply_ruleset() {
 }
 
 report_blocking_checks() {
-	local str_repo="$1"
-	local str_id str_live str_strict
+	local str_repo="$1" str_branch="$2"
+	local str_id str_enforcement str_live str_strict str_rules
 	if ! str_id="$(gh api "repos/$str_repo/rulesets" --jq \
-		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>&1)"; then
+		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
 		return 2
 	fi
-	str_id="$(printf '%s\n' "$str_id" | head -1)"
+	read -r str_id str_enforcement <<<"$(printf '%s\n' "$str_id" | head -1)"
 	if [ -z "$str_id" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
 		return 2
 	fi
-	if ! str_live="$(gh api "repos/$str_repo/rulesets/$str_id" --jq \
-		'[.rules[]? | select(.type == "required_status_checks")
-		  | .parameters.required_status_checks[]?.context] | join(", ")' 2>&1)"; then
-		print_status "warning" "Could not READ ruleset '$RULESET_NAME' from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_live:-no output from gh}"
+	if [ "$str_enforcement" != "active" ]; then
+		print_status "warning" "Ruleset '$RULESET_NAME' on $str_repo has enforcement '${str_enforcement:-unknown}', not 'active' — its rules block nothing"
+		return 2
+	fi
+	str_rules=".[] | select(.type == \"required_status_checks\" and .ruleset_id == $str_id)"
+	if ! str_live="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --jq \
+		"[$str_rules | .parameters.required_status_checks[]?.context] | join(\", \")" 2>&1)"; then
+		print_status "warning" "Could not READ the rules applying to $str_repo:$str_branch (so the blocking set is UNKNOWN, not empty): ${str_live:-no output from gh}"
 		return 2
 	fi
 	if [ -z "$str_live" ]; then
-		print_status "warning" "Ruleset '$RULESET_NAME' is active but declares NO required status checks — CI runs and blocks NOTHING. Populate REQUIRED_CHECKS in bin/enable_repo_rules.sh from a real PR's check-run names, then re-run."
+		print_status "warning" "Ruleset '$RULESET_NAME' applies NO required status checks to $str_repo:$str_branch — CI runs and blocks NOTHING there. Check that the ruleset targets the default branch and that REQUIRED_CHECKS in bin/enable_repo_rules.sh is populated, then re-run."
 		return 2
 	fi
-	print_status "config" "Merge-blocking checks live on $str_repo: $str_live"
+	print_status "config" "Merge-blocking checks live on $str_repo:$str_branch: $str_live"
 
-	if ! str_strict="$(gh api "repos/$str_repo/rulesets/$str_id" --jq \
-		'[.rules[]? | select(.type == "required_status_checks")
-		  | .parameters.strict_required_status_checks_policy] | first' 2>&1)"; then
+	if ! str_strict="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --jq \
+		"[$str_rules | .parameters.strict_required_status_checks_policy] | first" 2>&1)"; then
 		print_status "warning" "Could not READ the strict policy on $str_repo (so it is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
 		return 2
 	fi
@@ -195,7 +198,7 @@ verify_strict_required_checks() {
 	fi
 
 	local int_ruleset_result int_protection_result
-	report_blocking_checks "$str_repo" && int_ruleset_result=0 || int_ruleset_result=$?
+	report_blocking_checks "$str_repo" "$str_branch" && int_ruleset_result=0 || int_ruleset_result=$?
 	assert_branch_protection_strict "$str_repo" "$str_branch" && int_protection_result=0 || int_protection_result=$?
 
 	if [ "$int_ruleset_result" -eq 1 ] || [ "$int_protection_result" -eq 1 ]; then
@@ -249,13 +252,13 @@ check_ruleset_present() {
 		return 0
 	fi
 	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
-		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>&1)"; then
+		".[] | select(.name == \"$RULESET_NAME\" and .enforcement == \"active\") | .id" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (presence UNKNOWN): ${str_ids:-no output from gh}"
 		return 0
 	fi
 	[ -n "$str_ids" ] && return 0
 	[ "${GITHUB_ACTIONS:-}" = "true" ] && echo "::warning title=Ruleset missing::'$RULESET_NAME' is not enabled on $str_repo, so merges are unprotected. A maintainer with admin rights must run 'poe enable_repo_rules'."
-	print_status "error" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — run 'poe enable_repo_rules' (needs repo-admin)"
+	print_status "error" "Ruleset '$RULESET_NAME' is NOT present and active on $str_repo — run 'poe enable_repo_rules' (needs repo-admin)"
 	return 1
 }
 
@@ -326,10 +329,9 @@ main() {
 	apply_ruleset "$str_repo"
 	report_stranded_prs "$str_repo"
 
-	report_blocking_checks "$str_repo" || true
-
 	local str_branch
 	str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>/dev/null || echo main)"
+	report_blocking_checks "$str_repo" "$str_branch" || true
 	assert_branch_protection_strict "$str_repo" "$str_branch" || true
 }
 
