@@ -128,3 +128,20 @@ counts as resolved once it holds no `<<<<<<<` or `>>>>>>>` marker line. Only the
 
 `--apply` also refuses a BlueprintX checkout with uncommitted or untracked changes, because
 theirs is read from the working tree while the stamped commit comes from history.
+
+## Aligning an existing library
+
+`poe template_update` brings template files into a project that already has its own code. For
+a library that is how the template's generic payload arrives: the placeholder `main.py`, every
+vendored `_internal/utils` module, and the runtime dependencies those modules import. Every PR
+stays green, because the tests cover the utils and deptry sees their imports.
+
+- Re-decide `zero_dependency` for the library rather than keep the generic answer: a library
+  whose public modules need none of the vendored toolkit should not declare its dependencies.
+- Before the first release after the alignment, run `python3 bin/check_template_residue.py`.
+  It fails while `src/<pkg>/main.py` still holds the template's placeholder, and it lists the
+  `_internal/utils` modules no public module reaches, with the third-party imports only they
+  make. Delete each one with its tests and its dependencies, or allowlist it in
+  `.unreachable-modules.txt` with the reason it is loaded dynamically.
+- `release-pypi.yaml` runs the same script with `--strict` before the build, so a release
+  fails on any finding left.
