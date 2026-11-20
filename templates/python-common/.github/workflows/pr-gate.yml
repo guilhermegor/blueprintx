@@ -66,9 +66,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          GATE_MAX_POLLS: "1"
         run: |
           for n in $(gh pr list --state open --limit 100 --json number --jq '.[].number'); do
             echo "::group::PR #$n"
-            PR_NUMBER="$n" python bin/pr_gate.py || echo "::warning::gate failed for PR #$n"
+            PR_NUMBER="$n" python bin/pr_gate.py ||
+              echo "::warning::PR #$n has no final verdict (checks pending or failing); its own next run decides"
             echo "::endgroup::"
           done
