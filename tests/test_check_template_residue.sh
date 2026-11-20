@@ -103,8 +103,8 @@ test_unreachable_util_is_reported_not_failed() {
     str_root="$(make_project)"
     add_unused_util "$str_root"
     expect "unreachable util, report-only" pass "$str_root" "pkg._internal.utils.unused"
-    expect "dep only the unreachable util uses" pass "$str_root" "numpy"
-    expect_absent "dep a reachable module also uses" "$str_root" "import: dateutil"
+    expect "dep only the unreachable util uses" pass "$str_root" "import: numpy"
+    expect_absent "dep a reachable module also uses" "$str_root" "dateutil"
     expect_absent "stdlib import" "$str_root" "json"
     rm -rf "$str_root"
 }
@@ -123,6 +123,23 @@ test_allowlisted_util_passes_strict() {
     add_unused_util "$str_root"
     printf 'pkg._internal.utils.unused | loaded by importlib\n' > "$str_root/.unreachable-modules.txt"
     expect "allowlisted util, --strict" pass "$str_root" "0 unreachable" --strict
+    rm -rf "$str_root"
+}
+
+test_allowlisted_util_imports_count_as_live() {
+    local str_root
+    str_root="$(make_project)"
+    add_unused_util "$str_root"
+    printf 'pkg._internal.utils.unused | loaded by importlib\n' > "$str_root/.unreachable-modules.txt"
+    expect_absent "allowlisted util's own import" "$str_root" "numpy"
+    rm -rf "$str_root"
+}
+
+test_allowlist_only_failure_prints_summary() {
+    local str_root
+    str_root="$(make_project)"
+    printf 'pkg._internal.utils.gone | loaded by importlib\n' > "$str_root/.unreachable-modules.txt"
+    expect "allowlist-only failure, --strict" fail "$str_root" "❌ 1 allowlist problem(s)" --strict
     rm -rf "$str_root"
 }
 
