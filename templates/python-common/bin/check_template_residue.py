@@ -1,7 +1,7 @@
 """Flag lib-minimal template residue that would ship in the next wheel.
 
 The placeholder guard fails when a ``src/<pkg>/main.py`` still holds the template's greeting
-literal, in any formatting. The reachability report walks imports from the public modules
+literal, even reformatted. The reachability report walks imports from the public modules
 (the walk of ``check_unreachable_modules.py``, with its allowlist) and lists the vendored
 ``_internal.utils`` modules left outside, plus the third-party imports only those modules
 make. The report fails only under ``--strict``.
@@ -9,7 +9,6 @@ make. The report fails only under ``--strict``.
 
 import argparse
 import ast
-import fnmatch
 import pathlib
 import re
 import sys
@@ -223,11 +222,7 @@ def allowlist_problems(path_root: pathlib.Path, *, list_dead: list[str]) -> list
     list_patterns, list_problems = unreachable.load_allowlist(
         path_root / unreachable.STR_ALLOWLIST_NAME
     )
-    return list_problems + [
-        f"allowlist entry '{str_pattern}' matches no unreachable module: remove it"
-        for str_pattern in list_patterns
-        if not any(fnmatch.fnmatchcase(str_module, str_pattern) for str_module in list_dead)
-    ]
+    return list_problems + unreachable.stale_patterns(list_patterns, list_dead=list_dead)
 
 
 def audit(path_root: pathlib.Path) -> tuple[list[str], list[str], list[str], list[str]]:
@@ -309,6 +304,12 @@ def main(list_argv: list[str] | None = None) -> int:
         f"{len(list_residue)} unreachable _internal.utils module(s),"
         f" {len(list_deps)} dependency(ies) only they import"
     )
+    if cls_args.strict and list_problems and not (list_files or list_residue):
+        print(
+            f"❌ {len(list_problems)} allowlist problem(s): give each"
+            f" {unreachable.STR_ALLOWLIST_NAME} entry a reason and remove entries that match"
+            " no unreachable module"
+        )
     if list_residue:
         print(
             "Delete each unreachable util with its tests and the dependencies only it imports,"

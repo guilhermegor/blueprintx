@@ -248,6 +248,28 @@ def load_allowlist(path_allowlist: pathlib.Path) -> tuple[list[str], list[str]]:
     return list_patterns, list_problems
 
 
+def stale_patterns(list_patterns: list[str], *, list_dead: list[str]) -> list[str]:
+    """Return the allowlist patterns that match no unreachable module.
+
+    Parameters
+    ----------
+    list_patterns : list of str
+        Allowlist patterns.
+    list_dead : list of str
+        The modules the public roots miss.
+
+    Returns
+    -------
+    list of str
+        One problem message per stale pattern.
+    """
+    return [
+        f"allowlist entry '{str_pattern}' matches no unreachable module: remove it"
+        for str_pattern in list_patterns
+        if not any(fnmatch.fnmatchcase(str_module, str_pattern) for str_module in list_dead)
+    ]
+
+
 def dead_modules(
     dict_modules: dict[str, pathlib.Path], *, list_patterns: list[str]
 ) -> tuple[list[str], list[str]]:
@@ -301,11 +323,7 @@ def audit(path_root: pathlib.Path, *, path_allowlist: pathlib.Path) -> tuple[lis
         list_dead, list_open = dead_modules(dict_modules, list_patterns=list_patterns)
     except (SyntaxError, ValueError) as cls_error:
         return [*list_problems, f"could not parse ({cls_error})"], len(dict_modules)
-    for str_pattern in list_patterns:
-        if not any(fnmatch.fnmatchcase(str_module, str_pattern) for str_module in list_dead):
-            list_problems.append(
-                f"allowlist entry '{str_pattern}' matches no unreachable module: remove it"
-            )
+    list_problems.extend(stale_patterns(list_patterns, list_dead=list_dead))
     for str_module in list_open:
         list_problems.append(
             f"{dict_modules[str_module].relative_to(path_root)}: {str_module} is unreachable"
