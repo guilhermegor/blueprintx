@@ -26,6 +26,7 @@ import pytest
 
 
 _INT_11 = 11
+_INT_20 = 20
 _INT_22 = 22
 _INT_35 = 35
 
@@ -994,6 +995,42 @@ def test_select_pr_for_retry_picks_the_oldest_of_several_waiting_prs(
             dt_now=_DT_NOW,
         )
         == _INT_11
+    )
+
+
+def test_select_pr_for_retry_skips_a_pr_whose_request_was_refused_this_run(
+    cls_retry: ModuleType, *, cls_gate: ModuleType
+) -> None:
+    """A refused re-request on the oldest PR must not stall the PR behind it.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    cls_gate : types.ModuleType
+        The gate module.
+    """
+    list_comments = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED)]
+    dict_pr = _pr(list_comments, list_reviews=[])
+    list_candidates = [
+        _candidate(
+            20, str_created_at="2026-08-25T00:00:00Z", list_comments=list_comments, dict_pr=dict_pr
+        ),
+        _candidate(
+            11, str_created_at="2026-08-20T00:00:00Z", list_comments=list_comments, dict_pr=dict_pr
+        ),
+    ]
+
+    assert (
+        cls_retry.select_pr_for_retry(
+            list_candidates,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
+            set_skip=frozenset({_INT_11}),
+        )
+        == _INT_20
     )
 
 
