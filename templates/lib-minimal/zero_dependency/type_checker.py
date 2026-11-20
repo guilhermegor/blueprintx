@@ -114,12 +114,8 @@ def _plain_class(hint: object) -> type:
     type
         The class to check against.
     """
-    if isinstance(hint, type) and hint is not Any:
-        return hint
-    cls_origin = get_origin(hint)
-    if isinstance(cls_origin, type):
-        return cls_origin
-    return object
+    cls_found = hint if isinstance(hint, type) and hint is not Any else get_origin(hint)
+    return cls_found if isinstance(cls_found, type) else object
 
 
 def _expected_classes(hint: object) -> tuple[type, ...]:
