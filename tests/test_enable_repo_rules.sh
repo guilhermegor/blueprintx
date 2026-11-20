@@ -112,7 +112,7 @@ STUB
 chmod +x "$WORK_DIR/v/gh"
 
 run_verify() {
-    PATH="$WORK_DIR/v:$PATH" STUB_ENFORCEMENT="$1" STUB_APPLIES="$2" bash "$SCRIPT" "$3" 2>&1
+    PATH="$WORK_DIR/v:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT="$1" STUB_APPLIES="$2" bash "$SCRIPT" "$3" 2>&1
     echo "rc=$?"
 }
 
