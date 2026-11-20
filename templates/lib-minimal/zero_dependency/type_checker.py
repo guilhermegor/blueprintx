@@ -3,9 +3,10 @@
 The package ships with no runtime dependencies, so this decorator replaces a third-party
 checker. It validates every argument whose annotation is a plain class (``str``, ``int``),
 each member of a union (``date | datetime``, ``str | None``) and the origin class of a
-generic alias (``list[int]`` checks ``list``); ``Literal`` values, container elements and
-string-forward annotations are left to mypy. Annotations resolve on
-the first call, so a class defined later in the module works and a name imported only under
+generic alias (``list[int]`` checks ``list``). ``Literal`` values, container elements,
+string-forward annotations and classes ``isinstance`` rejects (a ``TypedDict``, a Protocol
+not marked ``runtime_checkable``) are left to mypy. Annotations resolve on the first call,
+so a class defined later in the module works and a name imported only under
 ``TYPE_CHECKING`` skips that one parameter's check instead of failing the import.
 """
 
@@ -101,6 +102,45 @@ _EXPANDERS: dict[inspect._ParameterKind, Callable[[object], list[object]]] = {
 }
 
 
+def _usable_class(cls_found: type) -> type:
+    """Return ``cls_found`` when ``isinstance`` accepts it, else ``object`` (always satisfied).
+
+    A ``TypedDict`` and a Protocol not marked ``runtime_checkable`` make ``isinstance`` raise
+    ``TypeError``, which would read as a violation of the caller's argument.
+
+    Parameters
+    ----------
+    cls_found : type
+        A class taken from an annotation.
+
+    Returns
+    -------
+    type
+        ``cls_found``, or ``object`` when it cannot be used with ``isinstance``.
+    """
+    try:
+        isinstance(None, cls_found)
+    except TypeError:
+        return object
+    return cls_found
+
+
+def _class_name(cls_expected: type) -> str:
+    """Return the name shown in an error, with ``NoneType`` written as ``None``.
+
+    Parameters
+    ----------
+    cls_expected : type
+        An annotated class.
+
+    Returns
+    -------
+    str
+        Its display name.
+    """
+    return "None" if cls_expected is type(None) else cls_expected.__name__
+
+
 def _plain_class(hint: object) -> type:
     """Return the annotation when it is a plain class, else ``object`` (always satisfied).
 
@@ -115,7 +155,7 @@ def _plain_class(hint: object) -> type:
         The class to check against.
     """
     cls_found = hint if isinstance(hint, type) and hint is not Any else get_origin(hint)
-    return cls_found if isinstance(cls_found, type) else object
+    return _usable_class(cls_found) if isinstance(cls_found, type) else object
 
 
 def _expected_classes(hint: object) -> tuple[type, ...]:
@@ -160,7 +200,7 @@ def _check_item(*, str_name: str, tuple_expected: tuple[type, ...], item: object
     """
     if any(_accepts(cls_expected=cls, value=item) for cls in tuple_expected):
         return
-    str_expected = " | ".join(cls.__name__ for cls in tuple_expected)
+    str_expected = " | ".join(_class_name(cls) for cls in tuple_expected)
     raise TypeError(
         f"parameter {str_name}={item!r} violates type hint "
         f"{str_expected}, got {type(item).__name__}"
