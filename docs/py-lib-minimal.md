@@ -95,7 +95,7 @@ A library that adopts this scaffold file by file must re-decide `zero_dependency
 
 Before the first release after the alignment, run `python3 bin/check_template_residue.py` in the project. It fails while any `src/<pkg>/main.py` still holds the template's greeting literal (`Hello from lib-minimal!`, matched as a string constant so reformatting does not hide it), and it lists the `_internal/utils` modules no public module reaches through imports (everything outside `_internal`, plus `__init__`), with the third-party imports only those modules make. Delete each listed module with its tests and the dependencies only it uses, or allowlist it in `.unreachable-modules.txt` with the reason it is loaded dynamically.
 
-The report alone exits 0. `release-pypi.yaml` runs it with `--strict` in its `template_residue` job, before the build, so a release fails on any finding. It runs nowhere else: a fresh scaffold carries the placeholder and the unwired toolkit by design, and its tests, lint and pre-commit stay green until the first release asks the question.
+The report alone exits 0. `release-pypi.yaml` and `release-test-pypi.yaml` both run it with `--strict` in a `template_residue` job, before the build, so a release or a Test PyPI dry run fails on any finding, including an allowlist entry with no reason or one that matches no unreachable module. It runs nowhere else: a fresh scaffold carries the placeholder and the unwired toolkit by design, and its tests, lint and pre-commit stay green until the first release asks the question. The cost is that a fresh scaffold cannot rehearse on Test PyPI until the placeholder and unwired utils are dealt with; the dry run is meant to rehearse the release that will ship, so it asks the same question.
 
 ---
 

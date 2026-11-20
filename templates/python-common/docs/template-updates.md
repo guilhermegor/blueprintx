@@ -143,5 +143,8 @@ stays green, because the tests cover the utils and deptry sees their imports.
   `_internal/utils` modules no public module reaches, with the third-party imports only they
   make. Delete each one with its tests and its dependencies, or allowlist it in
   `.unreachable-modules.txt` with the reason it is loaded dynamically.
-- `release-pypi.yaml` runs the same script with `--strict` before the build, so a release
-  fails on any finding left.
+- In a `lib-minimal` project, `release-pypi.yaml` and `release-test-pypi.yaml` both run the
+  same script with `--strict` before the build, so a release, or a Test PyPI dry run, fails on
+  any finding left, including an allowlist entry with no reason or one that matches no
+  unreachable module. A fresh scaffold therefore cannot publish to Test PyPI until its
+  placeholder and unwired utils are dealt with.
