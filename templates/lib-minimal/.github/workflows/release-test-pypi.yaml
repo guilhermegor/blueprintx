@@ -94,8 +94,24 @@ jobs:
             echo "The new version $NEW_VERSION is greater than the latest version $LATEST_VERSION on Test PyPI."
           fi
 
+  template_residue:
+    name: Template residue gate
+    needs: details
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Fail on the placeholder main.py or unreachable vendored utils
+        run: python3 bin/check_template_residue.py --strict
+
   setup_and_build:
-    needs: [details, check_test_pypi, run_tests]
+    needs: [details, check_test_pypi, template_residue, run_tests]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
