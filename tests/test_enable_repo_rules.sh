@@ -110,6 +110,7 @@ repos/o/r/rules/branches/main*)
 	esac
 	;;
 repos/o/r/branches/main/protection)
+	[ "${STUB_PROTECTION:-}" = unprotected-500 ] && { echo "gh: Branch not protected (HTTP 500)" >&2; exit 1; }
 	[ "${STUB_PROTECTION:-}" = unprotected ] || { echo "gh: Server Error (HTTP 500)" >&2; exit 1; }
 	echo '{"message":"Branch not protected","documentation_url":"https://docs.github.com","status":"404"}'
 	echo "gh: Branch not protected (HTTP 404)" >&2
@@ -159,8 +160,13 @@ test_genuine_protection_read_failure_stays_unknown() {
     assert_has "a 5xx stays UNKNOWN" "Could not READ classic" "$(run_verify active 1 verify)"
 }
 
+test_not_protected_text_on_a_5xx_stays_unknown() {
+    assert_has "the 404 status, not the message alone, marks ruleset-only" "Could not READ classic" "$(STUB_PROTECTION=unprotected-500 run_verify active 1 verify)"
+}
+
 test_ruleset_only_repo_has_no_unreadable_protection_warning
 test_genuine_protection_read_failure_stays_unknown
+test_not_protected_text_on_a_5xx_stays_unknown
 test_verify_refuses_a_disabled_ruleset
 test_verify_refuses_a_ruleset_that_skips_the_default_branch
 test_verify_accepts_an_active_ruleset_on_the_default_branch
