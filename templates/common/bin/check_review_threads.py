@@ -2235,27 +2235,27 @@ def _parse_time(str_time: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(str_time.replace("Z", "+00:00"))
 
 
-def _reviews_after_base_change(dict_pr: dict) -> list[dict]:
-    """Return the PR's reviews submitted after its latest base change; all of them when none.
+def _after_base_change(dict_pr: dict, *, list_items: list[dict], str_key: str) -> list[dict]:
+    """Return the items stamped (at ``str_key``) after the PR's latest base change; all when none.
 
-    Fails closed: an unreadable event time drops every review, an unreadable review time drops
-    that review.
+    Applied to reviews (``submittedAt``) and completion notices (``createdAt``) alike: both are
+    evidence about the base they were written against. Fails closed: an unreadable event time
+    drops every item, an unreadable item time drops that item.
     """
-    list_reviews = dict_pr.get("reviews", {}).get("nodes", [])
     list_changes = (dict_pr.get("timelineItems") or {}).get("nodes") or []
     if not list_changes:
-        return list_reviews
+        return list_items
     try:
         dt_change = max(_parse_time(dict_ev.get("createdAt") or "") for dict_ev in list_changes)
     except (ValueError, AttributeError, TypeError):
         return []
-    return [r for r in list_reviews if _submitted_after(r, dt_change=dt_change)]
+    return [d for d in list_items if _stamped_after(d, str_key=str_key, dt_change=dt_change)]
 
 
-def _submitted_after(dict_review: dict, *, dt_change: datetime.datetime) -> bool:
-    """Return whether one review was submitted after ``dt_change``; ``False`` when unknown."""
+def _stamped_after(dict_item: dict, *, str_key: str, dt_change: datetime.datetime) -> bool:
+    """Return whether one item's ``str_key`` time is after ``dt_change``; ``False`` if unknown."""
     try:
-        return _parse_time(dict_review.get("submittedAt") or "") > dt_change
+        return _parse_time(dict_item.get(str_key) or "") > dt_change
     except (ValueError, TypeError):
         return False
 
@@ -2470,13 +2470,19 @@ def _missing_review(
         return None, ""
     str_author = (dict_pr.get("author") or {}).get("login") or ""
     return check_missing_review(
-        _reviews_after_base_change(dict_pr),
+        _after_base_change(
+            dict_pr,
+            list_items=dict_pr.get("reviews", {}).get("nodes", []),
+            str_key="submittedAt",
+        ),
         set_reviewers=set_reviewers,
         str_pr_author=""
         if _borrows_bot_login(dict_pr, set_declared=set_reviewers)
         else str_author,
         str_head_oid=dict_pr.get("headRefOid") or "",
-        list_notices=dict_pr.get("comments", {}).get("nodes", []),
+        list_notices=_after_base_change(
+            dict_pr, list_items=dict_pr.get("comments", {}).get("nodes", []), str_key="createdAt"
+        ),
         str_head_date=_head_committed_date(dict_pr),
         tuple_markers=load_comment_markers(pathlib.Path.cwd()),
         set_posters=load_marker_posters(pathlib.Path.cwd()),

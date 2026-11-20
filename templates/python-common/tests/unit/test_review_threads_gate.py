@@ -5306,3 +5306,50 @@ def test_a_head_review_after_the_latest_retarget_still_counts(
     assert cls_gate._missing_review(
         dict_pr, str_repo_full="o/r", set_reviewers={"coderabbitai[bot]"}
     ) == (None, "")
+
+
+def _pr_with_notice_and_retarget(str_retarget: str) -> dict:
+    """Build a PR whose only review evidence is a completion notice posted 2026-01-02."""
+    return {
+        "author": {"login": "someone"},
+        "headRefOid": _HEAD,
+        "baseRefOid": "base",
+        "timelineItems": {
+            "nodes": [{"__typename": "BaseRefChangedEvent", "createdAt": str_retarget}]
+        },
+        "comments": {"nodes": [_notice("coderabbitai", str_body=_NOTICE_PERFORMED)]},
+        "reviews": {"nodes": []},
+        "commits": {"nodes": [{"commit": {"committedDate": _HEAD_DATE}}]},
+    }
+
+
+@pytest.mark.parametrize(
+    ("str_retarget", "bool_expected_problem"),
+    [
+        pytest.param("2026-01-03T00:00:00Z", True, id="notice-before-retarget"),
+        pytest.param("2026-01-01T12:00:00Z", False, id="notice-after-retarget"),
+    ],
+)
+def test_a_completion_notice_counts_only_after_the_latest_retarget(
+    *, str_retarget: str, bool_expected_problem: bool
+) -> None:
+    """A notice is held to the same base-change cutoff as a review object.
+
+    Raised by review on #1223: reviews were filtered by the latest ``BaseRefChangedEvent`` but
+    completion notices were not, so a "Review finished" written against the old base kept
+    satisfying the gate after a retarget.
+
+    Parameters
+    ----------
+    str_retarget : str
+        When the base branch was last changed.
+    bool_expected_problem : bool
+        Whether the gate must still report a missing review.
+    """
+    cls_gate = _load_gate()
+    str_problem, _ = cls_gate._missing_review(
+        _pr_with_notice_and_retarget(str_retarget),
+        str_repo_full="o/r",
+        set_reviewers={"coderabbitai[bot]"},
+    )
+    assert (str_problem is not None) is bool_expected_problem
