@@ -1,8 +1,10 @@
 """Standard-library runtime type checking for plain annotated parameters.
 
 The package ships with no runtime dependencies, so this decorator replaces a third-party
-checker. It validates every argument whose annotation is a plain class (``str``, ``int``)
-and leaves generic, union and string-forward annotations to mypy. Annotations resolve on
+checker. It validates every argument whose annotation is a plain class (``str``, ``int``),
+each member of a union (``date | datetime``, ``str | None``) and the origin class of a
+generic alias (``list[int]`` checks ``list``); ``Literal`` values, container elements and
+string-forward annotations are left to mypy. Annotations resolve on
 the first call, so a class defined later in the module works and a name imported only under
 ``TYPE_CHECKING`` skips that one parameter's check instead of failing the import.
 """
@@ -13,12 +15,13 @@ from collections.abc import Callable
 import functools
 import inspect
 import types
-from typing import Any, ParamSpec, TypeVar, get_type_hints
+from typing import Any, ParamSpec, TypeVar, Union, get_args, get_origin, get_type_hints
 
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 _WIDENED = {float: (int, float), complex: (int, float, complex)}
+_UNION_ORIGINS = (Union, types.UnionType)
 
 
 def _accepts(*, cls_expected: type, value: object) -> bool:
@@ -113,18 +116,39 @@ def _plain_class(hint: object) -> type:
     """
     if isinstance(hint, type) and hint is not Any:
         return hint
+    cls_origin = get_origin(hint)
+    if isinstance(cls_origin, type):
+        return cls_origin
     return object
 
 
-def _check_item(*, str_name: str, cls_expected: type, item: object) -> None:
-    """Raise ``TypeError`` when one value violates the annotated class.
+def _expected_classes(hint: object) -> tuple[type, ...]:
+    """Return the classes a value may match: every union member, else the one plain class.
+
+    Parameters
+    ----------
+    hint : object
+        A resolved annotation, or ``None`` when the parameter has none.
+
+    Returns
+    -------
+    tuple[type, ...]
+        The acceptable classes; ``(object,)`` when nothing checkable is annotated.
+    """
+    if get_origin(hint) not in _UNION_ORIGINS:
+        return (_plain_class(hint),)
+    return tuple(cls for member in get_args(hint) for cls in _expected_classes(member))
+
+
+def _check_item(*, str_name: str, tuple_expected: tuple[type, ...], item: object) -> None:
+    """Raise ``TypeError`` when one value matches none of the annotated classes.
 
     Parameters
     ----------
     str_name : str
         Parameter name.
-    cls_expected : type
-        The annotated class.
+    tuple_expected : tuple[type, ...]
+        The annotated classes (one, or every member of a union).
     item : object
         The value to check.
 
@@ -138,11 +162,13 @@ def _check_item(*, str_name: str, cls_expected: type, item: object) -> None:
     TypeError
         If the value is not acceptable for the class.
     """
-    if not _accepts(cls_expected=cls_expected, value=item):
-        raise TypeError(
-            f"parameter {str_name}={item!r} violates type hint "
-            f"{cls_expected.__name__}, got {type(item).__name__}"
-        )
+    if any(_accepts(cls_expected=cls, value=item) for cls in tuple_expected):
+        return
+    str_expected = " | ".join(cls.__name__ for cls in tuple_expected)
+    raise TypeError(
+        f"parameter {str_name}={item!r} violates type hint "
+        f"{str_expected}, got {type(item).__name__}"
+    )
 
 
 def _check_argument(
@@ -164,9 +190,9 @@ def _check_argument(
     None
         Nothing; the check either passes or raises ``TypeError``.
     """
-    cls_expected = _plain_class(dict_hints.get(cls_parameter.name))
+    tuple_expected = _expected_classes(dict_hints.get(cls_parameter.name))
     for item in _EXPANDERS.get(cls_parameter.kind, _single_value)(value):
-        _check_item(str_name=cls_parameter.name, cls_expected=cls_expected, item=item)
+        _check_item(str_name=cls_parameter.name, tuple_expected=tuple_expected, item=item)
 
 
 def _check_call(
