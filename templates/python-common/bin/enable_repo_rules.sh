@@ -136,22 +136,24 @@ report_blocking_checks() {
 		return 2
 	fi
 	str_rules=".[] | select(.type == \"required_status_checks\" and .ruleset_id == $str_id)"
-	if ! str_live="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --jq \
-		"[$str_rules | .parameters.required_status_checks[]?.context] | join(\", \")" 2>&1)"; then
+	if ! str_live="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --paginate --jq \
+		"$str_rules | .parameters.required_status_checks[]?.context" 2>&1)"; then
 		print_status "warning" "Could not READ the rules applying to $str_repo:$str_branch (so the blocking set is UNKNOWN, not empty): ${str_live:-no output from gh}"
 		return 2
 	fi
+	str_live="${str_live//$'\n'/, }"
 	if [ -z "$str_live" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' applies NO required status checks to $str_repo:$str_branch — CI runs and blocks NOTHING there. Check that the ruleset targets the default branch and that REQUIRED_CHECKS in bin/enable_repo_rules.sh is populated, then re-run."
 		return 2
 	fi
 	print_status "config" "Merge-blocking checks live on $str_repo:$str_branch: $str_live"
 
-	if ! str_strict="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --jq \
-		"[$str_rules | .parameters.strict_required_status_checks_policy] | first" 2>&1)"; then
+	if ! str_strict="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --paginate --jq \
+		"$str_rules | .parameters.strict_required_status_checks_policy" 2>&1)"; then
 		print_status "warning" "Could not READ the strict policy on $str_repo (so it is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
 		return 2
 	fi
+	str_strict="${str_strict%%$'\n'*}"
 	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
 		print_status "warning" "strict_required_status_checks_policy is absent on $str_repo (ruleset '$RULESET_NAME') — UNKNOWN, not enforced"
 		return 2
