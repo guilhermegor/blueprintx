@@ -11,6 +11,7 @@ the gate: 14 threads all reading ``isResolved: true`` while 11 held no author re
 """
 
 from collections.abc import Callable
+import copy
 import functools
 import importlib.util
 import json
@@ -463,7 +464,7 @@ def tuple_paged_fetch() -> tuple[ModuleType, dict, Mock]:
         The loaded gate, the merged pull request, and the page-fetch mock.
     """
     cls_gate = _load_gate()
-    cls_page = Mock(side_effect=[_DICT_PAGE_ONE, _DICT_PAGE_TWO])
+    cls_page = Mock(side_effect=copy.deepcopy([_DICT_PAGE_ONE, _DICT_PAGE_TWO]))
     with pytest.MonkeyPatch.context() as cls_patch:
         cls_patch.setattr(cls_gate, "_fetch_page", cls_page)
         dict_pr = cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
@@ -5238,8 +5239,8 @@ def test_the_thread_query_asks_for_the_reply_authors_actor_type() -> None:
 def test_fetch_refuses_to_merge_pages_from_another_revision() -> None:
     """A head that moves between pages would mix two revisions' evidence into one verdict."""
     cls_gate = _load_gate()
-    dict_one = {**_DICT_PAGE_ONE, "headRefOid": _HEAD, "baseRefOid": "base"}
-    dict_two = {**_DICT_PAGE_TWO, "headRefOid": _SUPERSEDED, "baseRefOid": "base"}
+    dict_one = {**copy.deepcopy(_DICT_PAGE_ONE), "headRefOid": _HEAD, "baseRefOid": "base"}
+    dict_two = {**copy.deepcopy(_DICT_PAGE_TWO), "headRefOid": _SUPERSEDED, "baseRefOid": "base"}
     with pytest.MonkeyPatch.context() as cls_patch:
         cls_patch.setattr(cls_gate, "_fetch_page", Mock(side_effect=[dict_one, dict_two]))
         with pytest.raises(RuntimeError, match="revision"):
