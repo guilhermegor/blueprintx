@@ -5204,3 +5204,104 @@ def test_a_ladder_review_carrying_the_marker_still_needs_an_answer() -> None:
         tuple_markers=("fallback review — runtime:",),
     )
     assert len(list_problems) == 1
+
+
+def test_a_human_reviewers_opening_finding_is_not_its_own_reply() -> None:
+    """A resolved thread holding only a long finding from a human reviewer is unanswered."""
+    list_threads = [_thread([("human-reviewer", "**Finding.** " + _LONG)])]
+    assert len(_load_gate().find_thread_problems(list_threads, set_roster=_ROSTER)) == 1
+
+
+def test_an_unlisted_bots_long_status_comment_is_not_a_reply() -> None:
+    """A bot outside the roster posting a long comment does not answer a finding."""
+    dict_thread = _thread([("coderabbitai[bot]", "**Finding.** " + _LONG)])
+    dict_thread["comments"]["nodes"].append(
+        {"author": {"login": "some-status", "__typename": "Bot"}, "body": _LONG}
+    )
+    assert len(_load_gate().find_thread_problems([dict_thread], set_roster=_ROSTER)) == 1
+
+
+def test_a_ghost_authored_reply_is_not_a_reply() -> None:
+    """A deleted account (null author) is not a known human, so it answers nothing."""
+    dict_thread = _thread([("coderabbitai[bot]", "**Finding.** " + _LONG)])
+    dict_thread["comments"]["nodes"].append({"author": None, "body": _LONG})
+    assert len(_load_gate().find_thread_problems([dict_thread], set_roster=_ROSTER)) == 1
+
+
+def test_the_thread_query_asks_for_the_reply_authors_actor_type() -> None:
+    """The bot check needs ``__typename`` on thread comments, which only the query can ask."""
+    assert "comments(first:50) { nodes { author { login __typename } body } }" in (
+        _load_gate()._QUERY
+    )
+
+
+def test_fetch_refuses_to_merge_pages_from_another_revision() -> None:
+    """A head that moves between pages would mix two revisions' evidence into one verdict."""
+    cls_gate = _load_gate()
+    dict_one = {**_DICT_PAGE_ONE, "headRefOid": _HEAD, "baseRefOid": "base"}
+    dict_two = {**_DICT_PAGE_TWO, "headRefOid": _SUPERSEDED, "baseRefOid": "base"}
+    with pytest.MonkeyPatch.context() as cls_patch:
+        cls_patch.setattr(cls_gate, "_fetch_page", Mock(side_effect=[dict_one, dict_two]))
+        with pytest.raises(RuntimeError, match="revision"):
+            cls_gate.fetch_pull_request("o", str_repo="r", int_number=1)
+
+
+def test_a_head_review_older_than_the_latest_retarget_does_not_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retargeting without a push leaves the head SHA alone but changes the diff reviewed."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
+    dict_pr = {
+        "author": {"login": "someone"},
+        "headRefOid": _HEAD,
+        "baseRefOid": "base",
+        "timelineItems": {
+            "nodes": [{"__typename": "BaseRefChangedEvent", "createdAt": "2026-10-02T00:00:00Z"}]
+        },
+        "comments": {"nodes": []},
+        "reviews": {
+            "nodes": [
+                {
+                    **_review("coderabbitai[bot]"),
+                    "state": "COMMENTED",
+                    "submittedAt": "2026-10-01T00:00:00Z",
+                }
+            ]
+        },
+        "commits": {"nodes": []},
+    }
+    str_problem, _ = cls_gate._missing_review(
+        dict_pr, str_repo_full="o/r", set_reviewers={"coderabbitai[bot]"}
+    )
+    assert str_problem is not None
+
+
+def test_a_head_review_after_the_latest_retarget_still_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cutoff only refuses reviews that predate the retarget."""
+    cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
+    dict_pr = {
+        "author": {"login": "someone"},
+        "headRefOid": _HEAD,
+        "baseRefOid": "base",
+        "timelineItems": {
+            "nodes": [{"__typename": "BaseRefChangedEvent", "createdAt": "2026-10-01T00:00:00Z"}]
+        },
+        "comments": {"nodes": []},
+        "reviews": {
+            "nodes": [
+                {
+                    **_review("coderabbitai[bot]"),
+                    "state": "COMMENTED",
+                    "submittedAt": "2026-10-02T00:00:00Z",
+                }
+            ]
+        },
+        "commits": {"nodes": []},
+    }
+    assert cls_gate._missing_review(
+        dict_pr, str_repo_full="o/r", set_reviewers={"coderabbitai[bot]"}
+    ) == (None, "")

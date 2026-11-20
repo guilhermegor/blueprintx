@@ -156,7 +156,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
           isResolved
           isOutdated
           path
-          comments(first:50) { nodes { author { login } body } }
+          comments(first:50) { nodes { author { login __typename } body } }
         }
       }
     }
@@ -382,6 +382,13 @@ def _fetch_page(
 
 
 _TUPLE_PAGED = ("reviews", "reviewThreads", "comments")
+
+
+def _revision(dict_pr: dict) -> tuple[str | None, str | None]:
+    """Return the ``(headRefOid, baseRefOid)`` pair one page was read at."""
+    return dict_pr.get("headRefOid"), dict_pr.get("baseRefOid")
+
+
 _TUPLE_CURSOR_KWARGS = ("str_review_cursor", "str_thread_cursor", "str_comment_cursor")
 
 
@@ -468,6 +475,8 @@ def fetch_pull_request(
         dict_next = _fetch_page(
             str_owner, str_repo=str_repo, int_number=int_number, **dict_cursors
         )
+        if _revision(dict_next) != _revision(dict_pr):
+            raise RuntimeError("the PR's revision moved between pages; re-run the gate")
         for dict_side, str_key in list_sides:
             if not dict_side["pageInfo"]["hasNextPage"]:
                 continue
@@ -1517,9 +1526,8 @@ def find_thread_problems(
             continue
         list_answers = [
             c
-            for c in list_comments
-            if normalise_login((c.get("author") or {}).get("login") or "") not in set_roster
-            and len((c.get("body") or "").strip()) >= int_min_chars
+            for c in list_comments[1:]
+            if _is_thread_answer(c, set_roster=set_roster, int_min_chars=int_min_chars)
         ]
         str_first = (list_comments[0].get("body") or "").strip().splitlines()
         str_title = next(
@@ -1746,17 +1754,30 @@ _RE_ANSWER_SHAPE = re.compile(
 )
 
 
-def _is_human_answer(dict_notice: dict, *, set_roster: set[str], int_min_chars: int) -> bool:
-    """Return whether one comment is by a known human outside the roster and reads as an answer."""
-    dict_author = dict_notice.get("author") or {}
+def _is_human_outside_roster(dict_comment: dict, *, set_roster: set[str]) -> bool:
+    """Return whether one comment's author is a known human account outside the roster."""
+    dict_author = dict_comment.get("author") or {}
     str_login = dict_author.get("login") or ""
-    str_body = (dict_notice.get("body") or "").strip()
     return (
         bool(str_login)
         and normalise_login(str_login) not in set_roster
         and dict_author.get("__typename", "User") == "User"
         and not str_login.endswith(_BOT_SUFFIX)
-        and (len(str_body) >= int_min_chars or bool(_RE_ANSWER_SHAPE.search(str_body)))
+    )
+
+
+def _is_thread_answer(dict_comment: dict, *, set_roster: set[str], int_min_chars: int) -> bool:
+    """Return whether one thread reply is by a known human outside the roster and long enough."""
+    return _is_human_outside_roster(dict_comment, set_roster=set_roster) and (
+        len((dict_comment.get("body") or "").strip()) >= int_min_chars
+    )
+
+
+def _is_human_answer(dict_notice: dict, *, set_roster: set[str], int_min_chars: int) -> bool:
+    """Return whether one comment is by a known human outside the roster and reads as an answer."""
+    str_body = (dict_notice.get("body") or "").strip()
+    return _is_human_outside_roster(dict_notice, set_roster=set_roster) and (
+        len(str_body) >= int_min_chars or bool(_RE_ANSWER_SHAPE.search(str_body))
     )
 
 
@@ -2214,6 +2235,31 @@ def _parse_time(str_time: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(str_time.replace("Z", "+00:00"))
 
 
+def _reviews_after_base_change(dict_pr: dict) -> list[dict]:
+    """Return the PR's reviews submitted after its latest base change; all of them when none.
+
+    Fails closed: an unreadable event time drops every review, an unreadable review time drops
+    that review.
+    """
+    list_reviews = dict_pr.get("reviews", {}).get("nodes", [])
+    list_changes = (dict_pr.get("timelineItems") or {}).get("nodes") or []
+    if not list_changes:
+        return list_reviews
+    try:
+        dt_change = max(_parse_time(dict_ev.get("createdAt") or "") for dict_ev in list_changes)
+    except (ValueError, AttributeError, TypeError):
+        return []
+    return [r for r in list_reviews if _submitted_after(r, dt_change=dt_change)]
+
+
+def _submitted_after(dict_review: dict, *, dt_change: datetime.datetime) -> bool:
+    """Return whether one review was submitted after ``dt_change``; ``False`` when unknown."""
+    try:
+        return _parse_time(dict_review.get("submittedAt") or "") > dt_change
+    except (ValueError, TypeError):
+        return False
+
+
 def _review_times(
     dict_pr: dict, *, str_oid: str, set_roster: set[str] | None
 ) -> list[datetime.datetime]:
@@ -2424,7 +2470,7 @@ def _missing_review(
         return None, ""
     str_author = (dict_pr.get("author") or {}).get("login") or ""
     return check_missing_review(
-        dict_pr.get("reviews", {}).get("nodes", []),
+        _reviews_after_base_change(dict_pr),
         set_reviewers=set_reviewers,
         str_pr_author=""
         if _borrows_bot_login(dict_pr, set_declared=set_reviewers)
