@@ -68,6 +68,7 @@ AUTO_MERGEABLE = frozenset({"docs", "ci", "deps"})
 SIZE_BUCKETS = (("XS", 10), ("S", 50), ("M", 200), ("L", 500))
 SIZE_XL = "XL"
 
+REQUIRED_AXES = frozenset({"tests"})
 PAGE_SIZE = 100
 PR_FILES_CAP = 3000
 
@@ -239,7 +240,7 @@ def axes_are_terminal(dict_axes: dict) -> bool:
     bool
         ``True`` when no axis is still pending or failing.
     """
-    return not any(v in {"pending", "failing"} for v in dict_axes.values())
+    return not any(v in {"pending", "failing", "absent"} for v in dict_axes.values())
 
 
 def render_comment(
@@ -269,7 +270,13 @@ def render_comment(
     str
         The full comment body, marker included.
     """
-    dict_icon = {"success": "✅", "failure": "❌", "failing": "❌", "pending": "⏳"}
+    dict_icon = {
+        "success": "✅",
+        "failure": "❌",
+        "failing": "❌",
+        "pending": "⏳",
+        "absent": "➖",
+    }
     list_rows = []
     for str_axis, str_state in sorted(dict_axes.items()):
         str_detail = ", ".join(f"`{n}`" for n in dict_failing.get(str_axis, [])) or "—"
@@ -540,7 +547,7 @@ def collect_axes(list_check_runs: list, *, dict_axis_rules: dict) -> tuple:
             if any(m.lower() in (r.get("name") or "").lower() for m in tuple_matches)
         ]
         if not list_mine:
-            dict_axes[str_axis] = "pending"
+            dict_axes[str_axis] = "pending" if str_axis in REQUIRED_AXES else "absent"
             continue
         list_failed = [
             r.get("name")
@@ -671,7 +678,7 @@ def sync_gate_labels(
             _api("DELETE", str_url=f"{API}/repos/{str_repo}/issues/{int_pr}/labels/{str_stale}")
 
 
-def reconcile_auto_merge(dict_pr: dict, *, bool_eligible: bool, list_labels: list) -> None:
+def reconcile_auto_merge(dict_pr: dict, *, bool_eligible: bool, list_labels: list) -> bool:
     """Disarm auto-merge when ``do-not-merge`` is present, else arm it for an eligible PR.
 
     GitHub keeps an armed auto-merge across label changes, so skipping the arm call alone
@@ -688,19 +695,49 @@ def reconcile_auto_merge(dict_pr: dict, *, bool_eligible: bool, list_labels: lis
 
     Returns
     -------
-    None
+    bool
+        ``False`` only when the opt-out label could not disarm an armed auto-merge; arming
+        stays best-effort.
     """
     if BLOCK_LABEL in list_labels and dict_pr.get("auto_merge"):
         str_reason = _disable_auto_merge(dict_pr.get("node_id"))
         print(
-            f"::warning::{BLOCK_LABEL}: could not disarm auto-merge: {str_reason}"
+            f"::error::{BLOCK_LABEL}: could not disarm auto-merge: {str_reason}"
             if str_reason
             else f"::notice::{BLOCK_LABEL}: auto-merge disarmed"
         )
-        return
+        return not str_reason
     if bool_eligible and not _is_dependabot(dict_pr):
         str_head_sha = (dict_pr.get("head") or {}).get("sha", "")
         _report_skip(_enable_auto_merge(dict_pr.get("node_id"), str_head_sha=str_head_sha))
+    return True
+
+
+def _reread_same_revision(str_pr_url: str, *, dict_pr: dict, int_pr: int) -> dict | None:
+    """Re-read the PR before publishing, or ``None`` when it is unreadable or has moved.
+
+    Parameters
+    ----------
+    str_pr_url : str
+        The PR's REST URL.
+    dict_pr : dict
+        The payload the verdict was computed from.
+    int_pr : int
+        The PR number, for the error annotation.
+
+    Returns
+    -------
+    dict | None
+        The fresh payload when its revision matches ``dict_pr``, else ``None``.
+    """
+    dict_now = _api("GET", str_url=str_pr_url)
+    if not isinstance(dict_now, dict):
+        print(f"::error::could not re-read PR #{int_pr} before publishing")
+        return None
+    if _revision(dict_now) != _revision(dict_pr):
+        print(f"::error::PR #{int_pr} moved to a new revision while gated; re-run this job")
+        return None
+    return dict_now
 
 
 def main() -> int:
@@ -737,13 +774,9 @@ def main() -> int:
         int_poll_seconds=int(os.environ.get("GATE_POLL_SECONDS", "30")),
     )
 
-    dict_now = _api("GET", str_url=str_pr_url)
-    if not isinstance(dict_now, dict):
-        print(f"::error::could not re-read PR #{int_pr} before publishing")
+    dict_now = _reread_same_revision(str_pr_url, dict_pr=dict_pr, int_pr=int_pr)
+    if dict_now is None:
         return 1
-    if _revision(dict_now) != _revision(dict_pr):
-        print(f"::notice::PR #{int_pr} moved to a new revision; its own run publishes the verdict")
-        return 0
 
     list_labels = [lbl["name"] for lbl in dict_now.get("labels", [])]
     bool_eligible = is_auto_mergeable(
@@ -752,7 +785,9 @@ def main() -> int:
         list_labels=list_labels,
         bool_lockfile_only=is_lockfile_only(list_paths),
     )
-    reconcile_auto_merge(dict_now, bool_eligible=bool_eligible, list_labels=list_labels)
+    bool_disarmed = reconcile_auto_merge(
+        dict_now, bool_eligible=bool_eligible, list_labels=list_labels
+    )
 
     sync_gate_labels(
         str_repo,
@@ -774,7 +809,7 @@ def main() -> int:
     )
     str_state = gate_state(dict_axes)
     print(f"risk={str_risk} size={str_size} eligible={bool_eligible} state={str_state}")
-    return 0 if str_state == "success" else 1
+    return 0 if str_state == "success" and bool_disarmed else 1
 
 
 if __name__ == "__main__":

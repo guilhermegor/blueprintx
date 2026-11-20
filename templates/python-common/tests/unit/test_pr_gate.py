@@ -194,8 +194,9 @@ def test_xl_veto_applies_to_handwritten_but_is_waived_for_a_lockfile(
         ({"a": "failure", "b": "pending"}, "failure"),
         ({"a": "pending", "b": "success"}, "pending"),
         ({"a": "success"}, "success"),
+        ({"tests": "success", "lint": "absent"}, "success"),
     ],
-    ids=["red-outranks-pending", "pending-outranks-green", "all-green"],
+    ids=["red-outranks-pending", "pending-outranks-green", "all-green", "absent-optional-axis"],
 )
 def test_gate_state_lets_red_outrank_pending(dict_axes: dict, *, str_state: str) -> None:
     """For DISPLAY, a known failure outranks a still-deciding axis.
@@ -215,8 +216,9 @@ def test_gate_state_lets_red_outrank_pending(dict_axes: dict, *, str_state: str)
     [
         ({"a": "failure", "b": "pending"}, False),
         ({"a": "failure", "b": "success"}, True),
+        ({"tests": "success", "lint": "absent"}, False),
     ],
-    ids=["red-but-still-deciding", "red-and-everything-reported"],
+    ids=["red-but-still-deciding", "red-and-everything-reported", "absent-axis-may-still-start"],
 )
 def test_terminality_is_separate_from_display_state(
     dict_axes: dict, *, bool_terminal: bool
@@ -237,6 +239,12 @@ def test_axis_with_no_check_run_is_pending_not_failing() -> None:
     """An axis with no check-run yet on this head SHA is awaiting a result, never a failure."""
     dict_axes, _ = gate.collect_axes([], dict_axis_rules={"tests": ("Run Automated Tests",)})
     assert dict_axes["tests"] == "pending"
+
+
+def test_optional_axis_with_no_check_run_is_absent() -> None:
+    """A scaffold with no lint or CodeQL producer must not block every PR on that axis."""
+    dict_axes, _ = gate.collect_axes([], dict_axis_rules={"lint": ("Ruff",)})
+    assert dict_axes["lint"] == "absent"
 
 
 def test_collect_axes_matches_the_analysis_not_the_umbrella() -> None:
@@ -811,3 +819,34 @@ def test_main_publishes_nothing_for_a_superseded_revision(
     monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: ({}, {}))
     gate.main()
     assert set(cls_api.list_methods) == {"GET"}
+
+
+_DICT_GREEN_AXES = {"tests": "success", "lint": "success", "code scanning": "success"}
+
+
+def test_main_exits_nonzero_for_a_superseded_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A base-only retarget triggers no new gate run, so this run must not leave a green."""
+    _set_env(monkeypatch)
+    dict_old = _DICT_MAIN_API_RESPONSES[_STR_PR_URL]
+    cls_api = _MovingHeadApi([dict_old, {**dict_old, "base": {"sha": "base2"}}])
+    monkeypatch.setattr(gate, "_api", cls_api)
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: (_DICT_GREEN_AXES, {}))
+    assert gate.main() == 1
+
+
+def test_main_exits_nonzero_when_the_opt_out_cannot_disarm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A still-armed auto-merge under ``do-not-merge`` must not get a green required check."""
+    _set_env(monkeypatch)
+    dict_pr = {
+        **_DICT_MAIN_API_RESPONSES[_STR_PR_URL],
+        "labels": [{"name": gate.BLOCK_LABEL}],
+        "auto_merge": {"merge_method": "squash"},
+    }
+    monkeypatch.setattr(gate, "_api", _RoutedApi({_STR_PR_URL: dict_pr}))
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: (_DICT_GREEN_AXES, {}))
+    monkeypatch.setattr(gate, "_disable_auto_merge", lambda *a, **k: "HTTP 502")
+    assert gate.main() == 1
