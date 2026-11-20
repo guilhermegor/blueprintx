@@ -1232,3 +1232,85 @@ def test_build_candidate_selects_the_coderabbit_notice_past_a_newer_greptile_one
         cls_gate=cls_gate,
     )
     assert (dict_candidate or {}).get("notice") is list_comments[0]
+
+
+def _retargeted_pr() -> dict:
+    """Build a PR whose only head review predates the latest base change."""
+    return {
+        "headRefOid": "cafe123",
+        "timelineItems": {
+            "nodes": [{"__typename": "BaseRefChangedEvent", "createdAt": "2026-08-24T23:00:00Z"}]
+        },
+        "reviews": {
+            "nodes": [
+                {
+                    "author": {"login": "coderabbitai"},
+                    "commit": {"oid": "cafe123"},
+                    "submittedAt": "2026-08-24T22:00:00Z",
+                }
+            ]
+        },
+    }
+
+
+def test_a_head_review_from_before_a_retarget_does_not_stop_a_retry(
+    cls_retry: ModuleType, *, cls_gate: ModuleType
+) -> None:
+    """The retry reads reviews through the gate's base-change cutoff.
+
+    Raised by review on #1223: the gate refuses a head review written before a retarget, so
+    a retry that still counted it would never re-ask, and the PR would stay red.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    cls_gate : types.ModuleType
+        The gate module.
+    """
+    list_comments = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED)]
+
+    assert (
+        cls_retry.pr_needs_retry(
+            _retargeted_pr(),
+            list_comments=list_comments,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
+        )
+        is True
+    )
+
+
+def test_build_candidate_keeps_a_pr_whose_head_review_predates_a_retarget(
+    cls_retry: ModuleType, *, cls_gate: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pre-retarget head review does not drop the PR from the retry queue.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    cls_gate : types.ModuleType
+        The gate module.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub both reads.
+    """
+    monkeypatch.setattr(cls_gate, "fetch_pull_request", Mock(return_value=_retargeted_pr()))
+    monkeypatch.setattr(
+        cls_retry,
+        "fetch_comments",
+        Mock(return_value=[_comment("coderabbitai", str_body=_STR_RATE_LIMITED)]),
+    )
+
+    assert (
+        cls_retry.build_candidate(
+            "acme/widget",
+            int_number=7,
+            str_created_at="2026-08-24T00:00:00Z",
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+        )
+        is not None
+    )

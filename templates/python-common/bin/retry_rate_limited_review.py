@@ -416,7 +416,7 @@ def pr_needs_retry(
         ``True`` when nothing has reviewed the head commit, the reviewer's newest word is a
         rate limit, and we have not asked within the cooldown.
     """
-    list_reviews = ((dict_pr.get("reviews") or {}).get("nodes")) or []
+    list_reviews = cls_gate.current_reviews(dict_pr)
     str_head = dict_pr.get("headRefOid") or ""
     if cls_gate.reviewers_who_reported(
         list_reviews, set_roster=set_reviewers, str_commit_oid=str_head
@@ -569,7 +569,7 @@ def build_candidate(
         print(f"::warning::could not read #{int_number}, skipping it: {str(cls_error)[:200]}")
         return None
 
-    list_reviews = ((dict_pr.get("reviews") or {}).get("nodes")) or []
+    list_reviews = cls_gate.current_reviews(dict_pr)
     str_head = dict_pr.get("headRefOid") or ""
     if cls_gate.reviewers_who_reported(
         list_reviews, set_roster=set_reviewers, str_commit_oid=str_head

@@ -2252,6 +2252,19 @@ def _after_base_change(dict_pr: dict, *, list_items: list[dict], str_key: str) -
     return [d for d in list_items if _stamped_after(d, str_key=str_key, dt_change=dt_change)]
 
 
+def current_reviews(dict_pr: dict) -> list[dict]:
+    """Return the PR's reviews submitted after its latest base change (all when never changed).
+
+    The one review list the gate and ``retry_rate_limited_review.py`` both judge, so the retry
+    never treats as reviewed a head the gate refuses.
+    """
+    return _after_base_change(
+        dict_pr,
+        list_items=(dict_pr.get("reviews") or {}).get("nodes") or [],
+        str_key="submittedAt",
+    )
+
+
 def _stamped_after(dict_item: dict, *, str_key: str, dt_change: datetime.datetime) -> bool:
     """Return whether one item's ``str_key`` time is after ``dt_change``; ``False`` if unknown."""
     try:
@@ -2470,11 +2483,7 @@ def _missing_review(
         return None, ""
     str_author = (dict_pr.get("author") or {}).get("login") or ""
     return check_missing_review(
-        _after_base_change(
-            dict_pr,
-            list_items=dict_pr.get("reviews", {}).get("nodes", []),
-            str_key="submittedAt",
-        ),
+        current_reviews(dict_pr),
         set_reviewers=set_reviewers,
         str_pr_author=""
         if _borrows_bot_login(dict_pr, set_declared=set_reviewers)
