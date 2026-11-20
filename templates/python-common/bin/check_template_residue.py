@@ -9,6 +9,7 @@ make. The report fails only under ``--strict``.
 
 import argparse
 import ast
+import fnmatch
 import pathlib
 import re
 import sys
@@ -154,9 +155,16 @@ def declared_dependencies(path_pyproject: pathlib.Path) -> dict[str, str]:
 
 
 def residue_dependencies(
-    dict_modules: dict[str, pathlib.Path], *, list_residue: list[str], path_root: pathlib.Path
+    dict_modules: dict[str, pathlib.Path],
+    *,
+    list_residue: list[str],
+    list_open: list[str],
+    path_root: pathlib.Path,
 ) -> list[str]:
     """Name the third-party imports that only the residue modules make.
+
+    An import counts as live only when a reachable module makes it, so a dependency the
+    residue shares with another unreachable module is still reported.
 
     Parameters
     ----------
@@ -164,6 +172,8 @@ def residue_dependencies(
         Every module under ``src/`` that counts as shipped code.
     list_residue : list of str
         The unreachable vendored utils.
+    list_open : list of str
+        Every module still unreachable once the allowlisted ones count as roots.
     path_root : pathlib.Path
         Project root holding ``pyproject.toml``.
 
@@ -177,25 +187,50 @@ def residue_dependencies(
         str_module: third_party_imports(path_file, set_first_party=set_first_party)
         for str_module, path_file in dict_modules.items()
     }
-    set_residue = set(list_residue)
+    set_open = set(list_open)
     set_live = set().union(
         *(
             set_names
             for str_module, set_names in dict_imports.items()
-            if str_module not in set_residue
+            if str_module not in set_open
         )
     )
-    set_only = set().union(*(dict_imports[str_module] for str_module in set_residue)) - set_live
+    set_only = set().union(*(dict_imports[str_module] for str_module in list_residue)) - set_live
     dict_declared = declared_dependencies(path_root / "pyproject.toml")
     return sorted(
         dict_declared.get(
-            normalized(str_name), f"{str_name} (import; no declared dependency matches)"
+            normalized(str_name), f"{str_name} (import name; no declared dependency matches it)"
         )
         for str_name in set_only
     )
 
 
-def audit(path_root: pathlib.Path) -> tuple[list[str], list[str], list[str]]:
+def allowlist_problems(path_root: pathlib.Path, *, list_dead: list[str]) -> list[str]:
+    """Report allowlist entries without a reason and entries that match no unreachable module.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        Project root holding the allowlist.
+    list_dead : list of str
+        The modules the public roots miss.
+
+    Returns
+    -------
+    list of str
+        One message per problem.
+    """
+    list_patterns, list_problems = unreachable.load_allowlist(
+        path_root / unreachable.STR_ALLOWLIST_NAME
+    )
+    return list_problems + [
+        f"allowlist entry '{str_pattern}' matches no unreachable module: remove it"
+        for str_pattern in list_patterns
+        if not any(fnmatch.fnmatchcase(str_module, str_pattern) for str_module in list_dead)
+    ]
+
+
+def audit(path_root: pathlib.Path) -> tuple[list[str], list[str], list[str], list[str]]:
     """Audit one project tree.
 
     Parameters
@@ -206,8 +241,8 @@ def audit(path_root: pathlib.Path) -> tuple[list[str], list[str], list[str]]:
     Returns
     -------
     tuple of list of str
-        Placeholder files, unreachable vendored utils, and the dependencies only those utils
-        import.
+        Placeholder files, unreachable vendored utils, the dependencies only those utils
+        import, and the allowlist problems.
 
     Raises
     ------
@@ -224,13 +259,16 @@ def audit(path_root: pathlib.Path) -> tuple[list[str], list[str], list[str]]:
         if str_module not in list_placeholders
     }
     list_patterns, _ = unreachable.load_allowlist(path_root / unreachable.STR_ALLOWLIST_NAME)
-    _, list_open = unreachable.dead_modules(dict_shipped, list_patterns=list_patterns)
+    list_dead, list_open = unreachable.dead_modules(dict_shipped, list_patterns=list_patterns)
     list_residue = [str_module for str_module in list_open if is_vendored_util(str_module)]
     list_files = [
         str(dict_modules[str_module].relative_to(path_root)) for str_module in list_placeholders
     ]
-    list_deps = residue_dependencies(dict_shipped, list_residue=list_residue, path_root=path_root)
-    return list_files, list_residue, list_deps
+    list_deps = residue_dependencies(
+        dict_shipped, list_residue=list_residue, list_open=list_open, path_root=path_root
+    )
+    list_problems = allowlist_problems(path_root, list_dead=list_dead)
+    return list_files, list_residue, list_deps, list_problems
 
 
 def main(list_argv: list[str] | None = None) -> int:
@@ -244,14 +282,15 @@ def main(list_argv: list[str] | None = None) -> int:
     Returns
     -------
     int
-        1 on a placeholder, an unparsable tree, or (under ``--strict``) any residue; else 0.
+        1 on a placeholder, an unparsable tree, or (under ``--strict``) any residue or
+        allowlist problem; else 0.
     """
     cls_parser = argparse.ArgumentParser(description=__doc__)
     cls_parser.add_argument("--root", type=pathlib.Path, default=unreachable.PATH_ROOT)
     cls_parser.add_argument("--strict", action="store_true")
     cls_args = cls_parser.parse_args(list_argv)
     try:
-        list_files, list_residue, list_deps = audit(cls_args.root.resolve())
+        list_files, list_residue, list_deps, list_problems = audit(cls_args.root.resolve())
     except (SyntaxError, ValueError) as cls_error:
         print(f"❌ {cls_error}")
         return 1
@@ -260,6 +299,8 @@ def main(list_argv: list[str] | None = None) -> int:
             f"❌ {str_file} still holds the lib-minimal placeholder ({STR_PLACEHOLDER!r}):"
             " replace it with the library's API or delete it before releasing"
         )
+    for str_problem in list_problems:
+        print(f"allowlist: {str_problem}")
     for str_module in list_residue:
         print(f"unreachable vendored util: {str_module}")
     for str_dep in list_deps:
@@ -274,7 +315,7 @@ def main(list_argv: list[str] | None = None) -> int:
             f" or allowlist it in {unreachable.STR_ALLOWLIST_NAME} with the reason it is loaded"
             " dynamically."
         )
-    return int(bool(list_files) or (cls_args.strict and bool(list_residue)))
+    return int(bool(list_files) or (cls_args.strict and bool(list_residue or list_problems)))
 
 
 if __name__ == "__main__":

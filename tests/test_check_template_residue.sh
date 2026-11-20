@@ -9,10 +9,12 @@ source "$REPO_ROOT/bin/lib/common.sh"
 GATE="$REPO_ROOT/templates/python-common/bin/check_template_residue.py"
 PLACEHOLDER="$REPO_ROOT/templates/lib-minimal/main.py"
 int_failures=0
+TMP_ROOT="$(mktemp -d)"
+trap 'rm -rf "$TMP_ROOT"' EXIT
 
 make_project() {
     local str_root
-    str_root="$(mktemp -d)"
+    str_root="$(mktemp -d -p "$TMP_ROOT")"
     mkdir -p "$str_root/src/pkg/_internal/utils"
     printf '[tool.poetry.dependencies]\npython = ">=3.11"\nnumpy = ">=1"\npython-dateutil = "^2"\n' \
         > "$str_root/pyproject.toml"
@@ -78,8 +80,13 @@ test_reformatted_placeholder_fails() {
     local str_root
     str_root="$(make_project)"
     use_placeholder "$str_root"
-    sed 's/^    /\t/' "$PLACEHOLDER" > "$str_root/src/pkg/main.py"
-    expect "tab-indented placeholder main.py" fail "$str_root" "placeholder"
+    sed "s/\"Hello from lib-minimal!\"/\"Hello from \" 'lib-minimal!'/" "$PLACEHOLDER" \
+        > "$str_root/src/pkg/main.py"
+    if grep -qF 'Hello from lib-minimal!' "$str_root/src/pkg/main.py"; then
+        print_status "error" "reformat fixture still holds the contiguous literal"
+        int_failures=$((int_failures + 1))
+    fi
+    expect "split, requoted placeholder main.py" fail "$str_root" "placeholder"
     rm -rf "$str_root"
 }
 
@@ -97,7 +104,7 @@ test_unreachable_util_is_reported_not_failed() {
     add_unused_util "$str_root"
     expect "unreachable util, report-only" pass "$str_root" "pkg._internal.utils.unused"
     expect "dep only the unreachable util uses" pass "$str_root" "numpy"
-    expect_absent "dep a reachable module also uses" "$str_root" "python-dateutil"
+    expect_absent "dep a reachable module also uses" "$str_root" "import: dateutil"
     expect_absent "stdlib import" "$str_root" "json"
     rm -rf "$str_root"
 }
@@ -119,9 +126,36 @@ test_allowlisted_util_passes_strict() {
     rm -rf "$str_root"
 }
 
+test_dep_shared_with_dead_module_is_reported() {
+    local str_root
+    str_root="$(make_project)"
+    add_unused_util "$str_root"
+    printf 'import numpy\n' > "$str_root/src/pkg/_internal/dead_config.py"
+    expect "dep shared only with another dead module" pass "$str_root" "import: numpy"
+    rm -rf "$str_root"
+}
+
+test_allowlist_entry_without_reason_fails_strict() {
+    local str_root
+    str_root="$(make_project)"
+    add_unused_util "$str_root"
+    printf 'pkg._internal.utils.unused\n' > "$str_root/.unreachable-modules.txt"
+    expect "reasonless allowlist entry, report-only" pass "$str_root" "has no reason"
+    expect "reasonless allowlist entry, --strict" fail "$str_root" "has no reason" --strict
+    rm -rf "$str_root"
+}
+
+test_stale_allowlist_entry_fails_strict() {
+    local str_root
+    str_root="$(make_project)"
+    printf 'pkg._internal.utils.gone | loaded by importlib\n' > "$str_root/.unreachable-modules.txt"
+    expect "stale allowlist entry, --strict" fail "$str_root" "matches no unreachable module" --strict
+    rm -rf "$str_root"
+}
+
 test_empty_src_fails() {
     local str_root
-    str_root="$(mktemp -d)"
+    str_root="$(mktemp -d -p "$TMP_ROOT")"
     expect "no module under src" fail "$str_root" "no module"
     rm -rf "$str_root"
 }
