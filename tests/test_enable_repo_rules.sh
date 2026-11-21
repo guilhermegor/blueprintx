@@ -109,6 +109,14 @@ repos/o/r/rules/branches/main*)
 	*) str_json='[]' ;;
 	esac
 	;;
+repos/o/r/branches/main/protection)
+	[ "${STUB_PROTECTION:-}" = unprotected-500 ] && { echo "gh: Branch not protected (HTTP 500)" >&2; exit 1; }
+	[ "${STUB_PROTECTION:-}" = not-found ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+	[ "${STUB_PROTECTION:-}" = unprotected ] || { echo "gh: Server Error (HTTP 500)" >&2; exit 1; }
+	echo '{"message":"Branch not protected","documentation_url":"https://docs.github.com","status":"404"}'
+	echo "gh: Branch not protected (HTTP 404)" >&2
+	exit 1
+	;;
 *) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
 esac
 str_jq=""
@@ -118,7 +126,7 @@ STUB
 chmod +x "$WORK_DIR/v/gh"
 
 run_verify() {
-    PATH="$WORK_DIR/v:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT="$1" STUB_APPLIES="$2" bash "$SCRIPT" "$3" 2>&1
+    PATH="$WORK_DIR/v:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT="$1" STUB_APPLIES="$2" STUB_PROTECTION="${STUB_PROTECTION:-}" bash "$SCRIPT" "$3" 2>&1
     echo "rc=$?"
 }
 
@@ -142,6 +150,42 @@ test_check_ruleset_flags_a_disabled_ruleset() {
     assert_has "a disabled ruleset is not present" "rc=1" "$(run_verify disabled 1 check_ruleset)"
 }
 
+test_ruleset_only_repo_has_no_unreadable_protection_warning() {
+    local str_out
+    str_out="$(STUB_PROTECTION=unprotected run_verify active 1 verify)"
+    assert_has "ruleset-only repo still verifies" "rc=0" "$str_out"
+    assert_lacks "a 404 Branch not protected is not a read failure" "Could not READ classic" "$str_out"
+    assert_has "the absence is reported as info" "No classic branch protection" "$str_out"
+}
+
+test_genuine_protection_read_failure_stays_unknown() {
+    local str_out
+    str_out="$(STUB_PROTECTION= run_verify active 1 verify)"
+    assert_has "a 5xx stays UNKNOWN" "Could not READ classic" "$str_out"
+    assert_lacks "the unreadable path is not reported as absent" "No classic branch protection" "$str_out"
+    assert_has "an UNKNOWN classic read does not fail a verified ruleset" "rc=0" "$str_out"
+}
+
+test_not_protected_text_on_a_5xx_stays_unknown() {
+    local str_out
+    str_out="$(STUB_PROTECTION=unprotected-500 run_verify active 1 verify)"
+    assert_has "the 404 status, not the message alone, marks ruleset-only" "Could not READ classic" "$str_out"
+    assert_lacks "the unreadable path is not reported as absent" "No classic branch protection" "$str_out"
+    assert_has "the 5xx path still verifies on the ruleset" "rc=0" "$str_out"
+}
+
+test_plain_404_without_the_message_stays_unknown() {
+    local str_out
+    str_out="$(STUB_PROTECTION=not-found run_verify active 1 verify)"
+    assert_has "a 404 without 'Branch not protected' is a read failure" "Could not READ classic" "$str_out"
+    assert_lacks "the unreadable path is not reported as absent" "No classic branch protection" "$str_out"
+    assert_has "the plain-404 path still verifies on the ruleset" "rc=0" "$str_out"
+}
+
+test_ruleset_only_repo_has_no_unreadable_protection_warning
+test_genuine_protection_read_failure_stays_unknown
+test_not_protected_text_on_a_5xx_stays_unknown
+test_plain_404_without_the_message_stays_unknown
 test_verify_refuses_a_disabled_ruleset
 test_verify_refuses_a_ruleset_that_skips_the_default_branch
 test_verify_accepts_an_active_ruleset_on_the_default_branch
