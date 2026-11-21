@@ -107,7 +107,7 @@ pip_fallback_ensure_project_poetry() {
 	str_poetry_spec="$(pip_fallback_poetry_spec_from_requirements)"
 
 	print_status "info" "Ensuring Poetry matches spec: $str_poetry_spec"
-	install_poetry_from_wheelhouse --upgrade ${PIP_FALLBACK_USER_ARGS[@]+"${PIP_FALLBACK_USER_ARGS[@]}"} ||
+	install_poetry_from_wheelhouse --upgrade ${PIP_FALLBACK_USER_ARGS[@]+"${PIP_FALLBACK_USER_ARGS[@]}"} "$str_poetry_spec" ||
 		"$PYTHON" -m pip install "${PIP_FALLBACK_ARGS[@]}" --upgrade ${PIP_FALLBACK_USER_ARGS[@]+"${PIP_FALLBACK_USER_ARGS[@]}"} "$str_poetry_spec"
 
 	if "$PYTHON" -m poetry --version >/dev/null 2>&1; then

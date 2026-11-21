@@ -3302,7 +3302,8 @@ def test_poetry_installs_from_the_wheelhouse_without_touching_pypi(tmp_path: Pat
     dict_env = dict(os.environ, WHEELHOUSE_WHEELS_DIR=str(path_wheels))
     str_script = (
         f'source "{path_bin}/lib/common.sh"; source "{path_bin}/lib/bootstrap.sh"; '
-        f'PROJECT_ROOT="{tmp_path}"; PYTHON="{path_stub}"; install_poetry_from_wheelhouse'
+        f'PROJECT_ROOT="{tmp_path}"; PYTHON="{path_stub}"; '
+        'install_poetry_from_wheelhouse "poetry>=2.2"'
     )
     cls_run = subprocess.run(  # noqa: S603
         [shutil.which("bash") or "bash", "-c", str_script],
@@ -3314,7 +3315,8 @@ def test_poetry_installs_from_the_wheelhouse_without_touching_pypi(tmp_path: Pat
     )
 
     assert cls_run.returncode == 0, cls_run.stderr
-    assert f"--no-index --find-links={path_wheels} poetry" in path_log.read_text(encoding="utf-8")
+    str_calls = path_log.read_text(encoding="utf-8")
+    assert f"--no-index --find-links={path_wheels} poetry>=2.2" in str_calls
 
 
 def test_poetry_requirement_admits_the_poetry_the_lock_holds() -> None:
