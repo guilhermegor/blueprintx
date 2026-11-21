@@ -1,7 +1,7 @@
 name: Review Threads
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, edited]
   pull_request_review:
   pull_request_review_comment:
@@ -11,12 +11,12 @@ on:
 permissions:
   contents: read
   pull-requests: read
-  actions: write
+  checks: write
 
 jobs:
 
-  review-threads:
-    name: Review threads answered
+  review-gate-runner:
+    name: Review gate runner
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: >-
@@ -25,6 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -34,6 +35,9 @@ jobs:
       - run: pip install --quiet pyyaml
 
       - name: Every review thread is answered and resolved
+        id: gate
+        continue-on-error: true
+        timeout-minutes: 15
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -41,18 +45,33 @@ jobs:
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python bin/check_review_threads.py
 
-      - name: Clear stale failed runs of this gate at the same head
-        if: success()
+      - name: Post the required result as a check-run on the PR head
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          str_head="$EVENT_HEAD_SHA"
-          if [ -z "$str_head" ]; then
-            str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          str_conclusion=failure
+          str_title="Unanswered or unresolved review threads"
+          if [ "$GATE_OUTCOME" = "success" ]; then
+            str_conclusion=success
+            str_title="Every review thread is answered and resolved"
           fi
+          str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
           [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
-          HEAD_SHA="$str_head" bash bin/rerun_stale_gate_runs.sh
+          gh api "repos/${GITHUB_REPOSITORY}/check-runs" -X POST \
+            -f name="Review threads answered" \
+            -f head_sha="$str_head" \
+            -f status=completed \
+            -f conclusion="$str_conclusion" \
+            -f details_url="$RUN_URL" \
+            -f "output[title]=$str_title" \
+            -f "output[summary]=Gate outcome: ${GATE_OUTCOME:-did not run}. Run: $RUN_URL"
+
+      - name: Fail this job when the gate did not pass
+        if: steps.gate.outcome != 'success'
+        run: exit 1

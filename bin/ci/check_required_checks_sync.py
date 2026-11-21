@@ -38,6 +38,7 @@ POLICY_FIELDS = 3
 PR_EVENTS = ("pull_request", "pull_request_target")
 FILTERS = ("branches", "branches-ignore", "paths", "paths-ignore")
 BASE_BRANCH = "main"
+CHECK_RUN_CONTEXTS = ("Review threads answered",)
 RE_EVENT_CLAUSE = re.compile(r"^github\.event_name\s*(==|!=)\s*'([a-z_]+)'$")
 
 
@@ -373,7 +374,10 @@ def check_required_list(args: argparse.Namespace) -> int:
     list_err = list_problems + compare(
         set_req,
         dict_jobs=dict_jobs,
-        dict_policy={"optional": {n: "" for n, f in dict_jobs.items() if f}, "external": {}},
+        dict_policy={
+            "optional": {n: "" for n, f in dict_jobs.items() if f},
+            "external": {n: "" for n in CHECK_RUN_CONTEXTS if n in set_req},
+        },
     )
     for str_msg in list_err:
         print(f"::error::{str_msg}", file=sys.stderr)
