@@ -1,6 +1,7 @@
 site_name: ${PROJECT_DISPLAY_NAME}
 site_description: "${PROJECT_DESCRIPTION_ESC}"
 repo_url: ${REPOSITORY}
+copyright: 'Generated from the ddd-service-native-db template via <a href="https://github.com/guilhermegor/blueprintx">BlueprintX</a>.'
 nav:
   - Home: index.md
   - Guide:
