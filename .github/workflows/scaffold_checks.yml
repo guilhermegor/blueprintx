@@ -346,6 +346,9 @@ jobs:
       - name: Release tag targets the built SHA
         run: bash tests/test_release_target_sha.sh
 
+      - name: enable_pages requests the legacy build_type
+        run: bash tests/test_enable_pages.sh
+
   secret-scan:
     name: GitGuardian — secret scan
     runs-on: ubuntu-latest
