@@ -151,4 +151,4 @@ Este projeto é licenciado sob ${PROJECT_LICENSE}; veja [LICENSE](LICENSE).
 ---
 
 <sub>Gerado a partir do template ${README_TIER} via [BlueprintX](https://github.com/guilhermegor/blueprintx).</sub>
-<!-- add any project disclaimer inside the sub tag above; for a library wrapping a third party, e.g. "Unofficial, community library. Not affiliated with or endorsed by ORG_NAME." -->
+<!-- disclaimers and credits go inside the sub tag above, never in the body: e.g. "Unofficial, community library. Not affiliated with or endorsed by ORG_NAME." and "Logo photo by AUTHOR on Pexels." -->

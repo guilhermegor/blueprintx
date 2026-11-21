@@ -1,6 +1,6 @@
-# Backlog — backport the wwdates lesson wave into BlueprintX templates
+# Backlog — backport the purecalendars lesson wave into BlueprintX templates
 
-Branch: `feat/backport-wwdates-lessons`. One PR, commits grouped by cluster (A → B → C → D).
+Branch: `feat/backport-purecalendars-lessons`. One PR, commits grouped by cluster (A → B → C → D).
 Plan: `~/.claude/plans/synchronous-bubbling-walrus.md`. **18 lessons + 1 advisory + 2 new
 refinement captures.** Tick each box as it lands; update blueprintx's `docs/blueprintx-lessons.md`
 mirror + the global store as lessons apply. Delete this file once every box is `[x]`.
@@ -29,7 +29,7 @@ mirror + the global store as lessons apply. Delete this file once every box is `
   `make/library.mk` + tasks.sh (guarded); `python -m build`, runtime pkg-name resolution, prints built
   wheel filename. Lib `__init__.py` now defines `__version__` (scaffold). Targets resolve (verified).
 - [x] 6. `mkdocs-version-badge-from-git-tag` — **DONE**. `templates/common/docs_version/mkdocs_hooks.py`
-  ported from wwdates: `git describe --tags --always`, strip `v`, fallback git → pyproject → `?`;
+  ported from purecalendars: `git describe --tags --always`, strip `v`, fallback git → pyproject → `?`;
   bandit S603/S607 line-scoped.
 - [x] 7. `pypi-oidc-publisher-claims-must-match` — **DONE** (workflow side): per-index envs
   `release_pypi`/`release_test_pypi`. **TODO:** document project-name/env claim-matching + pending
@@ -42,12 +42,12 @@ mirror + the global store as lessons apply. Delete this file once every box is `
   `[[tool.poetry.source]]` block (dependency-confusion guard) — verified pyproject stays valid TOML.
   The publish-target / private-source guidance is documented in `docs/contributing.md`
   ("Choosing publish targets"). Verified: scaffold shellcheck clean, prompt + Q3 wired in main.
-- [x] 8c. `scaffold-repo-website-pages-docs-url` *(NEW lesson — wwdates mirror line 304, not in
+- [x] 8c. `scaffold-repo-website-pages-docs-url` *(NEW lesson — purecalendars mirror line 304, not in
   global store)* — **DONE + verified**. Online path: `apply_online_docs_url` points pyproject
   `homepage`/`documentation`/`[tool.poetry.urls] Documentation` at `https://<owner>.github.io/<repo>/`;
   `prompt_git_remote_setup` sets the GitHub repo **Website** field via `gh repo create --homepage`
   (+ `gh repo edit --homepage`). Offline stays generic. TODO: promote to global store.
-- [x] 8b. `release-build-bypass-never-local-tag` *(NEW lesson — wwdates mirror only, not yet in
+- [x] 8b. `release-build-bypass-never-local-tag` *(NEW lesson — purecalendars mirror only, not yet in
   global store)* — `release_pypi.yaml` build step stamps via `POETRY_DYNAMIC_VERSIONING_BYPASS`,
   **no local `git tag`, no `fetch-depth: 0`** on `setup_and_build` (byte-identical to the Test PyPI
   build step); the `v<version>` tag is a release artifact created only by `github_release` after
@@ -79,7 +79,7 @@ mirror + the global store as lessons apply. Delete this file once every box is `
   "vendored from stpstone" shipped-provenance, which reached the lib on the logs opt-in). NOTE: the
   remaining `stpstone` refs (service pyproject dep, `utils/dates.py` wrapper, `mypy.ini` stub-list
   example) are **legitimate** — stpstone is a real upstream dependency of the service tiers here,
-  not a dehydrated source repo (unlike wwdates); leaving them is correct.
+  not a dehydrated source repo (unlike purecalendars); leaving them is correct.
 - [x] 14. `branch-work-ledger-in-docs-backlog` — **DONE (all 5 tiers)**: expanded the `docs/backlog/`
   bullet in every tier's `docs/CLAUDE.md` with the timestamped per-branch work-ledger convention
   (what-done/what-remains, cross-session, distinct from lessons, delete when complete).
