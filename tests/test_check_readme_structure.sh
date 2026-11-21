@@ -421,6 +421,8 @@ test_stock_photo_credit_belongs_in_footer() {
     expect_gate "unsplash credit in the body" \
         "$(good_readme | awk '/^<!-- slug: features -->/ { print "[Photo](https://unsplash.com/photos/x)"; print "" } 1')" \
         fail "credits belong in the footer"
+    expect_gate "stock host only in a URL path is not a credit" \
+        "$(good_readme | awk '/^<!-- slug: features -->/ { print "[Guide](https://example.org/guides/unsplash.com)"; print "" } 1')" pass
     expect_gate "stock-host credit inside the footer sub" \
         "$(good_readme | sed "s|</sub>\$| $str_credit</sub>|")" pass "" --require-footer
 }

@@ -159,7 +159,15 @@ check_credits_in_footer() {
 	done < <(md_strip_fences <"$path_file" | awk '
 		/^<sub>(Generated from|Gerado a partir do)/ { exit }
 		/^<!--/ { next }
-		tolower($0) ~ /(pexels|unsplash|pixabay)\.com/ { print NR "\t" $0 }')
+		{
+			line = tolower($0)
+			while (match(line, /https?:\/\/[^\/ )>\]"'"'"'?#]+/)) {
+				host = substr(line, RSTART, RLENGTH)
+				sub(/^https?:\/\//, "", host); sub(/^[^@]*@/, "", host); sub(/:[0-9]+$/, "", host)
+				if (host ~ /(^|\.)(pexels|unsplash|pixabay)\.com$/) { print NR "\t" $0; break }
+				line = substr(line, RSTART + RLENGTH)
+			}
+		}')
 }
 
 check_footer() {
