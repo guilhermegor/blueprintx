@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/lib/md_structure.sh"
 readonly -a ARR_SLUGS_HEAD=(getting-started install usage project-structure development)
 readonly -a ARR_SLUGS_TAIL=(contributing license authors useful-links)
 readonly STR_ICON_RE=$'\xf0\x9f|\xe2[\x98-\x9e]|\xef\xb8\x8f|\xe2\xad[\x90-\x95]|\xe2\x8c[\x9a\x9b]|\xe2\x8f|\xe2\x80\x8d'
+readonly STR_FOOTER_RE='^<sub>(Generated from|Gerado a partir do)'
 readonly STR_BLUEPRINTX_URL="https://github.com/guilhermegor/blueprintx"
 readonly STR_LINKEDIN_PLACEHOLDER="linkedin.com/in/your-linkedin-handle"
 declare -A MAP_ARCHETYPE=(
@@ -145,11 +146,29 @@ check_authors() {
 }
 
 footer_rule_missing() {
-	md_strip_fences <"$1" | awk '
+	md_strip_fences <"$1" | awk -v footer_re="$STR_FOOTER_RE" '
 		{ sub(/[ \t\r]+$/, "") }
-		/^<sub>Generated from/ { if (prev != "---") bad = 1 }
+		$0 ~ footer_re { if (prev != "---") bad = 1 }
 		NF { prev = $0 }
 		END { exit !bad }'
+}
+
+check_credits_in_footer() {
+	local path_file="$1" i_line str_text
+	while IFS= read -r str_text; do
+		i_line="$(grep -nF -m1 -- "$str_text" "$path_file" | cut -d: -f1)"
+		problem "$path_file:${i_line:-?}" "stock-photo host link belongs in the footer <sub>, not the body (credits go there): $str_text"
+	done < <(md_strip_fences <"$path_file" | md_strip_comments | awk -v footer_re="$STR_FOOTER_RE" '
+		$0 ~ footer_re { exit }
+		{
+			line = tolower($0)
+			while (match(line, /https?:\/\/[^\/ )>\]"'"'"'?#]+/)) {
+				host = substr(line, RSTART, RLENGTH)
+				sub(/^https?:\/\//, "", host); sub(/^[^@]*@/, "", host); sub(/:[0-9]+$/, "", host)
+				if (host ~ /(^|\.)(pexels|unsplash|pixabay)\.com$/) { print $0; break }
+				line = substr(line, RSTART + RLENGTH)
+			}
+		}')
 }
 
 check_footer() {
@@ -158,10 +177,11 @@ check_footer() {
 		int_count=$((int_count + 1))
 		[[ "$str_line" == *"[BlueprintX]($STR_BLUEPRINTX_URL)"* ]] ||
 			problem "$path_file" "footer does not link BlueprintX: use [BlueprintX]($STR_BLUEPRINTX_URL)"
-	done < <(md_strip_fences <"$path_file" | grep -E '^<sub>Generated from' || true)
+	done < <(md_strip_fences <"$path_file" | grep -E "$STR_FOOTER_RE" || true)
+	check_credits_in_footer "$path_file"
 	[ "$BOOL_REQUIRE_FOOTER" -eq 1 ] || return 0
 	if [ "$int_count" -eq 0 ]; then
-		problem "$path_file" "README has no footer: end it with a '---' rule and a '<sub>Generated from ...' line"
+		problem "$path_file" "README has no footer: end it with a '---' rule and a '<sub>Generated from ...' (or pt-BR '<sub>Gerado a partir do ...') line"
 	elif footer_rule_missing "$path_file"; then
 		problem "$path_file" "footer is not preceded by a '---' rule"
 	fi

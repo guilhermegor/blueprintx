@@ -413,6 +413,41 @@ test_strict_closed_vocabulary_and_features() {
     expect_gate "without --strict an unslugged H2 passes" "$(h2_before_contributing '## Acknowledgments')" pass
 }
 
+test_stock_photo_credit_belongs_in_footer() {
+    local str_credit='Photo by [Jane Doe](https://www.pexels.com/@jane) on Pexels.'
+    expect_gate "stock-host credit in the body" \
+        "$(good_readme | awk -v c="$str_credit" '/^<!-- slug: features -->/ { print c; print "" } 1')" \
+        fail "belongs in the footer"
+    expect_gate "unsplash credit in the body" \
+        "$(good_readme | awk '/^<!-- slug: features -->/ { print "[Photo](https://unsplash.com/photos/x)"; print "" } 1')" \
+        fail "belongs in the footer"
+    expect_gate "stock host only in a URL path is not a credit" \
+        "$(good_readme | awk '/^<!-- slug: features -->/ { print "[Guide](https://example.org/guides/unsplash.com)"; print "" } 1')" pass
+    expect_gate "pixabay link with userinfo and port" \
+        "$(good_readme | awk '/^<!-- slug: features -->/ { print "[P](https://u@cdn.pixabay.com:443/x)"; print "" } 1')" \
+        fail "belongs in the footer"
+    expect_gate "hot-linked stock image counts as a stock link" \
+        "$(good_readme | awk '/^<!-- slug: features -->/ { print "<img src=\"https://images.pexels.com/p.jpg\">"; print "" } 1')" \
+        fail "belongs in the footer"
+    expect_gate "stock link inside a fenced block passes" \
+        "$(good_readme | awk '/^<!-- slug: features -->/ { print "```"; print "https://unsplash.com/x"; print "```"; print "" } 1')" pass
+    expect_gate "stock link inside a multi-line HTML comment passes" \
+        "$(good_readme | awk '/^<!-- slug: features -->/ { print "<!--"; print "https://unsplash.com/x"; print "-->"; print "" } 1')" pass
+    expect_gate "reported line ignores stripped fence lines" \
+        "$(good_readme | awk '/^<!-- slug: features -->/ { print "```"; print "x"; print "```"; print "[P](https://unsplash.com/z)"; print "" } 1')" \
+        fail ":$(good_readme | awk '/^<!-- slug: features -->/ { n = NR + 3 } END { print n }'):"
+    expect_gate "stock-host credit inside the footer sub" \
+        "$(good_readme | sed "s|</sub>\$| $str_credit</sub>|")" pass "" --require-footer
+}
+
+test_localized_footer_is_recognised() {
+    local str_pt
+    str_pt="$(good_readme | sed 's|Generated from the lib-minimal template|Gerado a partir do template lib-minimal|')"
+    expect_gate "pt-BR footer passes --require-footer" "$str_pt" pass "" --require-footer
+    expect_gate "pt-BR footer without the rule fails --require-footer" \
+        "$(printf '%s\n' "$str_pt" | sed '/^---$/d')" fail "footer is not preceded by a '---' rule" --require-footer
+}
+
 main() {
     local str_test
     for str_test in $(declare -F | awk '$3 ~ /^test_/ { print $3 }'); do

@@ -87,6 +87,16 @@ LIST_REQUIRED = [cls_contract.str_filename for cls_contract in contracts.ALL]
 > The README logo and the docs-site logo are a second such pair in the Python skeletons,
 > enforced by `bin/check_logo_sync.sh` (`check-logo-sync` hook); TypeScript and Bash skeletons have no such gate.
 
+## Disclaimers and credits live in the footer
+
+A disclaimer ("unofficial, not affiliated with X") or a credit (photo author, icon set, dataset
+licence notice) goes in the README footer `<sub>` line, after the `---` rule, never in the body
+(Overview included). On the docs site it goes in the footer slot: `mkdocs.yml` `copyright:`
+(Python skeletons, rendered by Material) or `docusaurus.config.js` `themeConfig.footer.copyright`
+(`ts-lib`); skeletons without a docs site have no such slot. `bin/check_readme_structure.sh`
+fails any `http(s)` link to `pexels.com`, `unsplash.com` or `pixabay.com` (or a subdomain,
+images included) above the footer; scheme-less mentions are not gated.
+
 ## Data-handling guardrails (advisory, Python)
 
 When a pipeline or capability merges, overrides, or validates tabular data, these recurring
