@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/repo_slug.sh"
 
 RULESET_NAME="pr-quality-gate"
 
@@ -33,10 +34,6 @@ require_gh() {
 		return 1
 	fi
 	return 0
-}
-
-resolve_repo() {
-	gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true
 }
 
 build_rules_json() {
@@ -193,9 +190,8 @@ verify_strict_required_checks() {
 		return 1
 	fi
 	local str_repo str_branch
-	str_repo="$(resolve_repo)"
-	if [ -z "$str_repo" ]; then
-		print_status "error" "No GitHub remote resolved — cannot verify branch protection"
+	if ! str_repo="$(resolve_repo enable_repo_rules)"; then
+		print_status "error" "Cannot verify branch protection without a resolved repository"
 		return 1
 	fi
 	if ! str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>&1)"; then
@@ -252,7 +248,7 @@ ensure_optout_label() {
 check_ruleset_present() {
 	require_gh || return 0
 	local str_repo str_ids
-	str_repo="${GITHUB_REPOSITORY:-$(resolve_repo)}"
+	str_repo="${GITHUB_REPOSITORY:-$(resolve_repo enable_repo_rules || true)}"
 	if [ -z "$str_repo" ]; then
 		print_status "warning" "Could not resolve the repository (ruleset presence UNKNOWN, not confirmed)"
 		return 0
@@ -313,7 +309,7 @@ main() {
 	fi
 	if [ "${1:-}" = "stranded" ]; then
 		require_gh || return 0
-		report_stranded_prs "${GITHUB_REPOSITORY:-$(resolve_repo)}"
+		report_stranded_prs "${GITHUB_REPOSITORY:-$(resolve_repo enable_repo_rules || true)}"
 		return 0
 	fi
 
@@ -323,9 +319,7 @@ main() {
 	fi
 
 	local str_repo
-	str_repo="$(resolve_repo)"
-	if [ -z "$str_repo" ]; then
-		print_status "warning" "No GitHub remote resolved — skipping (push the repo to GitHub first)"
+	if ! str_repo="$(resolve_repo enable_repo_rules)"; then
 		return 0
 	fi
 

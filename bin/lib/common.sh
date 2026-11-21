@@ -326,6 +326,8 @@ copy_repo_rules_provisioner() {
     blueprintx_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
     mkdir -p "$project_path/bin/lib"
     cp "$blueprintx_root/templates/common/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
+    cp "$blueprintx_root/templates/python-common/bin/lib/repo_slug.sh" \
+        "$project_path/bin/lib/repo_slug.sh"
     cp "$blueprintx_root/templates/python-common/bin/enable_repo_rules.sh" \
         "$project_path/bin/enable_repo_rules.sh"
     cp "$required_checks_src" "$project_path/bin/required-checks.txt"
