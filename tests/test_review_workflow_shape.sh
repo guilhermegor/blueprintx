@@ -31,6 +31,13 @@ check "trigger never reads a PR-controlled head field" \
 check "backfill reads each PR once instead of sleeping on it inside one job timeout" \
 	backfill_polls_once
 
+repo_workflows="$REPO_ROOT/.github/workflows"
+ruff_installs_pinned() {
+	! grep -rhE 'pipx install ruff' "$repo_workflows" | grep -vE 'pipx install ruff==[0-9]'
+}
+check "every pipx install ruff under .github/workflows is pinned with ==<version>" \
+	ruff_installs_pinned
+
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
 	exit 1
