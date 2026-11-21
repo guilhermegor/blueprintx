@@ -40,6 +40,12 @@ ruff_installs_pinned() {
 check "every pipx install ruff under .github/workflows is pinned with ==<version>" \
 	ruff_installs_pinned
 
+main_run_never_cancelled() {
+	! grep -qE '^ +cancel-in-progress: true$' "$repo_workflows/$1"
+}
+check "scaffold_checks (push to main) never cancels a run unconditionally" \
+	main_run_never_cancelled scaffold_checks.yml
+
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
 	exit 1
