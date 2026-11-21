@@ -160,8 +160,9 @@ test_ruleset_only_repo_has_no_unreadable_protection_warning() {
 
 test_genuine_protection_read_failure_stays_unknown() {
     local str_out
-    str_out="$(run_verify active 1 verify)"
+    str_out="$(STUB_PROTECTION= run_verify active 1 verify)"
     assert_has "a 5xx stays UNKNOWN" "Could not READ classic" "$str_out"
+    assert_lacks "the unreadable path is not reported as absent" "No classic branch protection" "$str_out"
     assert_has "an UNKNOWN classic read does not fail a verified ruleset" "rc=0" "$str_out"
 }
 
@@ -169,6 +170,7 @@ test_not_protected_text_on_a_5xx_stays_unknown() {
     local str_out
     str_out="$(STUB_PROTECTION=unprotected-500 run_verify active 1 verify)"
     assert_has "the 404 status, not the message alone, marks ruleset-only" "Could not READ classic" "$str_out"
+    assert_lacks "the unreadable path is not reported as absent" "No classic branch protection" "$str_out"
     assert_has "the 5xx path still verifies on the ruleset" "rc=0" "$str_out"
 }
 
@@ -176,6 +178,7 @@ test_plain_404_without_the_message_stays_unknown() {
     local str_out
     str_out="$(STUB_PROTECTION=not-found run_verify active 1 verify)"
     assert_has "a 404 without 'Branch not protected' is a read failure" "Could not READ classic" "$str_out"
+    assert_lacks "the unreadable path is not reported as absent" "No classic branch protection" "$str_out"
     assert_has "the plain-404 path still verifies on the ruleset" "rc=0" "$str_out"
 }
 
