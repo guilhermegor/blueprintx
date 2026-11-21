@@ -342,6 +342,14 @@ PY
     print_status "success" "Zero-dependency: runtime dependency list emptied and verified"
 }
 
+lib_minimal_compose_ruff_toml() {
+    local project_path="$1"
+
+    cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
+    PROJECT_PKG_NAME="$PROJECT_PKG_NAME" envsubst '${PROJECT_PKG_NAME}' \
+        < "$COMMON_TEMPLATE_ROOT/ruff/lib-minimal.toml" >> "$project_path/ruff.toml"
+}
+
 lib_minimal_copy_tooling_configs() {
     local project_path="$1"
 
@@ -369,7 +377,6 @@ lib_minimal_copy_tooling_configs() {
     add_poe_include "$project_path" "poe_tasks.library.toml"
     copy_poe_fragments lib-minimal "$project_path"
     cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$project_path/pytest.ini"
-    cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$project_path/ruff.toml"
     cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$project_path/poetry.toml"
     cp "$COMMON_TEMPLATE_ROOT/.cz.toml" "$project_path/.cz.toml"
 }
@@ -519,6 +526,7 @@ copy_common_templates() {
     print_status "info" "Applying common Python templates..."
     lib_minimal_render_pyproject "$project_path"
     lib_minimal_copy_tooling_configs "$project_path"
+    lib_minimal_compose_ruff_toml "$project_path"
     lib_minimal_copy_github_assets "$project_path"
     lib_minimal_copy_project_scaffolding "$project_path"
     scaffold_stamp_provenance lib-minimal "$project_path"
