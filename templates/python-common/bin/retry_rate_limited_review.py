@@ -945,13 +945,13 @@ def main() -> int:
                 f"[dry-run] would request a review on #{int_chosen} — oldest eligible of "
                 f"{len(list_candidates)} waiting PR(s)."
             )
-            return 0
-
-        bool_asked = request_review(str_repo, int_number=int_chosen)
-        print(f"open PRs checked: {len(list_open)}; requested #{int_chosen}: {bool_asked}.")
+            bool_asked = True
+        else:
+            bool_asked = request_review(str_repo, int_number=int_chosen)
+            print(f"open PRs checked: {len(list_open)}; requested #{int_chosen}: {bool_asked}.")
         if bool_asked:
             return 0
-        set_refused = set_refused | {int_chosen}
+        set_refused |= {int_chosen}
     return 0
 
 
