@@ -433,6 +433,9 @@ test_stock_photo_credit_belongs_in_footer() {
         "$(good_readme | awk '/^<!-- slug: features -->/ { print "```"; print "https://unsplash.com/x"; print "```"; print "" } 1')" pass
     expect_gate "stock link inside a multi-line HTML comment passes" \
         "$(good_readme | awk '/^<!-- slug: features -->/ { print "<!--"; print "https://unsplash.com/x"; print "-->"; print "" } 1')" pass
+    expect_gate "reported line ignores stripped fence lines" \
+        "$(good_readme | awk '/^<!-- slug: features -->/ { print "```"; print "x"; print "```"; print "[P](https://unsplash.com/z)"; print "" } 1')" \
+        fail ":$(good_readme | awk '/^<!-- slug: features -->/ { n = NR + 3 } END { print n }'):"
     expect_gate "stock-host credit inside the footer sub" \
         "$(good_readme | sed "s|</sub>\$| $str_credit</sub>|")" pass "" --require-footer
 }

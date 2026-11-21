@@ -155,8 +155,9 @@ footer_rule_missing() {
 
 check_credits_in_footer() {
 	local path_file="$1" i_line str_text
-	while IFS=$'\t' read -r i_line str_text; do
-		problem "$path_file:$i_line" "stock-photo host link belongs in the footer <sub>, not the body (credits go there): $str_text"
+	while IFS= read -r str_text; do
+		i_line="$(grep -nF -m1 -- "$str_text" "$path_file" | cut -d: -f1)"
+		problem "$path_file:${i_line:-?}" "stock-photo host link belongs in the footer <sub>, not the body (credits go there): $str_text"
 	done < <(md_strip_fences <"$path_file" | md_strip_comments | awk -v footer_re="$STR_FOOTER_RE" '
 		$0 ~ footer_re { exit }
 		{
@@ -164,7 +165,7 @@ check_credits_in_footer() {
 			while (match(line, /https?:\/\/[^\/ )>\]"'"'"'?#]+/)) {
 				host = substr(line, RSTART, RLENGTH)
 				sub(/^https?:\/\//, "", host); sub(/^[^@]*@/, "", host); sub(/:[0-9]+$/, "", host)
-				if (host ~ /(^|\.)(pexels|unsplash|pixabay)\.com$/) { print NR "\t" $0; break }
+				if (host ~ /(^|\.)(pexels|unsplash|pixabay)\.com$/) { print $0; break }
 				line = substr(line, RSTART + RLENGTH)
 			}
 		}')
