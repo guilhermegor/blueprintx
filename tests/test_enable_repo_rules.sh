@@ -111,6 +111,7 @@ repos/o/r/rules/branches/main*)
 	;;
 repos/o/r/branches/main/protection)
 	[ "${STUB_PROTECTION:-}" = unprotected-500 ] && { echo "gh: Branch not protected (HTTP 500)" >&2; exit 1; }
+	[ "${STUB_PROTECTION:-}" = not-found ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 	[ "${STUB_PROTECTION:-}" = unprotected ] || { echo "gh: Server Error (HTTP 500)" >&2; exit 1; }
 	echo '{"message":"Branch not protected","documentation_url":"https://docs.github.com","status":"404"}'
 	echo "gh: Branch not protected (HTTP 404)" >&2
@@ -157,16 +158,30 @@ test_ruleset_only_repo_has_no_unreadable_protection_warning() {
 }
 
 test_genuine_protection_read_failure_stays_unknown() {
-    assert_has "a 5xx stays UNKNOWN" "Could not READ classic" "$(run_verify active 1 verify)"
+    local str_out
+    str_out="$(run_verify active 1 verify)"
+    assert_has "a 5xx stays UNKNOWN" "Could not READ classic" "$str_out"
+    assert_has "an UNKNOWN classic read does not fail a verified ruleset" "rc=0" "$str_out"
 }
 
 test_not_protected_text_on_a_5xx_stays_unknown() {
-    assert_has "the 404 status, not the message alone, marks ruleset-only" "Could not READ classic" "$(STUB_PROTECTION=unprotected-500 run_verify active 1 verify)"
+    local str_out
+    str_out="$(STUB_PROTECTION=unprotected-500 run_verify active 1 verify)"
+    assert_has "the 404 status, not the message alone, marks ruleset-only" "Could not READ classic" "$str_out"
+    assert_has "the 5xx path still verifies on the ruleset" "rc=0" "$str_out"
+}
+
+test_plain_404_without_the_message_stays_unknown() {
+    local str_out
+    str_out="$(STUB_PROTECTION=not-found run_verify active 1 verify)"
+    assert_has "a 404 without 'Branch not protected' is a read failure" "Could not READ classic" "$str_out"
+    assert_has "the plain-404 path still verifies on the ruleset" "rc=0" "$str_out"
 }
 
 test_ruleset_only_repo_has_no_unreadable_protection_warning
 test_genuine_protection_read_failure_stays_unknown
 test_not_protected_text_on_a_5xx_stays_unknown
+test_plain_404_without_the_message_stays_unknown
 test_verify_refuses_a_disabled_ruleset
 test_verify_refuses_a_ruleset_that_skips_the_default_branch
 test_verify_accepts_an_active_ruleset_on_the_default_branch
