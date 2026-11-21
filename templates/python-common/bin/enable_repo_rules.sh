@@ -122,7 +122,7 @@ report_blocking_checks() {
 	local str_repo="$1" str_branch="$2"
 	local str_id str_enforcement str_live str_strict str_rules
 	if ! str_id="$(gh api "repos/$str_repo/rulesets" --jq \
-		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
+		"[.[] | select(.name == \"$RULESET_NAME\")] | sort_by(.enforcement != \"active\") | .[] | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
 		return 2
 	fi

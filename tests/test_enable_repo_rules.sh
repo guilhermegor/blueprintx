@@ -100,7 +100,7 @@ cat >"$WORK_DIR/v/gh" <<'STUB'
 str_rule='{"type":"required_status_checks","ruleset_id":42,"parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"Review threads answered"}]}}'
 case "$2" in
 repos/o/r) str_json='{"default_branch":"main"}' ;;
-repos/o/r/rulesets) str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
+repos/o/r/rulesets) [ -n "${STUB_TWO:-}" ] && str_json="[{\"id\":41,\"name\":\"pr-quality-gate\",\"enforcement\":\"disabled\"},{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"active\"}]" || str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
 repos/o/r/rulesets/42) str_json="{\"rules\":[$str_rule]}" ;;
 repos/o/r/rules/branches/main*)
 	case "$STUB_APPLIES" in
@@ -150,6 +150,10 @@ test_check_ruleset_flags_a_disabled_ruleset() {
     assert_has "a disabled ruleset is not present" "rc=1" "$(run_verify disabled 1 check_ruleset)"
 }
 
+test_verify_picks_the_active_ruleset_not_the_first() {
+    assert_has "a disabled twin listed first must not decide" "rc=0" "$(STUB_TWO=1 run_verify active 1 verify)"
+}
+
 test_ruleset_only_repo_has_no_unreadable_protection_warning() {
     local str_out
     str_out="$(STUB_PROTECTION=unprotected run_verify active 1 verify)"
@@ -182,6 +186,7 @@ test_plain_404_without_the_message_stays_unknown() {
     assert_has "the plain-404 path still verifies on the ruleset" "rc=0" "$str_out"
 }
 
+test_verify_picks_the_active_ruleset_not_the_first
 test_ruleset_only_repo_has_no_unreadable_protection_warning
 test_genuine_protection_read_failure_stays_unknown
 test_not_protected_text_on_a_5xx_stays_unknown
