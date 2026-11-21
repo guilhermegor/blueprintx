@@ -635,6 +635,7 @@ apply_offline_mode() {
     mkdir -p "$project_path/make"
     cp "$SHARED_TEMPLATE_ROOT/poe_tasks.offline.toml" "$project_path/poe_tasks.offline.toml"
     add_poe_include "$project_path" "poe_tasks.offline.toml"
+    scaffold_append_offline_contributing "$project_path"
     mkdir -p "$project_path/git_diffs"
     touch "$project_path/git_diffs/.keep"
     swap_protect_branch_hook "$project_path"
