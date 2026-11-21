@@ -141,7 +141,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
       ) {
         pageInfo { hasNextPage endCursor }
         nodes {
-          author { login __typename } databaseId commit { oid } state body submittedAt
+          author { login __typename } fullDatabaseId commit { oid } state body submittedAt
           comments(first:20) { nodes { replyTo { id } } }
         }
       }
@@ -1076,15 +1076,20 @@ _TUPLE_COMPLETION_PHRASES = (
 )
 
 
-_RE_NOTICE_SHA = re.compile(r"\b(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b", re.IGNORECASE)
+_RE_NOTICE_SHA = re.compile(
+    r"\b(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b"
+    r"|\b(?:commit|sha|head)\s*:?\s*`?([0-9a-f]{7,40})\b",
+    re.IGNORECASE,
+)
 
 
 def _notice_names_other_head(str_notice: str, *, str_head_oid: str) -> bool:
     """Return whether the notice carries a 7-40 hex sha that is not a prefix of the head.
 
-    A token needs a digit, so an all-letter word such as ``acceded`` is not read as a sha.
+    A bare token needs a digit, so an all-letter word such as ``acceded`` is not read as a sha;
+    an all-letter one is read as a sha only when labelled (``commit deadbee``).
     """
-    list_shas = _RE_NOTICE_SHA.findall(str_notice)
+    list_shas = [m.group(1) or m.group(0) for m in _RE_NOTICE_SHA.finditer(str_notice)]
     return any(not str_head_oid.casefold().startswith(s.casefold()) for s in list_shas)
 
 
@@ -1806,8 +1811,12 @@ _INT_MIN_QUOTE_CHARS = 10
 
 
 def _review_id(dict_review: dict) -> str:
-    """Return the review's REST id as text, or ``""`` for a review shaped from a comment."""
-    return str(dict_review.get("databaseId") or "")
+    """Return the review's REST id as text, or ``""`` for a review shaped from a comment.
+
+    ``databaseId`` is a 32-bit ``Int`` and review ids already exceed it, so the query asks for
+    ``fullDatabaseId`` (a ``BigInt``, served as a string); both sides compare as text.
+    """
+    return str(dict_review.get("fullDatabaseId") or "")
 
 
 def _first_body_line(dict_review: dict) -> str:
@@ -1827,37 +1836,46 @@ def _quoted_lines(str_reply: str) -> list[str]:
     ]
 
 
-def _reply_names_review(str_reply: str, dict_review: dict) -> bool:
+def _reply_names_review(str_reply: str, dict_review: dict, *, list_all: list[dict]) -> bool:
     """Return whether a reply references one review by id, review URL or quoting its first line.
 
-    ``reviews 123, 456`` names each id it lists, so a batch answer needs no extra syntax.
+    ``reviews 123, 456`` names each id it lists, so a batch answer needs no extra syntax. A
+    quotation names a review only when no other review in ``list_all`` opens with the same
+    text: two reviews that both begin ``## Findings`` are told apart by id, never by the quote.
     """
     str_id = _review_id(dict_review)
     set_ids = set(_RE_REVIEW_URL_ID.findall(str_reply)) | set(_RE_BARE_ID.findall(str_reply))
-    str_first = _first_body_line(dict_review)
-    return (bool(str_id) and str_id in set_ids) or (
-        bool(str_first) and any(str_first.startswith(q) for q in _quoted_lines(str_reply))
+    if bool(str_id) and str_id in set_ids:
+        return True
+    return any(
+        _first_body_line(dict_review).startswith(q)
+        and sum(_first_body_line(d).startswith(q) for d in list_all) == 1
+        for q in _quoted_lines(str_reply)
     )
 
 
 def _answers_review(
-    dict_reply: dict, dict_review: dict, *, list_findings_reviews: list[dict]
+    dict_reply: dict, dict_review: dict, *, tuple_scope: tuple[list, list]
 ) -> bool:
     """Return whether one reply answers one review, per review rather than per PR.
 
-    A reply that names reviews answers exactly those. A generic one answers only the newest
-    findings review that precedes it, so a single comment no longer clears every earlier body.
+    A reply that names any review, clean ones included, answers exactly those. A generic one
+    answers only the newest findings review that precedes it, so a single comment no longer
+    clears every earlier body.
+
+    ``tuple_scope`` is ``(every roster review, the findings reviews)``.
     """
+    list_all, list_findings = tuple_scope
     str_reply = dict_reply.get("body") or ""
     str_created = dict_reply.get("createdAt") or ""
     str_when = dict_review.get("submittedAt") or ""
     if not str_when or str_created <= str_when:
         return False
-    if _reply_names_review(str_reply, dict_review):
+    if _reply_names_review(str_reply, dict_review, list_all=list_all):
         return True
-    if any(_reply_names_review(str_reply, d) for d in list_findings_reviews):
+    if any(_reply_names_review(str_reply, d, list_all=list_all) for d in list_all):
         return False
-    list_before = [d for d in list_findings_reviews if (d.get("submittedAt") or "") < str_created]
+    list_before = [d for d in list_findings if (d.get("submittedAt") or "") < str_created]
     return dict_review is max(list_before, key=lambda d: d.get("submittedAt") or "")
 
 
@@ -2030,6 +2048,7 @@ def find_review_body_problems(
             )
         )
     ]
+    list_all = [dict_review for dict_review, _ in list_hits]
     list_findings = [dict_review for dict_review, list_lines in list_hits if list_lines]
     list_answers = [
         d
@@ -2042,7 +2061,7 @@ def find_review_body_problems(
         for dict_review, list_lines in list_hits
         if list_lines
         and not any(
-            _answers_review(d, dict_review, list_findings_reviews=list_findings)
+            _answers_review(d, dict_review, tuple_scope=(list_all, list_findings))
             for d in list_answers
         )
     ]
@@ -2561,11 +2580,14 @@ def _gh_rest_list(str_path: str, *, str_key: str) -> list[dict] | None:
     return list_items
 
 
-def fetch_head_push_time(str_repo_full: str, *, str_head_oid: str) -> str:
-    """Return when the head was pushed, or ``""`` when no source can say (fail closed).
+def fetch_head_push_time(str_repo_full: str, *, str_head_oid: str, str_number: str = "") -> str:
+    """Return when the head was pushed to THIS PR, or ``""`` when no source can say.
 
     The earliest ``created_at`` of a ``pull_request`` workflow run on the head is the push
-    time lower bound; failing that, the earliest check-run ``started_at`` on it.
+    time lower bound. With ``str_number`` only runs that list this PR count, so the same sha
+    run earlier for another PR is no evidence; runs that exist but none for this PR fail
+    closed. With no run at all, the earliest check-run ``started_at`` on the head stands in
+    (repository-wide, so it cannot be scoped to a PR).
     """
     if not str_head_oid:
         return ""
@@ -2574,6 +2596,13 @@ def fetch_head_push_time(str_repo_full: str, *, str_head_oid: str) -> str:
         "&event=pull_request&per_page=100",
         str_key="workflow_runs",
     )
+    if list_runs and str_number:
+        list_runs = [
+            d
+            for d in list_runs
+            if any(str(p.get("number")) == str_number for p in d.get("pull_requests") or [])
+        ]
+        return min(d.get("created_at") or "" for d in list_runs) if list_runs else ""
     list_times = [d.get("created_at") or "" for d in list_runs or []]
     if not list_times or not all(list_times):
         list_checks = _gh_rest_list(
@@ -2658,6 +2687,7 @@ def _missing_review(
     *,
     str_repo_full: str,
     set_reviewers: set[str],
+    str_number: str = "",
 ) -> tuple[str | None, str]:
     """Return :func:`check_missing_review` for one fetched ``pullRequest`` node."""
     if dependabot_review_exempt(
@@ -2680,7 +2710,7 @@ def _missing_review(
         ),
         str_head_date=_head_committed_date(dict_pr),
         str_push_time=fetch_head_push_time(
-            str_repo_full, str_head_oid=dict_pr.get("headRefOid") or ""
+            str_repo_full, str_head_oid=dict_pr.get("headRefOid") or "", str_number=str_number
         ),
         tuple_markers=load_comment_markers(pathlib.Path.cwd()),
         set_posters=load_marker_posters(pathlib.Path.cwd()),
@@ -2844,7 +2874,7 @@ def _check_pull_request(bool_json: bool) -> int:
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 
     str_missing, str_carried = _missing_review(
-        dict_pr, str_repo_full=str_repo_full, set_reviewers=set_reviewers
+        dict_pr, str_repo_full=str_repo_full, set_reviewers=set_reviewers, str_number=str_number
     )
     if str_missing:
         return _print_missing_review(

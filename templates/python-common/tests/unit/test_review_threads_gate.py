@@ -1552,6 +1552,7 @@ def test_an_unreadable_push_time_fails_closed_and_says_so() -> None:
         pytest.param(_HEAD[:7], True, id="prefix-of-head"),
         pytest.param(_HEAD, True, id="full-head"),
         pytest.param("0123abc", False, id="other-commit"),
+        pytest.param("commit deadbee", False, id="labelled-all-letter-other-commit"),
         pytest.param("", True, id="no-sha-time-only"),
     ],
 )
@@ -1604,6 +1605,34 @@ def test_fetch_head_push_time_takes_the_earliest_pull_request_run(
         list_checks=None,
     )
     assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD) == "2026-01-01T11:00:00Z"
+
+
+def test_fetch_head_push_time_ignores_runs_of_another_pr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Thread 4653332749: the sha ran at 09:00 for PR 7; this PR (8) was pushed at 11:00."""
+    cls_gate = _stub_rest(
+        monkeypatch,
+        list_runs=[
+            {"created_at": "2026-01-01T09:00:00Z", "pull_requests": [{"number": 7}]},
+            {"created_at": "2026-01-01T11:00:00Z", "pull_requests": [{"number": 8}]},
+        ],
+        list_checks=None,
+    )
+    str_time = cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8")
+    assert str_time == "2026-01-01T11:00:00Z"
+
+
+def test_fetch_head_push_time_is_empty_when_no_run_belongs_to_this_pr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Runs exist for the sha but none for this PR -> fail closed, no check-run fallback."""
+    cls_gate = _stub_rest(
+        monkeypatch,
+        list_runs=[{"created_at": "2026-01-01T09:00:00Z", "pull_requests": [{"number": 7}]}],
+        list_checks=[{"started_at": "2026-01-01T09:00:00Z"}],
+    )
+    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8") == ""
 
 
 def test_fetch_head_push_time_falls_back_to_the_earliest_check_run(
@@ -2241,8 +2270,8 @@ def test_review_body_findings_on_a_superseded_commit_still_need_a_reply() -> Non
 
 
 def _two_reviews() -> list[dict]:
-    dict_a = {**_body_review(_BODY_MAJOR), "databaseId": 1111111}
-    dict_b = {**dict_a, "databaseId": 2222222, "submittedAt": "2026-01-02T12:00:00Z"}
+    dict_a = {**_body_review(_BODY_MAJOR), "fullDatabaseId": "1111111"}
+    dict_b = {**dict_a, "fullDatabaseId": "2222222", "submittedAt": "2026-01-02T12:00:00Z"}
     return [dict_a, dict_b]
 
 
@@ -2282,6 +2311,32 @@ def test_review_body_explicit_reference_answers_that_review_even_when_older(
     """
     list_problems = _body_problems(_two_reviews(), list_notices=_reply(str_ref))
     assert [("1111111" in s, "2222222" in s) for s in list_problems] == [(False, True)]
+
+
+def test_review_body_ambiguous_quotation_names_neither_review() -> None:
+    """Two reviews open with the same line, so quoting it is not an answer to either.
+
+    The generic rule then answers only the newest, and the older one is still reported.
+    """
+    str_first = _BODY_MAJOR.strip().splitlines()[0]
+    list_problems = _body_problems(
+        _two_reviews(), list_notices=_reply(f"\n> {str_first}\n\nDone.")
+    )
+    assert [("1111111" in s, "2222222" in s) for s in list_problems] == [(True, False)]
+
+
+def test_review_body_reference_to_a_clean_review_is_not_a_generic_answer() -> None:
+    """A reply naming clean review 2222222 must not clear findings review 1111111."""
+    dict_findings = {**_body_review(_BODY_MAJOR), "fullDatabaseId": "1111111"}
+    dict_clean = {
+        **_body_review("Nothing to report."),
+        "fullDatabaseId": "2222222",
+        "submittedAt": "2026-01-02T12:00:00Z",
+    }
+    list_problems = _body_problems(
+        [dict_findings, dict_clean], list_notices=_reply("reply to review 2222222")
+    )
+    assert len(list_problems) == 1
 
 
 def test_review_body_blockquote_of_the_first_line_answers_that_review() -> None:
@@ -5448,6 +5503,7 @@ def test_a_head_review_older_than_the_latest_retarget_does_not_count(
     """Retargeting without a push leaves the head SHA alone but changes the diff reviewed."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_head_push_time", lambda *_, **__: "")
     dict_pr = {
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
@@ -5479,6 +5535,7 @@ def test_a_head_review_after_the_latest_retarget_still_counts(
     """The cutoff only refuses reviews that predate the retarget."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_head_push_time", lambda *_, **__: "")
     dict_pr = {
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
