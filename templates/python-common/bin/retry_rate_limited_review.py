@@ -456,7 +456,8 @@ def request_review(str_repo: str, *, int_number: int) -> bool:
     Returns
     -------
     bool
-        ``True`` when the comment was posted.
+        ``True`` when a comment was posted, even one the reviewer ignores (a Bot author);
+        ``False`` only when nothing was posted, so the caller may try another PR.
     """
     dict_posted = _gh_json(
         [
@@ -478,7 +479,7 @@ def request_review(str_repo: str, *, int_number: int) -> bool:
             f"{dict_posted.get('login')} [Bot], which the reviewer IGNORES — set "
             "GH_PAT_REVIEW_TRIGGER to a user PAT (see coderabbit_trigger)."
         )
-        return False
+        return True
 
     print(f"requested a full review on #{int_number} as {dict_posted.get('login')}")
     return True

@@ -1351,3 +1351,35 @@ def test_build_candidate_keeps_a_pr_whose_head_review_predates_a_retarget(
         )
         is not None
     )
+
+
+def test_request_review_reports_posted_even_when_the_author_is_a_bot(
+    cls_retry: ModuleType, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Bot-authored comment is still a posted comment, so the run must not ask a second PR.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    monkeypatch : pytest.MonkeyPatch
+        Patches the ``gh`` call.
+    """
+    monkeypatch.setattr(cls_retry, "_gh_json", lambda _args: {"login": "x[bot]", "type": "Bot"})
+    assert cls_retry.request_review("o/r", int_number=1) is True
+
+
+def test_request_review_reports_not_posted_when_the_gh_call_fails(
+    cls_retry: ModuleType, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed ``gh`` call posted nothing, so the caller may try the next PR.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    monkeypatch : pytest.MonkeyPatch
+        Patches the ``gh`` call.
+    """
+    monkeypatch.setattr(cls_retry, "_gh_json", lambda _args: None)
+    assert cls_retry.request_review("o/r", int_number=1) is False
