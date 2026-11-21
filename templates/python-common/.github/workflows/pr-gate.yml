@@ -3,6 +3,9 @@ name: PR Quality Gate
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_run:
+    workflows: ["Run Tests"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       backfill:
@@ -47,6 +50,29 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: python bin/pr_gate.py
+
+  retrigger:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request'
+    name: Re-run a gate that timed out before Run Tests finished
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Re-run the failed gate for this head commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          str_id="$(gh run list --workflow pr-gate.yml --event pull_request \
+            --commit "$HEAD_SHA" --status failure --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -z "$str_id" ]; then
+            echo "no failed gate run for $HEAD_SHA; nothing to re-run"
+            exit 0
+          fi
+          gh run rerun "$str_id"
 
   backfill:
     if: github.event_name == 'workflow_dispatch' && inputs.backfill

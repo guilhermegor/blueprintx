@@ -31,6 +31,21 @@ check "trigger never reads a PR-controlled head field" \
 check "backfill reads each PR once instead of sleeping on it inside one job timeout" \
 	backfill_polls_once
 
+retrigger_job() { sed -n '/^  retrigger:/,/^  backfill:/p' "$WORKFLOWS/pr-gate.yml"; }
+retrigger_reruns_failed_gate() { retrigger_job | grep -qE 'gh run rerun'; }
+retrigger_may_write_actions() { retrigger_job | grep -qE '^ +actions: write$'; }
+
+check "gate re-triggers when Run Tests completes, so a slow suite cannot strand it red" \
+	has_line pr-gate.yml '^  workflow_run:$'
+check "the workflow_run trigger names the Run Tests workflow" \
+	has_line pr-gate.yml '^    workflows: \["Run Tests"\]$'
+check "the retrigger job re-runs the failed gate run" \
+	retrigger_reruns_failed_gate
+check "the retrigger job carries the actions: write it needs" \
+	retrigger_may_write_actions
+check "the retrigger job never checks out code" \
+	bash -c "! sed -n '/^  retrigger:/,/^  backfill:/p' '$WORKFLOWS/pr-gate.yml' | grep -q 'actions/checkout'"
+
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
 	exit 1
