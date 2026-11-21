@@ -228,6 +228,10 @@ jobs:
         if: runner.os == 'Linux'
         run: poetry run python bin/check_docs_code_refs.py
 
+      - name: Run Docs Drift Enforcement
+        if: runner.os == 'Linux'
+        run: poetry run python bin/check_docs_drift.py --coupling --base "origin/${{ github.base_ref || 'main' }}"
+
       - name: Run Work-Ledger Enforcement
         if: runner.os == 'Linux'
         run: poetry run python bin/check_backlog_ledger.py
