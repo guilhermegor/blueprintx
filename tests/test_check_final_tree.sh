@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 set -uo pipefail
-unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="$REPO_ROOT/bin/ci/check_final_tree.sh"

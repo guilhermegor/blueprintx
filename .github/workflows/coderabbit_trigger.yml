@@ -1,11 +1,10 @@
 name: CodeRabbit Trigger
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, ready_for_review]
 
-permissions:
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: coderabbit-trigger-${{ github.event.pull_request.number }}
