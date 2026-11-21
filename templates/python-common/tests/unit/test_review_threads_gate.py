@@ -3621,6 +3621,31 @@ def test_patch_fingerprint_ignores_hunk_line_numbers() -> None:
     )
 
 
+def test_patch_fingerprint_same_edit_at_another_line_matches() -> None:
+    """Pins the blueprintx#1220 decision: the edit location is NOT in the digest."""
+    cls_gate = _load_gate()
+    dict_at_ten = {
+        "filename": "a",
+        "status": "modified",
+        "patch": "@@ -10,3 +10,4 @@\n ctx\n+y\n ctx",
+    }
+    dict_at_forty = {
+        "filename": "a",
+        "status": "modified",
+        "patch": "@@ -40,3 +41,4 @@\n ctx\n+y\n ctx",
+    }
+    assert cls_gate.patch_fingerprint([dict_at_ten]) == cls_gate.patch_fingerprint([dict_at_forty])
+
+
+def test_patch_fingerprint_same_patch_in_another_file_differs() -> None:
+    """The path IS in the digest: the identical edit to another file is different code."""
+    cls_gate = _load_gate()
+    str_patch = "@@ -1 +1 @@\n-x\n+y"
+    dict_one = {"filename": "src/a.py", "status": "modified", "patch": str_patch}
+    dict_other = {"filename": "src/b.py", "status": "modified", "patch": str_patch}
+    assert cls_gate.patch_fingerprint([dict_one]) != cls_gate.patch_fingerprint([dict_other])
+
+
 def test_patch_fingerprint_ignores_unchanged_context_lines() -> None:
     """Main editing lines next to the PR's hunk changes context only, never the PR's patch."""
     cls_gate = _load_gate()
