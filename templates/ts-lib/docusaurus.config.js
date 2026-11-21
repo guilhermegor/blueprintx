@@ -38,6 +38,9 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
+      footer: {
+        copyright: 'Generated from the ts-lib template via <a href="https://github.com/guilhermegor/blueprintx">BlueprintX</a>.',
+      },
       navbar: {
         title: '${PROJECT_NAME}',
         items: [
