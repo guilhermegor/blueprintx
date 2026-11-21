@@ -1118,6 +1118,22 @@ is shaped as it is; a generated project gets the behavior, not the history.
   authored before the tree was tabified); no per-file ANN401 ignore remains (#1054). `lib-minimal` vendors the typing engine at a nested private path whose imports are
   rewritten to `<pkg>._internal.*` and can exceed the line length, so it is excluded in full
   (mypy excludes it too).
+- **One file, every Python tier; layout-specific entries stay, rationale lives here (#1242).**
+  `ruff.toml` is copied verbatim into all six tiers (`lib-minimal` has its own scaffold but
+  the same `cp`), and `ruff.toml` carries no comments (#304, `check_comment_budget.py`), so the
+  rationale for an entry that only some layouts exercise is recorded in this section instead.
+  Measured by scaffolding each tier: `banned-api` (`utils.tabular_reader`, `config.contracts`),
+  `known-first-party` `config`/`utils` and the `xml_reader.py` per-file-ignores resolve in every
+  tier except zero-dependency `lib-minimal`, which has no `tabular_reader`/`xml_reader`
+  (`lib-minimal` ships them as `<pkg>._internal.utils.*`, matched by the
+  `src/*/_internal/utils/xml_reader.py` glob). `app`/`capabilities`/`chassis` exist only in the
+  DDD and API tiers, `controller`/`model`/`view` only in MVC, and
+  `src/chassis/db_wschema/.../joblib_handler.py` only when a DDD project opts into schema-less
+  storage. A `known-first-party` name or per-file-ignore glob that matches nothing is inert, so
+  these entries cost a library nothing; deleting them would turn the service tiers red
+  (isort ordering, E101, N813). Splitting `ruff.toml` per tier needs a scaffold change, which
+  is deferred until a tier's inert entries actually mislead (the `banned-api` messages name
+  `utils.tabular_reader`, which a library spells `<pkg>._internal.utils.tabular_reader`).
 - **Preview mode is for PLR1702 and PLR0917 only** (too-many-nested-blocks and
   too-many-positional-arguments, both preview-only in ruff 0.17.5: `ruff rule PLR1702`,
   `ruff rule PLR0917`; turning preview off silently disables the keyword-only gate). It also activates tag-along preview rules in the `PL` and `S`
