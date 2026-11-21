@@ -91,7 +91,7 @@ EOF
 apply_ruleset() {
 	local str_repo="$1"
 	local str_id
-	str_id=$(gh api "repos/$str_repo/rulesets" --jq \
+	str_id=$(gh api "repos/$str_repo/rulesets" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)
 
 	if [ -n "$str_id" ] && [ "$REQUIRED_CHECKS_FILE_MISSING" = "1" ]; then
@@ -121,12 +121,12 @@ apply_ruleset() {
 report_blocking_checks() {
 	local str_repo="$1" str_branch="$2"
 	local str_id str_enforcement str_live str_strict str_rules
-	if ! str_id="$(gh api "repos/$str_repo/rulesets" --jq \
-		"[.[] | select(.name == \"$RULESET_NAME\")] | sort_by(.enforcement != \"active\") | .[] | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
+	if ! str_id="$(gh api "repos/$str_repo/rulesets" --paginate --jq \
+		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
 		return 2
 	fi
-	read -r str_id str_enforcement <<<"$(printf '%s\n' "$str_id" | head -1)"
+	read -r str_id str_enforcement <<<"$(printf '%s\n' "$str_id" | grep -m1 ' active$' || printf '%s\n' "$str_id" | head -1)"
 	if [ -z "$str_id" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
 		return 2
@@ -257,7 +257,7 @@ check_ruleset_present() {
 		print_status "warning" "Could not resolve the repository (ruleset presence UNKNOWN, not confirmed)"
 		return 0
 	fi
-	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
+	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\" and .enforcement == \"active\") | .id" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (presence UNKNOWN): ${str_ids:-no output from gh}"
 		return 0

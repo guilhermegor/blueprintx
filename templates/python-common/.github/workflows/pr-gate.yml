@@ -64,12 +64,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
+          if [ -n "$PR_NUMBER" ]; then
+            str_head="$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq .head.sha)"
+            if [ "$str_head" != "$HEAD_SHA" ]; then
+              echo "PR #$PR_NUMBER head moved to $str_head; $HEAD_SHA is stale, nothing to re-run"
+              exit 0
+            fi
+          fi
           str_id="$(gh run list --workflow pr-gate.yml --event pull_request \
-            --commit "$HEAD_SHA" --status failure --limit 1 \
-            --json databaseId --jq '.[0].databaseId // empty')"
+            --commit "$HEAD_SHA" --limit 1 --json databaseId,conclusion \
+            --jq '.[0] | select(.conclusion == "failure" or .conclusion == "cancelled") | .databaseId')"
           if [ -z "$str_id" ]; then
-            echo "no failed gate run for $HEAD_SHA; nothing to re-run"
+            echo "no failed or cancelled gate run for $HEAD_SHA; nothing to re-run"
             exit 0
           fi
           gh run rerun "$str_id"
