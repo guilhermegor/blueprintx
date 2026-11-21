@@ -3932,6 +3932,22 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
   authored before the tree was tabified); no per-file ANN401 ignore remains (#1054). <code>lib-minimal</code> vendors the typing engine at a nested private path whose imports are
   rewritten to <code>&lt;pkg&gt;._internal.*</code> and can exceed the line length, so it is excluded in full
   (mypy excludes it too).</li>
+<li><strong>One file, every Python tier; layout-specific entries stay, rationale lives here (#1242).</strong>
+  <code>ruff.toml</code> is copied verbatim into all six tiers (<code>lib-minimal</code> has its own scaffold but
+  the same <code>cp</code>), and <code>ruff.toml</code> carries no comments (#304, <code>check_comment_budget.py</code>), so the
+  rationale for an entry that only some layouts exercise is recorded in this section instead.
+  Measured by scaffolding each tier: <code>banned-api</code> (<code>utils.tabular_reader</code>, <code>config.contracts</code>),
+  <code>known-first-party</code> <code>config</code>/<code>utils</code> and the <code>xml_reader.py</code> per-file-ignores resolve in every
+  tier except zero-dependency <code>lib-minimal</code>, which has no <code>tabular_reader</code>/<code>xml_reader</code>
+  (<code>lib-minimal</code> ships them as <code>&lt;pkg&gt;._internal.utils.*</code>, matched by the
+  <code>src/*/_internal/utils/xml_reader.py</code> glob). <code>app</code>/<code>capabilities</code>/<code>chassis</code> exist only in the
+  DDD and API tiers, <code>controller</code>/<code>model</code>/<code>view</code> only in MVC, and
+  <code>src/chassis/db_wschema/.../joblib_handler.py</code> only when a DDD project opts into schema-less
+  storage. A <code>known-first-party</code> name or per-file-ignore glob that matches nothing is inert, so
+  these entries cost a library nothing; deleting them would turn the service tiers red
+  (isort ordering, E101, N813). Splitting <code>ruff.toml</code> per tier needs a scaffold change, which
+  is deferred until a tier's inert entries actually mislead (the <code>banned-api</code> messages name
+  <code>utils.tabular_reader</code>, which a library spells <code>&lt;pkg&gt;._internal.utils.tabular_reader</code>).</li>
 <li><strong>Preview mode is for PLR1702 and PLR0917 only</strong> (too-many-nested-blocks and
   too-many-positional-arguments, both preview-only in ruff 0.17.5: <code>ruff rule PLR1702</code>,
   <code>ruff rule PLR0917</code>; turning preview off silently disables the keyword-only gate). It also activates tag-along preview rules in the <code>PL</code> and <code>S</code>
