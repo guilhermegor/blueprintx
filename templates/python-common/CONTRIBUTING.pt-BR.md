@@ -47,7 +47,7 @@ Usamos as seguintes convenções padronizadas de nomes de variáveis:
 
 **A `main` é protegida: commits e pushes diretos são bloqueados** (`no-commit-to-branch` localmente,
 proteção de branch no servidor do GitHub). Toda mudança entra por branch, Pull Request e merge
-(online), ou por `poe new_branch` e `poe git_merge_to_main` (offline).
+(online).
 
 ### Convenção de Nomes de Branch
 
