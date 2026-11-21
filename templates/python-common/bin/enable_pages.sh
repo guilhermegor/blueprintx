@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/repo_slug.sh"
 
 MKDOCS_YML="$SCRIPT_DIR/../mkdocs.yml"
 PAGES_BRANCH="gh-pages"
@@ -18,47 +19,6 @@ require_gh() {
 		return 1
 	fi
 	return 0
-}
-
-repo_from_remote() {
-	git remote get-url origin 2>/dev/null |
-		sed -nE 's#^(git@github\.com:|ssh://git@github\.com/|https?://([^@/]+@)?github\.com/)([^/]+/[^/]+)/?$#\3#p' |
-		sed -E 's#\.git$##' || true
-}
-
-report_gh_failure() {
-	local str_err="$1" str_limit int_remaining int_reset str_when
-	str_limit="$(gh api rate_limit --jq '.resources.graphql | "\(.remaining) \(.reset)"' 2>/dev/null || true)"
-	int_remaining="${str_limit%% *}"
-	int_reset="${str_limit##* }"
-	if [ "$int_remaining" = "0" ]; then
-		str_when="$(date -d "@$int_reset" 2>/dev/null || date -r "$int_reset" 2>/dev/null || echo "epoch $int_reset")"
-		print_status "warning" "GitHub GraphQL rate limit exhausted — resets at $str_when; re-run 'poetry run poe enable_pages' after the reset${str_err:+ — gh said: $str_err}" >&2
-		return 0
-	fi
-	print_status "warning" "gh repo view failed: ${str_err:-no output}" >&2
-}
-
-resolve_repo() {
-	local str_slug
-	str_slug="$(repo_from_remote)"
-	if [ -n "$str_slug" ]; then
-		echo "$str_slug"
-		return 0
-	fi
-	local str_err
-	str_slug="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
-	if [ -n "$str_slug" ]; then
-		echo "$str_slug"
-		return 0
-	fi
-	str_err="$(gh repo view --json nameWithOwner 2>&1 >/dev/null || true)"
-	if [ -z "$(git remote)" ]; then
-		print_status "warning" "No GitHub remote resolved — push the repo to GitHub first" >&2
-	else
-		report_gh_failure "$str_err"
-	fi
-	return 1
 }
 
 uses_mike() {
@@ -100,7 +60,7 @@ set_pages_source() {
 
 enable_pages() {
 	local str_repo
-	if ! str_repo="$(resolve_repo)"; then
+	if ! str_repo="$(resolve_repo enable_pages)"; then
 		return 0
 	fi
 	set_pages_source "$str_repo"
