@@ -10,7 +10,7 @@ GATE="$REPO_ROOT/templates/python-common/bin/check_registry_order.py"
 INIT_TMPL="$REPO_ROOT/templates/lib-minimal/rendered/package__init__.py.tmpl"
 int_failures=0
 
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 

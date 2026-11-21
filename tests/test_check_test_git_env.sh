@@ -41,6 +41,7 @@ expect_gate uncleared_git_dash_c fail
 expect_gate grep_without_unset fail
 expect_gate uncleared_git_add fail
 expect_gate partial_unset fail
+expect_gate fixed_list_unset fail
 expect_gate compgen_without_unset fail
 expect_gate continued_git_commit fail
 expect_gate echoed_unset fail
