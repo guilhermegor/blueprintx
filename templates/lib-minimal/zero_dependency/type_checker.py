@@ -358,7 +358,8 @@ def type_checker(fn_target: Callable[_P, _R]) -> Callable[_P, _R]:
     cls_signature = inspect.signature(fn_target)
     fn_expected = functools.cache(
         lambda: {
-            str_name: _expected_classes(hint) for str_name, hint in _resolve_hints(fn_target).items()
+            str_name: _expected_classes(hint)
+            for str_name, hint in _resolve_hints(fn_target).items()
         }
     )
 
