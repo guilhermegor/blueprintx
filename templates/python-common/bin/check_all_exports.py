@@ -66,7 +66,30 @@ def _parse(path_module: pathlib.Path) -> ast.Module:
         ) from cls_exc
 
 
-def _module_statements(list_body: list[ast.stmt]) -> Iterator[ast.stmt]:
+def _is_type_checking(cls_node: ast.stmt) -> bool:
+    """Return whether a statement is an ``if TYPE_CHECKING:`` block.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``if TYPE_CHECKING:`` and ``if typing.TYPE_CHECKING:``.
+    """
+    if not isinstance(cls_node, ast.If):
+        return False
+    cls_test = cls_node.test
+    return (isinstance(cls_test, ast.Name) and cls_test.id == "TYPE_CHECKING") or (
+        isinstance(cls_test, ast.Attribute) and cls_test.attr == "TYPE_CHECKING"
+    )
+
+
+def _module_statements(
+    list_body: list[ast.stmt], *, bool_runtime: bool = False
+) -> Iterator[ast.stmt]:
     """Yield the statements bound at module level, descending into ``if``/``try``/``with`` blocks.
 
     A guarded import (``try:``, ``if TYPE_CHECKING:``, ``if sys.version_info``, ``with suppress``)
@@ -76,6 +99,9 @@ def _module_statements(list_body: list[ast.stmt]) -> Iterator[ast.stmt]:
     ----------
     list_body : list of ast.stmt
         A module body, or the body of a block already entered.
+    bool_runtime : bool, optional
+        Skip the body of an ``if TYPE_CHECKING:`` block, whose definitions are type-only
+        stubs and never part of the runtime surface.
 
     Yields
     ------
@@ -87,9 +113,13 @@ def _module_statements(list_body: list[ast.stmt]) -> Iterator[ast.stmt]:
         if not isinstance(cls_node, _BLOCK_STATEMENTS):
             continue
         for str_field in ("body", "orelse", "finalbody"):
-            yield from _module_statements(getattr(cls_node, str_field, []))
+            if bool_runtime and str_field == "body" and _is_type_checking(cls_node):
+                continue
+            yield from _module_statements(
+                getattr(cls_node, str_field, []), bool_runtime=bool_runtime
+            )
         for cls_handler in getattr(cls_node, "handlers", []):
-            yield from _module_statements(cls_handler.body)
+            yield from _module_statements(cls_handler.body, bool_runtime=bool_runtime)
 
 
 def declared_all(path_init: pathlib.Path) -> list[str] | None:
@@ -216,7 +246,9 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     """
     return {
         str_name
-        for str_name in _definitions(_module_statements(_parse(path_module).body))
+        for str_name in _definitions(
+            _module_statements(_parse(path_module).body, bool_runtime=True)
+        )
         if not str_name.startswith("_")
     }
 

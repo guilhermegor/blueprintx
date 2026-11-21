@@ -1211,3 +1211,17 @@ def test_public_class_under_a_module_level_try_is_required(tmp_path: Path) -> No
         str_member="try:\n    class Thing:\n        pass\nexcept ImportError:\n    pass\n",
     )
     assert "'Thing'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_type_checking_stub_is_not_a_public_definition(tmp_path: Path) -> None:
+    """Item 4 of #1258: a type-only stub under ``if TYPE_CHECKING:`` is not runtime API."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n    def helper():\n        pass\n"
+            "else:\n    from other import helper\n"
+        ),
+    )
+    assert _load_gate().check_package(path_init) == []
