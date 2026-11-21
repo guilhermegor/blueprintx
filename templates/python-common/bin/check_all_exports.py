@@ -140,8 +140,7 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
         list_found = _declared_names(cls_node)
         if list_found is None:
             continue
-        if list_names is None or _extends(cls_node):
-            list_names = [*(list_names or []), *list_found]
+        list_names = [*(list_names or []), *list_found] if _extends(cls_node) else list_found
     return list_names
 
 
@@ -215,7 +214,7 @@ def _declared_names(cls_node: ast.stmt) -> list[str] | None:
     if isinstance(cls_node, ast.Assign) and any(_all_target(cls_t) for cls_t in cls_node.targets):
         return _literal_strings(cls_node.value)
     if isinstance(cls_node, ast.AnnAssign | ast.AugAssign) and _all_target(cls_node.target):
-        return _literal_strings(cls_node.value)
+        return None if cls_node.value is None else _literal_strings(cls_node.value)
     cls_call = cls_node.value if isinstance(cls_node, ast.Expr) else None
     if not (isinstance(cls_call, ast.Call) and isinstance(cls_call.func, ast.Attribute)):
         return None

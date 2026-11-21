@@ -1155,6 +1155,18 @@ def test_annotated_all_still_enforces_completeness(tmp_path: Path) -> None:
     assert "'THING'" in _sole(_load_gate().check_package(path_init))
 
 
+def test_last_plain_assignment_of_all_wins(tmp_path: Path) -> None:
+    """Python keeps the final ``__all__ = [...]``, so the gate must too."""
+    path_init = _package(tmp_path, str_init="__all__ = ['a']\n__all__ = ['b']\n", str_member="")
+    assert _load_gate().declared_all(path_init) == ["b"]
+
+
+def test_bare_annotation_does_not_declare_all(tmp_path: Path) -> None:
+    """``__all__: list[str]`` binds nothing at runtime, so the package stays out of scope."""
+    path_init = _package(tmp_path, str_init="__all__: list[str]\n", str_member="THING = 1\n")
+    assert _load_gate().declared_all(path_init) is None
+
+
 def test_syntax_error_in_init_is_a_finding_not_a_traceback(tmp_path: Path) -> None:
     """Item 2 of #1258: an unparseable ``__init__.py`` is reported."""
     path_init = _package(tmp_path, str_init="__all__ = [\n", str_member="")
