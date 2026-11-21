@@ -26,6 +26,7 @@ import pytest
 
 
 _INT_11 = 11
+_INT_20 = 20
 _INT_22 = 22
 _INT_35 = 35
 
@@ -997,6 +998,42 @@ def test_select_pr_for_retry_picks_the_oldest_of_several_waiting_prs(
     )
 
 
+def test_select_pr_for_retry_skips_a_pr_whose_request_was_refused_this_run(
+    cls_retry: ModuleType, *, cls_gate: ModuleType
+) -> None:
+    """A refused re-request on the oldest PR must not stall the PR behind it.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    cls_gate : types.ModuleType
+        The gate module.
+    """
+    list_comments = [_comment("coderabbitai", str_body=_STR_RATE_LIMITED)]
+    dict_pr = _pr(list_comments, list_reviews=[])
+    list_candidates = [
+        _candidate(
+            20, str_created_at="2026-08-25T00:00:00Z", list_comments=list_comments, dict_pr=dict_pr
+        ),
+        _candidate(
+            11, str_created_at="2026-08-20T00:00:00Z", list_comments=list_comments, dict_pr=dict_pr
+        ),
+    ]
+
+    assert (
+        cls_retry.select_pr_for_retry(
+            list_candidates,
+            set_reviewers={"coderabbitai"},
+            cls_gate=cls_gate,
+            str_self_login="guilhermegor",
+            dt_now=_DT_NOW,
+            set_skip=frozenset({_INT_11}),
+        )
+        == _INT_20
+    )
+
+
 def test_select_pr_for_retry_picks_none_while_the_only_candidate_is_cooling_down(
     cls_retry: ModuleType, *, cls_gate: ModuleType
 ) -> None:
@@ -1314,3 +1351,35 @@ def test_build_candidate_keeps_a_pr_whose_head_review_predates_a_retarget(
         )
         is not None
     )
+
+
+def test_request_review_reports_posted_even_when_the_author_is_a_bot(
+    cls_retry: ModuleType, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Bot-authored comment is still a posted comment, so the run must not ask a second PR.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    monkeypatch : pytest.MonkeyPatch
+        Patches the ``gh`` call.
+    """
+    monkeypatch.setattr(cls_retry, "_gh_json", lambda _args: {"login": "x[bot]", "type": "Bot"})
+    assert cls_retry.request_review("o/r", int_number=1) is True
+
+
+def test_request_review_reports_not_posted_when_the_gh_call_fails(
+    cls_retry: ModuleType, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed ``gh`` call posted nothing, so the caller may try the next PR.
+
+    Parameters
+    ----------
+    cls_retry : types.ModuleType
+        The retry module.
+    monkeypatch : pytest.MonkeyPatch
+        Patches the ``gh`` call.
+    """
+    monkeypatch.setattr(cls_retry, "_gh_json", lambda _args: None)
+    assert cls_retry.request_review("o/r", int_number=1) is False
