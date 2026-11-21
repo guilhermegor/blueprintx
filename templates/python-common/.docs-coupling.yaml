@@ -1,0 +1,9 @@
+couplings:
+  - source: pyproject.toml
+    docs: [README.md]
+  - source: src/*/__init__.py
+    docs: [docs/api/reference.md]
+  - source: .github/workflows/release*
+    docs: [CONTRIBUTING.md, docs/contributing.md]
+  - source: src/*/*download*.py
+    docs: [SECURITY.md]
