@@ -155,6 +155,7 @@ test_ruleset_only_repo_has_no_unreadable_protection_warning() {
     str_out="$(STUB_PROTECTION=unprotected run_verify active 1 verify)"
     assert_has "ruleset-only repo still verifies" "rc=0" "$str_out"
     assert_lacks "a 404 Branch not protected is not a read failure" "Could not READ classic" "$str_out"
+    assert_has "the absence is reported as info" "No classic branch protection" "$str_out"
 }
 
 test_genuine_protection_read_failure_stays_unknown() {
