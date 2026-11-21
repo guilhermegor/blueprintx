@@ -170,6 +170,10 @@ assert_branch_protection_strict() {
 	local str_strict
 	if ! str_strict="$(gh api "repos/$str_repo/branches/$str_branch/protection" --jq \
 		'.required_status_checks.strict' 2>&1)"; then
+		if [[ "$str_strict" == *"Branch not protected"* && "$str_strict" == *"(HTTP 404)"* ]]; then
+			print_status "info" "No classic branch protection on $str_repo:$str_branch (classic protection is absent; the ruleset check reports its own result)"
+			return 2
+		fi
 		print_status "warning" "Could not READ classic branch protection on $str_repo:$str_branch (so strict is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
 		return 2
 	fi
