@@ -350,6 +350,7 @@ lib_minimal_copy_tooling_configs() {
     cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$project_path/requirements.txt"
     cp "$BLUEPRINTX_ROOT/templates/lib-minimal/.layer-policy.yaml" "$project_path/.layer-policy.yaml"
     cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$project_path/.codespellrc"
+    cp "$COMMON_TEMPLATE_ROOT/.docs-coupling.yaml" "$project_path/.docs-coupling.yaml"
     if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
         cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$project_path/.review-bots.yaml"
     else
