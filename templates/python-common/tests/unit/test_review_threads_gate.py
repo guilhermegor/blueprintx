@@ -2240,11 +2240,57 @@ def test_review_body_findings_on_a_superseded_commit_still_need_a_reply() -> Non
     assert len(_body_problems([dict_stale], list_notices=[])) == 1
 
 
-def test_review_body_one_reply_after_both_reviews_answers_both() -> None:
-    """Deliberate: one reply posted after the latest findings body covers the earlier ones."""
-    dict_late = {**_body_review(_BODY_MAJOR), "submittedAt": "2026-01-02T12:00:00Z"}
-    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created=_BODY_AFTER)]
-    assert _body_problems([_body_review(_BODY_MAJOR), dict_late], list_notices=list_notices) == []
+def _two_reviews() -> list[dict]:
+    dict_a = {**_body_review(_BODY_MAJOR), "databaseId": 1111111}
+    dict_b = {**dict_a, "databaseId": 2222222, "submittedAt": "2026-01-02T12:00:00Z"}
+    return [dict_a, dict_b]
+
+
+def _reply(str_text: str) -> list[dict]:
+    return [_notice("someone", str_body=f"{_BODY_REPLY} {str_text}", str_created=_BODY_AFTER)]
+
+
+def test_review_body_generic_reply_answers_only_the_newest_review() -> None:
+    """blueprintx#1220 item 3: one generic reply after A and B answers B; A stays open.
+
+    Replaces the old test that pinned "one reply covers every earlier review", the behaviour
+    the approved design removes.
+    """
+    list_problems = _body_problems(_two_reviews(), list_notices=_reply(""))
+    assert [("1111111" in s, "2222222" in s) for s in list_problems] == [(True, False)]
+
+
+def test_review_body_batch_reply_naming_both_reviews_answers_both() -> None:
+    """The control for the witness above: ``reviews 1111111, 2222222`` names each one."""
+    assert _body_problems(_two_reviews(), list_notices=_reply("reviews 1111111, 2222222")) == []
+
+
+@pytest.mark.parametrize(
+    "str_ref",
+    ["review 1111111", "see #pullrequestreview-1111111", "re: 1111111"],
+    ids=["id", "url-fragment", "re-id"],
+)
+def test_review_body_explicit_reference_answers_that_review_even_when_older(
+    str_ref: str,
+) -> None:
+    """A reply naming A answers A, but then it is not a generic answer for B.
+
+    Parameters
+    ----------
+    str_ref : str
+        How the reply refers to review A.
+    """
+    list_problems = _body_problems(_two_reviews(), list_notices=_reply(str_ref))
+    assert [("1111111" in s, "2222222" in s) for s in list_problems] == [(False, True)]
+
+
+def test_review_body_blockquote_of_the_first_line_answers_that_review() -> None:
+    """Quoting a review's first line names it without needing its id."""
+    str_first = _BODY_MAJOR.strip().splitlines()[0]
+    dict_other = {**_two_reviews()[1], "body": "Other review\n" + _BODY_MAJOR}
+    list_reviews = [_two_reviews()[0], dict_other]
+    list_problems = _body_problems(list_reviews, list_notices=_reply(f"\n> {str_first}\n\nDone."))
+    assert [("2222222" in s) for s in list_problems] == [True]
 
 
 def test_review_body_reply_from_a_graphql_bot_is_a_problem() -> None:

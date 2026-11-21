@@ -141,7 +141,7 @@ query($owner:String!, $repo:String!, $number:Int!, $rc:String, $tc:String, $cc:S
       ) {
         pageInfo { hasNextPage endCursor }
         nodes {
-          author { login __typename } commit { oid } state body submittedAt
+          author { login __typename } databaseId commit { oid } state body submittedAt
           comments(first:20) { nodes { replyTo { id } } }
         }
       }
@@ -1800,6 +1800,67 @@ def _answered_after(
     )
 
 
+_RE_REVIEW_URL_ID = re.compile(r"pullrequestreview-(\d+)")
+_RE_BARE_ID = re.compile(r"(?<![\w-])(\d{6,})(?![\w-])")
+_INT_MIN_QUOTE_CHARS = 10
+
+
+def _review_id(dict_review: dict) -> str:
+    """Return the review's REST id as text, or ``""`` for a review shaped from a comment."""
+    return str(dict_review.get("databaseId") or "")
+
+
+def _first_body_line(dict_review: dict) -> str:
+    """Return the review body's first non-empty line, lower-cased and stripped."""
+    return next(
+        (s.strip().casefold() for s in (dict_review.get("body") or "").splitlines() if s.strip()),
+        "",
+    )
+
+
+def _quoted_lines(str_reply: str) -> list[str]:
+    """Return the blockquoted lines of a reply, lower-cased and stripped of the ``>`` marker."""
+    return [
+        s.lstrip(">").strip().casefold()
+        for s in str_reply.splitlines()
+        if s.startswith(">") and len(s.lstrip(">").strip()) >= _INT_MIN_QUOTE_CHARS
+    ]
+
+
+def _reply_names_review(str_reply: str, dict_review: dict) -> bool:
+    """Return whether a reply references one review by id, review URL or quoting its first line.
+
+    ``reviews 123, 456`` names each id it lists, so a batch answer needs no extra syntax.
+    """
+    str_id = _review_id(dict_review)
+    set_ids = set(_RE_REVIEW_URL_ID.findall(str_reply)) | set(_RE_BARE_ID.findall(str_reply))
+    str_first = _first_body_line(dict_review)
+    return (bool(str_id) and str_id in set_ids) or (
+        bool(str_first) and any(str_first.startswith(q) for q in _quoted_lines(str_reply))
+    )
+
+
+def _answers_review(
+    dict_reply: dict, dict_review: dict, *, list_findings_reviews: list[dict]
+) -> bool:
+    """Return whether one reply answers one review, per review rather than per PR.
+
+    A reply that names reviews answers exactly those. A generic one answers only the newest
+    findings review that precedes it, so a single comment no longer clears every earlier body.
+    """
+    str_reply = dict_reply.get("body") or ""
+    str_created = dict_reply.get("createdAt") or ""
+    str_when = dict_review.get("submittedAt") or ""
+    if not str_when or str_created <= str_when:
+        return False
+    if _reply_names_review(str_reply, dict_review):
+        return True
+    if any(_reply_names_review(str_reply, d) for d in list_findings_reviews):
+        return False
+    list_before = [d for d in list_findings_reviews if (d.get("submittedAt") or "") < str_created]
+    return dict_review is max(list_before, key=lambda d: d.get("submittedAt") or "")
+
+
 _STR_REVIEW_NOUN = (
     r"(?:the\s+|our\s+|my\s+)?(?:(?:ladder|fallback|claude|coderabbit|cli|rung)\s+)*review\b"
 )
@@ -1808,7 +1869,8 @@ _RE_ANSWER_SHAPE = re.compile(
     rf"(?:\s+(?:to|on))?\s*:?)\s*{_STR_REVIEW_NOUN}"
     r"|\b(?:addressed|fixed|resolved)\s+in\s+`?[0-9a-f]{7,40}\b"
     r"|^[^\w\n]*finding\s+\d+\b"
-    r"|\breview\s+\d{6,}\b"
+    r"|\breviews?\s+#?\d{6,}\b"
+    r"|pullrequestreview-\d+"
     r"|^>[^\n]*\n(?:[^\S\n]*\n)*[^>\s]",
     re.IGNORECASE | re.MULTILINE,
 )
@@ -1910,9 +1972,10 @@ def find_review_body_problems(
     """Return one problem per roster review whose body lists findings nobody answered.
 
     Every submitted review counts, not only the head's: inline threads persist across pushes,
-    so a body must too, or a trivial push plus a clean re-review would clear it. One reply
-    posted after the latest findings body therefore answers all earlier ones; a reply must
-    postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
+    so a body must too, or a trivial push plus a clean re-review would clear it. A reply
+    answers per review: one that names a review (its id, ``#pullrequestreview-<id>``, a
+    blockquote of its first line, or ``reviews 123, 456``) answers those; a generic one answers
+    only the newest findings review before it. A reply must postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
     maintainer's explicit answer. A roster issue comment that is shaped like a review counts as
     one, since some ladder rungs post that way.
 
@@ -1967,20 +2030,33 @@ def find_review_body_problems(
             )
         )
     ]
+    list_findings = [dict_review for dict_review, list_lines in list_hits if list_lines]
+    list_answers = [
+        d
+        for d in list_notices
+        if _is_human_answer(d, set_roster=set_roster, int_min_chars=int_min_chars)
+        and not _is_marker_comment(d, tuple_markers=tuple_markers)
+    ]
     return [
-        f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
-        f"and nobody outside the reviewer roster (and no bot) replied after it — "
-        f"{list_lines[0][:90]}"
+        _unanswered_message(dict_review, list_lines)
         for dict_review, list_lines in list_hits
         if list_lines
-        and not _answered_after(
-            list_notices,
-            set_roster=set_roster,
-            str_when=dict_review.get("submittedAt") or "",
-            int_min_chars=int_min_chars,
-            tuple_markers=tuple_markers,
+        and not any(
+            _answers_review(d, dict_review, list_findings_reviews=list_findings)
+            for d in list_answers
         )
     ]
+
+
+def _unanswered_message(dict_review: dict, list_lines: list[str]) -> str:
+    """Return the problem for one findings review nobody answered, naming its id."""
+    str_id = _review_id(dict_review)
+    str_ref = f" [review {str_id}]" if str_id else ""
+    return (
+        f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
+        f"and nobody outside the reviewer roster (and no bot) replied after it — "
+        f"{list_lines[0][:90]}{str_ref}"
+    )
 
 
 def report_verdict(
