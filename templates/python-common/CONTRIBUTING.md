@@ -47,7 +47,7 @@ We use the following standardized variable naming conventions:
 
 **`main` is protected — direct commits and pushes are blocked** (`no-commit-to-branch` locally,
 server-side branch protection on GitHub). All changes land via a branch → Pull Request → merge
-(online), or `poe new_branch` → `poe git_merge_to_main` (offline).
+(online).
 
 ### Branch Naming Convention
 
