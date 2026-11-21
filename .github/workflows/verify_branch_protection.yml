@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   strict-required-checks:
-    name: strict required-checks guard (blueprintx#307)
+    name: no-strict required-checks guard (blueprintx#1285)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -30,13 +30,31 @@ jobs:
           GH_PAT_REVIEW_TRIGGER: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
         run: |
           if [ -z "$GH_PAT_REVIEW_TRIGGER" ]; then
-            echo "::error::GH_PAT_REVIEW_TRIGGER is not set, so branch-protection strictness cannot be verified." >&2
+            echo "::error::GH_PAT_REVIEW_TRIGGER is not set, so branch-protection policy cannot be verified." >&2
             echo "GITHUB_TOKEN cannot substitute: reading branch protection needs Administration" >&2
             echo "access, which the default Actions token can never be granted." >&2
             exit 1
           fi
 
-      - name: Assert required_status_checks.strict is enforced
+      - name: Assert strict is OFF and the required checks are present
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_REVIEW_TRIGGER }}
-        run: bash templates/python-common/bin/enable_repo_rules.sh verify
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          branch="$(gh api "repos/$repo" --jq .default_branch)"
+          rules="$(gh api "repos/$repo/rules/branches/$branch?per_page=100" --paginate | jq -s 'add // []')"
+          jq -e '[.[] | select(.type == "required_status_checks")] | length > 0' <<<"$rules" >/dev/null \
+            || { echo "::error::no required_status_checks rule applies to $branch" >&2; exit 1; }
+          jq -e 'all(.[] | select(.type == "required_status_checks"); (.parameters.required_status_checks | length) > 0)' <<<"$rules" >/dev/null \
+            || { echo "::error::a required_status_checks rule on $branch lists no checks" >&2; exit 1; }
+          jq -e 'all(.[] | select(.type == "required_status_checks"); .parameters.strict_required_status_checks_policy == false)' <<<"$rules" >/dev/null \
+            || { echo "::error::strict_required_status_checks_policy is not false on $branch (blueprintx#1285)" >&2; exit 1; }
+          if classic="$(gh api "repos/$repo/branches/$branch/protection" 2>&1)"; then
+            jq -e '.required_status_checks.strict != true' <<<"$classic" >/dev/null \
+              || { echo "::error::classic required_status_checks.strict is true on $branch (blueprintx#1285)" >&2; exit 1; }
+          elif [[ "$classic" != *"Branch not protected"* ]]; then
+            echo "::error::could not read classic branch protection: $classic" >&2
+            exit 1
+          fi
+          echo "strict is off and required checks are present on $branch"
