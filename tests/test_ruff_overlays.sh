@@ -24,8 +24,8 @@ compose() {
 
 flags_banned_import() {
 	local str_toml="$1" str_dir="$2" str_out
-	str_out="$(cd "$str_dir" && ruff check --no-cache --config "$str_toml" --select TID251 consumer.py 2>&1)" || true
-	[[ "$str_out" == *TID251* ]]
+	str_out="$(cd "$str_dir" && ruff check --no-cache --config "$str_toml" --select TID251 --output-format json consumer.py 2>&1)" || true
+	[[ "$str_out" == *\"TID251\"* ]]
 }
 
 for path_overlay in "$COMMON"/ruff/*.toml; do
