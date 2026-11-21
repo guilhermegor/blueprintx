@@ -19,11 +19,6 @@ cited_tasks() {
 		"$1" | sed -E 's/.*poe //' | sort -u
 }
 
-cited_tasks_in_file() {
-	mkdir -p "$WORK_DIR/one" && cp "$1" "$WORK_DIR/one/doc.md" && cited_tasks "$WORK_DIR/one"
-	rm -rf "$WORK_DIR/one"
-}
-
 path_witness="$WORK_DIR/witness"
 mkdir -p "$path_witness"
 printf -- '- poe missing_task\n' >"$path_witness/list.md"
@@ -69,13 +64,26 @@ done
 
 list_offline_tasks="$(sed -nE 's/^\[tool\.poe\.tasks\.([A-Za-z0-9_-]+)\].*/\1/p' \
 	"$REPO_ROOT/templates/common/poe_tasks.offline.toml")"
+for str_must in new_branch git_merge_to_main; do
+	grep -qxF "$str_must" <<<"$list_offline_tasks" \
+		|| { echo "FAIL: offline task list lacks $str_must"; exit 1; }
+done
+printf -- '- `poe new_branch`\n' >"$path_witness/offline.md"
+if grep -qxF new_branch <<<"$list_offline_tasks" && grep -qxF new_branch <<<"$(cited_tasks "$path_witness/offline.md")"; then
+	echo "ok: an offline-only task cited in a doc is flagged"
+else
+	echo "FAIL: an offline-only task cited in a doc is not flagged"
+	int_failures=$((int_failures + 1))
+fi
 for path_doc in "$REPO_ROOT"/templates/python-common/CONTRIBUTING*.md; do
+	[ -f "$path_doc" ] || { echo "FAIL: no CONTRIBUTING*.md under python-common"; exit 1; }
 	while IFS= read -r str_task; do
+		[ -n "$str_task" ] || continue
 		if grep -qxF "$str_task" <<<"$list_offline_tasks"; then
 			echo "FAIL: $(basename "$path_doc") cites offline-only poe $str_task"
 			int_failures=$((int_failures + 1))
 		fi
-	done <<<"$(cited_tasks_in_file "$path_doc")"
+	done <<<"$(cited_tasks "$path_doc")"
 done
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
