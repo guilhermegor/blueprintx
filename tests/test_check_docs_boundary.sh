@@ -8,7 +8,7 @@ source "$REPO_ROOT/bin/lib/common.sh"
 
 int_failures=0
 
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 
 make_sandbox() {

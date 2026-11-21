@@ -456,7 +456,8 @@ def request_review(str_repo: str, *, int_number: int) -> bool:
     Returns
     -------
     bool
-        ``True`` when the comment was posted.
+        ``True`` when a comment was posted, even one the reviewer ignores (a Bot author);
+        ``False`` only when nothing was posted, so the caller may try another PR.
     """
     dict_posted = _gh_json(
         [
@@ -478,7 +479,7 @@ def request_review(str_repo: str, *, int_number: int) -> bool:
             f"{dict_posted.get('login')} [Bot], which the reviewer IGNORES — set "
             "GH_PAT_REVIEW_TRIGGER to a user PAT (see coderabbit_trigger)."
         )
-        return False
+        return True
 
     print(f"requested a full review on #{int_number} as {dict_posted.get('login')}")
     return True
@@ -686,6 +687,7 @@ def select_pr_for_retry(
     str_self_login: str,
     dt_now: datetime,
     int_max_attempts: int = _INT_MAX_ATTEMPTS_PER_PR,
+    set_skip: frozenset[int] = frozenset(),
 ) -> int | None:
     """Pick the oldest waiting PR that is eligible to be asked right now.
 
@@ -703,6 +705,9 @@ def select_pr_for_retry(
         The current time, timezone-aware.
     int_max_attempts : int, optional
         Attempts after which a PR is skipped past, rather than blocking the queue.
+    set_skip : frozenset of int, optional
+        PR numbers whose request was refused earlier in this run, so one refusal does not
+        stall the PRs behind it.
 
     Returns
     -------
@@ -711,6 +716,8 @@ def select_pr_for_retry(
         has exhausted its attempts.
     """
     for dict_candidate in sorted(list_candidates, key=lambda d: d["created_at"]):
+        if dict_candidate["number"] in set_skip:
+            continue
         if not pr_needs_retry(
             dict_candidate["pr"],
             list_comments=dict_candidate["comments"],
@@ -840,6 +847,7 @@ def choose_pr_to_retry(
     cls_gate: types.ModuleType,
     str_self_login: str,
     dt_now: datetime,
+    set_skip: frozenset[int] = frozenset(),
 ) -> int | None:
     """Decide which PR, if any, to ask this run.
 
@@ -857,6 +865,8 @@ def choose_pr_to_retry(
         The login the retry posts as.
     dt_now : datetime.datetime
         The current time, timezone-aware.
+    set_skip : frozenset of int, optional
+        PR numbers already refused this run.
 
     Returns
     -------
@@ -881,6 +891,7 @@ def choose_pr_to_retry(
         cls_gate=cls_gate,
         str_self_login=str_self_login,
         dt_now=dt_now,
+        set_skip=set_skip,
     )
     if int_chosen is None:
         print(
@@ -916,26 +927,32 @@ def main() -> int:
 
     str_self_login = resolve_self_login()
     dt_now = datetime.now(UTC)
-    int_chosen = choose_pr_to_retry(
-        list_open,
-        list_candidates=list_candidates,
-        set_reviewers=set_reviewers,
-        cls_gate=cls_gate,
-        str_self_login=str_self_login,
-        dt_now=dt_now,
-    )
-    if int_chosen is None:
-        return 0
-
-    if "--dry-run" in sys.argv:
-        print(
-            f"[dry-run] would request a review on #{int_chosen} — oldest eligible of "
-            f"{len(list_candidates)} waiting PR(s)."
+    set_refused: frozenset[int] = frozenset()
+    for _ in list_candidates:
+        int_chosen = choose_pr_to_retry(
+            list_open,
+            list_candidates=list_candidates,
+            set_reviewers=set_reviewers,
+            cls_gate=cls_gate,
+            str_self_login=str_self_login,
+            dt_now=dt_now,
+            set_skip=set_refused,
         )
-        return 0
+        if int_chosen is None:
+            return 0
 
-    bool_asked = request_review(str_repo, int_number=int_chosen)
-    print(f"open PRs checked: {len(list_open)}; requested #{int_chosen}: {bool_asked}.")
+        if "--dry-run" in sys.argv:
+            print(
+                f"[dry-run] would request a review on #{int_chosen} — oldest eligible of "
+                f"{len(list_candidates)} waiting PR(s)."
+            )
+            bool_asked = True
+        else:
+            bool_asked = request_review(str_repo, int_number=int_chosen)
+            print(f"open PRs checked: {len(list_open)}; requested #{int_chosen}: {bool_asked}.")
+        if bool_asked:
+            return 0
+        set_refused |= {int_chosen}
     return 0
 
 
