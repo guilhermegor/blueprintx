@@ -1364,7 +1364,10 @@ def _push_note(
     if not any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES):
         return ""
     if not str_push_time:
-        return f"\nThe push time of {str_head_oid[:7]} could not be read, so the notice is not trusted."
+        return (
+            f"\nThe push time of {str_head_oid[:7]} could not be read, "
+            "so the notice is not trusted."
+        )
     if _notice_names_other_head(str_newest, str_head_oid=str_head_oid):
         return f"\nThe notice names a commit other than {str_head_oid[:7]}."
     return f"\nThe notice predates the push of {str_head_oid[:7]}."
@@ -1782,29 +1785,6 @@ def _is_marker_comment(dict_notice: dict, *, tuple_markers: tuple[str, ...]) -> 
     )
 
 
-def _answered_after(
-    list_notices: list[dict],
-    *,
-    set_roster: set[str],
-    str_when: str,
-    int_min_chars: int,
-    tuple_markers: tuple[str, ...] = (),
-) -> bool:
-    """Return whether a human comment of at least ``int_min_chars`` postdates ``str_when``.
-
-    Bots never answer: GraphQL reports ``__typename`` ``Bot`` (and REST a ``[bot]`` suffix) for
-    GitGuardian, ``github-actions`` and the like, and one of those clearing findings unread is
-    the #630 failure again. A null author (a deleted "ghost" account) is not a known human
-    either, so it fails closed like a missing ``submittedAt``.
-    """
-    return bool(str_when) and any(
-        _is_human_answer(dict_notice, set_roster=set_roster, int_min_chars=int_min_chars)
-        and not _is_marker_comment(dict_notice, tuple_markers=tuple_markers)
-        and (dict_notice.get("createdAt") or "") > str_when
-        for dict_notice in list_notices
-    )
-
-
 _RE_REVIEW_URL_ID = re.compile(r"pullrequestreview-(\d+)")
 _RE_BARE_ID = re.compile(r"(?<![\w-])(\d{6,})(?![\w-])")
 _INT_MIN_QUOTE_CHARS = 10
@@ -1836,7 +1816,7 @@ def _quoted_lines(str_reply: str) -> list[str]:
     ]
 
 
-def _reply_names_review(str_reply: str, dict_review: dict, *, list_all: list[dict]) -> bool:
+def _reply_names_review(str_reply: str, *, dict_review: dict, list_all: list[dict]) -> bool:
     """Return whether a reply references one review by id, review URL or quoting its first line.
 
     ``reviews 123, 456`` names each id it lists, so a batch answer needs no extra syntax. A
@@ -1855,7 +1835,7 @@ def _reply_names_review(str_reply: str, dict_review: dict, *, list_all: list[dic
 
 
 def _answers_review(
-    dict_reply: dict, dict_review: dict, *, tuple_scope: tuple[list, list]
+    dict_reply: dict, *, dict_review: dict, tuple_scope: tuple[list, list]
 ) -> bool:
     """Return whether one reply answers one review, per review rather than per PR.
 
@@ -1871,9 +1851,9 @@ def _answers_review(
     str_when = dict_review.get("submittedAt") or ""
     if not str_when or str_created <= str_when:
         return False
-    if _reply_names_review(str_reply, dict_review, list_all=list_all):
+    if _reply_names_review(str_reply, dict_review=dict_review, list_all=list_all):
         return True
-    if any(_reply_names_review(str_reply, d, list_all=list_all) for d in list_all):
+    if any(_reply_names_review(str_reply, dict_review=d, list_all=list_all) for d in list_all):
         return False
     list_before = [d for d in list_findings if (d.get("submittedAt") or "") < str_created]
     return dict_review is max(list_before, key=lambda d: d.get("submittedAt") or "")
@@ -1993,9 +1973,10 @@ def find_review_body_problems(
     so a body must too, or a trivial push plus a clean re-review would clear it. A reply
     answers per review: one that names a review (its id, ``#pullrequestreview-<id>``, a
     blockquote of its first line, or ``reviews 123, 456``) answers those; a generic one answers
-    only the newest findings review before it. A reply must postdate the review it answers. A ``DISMISSED`` review is skipped, the dismissal being the
-    maintainer's explicit answer. A roster issue comment that is shaped like a review counts as
-    one, since some ladder rungs post that way.
+    only the newest findings review before it. A reply must postdate the review it answers.
+    A ``DISMISSED`` review is skipped, the dismissal being the maintainer's explicit answer.
+    A roster issue comment that is shaped like a review counts as one, since some ladder rungs
+    post that way.
 
     Parameters
     ----------
@@ -2057,17 +2038,17 @@ def find_review_body_problems(
         and not _is_marker_comment(d, tuple_markers=tuple_markers)
     ]
     return [
-        _unanswered_message(dict_review, list_lines)
+        _unanswered_message(dict_review, list_lines=list_lines)
         for dict_review, list_lines in list_hits
         if list_lines
         and not any(
-            _answers_review(d, dict_review, tuple_scope=(list_all, list_findings))
+            _answers_review(d, dict_review=dict_review, tuple_scope=(list_all, list_findings))
             for d in list_answers
         )
     ]
 
 
-def _unanswered_message(dict_review: dict, list_lines: list[str]) -> str:
+def _unanswered_message(dict_review: dict, *, list_lines: list[str]) -> str:
     """Return the problem for one findings review nobody answered, naming its id."""
     str_id = _review_id(dict_review)
     str_ref = f" [review {str_id}]" if str_id else ""
