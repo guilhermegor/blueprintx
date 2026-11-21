@@ -11,7 +11,7 @@ delivered and verified with `scaffold_lint_test.sh`.
 |---|---|---|
 | #207 | `bin/` outside ruff — 73 findings | ✅ 0 |
 | #206 | `check-urls` skipped the delimiter line | ✅ + 2 real stale URLs fixed |
-| #110 | `wwdates >=1.0.0` | ✅ (issue was stale: PyPI already has 2.0.0) |
+| #110 | `purecalendars >=1.0.0` | ✅ (issue was stale: PyPI already has 2.0.0) |
 | #167 | complexity gate | ✅ 80/80, gate green on both sides |
 | #139 | import gate passed without looking | ✅ 4 new policies, fails instead of staying silent |
 | #140 | direction between layers | ✅ 0 refactors (preventive) |
@@ -185,7 +185,7 @@ gate would be born outside the lint.
 - [x] **Verification:** `src`, `bin`, `tests`, `optional` → all exit 0. shellcheck + `bash -n`
       clean; 40 integration tests pass.
 
-## Slice 3 — #110: `wwdates >=1.0.0` ✅ DELIVERED
+## Slice 3 — #110: `purecalendars >=1.0.0` ✅ DELIVERED
 
 - [x] Bumped across the 4 service tiers (`ddd-*`, `mvc-*`), `>=` style per the issue's decision.
 - [x] ⚠️ **The issue is stale on one factual point** and it's worth correcting there: it
@@ -195,7 +195,7 @@ gate would be born outside the lint.
       `DatesBRAnbima`'s meaning under the same name).
 - [x] **Verified on the real wheels, not the README**, by downloading 1.0.0 and 2.0.0 from
       PyPI:
-      - both export `DatesBRAnbima` from `wwdates/br/anbima.py`;
+      - both export `DatesBRAnbima` from `purecalendars/br/anbima.py`;
       - neither imports an HTTP client (`requests`/`urllib`/`httpx`) → genuinely offline;
       - `__init__` has only optional arguments → `DatesBRAnbima()` stays valid;
       - the 6 methods the wrapper calls exist in both.
