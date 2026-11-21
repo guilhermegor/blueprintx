@@ -44,6 +44,7 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/.pydocstyle" "$str_project_path/.pydocstyle"
 	cp "$COMMON_TEMPLATE_ROOT/requirements.txt" "$str_project_path/requirements.txt"
 	cp "$COMMON_TEMPLATE_ROOT/.codespellrc" "$str_project_path/.codespellrc"
+	cp "$COMMON_TEMPLATE_ROOT/.docs-coupling.yaml" "$str_project_path/.docs-coupling.yaml"
 	if [[ "${INCLUDE_REVIEW_BOT_ROSTER:-true}" == "true" ]]; then
 		cp "$COMMON_TEMPLATE_ROOT/.review-bots.yaml" "$str_project_path/.review-bots.yaml"
 	else
@@ -168,6 +169,8 @@ scaffold_copy_gate_tests() {
 		"$str_project_path/tests/unit/test_review_retry.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_code_refs_gate.py" \
 		"$str_project_path/tests/unit/test_docs_code_refs_gate.py"
+	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_check_docs_drift.py" \
+		"$str_project_path/tests/unit/test_check_docs_drift.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_assertion_weakening_gate.py" \
 		"$str_project_path/tests/unit/test_assertion_weakening_gate.py"
 	cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_rmw_race_gate.py" \

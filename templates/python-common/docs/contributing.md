@@ -83,8 +83,7 @@ Deploy from a branch → gh-pages*.
 ## Releasing
 
 > **`main` is protected — you never commit or push to it directly.** All changes land via a
-> branch → Pull Request → merge (online), or `poe new_branch` → `poe git_merge_to_main`
-> (offline). Cutting a release means creating a `vX.Y.Z` git tag; the Changelog page is then
+> branch → Pull Request → merge. Cutting a release means creating a `vX.Y.Z` git tag; the Changelog page is then
 > generated from that tag by `cz changelog` on the docs build.
 
 This service is deployed, not published to a package index.
@@ -95,16 +94,6 @@ This service is deployed, not published to a package index.
    (e.g. `1.4.0`). It creates the `v1.4.0` tag and a GitHub Release server-side — no direct
    push to protected `main`.
 3. The docs deploy regenerates the Changelog from the new tag automatically.
-
-**Without a GitHub remote (offline):**
-1. `poe new_branch feat/my-change` — branch off the default branch.
-2. Do the work and commit (Conventional Commits). Pre-flight the message first with
-   `poe check_commit_msg <file>` — it runs the same gitlint + commitizen `commit-msg` checks
-   in seconds, instead of a rejected title costing a full pre-commit gate run.
-3. `poe bump_version` — runs `cz bump`: computes the next version from your commits, updates
-   `pyproject.toml`, regenerates `CHANGELOG.md`, and creates the `vX.Y.Z` tag.
-4. `poe git_merge_to_main` — merges the branch into the protected default branch locally.
-5. Preview the Changelog any time with `poe changelog`.
 
 ## Branding the docs site
 

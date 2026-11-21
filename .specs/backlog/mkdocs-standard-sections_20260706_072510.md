@@ -3,7 +3,7 @@
 Branch: `feat/mkdocs-standard-doc-sections`. Two coordinated changes across every mkdocs site
 in the family (5 scaffold tiers + root), batched because they touch the same `mkdocs.yml` files.
 
-**Canonical section set (from wwdates):** Home · Usage · Examples · API Reference · FAQ ·
+**Canonical section set (from purecalendars):** Home · Usage · Examples · API Reference · FAQ ·
 Contributing · Changelog. Decisions: root = tool-mapped full set; service tiers = full parity +
 keep Architecture; masthead version pill removed from scaffold tiers **and** root (GitHub-release
 version from Material's `repo_url` integration stays).
