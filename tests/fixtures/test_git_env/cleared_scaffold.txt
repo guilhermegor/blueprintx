@@ -1,4 +1,4 @@
 #!/bin/bash
 
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
 bash "$REPO_ROOT/bin/scaffold/ts_lib.sh" out

@@ -35,7 +35,6 @@ first_clear_line() {
 		{ n++ }
 		int_found || !/(^|[;&|({]|then|do|else)[[:space:]]*unset[[:space:]]/ { next }
 		/compgen -e *([|] *grep .\^GIT_|GIT_)/ { int_found = n }
-		/GIT_DIR/ && /GIT_INDEX_FILE/ && /GIT_WORK_TREE/ { int_found = n }
 		END { if (int_found) print int_found }
 	'
 }
@@ -49,7 +48,7 @@ for path_test in "$REPO_ROOT"/tests/*.sh; do
 	[ -n "$int_spawn" ] || continue
 	int_clear="$(first_clear_line "$path_test")"
 	if [ -z "$int_clear" ] || [ "$int_clear" -gt "$int_spawn" ]; then
-		print_status "error" "tests/$(basename "$path_test") — spawns git or a scaffold (code line $int_spawn) without first clearing the inherited GIT_* env; under pre-commit, GIT_DIR and GIT_INDEX_FILE point at the calling repository, so its commits land there. Add: while IFS= read -r str_var; do unset \"\$str_var\"; done < <(compgen -e | grep '^GIT_')"
+		print_status "error" "tests/$(basename "$path_test") — spawns git or a scaffold (code line $int_spawn) without first clearing the inherited GIT_* env; under pre-commit, GIT_DIR, GIT_INDEX_FILE and GIT_COMMON_DIR point at the calling repository, so its commits land there. Add: while IFS= read -r str_var; do unset \"\$str_var\"; done < <(compgen -e | grep '^GIT_')"
 		errors=$((errors + 1))
 	fi
 done
