@@ -66,11 +66,31 @@ test_check_ruleset_passes_when_present() {
 
 test_check_ruleset_unresolved_repo_is_unknown() {
     local str_out
-    str_out="$(PATH="$WORK_DIR:$PATH" GITHUB_REPOSITORY="" STUB_NO_REPO=1 bash -c '
+    mkdir -p "$WORK_DIR/norepo"
+    str_out="$(cd "$WORK_DIR/norepo" && PATH="$WORK_DIR:$PATH" GITHUB_REPOSITORY="" STUB_NO_REPO=1 bash -c '
         gh() { [ "$1 $2" = "repo view" ] && return 0; command gh "$@"; }
         export -f gh
         bash "$0" check_ruleset' "$SCRIPT" 2>&1)"
     assert_has "unresolved repo is reported UNKNOWN" "UNKNOWN" "$str_out"
+}
+
+test_main_resolves_slug_from_origin_when_graphql_fails() {
+    local str_out
+    mkdir -p "$WORK_DIR/withremote" "$WORK_DIR/f"
+    git -C "$WORK_DIR/withremote" init -q
+    git -C "$WORK_DIR/withremote" remote add origin https://github.com/acme/widget.git
+    sed 's#^"repo view") echo "o/r"; exit 0 ;;#"repo view") echo "graphql down" >\&2; exit 1 ;;#' "$WORK_DIR/gh" >"$WORK_DIR/f/gh"
+    chmod +x "$WORK_DIR/f/gh"
+    str_out="$(cd "$WORK_DIR/withremote" && PATH="$WORK_DIR/f:$PATH" bash "$SCRIPT" 2>&1)"
+    assert_lacks "origin slug survives a GraphQL outage" "No GitHub remote resolved" "$str_out"
+}
+
+test_main_without_any_remote_says_no_remote() {
+    local str_out
+    mkdir -p "$WORK_DIR/noremote" "$WORK_DIR/f"
+    git -C "$WORK_DIR/noremote" init -q
+    str_out="$(cd "$WORK_DIR/noremote" && PATH="$WORK_DIR/f:$PATH" bash "$SCRIPT" 2>&1)"
+    assert_has "no remote at all still says so" "No GitHub remote resolved" "$str_out"
 }
 
 test_stranded_names_pr_without_analysis() {
@@ -126,7 +146,8 @@ STUB
 chmod +x "$WORK_DIR/v/gh"
 
 run_verify() {
-    PATH="$WORK_DIR/v:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT="$1" STUB_APPLIES="$2" STUB_PROTECTION="${STUB_PROTECTION:-}" bash "$SCRIPT" "$3" 2>&1
+    mkdir -p "$WORK_DIR/norepo"
+    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/v:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT="$1" STUB_APPLIES="$2" STUB_PROTECTION="${STUB_PROTECTION:-}" bash "$SCRIPT" "$3" 2>&1)
     echo "rc=$?"
 }
 
@@ -202,4 +223,6 @@ test_check_ruleset_unresolved_repo_is_unknown
 test_stranded_names_pr_without_analysis
 test_stranded_lookup_failure_is_unknown_not_stranded
 test_stranded_pr_list_failure_is_unknown
+test_main_resolves_slug_from_origin_when_graphql_fails
+test_main_without_any_remote_says_no_remote
 exit "$int_failures"

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -uo pipefail
-unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
+while IFS= read -r str_var; do unset "$str_var"; done < <(compgen -e | grep '^GIT_')
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="$(mktemp -d)"
@@ -147,6 +147,30 @@ check_ptbr_gate() {
 	echo "ok: pt-BR gate rejects English and accepts pt-BR"
 }
 
+check_about_gate() {
+	local path_project="$WORK_DIR/about-proj" path_bin="$WORK_DIR/fakebin" str_desc="Validate and mask document numbers"
+	local path_gate="$REPO_ROOT/templates/python-common/bin/check_description_sync.sh"
+	mkdir -p "$path_project" "$path_bin"
+	printf '[project]\nname = "x"\ndescription = "%s"\n' "$str_desc" >"$path_project/pyproject.toml"
+	git -C "$path_project" init -q
+	git -C "$path_project" remote add origin https://github.com/acme/widget.git
+	printf '#!/bin/bash\nexit 1\n' >"$path_bin/gh"
+	chmod +x "$path_bin/gh"
+	local str_out int_rc=0
+	str_out="$(PATH="$path_bin:$PATH" GH_TOKEN=t bash "$path_gate" "$path_project" 2>&1)" || int_rc=$?
+	if [[ "$int_rc" -eq 0 || "$str_out" != *"GitHub About lookup failed"* ]]; then
+		fail "About gate" "gh api failure with a token present: rc=$int_rc, no lookup-failed diagnostic"
+	fi
+	str_out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$path_bin:$PATH" bash "$path_gate" "$path_project" 2>&1)"
+	if [[ "$str_out" != *"SKIPPED GitHub About"* ]]; then
+		fail "About gate" "did not name a skip when no token is present"
+	fi
+	printf '#!/bin/bash\necho "%s"\n' "$str_desc" >"$path_bin/gh"
+	PATH="$path_bin:$PATH" GH_TOKEN=t bash "$path_gate" "$path_project" >/dev/null 2>&1 ||
+		fail "About gate" "rejected a matching About description"
+	echo "ok: About gate fails on gh failure with a token, skips without one"
+}
+
 main() {
 	local str_tier
 	for str_tier in "${LIST_PY_TIERS[@]}" ts-lib react-spa-webpack; do
@@ -154,6 +178,7 @@ main() {
 	done
 	check_drift_gate
 	check_ptbr_gate
+	check_about_gate
 	if [[ "$int_failures" -gt 0 ]]; then
 		echo "$int_failures description-sync case(s) failed"
 		exit 1

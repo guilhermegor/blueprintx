@@ -46,6 +46,15 @@ check "the retrigger job carries the actions: write it needs" \
 check "the retrigger job never checks out code" \
 	bash -c "! sed -n '/^  retrigger:/,/^  backfill:/p' '$WORKFLOWS/pr-gate.yml' | grep -q 'actions/checkout'"
 
+repo_workflows="$REPO_ROOT/.github/workflows"
+ruff_installs_pinned() {
+	local installs
+	installs="$(grep -rnE 'pipx install ruff([^-[:alnum:]_]|$)' "$repo_workflows")" || return 1
+	! grep -vE 'pipx install ruff==[0-9]' <<<"$installs"
+}
+check "every pipx install ruff under .github/workflows is pinned with ==<version>" \
+	ruff_installs_pinned
+
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
 	exit 1
