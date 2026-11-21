@@ -4457,14 +4457,14 @@ is shaped as it is.</p>
   reports <code>-</code>); <code>--no-fail</code> is not passed, the container's status is the verdict.</li>
 <li><strong><code>lint_deps.sh</code></strong> (deptry over <code>src/</code>). The rule "every imported package is a direct
   dependency" was written down and nothing checked it. The first run found both DDD tiers using
-  pandas in five <code>src/utils</code> modules while declaring it nowhere (it arrived through <code>wwdates</code>);
+  pandas in five <code>src/utils</code> modules while declaring it nowhere (it arrived through <code>purecalendars</code>);
   a calendar library dropping pandas would have broken every DDD project with an <code>ImportError</code>
   nobody could predict. It must run inside the project venv with no system fallback: deptry maps
   a module to its distribution through the metadata of the environment it runs in, and outside
   the venv the verdict inverts (9 findings on ddd-native, all false and two contradictory, while
   both real defects vanished). The config lives in <code>pyproject.toml</code> per tier, never a shared
   <code>deptry.toml</code>: <code>--config &lt;file&gt;</code> re-points deptry at that file as the manifest too, and it fell
-  back to <code>requirements.txt</code> and relabelled beartype, python-dotenv, wwdates and every DB driver
+  back to <code>requirements.txt</code> and relabelled beartype, python-dotenv, purecalendars and every DB driver
   as transitive. <code>bin/</code> is out of scope, since one run cannot hold both profiles and each dev
   dependency would become a DEP004. Zero <code>.py</code> files under the tree fails.</li>
 <li><strong><code>check_unix_filenames.sh</code></strong> rejects names outside <code>[a-zA-Z0-9._-]</code>. It has two callers:
