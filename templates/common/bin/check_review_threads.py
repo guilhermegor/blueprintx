@@ -1076,11 +1076,24 @@ _TUPLE_COMPLETION_PHRASES = (
 )
 
 
+_RE_NOTICE_SHA = re.compile(r"\b(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b", re.IGNORECASE)
+
+
+def _notice_names_other_head(str_notice: str, *, str_head_oid: str) -> bool:
+    """Return whether the notice carries a 7-40 hex sha that is not a prefix of the head.
+
+    A token needs a digit, so an all-letter word such as ``acceded`` is not read as a sha.
+    """
+    list_shas = _RE_NOTICE_SHA.findall(str_notice)
+    return any(not str_head_oid.casefold().startswith(s.casefold()) for s in list_shas)
+
+
 def reviewer_declared_completion(
     list_notices: list[dict],
     *,
     set_roster: set[str],
-    str_head_date: str = "",
+    str_push_time: str = "",
+    str_head_oid: str = "",
 ) -> bool:
     """Return whether a roster member's own notice says it reviewed THIS PR's head.
 
@@ -1090,24 +1103,31 @@ def reviewer_declared_completion(
         The PR's issue comments, oldest first — the stream the reviewer reports completion to.
     set_roster : set of str
         Already-normalised logins that can submit a review.
-    str_head_date : str, optional
-        ISO-8601 ``committedDate`` of the head commit. A notice created BEFORE it describes
-            superseded code and is not evidence. Empty means unknown, and unknown fails closed.
+    str_push_time : str, optional
+        ISO-8601 time the head was pushed (:func:`fetch_head_push_time`). A notice created
+            BEFORE it describes superseded code and is not evidence. ``committedDate`` is not
+            a push time: a push of older commits carries an older date than the notice that
+            described the previous head. Empty means unknown, and unknown fails closed.
+    str_head_oid : str, optional
+        The head commit SHA. A notice that carries a 7-40 hex sha must prefix-match it, or it
+            is refused; a notice without one is judged by time alone.
 
     Returns
     -------
     bool
         ``True`` when a roster-authored comment carries a completion phrase AND postdates the
-            head commit. ⚠️ Evidence that a review HAPPENED and never that a thread was answered —
-            see the COMPLETION block above.
+            push of the head. ⚠️ Evidence that a review HAPPENED and never that a thread was
+            answered — see the COMPLETION block above.
     """
-    if not str_head_date:
+    if not str_push_time:
         return False
-    str_newest = newest_roster_notice(list_notices, set_roster=set_roster).casefold()
-    if not any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES):
+    str_raw = newest_roster_notice(list_notices, set_roster=set_roster)
+    if not any(str_phrase in str_raw.casefold() for str_phrase in _TUPLE_COMPLETION_PHRASES):
+        return False
+    if _notice_names_other_head(str_raw, str_head_oid=str_head_oid):
         return False
     str_when = newest_roster_notice_date(list_notices, set_roster=set_roster)
-    return bool(str_when) and str_when >= str_head_date
+    return bool(str_when) and str_when >= str_push_time
 
 
 _KIND_COMMENT_MARKER = "comment-marker"
@@ -1327,6 +1347,24 @@ def _notice_quote(list_notices: list[dict], *, set_roster: set[str]) -> str:
     return f"\nThe reviewer's most recent notice on this PR reads: {str_seen}" if str_seen else ""
 
 
+def _push_note(
+    list_notices: list[dict],
+    *,
+    set_roster: set[str],
+    str_push_time: str,
+    str_head_oid: str,
+) -> str:
+    """Return why a completion notice was not accepted as evidence of THIS head, or ``""``."""
+    str_newest = newest_roster_notice(list_notices, set_roster=set_roster).casefold()
+    if not any(str_phrase in str_newest for str_phrase in _TUPLE_COMPLETION_PHRASES):
+        return ""
+    if not str_push_time:
+        return f"\nThe push time of {str_head_oid[:7]} could not be read, so the notice is not trusted."
+    if _notice_names_other_head(str_newest, str_head_oid=str_head_oid):
+        return f"\nThe notice names a commit other than {str_head_oid[:7]}."
+    return f"\nThe notice predates the push of {str_head_oid[:7]}."
+
+
 def _notice_declares_review(
     list_notices: list[dict],
     *,
@@ -1334,6 +1372,7 @@ def _notice_declares_review(
     tuple_marker_rule: tuple[tuple[str, ...], frozenset[str]],
     str_head_date: str,
     str_head_oid: str,
+    str_push_time: str = "",
 ) -> bool:
     """Return whether an issue comment declares the head reviewed: a completion or a marker.
 
@@ -1342,7 +1381,10 @@ def _notice_declares_review(
     """
     tuple_markers, set_posters = tuple_marker_rule
     return reviewer_declared_completion(
-        list_notices, set_roster=set_roster, str_head_date=str_head_date
+        list_notices,
+        set_roster=set_roster,
+        str_push_time=str_push_time,
+        str_head_oid=str_head_oid,
     ) or ladder_marker_declared(
         list_notices,
         tuple_markers=tuple_markers,
@@ -1367,6 +1409,20 @@ def counts_as_review(dict_review: dict) -> bool:
     )
 
 
+def _superseded_message(str_head_oid: str) -> str:
+    """Return the message for a PR reviewed only on code the head has superseded."""
+    return (
+        f"a declared reviewer DID review this PR, but only on SUPERSEDED code — no review "
+        f"is attributed to the head commit {str_head_oid[:7] or '?'}. A review is pinned to "
+        "the commit it was written against and nothing re-pins it when the branch moves, so "
+        "the code that would merge has not been looked at. This is NOT 'no review "
+        "happened'.\n"
+        "Push-triggered re-review is automatic; if it did not fire, ask for a FULL re-review "
+        "(a comment such as '@coderabbitai full review' from a user account, which unlike a "
+        "plain 'review' disregards what was already reviewed) and re-run this check."
+    )
+
+
 def check_missing_review(  # noqa: PLR0913
     list_reviews: list[dict],
     *,
@@ -1378,6 +1434,7 @@ def check_missing_review(  # noqa: PLR0913
     tuple_markers: tuple[str, ...] = (),
     fn_fingerprint: Callable[[str], str] | None = None,
     set_posters: frozenset[str] = frozenset(),
+    str_push_time: str = "",
 ) -> tuple[str | None, str]:
     """Return ``(problem, carried_from)`` for a PR no declared reviewer reported on at HEAD.
 
@@ -1405,6 +1462,9 @@ def check_missing_review(  # noqa: PLR0913
         Roster ``comment-marker`` strings; see :func:`ladder_marker_declared`.
     set_posters : frozenset of str, optional
         Roster ``posters:`` logins allowed to post a marker; see :func:`load_marker_posters`.
+    str_push_time : str, optional
+        When the head was pushed; see :func:`reviewer_declared_completion`. Empty fails CLOSED
+            for the completion-notice path (the ladder marker is SHA-exact and unaffected).
     fn_fingerprint : Callable[[str], str], optional
         Maps a commit oid to its patch fingerprint. When given, a review at an earlier
             commit covers HEAD if the PR's own patch is unchanged (see
@@ -1431,30 +1491,28 @@ def check_missing_review(  # noqa: PLR0913
         tuple_marker_rule=(tuple_markers, set_posters),
         str_head_date=str_head_date,
         str_head_oid=str_head_oid,
+        str_push_time=str_push_time,
     ):
         return None, ""
 
     str_carried = review_carried_forward(
-        fn_fingerprint, list_reviews=list_reviews, set_roster=set_roster, str_head_oid=str_head_oid
+        fn_fingerprint,
+        list_reviews=list_reviews,
+        set_roster=set_roster,
+        str_head_oid=str_head_oid,
     )
     if str_carried:
         return None, str_carried
 
-    str_quote = _notice_quote(list_notices or [], set_roster=set_roster)
+    str_quote = _notice_quote(list_notices or [], set_roster=set_roster) + _push_note(
+        list_notices or [],
+        set_roster=set_roster,
+        str_push_time=str_push_time,
+        str_head_oid=str_head_oid,
+    )
 
     if reviewers_who_reported(list_reviews, set_roster=set_roster):
-        str_problem = (
-            f"a declared reviewer DID review this PR, but only on SUPERSEDED code — no review "
-            f"is attributed to the head commit {str_head_oid[:7] or '?'}. A review is pinned to "
-            "the commit it was written against and nothing re-pins it when the branch moves, so "
-            "the code that would merge has not been looked at. This is NOT 'no review "
-            "happened'.\n"
-            "Push-triggered re-review is automatic; if it did not fire, ask for a FULL re-review "
-            "(a comment such as '@coderabbitai full review' from a user account, which unlike a "
-            "plain 'review' disregards what was already reviewed) and re-run this check."
-            + str_quote
-        )
-        return str_problem, ""
+        return _superseded_message(str_head_oid) + str_quote, ""
 
     return _zero_review_message(
         str_quote, set_roster=set_roster, list_notices=list_notices or []
@@ -1472,6 +1530,7 @@ def find_missing_review_problem(  # noqa: PLR0913
     tuple_markers: tuple[str, ...] = (),
     fn_fingerprint: Callable[[str], str] | None = None,
     set_posters: frozenset[str] = frozenset(),
+    str_push_time: str = "",
 ) -> str | None:
     """Return only the problem half of :func:`check_missing_review` (same parameters)."""
     return check_missing_review(
@@ -1484,6 +1543,7 @@ def find_missing_review_problem(  # noqa: PLR0913
         tuple_markers=tuple_markers,
         fn_fingerprint=fn_fingerprint,
         set_posters=set_posters,
+        str_push_time=str_push_time,
     )[0]
 
 
@@ -2400,6 +2460,54 @@ def _is_dependabot_bot(dict_author: dict) -> bool:
     )
 
 
+def _gh_rest_list(str_path: str, *, str_key: str) -> list[dict] | None:
+    """Return the complete ``str_key`` array served at ``str_path``, or ``None`` when unreadable.
+
+    Truncated (``total_count`` above the page), failed or malformed responses are ``None``.
+    """
+    try:
+        cls_run = subprocess.run(  # noqa: S603
+            ["gh", "api", str_path],  # noqa: S607
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            timeout=_INT_COMPARE_TIMEOUT_S,
+        )
+        dict_out = json.loads(cls_run.stdout)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+    if cls_run.returncode != 0 or not isinstance(dict_out, dict):
+        return None
+    list_items = dict_out.get(str_key)
+    if not isinstance(list_items, list) or dict_out.get("total_count") != len(list_items):
+        return None
+    return list_items
+
+
+def fetch_head_push_time(str_repo_full: str, *, str_head_oid: str) -> str:
+    """Return when the head was pushed, or ``""`` when no source can say (fail closed).
+
+    The earliest ``created_at`` of a ``pull_request`` workflow run on the head is the push
+    time lower bound; failing that, the earliest check-run ``started_at`` on it.
+    """
+    if not str_head_oid:
+        return ""
+    list_runs = _gh_rest_list(
+        f"repos/{str_repo_full}/actions/runs?head_sha={str_head_oid}"
+        "&event=pull_request&per_page=100",
+        str_key="workflow_runs",
+    )
+    list_times = [d.get("created_at") or "" for d in list_runs or []]
+    if not list_times or not all(list_times):
+        list_checks = _gh_rest_list(
+            f"repos/{str_repo_full}/commits/{str_head_oid}/check-runs?per_page=100",
+            str_key="check_runs",
+        )
+        list_times = [d.get("started_at") or "" for d in list_checks or []]
+    return min(list_times) if list_times and all(list_times) else ""
+
+
 def dependabot_pushed_head(str_repo_full: str, *, str_head_oid: str) -> bool:
     """Return whether every ``pull_request`` run on the head commit was started by Dependabot.
 
@@ -2490,9 +2598,14 @@ def _missing_review(
         else str_author,
         str_head_oid=dict_pr.get("headRefOid") or "",
         list_notices=_after_base_change(
-            dict_pr, list_items=dict_pr.get("comments", {}).get("nodes", []), str_key="createdAt"
+            dict_pr,
+            list_items=dict_pr.get("comments", {}).get("nodes", []),
+            str_key="createdAt",
         ),
         str_head_date=_head_committed_date(dict_pr),
+        str_push_time=fetch_head_push_time(
+            str_repo_full, str_head_oid=dict_pr.get("headRefOid") or ""
+        ),
         tuple_markers=load_comment_markers(pathlib.Path.cwd()),
         set_posters=load_marker_posters(pathlib.Path.cwd()),
         fn_fingerprint=_compare_fingerprint(

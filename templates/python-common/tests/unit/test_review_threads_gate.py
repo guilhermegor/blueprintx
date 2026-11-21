@@ -1472,7 +1472,7 @@ def test_a_declared_completion_is_evidence_the_reviewer_ran() -> None:
             set_reviewers=_ROSTER,
             str_pr_author="h",
             str_head_oid=_HEAD,
-            str_head_date=_HEAD_DATE,
+            str_push_time=_HEAD_DATE,
             list_notices=[_notice("coderabbitai", str_body=_NOTICE_PERFORMED)],
         )
         is None
@@ -1494,7 +1494,7 @@ def test_a_completion_predating_the_head_commit_is_not_evidence() -> None:
             set_reviewers=_ROSTER,
             str_pr_author="h",
             str_head_oid=_HEAD,
-            str_head_date="2026-06-01T00:00:00Z",
+            str_push_time="2026-06-01T00:00:00Z",
             list_notices=[
                 _notice(
                     "coderabbitai", str_body=_NOTICE_PERFORMED, str_created="2026-05-01T00:00:00Z"
@@ -1503,6 +1503,130 @@ def test_a_completion_predating_the_head_commit_is_not_evidence() -> None:
         )
         is not None
     )
+
+
+def _problem_for_push(str_push_time: str, *, str_created: str, str_body: str) -> str | None:
+    return _load_gate().find_missing_review_problem(
+        [],
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
+        str_head_oid=_HEAD,
+        str_head_date="2026-01-01T09:00:00Z",
+        str_push_time=str_push_time,
+        list_notices=[_notice("coderabbitai", str_body=str_body, str_created=str_created)],
+    )
+
+
+def test_a_notice_older_than_the_push_fails_though_newer_than_the_commit() -> None:
+    """blueprintx#1220 witness: committed 09:00, notice 10:00, first run 11:00 -> refused.
+
+    ``committedDate`` is not a push time; the old comparison (10:00 >= 09:00) passed this.
+    """
+    str_problem = _problem_for_push(
+        "2026-01-01T11:00:00Z", str_created="2026-01-01T10:00:00Z", str_body=_NOTICE_PERFORMED
+    )
+    assert f"predates the push of {_HEAD[:7]}" in str_problem
+
+
+def test_a_notice_after_the_push_is_accepted() -> None:
+    """The control for the witness above: the same notice at 12:00 passes."""
+    assert (
+        _problem_for_push(
+            "2026-01-01T11:00:00Z", str_created="2026-01-01T12:00:00Z", str_body=_NOTICE_PERFORMED
+        )
+        is None
+    )
+
+
+def test_an_unreadable_push_time_fails_closed_and_says_so() -> None:
+    """No runs and no check-runs -> empty push time -> the notice is not trusted."""
+    str_problem = _problem_for_push(
+        "", str_created="2099-01-01T00:00:00Z", str_body=_NOTICE_PERFORMED
+    )
+    assert "push time" in str_problem
+
+
+@pytest.mark.parametrize(
+    ("str_sha", "bool_accepted"),
+    [
+        pytest.param(_HEAD[:7], True, id="prefix-of-head"),
+        pytest.param(_HEAD, True, id="full-head"),
+        pytest.param("0123abc", False, id="other-commit"),
+        pytest.param("", True, id="no-sha-time-only"),
+    ],
+)
+def test_a_notice_sha_must_prefix_match_the_head(*, str_sha: str, bool_accepted: bool) -> None:
+    """A 7-40 hex token in the notice names the head it described, or the notice is refused.
+
+    Parameters
+    ----------
+    str_sha : str
+        The sha written into the notice; empty writes none.
+    bool_accepted : bool
+        Whether the notice may satisfy the gate.
+    """
+    str_problem = _problem_for_push(
+        "2026-01-01T11:00:00Z",
+        str_created="2026-01-01T12:00:00Z",
+        str_body=f"Review finished. {str_sha}",
+    )
+    assert (str_problem is None) is bool_accepted
+
+
+def test_an_all_letter_word_is_not_read_as_a_sha() -> None:
+    """``acceded`` is seven hex letters and English; only a token with a digit is a sha."""
+    assert (
+        _problem_for_push(
+            "2026-01-01T11:00:00Z",
+            str_created="2026-01-01T12:00:00Z",
+            str_body="Review finished. Author acceded.",
+        )
+        is None
+    )
+
+
+def _stub_rest(
+    monkeypatch: pytest.MonkeyPatch, *, list_runs: object, list_checks: object
+) -> ModuleType:
+    cls_gate = _load_gate()
+    dict_by_key = {"workflow_runs": list_runs, "check_runs": list_checks}
+    monkeypatch.setattr(cls_gate, "_gh_rest_list", lambda _path, *, str_key: dict_by_key[str_key])
+    return cls_gate
+
+
+def test_fetch_head_push_time_takes_the_earliest_pull_request_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The earliest ``created_at`` wins whatever order the API lists them in."""
+    cls_gate = _stub_rest(
+        monkeypatch,
+        list_runs=[{"created_at": "2026-01-01T11:30:00Z"}, {"created_at": "2026-01-01T11:00:00Z"}],
+        list_checks=None,
+    )
+    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD) == "2026-01-01T11:00:00Z"
+
+
+def test_fetch_head_push_time_falls_back_to_the_earliest_check_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No ``pull_request`` run on the head -> the earliest check-run ``started_at``."""
+    cls_gate = _stub_rest(
+        monkeypatch,
+        list_runs=[],
+        list_checks=[
+            {"started_at": "2026-01-01T11:45:00Z"},
+            {"started_at": "2026-01-01T11:15:00Z"},
+        ],
+    )
+    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD) == "2026-01-01T11:15:00Z"
+
+
+def test_fetch_head_push_time_is_empty_when_neither_source_is_readable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Runs endpoint returns ``[]`` and check-runs is unreadable -> fail closed."""
+    cls_gate = _stub_rest(monkeypatch, list_runs=[], list_checks=None)
+    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD) == ""
 
 
 def test_an_unknown_head_date_is_not_evidence() -> None:
@@ -1518,7 +1642,7 @@ def test_an_unknown_head_date_is_not_evidence() -> None:
             set_reviewers=_ROSTER,
             str_pr_author="h",
             str_head_oid=_HEAD,
-            str_head_date="",
+            str_push_time="",
             list_notices=[_notice("coderabbitai", str_body=_NOTICE_PERFORMED)],
         )
         is not None
@@ -2919,7 +3043,7 @@ def test_completion_is_seen_past_the_display_budget() -> None:
     assert cls_gate.reviewer_declared_completion(
         [_notice("coderabbitai[bot]", str_body=f"{_STR_FILLER} Review finished.")],
         set_roster=_ROSTER_NORMALISED,
-        str_head_date=_HEAD_DATE,
+        str_push_time=_HEAD_DATE,
     )
 
 
@@ -5356,7 +5480,7 @@ def _pr_with_notice_and_retarget(str_retarget: str) -> dict:
     ],
 )
 def test_a_completion_notice_counts_only_after_the_latest_retarget(
-    *, str_retarget: str, bool_expected_problem: bool
+    *, str_retarget: str, bool_expected_problem: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A notice is held to the same base-change cutoff as a review object.
 
@@ -5370,8 +5494,11 @@ def test_a_completion_notice_counts_only_after_the_latest_retarget(
         When the base branch was last changed.
     bool_expected_problem : bool
         Whether the gate must still report a missing review.
+    monkeypatch : pytest.MonkeyPatch
+        Pins the head push time, which would otherwise be read from the REST API.
     """
     cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "fetch_head_push_time", lambda *_, **__: _HEAD_DATE)
     str_problem, _ = cls_gate._missing_review(
         _pr_with_notice_and_retarget(str_retarget),
         str_repo_full="o/r",
