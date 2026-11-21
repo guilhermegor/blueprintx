@@ -123,7 +123,7 @@ STR_COMPARE_BASELINE = "--compare-baseline"
 
 RE_ENCODING_DECL = re.compile(r"coding[:=]\s*[-\w.]+")
 
-RE_BANNER_LINE = re.compile(r"^[-=*#~_\s]{3,}$")
+RE_BANNER_LINE = re.compile(r"^(?=.*[-=*#~_])[-=*#~_\s]{3,}$")
 
 
 def load_allowlist() -> tuple:
@@ -480,6 +480,11 @@ def python_blocks(str_source: str) -> list:
         ):
             list_block = _flush_block(list_out, int_start=int_start, list_block=list_block)
             int_previous = int_line
+            continue
+        if cls_token.line[: cls_token.start[1]].strip():
+            list_block = _flush_block(list_out, int_start=int_start, list_block=list_block)
+            list_out.append((int_line, [str_content]))
+            int_previous = -2
             continue
         if int_line != int_previous + 1 and list_block:
             list_block = _flush_block(list_out, int_start=int_start, list_block=list_block)

@@ -1141,3 +1141,73 @@ def test_comprehension_target_in_the_package_does_not_provide_the_name(tmp_path:
         dict_files={"_internal/__init__.py": "", "_internal/config.py": "Priv = 1\n"},
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_annotated_all_is_read_not_opted_out(tmp_path: Path) -> None:
+    """Item 2 of #1258: ``__all__: list[str] = [...]`` is a declaration."""
+    path_init = _package(tmp_path, str_init="__all__: list[str] = []\n", str_member="")
+    assert _load_gate().declared_all(path_init) == []
+
+
+def test_annotated_all_still_enforces_completeness(tmp_path: Path) -> None:
+    """Item 2 of #1258: an annotated ``__all__`` must not silently opt the package out."""
+    path_init = _package(tmp_path, str_init="__all__: list[str] = []\n", str_member="THING = 1\n")
+    assert "'THING'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_syntax_error_in_init_is_a_finding_not_a_traceback(tmp_path: Path) -> None:
+    """Item 2 of #1258: an unparseable ``__init__.py`` is reported."""
+    path_init = _package(tmp_path, str_init="__all__ = [\n", str_member="")
+    assert "could not parse" in _sole(_load_gate().check_package(path_init))
+
+
+def test_main_survives_a_syntax_error_in_init(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 2 of #1258: ``main`` exits 1 on an unparseable ``__init__.py`` instead of raising."""
+    gate = _load_gate()
+    path_init = tmp_path / "src" / "pkg" / "__init__.py"
+    path_init.parent.mkdir(parents=True)
+    path_init.write_text("__all__ = [\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_SRC", tmp_path / "src")
+    assert gate.main() == 1
+
+
+@pytest.mark.parametrize(
+    "str_extension",
+    ["__all__ += ['b']\n", "__all__.extend(['b'])\n", "__all__.append('b')\n"],
+)
+def test_extended_all_names_are_read(tmp_path: Path, *, str_extension: str) -> None:
+    """Item 3 of #1258: names added by ``+=``/``.extend``/``.append`` count as exported."""
+    path_init = _package(tmp_path, str_init=f"__all__ = ['a']\n{str_extension}", str_member="")
+    assert _load_gate().declared_all(path_init) == ["a", "b"]
+
+
+def test_extended_name_is_not_reported_missing(tmp_path: Path) -> None:
+    """Item 3 of #1258: the false positive itself."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ += ['b']\n",
+        str_member="a = 1\nb = 2\n",
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_public_def_under_a_module_level_if_is_required(tmp_path: Path) -> None:
+    """Item 4 of #1258: a guarded public definition is still module-level API."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="if True:\n    def helper():\n        pass\n",
+    )
+    assert "'helper'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_public_class_under_a_module_level_try_is_required(tmp_path: Path) -> None:
+    """Item 4 of #1258: same for ``try``."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="try:\n    class Thing:\n        pass\nexcept ImportError:\n    pass\n",
+    )
+    assert "'Thing'" in _sole(_load_gate().check_package(path_init))

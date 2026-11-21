@@ -14,6 +14,7 @@ from pathlib import Path
 import subprocess
 import sys
 from types import ModuleType
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -895,3 +896,65 @@ def test_the_failure_omits_the_terminal_hint_with_a_terminal(
     gate.report(["some finding"], str_base="base-sha", int_changed_count=1)
 
     assert "interactive terminal" not in capsys.readouterr().out
+
+
+def test_show_reads_blobs_from_the_root_not_the_process_cwd(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 1 of #1258: ``show`` must run git in ``PATH_ROOT`` like ``_git`` does."""
+    path_repo = tmp_path / "repo"
+    path_repo.mkdir()
+    _git_in(path_repo, "init", "-q")
+    (path_repo / "a.py").write_text("X = 1\n", encoding="utf-8")
+    _git_in(path_repo, "add", ".")
+    path_elsewhere = tmp_path / "elsewhere"
+    path_elsewhere.mkdir()
+    monkeypatch.chdir(path_elsewhere)
+    monkeypatch.setattr(gate, "PATH_ROOT", path_repo)
+    assert gate.show(gate.STR_INDEX_REF, str_path="a.py") == "X = 1\n"
+
+
+def test_show_returns_none_when_git_cannot_be_spawned(*, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Item 1 of #1258: ``show`` shares ``_git``'s ``OSError`` guard."""
+    monkeypatch.setattr(gate.subprocess, "run", MagicMock(side_effect=OSError))
+    assert gate.show("", str_path="a.py") is None
+
+
+@pytest.mark.parametrize(
+    "str_marker",
+    ["@pytest.mark.skipif(True, reason='x')\n", "@pytest.mark.skipif(sys.platform == 'x')\n"],
+)
+def test_a_newly_added_skipif_marker_is_flagged(str_marker: str) -> None:
+    """Item 5 of #1258: ``skipif`` escaped the ``skip``/``xfail`` match."""
+    str_old = "def test_a():\n    assert f() == 1\n"
+    str_new = f"{str_marker}def test_a():\n    assert f() == 1\n"
+    assert "skipif" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_newly_added_pytest_skip_call_is_flagged() -> None:
+    """Item 5 of #1258: ``pytest.skip()`` inside the body turns the test off too."""
+    str_old = "def test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    pytest.skip('later')\n    assert f() == 1\n"
+    assert "skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_raises_keyword_form_is_not_read_as_broadened() -> None:
+    """Item 6 of #1258: ``expected_exception=ValueError`` is the same type as positional."""
+    str_old = "def test_a():\n    with pytest.raises(ValueError):\n        f()\n"
+    str_new = str_old.replace("(ValueError)", "(expected_exception=ValueError)")
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_raises_keyword_form_broadened_to_exception_is_flagged() -> None:
+    """Item 6 of #1258: reading the keyword must not blind the broadening check."""
+    str_old = (
+        "def test_a():\n    with pytest.raises(expected_exception=ValueError):\n        f()\n"
+    )
+    str_new = str_old.replace("ValueError", "Exception")
+    assert "broadened" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize("str_path", ["tests/conftest.py", "tests/helpers/util.py"])
+def test_test_support_modules_are_not_production_code(str_path: str) -> None:
+    """Item 7 of #1258: a fixture or helper under ``tests/`` is not production code."""
+    assert not gate._touches_production_code([("M", str_path, str_path)])

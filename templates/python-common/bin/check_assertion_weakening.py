@@ -11,16 +11,11 @@ That diff turns a money-truncation BUG into a green suite, and nothing in the re
 blueprintx#323 hit exactly this shape for real, and blueprintx#289's review caught a human
 doing the operator-level version by hand (`==` weakened to `in`).
 
-WHY A NEW FILE, NOT AN EXTENSION OF `check_gate_integrity.py` (the issue's stated
-preference). `check_gate_integrity.py` is held by another open PR (#330, wiring the
-Makefile-pairing gate) in the same working session — editing it here would collide. This
-file duplicates a small slice of that script's git-diffing plumbing (`_git`, `show`,
-`changed_paths`, `default_branch`, `resolve_base`, `pr_body_text`, `apply_root_flag`) rather
-than importing it, because importing a sibling gate mid-flight under another open PR is a
-brittle dependency on an interface that may still move. The two files audit different
-QUESTIONS (config weakening vs. assertion weakening) rather than being two copies of the
-same check, so this is not the drift `check_codespell_sync.sh` exists to police — but the
-duplicated plumbing is real and should collapse into one shared module once #330 lands.
+WHY A NEW FILE, NOT AN EXTENSION OF `check_gate_integrity.py`. The two files audit different
+QUESTIONS (config weakening vs. assertion weakening). This file duplicates a small slice of
+that script's git-diffing plumbing (`_git`, `show`, `changed_paths`, `default_branch`,
+`resolve_base`, `pr_body_text`, `apply_root_flag`) rather than importing a sibling gate, which
+would couple it to an interface that may move.
 
 WHAT IS DECIDABLE (measured against real history before being written — see the PR body for
 the count). Comparing an assertion's AST shape between the merge-base version of a test file
@@ -34,7 +29,8 @@ and the index (staged/HEAD) version, for a function whose name is unchanged, cat
 - a `self.assertEqual`-family call weakened to a looser call (`assertTrue`,
   `assertIsNotNone`, `assertIn`, ...)
 - `pytest.raises(<SpecificError>)` broadened to no type, `Exception`, or `BaseException`
-- a `@pytest.mark.skip` / `@pytest.mark.xfail` newly added to a test that did not carry it
+- a `@pytest.mark.skip` / `skipif` / `xfail` marker or a `pytest.skip()` call, newly added to a
+  test that did not carry it
 - an `assertEqual`/`==` EXPECTED VALUE changed on one side while a non-test file *also*
   changed in the same diff — the #323 shape. Gated on production code changing in the same
   diff on purpose: a test correction in a PR that touches no production code is legitimate
@@ -79,8 +75,11 @@ PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 RE_JUSTIFICATION = re.compile(r"^\s*test-change-ok:\s*(\S.*)$", re.I | re.M)
 RE_TEST_PATH = re.compile(r"(^|/)tests/.*test_[^/]+\.py$")
 RE_DOC_PATH = re.compile(r"\.md$|(^|/)docs/")
+RE_TEST_TREE = re.compile(r"(^|/)tests/")
 
 STR_INDEX_REF = ""
+
+_SKIP_MARKERS = frozenset({"skip", "skipif", "xfail"})
 
 _INT_MIN_FIELDS = 2
 _MIN_EQ_ARGS = 2
@@ -161,11 +160,15 @@ def show(str_ref: str, *, str_path: str) -> str | None:
         UTF-8 (mirrors ``check_gate_integrity.py::show`` — a binary defines nothing to
         compare, and decoding by extension is the wrong fix, see that file's own note).
     """
-    cls_proc = subprocess.run(  # noqa: S603
-        ["git", "show", f"{str_ref}:{str_path}"],  # noqa: S607
-        capture_output=True,
-        check=False,
-    )
+    try:
+        cls_proc = subprocess.run(  # noqa: S603
+            ["git", "show", f"{str_ref}:{str_path}"],  # noqa: S607
+            capture_output=True,
+            check=False,
+            cwd=PATH_ROOT,
+        )
+    except OSError:
+        return None
     if cls_proc.returncode != 0:
         return None
     try:
@@ -473,9 +476,11 @@ def _raises_exception_name(node_with: ast.With) -> str | None:
         expr = item.context_expr
         if not (isinstance(expr, ast.Call) and _raises_func_name(expr) == "raises"):
             continue
-        if not expr.args:
+        list_kw = [kw.value for kw in expr.keywords if kw.arg == "expected_exception"]
+        list_exc = expr.args or list_kw
+        if not list_exc:
             return None
-        arg0 = expr.args[0]
+        arg0 = list_exc[0]
         if isinstance(arg0, ast.Name):
             return arg0.id
         if isinstance(arg0, ast.Attribute):
@@ -533,14 +538,39 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
     Returns
     -------
     set of str
-        Subset of ``{"skip", "xfail"}`` present as ``@pytest.mark.<name>`` decorators.
+        Subset of ``{"skip", "skipif", "xfail"}`` present as ``@pytest.mark.<name>``
+        decorators, with ``skip`` also set by a ``pytest.skip(...)`` call in the body.
     """
     set_out = set()
     for dec in node_fn.decorator_list:
         target = dec.func if isinstance(dec, ast.Call) else dec
-        if isinstance(target, ast.Attribute) and target.attr in {"skip", "xfail"}:
+        if isinstance(target, ast.Attribute) and target.attr in _SKIP_MARKERS:
             set_out.add(target.attr)
+    if any(_is_pytest_skip_call(node) for node in ast.walk(node_fn)):
+        set_out.add("skip")
     return set_out
+
+
+def _is_pytest_skip_call(node: ast.AST) -> bool:
+    """Return whether a node is a ``pytest.skip(...)`` call.
+
+    Parameters
+    ----------
+    node : ast.AST
+        Any node.
+
+    Returns
+    -------
+    bool
+        ``True`` for the call form, which turns a test off at run time.
+    """
+    func = node.func if isinstance(node, ast.Call) else None
+    return (
+        isinstance(func, ast.Attribute)
+        and func.attr == "skip"
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "pytest"
+    )
 
 
 def _is_literal_ish(node: ast.expr) -> bool:
@@ -959,7 +989,7 @@ def _touches_production_code(list_changed: list) -> bool:
     for str_status, str_src, str_path in list_changed:
         tuple_paths = (str_src, str_path) if str_status == "R" else (str_path,)
         if any(
-            not (RE_TEST_PATH.search(str_p) or RE_DOC_PATH.search(str_p)) for str_p in tuple_paths
+            not (RE_TEST_TREE.search(str_p) or RE_DOC_PATH.search(str_p)) for str_p in tuple_paths
         ):
             return True
     return False

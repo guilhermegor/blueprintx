@@ -105,20 +105,97 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
     list of str or None
         The exported names, or ``None`` when the module has no ``__all__``.
     """
-    cls_tree = ast.parse(path_init.read_text(encoding="utf-8"))
-    for cls_node in cls_tree.body:
-        if not isinstance(cls_node, ast.Assign):
+    list_names: list[str] | None = None
+    for cls_node in _parse(path_init).body:
+        list_found = _declared_names(cls_node)
+        if list_found is None:
             continue
-        for cls_target in cls_node.targets:
-            if isinstance(cls_target, ast.Name) and cls_target.id == "__all__":
-                if not isinstance(cls_node.value, ast.List | ast.Tuple):
-                    return []
-                return [
-                    cls_elt.value
-                    for cls_elt in cls_node.value.elts
-                    if isinstance(cls_elt, ast.Constant) and isinstance(cls_elt.value, str)
-                ]
-    return None
+        if list_names is None or _extends(cls_node):
+            list_names = [*(list_names or []), *list_found]
+    return list_names
+
+
+def _all_target(cls_node: ast.AST) -> bool:
+    """Return whether a node is the name ``__all__``.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        Any node.
+
+    Returns
+    -------
+    bool
+        ``True`` for a ``Name`` spelled ``__all__``.
+    """
+    return isinstance(cls_node, ast.Name) and cls_node.id == "__all__"
+
+
+def _extends(cls_node: ast.stmt) -> bool:
+    """Return whether a statement adds to ``__all__`` rather than assigning it.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement that touches ``__all__``.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``__all__ += [...]``, ``__all__.extend(...)`` and ``__all__.append(...)``.
+    """
+    return not isinstance(cls_node, ast.Assign | ast.AnnAssign)
+
+
+def _literal_strings(cls_value: ast.expr | None) -> list[str]:
+    """Return the string constants of a list or tuple literal, ``[]`` for any other value.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    list of str
+        The literal's string elements.
+    """
+    if not isinstance(cls_value, ast.List | ast.Tuple):
+        return []
+    return [
+        cls_elt.value
+        for cls_elt in cls_value.elts
+        if isinstance(cls_elt, ast.Constant) and isinstance(cls_elt.value, str)
+    ]
+
+
+def _declared_names(cls_node: ast.stmt) -> list[str] | None:
+    """Return the names one statement assigns or adds to ``__all__``, or ``None`` if unrelated.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement.
+
+    Returns
+    -------
+    list of str or None
+        The literal names, or ``None`` when the statement does not touch ``__all__``.
+    """
+    if isinstance(cls_node, ast.Assign) and any(_all_target(cls_t) for cls_t in cls_node.targets):
+        return _literal_strings(cls_node.value)
+    if isinstance(cls_node, ast.AnnAssign | ast.AugAssign) and _all_target(cls_node.target):
+        return _literal_strings(cls_node.value)
+    cls_call = cls_node.value if isinstance(cls_node, ast.Expr) else None
+    if not (isinstance(cls_call, ast.Call) and isinstance(cls_call.func, ast.Attribute)):
+        return None
+    if not (_all_target(cls_call.func.value) and cls_call.func.attr in {"extend", "append"}):
+        return None
+    cls_arg = cls_call.args[0] if cls_call.args else None
+    if cls_call.func.attr == "extend":
+        return _literal_strings(cls_arg)
+    is_string = isinstance(cls_arg, ast.Constant) and isinstance(cls_arg.value, str)
+    return [cls_arg.value] if is_string else []
 
 
 def public_names(path_module: pathlib.Path) -> set[str]:
@@ -139,7 +216,7 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     """
     return {
         str_name
-        for str_name in _definitions(_parse(path_module).body)
+        for str_name in _definitions(_module_statements(_parse(path_module).body))
         if not str_name.startswith("_")
     }
 
@@ -1238,7 +1315,10 @@ def check_package(path_init: pathlib.Path) -> list[str]:
     list of str
         Human-readable problems; empty when the export list is complete.
     """
-    list_exported = declared_all(path_init)
+    try:
+        list_exported = declared_all(path_init)
+    except _UnparseableError as cls_exc:
+        return [str(cls_exc)]
     if list_exported is None:
         return []
     set_exported = set(list_exported)
@@ -1249,6 +1329,26 @@ def check_package(path_init: pathlib.Path) -> list[str]:
                 path_init, path_module=path_module, set_exported=set_exported
             )
     return list(dict.fromkeys(list_problems))
+
+
+def _in_scope(path_init: pathlib.Path) -> bool:
+    """Return whether a package opts in: it declares ``__all__``, or cannot be read to say.
+
+    Parameters
+    ----------
+    path_init : pathlib.Path
+        The package's ``__init__.py``.
+
+    Returns
+    -------
+    bool
+        ``True`` for a declared ``__all__`` and for an unparseable file, which ``check_package``
+        then reports instead of letting it opt out in silence.
+    """
+    try:
+        return declared_all(path_init) is not None
+    except _UnparseableError:
+        return True
 
 
 def main() -> int:
@@ -1262,7 +1362,7 @@ def main() -> int:
     list_inits = [
         path_init
         for path_init in _SRC.rglob("__init__.py")
-        if _EXCLUDED_PARTS.isdisjoint(path_init.parts) and declared_all(path_init) is not None
+        if _EXCLUDED_PARTS.isdisjoint(path_init.parts) and _in_scope(path_init)
     ]
     if not list_inits:
         print(
