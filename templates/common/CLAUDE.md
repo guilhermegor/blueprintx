@@ -91,9 +91,11 @@ LIST_REQUIRED = [cls_contract.str_filename for cls_contract in contracts.ALL]
 
 A disclaimer ("unofficial, not affiliated with X") or a credit (photo author, icon set, dataset
 licence notice) goes in the README footer `<sub>` line, after the `---` rule, never in the body
-(Overview included). On the docs site it goes in `mkdocs.yml` `copyright:`, which Material
-renders in the page footer. `bin/check_readme_structure.sh` fails a `pexels.com`,
-`unsplash.com` or `pixabay.com` link above the footer.
+(Overview included). On the docs site it goes in the footer slot: `mkdocs.yml` `copyright:`
+(Python skeletons, rendered by Material) or `docusaurus.config.js` `themeConfig.footer.copyright`
+(`ts-lib`); skeletons without a docs site have no such slot. `bin/check_readme_structure.sh`
+fails any `http(s)` link to `pexels.com`, `unsplash.com` or `pixabay.com` (or a subdomain,
+images included) above the footer; scheme-less mentions are not gated.
 
 ## Data-handling guardrails (advisory, Python)
 

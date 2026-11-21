@@ -90,9 +90,10 @@ Further rules:
   `README.template.md`, every `templates/*/README.md` and every generated project.
   Disclaimers **and** credits or attributions go here, not in the body. A disclaimer:
   "Unofficial, community library. Not affiliated with or endorsed by the BCB." A credit:
-  "Logo photo by Jane Doe on Pexels." The gate reports a link to `pexels.com`, `unsplash.com`
-  or `pixabay.com` above the footer; disclaimer wording is locale-dependent, so it is not
-  gated. The footer line may be localized ("Gerado a partir do template ..."). On the docs
+  "Logo photo by Jane Doe on Pexels." The gate reports an `http(s)` link to `pexels.com`, `unsplash.com`
+  or `pixabay.com` (hot-linked images included; scheme-less mentions are not gated) above the footer; disclaimer wording is locale-dependent, so it is not
+  gated. The footer line may be written in pt-BR ("Gerado a partir do template ..."), the only
+  alternative locale recognised. On the docs
   site the same slot is `copyright:` in `mkdocs.yml` (Material renders it in the page
   footer), shipped holding the "Generated from ... via BlueprintX" line.
 - Every list item under `authors` carries a `github.com/<user>` link and a
