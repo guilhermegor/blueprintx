@@ -328,7 +328,7 @@ repos:
         name: docs drift (poe tasks, __all__)
         entry: bash bin/poetry_exec.sh run python bin/check_docs_drift.py
         language: system
-        files: ^(docs/|README.*\.md|CONTRIBUTING.*\.md|poe_tasks.*\.toml|src/)
+        always_run: true
         pass_filenames: false
 
       - id: check-backlog-ledger

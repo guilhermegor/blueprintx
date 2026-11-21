@@ -265,6 +265,10 @@ fi
 echo "poe lint left the tree clean."
 echo "::endgroup::"
 
+echo "::group::docs drift (blocking checks on the fresh tree)"
+poetry run python bin/check_docs_drift.py
+echo "::endgroup::"
+
 echo "::group::poe unit_tests"
 bash bin/poe_exec.sh unit_tests
 echo "::endgroup::"

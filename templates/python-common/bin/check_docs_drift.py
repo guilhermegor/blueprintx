@@ -39,10 +39,12 @@ STR_BASE_FLAG = "--base"
 STR_COUPLING_FLAG = "--coupling"
 SET_SKIP_DIRS = {".git", ".venv", "node_modules", "site", "htmlcov"}
 
-RE_FENCE = re.compile(r"^\s*(```|~~~)")
+RE_FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 RE_SPAN = re.compile(r"`([^`\n]+)`")
 RE_POE = re.compile(r"\bpoe\s+([A-Za-z_][A-Za-z0-9_-]*)")
-RE_ESCAPE = re.compile(r"^Docs:\s*not needed because\s+\S", re.IGNORECASE | re.MULTILINE)
+RE_ESCAPE = re.compile(
+    r"^Docs:[ \t]*not[ \t]+needed[ \t]+because[ \t]+\S", re.IGNORECASE | re.MULTILINE
+)
 
 
 def doc_files(path_root: pathlib.Path) -> list:
@@ -67,8 +69,29 @@ def doc_files(path_root: pathlib.Path) -> list:
     ]
 
 
+def fence_closes(str_line: str, *, str_open: str) -> bool:
+    """Tell whether a line closes the fence a block opened with.
+
+    Parameters
+    ----------
+    str_line : str
+        A line inside a fenced block.
+    str_open : str
+        The opening delimiter run, such as three backticks or four tildes.
+
+    Returns
+    -------
+    bool
+        True when the line is the same character, at least as long, and nothing else.
+    """
+    str_stripped = str_line.strip()
+    return str_stripped.startswith(str_open) and not str_stripped.strip(str_open[0])
+
+
 def code_segments(str_text: str) -> list:
     """Return the code-only text of a Markdown page: fenced lines and inline spans.
+
+    Inline spans are read per paragraph, so one that wraps across source lines is found.
 
     Parameters
     ----------
@@ -81,15 +104,20 @@ def code_segments(str_text: str) -> list:
         One entry per fenced line or inline code span; prose is never included.
     """
     list_segments = []
-    bool_fenced = False
+    list_block = []
+    str_open = ""
     for str_line in str_text.splitlines():
-        if RE_FENCE.match(str_line):
-            bool_fenced = not bool_fenced
-        elif bool_fenced:
-            list_segments.append(str_line)
-        else:
-            list_segments += RE_SPAN.findall(str_line)
-    return list_segments
+        if str_open:
+            str_open = "" if fence_closes(str_line, str_open=str_open) else str_open
+            list_segments += [str_line] if str_open else []
+            continue
+        cls_fence = RE_FENCE.match(str_line)
+        if cls_fence or not str_line.strip():
+            list_segments += RE_SPAN.findall(" ".join(list_block))
+            list_block = []
+        str_open = cls_fence.group(1) if cls_fence else ""
+        list_block += [] if cls_fence else [str_line.strip()]
+    return list_segments + RE_SPAN.findall(" ".join(list_block))
 
 
 def cited_tasks(str_text: str) -> set:
@@ -156,6 +184,28 @@ def poe_problems(path_root: pathlib.Path, *, list_docs: list) -> list:
     return list_problems
 
 
+def all_value(cls_node: ast.stmt) -> ast.expr | None:
+    """Return the value assigned to ``__all__`` by a plain or annotated assignment.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement.
+
+    Returns
+    -------
+    ast.expr or None
+        The assigned expression, or None when the statement does not bind ``__all__``.
+    """
+    if isinstance(cls_node, ast.Assign) and any(
+        isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_node.targets
+    ):
+        return cls_node.value
+    if isinstance(cls_node, ast.AnnAssign) and getattr(cls_node.target, "id", "") == "__all__":
+        return cls_node.value
+    return None
+
+
 def declared_all(path_init: pathlib.Path) -> list:
     """Return the string entries of a module-level ``__all__`` list or tuple.
 
@@ -170,16 +220,11 @@ def declared_all(path_init: pathlib.Path) -> list:
         The entries, empty when the module declares no ``__all__``.
     """
     for cls_node in ast.parse(path_init.read_text(encoding="utf-8")).body:
-        if not isinstance(cls_node, ast.Assign) or not isinstance(
-            cls_node.value, ast.List | ast.Tuple
-        ):
-            continue
-        if any(
-            isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_node.targets
-        ):
+        cls_value = all_value(cls_node)
+        if isinstance(cls_value, ast.List | ast.Tuple):
             return [
                 cls_elt.value
-                for cls_elt in cls_node.value.elts
+                for cls_elt in cls_value.elts
                 if isinstance(cls_elt, ast.Constant) and isinstance(cls_elt.value, str)
             ]
     return []
@@ -233,7 +278,7 @@ def all_problems(path_root: pathlib.Path) -> list:
     ]
 
 
-def git_lines(path_root: pathlib.Path, *, list_args: list) -> list:
+def git_lines(path_root: pathlib.Path, *, list_args: list) -> list | None:
     """Run a read-only git query and return its output lines.
 
     Parameters
@@ -245,8 +290,8 @@ def git_lines(path_root: pathlib.Path, *, list_args: list) -> list:
 
     Returns
     -------
-    list of str
-        Output lines, empty when git fails.
+    list of str or None
+        Output lines, or None when git fails, so a failed query differs from an empty one.
     """
     cls_run = subprocess.run(  # noqa: S603 -- constant argv, no shell
         ["git", "-C", str(path_root), *list_args],  # noqa: S607 -- git on PATH
@@ -255,11 +300,86 @@ def git_lines(path_root: pathlib.Path, *, list_args: list) -> list:
         encoding="utf-8",
         check=False,
     )
-    return cls_run.stdout.splitlines() if cls_run.returncode == 0 else []
+    return cls_run.stdout.splitlines() if cls_run.returncode == 0 else None
+
+
+def valid_rule(cls_rule: object) -> bool:
+    """Tell whether a coupling entry has a string ``source`` and a list of string ``docs``.
+
+    Parameters
+    ----------
+    cls_rule : object
+        One parsed entry of the ``couplings`` list.
+
+    Returns
+    -------
+    bool
+        True when the entry can be matched against changed paths.
+    """
+    return (
+        isinstance(cls_rule, dict)
+        and isinstance(cls_rule.get("source"), str)
+        and isinstance(cls_rule.get("docs"), list)
+        and all(isinstance(str_doc, str) for str_doc in cls_rule["docs"])
+    )
+
+
+def load_rules(path_map: pathlib.Path) -> tuple:
+    """Read the coupling map, turning every defect into a warning instead of an error.
+
+    Parameters
+    ----------
+    path_map : pathlib.Path
+        The ``.docs-coupling.yaml`` file.
+
+    Returns
+    -------
+    tuple
+        The valid rules and the warnings about what was skipped.
+    """
+    try:
+        cls_doc = yaml.safe_load(path_map.read_text(encoding="utf-8")) or {}
+    except (yaml.YAMLError, OSError, UnicodeDecodeError) as cls_err:
+        return [], [f"{STR_COUPLING} could not be read: {cls_err}"]
+    list_raw = cls_doc.get("couplings", []) if isinstance(cls_doc, dict) else None
+    if not isinstance(list_raw, list):
+        return [], [f"{STR_COUPLING} must be a mapping with a 'couplings' list"]
+    list_rules = [cls_rule for cls_rule in list_raw if valid_rule(cls_rule)]
+    if len(list_rules) == len(list_raw):
+        return list_rules, []
+    return list_rules, [
+        f"{STR_COUPLING}: {len(list_raw) - len(list_rules)} malformed rule(s) skipped"
+    ]
+
+
+def coupling_exempt(path_root: pathlib.Path, *, str_base: str) -> bool:
+    """Tell whether the commit range carries the escape line or a bot author.
+
+    Parameters
+    ----------
+    path_root : pathlib.Path
+        The repository root.
+    str_base : str
+        The ref the branch is compared against.
+
+    Returns
+    -------
+    bool
+        True when a message holds ``Docs: not needed because <reason>`` on one line, or an
+        author name ends in ``[bot]``.
+    """
+    str_range = f"{str_base}..HEAD"
+    list_authors = git_lines(path_root, list_args=["log", "--format=%an", str_range]) or []
+    str_messages = "\n".join(
+        git_lines(path_root, list_args=["log", "--format=%B", str_range]) or []
+    )
+    return bool(RE_ESCAPE.search(str_messages)) or any(
+        str_author.endswith("[bot]") for str_author in list_authors
+    )
 
 
 def coupling_problems(path_root: pathlib.Path, *, str_base: str) -> list:
-    """Return the coupling-map entries whose source changed without its doc.
+    """Return the coupling-map advisories: warnings and sources changed without their doc.
 
     Parameters
     ----------
@@ -271,20 +391,19 @@ def coupling_problems(path_root: pathlib.Path, *, str_base: str) -> list:
     Returns
     -------
     list of str
-        One message per source glob changed while none of its docs was.
+        One message per warning, or per source glob changed while none of its docs was.
     """
     path_map = path_root / STR_COUPLING
     if not path_map.is_file():
         return []
-    str_range = f"{str_base}...HEAD"
-    list_changed = git_lines(path_root, list_args=["diff", "--name-only", str_range])
-    str_log = "\n".join(
-        git_lines(path_root, list_args=["log", "--format=%an%n%B", f"{str_base}..HEAD"])
-    )
-    if RE_ESCAPE.search(str_log) or "[bot]" in str_log:
-        return []
+    list_rules, list_warnings = load_rules(path_map)
+    list_changed = git_lines(path_root, list_args=["diff", "--name-only", f"{str_base}...HEAD"])
+    if list_changed is None:
+        return list_warnings + [f"git could not diff against {str_base}; coupling check skipped"]
+    if coupling_exempt(path_root, str_base=str_base):
+        return list_warnings
     list_problems = []
-    for dict_entry in yaml.safe_load(path_map.read_text(encoding="utf-8")).get("couplings", []):
+    for dict_entry in list_rules:
         list_hit = [
             str_path
             for str_path in list_changed
@@ -294,7 +413,7 @@ def coupling_problems(path_root: pathlib.Path, *, str_base: str) -> list:
             list_problems.append(
                 f"{list_hit[0]} changed but none of {', '.join(dict_entry['docs'])} did"
             )
-    return list_problems
+    return list_warnings + list_problems
 
 
 def option(list_argv: list, *, str_flag: str, str_default: str) -> str:
