@@ -2075,7 +2075,7 @@ def test_deps_gate_fires_on_an_import_that_is_no_declared_dependency(tmp_path: P
     The rule ("every imported package is a direct dependency") was prose with no enforcement
     until blueprintx#238, and the gate's first run found both DDD tiers importing pandas in
     five ``src/utils`` modules while declaring it nowhere — it arrived only through
-    ``wwdates``, a business-day calendar. This test reproduces that exact shape: a
+    ``purecalendars``, a business-day calendar. This test reproduces that exact shape: a
     package that IS installed, IS imported, and is NOT declared. Without it, the gate's
     central claim rests on the day somebody happened to run it.
 
