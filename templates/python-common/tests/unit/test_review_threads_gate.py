@@ -1595,16 +1595,20 @@ def _stub_rest(
     return cls_gate
 
 
-def test_fetch_head_push_time_takes_the_earliest_pull_request_run(
+def test_fetch_head_push_time_takes_the_newest_run_of_this_pr(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The earliest ``created_at`` wins whatever order the API lists them in."""
+    """Thread 4653332749 (b): the PR returned to a sha it had at 09:00; the newest run wins."""
     cls_gate = _stub_rest(
         monkeypatch,
-        list_runs=[{"created_at": "2026-01-01T11:30:00Z"}, {"created_at": "2026-01-01T11:00:00Z"}],
+        list_runs=[
+            {"created_at": "2026-01-01T11:00:00Z", "pull_requests": [{"number": 8}]},
+            {"created_at": "2026-01-01T09:00:00Z", "pull_requests": [{"number": 8}]},
+        ],
         list_checks=None,
     )
-    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD) == "2026-01-01T11:00:00Z"
+    str_time = cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8")
+    assert str_time == "2026-01-01T11:00:00Z"
 
 
 def test_fetch_head_push_time_ignores_runs_of_another_pr(
@@ -1635,19 +1639,16 @@ def test_fetch_head_push_time_is_empty_when_no_run_belongs_to_this_pr(
     assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8") == ""
 
 
-def test_fetch_head_push_time_falls_back_to_the_earliest_check_run(
+def test_fetch_head_push_time_has_no_repository_wide_check_run_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No ``pull_request`` run on the head -> the earliest check-run ``started_at``."""
+    """Thread 4653332749 (a): no run lists this PR -> empty, whatever the check-runs say."""
     cls_gate = _stub_rest(
         monkeypatch,
         list_runs=[],
-        list_checks=[
-            {"started_at": "2026-01-01T11:45:00Z"},
-            {"started_at": "2026-01-01T11:15:00Z"},
-        ],
+        list_checks=[{"started_at": "2026-01-01T11:15:00Z"}],
     )
-    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD) == "2026-01-01T11:15:00Z"
+    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8") == ""
 
 
 def test_fetch_head_push_time_is_empty_when_neither_source_is_readable(
@@ -1655,7 +1656,7 @@ def test_fetch_head_push_time_is_empty_when_neither_source_is_readable(
 ) -> None:
     """Runs endpoint returns ``[]`` and check-runs is unreadable -> fail closed."""
     cls_gate = _stub_rest(monkeypatch, list_runs=[], list_checks=None)
-    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD) == ""
+    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8") == ""
 
 
 def test_an_unknown_head_date_is_not_evidence() -> None:

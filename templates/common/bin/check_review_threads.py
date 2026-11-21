@@ -2580,37 +2580,29 @@ def _gh_rest_list(str_path: str, *, str_key: str) -> list[dict] | None:
     return list_items
 
 
-def fetch_head_push_time(str_repo_full: str, *, str_head_oid: str, str_number: str = "") -> str:
-    """Return when the head was pushed to THIS PR, or ``""`` when no source can say.
+def fetch_head_push_time(str_repo_full: str, *, str_head_oid: str, str_number: str) -> str:
+    """Return when the head last arrived on THIS PR, or ``""`` when no evidence says (fail closed).
 
-    The earliest ``created_at`` of a ``pull_request`` workflow run on the head is the push
-    time lower bound. With ``str_number`` only runs that list this PR count, so the same sha
-    run earlier for another PR is no evidence; runs that exist but none for this PR fail
-    closed. With no run at all, the earliest check-run ``started_at`` on the head stands in
-    (repository-wide, so it cannot be scoped to a PR).
+    The newest ``created_at`` among ``pull_request`` workflow runs on the head that list this
+    PR. Newest, not earliest: a PR that returns to a head sha it already had (a force-push
+    back) gets a fresh run, and the earliest run would predate that transition. Runs of
+    another PR on the same sha are no evidence. There is deliberately no fallback to
+    repository-wide check-runs, which cannot be scoped to a PR. A later non-push run of the
+    same event (an edit) moves the time later, which only makes the gate stricter.
     """
-    if not str_head_oid:
+    if not str_head_oid or not str_number:
         return ""
     list_runs = _gh_rest_list(
         f"repos/{str_repo_full}/actions/runs?head_sha={str_head_oid}"
         "&event=pull_request&per_page=100",
         str_key="workflow_runs",
     )
-    if list_runs and str_number:
-        list_runs = [
-            d
-            for d in list_runs
-            if any(str(p.get("number")) == str_number for p in d.get("pull_requests") or [])
-        ]
-        return min(d.get("created_at") or "" for d in list_runs) if list_runs else ""
-    list_times = [d.get("created_at") or "" for d in list_runs or []]
-    if not list_times or not all(list_times):
-        list_checks = _gh_rest_list(
-            f"repos/{str_repo_full}/commits/{str_head_oid}/check-runs?per_page=100",
-            str_key="check_runs",
-        )
-        list_times = [d.get("started_at") or "" for d in list_checks or []]
-    return min(list_times) if list_times and all(list_times) else ""
+    list_times = [
+        d.get("created_at") or ""
+        for d in list_runs or []
+        if any(str(p.get("number")) == str_number for p in d.get("pull_requests") or [])
+    ]
+    return max(list_times) if list_times and all(list_times) else ""
 
 
 def dependabot_pushed_head(str_repo_full: str, *, str_head_oid: str) -> bool:
