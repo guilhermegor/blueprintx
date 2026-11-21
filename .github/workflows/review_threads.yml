@@ -42,7 +42,7 @@ jobs:
             -e templates/python-common/.github/workflows/review-threads.yml \
             -e templates/ts-common/.github/workflows/review-threads.yml || true)
           [ -n "$str_hit" ] || exit 0
-          str_labels=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" --jq '.[].name')
+          str_labels=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" --jq '.[].name')
           if printf '%s\n' "$str_labels" | grep -Fxq gate-change-approved; then
             echo "::notice::review-thread gate files changed, approved by the gate-change-approved label"
             exit 0

@@ -39,16 +39,21 @@ gate_step() {
 	printf '#!/bin/bash\ncase "$*" in *labels*) printf "%%s\\n" "$FAKE_LABELS";; *) printf "%%s\\n" "$FAKE_FILES";; esac\n' >"$str_dir/gh"
 	chmod +x "$str_dir/gh"
 	PATH="$str_dir:$PATH" GITHUB_REPOSITORY=o/r PR_NUMBER=1 FAKE_FILES="$str_files" FAKE_LABELS="$str_labels" \
-		bash "$str_dir/step.sh" >/dev/null 2>&1
+		bash "$str_dir/step.sh" 2>&1
 	int_rc=$?
 	rm -rf "$str_dir"
 	return $int_rc
 }
 gate_edit="templates/common/bin/check_review_threads.py"
-gate_step_fails() { ! gate_step "$@"; }
+gate_step_passes() { gate_step "$@" >/dev/null; }
+gate_step_fails() {
+	local str_out
+	str_out=$(gate_step "$@")
+	[ $? -eq 1 ] && grep -qF "$gate_edit" <<<"$str_out"
+}
 check "gate edit without the label fails the step" gate_step_fails "$gate_edit" "bug"
-check "same gate edit with the label passes" gate_step "$gate_edit" "gate-change-approved"
-check "unrelated edit passes without the label" gate_step "README.md" ""
+check "same gate edit with the label passes" gate_step_passes "$gate_edit" "gate-change-approved"
+check "unrelated edit passes without the label" gate_step_passes "README.md" ""
 check "review-thread gate runs again when the label changes" \
 	grep -qE 'types: \[.*unlabeled' "$GATE_WF"
 
