@@ -33,7 +33,9 @@ check "backfill reads each PR once instead of sleeping on it inside one job time
 
 repo_workflows="$REPO_ROOT/.github/workflows"
 ruff_installs_pinned() {
-	! grep -rhE 'pipx install ruff' "$repo_workflows" | grep -vE 'pipx install ruff==[0-9]'
+	local installs
+	installs="$(grep -rnE 'pipx install ruff([^-[:alnum:]_]|$)' "$repo_workflows")" || return 1
+	! grep -vE 'pipx install ruff==[0-9]' <<<"$installs"
 }
 check "every pipx install ruff under .github/workflows is pinned with ==<version>" \
 	ruff_installs_pinned
