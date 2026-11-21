@@ -109,6 +109,11 @@ def _usable_class(cls_found: type) -> type:
     A ``TypedDict`` and a Protocol not marked ``runtime_checkable`` make ``isinstance`` raise
     ``TypeError``, which would read as a violation of the caller's argument.
 
+    ``None`` is the probe value: ``isinstance(None, cls)`` runs the class's
+    ``__instancecheck__`` without needing a real instance, and a ``TypeError`` from it marks
+    the class as unusable, so it is downgraded to ``object``. The result is computed once
+    per parameter and cached with the resolved annotations, not per call.
+
     Parameters
     ----------
     cls_found : type
@@ -201,7 +206,7 @@ def _check_item(*, str_name: str, tuple_expected: tuple[type, ...], item: object
     """
     if any(_accepts(cls_expected=cls, value=item) for cls in tuple_expected):
         return
-    str_expected = " | ".join(_class_name(cls) for cls in tuple_expected)
+    str_expected = " | ".join(dict.fromkeys(_class_name(cls) for cls in tuple_expected))
     raise TypeError(
         f"parameter {str_name}={item!r} violates type hint "
         f"{str_expected}, got {type(item).__name__}"
@@ -209,7 +214,7 @@ def _check_item(*, str_name: str, tuple_expected: tuple[type, ...], item: object
 
 
 def _check_argument(
-    *, cls_parameter: inspect.Parameter, value: object, dict_hints: dict[str, object]
+    *, cls_parameter: inspect.Parameter, value: object, dict_expected: dict[str, tuple[type, ...]]
 ) -> None:
     """Check one bound argument, element by element for ``*args`` and ``**kwargs``.
 
@@ -219,15 +224,15 @@ def _check_argument(
         The parameter the value is bound to.
     value : object
         Argument bound to that parameter.
-    dict_hints : dict[str, object]
-        Resolved annotations of the decorated function.
+    dict_expected : dict[str, tuple[type, ...]]
+        Acceptable classes per parameter name; a missing name accepts anything.
 
     Returns
     -------
     None
         Nothing; the check either passes or raises ``TypeError``.
     """
-    tuple_expected = _expected_classes(dict_hints.get(cls_parameter.name))
+    tuple_expected = dict_expected.get(cls_parameter.name, (object,))
     for item in _EXPANDERS.get(cls_parameter.kind, _single_value)(value):
         _check_item(str_name=cls_parameter.name, tuple_expected=tuple_expected, item=item)
 
@@ -235,7 +240,7 @@ def _check_argument(
 def _check_call(
     *,
     cls_signature: inspect.Signature,
-    dict_hints: dict[str, object],
+    dict_expected: dict[str, tuple[type, ...]],
     args: tuple[object, ...],
     kwargs: dict[str, object],
 ) -> None:
@@ -245,8 +250,8 @@ def _check_call(
     ----------
     cls_signature : inspect.Signature
         Signature of the decorated function.
-    dict_hints : dict[str, object]
-        Resolved annotations of the decorated function.
+    dict_expected : dict[str, tuple[type, ...]]
+        Acceptable classes per parameter name, computed once per function.
     args : tuple[object, ...]
         Positional arguments of the call.
     kwargs : dict[str, object]
@@ -261,7 +266,7 @@ def _check_call(
         _check_argument(
             cls_parameter=cls_signature.parameters[str_name],
             value=value,
-            dict_hints=dict_hints,
+            dict_expected=dict_expected,
         )
 
 
@@ -351,13 +356,19 @@ def type_checker(fn_target: Callable[_P, _R]) -> Callable[_P, _R]:
         The wrapped function, with its signature and docstring preserved.
     """
     cls_signature = inspect.signature(fn_target)
-    fn_hints = functools.cache(lambda: _resolve_hints(fn_target))
+    fn_expected = functools.cache(
+        lambda: {
+            str_name: _expected_classes(hint) for str_name, hint in _resolve_hints(fn_target).items()
+        }
+    )
 
     @functools.wraps(fn_target)
     def fn_wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         """Check the bound arguments, then call the wrapped function."""
-        dict_hints = fn_hints()
-        _check_call(cls_signature=cls_signature, dict_hints=dict_hints, args=args, kwargs=kwargs)
+        dict_expected = fn_expected()
+        _check_call(
+            cls_signature=cls_signature, dict_expected=dict_expected, args=args, kwargs=kwargs
+        )
         return fn_target(*args, **kwargs)
 
     return fn_wrapper
