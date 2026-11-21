@@ -45,6 +45,12 @@ for str_tier in lib-minimal api-service-native-db ddd-service-native-db ddd-serv
 		echo "FAIL: $str_tier is offline but CONTRIBUTING.md lacks the offline guidance"
 		int_failures=$((int_failures + 1))
 	fi
+	if [ -f "$path_project/poe_tasks.offline.toml" ] \
+		&& ! awk '/^## /{r=($0=="## Releasing")} r&&/poe git_merge_to_main/{f=1} END{exit !f}' \
+			"$path_project/docs/contributing.md"; then
+		echo "FAIL: $str_tier is offline but docs/contributing.md lacks the offline steps under Releasing"
+		int_failures=$((int_failures + 1))
+	fi
 
 	list_defined="$(cd "$path_project" && python3 -c '
 import sys
