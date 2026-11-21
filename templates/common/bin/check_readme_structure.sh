@@ -147,9 +147,27 @@ check_authors() {
 footer_rule_missing() {
 	md_strip_fences <"$1" | awk '
 		{ sub(/[ \t\r]+$/, "") }
-		/^<sub>Generated from/ { if (prev != "---") bad = 1 }
+		/^<sub>(Generated from|Gerado a partir do)/ { if (prev != "---") bad = 1 }
 		NF { prev = $0 }
 		END { exit !bad }'
+}
+
+check_credits_in_footer() {
+	local path_file="$1" i_line str_text
+	while IFS=$'\t' read -r i_line str_text; do
+		problem "$path_file:$i_line" "credits belong in the footer <sub>, not the body: $str_text"
+	done < <(md_strip_fences <"$path_file" | awk '
+		/^<sub>(Generated from|Gerado a partir do)/ { exit }
+		/^<!--/ { next }
+		{
+			line = tolower($0)
+			while (match(line, /https?:\/\/[^\/ )>\]"'"'"'?#]+/)) {
+				host = substr(line, RSTART, RLENGTH)
+				sub(/^https?:\/\//, "", host); sub(/^[^@]*@/, "", host); sub(/:[0-9]+$/, "", host)
+				if (host ~ /(^|\.)(pexels|unsplash|pixabay)\.com$/) { print NR "\t" $0; break }
+				line = substr(line, RSTART + RLENGTH)
+			}
+		}')
 }
 
 check_footer() {
@@ -158,7 +176,8 @@ check_footer() {
 		int_count=$((int_count + 1))
 		[[ "$str_line" == *"[BlueprintX]($STR_BLUEPRINTX_URL)"* ]] ||
 			problem "$path_file" "footer does not link BlueprintX: use [BlueprintX]($STR_BLUEPRINTX_URL)"
-	done < <(md_strip_fences <"$path_file" | grep -E '^<sub>Generated from' || true)
+	done < <(md_strip_fences <"$path_file" | grep -E '^<sub>(Generated from|Gerado a partir do)' || true)
+	check_credits_in_footer "$path_file"
 	[ "$BOOL_REQUIRE_FOOTER" -eq 1 ] || return 0
 	if [ "$int_count" -eq 0 ]; then
 		problem "$path_file" "README has no footer: end it with a '---' rule and a '<sub>Generated from ...' line"
