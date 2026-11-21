@@ -26,6 +26,7 @@ import sys
 import time
 from types import MappingProxyType
 
+from packaging.requirements import Requirement
 import pytest
 import yaml
 
@@ -3280,3 +3281,50 @@ def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
     assert len(list_hooks) == 1
     assert list_hooks[0].get("files") == r"\.py$"
     assert "types" not in list_hooks[0]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the stub interpreter is a POSIX shell script")
+def test_poetry_installs_from_the_wheelhouse_without_touching_pypi(tmp_path: Path) -> None:
+    """A wheelhouse holding a Poetry wheel is installed ``--no-index``, never from PyPI.
+
+    The stub interpreter logs its argv, so the assertion is on the pip command itself.
+    """
+    path_bin = tmp_path / "bin"
+    _materialise_bin_lib(path_bin)
+    path_wheels = tmp_path / "wheels"
+    path_wheels.mkdir()
+    (path_wheels / "poetry-2.2.1-py3-none-any.whl").write_bytes(b"")
+    path_log = tmp_path / "calls.log"
+    path_stub = tmp_path / "stub_python"
+    path_stub.write_text(f'#!/bin/sh\necho "$@" >> "{path_log}"\n', encoding="utf-8")
+    path_stub.chmod(0o755)
+
+    dict_env = dict(os.environ, WHEELHOUSE_WHEELS_DIR=str(path_wheels))
+    str_script = (
+        f'source "{path_bin}/lib/common.sh"; source "{path_bin}/lib/bootstrap.sh"; '
+        f'PROJECT_ROOT="{tmp_path}"; PYTHON="{path_stub}"; install_poetry_from_wheelhouse'
+    )
+    cls_run = subprocess.run(  # noqa: S603
+        [shutil.which("bash") or "bash", "-c", str_script],
+        env=dict_env,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+    assert cls_run.returncode == 0, cls_run.stderr
+    assert f"--no-index --find-links={path_wheels} poetry" in path_log.read_text(encoding="utf-8")
+
+
+def test_poetry_requirement_admits_the_poetry_the_lock_holds() -> None:
+    """``requirements.txt`` must not exclude the Poetry a project lock holds.
+
+    The offline wheelhouse is built from the lock, so a pin above the locked Poetry makes
+    the offline install unsatisfiable. 2.2.1 is the version the lock carried via
+    ``poetry-plugin-export`` when this was found.
+    """
+    path_req = Path(__file__).resolve().parents[2] / "requirements.txt"
+    str_line = path_req.read_text(encoding="utf-8").splitlines()[0]
+
+    assert Requirement(str_line.split(";")[0].strip()).specifier.contains("2.2.1")

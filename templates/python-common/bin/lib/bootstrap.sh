@@ -127,6 +127,14 @@ run_poetry() {
 	"${POETRY_CMD[@]}" "$@"
 }
 
+install_poetry_from_wheelhouse() {
+	local str_dir="${WHEELHOUSE_WHEELS_DIR:-$PROJECT_ROOT/../_wheels/$(basename "$PROJECT_ROOT")/wheels}"
+
+	compgen -G "$str_dir/poetry-*.whl" >/dev/null || return 1
+	print_status "info" "Installing Poetry from the offline wheelhouse: $str_dir"
+	"$PYTHON" -m pip install --no-index --find-links="$str_dir" "$@" poetry
+}
+
 ensure_poetry() {
 	if resolve_poetry; then
 		print_status "info" "Poetry found: $(run_poetry --version 2>&1 | head -n1)"
@@ -134,7 +142,9 @@ ensure_poetry() {
 	fi
 
 	print_status "warning" "Poetry not found — installing via $PYTHON -m pip ..."
-	if [[ -f "$PROJECT_ROOT/requirements.txt" ]]; then
+	if install_poetry_from_wheelhouse; then
+		:
+	elif [[ -f "$PROJECT_ROOT/requirements.txt" ]]; then
 		"$PYTHON" -m pip install -r "$PROJECT_ROOT/requirements.txt"
 	else
 		"$PYTHON" -m pip install "poetry>=2.4"
