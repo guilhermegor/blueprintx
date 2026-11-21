@@ -156,10 +156,11 @@ check_about_gate() {
 	git -C "$path_project" remote add origin https://github.com/acme/widget.git
 	printf '#!/bin/bash\nexit 1\n' >"$path_bin/gh"
 	chmod +x "$path_bin/gh"
-	if PATH="$path_bin:$PATH" GH_TOKEN=t bash "$path_gate" "$path_project" >/dev/null 2>&1; then
-		fail "About gate" "passed although gh api failed with a token present"
+	local str_out int_rc=0
+	str_out="$(PATH="$path_bin:$PATH" GH_TOKEN=t bash "$path_gate" "$path_project" 2>&1)" || int_rc=$?
+	if [[ "$int_rc" -eq 0 || "$str_out" != *"GitHub About lookup failed"* ]]; then
+		fail "About gate" "gh api failure with a token present: rc=$int_rc, no lookup-failed diagnostic"
 	fi
-	local str_out
 	str_out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$path_bin:$PATH" bash "$path_gate" "$path_project" 2>&1)"
 	if [[ "$str_out" != *"SKIPPED GitHub About"* ]]; then
 		fail "About gate" "did not name a skip when no token is present"
