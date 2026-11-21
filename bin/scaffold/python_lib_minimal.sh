@@ -456,6 +456,8 @@ lib_minimal_copy_gate_tests() {
         "$project_path/tests/unit/test_review_retry.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_docs_code_refs_gate.py" \
         "$project_path/tests/unit/test_docs_code_refs_gate.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_check_docs_drift.py" \
+        "$project_path/tests/unit/test_check_docs_drift.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_assertion_weakening_gate.py" \
         "$project_path/tests/unit/test_assertion_weakening_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_rmw_race_gate.py" \
