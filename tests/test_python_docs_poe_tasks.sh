@@ -62,14 +62,32 @@ print("\n".join(sorted(load_tasks(Path.cwd()))))
 	done <<<"$list_cited"
 done
 
-list_offline_tasks="$(sed -nE 's/^\[tool\.poe\.tasks\.([A-Za-z0-9_-]+)\].*/\1/p' \
-	"$REPO_ROOT/templates/common/poe_tasks.offline.toml")"
+list_offline_tasks="$(python3 -c '
+import sys, tomllib
+with open(sys.argv[1], "rb") as file_toml:
+    print("\n".join(sorted(tomllib.load(file_toml)["tool"]["poe"]["tasks"])))
+' "$REPO_ROOT/templates/common/poe_tasks.offline.toml")"
 for str_must in new_branch git_merge_to_main; do
 	grep -qxF "$str_must" <<<"$list_offline_tasks" \
 		|| { echo "FAIL: offline task list lacks $str_must"; exit 1; }
 done
+
+offline_cites_in() {
+	local str_cited str_task int_found=0
+	str_cited="$(cited_tasks "$1")" || { echo "FAIL: cannot read poe citations in $1"; return 1; }
+	while IFS= read -r str_task; do
+		[ -n "$str_task" ] || continue
+		if grep -qxF "$str_task" <<<"$list_offline_tasks"; then
+			echo "FAIL: $(basename "$1") cites offline-only poe $str_task"
+			int_found=$((int_found + 1))
+		fi
+	done <<<"$str_cited"
+	return "$int_found"
+}
+
 printf -- '- `poe new_branch`\n' >"$path_witness/offline.md"
-if grep -qxF new_branch <<<"$list_offline_tasks" && grep -qxF new_branch <<<"$(cited_tasks "$path_witness/offline.md")"; then
+offline_cites_in "$path_witness/offline.md" >/dev/null
+if [ "$?" -eq 1 ]; then
 	echo "ok: an offline-only task cited in a doc is flagged"
 else
 	echo "FAIL: an offline-only task cited in a doc is not flagged"
@@ -77,13 +95,7 @@ else
 fi
 for path_doc in "$REPO_ROOT"/templates/python-common/CONTRIBUTING*.md; do
 	[ -f "$path_doc" ] || { echo "FAIL: no CONTRIBUTING*.md under python-common"; exit 1; }
-	while IFS= read -r str_task; do
-		[ -n "$str_task" ] || continue
-		if grep -qxF "$str_task" <<<"$list_offline_tasks"; then
-			echo "FAIL: $(basename "$path_doc") cites offline-only poe $str_task"
-			int_failures=$((int_failures + 1))
-		fi
-	done <<<"$(cited_tasks "$path_doc")"
+	offline_cites_in "$path_doc" || int_failures=$((int_failures + 1))
 done
 
 [ "$int_failures" -eq 0 ] || { echo "$int_failures case(s) failed"; exit 1; }
