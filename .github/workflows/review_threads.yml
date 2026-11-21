@@ -2,7 +2,7 @@ name: Review Threads
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   pull_request_review:
   pull_request_review_comment:
   issue_comment:
@@ -26,6 +26,30 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Gate files unchanged, or the owner approved the change
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          str_files=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)')
+          str_hit=$(printf '%s\n' "$str_files" | grep -Fx \
+            -e .github/workflows/review_threads.yml \
+            -e templates/common/bin/check_review_threads.py \
+            -e templates/python-common/.github/workflows/review-threads.yml \
+            -e templates/ts-common/.github/workflows/review-threads.yml || true)
+          [ -n "$str_hit" ] || exit 0
+          str_labels=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" --jq '.[].name')
+          if printf '%s\n' "$str_labels" | grep -Fxq gate-change-approved; then
+            echo "::notice::review-thread gate files changed, approved by the gate-change-approved label"
+            exit 0
+          fi
+          echo "::error::PR edits review-thread gate files; the owner must add the gate-change-approved label:"
+          printf '%s\n' "$str_hit"
+          exit 1
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
