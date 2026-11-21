@@ -1167,6 +1167,16 @@ def test_bare_annotation_does_not_declare_all(tmp_path: Path) -> None:
     assert _load_gate().declared_all(path_init) is None
 
 
+def test_guarded_import_fallback_is_not_a_public_definition(tmp_path: Path) -> None:
+    """``try: import x`` / ``except ImportError: x = None`` binds a dependency, not API."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="try:\n    import pyodbc\nexcept ImportError:\n    pyodbc = None\n",
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
 def test_syntax_error_in_init_is_a_finding_not_a_traceback(tmp_path: Path) -> None:
     """Item 2 of #1258: an unparseable ``__init__.py`` is reported."""
     path_init = _package(tmp_path, str_init="__all__ = [\n", str_member="")

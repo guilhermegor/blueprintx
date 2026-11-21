@@ -243,12 +243,35 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     set of str
         Public names bound at module level by a def, class, or assignment.
     """
+    list_nodes = list(_module_statements(_parse(path_module).body, bool_runtime=True))
     return {
         str_name
-        for str_name in _definitions(
-            _module_statements(_parse(path_module).body, bool_runtime=True)
-        )
+        for str_name in _definitions(list_nodes) - _imported(list_nodes)
         if not str_name.startswith("_")
+    }
+
+
+def _imported(list_nodes: Iterable[ast.stmt]) -> set[str]:
+    """Return the names bound by ``import`` statements.
+
+    A guarded import's ``except ImportError: name = None`` fallback re-binds the imported name;
+    the name belongs to the dependency, so the fallback must not make it a definition.
+
+    Parameters
+    ----------
+    list_nodes : iterable of ast.stmt
+        Statements to read.
+
+    Returns
+    -------
+    set of str
+        The names each ``import`` or ``from ... import`` binds.
+    """
+    return {
+        (cls_alias.asname or cls_alias.name).split(".")[0]
+        for cls_node in list_nodes
+        if isinstance(cls_node, ast.Import | ast.ImportFrom)
+        for cls_alias in cls_node.names
     }
 
 
