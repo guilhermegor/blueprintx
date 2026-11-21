@@ -3010,7 +3010,14 @@ root <code>README.md</code> and a vendored copy in another repository run withou
   add one; pass <code>--require-footer</code> to fail a README with no <code>&lt;sub&gt;Generated from</code> line or whose
   footer has no <code>---</code> rule above it. <code>bin/ci/check_readme_structure.sh</code> passes it for
   <code>README.template.md</code>, every <code>templates/*/README.md</code> and every generated project.
-  Disclaimers go here, not in the body.</li>
+  Disclaimers <strong>and</strong> credits or attributions go here, not in the body. A disclaimer:
+  "Unofficial, community library. Not affiliated with or endorsed by the BCB." A credit:
+  "Logo photo by Jane Doe on Pexels." The gate reports an <code>http(s)</code> link to <code>pexels.com</code>, <code>unsplash.com</code>
+  or <code>pixabay.com</code> (hot-linked images included; scheme-less mentions are not gated) above the footer; disclaimer wording is locale-dependent, so it is not
+  gated. The footer line may be written in pt-BR ("Gerado a partir do template ..."), the only
+  alternative locale recognised. On the docs
+  site the same slot is <code>copyright:</code> in <code>mkdocs.yml</code> (Material renders it in the page
+  footer), shipped holding the "Generated from ... via BlueprintX" line.</li>
 <li>Every list item under <code>authors</code> carries a <code>github.com/&lt;user&gt;</code> link and a
   <code>linkedin.com/in/&lt;handle&gt;</code> link, and none uses the placeholder
   <code>linkedin.com/in/your-linkedin-handle</code>.</li>
