@@ -507,6 +507,23 @@ def test_a_malformed_coupling_map_is_an_advisory_not_a_crash(tmp_path: Path) -> 
     assert "could not be read" in gate.coupling_problems(path_root, str_base="main")[0]
 
 
+@pytest.mark.parametrize("str_coupling", ["[]\n", "false\n"])
+def test_a_falsy_non_mapping_coupling_map_is_an_advisory(
+    tmp_path: Path, *, str_coupling: str
+) -> None:
+    """Should-fail witness: a falsy top level other than None is not read as no rules.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    str_coupling : str
+        A coupling map whose top level is falsy but is not a mapping.
+    """
+    path_root = _repo_with_change(tmp_path, str_message="feat: x", str_coupling=str_coupling)
+    assert "must be a mapping" in gate.coupling_problems(path_root, str_base="main")[0]
+
+
 def test_an_unknown_base_is_reported_and_stays_advisory(
     tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:

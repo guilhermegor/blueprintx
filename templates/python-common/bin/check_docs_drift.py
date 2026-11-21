@@ -339,9 +339,11 @@ def load_rules(path_map: pathlib.Path) -> tuple:
         The valid rules and the warnings about what was skipped.
     """
     try:
-        cls_doc = yaml.safe_load(path_map.read_text(encoding="utf-8")) or {}
+        cls_doc = yaml.safe_load(path_map.read_text(encoding="utf-8"))
     except (yaml.YAMLError, OSError, UnicodeDecodeError) as cls_err:
         return [], [f"{STR_COUPLING} could not be read: {cls_err}"]
+    if cls_doc is None:
+        return [], []
     list_raw = cls_doc.get("couplings", []) if isinstance(cls_doc, dict) else None
     if not isinstance(list_raw, list):
         return [], [f"{STR_COUPLING} must be a mapping with a 'couplings' list"]
