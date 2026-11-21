@@ -225,6 +225,25 @@ def test_a_longer_fence_is_not_closed_by_a_shorter_one(
     assert (int_code, "README.md: poe ghost is not defined" in str_out) == (1, True)
 
 
+def test_a_shell_comment_in_a_fence_is_not_a_citation(
+    tmp_path: Path, *, capsys: pytest.CaptureFixture
+) -> None:
+    """A ``# ... poe ...`` comment in a code block is prose, not a command.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        A throwaway directory pytest provides per test.
+    capsys : pytest.CaptureFixture
+        Captures the gate's report.
+    """
+    path_root = _project(
+        tmp_path,
+        str_readme="```bash\nbash bin/venv.sh   # poe lives inside it\n# poe ghost\n```\n",
+    )
+    assert _verdict(path_root, capsys=capsys)[0] == 0
+
+
 def test_prose_after_a_closed_fence_is_not_a_citation(
     tmp_path: Path, *, capsys: pytest.CaptureFixture
 ) -> None:

@@ -40,6 +40,7 @@ STR_COUPLING_FLAG = "--coupling"
 SET_SKIP_DIRS = {".git", ".venv", "node_modules", "site", "htmlcov"}
 
 RE_FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+RE_COMMENT = re.compile(r"(^|\s)#.*$")
 RE_SPAN = re.compile(r"`([^`\n]+)`")
 RE_POE = re.compile(r"\bpoe\s+([A-Za-z_][A-Za-z0-9_-]*)")
 RE_ESCAPE = re.compile(
@@ -109,7 +110,7 @@ def code_segments(str_text: str) -> list:
     for str_line in str_text.splitlines():
         if str_open:
             str_open = "" if fence_closes(str_line, str_open=str_open) else str_open
-            list_segments += [str_line] if str_open else []
+            list_segments += [RE_COMMENT.sub("", str_line)] if str_open else []
             continue
         cls_fence = RE_FENCE.match(str_line)
         if cls_fence or not str_line.strip():
