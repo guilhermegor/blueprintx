@@ -188,7 +188,7 @@ jobs:
           persist-credentials: false
 
       - name: Install ruff
-        run: pipx install ruff
+        run: pipx install ruff==0.17.5
 
       - name: Check cyclomatic complexity across bin/ and templates/
         run: bash templates/python-common/bin/check_complexity.sh --root .
@@ -203,7 +203,7 @@ jobs:
           persist-credentials: false
 
       - name: Install ruff
-        run: pipx install ruff
+        run: pipx install ruff==0.17.5
 
       - name: Check cyclomatic complexity across templates/python-common
         run: bash templates/python-common/bin/check_complexity.sh --root templates/python-common
