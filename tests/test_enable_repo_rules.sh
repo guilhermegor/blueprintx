@@ -117,7 +117,7 @@ cat >"$WORK_DIR/v/gh" <<'STUB'
 #!/bin/bash
 [ "$1 $2" = "auth status" ] && exit 0
 [ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
-str_rule='{"type":"required_status_checks","ruleset_id":42,"parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"Review threads answered"}]}}'
+str_rule='{"type":"required_status_checks","ruleset_id":42,"parameters":{"strict_required_status_checks_policy":false,"required_status_checks":[{"context":"Review threads answered"}]}}'
 case "$2" in
 repos/o/r) str_json='{"default_branch":"main"}' ;;
 repos/o/r/rulesets) str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
@@ -203,6 +203,29 @@ test_plain_404_without_the_message_stays_unknown() {
     assert_has "the plain-404 path still verifies on the ruleset" "rc=0" "$str_out"
 }
 
+test_create_sends_strict_false() {
+    mkdir -p "$WORK_DIR/c" "$WORK_DIR/norepo"
+    cat >"$WORK_DIR/c/gh" <<'STUB'
+#!/bin/bash
+[ "$1 $2" = "auth status" ] && exit 0
+[ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
+[[ " $* " == *" -X POST "* && "$*" == *"/rulesets"* ]] && cat >"$STUB_CAPTURE"
+exit 0
+STUB
+    chmod +x "$WORK_DIR/c/gh"
+    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/c:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/payload.json" bash "$SCRIPT" >/dev/null 2>&1)
+    assert_has "the created ruleset sends strict false" '"strict_required_status_checks_policy":false' "$(cat "$WORK_DIR/payload.json" 2>/dev/null)"
+}
+
+test_verify_refuses_a_strict_true_ruleset() {
+    mkdir -p "$WORK_DIR/vt" "$WORK_DIR/norepo"
+    sed 's/"strict_required_status_checks_policy":false/"strict_required_status_checks_policy":true/' "$WORK_DIR/v/gh" >"$WORK_DIR/vt/gh"
+    chmod +x "$WORK_DIR/vt/gh"
+    assert_has "strict true is no longer accepted" "rc=1" "$( (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/vt:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT=active STUB_APPLIES=1 bash "$SCRIPT" verify 2>&1; echo "rc=$?") )"
+}
+
+test_create_sends_strict_false
+test_verify_refuses_a_strict_true_ruleset
 test_ruleset_only_repo_has_no_unreadable_protection_warning
 test_genuine_protection_read_failure_stays_unknown
 test_not_protected_text_on_a_5xx_stays_unknown
