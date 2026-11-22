@@ -111,7 +111,9 @@ def test_exit_code(
 
 def test_finding_names_the_found_version() -> None:
     """A hand-bump finding names the offending version."""
-    assert "'1.0.0'" in gate.find_problem(tomllib.loads(_pyproject("1.0.0", str_dynamic=STR_DYNAMIC)))
+    assert "'1.0.0'" in gate.find_problem(
+        tomllib.loads(_pyproject("1.0.0", str_dynamic=STR_DYNAMIC))
+    )
 
 
 def test_missing_version_is_a_finding() -> None:
@@ -159,7 +161,7 @@ def test_section_header_inside_multiline_string_is_not_a_section(tmp_path: Path)
     assert _run(tmp_path, str_text=str_text) == 0
 
 
-def test_invalid_toml_is_its_own_error(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_invalid_toml_is_its_own_error(tmp_path: Path, *, capsys: pytest.CaptureFixture) -> None:
     """Malformed TOML exits 1 with a message naming the parse failure.
 
     Parameters
