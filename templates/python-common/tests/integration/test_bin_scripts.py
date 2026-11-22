@@ -3311,5 +3311,5 @@ def test_unparseable_dependency_never_reaches_the_success_message(tmp_path: Path
         encoding="utf-8",
     )
 
-    assert cls_result.returncode == 1
-    assert "installed with pip fallback" not in cls_result.stdout
+    assert cls_result.returncode != 0
+    assert "installed with pip fallback" not in cls_result.stdout + cls_result.stderr

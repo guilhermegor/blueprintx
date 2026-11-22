@@ -168,7 +168,28 @@ def test_python_key_merges_with_existing_markers() -> None:
     dict_spec = {"version": "1.0", "python": "<3.12", "markers": "sys_platform == 'win32'"}
     assert (
         MODULE.build_requirement("pkg", union_spec=dict_spec)
-        == "pkg==1.0 ; python_version < '3.12' and sys_platform == 'win32'"
+        == "pkg==1.0 ; (python_version < '3.12') and (sys_platform == 'win32')"
+    )
+
+
+def test_patch_level_python_constraint_uses_python_full_version() -> None:
+    """``python_version`` is major.minor only, so a patch bound needs the full version."""
+    assert (
+        MODULE.build_requirement("pkg", union_spec={"version": "1.0", "python": ">=3.10.2"})
+        == "pkg==1.0 ; python_full_version >= '3.10.2'"
+    )
+
+
+def test_or_python_constraint_fails_loudly() -> None:
+    """A ``||`` python constraint aborts instead of emitting a wrong marker."""
+    with pytest.raises(SystemExit, match="Unsupported python constraint"):
+        MODULE.build_requirement("pkg", union_spec={"version": "1.0", "python": "^2.7 || ^3.6"})
+
+
+def test_wildcard_python_constraint_adds_no_marker() -> None:
+    """``python = "*"`` means any interpreter and leaves the line unmarked."""
+    assert (
+        MODULE.build_requirement("pkg", union_spec={"version": "1.0", "python": "*"}) == "pkg==1.0"
     )
 
 

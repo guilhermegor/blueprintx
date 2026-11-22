@@ -44,6 +44,8 @@ TUPLE_UNSUPPORTED_KEYS = ("path", "git", "url")
 
 _INT_SEMVER_PARTS = 3
 
+_INT_PATCH_DOTS = 2
+
 
 def version_parts(str_raw: str) -> list[int]:
     """Split a version string into its leading integer components.
@@ -170,16 +172,48 @@ def python_marker(str_python: str) -> str:
     str
         The marker expression, clauses joined with ``and``; empty for "any version".
     """
+    if "||" in str_python:
+        raise SystemExit(f"Unsupported python constraint for pip fallback: {str_python!r}")
     str_spec = normalize_version_spec(str_python)
-    list_matches = [
-        re.fullmatch(r"(>=|<=|==|!=|~=|>|<)\s*(.+)", str_clause.strip())
-        for str_clause in str_spec.split(",")
-    ]
+    if not str_spec:
+        return ""
     return " and ".join(
-        f"python_version {cls_match.group(1)} '{cls_match.group(2)}'"
-        for cls_match in list_matches
-        if cls_match
+        python_clause(str_clause, str_python=str_python) for str_clause in str_spec.split(",")
     )
+
+
+def python_clause(str_clause: str, *, str_python: str) -> str:
+    """Render one normalised ``python`` clause as a marker comparison.
+
+    A clause carrying a patch component compares ``python_full_version``, because
+    ``python_version`` is only ``major.minor`` and ``>= '3.10.2'`` never holds on 3.10.
+
+    Parameters
+    ----------
+    str_clause : str
+        One comparison such as ``">=3.10.2"``.
+    str_python : str
+        The original constraint, named in the error.
+
+    Returns
+    -------
+    str
+        The marker comparison.
+
+    Raises
+    ------
+    SystemExit
+        If the clause is not a comparison pip can express.
+    """
+    cls_match = re.fullmatch(r"(>=|<=|==|!=|~=|>|<)\s*(\d+(?:\.\d+)*)", str_clause.strip())
+    if not cls_match:
+        raise SystemExit(f"Unsupported python constraint for pip fallback: {str_python!r}")
+    str_variable = (
+        "python_full_version"
+        if cls_match.group(2).count(".") >= _INT_PATCH_DOTS
+        else "python_version"
+    )
+    return f"{str_variable} {cls_match.group(1)} '{cls_match.group(2)}'"
 
 
 def build_requirements(str_name: str, *, union_spec: str | dict | list) -> list[str]:
@@ -264,7 +298,7 @@ def build_requirement(str_name: str, *, union_spec: str | dict) -> str | None:
             if str_marker
         ]
         str_markers = " and ".join(
-            f"({str_marker})" if len(list_markers) > 1 and " or " in str_marker else str_marker
+            f"({str_marker})" if len(list_markers) > 1 else str_marker
             for str_marker in list_markers
         )
 
