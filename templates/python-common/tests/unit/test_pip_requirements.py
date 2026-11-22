@@ -180,6 +180,22 @@ def test_patch_level_python_constraint_uses_python_full_version() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("str_python", "str_marker"),
+    [
+        (">3.11", "python_full_version > '3.11.0'"),
+        ("<=3.11", "python_full_version <= '3.11.0'"),
+        (">=3.11", "python_version >= '3.11'"),
+        ("<3.11", "python_version < '3.11'"),
+    ],
+)
+def test_python_bound_without_patch_picks_the_variable_poetry_picks(
+    str_python: str, str_marker: str
+) -> None:
+    """``>`` and ``<=`` on major.minor must not exclude or include a whole 3.11.x line."""
+    assert MODULE.python_marker(str_python) == str_marker
+
+
 def test_or_python_constraint_fails_loudly() -> None:
     """A ``||`` python constraint aborts instead of emitting a wrong marker."""
     with pytest.raises(SystemExit, match="Unsupported python constraint"):

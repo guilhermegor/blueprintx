@@ -188,6 +188,8 @@ def python_clause(str_clause: str, *, str_python: str) -> str:
 
     A clause carrying a patch component compares ``python_full_version``, because
     ``python_version`` is only ``major.minor`` and ``>= '3.10.2'`` never holds on 3.10.
+    ``>3.11`` and ``<=3.11`` are zero-padded to ``3.11.0`` and compare the full version,
+    as Poetry does: ``python_version > '3.11'`` is false on 3.11.9.
 
     Parameters
     ----------
@@ -209,12 +211,13 @@ def python_clause(str_clause: str, *, str_python: str) -> str:
     cls_match = re.fullmatch(r"(>=|<=|==|!=|~=|>|<)\s*(\d+(?:\.\d+)*)", str_clause.strip())
     if not cls_match:
         raise SystemExit(f"Unsupported python constraint for pip fallback: {str_python!r}")
-    str_variable = (
-        "python_full_version"
-        if cls_match.group(2).count(".") >= _INT_PATCH_DOTS
-        else "python_version"
-    )
-    return f"{str_variable} {cls_match.group(1)} '{cls_match.group(2)}'"
+    str_op, str_bound = cls_match.groups()
+    int_dots = str_bound.count(".")
+    if int_dots < _INT_PATCH_DOTS and str_op in {">", "<="}:
+        str_bound = f"{str_bound}.0"
+        int_dots += 1
+    str_variable = "python_full_version" if int_dots >= _INT_PATCH_DOTS else "python_version"
+    return f"{str_variable} {str_op} '{str_bound}'"
 
 
 def build_requirements(str_name: str, *, union_spec: str | dict | list) -> list[str]:

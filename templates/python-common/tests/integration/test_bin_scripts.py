@@ -3303,13 +3303,21 @@ def test_unparseable_dependency_never_reaches_the_success_message(tmp_path: Path
         "pip_fallback_ensure_toml_reader() { return 0; }; "
         f'pip_fallback_install_groups_in_venv "{sys.executable}" main deps'
     )
+    dict_env = dict(os.environ)
+    dict_env.pop("_BX_PIP_FALLBACK_LOADED", None)
+    dict_env.pop("FORCE_COLOR", None)
+    dict_env.pop("CLICOLOR_FORCE", None)
+    dict_env.pop("NO_COLOR", None)
     cls_result = subprocess.run(  # noqa: S603
         [_STR_BASH, "-c", str_script],
         check=False,
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=dict_env,
     )
+    str_output = cls_result.stdout + cls_result.stderr
 
     assert cls_result.returncode != 0
-    assert "installed with pip fallback" not in cls_result.stdout + cls_result.stderr
+    assert "Unsupported dependency type for pip fallback: broken -> git" in str_output
+    assert "installed with pip fallback" not in str_output
