@@ -95,7 +95,7 @@ def main(list_argv: list) -> int:
     try:
         with path_pyproject.open("rb") as cls_file:
             dict_doc = tomllib.load(cls_file)
-    except tomllib.TOMLDecodeError as cls_exc:
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as cls_exc:
         print(f"{path_pyproject}: invalid TOML ({cls_exc})")
         return 1
     str_problem = find_problem(dict_doc)

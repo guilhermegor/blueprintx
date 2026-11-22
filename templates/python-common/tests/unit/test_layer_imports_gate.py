@@ -955,3 +955,22 @@ def test_root_relative_from_import_of_a_denied_layer_is_rejected(tmp_path: Path)
         encoding="utf-8",
     )
     assert "must not import 'chassis'" in _output_at(_run_main(tmp_path), int_expected=1)
+
+
+def test_one_statement_reaching_a_denied_layer_is_reported_once(tmp_path: Path) -> None:
+    """``from chassis import db_schema`` under a ``chassis`` deny key is one finding, not two.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis" / "db_schema").mkdir(parents=True)
+    (path_src / "utils").mkdir()
+    (path_src / "utils" / "mod.py").write_text("from chassis import db_schema\n", encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        'layers:\n  utils:\n    allow: {}\n    deny_layers:\n      chassis: "no"\n',
+        encoding="utf-8",
+    )
+    assert _output_at(_run_main(tmp_path), int_expected=1).count("must not import") == 1

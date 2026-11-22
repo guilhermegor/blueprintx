@@ -730,13 +730,16 @@ def direction_problems(
     list_targets = import_targets(
         cls_tree, tuple_pkg_parts=tuple_pkg_parts, tuple_module_roots=tuple_module_roots
     )
-    return [
-        f"{path_file}:{cls_node.lineno}: layer '{str_layer}' must not import "
-        f"'{str_target}'. {dict_deny[str_key]}"
-        for cls_node, str_target in list_targets
+    dict_found = {
+        (cls_node.lineno, str_key): (
+            f"{path_file}:{cls_node.lineno}: layer '{str_layer}' must not import "
+            f"'{str_target}'. {dict_deny[str_key]}"
+        )
+        for cls_node, str_target in reversed(list_targets)
         for str_key in [_matching_deny_key(str_target, dict_deny=dict_deny)]
         if str_key is not None
-    ]
+    }
+    return list(reversed(dict_found.values()))
 
 
 def imported_modules(cls_node: ast.AST) -> list[str]:
