@@ -3319,14 +3319,14 @@ def test_poetry_installs_from_the_wheelhouse_without_touching_pypi(tmp_path: Pat
     assert f"--no-index --find-links={path_wheels} poetry>=2.2" in str_calls
 
 
-def test_poetry_requirement_admits_the_poetry_the_lock_holds() -> None:
-    """``requirements.txt`` must not exclude the Poetry a project lock holds.
+def test_poetry_requirement_excludes_the_path_traversal_releases() -> None:
+    """``requirements.txt`` must floor Poetry at the GHSA-2599-h6xx-hpxp fix.
 
-    The offline wheelhouse is built from the lock, so a pin above the locked Poetry makes
-    the offline install unsatisfiable. 2.2.1 is the version the lock carried via
-    ``poetry-plugin-export`` when this was found.
+    Poetry 1.4.0 through 2.3.2 can write outside the target directory from a crafted wheel.
     """
     path_req = Path(__file__).resolve().parents[2] / "requirements.txt"
     str_line = path_req.read_text(encoding="utf-8").splitlines()[0]
+    cls_spec = Requirement(str_line.split(";")[0].strip()).specifier
 
-    assert Requirement(str_line.split(";")[0].strip()).specifier.contains("2.2.1")
+    assert cls_spec.contains("2.3.3")
+    assert not cls_spec.contains("2.3.2")
