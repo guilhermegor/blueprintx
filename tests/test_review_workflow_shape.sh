@@ -41,14 +41,15 @@ check "every pipx install ruff under .github/workflows is pinned with ==<version
 	ruff_installs_pinned
 
 every_suite_wired() {
-	local f b
+	local f b int_missing=0
 	for f in "$REPO_ROOT"/tests/test_*.sh; do
 		b="$(basename "$f")"
-		grep -rqF "$b" "$repo_workflows" "$REPO_ROOT/.pre-commit-config.yaml" || {
+		grep -rqE "^[^#]*bash tests/${b//./\\.}([^[:alnum:]_.-]|$)" "$repo_workflows" "$REPO_ROOT/.pre-commit-config.yaml" || {
 			echo "unwired: $b"
-			return 1
+			int_missing=1
 		}
 	done
+	[ "$int_missing" -eq 0 ]
 }
 check "every tests/test_*.sh is referenced by a workflow or the pre-commit config" \
 	every_suite_wired
