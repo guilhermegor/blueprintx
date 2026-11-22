@@ -16,15 +16,14 @@ confident wrong answer, which is why they need tests rather than review.
 import argparse
 import importlib.util
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import sys
-from types import ModuleType
 import zipfile
+from pathlib import Path
+from types import ModuleType
 
 import pytest
-
 
 _LIB = Path(__file__).resolve().parents[2] / "bin" / "lib"
 
@@ -434,8 +433,9 @@ if [[ "$1 $2 $3" == "-m pip download" ]]; then
 	while read -r str_line; do
 		str_name="${str_line%%[<>=; ]*}"
 		[[ -n "$str_name" ]] || continue
+		[[ -n "${bool_no_deps:-}" && "$str_name" == poetry ]] && continue
 		case "$str_name" in
-		poetry) [[ -n "${bool_no_deps:-}" ]] || echo x >"$dir_dest/poetry-2.4.0-py3-none-any.whl" ;;
+		poetry) echo x >"$dir_dest/poetry-2.4.0-py3-none-any.whl" ;;
 		*) echo x >"$dir_dest/${str_name//-/_}-1.0-py3-none-any.whl" ;;
 		esac
 	done <"$path_req"
@@ -458,10 +458,16 @@ def test_wheelhouse_includes_poetry_wheel(tmp_path: Path) -> None:
     path_shim = path_shims / "python3"
     path_shim.write_text(_PIP_SHIM.replace("@PY@", sys.executable))
     path_shim.chmod(0o755)
+    (path_shims / "python").symlink_to(path_shim)
+    (path_shims / "py").symlink_to(path_shim)
     path_out = tmp_path / "out"
 
     subprocess.run(  # noqa: S603
-        ["bash", str(path_project / "bin" / "build_wheelhouse.sh"), "build"],  # noqa: S607
+        [
+            shutil.which("bash") or "bash",
+            str(path_project / "bin" / "build_wheelhouse.sh"),
+            "build",
+        ],
         check=True,
         capture_output=True,
         env={
