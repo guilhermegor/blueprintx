@@ -221,6 +221,8 @@ test_verify_refuses_a_strict_true_ruleset() {
     mkdir -p "$WORK_DIR/vt" "$WORK_DIR/norepo"
     sed 's/"strict_required_status_checks_policy":false/"strict_required_status_checks_policy":true/' "$WORK_DIR/v/gh" >"$WORK_DIR/vt/gh"
     chmod +x "$WORK_DIR/vt/gh"
+    assert_has "the sed made the stub strict true" '"strict_required_status_checks_policy":true' "$(cat "$WORK_DIR/vt/gh")"
+    assert_has "strict true is refused by name" "NOT false" "$( (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/vt:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT=active STUB_APPLIES=1 bash "$SCRIPT" verify 2>&1) )"
     assert_has "strict true is no longer accepted" "rc=1" "$( (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/vt:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT=active STUB_APPLIES=1 bash "$SCRIPT" verify 2>&1; echo "rc=$?") )"
 }
 

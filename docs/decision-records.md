@@ -1567,6 +1567,9 @@ is shaped as it is.
       date"). With it false a PR merges on a green run against a base that no longer exists
       (#302: six tier checks red only because #293 had not merged; a rebase fixed it). The cost
       is an update-branch for a PR whose base moved, the accepted trade.
+      **Superseded by #1283 (2026-11-21):** the policy is now `false`. Strict made every merge
+      send all other PRs behind the base and re-run full CI, a serial chain. The #302 hazard
+      (green run against a stale base) is the accepted cost; `verify` now requires `false`.
     - The summary reads the server back, not the input: a provisioning step that reports its own
       input verified nothing. The strict check has three states with one exit contract (#311):
       0 confirmed strict, 1 confirmed not strict, 2 absent or unreadable. "Could not check" and
