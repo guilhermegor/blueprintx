@@ -346,6 +346,9 @@ jobs:
       - name: Release tag targets the built SHA
         run: bash tests/test_release_target_sha.sh
 
+      - name: enable_pages requests the legacy build_type
+        run: bash tests/test_enable_pages.sh
+
   secret-scan:
     name: GitGuardian — secret scan
     runs-on: ubuntu-latest
@@ -536,6 +539,12 @@ jobs:
 
       - name: Run the scaffold --list-copies suite, every tier (blueprintx#872)
         run: bash tests/test_scaffold_list_copies.sh
+
+      - name: Install ruff
+        run: pipx install ruff==0.17.5
+
+      - name: Run the per-tier ruff overlay suite (blueprintx#1242)
+        run: bash tests/test_ruff_overlays.sh
 
   specs-structure:
     name: .specs/ structure guard
