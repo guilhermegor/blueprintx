@@ -45,7 +45,25 @@ expect_closed_stdin_exit() {
 
 expect_closed_stdin_exit prompt_language "language prompt"
 expect_closed_stdin_exit prompt_skeleton "skeleton prompt"
-expect_closed_stdin_exit prompt_license "license prompt"
-expect_closed_stdin_exit prompt_docs_locale "docs locale prompt"
+
+expect_eof_default() {
+    local str_fn="$1" str_want="$2" str_got
+    str_got="$(timeout 5 bash -c 'str_root="$1"; str_fn="$2"; set --; source "$str_root/bin/blueprintx.sh"; "$str_fn"' _ "$REPO_ROOT" "$str_fn" </dev/null 2>/dev/null)" || true
+    if [ "$str_got" = "$str_want" ]; then
+        pass "$str_fn on closed stdin takes the default ($str_want)"
+    else
+        fail "$str_fn on closed stdin -> got '$str_got', expected default '$str_want'"
+    fi
+}
+
+expect_eof_default prompt_license MIT
+expect_eof_default prompt_docs_locale en
+
+str_partial="$(printf '2' | timeout 5 bash -c 'str_root="$1"; set --; source "$str_root/bin/blueprintx.sh"; prompt_license' _ "$REPO_ROOT" 2>/dev/null)" || true
+if [ "$str_partial" = "Apache-2.0" ]; then
+    pass "prompt_license accepts a final answer with no trailing newline"
+else
+    fail "prompt_license on '2' without newline -> got '$str_partial', expected Apache-2.0"
+fi
 
 [ "$int_failures" -eq 0 ] || exit 1
