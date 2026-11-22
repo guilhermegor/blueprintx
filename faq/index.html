@@ -1037,6 +1037,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-does-blueprintx-new-warn-that-my-install-is-older-than-the-latest-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does blueprintx new warn that my install is older than the latest release?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-does-the-coverage-badge-404-before-the-first-push-to-main" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3202,6 +3213,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-does-blueprintx-new-warn-that-my-install-is-older-than-the-latest-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why does blueprintx new warn that my install is older than the latest release?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-does-the-coverage-badge-404-before-the-first-push-to-main" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3560,6 +3582,9 @@ the same protection from the autouse <code>isolate_git_environment</code> fixtur
 <code>tests/conftest.py</code>, which removes the repository pointers for every test.</p>
 <h2 id="which-install-methods-are-supported">Which install methods are supported?<a class="headerlink" href="#which-install-methods-are-supported" title="Permanent link">&para;</a></h2>
 <p>Homebrew, Chocolatey, apt, and <code>make install</code> from a clone — see the project README.</p>
+<h2 id="why-does-blueprintx-new-warn-that-my-install-is-older-than-the-latest-release">Why does <code>blueprintx new</code> warn that my install is older than the latest release?<a class="headerlink" href="#why-does-blueprintx-new-warn-that-my-install-is-older-than-the-latest-release" title="Permanent link">&para;</a></h2>
+<p>A scaffold copies the templates of the installed package, so a lagging install reintroduces defects <code>main</code> already fixed. <code>warn_if_outdated</code> in <code>bin/lib/common.sh</code> runs at the start of the create flow, asks the public <code>https://api.github.com/repos/guilhermegor/blueprintx/releases/latest</code> with <code>curl -m 3</code> (no <code>gh</code>, login or GNU <code>timeout</code> needed, so it also works on stock macOS), and prints one warning when the installed version sorts below the latest tag.</p>
+<p>The check never blocks or fails a scaffold. It stays silent when <code>curl</code> is absent, the network is offline, the request times out or fails, the install is a development checkout (the <code>0.0.0</code> stub) or a prerelease, or <code>BLUEPRINTX_NO_UPDATE_CHECK</code> is set to any non-empty value. Upgrade through the package manager you installed with. The should-fail witness is <code>tests/test_warn_if_outdated.sh</code>, which stubs <code>curl</code>.</p>
 <h2 id="why-does-the-coverage-badge-404-before-the-first-push-to-main">Why does the coverage badge 404 before the first push to main?<a class="headerlink" href="#why-does-the-coverage-badge-404-before-the-first-push-to-main" title="Permanent link">&para;</a></h2>
 <p>The coverage badge is published by <code>publish-badge.yml</code> to an orphan <code>badges</code> branch on every push to <code>main</code>, so the committed repo never carries a stale <code>coverage.svg</code>. Until the first <code>main</code> push completes, the README badge URL returns 404.</p>
 <p>Publishing lives in its own <code>workflow_run</code> workflow rather than a job in <code>tests.yml</code> because <code>release-pypi.yaml</code> and <code>release-test-pypi.yaml</code> call <code>tests.yml</code> as a reusable workflow: a nested job requesting <code>contents: write</code> under a read-only caller makes GitHub reject the whole run, which would break releases. <code>tests.yml</code> therefore declares <code>contents: read</code> at workflow level. The publisher runs in a <code>concurrency</code> group without cancellation and skips itself when the tested commit is no longer the tip of <code>main</code>, so an older run cannot overwrite a newer badge. It resets the working tree to the fetched <code>badges</code> tip with <code>git reset --hard</code>, because <code>--soft</code> leaves the index empty and the next commit would delete every other file on that branch.</p>
