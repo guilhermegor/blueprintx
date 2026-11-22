@@ -2007,7 +2007,7 @@ def _parses_completely(list_lines: list[str], *, int_parsed: int) -> bool:
 
 
 def _carried_reviews(
-    list_hits: list[tuple[dict, list[str]]], *, fn_answered: Callable
+    list_hits: list[tuple[dict, list[str]]], *, fn_answered: Callable[[dict], bool]
 ) -> set[int]:
     """Return ``id()`` of each findings review whose findings an earlier one had answered.
 

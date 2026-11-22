@@ -5664,14 +5664,23 @@ def test_body_finding_with_no_reply_still_fails() -> None:
     assert len(_body_problems(list_reviews, list_notices=[])) == 2
 
 
-def test_body_finding_key_is_versioned_and_line_free() -> None:
-    """The key carries the v2 prefix and is identical whatever line the block names."""
-    fn_findings = _load_gate().body_findings
-    dict_a = fn_findings(_outside_diff_body("src/a.py", str_line="40"))[0]
-    dict_b = fn_findings(_outside_diff_body("src/a.py", str_line="52"))[0]
-    assert dict_a["key"].startswith("v2:")
-    assert dict_a["key"] == dict_b["key"]
-    assert (dict_a["line"], dict_b["line"]) == ("40", "52")
+def _first_finding(str_line: str) -> dict[str, str]:
+    return _load_gate().body_findings(_outside_diff_body("src/a.py", str_line=str_line))[0]
+
+
+def test_body_finding_key_is_versioned() -> None:
+    """The key carries the v2 prefix."""
+    assert _first_finding("40")["key"].startswith("v2:")
+
+
+def test_body_finding_key_is_line_free() -> None:
+    """The key is identical whatever line the block names."""
+    assert _first_finding("40")["key"] == _first_finding("52")["key"]
+
+
+def test_body_finding_keeps_the_line_for_the_report() -> None:
+    """The line is stored beside the key, for the report only."""
+    assert _first_finding("52")["line"] == "52"
 
 
 def test_body_with_an_unparsed_block_is_not_carried() -> None:
@@ -5695,3 +5704,10 @@ def test_two_findings_sharing_one_key_are_not_carried_by_one_answer() -> None:
     ]
     list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
     assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
+
+
+def test_the_duplicate_key_body_really_parses_two_blocks() -> None:
+    """Guard for the multiplicity test: the appended block must parse, or it proves nothing."""
+    str_block = _outside_diff_body("src/a.py", str_line="90").split("\n", 2)[2]
+    str_body = _outside_diff_body("src/a.py", str_line="52") + str_block
+    assert len(_load_gate().body_findings(str_body)) == 2
