@@ -567,3 +567,27 @@ def test_wheelhouse_omits_a_transitive_dependency_marked_for_another_platform(
     str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
 
     assert "secretstorage" not in str_manifest
+
+
+def test_close_keeps_only_the_dependencies_whose_marker_holds_for_the_target(
+    tmp_path: Path,
+) -> None:
+    """``close`` reads a wheel's ``Requires-Dist`` and evaluates it for the TARGET."""
+    _stub_wheel(tmp_path, str_stem="poetry-2.4.0-py3-none-any", list_requires=_POETRY_REQUIRES)
+    (tmp_path / "seed.txt").write_text("poetry>=2.4\n", encoding="utf-8")
+    args = argparse.Namespace(
+        seed=str(tmp_path / "seed.txt"),
+        wheels_dir=str(tmp_path),
+        out=str(tmp_path / "out.txt"),
+        target_python_version="3.12.2",
+        target_sys_platform="win32",
+        target_platform_machine="AMD64",
+        target_implementation="cpython",
+    )
+
+    gate.close_requirements(args)
+
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8").splitlines() == [
+        "poetry>=2.4",
+        "pywin32-ctypes>=0.2",
+    ]
