@@ -3411,7 +3411,7 @@ The rule is weaker than a thread: a long comment answers without being tied to a
 gate asks whether the PR's <strong>own patch</strong> changed between the reviewed commit <code>R</code> and the head
 <code>H</code>. If it did not, the review covers <code>H</code> and the gate prints
 <code>review at R still covers H: the head only merges the base, the PR's own patch is unchanged</code>.
-That is the case of <code>update-branch</code> under the strict-serial ruleset: main is merged in, no code
+That is the case of <code>update-branch</code>, which the former strict-serial ruleset (off since 2026-11-21, #1285) forced: main is merged in, no code
 is written, and a second review of the same diff would only spend a reviewer rung.</p>
 <p>The patch is the diff from the merge base with the base branch to the commit. It is
 fingerprinted from what the PR authored: the file name, status and previous name, and the
