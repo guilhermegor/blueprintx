@@ -435,7 +435,8 @@ if [[ "$1 $2 $3" == "-m pip download" ]]; then
 		[[ -n "$str_name" ]] || continue
 		str_stem="${str_name//-/_}"
 		cp "${STUB_INDEX:-/nonexistent}"/"$str_stem"-*.whl "$dir_dest"/ 2>/dev/null && continue
-		"@PY@" -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1], "w").writestr(sys.argv[2], "Name: x\\n")' \\
+		"@PY@" -c 'import sys, zipfile as z
+z.ZipFile(sys.argv[1], "w").writestr(sys.argv[2], "Name: x\\n")' \\
 			"$dir_dest/$str_stem-1.0-py3-none-any.whl" "$str_stem-1.0.dist-info/METADATA"
 	done <"$path_req"
 	exit 0
@@ -458,7 +459,7 @@ def _stub_wheel(path_index: Path, *, str_stem: str, list_requires: tuple[str, ..
         Directory acting as the stubbed package index.
     str_stem : str
         Wheel file stem, e.g. ``poetry-2.4.0-py3-none-any``.
-    list_requires : tuple of str
+    list_requires : tuple[str, ...]
         ``Requires-Dist`` header lines.
     """
     str_dist = str_stem.rsplit("-", 3)[0]
@@ -474,7 +475,7 @@ def _build_for(tmp_path: Path, *, dict_target: dict[str, str]) -> str:
     ----------
     tmp_path : Path
         Scratch directory.
-    dict_target : dict of str to str
+    dict_target : dict[str, str]
         ``WHEELHOUSE_*`` variables selecting the target environment.
 
     Returns
