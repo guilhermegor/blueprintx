@@ -190,6 +190,7 @@ def test_patch_level_python_constraint_uses_python_full_version() -> None:
         (">3", "python_full_version > '3.0.0'"),
         ("3.11.*", "python_full_version == '3.11.*'"),
         (">=3.10 <3.12", "python_version >= '3.10' and python_version < '3.12'"),
+        (">=3.10, <3.12", "python_version >= '3.10' and python_version < '3.12'"),
     ],
 )
 def test_python_bound_without_patch_picks_the_variable_poetry_picks(
@@ -197,6 +198,12 @@ def test_python_bound_without_patch_picks_the_variable_poetry_picks(
 ) -> None:
     """``>`` and ``<=`` on major.minor must not exclude or include a whole 3.11.x line."""
     assert MODULE.python_marker(str_python) == str_marker
+
+
+def test_wildcard_with_ordering_operator_fails_loudly() -> None:
+    """PEP 440 allows ``.*`` only with ``==``/``!=``, so ``>=3.11.*`` is rejected here."""
+    with pytest.raises(SystemExit, match="Unsupported python constraint"):
+        MODULE.python_marker(">=3.11.*", str_name="pkg")
 
 
 def test_or_python_constraint_fails_loudly() -> None:

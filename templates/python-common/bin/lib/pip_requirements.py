@@ -175,11 +175,16 @@ def python_marker(str_python: str, *, str_name: str = "") -> str:
     -------
     str
         The marker expression, clauses joined with ``and``; empty for "any version".
+
+    Raises
+    ------
+    SystemExit
+        If the constraint uses ``||`` or a clause pip cannot express.
     """
     str_label = f"{str_name} -> {str_python}"
     if "||" in str_python:
         raise SystemExit(f"Unsupported python constraint for pip fallback: {str_label}")
-    str_spec = normalize_version_spec(re.sub(r"\s+(?=[<>=!~])", ",", str_python.strip()))
+    str_spec = normalize_version_spec(re.sub(r"\s*,\s*|\s+(?=[<>=!~])", ",", str_python.strip()))
     if not str_spec:
         return ""
     return " and ".join(
@@ -215,7 +220,9 @@ def python_clause(str_clause: str, *, str_label: str) -> str:
     cls_match = re.fullmatch(
         r"(>=|<=|==|!=|~=|>|<)\s*(\d+(?:\.\d+)*(?:\.\*)?)", str_clause.strip()
     )
-    if not cls_match:
+    if not cls_match or (
+        cls_match.group(2).endswith(".*") and cls_match.group(1) not in {"==", "!="}
+    ):
         raise SystemExit(f"Unsupported python constraint for pip fallback: {str_label}")
     str_op, str_bound = cls_match.groups()
     int_dots = str_bound.count(".")

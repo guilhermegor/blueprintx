@@ -3301,7 +3301,7 @@ def test_unparseable_dependency_never_reaches_the_success_message(tmp_path: Path
         f'source "{path_lib}/common.sh"; source "{path_lib}/bootstrap.sh"; '
         f'source "{path_lib}/pip_fallback.sh"; '
         "pip_fallback_ensure_toml_reader() { return 0; }; "
-        f'pip_fallback_install_groups_in_venv "{sys.executable}" main deps'
+        f'pip_fallback_install_groups_in_venv "{shutil.which("false") or "false"}" main deps'
     )
     dict_env = dict(os.environ)
     dict_env.pop("_BX_PIP_FALLBACK_LOADED", None)
