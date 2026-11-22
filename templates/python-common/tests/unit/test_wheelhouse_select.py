@@ -16,14 +16,15 @@ confident wrong answer, which is why they need tests rather than review.
 import argparse
 import importlib.util
 import json
+from pathlib import Path
 import shutil
 import subprocess
 import sys
-import zipfile
-from pathlib import Path
 from types import ModuleType
+import zipfile
 
 import pytest
+
 
 _LIB = Path(__file__).resolve().parents[2] / "bin" / "lib"
 
