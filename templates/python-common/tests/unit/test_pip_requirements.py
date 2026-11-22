@@ -193,7 +193,7 @@ def test_patch_level_python_constraint_uses_python_full_version() -> None:
     ],
 )
 def test_python_bound_without_patch_picks_the_variable_poetry_picks(
-    str_python: str, str_marker: str
+    *, str_python: str, str_marker: str
 ) -> None:
     """``>`` and ``<=`` on major.minor must not exclude or include a whole 3.11.x line."""
     assert MODULE.python_marker(str_python) == str_marker
