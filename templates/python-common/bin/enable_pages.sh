@@ -41,8 +41,14 @@ set_pages_source() {
 			return 0
 		fi
 		print_status "info" "Setting GitHub Pages source to branch '$PAGES_BRANCH' for $str_repo (mike versioned docs)..."
-		if printf '{"source":{"branch":"%s","path":"/"}}' "$PAGES_BRANCH" |
+		if printf '{"build_type":"legacy","source":{"branch":"%s","path":"/"}}' "$PAGES_BRANCH" |
 			gh api -X "$str_method" "repos/$str_repo/pages" --input - >/dev/null 2>&1; then
+			local str_build_type
+			str_build_type="$(gh api "repos/$str_repo/pages" --jq .build_type 2>/dev/null || true)"
+			if [ "$str_build_type" != "legacy" ]; then
+				print_status "warning" "Pages source set but build_type reads back as '${str_build_type:-unknown}', not 'legacy' — the site may still deploy from Actions; set Settings → Pages → Deploy from a branch"
+				return 0
+			fi
 			print_status "success" "GitHub Pages now serves the versioned docs from '$PAGES_BRANCH'"
 			return 0
 		fi
