@@ -40,6 +40,19 @@ ruff_installs_pinned() {
 check "every pipx install ruff under .github/workflows is pinned with ==<version>" \
 	ruff_installs_pinned
 
+every_suite_wired() {
+	local f b
+	for f in "$REPO_ROOT"/tests/test_*.sh; do
+		b="$(basename "$f")"
+		grep -rqF "$b" "$repo_workflows" "$REPO_ROOT/.pre-commit-config.yaml" || {
+			echo "unwired: $b"
+			return 1
+		}
+	done
+}
+check "every tests/test_*.sh is referenced by a workflow or the pre-commit config" \
+	every_suite_wired
+
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
 	exit 1
