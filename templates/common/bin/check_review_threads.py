@@ -1958,6 +1958,60 @@ def _count_authority(dict_review: dict, *, tuple_markers: tuple[str, ...]) -> st
     return (dict_review.get("author") or {}).get("login") or ""
 
 
+_RE_BODY_FINDING_BLOCK = re.compile(
+    r"^>\s*`(?P<path>[^`\n]+?)(?::(?P<line>\d+(?:-\d+)?))?`\s*\n"
+    r">[^\n]*\n>\s*\n>\s*\*\*(?P<title>[^\n]+?)\*\*\s*$",
+    re.MULTILINE,
+)
+_STR_KEY_VERSION = "v2:"
+
+
+def body_finding_key(str_path: str, *, str_title: str) -> str:
+    """Return the carry key of one review-body finding: path and normalised first line.
+
+    The line number is deliberately not part of the key: lines shift on every merge from main,
+    so keying by (path, line) would demand a second reply for an unchanged finding.
+    """
+    str_first = " ".join(str_title.replace("*", " ").split()).casefold()
+    str_digest = hashlib.sha256(f"{str_path}\0{str_first}".encode()).hexdigest()
+    return f"{_STR_KEY_VERSION}{str_digest}"
+
+
+def body_findings(str_body: str | None) -> list[dict[str, str]]:
+    """Return ``key``, ``path`` and ``line`` for every finding block in a review body.
+
+    ``line`` is stored for the report only; ``""`` when the block names no line.
+    """
+    return [
+        {
+            "key": body_finding_key(cls_match.group("path"), str_title=cls_match.group("title")),
+            "path": cls_match.group("path"),
+            "line": cls_match.group("line") or "",
+        }
+        for cls_match in _RE_BODY_FINDING_BLOCK.finditer(str_body or "")
+    ]
+
+
+def _carried_reviews(
+    list_hits: list[tuple[dict, list[str]]], *, fn_answered: Callable
+) -> set[int]:
+    """Return ``id()`` of each findings review whose findings an earlier one had answered.
+
+    A review with no parsable finding block is never carried, so it still needs its own reply.
+    """
+    set_answered: set[str] = set()
+    set_carried: set[int] = set()
+    for dict_review, list_lines in sorted(
+        list_hits, key=lambda tuple_hit: tuple_hit[0].get("submittedAt") or ""
+    ):
+        set_keys = {d["key"] for d in body_findings(dict_review.get("body"))}
+        if list_lines and set_keys and set_keys <= set_answered:
+            set_carried.add(id(dict_review))
+        elif list_lines and fn_answered(dict_review):
+            set_answered |= set_keys
+    return set_carried
+
+
 def find_review_body_problems(
     list_reviews: list[dict],
     *,
@@ -2037,14 +2091,18 @@ def find_review_body_problems(
         if _is_human_answer(d, set_roster=set_roster, int_min_chars=int_min_chars)
         and not _is_marker_comment(d, tuple_markers=tuple_markers)
     ]
-    return [
-        _unanswered_message(dict_review, list_lines=list_lines)
-        for dict_review, list_lines in list_hits
-        if list_lines
-        and not any(
+
+    def is_answered(dict_review: dict) -> bool:
+        return any(
             _answers_review(d, dict_review=dict_review, tuple_scope=(list_all, list_findings))
             for d in list_answers
         )
+
+    set_carried = _carried_reviews(list_hits, fn_answered=is_answered)
+    return [
+        _unanswered_message(dict_review, list_lines=list_lines)
+        for dict_review, list_lines in list_hits
+        if list_lines and id(dict_review) not in set_carried and not is_answered(dict_review)
     ]
 
 

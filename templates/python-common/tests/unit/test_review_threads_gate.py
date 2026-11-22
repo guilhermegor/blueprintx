@@ -5609,3 +5609,66 @@ def test_a_completion_notice_counts_only_after_the_latest_retarget(
         set_reviewers={"coderabbitai[bot]"},
     )
     assert (str_problem is not None) is bool_expected_problem
+
+
+_CARRY_TITLE = "Reject non-GitHub origins before attempting the lookup."
+_CARRY_FIRST = "2026-01-02T00:00:00Z"
+_CARRY_SECOND = "2026-01-04T00:00:00Z"
+
+
+def _outside_diff_body(str_path: str, *, str_line: str, str_title: str = _CARRY_TITLE) -> str:
+    """Build a CodeRabbit body with one outside-diff finding, in the measured block shape."""
+    return (
+        "> **⚠️ Outside diff range comments (1)**\n"
+        ">\n"
+        f"> `{str_path}:{str_line}`\n"
+        "> **Minor** · **Functional Correctness**\n"
+        ">\n"
+        f"> **{str_title}**\n"
+    )
+
+
+def _carry_review(str_body: str, *, str_submitted: str) -> dict:
+    return {**_body_review(str_body), "submittedAt": str_submitted}
+
+
+def _carry_problems(str_second_path: str, *, str_second_line: str) -> list[str]:
+    """Problems when the first body was answered and a second, shifted body is then posted."""
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(
+            _outside_diff_body(str_second_path, str_line=str_second_line),
+            str_submitted=_CARRY_SECOND,
+        ),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    return _body_problems(list_reviews, list_notices=list_notices)
+
+
+def test_body_finding_key_ignores_the_line_number_and_carries_the_reply() -> None:
+    """The same text on src/a.py moved from line 40 to 52 needs no second reply."""
+    assert _carry_problems("src/a.py", str_second_line="52") == []
+
+
+def test_body_finding_key_differs_for_the_same_text_on_another_path() -> None:
+    """The same text on src/b.py is a different finding and still demands its own reply."""
+    assert len(_carry_problems("src/b.py", str_second_line="52")) == 1
+
+
+def test_body_finding_with_no_reply_still_fails() -> None:
+    """Should-fail witness: a body finding nobody answered fails, however often it repeats."""
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(_outside_diff_body("src/a.py", str_line="52"), str_submitted=_CARRY_SECOND),
+    ]
+    assert len(_body_problems(list_reviews, list_notices=[])) == 2
+
+
+def test_body_finding_key_is_versioned_and_line_free() -> None:
+    """The key carries the v2 prefix and is identical whatever line the block names."""
+    fn_findings = _load_gate().body_findings
+    dict_a = fn_findings(_outside_diff_body("src/a.py", str_line="40"))[0]
+    dict_b = fn_findings(_outside_diff_body("src/a.py", str_line="52"))[0]
+    assert dict_a["key"].startswith("v2:")
+    assert dict_a["key"] == dict_b["key"]
+    assert (dict_a["line"], dict_b["line"]) == ("40", "52")
