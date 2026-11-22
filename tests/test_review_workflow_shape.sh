@@ -34,6 +34,8 @@ check "backfill reads each PR once instead of sleeping on it inside one job time
 retrigger_job() { sed -n '/^  retrigger:/,/^  backfill:/p' "$WORKFLOWS/pr-gate.yml"; }
 retrigger_reruns_failed_gate() { retrigger_job | grep -qE 'gh run rerun'; }
 retrigger_may_write_actions() { retrigger_job | grep -qE '^ +actions: write$'; }
+retrigger_may_read_prs() { retrigger_job | grep -qE '^ +pull-requests: read$'; }
+retrigger_waits_for_running_gate() { retrigger_job | grep -qE 'status,conclusion' && retrigger_job | grep -q 'sleep '; }
 
 check "gate re-triggers when Run Tests completes, so a slow suite cannot strand it red" \
 	has_line pr-gate.yml '^  workflow_run:$'
@@ -43,6 +45,10 @@ check "the retrigger job re-runs the failed gate run" \
 	retrigger_reruns_failed_gate
 check "the retrigger job carries the actions: write it needs" \
 	retrigger_may_write_actions
+check "the retrigger job can read the PR head on a private repo" \
+	retrigger_may_read_prs
+check "the retrigger job waits out an in-progress gate run" \
+	retrigger_waits_for_running_gate
 check "the retrigger job never checks out code" \
 	bash -c "! sed -n '/^  retrigger:/,/^  backfill:/p' '$WORKFLOWS/pr-gate.yml' | grep -q 'actions/checkout'"
 

@@ -89,7 +89,8 @@ apply_ruleset() {
 	local str_repo="$1"
 	local str_id
 	str_id=$(gh api "repos/$str_repo/rulesets" --paginate --jq \
-		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)
+		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>/dev/null |
+		{ grep -m1 ' active$' || head -1; } | cut -d' ' -f1 || true)
 
 	if [ -n "$str_id" ] && [ "$REQUIRED_CHECKS_FILE_MISSING" = "1" ]; then
 		print_status "warning" "$REQUIRED_CHECKS_FILE is missing and ruleset '$RULESET_NAME' (id $str_id) already exists — skipping the update so its required_status_checks rule is never silently dropped. Restore the file, then re-run 'poe enable_repo_rules'."

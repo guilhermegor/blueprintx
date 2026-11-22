@@ -49,6 +49,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          GATE_AXES: "tests,lint,code scanning"
         run: python bin/pr_gate.py
 
   retrigger:
@@ -58,6 +59,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: write
+      pull-requests: read
     steps:
       - name: Re-run the failed gate for this head commit
         env:
@@ -73,9 +75,20 @@ jobs:
               exit 0
             fi
           fi
-          str_id="$(gh run list --workflow pr-gate.yml --event pull_request \
-            --commit "$HEAD_SHA" --limit 1 --json databaseId,conclusion \
-            --jq '.[0] | select(.conclusion == "failure" or .conclusion == "cancelled") | .databaseId')"
+          for _ in $(seq 1 18); do
+            str_run="$(gh run list --workflow pr-gate.yml --event pull_request \
+              --commit "$HEAD_SHA" --limit 1 --json databaseId,status,conclusion \
+              --jq '.[0] // empty | "\(.databaseId) \(.status) \(.conclusion)"')"
+            case "$str_run" in
+            *" completed "*) break ;;
+            "") break ;;
+            esac
+            sleep 10
+          done
+          str_id=""
+          case "$str_run" in
+          *" completed failure" | *" completed cancelled") str_id="${str_run%% *}" ;;
+          esac
           if [ -z "$str_id" ]; then
             echo "no failed or cancelled gate run for $HEAD_SHA; nothing to re-run"
             exit 0

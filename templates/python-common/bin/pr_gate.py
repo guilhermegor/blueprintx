@@ -607,6 +607,11 @@ def poll_axes_until_terminal(
     ⚠️ Stops ONLY when every axis is terminal — never on ``gate_state() != "pending"``,
     which would freeze the comment on the first transient red while other checks still run.
 
+    A scaffold declares the axes it produces in ``GATE_AXES`` (comma-separated, e.g.
+    ``tests,lint``); an undeclared axis is not polled, so one nothing produces no longer costs the
+    whole budget. ``tests`` is always polled, and unset keeps every axis. A declared axis that has
+    no check-run yet stays ``absent`` (non-terminal), because its producer may just be slow.
+
     Parameters
     ----------
     str_repo : str
@@ -628,6 +633,10 @@ def poll_axes_until_terminal(
         "lint": ("Ruff", "mypy", "lint"),
         "code scanning": ("Analyze",),
     }
+    str_declared = os.environ.get("GATE_AXES", "").strip()
+    if str_declared:
+        set_declared = {s.strip() for s in str_declared.split(",")} | REQUIRED_AXES
+        dict_axis_rules = {k: v for k, v in dict_axis_rules.items() if k in set_declared}
 
     int_max_polls = max(1, int_max_polls)
 

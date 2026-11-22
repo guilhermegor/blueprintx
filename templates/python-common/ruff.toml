@@ -84,36 +84,6 @@ ignore = [
 fixable = ["I"]
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-[lint.flake8-tidy-imports.banned-api]
-"pandas.read_excel".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
-"pandas.read_csv".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
-"pandas.read_json".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
-"pandas.read_table".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
-"pandas.read_parquet".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
-"pandas.read_sql".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
-"pandas.read_sql_query".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
-"pandas.read_sql_table".msg = "Use utils.tabular_reader.read_query (enforces contract + dtypes)."
-"pandas.ExcelFile".msg = "Use utils.tabular_reader.read_table (enforces contract + dtypes)."
-"utils.tabular_reader.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
-"config.contracts.FileContract".msg = "Construct contracts only in config/contracts/; import the instance."
-
-[lint.isort]
-known-first-party = [
-    "app",
-    "capabilities",
-    "chassis",
-    "config",
-    "controller",
-    "model",
-    "utils",
-    "view",
-]
-force-single-line = false
-combine-as-imports = true
-split-on-trailing-comma = true
-force-sort-within-sections = true
-lines-after-imports = 2
-
 [lint.pylint]
 max-args = 8
 max-positional-args = 1
@@ -130,12 +100,8 @@ allow-star-arg-any = false
 [lint.per-file-ignores]
 "bin/**/*.py" = ["PLC2701"]
 
-"src/chassis/db_wschema/infrastructure/joblib_handler.py" = ["E101"]
-
 "tests/**/*.py" = [
     "S101",
     "PLC2701",
     "PLR2004",
 ]
-"src/utils/xml_reader.py" = ["N813"]
-"src/*/_internal/utils/xml_reader.py" = ["N813"]
