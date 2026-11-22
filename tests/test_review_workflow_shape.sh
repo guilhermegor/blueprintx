@@ -41,7 +41,8 @@ check "every pipx install ruff under .github/workflows is pinned with ==<version
 	ruff_installs_pinned
 
 main_run_never_cancelled() {
-	! grep -qE '^ +cancel-in-progress: true$' "$repo_workflows/$1"
+	[ -f "$repo_workflows/$1" ] || return 1
+	! grep -qE "^ +cancel-in-progress: *(true|'true'|\"true\"|\\$\\{\\{ *true *\\}\\})( *#.*)?$" "$repo_workflows/$1"
 }
 check "scaffold_checks (push to main) never cancels a run unconditionally" \
 	main_run_never_cancelled scaffold_checks.yml
