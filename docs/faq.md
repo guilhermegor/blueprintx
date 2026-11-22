@@ -213,7 +213,7 @@ A review is pinned to the commit it was written against. When no review names th
 gate asks whether the PR's **own patch** changed between the reviewed commit `R` and the head
 `H`. If it did not, the review covers `H` and the gate prints
 `review at R still covers H: the head only merges the base, the PR's own patch is unchanged`.
-That is the case of `update-branch` (the strict-serial ruleset, off since 2026-11-21, #1285): main is merged in, no code
+That is the case of `update-branch`, which the former strict-serial ruleset (off since 2026-11-21, #1285) forced: main is merged in, no code
 is written, and a second review of the same diff would only spend a reviewer rung.
 
 The patch is the diff from the merge base with the base branch to the commit. It is

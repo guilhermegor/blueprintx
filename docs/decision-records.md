@@ -1564,7 +1564,7 @@ is shaped as it is.
       resolve half to the ruleset, which drops a thread marked `isOutdated`; see the records
       above. The accepted cost is a red check after a resolve until a re-run.
     - Reversed 2026-11-21 (#1285, see "Strict required checks are off" below):
-      `strict_required_status_checks_policy` must be true (#307, "Require branches to be up to
+      `strict_required_status_checks_policy` was required to be true (#307, "Require branches to be up to
       date"). With it false a PR merges on a green run against a base that no longer exists
       (#302: six tier checks red only because #293 had not merged; a rebase fixed it). The cost
       is an update-branch for a PR whose base moved, the accepted trade.
