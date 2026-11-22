@@ -446,6 +446,10 @@ exec "@PY@" "$@"
 """
 
 
+@pytest.mark.skipif(
+    not (_LIB.parent / "build_wheelhouse.sh").exists(),
+    reason="this tier does not ship bin/build_wheelhouse.sh",
+)
 def test_wheelhouse_includes_poetry_wheel(tmp_path: Path) -> None:
     """A lock with no Poetry still yields a Poetry wheel in the packed manifest."""
     path_project = tmp_path / "proj"
