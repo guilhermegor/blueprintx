@@ -974,3 +974,30 @@ def test_one_statement_reaching_a_denied_layer_is_reported_once(tmp_path: Path) 
         encoding="utf-8",
     )
     assert _output_at(_run_main(tmp_path), int_expected=1).count("must not import") == 1
+
+
+@pytest.mark.parametrize(
+    "str_source",
+    ["import src.chassis.db_schema\n", "from src.chassis import db_schema\n"],
+    ids=["import-form", "from-form"],
+)
+def test_src_qualified_deny_rejects_both_forms(tmp_path: Path, *, str_source: str) -> None:
+    """A ``src.``-qualified deny key catches the from-form too, not only ``import a.b``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    str_source : str
+        The import form under test.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis").mkdir(parents=True)
+    (path_src / "chassis" / "db_schema.py").write_text("", encoding="utf-8")
+    (path_src / "utils").mkdir()
+    (path_src / "utils" / "mod.py").write_text(str_source, encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        _STR_DENY_POLICY.replace("chassis.db_schema:", "src.chassis.db_schema:"),
+        encoding="utf-8",
+    )
+    assert "src.chassis.db_schema" in _output_at(_run_main(tmp_path), int_expected=1)

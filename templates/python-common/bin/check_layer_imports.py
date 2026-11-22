@@ -1018,7 +1018,7 @@ def main() -> int:
                 dict_policy=dict_policy,
                 set_first_party=set_first_party,
                 tuple_pkg_parts=tuple_rel[:-1],
-                tuple_module_roots=(path_src, path_src.joinpath(*tuple_prefix)),
+                tuple_module_roots=(path_src, path_src.joinpath(*tuple_prefix), path_root),
             )
         )
         list_all.extend(
