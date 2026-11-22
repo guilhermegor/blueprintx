@@ -217,6 +217,7 @@ test_create_sends_strict_false() {
 exit 0
 STUB
     chmod +x "$WORK_DIR/c/gh"
+    rm -f "$WORK_DIR/payload.json"
     (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/c:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/payload.json" bash "$SCRIPT" >/dev/null 2>&1)
     assert_has "the created ruleset sends strict false" '"strict_required_status_checks_policy":false' "$(cat "$WORK_DIR/payload.json" 2>/dev/null)"
 }

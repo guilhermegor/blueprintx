@@ -1572,7 +1572,10 @@ is shaped as it is.
       (green run against a stale base) is the accepted cost; `verify` now requires `false`.
       Migration: re-running `poe enable_repo_rules` PUTs the existing ruleset with strict false
       (no manual step) for ruleset repos; classic protection is only read, never written,
-      so a repo that still has classic `strict: true` must flip it by hand (`verify` fails on it).
+      so a repo that still has classic `strict: true` must flip it by hand. `verify` fails on a
+      classic `true` it can read; an unreadable classic leg (no admin token, 5xx) is unknown
+      (2) and does not fail a ruleset confirmed off, the #311 contract. An omitted policy field
+      also reads as unknown, so a hand-made ruleset must set it explicitly.
     - The summary reads the server back, not the input: a provisioning step that reports its own
       input verified nothing. The strict check has three states with one exit contract (#311, polarity
       inverted by #1283): 0 confirmed off, 1 confirmed on (a violation), 2 absent or unreadable. "Could not check" and
