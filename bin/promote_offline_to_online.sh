@@ -213,6 +213,8 @@ resolve_identity() {
 copy_online_assets_service_tier() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
     local dest="$PROJECT_PATH" wf
+    mkdir -p "$dest/bin"
+    cp "$common/bin/rerun_on_collision.py" "$dest/bin/rerun_on_collision.py"
     mkdir -p "$dest/.github/workflows"
     for wf in tests review-threads coderabbit-trigger review-retry pr-gate pr-reconcile rerun-on-collision docstring-urls contract-drift release; do
         cp "$common/.github/workflows/$wf.yml" "$dest/.github/workflows/$wf.yml"
@@ -231,6 +233,8 @@ copy_online_assets_service_tier() {
 copy_online_assets_lib_minimal() {
     local common="$BLUEPRINTX_ROOT/templates/python-common" shared="$BLUEPRINTX_ROOT/templates/common"
     local skeleton="$BLUEPRINTX_ROOT/templates/lib-minimal" dest="$PROJECT_PATH" wf
+    mkdir -p "$dest/bin"
+    cp "$common/bin/rerun_on_collision.py" "$dest/bin/rerun_on_collision.py"
     mkdir -p "$dest/.github/workflows"
     for wf in tests review-threads coderabbit-trigger review-retry pr-gate pr-reconcile rerun-on-collision; do
         cp "$common/.github/workflows/$wf.yml" "$dest/.github/workflows/$wf.yml"

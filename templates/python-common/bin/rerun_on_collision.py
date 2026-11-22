@@ -36,6 +36,11 @@ ZERO_SHA = "0" * 40
 PAGE_SIZE = 100
 
 
+def paths_of(files: list[dict]) -> set[str]:
+    """Return every path a file list touches, including the old name of a rename."""
+    return {p for f in files for p in (f["filename"], f.get("previous_filename")) if p}
+
+
 def parse_excludes(str_raw: str) -> list[str]:
     """Split a comma/newline-separated glob list, dropping blanks.
 
@@ -110,6 +115,20 @@ def _paged(str_path: str, *, str_token: str, str_key: str = "") -> list:
         page += 1
 
 
+def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[str]]:
+    """Map each open non-draft PR to its paths, skipping PRs whose files cannot be read."""
+    pr_files: dict[int, set[str]] = {}
+    for pr in _paged(f"repos/{repo}/pulls?state=open&base={branch}", str_token=str_token):
+        if pr["draft"]:
+            continue
+        str_files = f"repos/{repo}/pulls/{pr['number']}/files"
+        try:
+            pr_files[pr["number"]] = paths_of(_paged(str_files, str_token=str_token))
+        except (urllib.error.URLError, TimeoutError) as err:
+            print(f"skip PR #{pr['number']}: cannot read files: {err}")
+    return pr_files
+
+
 def main() -> int:
     """Update every open PR that collides with the push that triggered this run.
 
@@ -127,25 +146,15 @@ def main() -> int:
     try:
         if before == ZERO_SHA:
             commit = _call("GET", str_path=f"repos/{repo}/commits/{after}", str_token=token)
-            merge = {f["filename"] for f in commit["files"]}
+            merge = paths_of(commit["files"])
         else:
-            merge = {
-                f["filename"]
-                for f in _paged(
-                    f"repos/{repo}/compare/{before}...{after}", str_token=token, str_key="files"
-                )
-            }
-    except urllib.error.HTTPError as err:
+            str_cmp = f"repos/{repo}/compare/{before}...{after}"
+            merge = paths_of(_paged(str_cmp, str_token=token, str_key="files"))
+    except (urllib.error.URLError, TimeoutError) as err:
         print(f"cannot read merge files: {err}", file=sys.stderr)
         return 1
 
-    prs = _paged(f"repos/{repo}/pulls?state=open&base={branch}", str_token=token)
-    pr_files: dict[int, set[str]] = {}
-    for pr in prs:
-        if pr["draft"]:
-            continue
-        str_files = f"repos/{repo}/pulls/{pr['number']}/files"
-        pr_files[pr["number"]] = {f["filename"] for f in _paged(str_files, str_token=token)}
+    pr_files = _open_pr_files(repo, branch=branch, str_token=token)
 
     for num in colliding_prs(merge, pr_files=pr_files, excludes=excludes):
         try:
@@ -153,6 +162,8 @@ def main() -> int:
             print(f"updated PR #{num}")
         except urllib.error.HTTPError as err:
             print(f"skip PR #{num}: HTTP {err.code}")
+        except (urllib.error.URLError, TimeoutError) as err:
+            print(f"skip PR #{num}: {err}")
     return 0
 
 

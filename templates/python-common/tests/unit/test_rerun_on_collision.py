@@ -30,3 +30,8 @@ def test_hot_files_are_excluded_on_both_sides() -> None:
 def test_parse_excludes_splits_commas_and_newlines() -> None:
     """Both separators work and blanks are dropped."""
     assert _MOD.parse_excludes("a, b\n\nc") == ["a", "b", "c"]
+
+
+def test_paths_of_includes_previous_filename_of_a_rename():
+    files = [{"filename": "b.py", "previous_filename": "a.py"}, {"filename": "c.py"}]
+    assert _MOD.paths_of(files) == {"a.py", "b.py", "c.py"}
