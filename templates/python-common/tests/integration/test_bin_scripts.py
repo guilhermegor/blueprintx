@@ -3280,3 +3280,36 @@ def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
     assert len(list_hooks) == 1
     assert list_hooks[0].get("files") == r"\.py$"
     assert "types" not in list_hooks[0]
+
+
+def test_unparseable_dependency_never_reaches_the_success_message(tmp_path: Path) -> None:
+    """An unsupported dependency makes the pip fallback fail, never report success.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary directory holding a ``pyproject.toml`` with a git dependency.
+    """
+    path_lib = Path(__file__).resolve().parents[2] / "bin" / "lib"
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.poetry.dependencies]\npython = "^3.10"\n'
+        'broken = {git = "https://example.invalid/x.git"}\n',
+        encoding="utf-8",
+    )
+    str_script = (
+        f'export PROJECT_ROOT="{tmp_path}" PYTHON="{sys.executable}"; '
+        f'source "{path_lib}/common.sh"; source "{path_lib}/bootstrap.sh"; '
+        f'source "{path_lib}/pip_fallback.sh"; '
+        "pip_fallback_ensure_toml_reader() { return 0; }; "
+        f'pip_fallback_install_groups_in_venv "{sys.executable}" main deps'
+    )
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, "-c", str_script],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+    assert cls_result.returncode == 1
+    assert "installed with pip fallback" not in cls_result.stdout

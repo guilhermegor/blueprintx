@@ -133,3 +133,46 @@ def test_empty_result_for_a_requested_group_fails_loudly(
 
     with pytest.raises(SystemExit, match="No requirements resolved"):
         MODULE.main()
+
+
+LIST_SPEC = [
+    {"version": "^1.26", "python": ">=3.11"},
+    {"version": "^1.24", "python": "<3.11"},
+]
+
+
+def test_multiple_constraints_list_expands_to_one_line_per_entry() -> None:
+    """A Poetry multiple-constraints list yields one requirement per entry."""
+    assert MODULE.build_requirements("numpy", union_spec=LIST_SPEC) == [
+        "numpy>=1.26,<2.0.0 ; python_version >= '3.11'",
+        "numpy>=1.24,<2.0.0 ; python_version < '3.11'",
+    ]
+
+
+def test_list_entry_with_unsupported_key_still_fails_loudly() -> None:
+    """One path/git/url entry inside a list aborts instead of being dropped."""
+    with pytest.raises(SystemExit, match="Unsupported dependency type"):
+        MODULE.build_requirements("pkg", union_spec=[{"version": "1"}, {"git": "https://x"}])
+
+
+def test_python_key_becomes_python_version_marker() -> None:
+    """A table's ``python`` constraint is no longer dropped."""
+    assert (
+        MODULE.build_requirement("pkg", union_spec={"version": "^1.0", "python": ">=3.11"})
+        == "pkg>=1.0,<2.0.0 ; python_version >= '3.11'"
+    )
+
+
+def test_python_key_merges_with_existing_markers() -> None:
+    """``python`` and ``markers`` are joined with ``and``."""
+    dict_spec = {"version": "1.0", "python": "<3.12", "markers": "sys_platform == 'win32'"}
+    assert (
+        MODULE.build_requirement("pkg", union_spec=dict_spec)
+        == "pkg==1.0 ; python_version < '3.12' and sys_platform == 'win32'"
+    )
+
+
+def test_poetry_dependency_given_as_list_resolves_every_entry() -> None:
+    """The list form flows through the Poetry selector, not just the builder."""
+    dict_pyproject = {"tool": {"poetry": {"dependencies": {"numpy": LIST_SPEC}}}}
+    assert len(MODULE.select_requirements(dict_pyproject, list_groups=["main"])) == 2
