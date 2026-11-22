@@ -7,6 +7,7 @@ enable dynamic versioning is ignored whatever its version.
 import importlib.util
 from pathlib import Path
 import sys
+import tomllib
 from types import ModuleType
 
 import pytest
@@ -110,12 +111,14 @@ def test_exit_code(
 
 def test_finding_names_the_found_version() -> None:
     """A hand-bump finding names the offending version."""
-    assert "'1.0.0'" in gate.find_problem(_pyproject("1.0.0", str_dynamic=STR_DYNAMIC))
+    assert "'1.0.0'" in gate.find_problem(tomllib.loads(_pyproject("1.0.0", str_dynamic=STR_DYNAMIC)))
 
 
 def test_missing_version_is_a_finding() -> None:
     """A tag-versioned project with no version at all is still a finding."""
-    assert "<missing>" in gate.find_problem("[tool.poetry]\nname = 'x'\n\n" + STR_DYNAMIC)
+    assert "<missing>" in gate.find_problem(
+        tomllib.loads("[tool.poetry]\nname = 'x'\n\n" + STR_DYNAMIC)
+    )
 
 
 def test_missing_pyproject_is_a_noop(tmp_path: Path) -> None:
@@ -127,3 +130,55 @@ def test_missing_pyproject_is_a_noop(tmp_path: Path) -> None:
         Pytest-provided empty directory.
     """
     assert gate.main(["--root", str(tmp_path)]) == 0
+
+
+def test_quoted_enable_key_is_still_enabled(tmp_path: Path) -> None:
+    """``"enable" = true`` is valid TOML and a hand-bump under it must fail.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided project root.
+    """
+    str_dynamic = STR_DYNAMIC.replace("enable =", '"enable" =')
+    assert _run(tmp_path, str_text=_pyproject("1.0.0", str_dynamic=str_dynamic)) == 1
+
+
+def test_section_header_inside_multiline_string_is_not_a_section(tmp_path: Path) -> None:
+    """A ``[example]`` line inside a ``\"\"\"`` string must not hide the real version.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided project root.
+    """
+    str_text = (
+        '[tool.poetry]\nname = "demo"\ndescription = """\n[example]\n"""\n'
+        'version = "0.0.0"\n\n' + STR_DYNAMIC
+    )
+    assert _run(tmp_path, str_text=str_text) == 0
+
+
+def test_invalid_toml_is_its_own_error(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """Malformed TOML exits 1 with a message naming the parse failure.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided project root.
+    capsys : pytest.CaptureFixture
+        Captures the gate's output.
+    """
+    _run(tmp_path, str_text="[tool.poetry\nversion = ")
+    assert "invalid TOML" in capsys.readouterr().out
+
+
+def test_invalid_toml_exits_nonzero(tmp_path: Path) -> None:
+    """Malformed TOML is a failure, never a silent pass.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided project root.
+    """
+    assert _run(tmp_path, str_text="[tool.poetry\nversion = ") == 1

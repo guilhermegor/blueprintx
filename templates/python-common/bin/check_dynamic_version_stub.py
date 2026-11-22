@@ -14,69 +14,35 @@ Usage: ``python bin/check_dynamic_version_stub.py [--root DIR]``
 
 import argparse
 import pathlib
-import re
 import sys
+import tomllib
 
 
 STR_STUB = "0.0.0"
 STR_DYNAMIC_SECTION = "tool.poetry-dynamic-versioning"
 STR_POETRY_SECTION = "tool.poetry"
 
-RE_SECTION = re.compile(r"^\s*\[([^\[\]]+)\]\s*(?:#.*)?$")
-RE_ENABLE = re.compile(r"^\s*enable\s*=\s*true\s*(?:#.*)?$")
-RE_VERSION = re.compile(r"""^\s*version\s*=\s*["']([^"']*)["']\s*(?:#.*)?$""")
 
-
-def read_key_lines(str_text: str) -> dict:
-    """Group the lines of a TOML document by their ``[section]`` header.
+def find_problem(dict_doc: dict) -> str:
+    """Return the gate's finding for one parsed ``pyproject.toml``, or ``""`` when clean.
 
     Parameters
     ----------
-    str_text : str
-        Raw ``pyproject.toml`` contents.
-
-    Returns
-    -------
-    dict
-        Section name to the list of lines under it (the preamble is keyed ``""``).
-    """
-    dict_sections: dict = {"": []}
-    str_current = ""
-    for str_line in str_text.splitlines():
-        re_match = RE_SECTION.match(str_line)
-        if re_match:
-            str_current = re_match.group(1).strip()
-            dict_sections.setdefault(str_current, [])
-        else:
-            dict_sections[str_current].append(str_line)
-    return dict_sections
-
-
-def find_problem(str_text: str) -> str:
-    """Return the gate's finding for one ``pyproject.toml``, or ``""`` when it is clean.
-
-    Parameters
-    ----------
-    str_text : str
-        Raw ``pyproject.toml`` contents.
+    dict_doc : dict
+        The parsed ``pyproject.toml`` (``tomllib`` output).
 
     Returns
     -------
     str
         A finding message, empty when the project is a no-op or carries the stub.
     """
-    dict_sections = read_key_lines(str_text)
-    list_dynamic = dict_sections.get(STR_DYNAMIC_SECTION, [])
-    if not any(RE_ENABLE.match(str_line) for str_line in list_dynamic):
+    dict_tool = dict_doc.get("tool", {})
+    dict_dynamic = dict_tool.get("poetry-dynamic-versioning", {})
+    if dict_dynamic.get("enable") is not True:
         return ""
-    list_versions = [
-        re_match.group(1)
-        for re_match in map(RE_VERSION.match, dict_sections.get(STR_POETRY_SECTION, []))
-        if re_match
-    ]
-    if list_versions == [STR_STUB]:
+    str_found = dict_tool.get("poetry", {}).get("version", "<missing>")
+    if str_found == STR_STUB:
         return ""
-    str_found = list_versions[0] if list_versions else "<missing>"
     return (
         f"[{STR_POETRY_SECTION}] version is {str_found!r} but "
         f"[{STR_DYNAMIC_SECTION}] is enabled: the version comes from the git tag, so it must "
@@ -104,7 +70,13 @@ def main(list_argv: list) -> int:
     if not path_pyproject.is_file():
         print(f"{path_pyproject} not found; nothing to check")
         return 0
-    str_problem = find_problem(path_pyproject.read_text(encoding="utf-8"))
+    try:
+        with path_pyproject.open("rb") as cls_file:
+            dict_doc = tomllib.load(cls_file)
+    except tomllib.TOMLDecodeError as cls_exc:
+        print(f"{path_pyproject}: invalid TOML ({cls_exc})")
+        return 1
+    str_problem = find_problem(dict_doc)
     if str_problem:
         print(f"{path_pyproject}: {str_problem}")
         return 1
