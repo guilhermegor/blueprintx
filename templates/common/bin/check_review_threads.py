@@ -63,6 +63,7 @@ reviewed".
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from collections.abc import Callable
 import datetime
 import hashlib
@@ -1992,23 +1993,42 @@ def body_findings(str_body: str | None) -> list[dict[str, str]]:
     ]
 
 
+_RE_DECLARED_COUNT = re.compile(r"\((\d+)\)\s*$")
+
+
+def _parses_completely(list_lines: list[str], *, int_parsed: int) -> bool:
+    """Return whether the body's declared finding counts equal the blocks that parsed.
+
+    Every finding line must end in ``(N)`` and the counts must sum to the parsed blocks, so a
+    body with a block the regex missed is never carried (it fails closed).
+    """
+    list_counts = [_RE_DECLARED_COUNT.search(str_line) for str_line in list_lines]
+    return all(list_counts) and sum(int(m.group(1)) for m in list_counts if m) == int_parsed
+
+
 def _carried_reviews(
     list_hits: list[tuple[dict, list[str]]], *, fn_answered: Callable
 ) -> set[int]:
     """Return ``id()`` of each findings review whose findings an earlier one had answered.
 
-    A review with no parsable finding block is never carried, so it still needs its own reply.
+    A review is carried only when its blocks parse completely and every one, counted with
+    multiplicity, was answered earlier. A review with no parsable block is never carried.
     """
-    set_answered: set[str] = set()
+    cnt_answered: Counter[str] = Counter()
     set_carried: set[int] = set()
     for dict_review, list_lines in sorted(
         list_hits, key=lambda tuple_hit: tuple_hit[0].get("submittedAt") or ""
     ):
-        set_keys = {d["key"] for d in body_findings(dict_review.get("body"))}
-        if list_lines and set_keys and set_keys <= set_answered:
+        cnt_keys = Counter(d["key"] for d in body_findings(dict_review.get("body")))
+        if (
+            list_lines
+            and cnt_keys
+            and _parses_completely(list_lines, int_parsed=sum(cnt_keys.values()))
+            and not cnt_keys - cnt_answered
+        ):
             set_carried.add(id(dict_review))
         elif list_lines and fn_answered(dict_review):
-            set_answered |= set_keys
+            cnt_answered |= cnt_keys
     return set_carried
 
 

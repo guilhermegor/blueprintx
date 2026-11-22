@@ -5672,3 +5672,26 @@ def test_body_finding_key_is_versioned_and_line_free() -> None:
     assert dict_a["key"].startswith("v2:")
     assert dict_a["key"] == dict_b["key"]
     assert (dict_a["line"], dict_b["line"]) == ("40", "52")
+
+
+def test_body_with_an_unparsed_block_is_not_carried() -> None:
+    """Fail-closed witness: the heading declares 2 findings, one block parses, so no carry."""
+    str_body = _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)")
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_body, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
+
+
+def test_two_findings_sharing_one_key_are_not_carried_by_one_answer() -> None:
+    """Fail-closed witness: one answered key does not cover two same-titled findings."""
+    str_block = _outside_diff_body("src/a.py", str_line="90").split("\n", 2)[2]
+    str_body = _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)") + str_block
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_body, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
