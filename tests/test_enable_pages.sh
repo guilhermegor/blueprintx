@@ -28,7 +28,7 @@ esac
 STUB
 chmod +x "$str_tmp/bin/gh"
 printf 'extra:\n  version:\n    provider: mike\n' > "$str_tmp/proj/mkdocs.yml"
-cp "$REPO_ROOT/templates/python-common/bin/lib/common.sh" "$str_tmp/proj/bin/lib/common.sh"
+cp "$REPO_ROOT"/templates/python-common/bin/lib/*.sh "$str_tmp/proj/bin/lib/"
 git -C "$str_tmp/proj" init -q
 git -C "$str_tmp/proj" remote add origin https://github.com/o/r.git
 
