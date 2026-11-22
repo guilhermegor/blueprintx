@@ -5669,8 +5669,8 @@ def _first_finding(str_line: str) -> dict[str, str]:
 
 
 def test_body_finding_key_is_versioned() -> None:
-    """The key carries the v2 prefix."""
-    assert _first_finding("40")["key"].startswith("v2:")
+    """The key carries the v3 prefix (v3 added the severity line)."""
+    assert _first_finding("40")["key"].startswith("v3:")
 
 
 def test_body_finding_key_is_line_free() -> None:
@@ -5711,3 +5711,29 @@ def test_the_duplicate_key_body_really_parses_two_blocks() -> None:
     str_block = _outside_diff_body("src/a.py", str_line="90").split("\n", 2)[2]
     str_body = _outside_diff_body("src/a.py", str_line="52") + str_block
     assert len(_load_gate().body_findings(str_body)) == 2
+
+
+def test_an_escalated_severity_is_not_carried() -> None:
+    """Fail-closed witness: the same title re-reported as Major needs its own reply."""
+    str_major = _outside_diff_body("src/a.py", str_line="52").replace("**Minor**", "**Major**")
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_major, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
+
+
+def test_an_answered_finding_plus_a_new_one_is_not_carried() -> None:
+    """Fail-closed witness: one carried key plus one new key still demands a reply."""
+    str_new = _outside_diff_body("src/a.py", str_line="90", str_title="A different finding.")
+    str_body = _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)") + str_new.split(
+        "\n", 2
+    )[2]
+    assert len(_load_gate().body_findings(str_body)) == 2
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_body, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1

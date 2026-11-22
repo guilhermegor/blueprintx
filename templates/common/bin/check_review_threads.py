@@ -1961,20 +1961,25 @@ def _count_authority(dict_review: dict, *, tuple_markers: tuple[str, ...]) -> st
 
 _RE_BODY_FINDING_BLOCK = re.compile(
     r"^>\s*`(?P<path>[^`\n]+?)(?::(?P<line>\d+(?:-\d+)?))?`\s*\n"
-    r">[^\n]*\n>\s*\n>\s*\*\*(?P<title>[^\n]+?)\*\*\s*$",
+    r">(?P<severity>[^\n]*)\n>\s*\n>\s*\*\*(?P<title>[^\n]+?)\*\*\s*$",
     re.MULTILINE,
 )
-_STR_KEY_VERSION = "v2:"
+_STR_KEY_VERSION = "v3:"
 
 
-def body_finding_key(str_path: str, *, str_title: str) -> str:
-    """Return the carry key of one review-body finding: path and normalised first line.
+def body_finding_key(str_path: str, *, str_title: str, str_severity: str = "") -> str:
+    """Return the carry key of one review-body finding: path, severity and normalised title.
 
     The line number is deliberately not part of the key: lines shift on every merge from main,
-    so keying by (path, line) would demand a second reply for an unchanged finding.
+    so keying by (path, line) would demand a second reply for an unchanged finding. Severity is
+    part of it, so a finding re-reported at a higher severity demands a fresh reply.
     """
-    str_first = " ".join(str_title.replace("*", " ").split()).casefold()
-    str_digest = hashlib.sha256(f"{str_path}\0{str_first}".encode()).hexdigest()
+
+    def _norm(str_text: str) -> str:
+        return " ".join(str_text.replace("*", " ").split()).casefold()
+
+    str_material = f"{str_path.strip()}\0{_norm(str_severity)}\0{_norm(str_title)}"
+    str_digest = hashlib.sha256(str_material.encode()).hexdigest()
     return f"{_STR_KEY_VERSION}{str_digest}"
 
 
@@ -1985,7 +1990,11 @@ def body_findings(str_body: str | None) -> list[dict[str, str]]:
     """
     return [
         {
-            "key": body_finding_key(cls_match.group("path"), str_title=cls_match.group("title")),
+            "key": body_finding_key(
+                cls_match.group("path"),
+                str_title=cls_match.group("title"),
+                str_severity=cls_match.group("severity"),
+            ),
             "path": cls_match.group("path"),
             "line": cls_match.group("line") or "",
         }
