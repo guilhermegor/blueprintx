@@ -1563,7 +1563,8 @@ is shaped as it is.
     - `REVIEW_THREADS_REQUIRE_RESOLVED=1` (#196) supersedes the earlier delegation of the
       resolve half to the ruleset, which drops a thread marked `isOutdated`; see the records
       above. The accepted cost is a red check after a resolve until a re-run.
-    - `strict_required_status_checks_policy` must be true (#307, "Require branches to be up to
+    - Reversed 2026-11-21 (#1285, see "Strict required checks are off" below):
+      `strict_required_status_checks_policy` was required to be true (#307, "Require branches to be up to
       date"). With it false a PR merges on a green run against a base that no longer exists
       (#302: six tier checks red only because #293 had not merged; a rebase fixed it). The cost
       is an update-branch for a PR whose base moved, the accepted trade.
@@ -2006,7 +2007,7 @@ repository. They were moved out of the workflow files, which now carry no prose.
   while nothing reached the store (#669); the channel was removed in #1026 (see "Snap is no
   longer a release channel" below). Every package job stamps the release version into
   the fallback literal of `blueprintx --version`, since packaged installs have no `.git`.
-- **`verify_branch_protection.yml` (#307).** Guards the `strict` setting, which anyone with
+- **`verify_branch_protection.yml` (#307, now asserts strict is OFF, #1285).** Guards the `strict` setting, which anyone with
   admin rights can flip with no red check. `GITHUB_TOKEN` cannot read branch protection
   (`administration` is not a grantable scope), so it reuses `GH_PAT_REVIEW_TRIGGER`. It runs
   on push to main, weekly and on dispatch, not on `pull_request`, because it checks a
@@ -2514,3 +2515,23 @@ passes to `fetch_sidecar_text`. For example, CVM publishes each dataset's descri
 `.xsd`, a `.dtd` or an OpenAPI document writes a different one. This page is the only place the
 CVM descriptor URL path is kept, as prose; incident-provenance references such as `opendata-cvm#164` stay where
 they are.
+
+## Strict required checks are off (reverses #307, #1285)
+
+Decided 2026-11-21 by the owner. #307 required `strict_required_status_checks_policy` ("Require
+branches to be up to date") on the `pr-quality-gate` ruleset. It is now off, on BlueprintX and on
+its 11 scaffolded repos.
+
+**Why.** With strict on, every merge made every other open PR stale, so each needed an
+update-and-rerun, one at a time. Measured with 15 parallel PRs: a serial chain in which nothing
+merged for hours. The merge-time safety #307 bought (a green run against a base that still exists)
+cost more than the rare semantic conflict it caught.
+
+**The safety net** is the CI run on main after each merge, covered by #1282. The template change
+that stops scaffolding the strict policy is #1283 / PR #1284.
+
+**The guard follows the policy.** `verify_branch_protection.yml` now fails when strict is true in
+the ruleset or in classic branch protection, and when a `required_status_checks` rule lists no
+checks. A strict-on setting is therefore the violation, and the required checks must still exist.
+The #302 failure mode (six tier checks red because #293 had not merged) is accepted and is caught
+on main instead of at merge time.
