@@ -291,6 +291,10 @@ test_absence_fails_when_another_ruleset_enforces_strict() {
     assert_has "the other ruleset is named as the cause" "Another ruleset" "$str_out"
     str_out="$(STUB_RULESETS=empty STUB_PROTECTION=unprotected STUB_EFFECTIVE=forbidden run_verify active 1 verify)"
     assert_has "unreadable effective rules fail" "rc=1" "$str_out"
+    str_out="$(STUB_PROTECTION=classic-strict-false STUB_EFFECTIVE=strict-true run_verify active 1 verify)"
+    assert_has "a verified classic false still fails on another strict ruleset" "rc=1" "$str_out"
+    str_out="$(STUB_RULESETS=empty STUB_PROTECTION=classic-strict-false run_verify active 1 verify)"
+    assert_has "absent ruleset with classic false passes" "rc=0" "$str_out"
 }
 
 test_classic_strict_true_names_the_remedy() {

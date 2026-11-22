@@ -224,14 +224,14 @@ verify_strict_required_checks() {
 	if [ "$int_ruleset_result" -eq 1 ] || [ "$int_protection_result" -eq 1 ]; then
 		return 1
 	fi
-	if [ "$int_ruleset_result" -eq 3 ] && [ "$int_protection_result" -eq 3 ]; then
-		assert_no_effective_strict "$str_repo" "$str_branch" || return 1
-		print_status "success" "No ruleset and no classic branch protection on $str_repo:$str_branch — neither enforces a strict policy (definite absence, verified)"
-		return 0
-	fi
-	if [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ]; then
+	if [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ] &&
+		{ [ "$int_ruleset_result" -ne 3 ] || [ "$int_protection_result" -ne 3 ]; }; then
 		print_status "error" "Neither mechanism confirmed the strict policy is off on $str_repo (at least one could not be read, or a ruleset is present but not blocking) — unreadable is not proof (blueprintx#1300)"
 		return 1
+	fi
+	assert_no_effective_strict "$str_repo" "$str_branch" || return 1
+	if [ "$int_ruleset_result" -eq 3 ] && [ "$int_protection_result" -eq 3 ]; then
+		print_status "success" "Ruleset '$RULESET_NAME' absent and no classic strict policy on $str_repo:$str_branch; no other rule enforces strict (definite absence, verified)"
 	fi
 	return 0
 }
