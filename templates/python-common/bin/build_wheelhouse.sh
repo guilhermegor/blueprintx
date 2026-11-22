@@ -66,10 +66,14 @@ export_and_select() {
 }
 
 download_wheels() {
-	local path_selected="$1" dir_wheels="$2" str_deps="${3:-no-deps}"
+	local path_selected="$1" dir_wheels="$2" path_constraints="${3:-}"
 	local -a args_pip=(-m pip download --dest "$dir_wheels" -r "$path_selected")
 
-	[[ "$str_deps" == "no-deps" ]] && args_pip+=(--no-deps)
+	if [[ -z "$path_constraints" ]]; then
+		args_pip+=(--no-deps)
+	else
+		args_pip+=(-c "$path_constraints")
+	fi
 
 	ensure_dir "$dir_wheels"
 	if [[ -n "${WHEELHOUSE_PIP_PLATFORM:-}" ]]; then
@@ -86,7 +90,7 @@ download_wheels() {
 }
 
 bundle_bootstrap() {
-	local path_selected="$1" dir_wheels="$2"
+	local path_selected="$1" dir_wheels="$2" path_lock="$3"
 
 	[[ -f "$PROJECT_ROOT/requirements.txt" ]] || return 0
 	print_status "info" "Adding the bootstrap requirements (Poetry and plugins) ..."
@@ -96,7 +100,7 @@ bundle_bootstrap() {
 		--target-sys-platform "$TARGET_SYSPLAT" \
 		--target-platform-machine "$TARGET_MACHINE" \
 		--target-implementation "$TARGET_IMPL"
-	download_wheels "$path_selected" "$dir_wheels" with-deps
+	download_wheels "$path_selected" "$dir_wheels" "$path_lock"
 }
 
 build_wheelhouse() {
@@ -113,7 +117,7 @@ build_wheelhouse() {
 	driver_prune_list
 	export_and_select "$dir_tmp/requirements.txt" "$dir_tmp/selected.txt"
 	download_wheels "$dir_tmp/selected.txt" "$dir_wheels"
-	bundle_bootstrap "$dir_tmp/bootstrap.txt" "$dir_wheels"
+	bundle_bootstrap "$dir_tmp/bootstrap.txt" "$dir_wheels" "$dir_tmp/selected.txt"
 
 	print_status "info" "Packing the wheelhouse (${WHEELHOUSE_PART_MB} MB parts) ..."
 	"$PYTHON" "$SELECT_PY" pack \

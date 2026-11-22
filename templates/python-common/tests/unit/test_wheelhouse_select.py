@@ -425,6 +425,7 @@ if [[ "$1 $2 $3" == "-m pip download" ]]; then
 	shift 3
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
+		--no-deps) bool_no_deps=1; shift ;;
 		--dest) dir_dest="$2"; shift 2 ;;
 		-r) path_req="$2"; shift 2 ;;
 		*) shift ;;
@@ -434,7 +435,7 @@ if [[ "$1 $2 $3" == "-m pip download" ]]; then
 		str_name="${str_line%%[<>=; ]*}"
 		[[ -n "$str_name" ]] || continue
 		case "$str_name" in
-		poetry) echo x >"$dir_dest/poetry-2.4.0-py3-none-any.whl" ;;
+		poetry) [[ -n "${bool_no_deps:-}" ]] || echo x >"$dir_dest/poetry-2.4.0-py3-none-any.whl" ;;
 		*) echo x >"$dir_dest/${str_name//-/_}-1.0-py3-none-any.whl" ;;
 		esac
 	done <"$path_req"
