@@ -1,0 +1,27 @@
+
+[lint.flake8-tidy-imports.banned-api]
+"pandas.read_excel".msg = "Use ${PROJECT_PKG_NAME}._internal.utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_csv".msg = "Use ${PROJECT_PKG_NAME}._internal.utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_json".msg = "Use ${PROJECT_PKG_NAME}._internal.utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_table".msg = "Use ${PROJECT_PKG_NAME}._internal.utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_parquet".msg = "Use ${PROJECT_PKG_NAME}._internal.utils.tabular_reader.read_table (enforces contract + dtypes)."
+"pandas.read_sql".msg = "Use ${PROJECT_PKG_NAME}._internal.utils.tabular_reader.read_query (enforces contract + dtypes)."
+"pandas.read_sql_query".msg = "Use ${PROJECT_PKG_NAME}._internal.utils.tabular_reader.read_query (enforces contract + dtypes)."
+"pandas.read_sql_table".msg = "Use ${PROJECT_PKG_NAME}._internal.utils.tabular_reader.read_query (enforces contract + dtypes)."
+"pandas.ExcelFile".msg = "Use ${PROJECT_PKG_NAME}._internal.utils.tabular_reader.read_table (enforces contract + dtypes)."
+"${PROJECT_PKG_NAME}._internal.utils.tabular_reader.FileContract".msg = "Construct contracts only in src/${PROJECT_PKG_NAME}/_internal/config/contracts/; import the instance."
+"${PROJECT_PKG_NAME}._internal.config.contracts.FileContract".msg = "Construct contracts only in src/${PROJECT_PKG_NAME}/_internal/config/contracts/; import the instance."
+
+[lint.isort]
+known-first-party = [
+    "config",
+    "utils",
+]
+force-single-line = false
+combine-as-imports = true
+split-on-trailing-comma = true
+force-sort-within-sections = true
+lines-after-imports = 2
+
+[lint.extend-per-file-ignores]
+"src/*/_internal/utils/xml_reader.py" = ["N813"]
