@@ -92,7 +92,10 @@ download_wheels() {
 bundle_bootstrap() {
 	local path_selected="$1" dir_wheels="$2" path_lock="$3"
 
-	[[ -f "$PROJECT_ROOT/requirements.txt" ]] || return 0
+	if [[ ! -f "$PROJECT_ROOT/requirements.txt" ]]; then
+		print_status "warning" "No requirements.txt: the wheelhouse ships without Poetry"
+		return 0
+	fi
 	print_status "info" "Adding the bootstrap requirements (Poetry and plugins) ..."
 	"$PYTHON" "$SELECT_PY" select \
 		--requirements "$PROJECT_ROOT/requirements.txt" --out "$path_selected" \
