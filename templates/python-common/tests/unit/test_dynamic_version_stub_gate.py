@@ -142,7 +142,7 @@ def test_quoted_enable_key_is_still_enabled(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         Pytest-provided project root.
     """
-    str_dynamic = STR_DYNAMIC.replace("enable =", '"enable" =')
+    str_dynamic = '[tool.poetry-dynamic-versioning]\n"enable" = true\n\n'
     assert _run(tmp_path, str_text=_pyproject("1.0.0", str_dynamic=str_dynamic)) == 1
 
 
@@ -184,3 +184,14 @@ def test_invalid_toml_exits_nonzero(tmp_path: Path) -> None:
         Pytest-provided project root.
     """
     assert _run(tmp_path, str_text="[tool.poetry\nversion = ") == 1
+
+
+def test_non_table_tool_value_is_a_noop(tmp_path: Path) -> None:
+    """``tool = "x"`` is valid TOML with no plugin table; the gate must not crash.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided project root.
+    """
+    assert _run(tmp_path, str_text='tool = "x"\n') == 0

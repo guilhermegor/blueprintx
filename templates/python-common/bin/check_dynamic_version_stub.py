@@ -23,6 +23,29 @@ STR_DYNAMIC_SECTION = "tool.poetry-dynamic-versioning"
 STR_POETRY_SECTION = "tool.poetry"
 
 
+def _table(dict_doc: dict, *tuple_keys: str) -> dict:
+    """Return the nested table at ``tuple_keys``, or ``{}`` when any step is not a table.
+
+    Parameters
+    ----------
+    dict_doc : dict
+        The parsed document.
+    *tuple_keys : str
+        Keys to descend through.
+
+    Returns
+    -------
+    dict
+        The table, or an empty dict for a missing or non-table value (``tool = "x"``).
+    """
+    dict_node = dict_doc
+    for str_key in tuple_keys:
+        dict_node = dict_node.get(str_key, {})
+        if not isinstance(dict_node, dict):
+            return {}
+    return dict_node
+
+
 def find_problem(dict_doc: dict) -> str:
     """Return the gate's finding for one parsed ``pyproject.toml``, or ``""`` when clean.
 
@@ -36,11 +59,10 @@ def find_problem(dict_doc: dict) -> str:
     str
         A finding message, empty when the project is a no-op or carries the stub.
     """
-    dict_tool = dict_doc.get("tool", {})
-    dict_dynamic = dict_tool.get("poetry-dynamic-versioning", {})
+    dict_dynamic = _table(dict_doc, "tool", "poetry-dynamic-versioning")
     if dict_dynamic.get("enable") is not True:
         return ""
-    str_found = dict_tool.get("poetry", {}).get("version", "<missing>")
+    str_found = _table(dict_doc, "tool", "poetry").get("version", "<missing>")
     if str_found == STR_STUB:
         return ""
     return (

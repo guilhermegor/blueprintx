@@ -661,9 +661,10 @@ def import_targets(
             continue
         if cls_node.level:
             str_base = relative_import_target(tuple_pkg_parts, cls_node=cls_node)
-            if str_base is None:
+            if str_base is not None:
+                list_targets.append((cls_node, str_base))
+            elif not tuple_pkg_parts or len(tuple_pkg_parts) < cls_node.level - 1:
                 continue
-            list_targets.append((cls_node, str_base))
         else:
             str_base = cls_node.module
         list_targets += [
@@ -1001,7 +1002,7 @@ def main() -> int:
     list_all: list[str] = []
     for path_file in list_modules:
         tuple_rel = path_file.relative_to(path_src).parts[int_prefix:]
-        parts_prefix = path_file.relative_to(path_src).parts[:int_prefix]
+        tuple_prefix = path_file.relative_to(path_src).parts[:int_prefix]
         str_layer = resolve_layer(tuple_rel, dict_policy=dict_policy)
         if not _under_prefix_marker(
             path_file.relative_to(path_src).parts, dict_policy=dict_policy
@@ -1014,7 +1015,7 @@ def main() -> int:
                 dict_policy=dict_policy,
                 set_first_party=set_first_party,
                 tuple_pkg_parts=tuple_rel[:-1],
-                tuple_module_roots=(path_src, path_src.joinpath(*parts_prefix)),
+                tuple_module_roots=(path_src, path_src.joinpath(*tuple_prefix)),
             )
         )
         list_all.extend(

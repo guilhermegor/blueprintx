@@ -936,3 +936,22 @@ def test_dotted_deny_rule_spares_what_is_not_the_denied_submodule(
         The import form under test.
     """
     assert "OK" in _output_at(_deny_project(tmp_path, str_source=str_source), int_expected=0)
+
+
+def test_root_relative_from_import_of_a_denied_layer_is_rejected(tmp_path: Path) -> None:
+    """``from .. import chassis`` from ``utils/`` reaches the ``chassis`` layer itself.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis").mkdir(parents=True)
+    (path_src / "utils").mkdir()
+    (path_src / "utils" / "mod.py").write_text("from .. import chassis\n", encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        'layers:\n  utils:\n    allow: {}\n    deny_layers:\n      chassis: "no"\n',
+        encoding="utf-8",
+    )
+    assert "must not import 'chassis'" in _output_at(_run_main(tmp_path), int_expected=1)
