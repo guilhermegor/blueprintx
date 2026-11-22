@@ -1570,13 +1570,16 @@ is shaped as it is.
       **Superseded by #1283 (2026-11-21):** the policy is now `false`. Strict made every merge
       send all other PRs behind the base and re-run full CI, a serial chain. The #302 hazard
       (green run against a stale base) is the accepted cost; `verify` now requires `false`.
+      Migration: re-running `poe enable_repo_rules` PUTs the existing ruleset with strict false
+      (no manual step); classic protection is only read, never written.
     - The summary reads the server back, not the input: a provisioning step that reports its own
-      input verified nothing. The strict check has three states with one exit contract (#311):
-      0 confirmed strict, 1 confirmed not strict, 2 absent or unreadable. "Could not check" and
+      input verified nothing. The strict check has three states with one exit contract (#311, polarity
+      inverted by #1283): 0 confirmed off, 1 confirmed on (a violation), 2 absent or unreadable. "Could not check" and
       "checked and it is fine" must never share an exit code, a failed read is never an empty
-      answer, and an absent policy reads back as jq `null`, which is unknown, not a violation.
+      answer, and an absent policy reads back as jq `null`, which is unknown, not a violation, and the jq
+      read has no `//` so a real `false` survives as "confirmed off".
       `init` swallows non-zero with `|| true`; `verify` is the read-only CI guard (needs no
-      admin) and fails loud on 1 and 2, requires at least one mechanism to confirm strict, and
+      admin) and fails loud on 1 and 2, requires at least one mechanism to confirm strict off, and
       checks classic branch protection too, since BlueprintX's own `main` uses it. The default
       branch read has no `|| echo main` fallback (CWE-693): a substituted answer nobody
       confirmed lets verification inspect the wrong branch.
