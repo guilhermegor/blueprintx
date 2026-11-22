@@ -385,6 +385,12 @@ the same protection from the autouse `isolate_git_environment` fixture in
 
 Homebrew, Chocolatey, apt, and `make install` from a clone — see the project README.
 
+## Why does `blueprintx new` warn that my install is older than the latest release?
+
+A scaffold copies the templates of the installed package, so a lagging install reintroduces defects `main` already fixed. `warn_if_outdated` in `bin/lib/common.sh` runs at the start of the create flow, asks `gh api repos/guilhermegor/blueprintx/releases/latest` with a 3-second timeout, and prints one warning when the installed version sorts below the latest tag.
+
+The check never blocks or fails a scaffold. It stays silent when `gh` is absent, the network is offline, the request times out or fails, or the install is a development checkout (the `0.0.0` stub). Upgrade through the package manager you installed with. The should-fail witness is `tests/test_warn_if_outdated.sh`, which stubs `gh`.
+
 ## Why does the coverage badge 404 before the first push to main?
 
 The coverage badge is published by `publish-badge.yml` to an orphan `badges` branch on every push to `main`, so the committed repo never carries a stale `coverage.svg`. Until the first `main` push completes, the README badge URL returns 404.

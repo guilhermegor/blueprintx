@@ -464,6 +464,9 @@ jobs:
       - name: Should-fail regression tests for the scaffold first commit
         run: bash tests/test_scaffold_first_commit.sh
 
+      - name: Regression tests for the outdated-install warning
+        run: bash tests/test_warn_if_outdated.sh
+
       - name: Should-fail regression tests for the scaffold_lint_test.sh cleanup trap
         run: bash tests/test_scaffold_lint_test_cleanup.sh
 

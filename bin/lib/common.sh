@@ -160,6 +160,20 @@ sed_inplace() {
     return "$int_status"
 }
 
+warn_if_outdated() {
+    local str_installed="${BLUEPRINTX_VERSION:-0.0.0}" str_latest
+    [ "$str_installed" = "0.0.0" ] && return 0
+    command -v gh >/dev/null 2>&1 || return 0
+    str_latest="$(timeout 3 gh api repos/guilhermegor/blueprintx/releases/latest --jq .tag_name 2>/dev/null || true)"
+    str_latest="${str_latest#v}"
+    [ -n "$str_latest" ] || return 0
+    [ "$str_latest" = "$str_installed" ] && return 0
+    if [ "$(printf '%s\n%s\n' "$str_installed" "$str_latest" | sort -V | head -1)" = "$str_installed" ]; then
+        print_status "warning" "Installed BlueprintX $str_installed is older than the latest release $str_latest; templates may carry fixed bugs."
+    fi
+    return 0
+}
+
 resolve_default_branch() {
     local explicit="${1:-}"
     if [ -n "$explicit" ]; then
