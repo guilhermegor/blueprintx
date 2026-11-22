@@ -17,6 +17,8 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 from types import ModuleType
 import zipfile
@@ -416,3 +418,72 @@ def test_a_failed_extraction_does_not_leave_the_reassembled_zip_behind(tmp_path:
         gate.assemble_wheelhouse(_assemble_args(tmp_path))
 
     assert not (tmp_path / "out" / "wheelhouse.zip").exists()
+
+
+_PIP_SHIM = """#!/usr/bin/env bash
+if [[ "$1 $2 $3" == "-m pip download" ]]; then
+	shift 3
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		--no-deps) bool_no_deps=1; shift ;;
+		--dest) dir_dest="$2"; shift 2 ;;
+		-r) path_req="$2"; shift 2 ;;
+		*) shift ;;
+		esac
+	done
+	while read -r str_line; do
+		str_name="${str_line%%[<>=; ]*}"
+		[[ -n "$str_name" ]] || continue
+		[[ -n "${bool_no_deps:-}" && "$str_name" == poetry ]] && continue
+		case "$str_name" in
+		poetry) echo x >"$dir_dest/poetry-2.4.0-py3-none-any.whl" ;;
+		*) echo x >"$dir_dest/${str_name//-/_}-1.0-py3-none-any.whl" ;;
+		esac
+	done <"$path_req"
+	exit 0
+fi
+exec "@PY@" "$@"
+"""
+
+
+@pytest.mark.skipif(
+    not (_LIB.parent / "build_wheelhouse.sh").exists(),
+    reason="this tier does not ship bin/build_wheelhouse.sh",
+)
+def test_wheelhouse_includes_poetry_wheel(tmp_path: Path) -> None:
+    """A lock with no Poetry still yields a Poetry wheel in the packed manifest."""
+    path_project = tmp_path / "proj"
+    shutil.copytree(_LIB.parent, path_project / "bin")
+    shutil.copy(_LIB.parents[1] / "requirements.txt", path_project / "requirements.txt")
+    (path_project / "bin" / "export_deps.sh").write_text(
+        '#!/usr/bin/env bash\necho "requests==2.32.0" >"$OUTPUT_FILE"\n'
+    )
+    path_shims = tmp_path / "shims"
+    path_shims.mkdir()
+    path_shim = path_shims / "python3"
+    path_shim.write_text(_PIP_SHIM.replace("@PY@", sys.executable))
+    path_shim.chmod(0o755)
+    (path_shims / "python").symlink_to(path_shim)
+    (path_shims / "py").symlink_to(path_shim)
+    path_out = tmp_path / "out"
+
+    subprocess.run(  # noqa: S603
+        [
+            shutil.which("bash") or "bash",
+            str(path_project / "bin" / "build_wheelhouse.sh"),
+            "build",
+        ],
+        check=True,
+        capture_output=True,
+        env={
+            "PATH": f"{path_shims}:/usr/bin:/bin",
+            "WHEELHOUSE_DIR": str(path_out),
+            "WHEELHOUSE_PIP_PLATFORM": "manylinux2014_x86_64",
+            "WHEELHOUSE_TARGET_PYTHON_VERSION": "3.12.2",
+            "WHEELHOUSE_TARGET_SYS_PLATFORM": "linux",
+            "WHEELHOUSE_TARGET_PLATFORM_MACHINE": "x86_64",
+        },
+    )
+
+    str_manifest = (path_out / "manifest.json").read_text()
+    assert "poetry-2.4.0-py3-none-any.whl" in str_manifest
