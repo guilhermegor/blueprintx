@@ -187,6 +187,9 @@ def test_patch_level_python_constraint_uses_python_full_version() -> None:
         ("<=3.11", "python_full_version <= '3.11.0'"),
         (">=3.11", "python_version >= '3.11'"),
         ("<3.11", "python_version < '3.11'"),
+        (">3", "python_full_version > '3.0.0'"),
+        ("3.11.*", "python_full_version == '3.11.*'"),
+        (">=3.10 <3.12", "python_version >= '3.10' and python_version < '3.12'"),
     ],
 )
 def test_python_bound_without_patch_picks_the_variable_poetry_picks(
@@ -198,7 +201,7 @@ def test_python_bound_without_patch_picks_the_variable_poetry_picks(
 
 def test_or_python_constraint_fails_loudly() -> None:
     """A ``||`` python constraint aborts instead of emitting a wrong marker."""
-    with pytest.raises(SystemExit, match="Unsupported python constraint"):
+    with pytest.raises(SystemExit, match=r"Unsupported python constraint .*: pkg -> "):
         MODULE.build_requirement("pkg", union_spec={"version": "1.0", "python": "^2.7 || ^3.6"})
 
 

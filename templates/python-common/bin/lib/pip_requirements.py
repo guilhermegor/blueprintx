@@ -160,30 +160,34 @@ def normalize_version_spec(str_spec: str) -> str:
     return f"=={str_spec}"
 
 
-def python_marker(str_python: str) -> str:
+def python_marker(str_python: str, *, str_name: str = "") -> str:
     """Translate a Poetry ``python`` constraint into a PEP 508 ``python_version`` marker.
 
     Parameters
     ----------
     str_python : str
-        A constraint such as ``">=3.11"``, ``"^3.10"`` or ``"<3.11"``.
+        A constraint such as ``">=3.11"``, ``"^3.10"``, ``"3.11.*"`` or the space-separated
+        ``">=3.10 <3.12"``.
+    str_name : str
+        The dependency the constraint belongs to, named in the error.
 
     Returns
     -------
     str
         The marker expression, clauses joined with ``and``; empty for "any version".
     """
+    str_label = f"{str_name} -> {str_python}"
     if "||" in str_python:
-        raise SystemExit(f"Unsupported python constraint for pip fallback: {str_python!r}")
-    str_spec = normalize_version_spec(str_python)
+        raise SystemExit(f"Unsupported python constraint for pip fallback: {str_label}")
+    str_spec = normalize_version_spec(re.sub(r"\s+(?=[<>=!~])", ",", str_python.strip()))
     if not str_spec:
         return ""
     return " and ".join(
-        python_clause(str_clause, str_python=str_python) for str_clause in str_spec.split(",")
+        python_clause(str_clause, str_label=str_label) for str_clause in str_spec.split(",")
     )
 
 
-def python_clause(str_clause: str, *, str_python: str) -> str:
+def python_clause(str_clause: str, *, str_label: str) -> str:
     """Render one normalised ``python`` clause as a marker comparison.
 
     A clause carrying a patch component compares ``python_full_version``, because
@@ -195,8 +199,8 @@ def python_clause(str_clause: str, *, str_python: str) -> str:
     ----------
     str_clause : str
         One comparison such as ``">=3.10.2"``.
-    str_python : str
-        The original constraint, named in the error.
+    str_label : str
+        The dependency and constraint, named in the error.
 
     Returns
     -------
@@ -208,12 +212,14 @@ def python_clause(str_clause: str, *, str_python: str) -> str:
     SystemExit
         If the clause is not a comparison pip can express.
     """
-    cls_match = re.fullmatch(r"(>=|<=|==|!=|~=|>|<)\s*(\d+(?:\.\d+)*)", str_clause.strip())
+    cls_match = re.fullmatch(
+        r"(>=|<=|==|!=|~=|>|<)\s*(\d+(?:\.\d+)*(?:\.\*)?)", str_clause.strip()
+    )
     if not cls_match:
-        raise SystemExit(f"Unsupported python constraint for pip fallback: {str_python!r}")
+        raise SystemExit(f"Unsupported python constraint for pip fallback: {str_label}")
     str_op, str_bound = cls_match.groups()
     int_dots = str_bound.count(".")
-    if int_dots < _INT_PATCH_DOTS and str_op in {">", "<="}:
+    while int_dots < _INT_PATCH_DOTS and str_op in {">", "<="}:
         str_bound = f"{str_bound}.0"
         int_dots += 1
     str_variable = "python_full_version" if int_dots >= _INT_PATCH_DOTS else "python_version"
@@ -296,7 +302,7 @@ def build_requirement(str_name: str, *, union_spec: str | dict) -> str | None:
         list_markers = [
             str_marker
             for str_marker in (
-                python_marker(union_spec.get("python", "")),
+                python_marker(union_spec.get("python", ""), str_name=str_name),
                 union_spec.get("markers", ""),
             )
             if str_marker
