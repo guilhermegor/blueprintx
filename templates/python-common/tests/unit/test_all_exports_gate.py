@@ -1247,3 +1247,25 @@ def test_type_checking_stub_is_not_a_public_definition(tmp_path: Path) -> None:
         ),
     )
     assert _load_gate().check_package(path_init) == []
+
+
+def test_type_checking_stub_alone_is_not_a_public_definition(tmp_path: Path) -> None:
+    """Non-vacuous variant: no runtime import rescues the stub, only the guard skip does."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    def helper():\n        pass\n"
+        ),
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_computed_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
+    """A later non-literal ``__all__ = __all__ + [...]`` must not reset the list to empty."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = __all__ + ['b']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]
