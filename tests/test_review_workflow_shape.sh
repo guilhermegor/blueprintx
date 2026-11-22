@@ -40,6 +40,19 @@ ruff_installs_pinned() {
 check "every pipx install ruff under .github/workflows is pinned with ==<version>" \
 	ruff_installs_pinned
 
+main_run_never_cancelled() {
+	[ -f "$repo_workflows/$1" ] || return 1
+	! grep -qE "^ +cancel-in-progress: *(true|'true'|\"true\"|\\$\\{\\{ *true *\\}\\})( *#.*)?$" "$repo_workflows/$1"
+}
+check "scaffold_checks (push to main) never cancels a run unconditionally" \
+	main_run_never_cancelled scaffold_checks.yml
+
+push_runs_get_own_group() {
+	grep -qE '^ +group: .*github\.sha' "$repo_workflows/$1"
+}
+check "scaffold_checks push runs are keyed by sha, so none replaces a pending main run" \
+	push_runs_get_own_group scaffold_checks.yml
+
 every_suite_wired() {
 	local f b int_missing=0
 	for f in "$REPO_ROOT"/tests/test_*.sh; do
