@@ -46,6 +46,12 @@ main_run_never_cancelled() {
 check "scaffold_checks (push to main) never cancels a run unconditionally" \
 	main_run_never_cancelled scaffold_checks.yml
 
+push_runs_get_own_group() {
+	grep -qE '^ +group: .*github\.sha' "$repo_workflows/$1"
+}
+check "scaffold_checks push runs are keyed by sha, so none replaces a pending main run" \
+	push_runs_get_own_group scaffold_checks.yml
+
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
 	exit 1
