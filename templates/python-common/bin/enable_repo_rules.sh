@@ -129,7 +129,7 @@ report_blocking_checks() {
 	fi
 	read -r str_id str_enforcement <<<"$(printf '%s\n' "$str_id" | head -1)"
 	if [ -z "$str_id" ]; then
-		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
+		print_status "info" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
 		return 3
 	fi
 	if [ "$str_enforcement" != "active" ]; then
@@ -189,6 +189,20 @@ assert_branch_protection_strict() {
 	print_status "success" "required_status_checks.strict is off on $str_repo:$str_branch (classic branch protection, verified)"
 }
 
+assert_no_effective_strict() {
+	local str_repo="$1" str_branch="$2"
+	local str_flags
+	if ! str_flags="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --paginate --jq \
+		'.[] | select(.type == "required_status_checks") | .parameters.strict_required_status_checks_policy' 2>&1)"; then
+		print_status "error" "Could not READ the effective rules on $str_repo:$str_branch (so a strict policy from another or organization ruleset is UNKNOWN, not absent): ${str_flags:-no output from gh}"
+		return 1
+	fi
+	if [[ "$str_flags" == *true* ]]; then
+		print_status "error" "Another ruleset (possibly organization-level) sets strict_required_status_checks_policy true on $str_repo:$str_branch — set it to false there (blueprintx#1300)"
+		return 1
+	fi
+}
+
 verify_strict_required_checks() {
 	if ! require_gh; then
 		return 1
@@ -211,6 +225,7 @@ verify_strict_required_checks() {
 		return 1
 	fi
 	if [ "$int_ruleset_result" -eq 3 ] && [ "$int_protection_result" -eq 3 ]; then
+		assert_no_effective_strict "$str_repo" "$str_branch" || return 1
 		print_status "success" "No ruleset and no classic branch protection on $str_repo:$str_branch — neither enforces a strict policy (definite absence, verified)"
 		return 0
 	fi

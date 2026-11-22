@@ -126,7 +126,10 @@ repos/o/r/rulesets)
 	[ "${STUB_RULESETS:-}" = empty ] && str_json='[]' || str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
 repos/o/r/rulesets/42) str_json="{\"rules\":[$str_rule]}" ;;
 repos/o/r/rules/branches/main*)
+	[ "${STUB_EFFECTIVE:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }
+	[ "${STUB_EFFECTIVE:-}" = strict-true ] && STUB_APPLIES=3 && str_other='{"type":"required_status_checks","ruleset_id":99,"parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"x"}]}}'
 	case "$STUB_APPLIES" in
+	3) str_json="[$str_other]" ;;
 	1) str_json="[$str_rule]" ;;
 	2) [[ " $* " == *" --paginate "* ]] && str_json="[] [$str_rule]" || str_json='[]' ;;
 	*) str_json='[]' ;;
@@ -281,6 +284,15 @@ test_verify_fails_when_a_mechanism_is_unreadable() {
     assert_has "both unreadable fails" "rc=1" "$str_out"
 }
 
+test_absence_fails_when_another_ruleset_enforces_strict() {
+    local str_out
+    str_out="$(STUB_RULESETS=empty STUB_PROTECTION=unprotected STUB_EFFECTIVE=strict-true run_verify active 1 verify)"
+    assert_has "a strict ruleset under another name fails" "rc=1" "$str_out"
+    assert_has "the other ruleset is named as the cause" "Another ruleset" "$str_out"
+    str_out="$(STUB_RULESETS=empty STUB_PROTECTION=unprotected STUB_EFFECTIVE=forbidden run_verify active 1 verify)"
+    assert_has "unreadable effective rules fail" "rc=1" "$str_out"
+}
+
 test_classic_strict_true_names_the_remedy() {
     assert_has "classic strict true names the PATCH remedy" "required_status_checks -F strict=false" "$(STUB_PROTECTION=classic-strict-true run_verify active 1 verify)"
 }
@@ -306,6 +318,7 @@ STUB
 test_create_sends_strict_false
 test_verify_passes_on_definite_absence_of_both_mechanisms
 test_verify_fails_when_a_mechanism_is_unreadable
+test_absence_fails_when_another_ruleset_enforces_strict
 test_classic_strict_true_names_the_remedy
 test_rerun_flips_an_existing_strict_true_ruleset_to_false
 test_update_puts_strict_false_on_an_existing_ruleset
