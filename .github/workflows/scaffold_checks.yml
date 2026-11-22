@@ -541,7 +541,7 @@ jobs:
         run: bash tests/test_scaffold_list_copies.sh
 
       - name: Install ruff
-        run: pipx install ruff
+        run: pipx install ruff==0.17.5
 
       - name: Run the per-tier ruff overlay suite (blueprintx#1242)
         run: bash tests/test_ruff_overlays.sh
