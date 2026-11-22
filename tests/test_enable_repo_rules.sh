@@ -130,12 +130,16 @@ repos/o/r/rules/branches/main*)
 	esac
 	;;
 repos/o/r/branches/main/protection)
+	if [[ "${STUB_PROTECTION:-}" == classic-strict-* ]]; then
+		str_json="{\"required_status_checks\":{\"strict\":${STUB_PROTECTION#classic-strict-}}}"
+	else
 	[ "${STUB_PROTECTION:-}" = unprotected-500 ] && { echo "gh: Branch not protected (HTTP 500)" >&2; exit 1; }
 	[ "${STUB_PROTECTION:-}" = not-found ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 	[ "${STUB_PROTECTION:-}" = unprotected ] || { echo "gh: Server Error (HTTP 500)" >&2; exit 1; }
 	echo '{"message":"Branch not protected","documentation_url":"https://docs.github.com","status":"404"}'
 	echo "gh: Branch not protected (HTTP 404)" >&2
 	exit 1
+	fi
 	;;
 *) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
 esac
@@ -226,7 +230,18 @@ test_verify_refuses_a_strict_true_ruleset() {
     assert_has "strict true is no longer accepted" "rc=1" "$( (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/vt:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT=active STUB_APPLIES=1 bash "$SCRIPT" verify 2>&1; echo "rc=$?") )"
 }
 
+test_classic_strict_true_refused_false_accepted() {
+    local str_out
+    str_out="$(STUB_PROTECTION=classic-strict-true run_verify active 1 verify)"
+    assert_has "classic strict true is refused" "rc=1" "$str_out"
+    assert_has "classic strict true is named" "NOT false" "$str_out"
+    str_out="$(STUB_PROTECTION=classic-strict-false run_verify active 1 verify)"
+    assert_has "classic strict false is accepted" "rc=0" "$str_out"
+    assert_has "classic strict false reads as off, not absent" "is off on o/r:main (classic" "$str_out"
+}
+
 test_create_sends_strict_false
+test_classic_strict_true_refused_false_accepted
 test_verify_refuses_a_strict_true_ruleset
 test_ruleset_only_repo_has_no_unreadable_protection_warning
 test_genuine_protection_read_failure_stays_unknown
