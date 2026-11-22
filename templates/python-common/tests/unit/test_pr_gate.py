@@ -850,3 +850,70 @@ def test_main_exits_nonzero_when_the_opt_out_cannot_disarm(
     monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: (_DICT_GREEN_AXES, {}))
     monkeypatch.setattr(gate, "_disable_auto_merge", lambda *a, **k: "HTTP 502")
     assert gate.main() == 1
+
+
+class _PollCounter:
+    """Stand in for ``_api``, count the check-run reads, and report only ``tests`` as done."""
+
+    def __init__(self) -> None:
+        """Start the read count at zero."""
+        self.int_reads = 0
+
+    def __call__(self, *args: object, **kwargs: object) -> dict:
+        """Count one read and answer with a single green ``tests`` check-run.
+
+        Parameters
+        ----------
+        *args : object
+            Ignored.
+        **kwargs : object
+            Ignored.
+
+        Returns
+        -------
+        dict
+            A check-runs payload where nothing but ``tests`` ever reports.
+        """
+        self.int_reads += 1
+        return {
+            "check_runs": [
+                {"name": "Run Automated Tests", "status": "completed", "conclusion": "success"}
+            ]
+        }
+
+
+def _count_polls(monkeypatch: pytest.MonkeyPatch, *, str_declared: str) -> int:
+    """Poll a head where only ``tests`` ever reports, and count the check-run reads.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Pytest fixture.
+    str_declared : str
+        The ``GATE_AXES`` value.
+
+    Returns
+    -------
+    int
+        How many times the check-runs endpoint was read.
+    """
+    cls_api = _PollCounter()
+    monkeypatch.setenv("GATE_AXES", str_declared)
+    monkeypatch.setattr(gate, "_api", cls_api)
+    monkeypatch.setattr(gate.time, "sleep", lambda *_: None)
+    gate.poll_axes_until_terminal("o/r", str_head_sha="abc", int_max_polls=5, int_poll_seconds=1)
+    return cls_api.int_reads
+
+
+def test_undeclared_axis_with_no_check_run_ends_the_poll_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An axis the scaffold does not declare must not be polled for the whole budget."""
+    assert _count_polls(monkeypatch, str_declared="tests") == 1
+
+
+def test_declared_axis_with_no_check_run_still_polls_to_the_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A declared axis stays ``absent`` (non-terminal): its producer may just be slow."""
+    assert _count_polls(monkeypatch, str_declared="tests,lint") == 5

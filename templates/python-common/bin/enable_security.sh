@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/repo_slug.sh"
 
 require_gh() {
 	if ! command -v gh >/dev/null 2>&1; then
@@ -15,10 +16,6 @@ require_gh() {
 		return 1
 	fi
 	return 0
-}
-
-resolve_repo() {
-	gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true
 }
 
 enable_toggle() {
@@ -47,9 +44,7 @@ main() {
 	fi
 
 	local str_repo
-	str_repo="$(resolve_repo)"
-	if [ -z "$str_repo" ]; then
-		print_status "warning" "No GitHub remote resolved — skipping (push the repo to GitHub first)"
+	if ! str_repo="$(resolve_repo enable_security)"; then
 		return 0
 	fi
 

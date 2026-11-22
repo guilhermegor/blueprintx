@@ -40,6 +40,18 @@ for str_tier in lib-minimal api-service-native-db ddd-service-native-db ddd-serv
 		|| { echo "FAIL: $str_tier scaffold exited non-zero"; tail -20 "$WORK_DIR/scaffold.log"; exit 1; }
 	path_project="$path_project.parent/project"
 
+	if [ -f "$path_project/poe_tasks.offline.toml" ] \
+		&& ! grep -q 'poe new_branch' "$path_project/CONTRIBUTING.md"; then
+		echo "FAIL: $str_tier is offline but CONTRIBUTING.md lacks the offline guidance"
+		int_failures=$((int_failures + 1))
+	fi
+	if [ -f "$path_project/poe_tasks.offline.toml" ] \
+		&& ! awk '/^## /{r=($0=="## Releasing")} r&&/poe git_merge_to_main/{f=1} END{exit !f}' \
+			"$path_project/docs/contributing.md"; then
+		echo "FAIL: $str_tier is offline but docs/contributing.md lacks the offline steps under Releasing"
+		int_failures=$((int_failures + 1))
+	fi
+
 	list_defined="$(cd "$path_project" && python3 -c '
 import sys
 from pathlib import Path
@@ -73,28 +85,53 @@ for str_must in new_branch git_merge_to_main; do
 done
 
 offline_cites_in() {
-	local str_cited str_task int_found=0
-	str_cited="$(cited_tasks "$1")" || { echo "FAIL: cannot read poe citations in $1"; return 1; }
+	local str_cited str_task int_rc=0
+	int_offline_cites=0
+	str_cited="$(cited_tasks "$1")" || int_rc=$?
+	if [ "$int_rc" -ge 2 ]; then
+		echo "FAIL: cannot read poe citations in $1"
+		return 2
+	fi
 	while IFS= read -r str_task; do
 		[ -n "$str_task" ] || continue
 		if grep -qxF "$str_task" <<<"$list_offline_tasks"; then
 			echo "FAIL: $(basename "$1") cites offline-only poe $str_task"
-			int_found=$((int_found + 1))
+			int_offline_cites=$((int_offline_cites + 1))
 		fi
 	done <<<"$str_cited"
-	return "$int_found"
+	echo "count=$int_offline_cites"
+	[ "$int_offline_cites" -eq 0 ] || return 1
+	return 0
 }
 
 printf -- '- `poe new_branch`\n' >"$path_witness/offline.md"
-offline_cites_in "$path_witness/offline.md" >/dev/null
-if [ "$?" -eq 1 ]; then
+str_out="$(offline_cites_in "$path_witness/offline.md")"
+int_rc=$?
+if [ "$int_rc" -eq 1 ] && grep -qxF "count=1" <<<"$str_out" \
+	&& grep -qxF "FAIL: offline.md cites offline-only poe new_branch" <<<"$str_out"; then
 	echo "ok: an offline-only task cited in a doc is flagged"
 else
 	echo "FAIL: an offline-only task cited in a doc is not flagged"
 	int_failures=$((int_failures + 1))
 fi
-for path_doc in "$REPO_ROOT"/templates/python-common/CONTRIBUTING*.md; do
-	[ -f "$path_doc" ] || { echo "FAIL: no CONTRIBUTING*.md under python-common"; exit 1; }
+printf -- 'No tasks are cited here.\n' >"$path_witness/prose.md"
+offline_cites_in "$path_witness/prose.md" >/dev/null
+if [ "$?" -eq 0 ]; then
+	echo "ok: a doc with no poe citation is clean, not an error"
+else
+	echo "FAIL: a doc with no poe citation is not reported clean"
+	int_failures=$((int_failures + 1))
+fi
+offline_cites_in "$path_witness/does-not-exist" >/dev/null 2>&1
+if [ "$?" -eq 2 ]; then
+	echo "ok: an unreadable path is an error, not a finding"
+else
+	echo "FAIL: an unreadable path is not reported as an error"
+	int_failures=$((int_failures + 1))
+fi
+for path_doc in "$REPO_ROOT"/templates/python-common/CONTRIBUTING*.md \
+	"$REPO_ROOT"/templates/python-common/docs/contributing.md; do
+	[ -f "$path_doc" ] || { echo "FAIL: missing python-common contributing doc $path_doc"; exit 1; }
 	offline_cites_in "$path_doc" || int_failures=$((int_failures + 1))
 done
 
