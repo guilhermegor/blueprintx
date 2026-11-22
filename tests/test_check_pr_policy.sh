@@ -69,7 +69,9 @@ expect "dependabot branch skips linked-issue" pass check_linked_issue "dependabo
 expect "renovate branch skips linked-issue" pass check_linked_issue "renovate/foo" "chore: t" github 0
 expect "release branch skips linked-issue" pass check_linked_issue "release/1.0.0-prep" "chore: t" github 0
 expect "release branch skips linked-issue under linear" pass check_linked_issue "release/1.0.0-prep" "chore: t" linear 0
-expect "non-release branch still needs a linked issue" fail check_linked_issue "feat/x" "chore: t" github 0
+expect "release/ only exempts as a prefix" fail check_linked_issue "feat/release/x" "chore: t" github 0
+expect "releases/ is not release/" fail check_linked_issue "releases/1.0.0" "chore: t" github 0
+expect "release branch skips linked-issue under regex" pass env TRACKER_REGEX="[A-Z]+-[0-9]+" bash -c 'source "$0"; check_linked_issue release/1.0.0-prep "chore: t" regex 0' "$REPO_ROOT/templates/common/bin/check_pr_policy.sh"
 expect "linear key in branch" pass check_linked_issue "feat/abc-123-x" "feat: t" linear 0
 expect "linear key in title" pass check_linked_issue "feat/x" "feat: ABC-123 t" linear 0
 expect "linear without key" fail check_linked_issue "feat/x" "feat: t" linear 0
