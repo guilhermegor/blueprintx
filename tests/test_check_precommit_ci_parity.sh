@@ -13,7 +13,7 @@ make_sandbox() {
 	str_root="$(mktemp -d)"
 	mkdir -p "$str_root/bin/lib" "$str_root/bin/ci" "$str_root/.github/workflows"
 	cp "$REPO_ROOT/bin/check_precommit_ci_parity.sh" "$str_root/bin/check_precommit_ci_parity.sh"
-	cp "$REPO_ROOT/bin/lib/common.sh" "$str_root/bin/lib/common.sh"
+	cp -r "$REPO_ROOT/bin/lib/." "$str_root/bin/lib/"
 	printf '%s' "$str_root"
 }
 

@@ -349,6 +349,24 @@ jobs:
       - name: enable_pages requests the legacy build_type
         run: bash tests/test_enable_pages.sh
 
+      - name: test_check_issue_scope
+        run: bash tests/test_check_issue_scope.sh
+
+      - name: test_check_orphan_pr_bodies
+        run: bash tests/test_check_orphan_pr_bodies.sh
+
+      - name: test_check_pr_file_count
+        run: bash tests/test_check_pr_file_count.sh
+
+      - name: test_check_precommit_ci_parity
+        run: bash tests/test_check_precommit_ci_parity.sh
+
+      - name: test_ts_agents_pairing_gate
+        run: bash tests/test_ts_agents_pairing_gate.sh
+
+      - name: test_enable_security
+        run: bash tests/test_enable_security.sh
+
   secret-scan:
     name: GitGuardian — secret scan
     runs-on: ubuntu-latest
