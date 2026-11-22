@@ -387,9 +387,9 @@ Homebrew, Chocolatey, apt, and `make install` from a clone — see the project R
 
 ## Why does `blueprintx new` warn that my install is older than the latest release?
 
-A scaffold copies the templates of the installed package, so a lagging install reintroduces defects `main` already fixed. `warn_if_outdated` in `bin/lib/common.sh` runs at the start of the create flow, asks `gh api repos/guilhermegor/blueprintx/releases/latest` with a 3-second timeout, and prints one warning when the installed version sorts below the latest tag.
+A scaffold copies the templates of the installed package, so a lagging install reintroduces defects `main` already fixed. `warn_if_outdated` in `bin/lib/common.sh` runs at the start of the create flow, asks the public `https://api.github.com/repos/guilhermegor/blueprintx/releases/latest` with `curl -m 3` (no `gh`, login or GNU `timeout` needed, so it also works on stock macOS), and prints one warning when the installed version sorts below the latest tag.
 
-The check never blocks or fails a scaffold. It stays silent when `gh` is absent, the network is offline, the request times out or fails, or the install is a development checkout (the `0.0.0` stub). Upgrade through the package manager you installed with. The should-fail witness is `tests/test_warn_if_outdated.sh`, which stubs `gh`.
+The check never blocks or fails a scaffold. It stays silent when `curl` is absent, the network is offline, the request times out or fails, the install is a development checkout (the `0.0.0` stub) or a prerelease, or `BLUEPRINTX_NO_UPDATE_CHECK` is set to any non-empty value. Upgrade through the package manager you installed with. The should-fail witness is `tests/test_warn_if_outdated.sh`, which stubs `curl`.
 
 ## Why does the coverage badge 404 before the first push to main?
 

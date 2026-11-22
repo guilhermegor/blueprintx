@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/bin/lib/common.sh"
 
 int_failures=0
+str_latest_json='{"tag_name": "v4.8.8"}'
 
 check() {
     local str_name="$1" str_want="$2" str_got="$3"
@@ -21,17 +22,20 @@ check() {
 str_stub_dir="$(mktemp -d)"
 trap 'rm -rf "$str_stub_dir"' EXIT
 
-run_with_gh() {
-    printf '#!/bin/bash\n%s\n' "$1" >"$str_stub_dir/gh"
-    chmod +x "$str_stub_dir/gh"
+run_with_curl() {
+    printf '#!/bin/bash\n%s\n' "$1" >"$str_stub_dir/curl"
+    chmod +x "$str_stub_dir/curl"
     PATH="$str_stub_dir:$PATH" BLUEPRINTX_VERSION="$2" warn_if_outdated 2>&1
 }
 
-check "older install warns" "older than the latest release 4.8.8" "$(run_with_gh 'echo v4.8.8' 3.9.5)"
-check "equal version is silent" "" "$(run_with_gh 'echo v4.8.8' 4.8.8)"
-check "newer install is silent" "" "$(run_with_gh 'echo v4.8.8' 5.0.0)"
-check "gh failure is silent" "" "$(run_with_gh 'exit 1' 3.9.5)"
-check "dev checkout is silent" "" "$(run_with_gh 'echo v4.8.8' 0.0.0)"
-check "empty answer is silent" "" "$(run_with_gh 'echo' 3.9.5)"
+check "older install warns" "older than the latest release 4.8.8" "$(run_with_curl "echo '$str_latest_json'" 3.9.5)"
+check "equal version is silent" "" "$(run_with_curl "echo '$str_latest_json'" 4.8.8)"
+check "newer install is silent" "" "$(run_with_curl "echo '$str_latest_json'" 5.0.0)"
+check "prerelease install is silent" "" "$(run_with_curl "echo '$str_latest_json'" 4.8.8-rc.1)"
+check "curl failure is silent" "" "$(run_with_curl 'exit 22' 3.9.5)"
+check "dev checkout is silent" "" "$(run_with_curl "echo '$str_latest_json'" 0.0.0)"
+check "empty answer is silent" "" "$(run_with_curl 'echo' 3.9.5)"
+check "opt-out is silent" "" "$(BLUEPRINTX_NO_UPDATE_CHECK=1 run_with_curl "echo '$str_latest_json'" 3.9.5)"
+check "curl absent is silent" "" "$(PATH="$str_stub_dir/none" BLUEPRINTX_VERSION=3.9.5 warn_if_outdated 2>&1)"
 
 (( int_failures == 0 ))

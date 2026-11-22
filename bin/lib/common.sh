@@ -163,9 +163,11 @@ sed_inplace() {
 warn_if_outdated() {
     local str_installed="${BLUEPRINTX_VERSION:-0.0.0}" str_latest
     [ "$str_installed" = "0.0.0" ] && return 0
-    command -v gh >/dev/null 2>&1 || return 0
-    str_latest="$(timeout 3 gh api repos/guilhermegor/blueprintx/releases/latest --jq .tag_name 2>/dev/null || true)"
-    str_latest="${str_latest#v}"
+    [[ "$str_installed" == *-* ]] && return 0
+    [ -n "${BLUEPRINTX_NO_UPDATE_CHECK:-}" ] && return 0
+    command -v curl >/dev/null 2>&1 || return 0
+    str_latest="$(curl -fsS -m 3 https://api.github.com/repos/guilhermegor/blueprintx/releases/latest 2>/dev/null |
+        sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1 || true)"
     [ -n "$str_latest" ] || return 0
     [ "$str_latest" = "$str_installed" ] && return 0
     if [ "$(printf '%s\n%s\n' "$str_installed" "$str_latest" | sort -V | head -1)" = "$str_installed" ]; then
