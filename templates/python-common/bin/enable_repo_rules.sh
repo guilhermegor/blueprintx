@@ -120,13 +120,17 @@ report_blocking_checks() {
 	local str_id str_enforcement str_live str_strict str_rules
 	if ! str_id="$(gh api "repos/$str_repo/rulesets" --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
+		if [[ "$str_id" == *"(HTTP 404)"* ]]; then
+			print_status "info" "No rulesets on $str_repo (HTTP 404): the ruleset enforces no strict policy"
+			return 3
+		fi
 		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
 		return 2
 	fi
 	read -r str_id str_enforcement <<<"$(printf '%s\n' "$str_id" | head -1)"
 	if [ -z "$str_id" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
-		return 2
+		return 3
 	fi
 	if [ "$str_enforcement" != "active" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' on $str_repo has enforcement '${str_enforcement:-unknown}', not 'active' — its rules block nothing"
@@ -169,17 +173,17 @@ assert_branch_protection_strict() {
 		'.required_status_checks.strict' 2>&1)"; then
 		if [[ "$str_strict" == *"Branch not protected"* && "$str_strict" == *"(HTTP 404)"* ]]; then
 			print_status "info" "No classic branch protection on $str_repo:$str_branch (classic protection is absent; the ruleset check reports its own result)"
-			return 2
+			return 3
 		fi
 		print_status "warning" "Could not READ classic branch protection on $str_repo:$str_branch (so strict is UNKNOWN, not confirmed off): ${str_strict:-no output from gh}"
 		return 2
 	fi
 	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
-		print_status "warning" "$str_repo:$str_branch has no required_status_checks under classic branch protection — nothing to assert strict on"
-		return 2
+		print_status "warning" "$str_repo:$str_branch has no required_status_checks under classic branch protection — no strict policy is enforced"
+		return 3
 	fi
 	if [ "$str_strict" != "false" ]; then
-		print_status "error" "required_status_checks.strict is NOT false on $str_repo:$str_branch (classic branch protection) — every merge forces every other PR to update to the base and re-run its CI (blueprintx#1283)"
+		print_status "error" "required_status_checks.strict is NOT false on $str_repo:$str_branch (classic branch protection) — every merge forces every other PR to update to the base and re-run its CI (blueprintx#1283). Remedy: gh api -X PATCH repos/$str_repo/branches/$str_branch/protection/required_status_checks -F strict=false (this script does not manage classic protection)"
 		return 1
 	fi
 	print_status "success" "required_status_checks.strict is off on $str_repo:$str_branch (classic branch protection, verified)"
@@ -206,8 +210,12 @@ verify_strict_required_checks() {
 	if [ "$int_ruleset_result" -eq 1 ] || [ "$int_protection_result" -eq 1 ]; then
 		return 1
 	fi
+	if [ "$int_ruleset_result" -eq 3 ] && [ "$int_protection_result" -eq 3 ]; then
+		print_status "success" "No ruleset and no classic branch protection on $str_repo:$str_branch — neither enforces a strict policy (definite absence, verified)"
+		return 0
+	fi
 	if [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ]; then
-		print_status "error" "Neither mechanism confirmed the strict policy is off on $str_repo (both absent or unreadable) — absence is not proof (blueprintx#1283)"
+		print_status "error" "Neither mechanism confirmed the strict policy is off on $str_repo (at least one could not be read, or a ruleset is present but not blocking) — unreadable is not proof (blueprintx#1300)"
 		return 1
 	fi
 	return 0
