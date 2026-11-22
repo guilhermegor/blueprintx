@@ -2911,8 +2911,9 @@ workflows (release, deploy) on the base branch.</p>
 which runs before arming on purpose. No retry loop wraps the mutation, so an authorization error is never retried.</p>
 <h2 id="assignee-and-linked-issue-blueprintx937">Assignee and linked issue (blueprintx#937)<a class="headerlink" href="#assignee-and-linked-issue-blueprintx937" title="Permanent link">&para;</a></h2>
 <p><code>check_pr_policy.sh assignee</code> fails when <code>ASSIGNEES</code> is blank. <code>check_pr_policy.sh linked-issue</code> reads
-<code>BRANCH</code>, <code>TITLE</code>, <code>TRACKER</code> and <code>CLOSING_COUNT</code>; <code>dependabot/</code> and <code>renovate/</code> branches skip it, since a
-dependency bump has no issue behind it. <code>release/</code> keeps its branch-rule exemption only.</p>
+<code>BRANCH</code>, <code>TITLE</code>, <code>TRACKER</code> and <code>CLOSING_COUNT</code>; <code>dependabot/</code>, <code>renovate/</code> and <code>release/</code> branches skip it
+(the same <code>EXEMPT_BRANCHES</code> as the branch rule). A dependency bump has no issue behind it, and a release-prep
+PR must say <code>Refs #N</code>, not <code>Closes #N</code>, so the release issue stays open until the install is verified.</p>
 <table>
 <thead>
 <tr>
