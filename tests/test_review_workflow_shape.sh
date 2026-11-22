@@ -51,10 +51,21 @@ gate_step_fails() {
 	str_out=$(gate_step "$@")
 	[ $? -eq 1 ] && grep -qF "$gate_edit" <<<"$str_out"
 }
+gate_step_fails_on() {
+	local str_out
+	str_out=$(gate_step "$1" "$3")
+	[ $? -eq 1 ] && grep -qF "$2" <<<"$str_out"
+}
 check "gate edit without the label fails the step" gate_step_fails "$gate_edit" "bug"
 check "same gate edit with the label passes" gate_step_passes "$gate_edit" "gate-change-approved"
 check "unrelated edit passes without the label" gate_step_passes "README.md" ""
-check "review-thread gate runs again when the label changes" \
+check "roster edit without the label fails the step" gate_step_fails_on ".review-bots.yaml" ".review-bots.yaml" "bug"
+check "rename away from a gated path fails the step" gate_step_fails_on \
+	"docs/old.py"$'\n'"$gate_edit" "$gate_edit" "bug"
+check "near-match label does not approve" gate_step_fails "$gate_edit" "gate-change-approved-x"
+check "review-thread gate re-runs when a label is added" \
+	grep -qE 'types: \[.*\blabeled\b' "$GATE_WF"
+check "review-thread gate re-runs when a label is removed" \
 	grep -qE 'types: \[.*unlabeled' "$GATE_WF"
 
 repo_workflows="$REPO_ROOT/.github/workflows"

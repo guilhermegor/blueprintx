@@ -40,7 +40,10 @@ jobs:
             -e .github/workflows/review_threads.yml \
             -e templates/common/bin/check_review_threads.py \
             -e templates/python-common/.github/workflows/review-threads.yml \
-            -e templates/ts-common/.github/workflows/review-threads.yml || true)
+            -e templates/ts-common/.github/workflows/review-threads.yml \
+            -e .review-bots.yaml \
+            -e templates/python-common/.review-bots.yaml \
+            -e templates/ts-common/.github/.review-bots.yaml || true)
           [ -n "$str_hit" ] || exit 0
           str_labels=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" --jq '.[].name')
           if printf '%s\n' "$str_labels" | grep -Fxq gate-change-approved; then
