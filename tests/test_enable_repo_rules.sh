@@ -221,6 +221,22 @@ STUB
     assert_has "the created ruleset sends strict false" '"strict_required_status_checks_policy":false' "$(cat "$WORK_DIR/payload.json" 2>/dev/null)"
 }
 
+test_update_puts_strict_false_on_an_existing_ruleset() {
+    mkdir -p "$WORK_DIR/u" "$WORK_DIR/norepo"
+    cat >"$WORK_DIR/u/gh" <<'STUB'
+#!/bin/bash
+[ "$1 $2" = "auth status" ] && exit 0
+[ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
+[[ " $* " == *" -X PUT "* && "$*" == *"/rulesets/42"* ]] && { cat >"$STUB_CAPTURE"; exit 0; }
+[ "$2" = "repos/o/r/rulesets" ] && { echo 42; exit 0; }
+exit 0
+STUB
+    chmod +x "$WORK_DIR/u/gh"
+    rm -f "$WORK_DIR/put.json"
+    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/u:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/put.json" bash "$SCRIPT" >/dev/null 2>&1)
+    assert_has "an existing ruleset is PUT with strict false" '"strict_required_status_checks_policy":false' "$(cat "$WORK_DIR/put.json" 2>/dev/null)"
+}
+
 test_verify_refuses_a_strict_true_ruleset() {
     mkdir -p "$WORK_DIR/vt" "$WORK_DIR/norepo"
     sed 's/"strict_required_status_checks_policy":false/"strict_required_status_checks_policy":true/' "$WORK_DIR/v/gh" >"$WORK_DIR/vt/gh"
@@ -241,6 +257,7 @@ test_classic_strict_true_refused_false_accepted() {
 }
 
 test_create_sends_strict_false
+test_update_puts_strict_false_on_an_existing_ruleset
 test_classic_strict_true_refused_false_accepted
 test_verify_refuses_a_strict_true_ruleset
 test_ruleset_only_repo_has_no_unreadable_protection_warning
