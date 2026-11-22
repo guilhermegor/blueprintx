@@ -67,6 +67,9 @@ expect "branch number with closed issue" fail check_linked_issue "feat/999-x" "f
 expect "no number and no closing reference" fail check_linked_issue "feat/x" "feat: t" github 0
 expect "dependabot branch skips linked-issue" pass check_linked_issue "dependabot/npm/foo" "chore: t" github 0
 expect "renovate branch skips linked-issue" pass check_linked_issue "renovate/foo" "chore: t" github 0
+expect "release branch skips linked-issue" pass check_linked_issue "release/1.0.0-prep" "chore: t" github 0
+expect "release branch skips linked-issue under linear" pass check_linked_issue "release/1.0.0-prep" "chore: t" linear 0
+expect "non-release branch still needs a linked issue" fail check_linked_issue "feat/x" "chore: t" github 0
 expect "linear key in branch" pass check_linked_issue "feat/abc-123-x" "feat: t" linear 0
 expect "linear key in title" pass check_linked_issue "feat/x" "feat: ABC-123 t" linear 0
 expect "linear without key" fail check_linked_issue "feat/x" "feat: t" linear 0
@@ -76,7 +79,6 @@ expect "linear rejects node-20 version bump branch" fail check_linked_issue "cho
 expect "linear rejects lowercase token in title" fail check_linked_issue "feat/x" "feat: py-3 support" linear 0
 expect "linear uppercase key after boundary in title" pass check_linked_issue "feat/x" "feat(ENG-12): t" linear 0
 expect "regex mode without TRACKER_REGEX exits 2" fail env -u TRACKER_REGEX bash -c 'source "$0"; check_linked_issue feat/x "feat: t" regex 0' "$REPO_ROOT/templates/common/bin/check_pr_policy.sh"
-expect "release branch still needs a linked issue" fail check_linked_issue "release/1.2.0" "chore: release" github 0
 expect "linear rejects UTF-8 in title" fail check_linked_issue "feat/x" "fix: handle UTF-8 BOM" linear 0
 expect "linear rejects SHA-256 in title" fail check_linked_issue "feat/x" "feat: SHA-256 sums" linear 0
 expect "linear rejects node-20-upgrade branch" fail check_linked_issue "chore/node-20-upgrade" "chore: t" linear 0
