@@ -162,6 +162,7 @@ sed_inplace() {
 
 warn_if_outdated() {
     local str_installed="${BLUEPRINTX_VERSION:-0.0.0}" str_latest
+    str_installed="${str_installed#v}"
     [ "$str_installed" = "0.0.0" ] && return 0
     [[ "$str_installed" == *-* ]] && return 0
     [ -n "${BLUEPRINTX_NO_UPDATE_CHECK:-}" ] && return 0
@@ -170,8 +171,8 @@ warn_if_outdated() {
         sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1 || true)"
     [ -n "$str_latest" ] || return 0
     [ "$str_latest" = "$str_installed" ] && return 0
-    if [ "$(printf '%s\n%s\n' "$str_installed" "$str_latest" | sort -V | head -1)" = "$str_installed" ]; then
-        print_status "warning" "Installed BlueprintX $str_installed is older than the latest release $str_latest; templates may carry fixed bugs."
+    if [ "$(printf '%s\n%s\n' "$str_installed" "$str_latest" | sort -V 2>/dev/null | head -1)" = "$str_installed" ]; then
+        print_status "warning" "Installed BlueprintX $str_installed is older than the latest release $str_latest; templates may carry fixed bugs (set BLUEPRINTX_NO_UPDATE_CHECK=1 to skip this check)."
     fi
     return 0
 }

@@ -29,6 +29,7 @@ run_with_curl() {
 }
 
 check "older install warns" "older than the latest release 4.8.8" "$(run_with_curl "echo '$str_latest_json'" 3.9.5)"
+check "v-prefixed older install warns" "older than the latest release 4.8.8" "$(run_with_curl "echo '$str_latest_json'" v3.9.5)"
 check "equal version is silent" "" "$(run_with_curl "echo '$str_latest_json'" 4.8.8)"
 check "newer install is silent" "" "$(run_with_curl "echo '$str_latest_json'" 5.0.0)"
 check "prerelease install is silent" "" "$(run_with_curl "echo '$str_latest_json'" 4.8.8-rc.1)"
