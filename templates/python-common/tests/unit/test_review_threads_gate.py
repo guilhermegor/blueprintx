@@ -10,19 +10,18 @@ Every shape here was measured on a real PR (blueprintx#170), including the one t
 the gate: 14 threads all reading ``isResolved: true`` while 11 held no author reply at all.
 """
 
-from collections.abc import Callable
 import copy
 import functools
 import importlib.util
 import json
-from pathlib import Path
 import re
 import subprocess
+from collections.abc import Callable
+from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock, call
 
 import pytest
-
 
 _INT_1260 = 1260
 _INT_2 = 2
@@ -5724,13 +5723,21 @@ def test_an_escalated_severity_is_not_carried() -> None:
     assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
 
 
-def test_an_answered_finding_plus_a_new_one_is_not_carried() -> None:
-    """Fail-closed witness: one carried key plus one new key still demands a reply."""
+def _answered_plus_new_body() -> str:
     str_new = _outside_diff_body("src/a.py", str_line="90", str_title="A different finding.")
-    str_body = _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)") + str_new.split(
+    return _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)") + str_new.split(
         "\n", 2
     )[2]
-    assert len(_load_gate().body_findings(str_body)) == 2
+
+
+def test_the_answered_plus_new_body_really_parses_two_blocks() -> None:
+    """Guard for the test below: the appended block must parse, or it proves nothing."""
+    assert len(_load_gate().body_findings(_answered_plus_new_body())) == 2
+
+
+def test_an_answered_finding_plus_a_new_one_is_not_carried() -> None:
+    """Fail-closed witness: one carried key plus one new key still demands a reply."""
+    str_body = _answered_plus_new_body()
     list_reviews = [
         _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
         _carry_review(str_body, str_submitted=_CARRY_SECOND),
