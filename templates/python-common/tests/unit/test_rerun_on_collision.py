@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 
+
 _SPEC = importlib.util.spec_from_file_location(
     "rerun_on_collision", Path(__file__).resolve().parents[2] / "bin" / "rerun_on_collision.py"
 )
