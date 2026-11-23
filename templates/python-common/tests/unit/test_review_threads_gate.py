@@ -10,18 +10,19 @@ Every shape here was measured on a real PR (blueprintx#170), including the one t
 the gate: 14 threads all reading ``isResolved: true`` while 11 held no author reply at all.
 """
 
+from collections.abc import Callable
 import copy
 import functools
 import importlib.util
 import json
+from pathlib import Path
 import re
 import subprocess
-from collections.abc import Callable
-from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock, call
 
 import pytest
+
 
 _INT_1260 = 1260
 _INT_2 = 2
@@ -5725,9 +5726,10 @@ def test_an_escalated_severity_is_not_carried() -> None:
 
 def _answered_plus_new_body() -> str:
     str_new = _outside_diff_body("src/a.py", str_line="90", str_title="A different finding.")
-    return _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)") + str_new.split(
-        "\n", 2
-    )[2]
+    return (
+        _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)")
+        + str_new.split("\n", 2)[2]
+    )
 
 
 def test_the_answered_plus_new_body_really_parses_two_blocks() -> None:
