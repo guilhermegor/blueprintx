@@ -29,6 +29,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
@@ -121,13 +122,15 @@ def _paged(str_path: str, *, str_token: str) -> list:
 def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[str]]:
     """Map each open non-draft PR to its paths, skipping PRs whose files cannot be read."""
     pr_files: dict[int, set[str]] = {}
-    for pr in _paged(f"repos/{repo}/pulls?state=open&base={branch}", str_token=str_token):
+    for pr in _paged(
+        f"repos/{repo}/pulls?state=open&base={urllib.parse.quote(branch)}", str_token=str_token
+    ):
         if pr["draft"]:
             continue
         str_files = f"repos/{repo}/pulls/{pr['number']}/files"
         try:
             pr_files[pr["number"]] = paths_of(_paged(str_files, str_token=str_token))
-        except (urllib.error.URLError, TimeoutError) as err:
+        except OSError as err:
             print(f"skip PR #{pr['number']}: cannot read files: {err}")
     return pr_files
 
@@ -172,7 +175,7 @@ def main() -> int:
     try:
         merge = _merge_files(repo, before=before, after=after, str_token=token)
         pr_files = _open_pr_files(repo, branch=branch, str_token=token)
-    except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as err:
+    except (OSError, ValueError, KeyError) as err:
         print(f"cannot read merge files or open PRs: {err}", file=sys.stderr)
         return 1
 
@@ -182,7 +185,7 @@ def main() -> int:
             print(f"updated PR #{num}")
         except urllib.error.HTTPError as err:
             print(f"skip PR #{num}: HTTP {err.code}")
-        except (urllib.error.URLError, TimeoutError) as err:
+        except OSError as err:
             print(f"skip PR #{num}: {err}")
     return 0
 
