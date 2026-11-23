@@ -32,6 +32,7 @@ def test_parse_excludes_splits_commas_and_newlines() -> None:
     assert _MOD.parse_excludes("a, b\n\nc") == ["a", "b", "c"]
 
 
-def test_paths_of_includes_previous_filename_of_a_rename():
+def test_paths_of_includes_previous_filename_of_a_rename() -> None:
+    """A renamed file contributes both its old and new path."""
     files = [{"filename": "b.py", "previous_filename": "a.py"}, {"filename": "c.py"}]
     assert _MOD.paths_of(files) == {"a.py", "b.py", "c.py"}

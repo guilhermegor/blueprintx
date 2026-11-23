@@ -129,6 +129,15 @@ def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[s
     return pr_files
 
 
+def _merge_files(repo: str, *, before: str, after: str, str_token: str) -> set[str]:
+    """Return the paths the push changed (a lone commit when ``before`` is the zero sha)."""
+    if before == ZERO_SHA:
+        commit = _call("GET", str_path=f"repos/{repo}/commits/{after}", str_token=str_token)
+        return paths_of(commit["files"])
+    str_cmp = f"repos/{repo}/compare/{before}...{after}"
+    return paths_of(_paged(str_cmp, str_token=str_token, str_key="files"))
+
+
 def main() -> int:
     """Update every open PR that collides with the push that triggered this run.
 
@@ -144,12 +153,7 @@ def main() -> int:
     excludes = parse_excludes(os.environ.get("RERUN_EXCLUDE_FILES", DEFAULT_EXCLUDES))
 
     try:
-        if before == ZERO_SHA:
-            commit = _call("GET", str_path=f"repos/{repo}/commits/{after}", str_token=token)
-            merge = paths_of(commit["files"])
-        else:
-            str_cmp = f"repos/{repo}/compare/{before}...{after}"
-            merge = paths_of(_paged(str_cmp, str_token=token, str_key="files"))
+        merge = _merge_files(repo, before=before, after=after, str_token=token)
     except (urllib.error.URLError, TimeoutError) as err:
         print(f"cannot read merge files: {err}", file=sys.stderr)
         return 1
