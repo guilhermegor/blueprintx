@@ -3,6 +3,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 _SPEC = importlib.util.spec_from_file_location(
     "rerun_on_collision", Path(__file__).resolve().parents[2] / "bin" / "rerun_on_collision.py"
@@ -42,3 +44,10 @@ def test_paths_of_includes_previous_filename_of_a_rename() -> None:
 def test_truncated_merge_updates_every_open_pr() -> None:
     """A merge file list at GitHub's cap cannot be intersected, so every PR is selected."""
     assert _MOD._targets(None, pr_files={1: {"a.py"}, 2: {"b.py"}}, excludes=[]) == [1, 2]
+
+
+def test_main_skips_without_rerun_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without RERUN_TOKEN the script exits 0 and never calls the API."""
+    monkeypatch.delenv("RERUN_TOKEN", raising=False)
+    monkeypatch.setattr(_MOD, "_call", lambda *a, **k: (_ for _ in ()).throw(AssertionError))
+    assert _MOD.main() == 0

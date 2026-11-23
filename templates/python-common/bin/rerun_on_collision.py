@@ -17,11 +17,11 @@ HOT FILES. Files nearly every PR touches would make every PR collide with every 
 matching ``RERUN_EXCLUDE_FILES`` (comma- or newline-separated ``fnmatch`` globs) are ignored on
 both sides. Default: ``poetry.lock,CHANGELOG.md``.
 
-TOKEN. By default everything goes through ``GITHUB_TOKEN`` (``contents: write`` and
-``pull-requests: write``). ⚠️ A branch update pushed with ``GITHUB_TOKEN`` does NOT start
-workflows on the PR (GitHub suppresses token-triggered events to prevent recursion), so with
-the default token the branch is updated but CI may not re-run. Set ``RERUN_TOKEN`` (a PAT or
-App token with ``contents: write`` and ``pull-requests: write``) to make the update retrigger CI.
+TOKEN. The script only runs with the ``RERUN_TOKEN`` secret (a PAT or App token with
+``contents: write`` and ``pull-requests: write``). A branch update pushed with ``GITHUB_TOKEN``
+starts no workflows on the PR (GitHub suppresses token-triggered events), so the PR would sit
+on "waiting for status" with no checks on its new head; without the secret the script logs and
+exits 0 without touching any PR.
 """
 
 import fnmatch
@@ -130,7 +130,7 @@ def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[s
         str_files = f"repos/{repo}/pulls/{pr['number']}/files"
         try:
             pr_files[pr["number"]] = paths_of(_paged(str_files, str_token=str_token))
-        except OSError as err:
+        except (OSError, ValueError, KeyError) as err:
             print(f"skip PR #{pr['number']}: cannot read files: {err}")
     return pr_files
 
@@ -143,8 +143,8 @@ def _merge_files(repo: str, *, before: str, after: str, str_token: str) -> set[s
         data = _call(
             "GET", str_path=f"repos/{repo}/compare/{before}...{after}", str_token=str_token
         )
-    files = data["files"]
-    return None if len(files) >= FILE_CAP else paths_of(files)
+    files = data.get("files")
+    return None if files is None or len(files) >= FILE_CAP else paths_of(files)
 
 
 def _targets(
@@ -166,7 +166,10 @@ def main() -> int:
         0 always for per-PR failures (logged); 1 only when the merge's files or the
         open-PR list cannot be read.
     """
-    token = os.environ.get("RERUN_TOKEN") or os.environ["GITHUB_TOKEN"]
+    token = os.environ.get("RERUN_TOKEN")
+    if not token:
+        print("RERUN_TOKEN is not set: skipping, an update pushed with GITHUB_TOKEN starts no CI")
+        return 0
     repo = os.environ["GITHUB_REPOSITORY"]
     before, after = os.environ.get("BEFORE_SHA") or ZERO_SHA, os.environ["AFTER_SHA"]
     branch = os.environ.get("BASE_BRANCH", "main")
@@ -185,7 +188,7 @@ def main() -> int:
             print(f"updated PR #{num}")
         except urllib.error.HTTPError as err:
             print(f"skip PR #{num}: HTTP {err.code}")
-        except OSError as err:
+        except (OSError, ValueError) as err:
             print(f"skip PR #{num}: {err}")
     return 0
 

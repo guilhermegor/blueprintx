@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
 
 jobs:
@@ -24,7 +24,6 @@ jobs:
 
       - name: Update colliding PRs
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           RERUN_TOKEN: ${{ secrets.RERUN_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           BEFORE_SHA: ${{ github.event.before }}
