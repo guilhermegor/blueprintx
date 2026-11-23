@@ -42,7 +42,7 @@ projects also switch versioning: online = tag-driven, offline = a local `poe bum
 
 ## I don't use a PR review bot — will the generated project's required check ever pass?
 
-The scaffolder asks *"Will an automated reviewer (CodeRabbit, Greptile, Graphite, Copilot,
+The scaffolder asks *"Will one of these automated reviewers (CodeRabbit, Greptile, Graphite, Copilot,
 reviewer-ladder App) review PRs here? Answering no opts the review-thread check out: only human reviews will count."*. The gate
 only recognizes the bot logins in the roster, so a project reviewed only by humans answers no.
 Answer **no** and it ships `.review-bots.yaml` containing `adopted: false`
