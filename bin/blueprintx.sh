@@ -412,7 +412,7 @@ prompt_language() {
     local cancel_idx="$idx"
     printf "  ${CANCEL}%d) Cancel${NC}\n" "$cancel_idx" >&2
     printf "${CYAN}Choice${NC} [1-%d]: " "$cancel_idx" >&2
-    read -r choice
+    read -r choice || [ -n "$choice" ] || exit_error "stdin closed at language prompt"
     printf "\n" >&2
 
     if [ "$choice" = "$cancel_idx" ]; then
@@ -450,7 +450,7 @@ prompt_skeleton() {
         idx=$((idx + 1))
     done
     printf "${CYAN}Choice${NC} [1-%d]: " "$((idx - 1))" >&2
-    read -r choice
+    read -r choice || [ -n "$choice" ] || exit_error "stdin closed at skeleton prompt"
     printf "\n" >&2
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -lt "$idx" ]; then
@@ -478,7 +478,7 @@ prompt_license() {
     printf "  ${BLUE}10) CC0-1.0${NC}      — Public domain dedication; waives all rights.\n" >&2
     printf "  ${BLUE}11) Unlicense${NC}    — Public domain; maximally free, no conditions.\n" >&2
     printf "${CYAN}Choice${NC} [1-11, default 1]: " >&2
-    read -r choice
+    read -r choice || true
     printf "\n" >&2
 
     case "$choice" in
@@ -507,7 +507,7 @@ prompt_docs_locale() {
     printf "  ${BLUE}2) pt-BR${NC} — Brazilian Portuguese\n" >&2
     printf "        Code comments and docstrings stay English either way.\n" >&2
     printf "${CYAN}Choice${NC} [1-2, default 1]: " >&2
-    read -r choice
+    read -r choice || true
     printf "\n" >&2
 
     case "$choice" in
@@ -736,6 +736,7 @@ run_create_flow_from_spec() {
 }
 
 run_create_flow() {
+    warn_if_outdated
     if [ -n "$SPEC_FILE" ]; then
         run_create_flow_from_spec
         return

@@ -3334,3 +3334,44 @@ def test_poetry_requirement_excludes_the_path_traversal_releases() -> None:
 
     assert cls_spec.contains("2.3.3")
     assert not cls_spec.contains("2.3.2")
+
+
+def test_unparseable_dependency_never_reaches_the_success_message(tmp_path: Path) -> None:
+    """An unsupported dependency makes the pip fallback fail, never report success.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary directory holding a ``pyproject.toml`` with a git dependency.
+    """
+    path_lib = Path(__file__).resolve().parents[2] / "bin" / "lib"
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.poetry.dependencies]\npython = "^3.10"\n'
+        'broken = {git = "https://example.invalid/x.git"}\n',
+        encoding="utf-8",
+    )
+    str_script = (
+        f'export PROJECT_ROOT="{tmp_path}" PYTHON="{sys.executable}"; '
+        f'source "{path_lib}/common.sh"; source "{path_lib}/bootstrap.sh"; '
+        f'source "{path_lib}/pip_fallback.sh"; '
+        "pip_fallback_ensure_toml_reader() { return 0; }; "
+        f'pip_fallback_install_groups_in_venv "{shutil.which("false") or "false"}" main deps'
+    )
+    dict_env = dict(os.environ)
+    dict_env.pop("_BX_PIP_FALLBACK_LOADED", None)
+    dict_env.pop("FORCE_COLOR", None)
+    dict_env.pop("CLICOLOR_FORCE", None)
+    dict_env.pop("NO_COLOR", None)
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, "-c", str_script],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=dict_env,
+    )
+    str_output = cls_result.stdout + cls_result.stderr
+
+    assert cls_result.returncode != 0
+    assert "Unsupported dependency type for pip fallback: broken -> git" in str_output
+    assert "installed with pip fallback" not in str_output
