@@ -31,6 +31,43 @@ check "trigger never reads a PR-controlled head field" \
 check "backfill reads each PR once instead of sleeping on it inside one job timeout" \
 	backfill_polls_once
 
+GATE_WF="$REPO_ROOT/.github/workflows/review_threads.yml"
+gate_step() {
+	local str_files="$1" str_labels="$2" str_dir int_rc
+	str_dir=$(mktemp -d)
+	awk '/name: Gate files unchanged/{f=1} f&&/^        run: \|/{r=1;next} r&&/^      - /{exit} r' "$GATE_WF" | sed 's/^          //' >"$str_dir/step.sh"
+	printf '#!/bin/bash\ncase "$*" in *labels*) printf "%%s\\n" "$FAKE_LABELS";; *) printf "%%s\\n" "$FAKE_FILES";; esac\n' >"$str_dir/gh"
+	chmod +x "$str_dir/gh"
+	PATH="$str_dir:$PATH" GITHUB_REPOSITORY=o/r PR_NUMBER=1 FAKE_FILES="$str_files" FAKE_LABELS="$str_labels" \
+		bash "$str_dir/step.sh" 2>&1
+	int_rc=$?
+	rm -rf "$str_dir"
+	return $int_rc
+}
+gate_edit="templates/common/bin/check_review_threads.py"
+gate_step_passes() { gate_step "$@" >/dev/null; }
+gate_step_fails() {
+	local str_out
+	str_out=$(gate_step "$@")
+	[ $? -eq 1 ] && grep -qF "$gate_edit" <<<"$str_out"
+}
+gate_step_fails_on() {
+	local str_out
+	str_out=$(gate_step "$1" "$3")
+	[ $? -eq 1 ] && grep -qF "$2" <<<"$str_out"
+}
+check "gate edit without the label fails the step" gate_step_fails "$gate_edit" "bug"
+check "same gate edit with the label passes" gate_step_passes "$gate_edit" "gate-change-approved"
+check "unrelated edit passes without the label" gate_step_passes "README.md" ""
+check "roster edit without the label fails the step" gate_step_fails_on ".review-bots.yaml" ".review-bots.yaml" "bug"
+check "rename away from a gated path fails the step" gate_step_fails_on \
+	"docs/old.py"$'\n'"$gate_edit" "$gate_edit" "bug"
+check "near-match label does not approve" gate_step_fails "$gate_edit" "gate-change-approved-x"
+check "review-thread gate re-runs when a label is added" \
+	grep -qE 'types: \[.*\blabeled\b' "$GATE_WF"
+check "review-thread gate re-runs when a label is removed" \
+	grep -qE 'types: \[.*unlabeled' "$GATE_WF"
+
 repo_workflows="$REPO_ROOT/.github/workflows"
 ruff_installs_pinned() {
 	local installs
