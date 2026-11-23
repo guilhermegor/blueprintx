@@ -1356,13 +1356,14 @@ is shaped as it is; a generated project gets the behavior, not the history.
       same id is NEWLY ADDED to another top-level workflow file of the same tree (the repo's
       own `.github/workflows/`, or one `templates/<name>/.github/workflows/`) with an
       identical job block, so moving a job between files is a move, not a removal (#1311).
-      Everything in the block must match except `runs-on` and `needs`, so a changed `name:`
+      Everything in the block must match except `runs-on`, so a changed `name:`
       (a required status-check context keys on the name), `steps:`, `if:`,
       `continue-on-error`, `env:` or `uses:` makes it a removal. One new job excuses one
       removal. It also counts as removed when the id is gone from the whole tree, when it
       only reappears in a different tree, or when the target sits in a subdirectory (GitHub
-      runs no workflow there). The target workflow's own triggers, `env:` and `permissions:`
-      are not compared.
+      runs no workflow there). `needs:` is compared, since a skipped dependency skips the job. The target
+      workflow's own `on:`, `env:`, `defaults:`, `concurrency:` and `permissions:` are not
+      compared, and neither is whether the target file is copied into generated projects.
     - `assertion-weakening`: wired in pre-commit (`language: system`, `always_run`, so the
       caller's environment reaches it, including the `TEST_CHANGE_OK` hatch) and as its own
       `assertion_weakening.yaml` workflow (not a step of the matrix `test` job, whose check

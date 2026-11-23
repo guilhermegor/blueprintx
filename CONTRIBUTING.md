@@ -740,7 +740,7 @@ Configuration files in this repository carry no comments, so the reasoning lives
   follow the one-implementation rule; diff-scoped gates (`gate-integrity`, the PR file-count
   ceiling) compare against `merge-base(HEAD, main)` because they check a delta. `gate-integrity`
   treats a workflow job as moved when the same id is newly added to another top-level workflow
-  file of the same tree with an identical job block bar `runs-on` and `needs`; a changed name,
+  file of the same tree with an identical job block bar `runs-on`; a changed name,
   steps, `if:` or `env:`, a job gone from the tree, a move across trees (template to root) or
   into a subdirectory is still a removal (#1311). The
   complexity gate runs twice, the second time scoped to `templates/python-common`, which

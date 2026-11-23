@@ -949,13 +949,16 @@ def test_workflow_job_moved_with_changed_steps_is_removed(monkeypatch: pytest.Mo
         "    continue-on-error: true\n",
         "    env:\n      LINT_REQUIRED: '0'\n",
         "    timeout-minutes: 1\n",
+        "    needs: [noop]\n",
+        '    "continue-on-error": true\n',
+        "    if : false\n",
     ],
 )
 def test_workflow_job_moved_with_a_softening_key_is_removed(
     monkeypatch: pytest.MonkeyPatch, *, str_extra: str
 ) -> None:
     """A key that skips or softens the job is not a faithful move."""
-    str_job = _STR_MOVED_JOB + str_extra
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
 
     assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
 

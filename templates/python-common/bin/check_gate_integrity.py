@@ -28,7 +28,7 @@ files a change touches — never off arbitrary source):
   or workflow file DELETED outright — the most complete form of every weakening above
 - a job key removed from a changed workflow's ``jobs:`` block, unless the same id reappears
   in a workflow file of the same tree, newly added there, with an identical job block bar
-  ``runs-on``/``needs`` (a move)
+  ``runs-on`` (a move)
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
   reads its diff rather than calling the GitHub API, the same "one implementation" reasoning
@@ -145,7 +145,8 @@ RE_GATE_SCRIPT = re.compile(r"(^|/)bin/(check|lint)_[^/]+\.(py|sh)$")
 RE_WORKFLOW_PATH = re.compile(r"\.github/workflows/.*\.ya?ml$")
 RE_TOP_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
 RE_JOB_KEY = re.compile(r"^ {4}([A-Za-z_-]+):")
-SET_MOVABLE_JOB_KEYS = frozenset({"runs-on", "needs"})
+RE_JOB_KEY_LINE = re.compile(r"^ {4}[^\s#-]")
+SET_MOVABLE_JOB_KEYS = frozenset({"runs-on"})
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
@@ -505,7 +506,7 @@ def precommit_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
 
 
 def job_signature(list_lines: list) -> tuple:
-    """Return a job block's comparable lines: everything bar ``runs-on`` and ``needs``.
+    """Return a job block's comparable lines: everything bar ``runs-on``.
 
     Parameters
     ----------
@@ -515,16 +516,16 @@ def job_signature(list_lines: list) -> tuple:
     Returns
     -------
     tuple
-        The block's lines with the ``runs-on:`` and ``needs:`` keys (and their continuation
-        lines) removed, so a changed ``name:``, ``if:``, ``env:``, ``steps:``, ``uses:`` or
+        The block's lines with the ``runs-on:`` key (and its continuation lines) removed;
+        any other 4-space line, quoted or oddly spaced keys included, ends the skip, so a changed ``name:``, ``if:``, ``env:``, ``steps:``, ``uses:`` or
         any other key makes the job differ.
     """
     list_kept = []
     bool_skip = False
     for str_line in list_lines:
         cls_key = RE_JOB_KEY.match(str_line)
-        if cls_key:
-            bool_skip = cls_key.group(1) in SET_MOVABLE_JOB_KEYS
+        if RE_JOB_KEY_LINE.match(str_line):
+            bool_skip = bool(cls_key) and cls_key.group(1) in SET_MOVABLE_JOB_KEYS
         if not bool_skip:
             list_kept.append(str_line)
     return tuple(list_kept)
