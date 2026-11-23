@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/repo_slug.sh"
 
 RULESET_NAME="pr-quality-gate"
 
@@ -35,10 +36,6 @@ require_gh() {
 	return 0
 }
 
-resolve_repo() {
-	gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true
-}
-
 build_rules_json() {
 	local str_checks_rule=""
 	if [ ${#REQUIRED_CHECKS[@]} -gt 0 ]; then
@@ -48,7 +45,7 @@ build_rules_json() {
 			str_contexts+="$(printf '{"context":"%s"},' "$str_check")"
 		done
 		str_contexts="${str_contexts%,}"
-		str_checks_rule=$(printf ',{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[%s]}}' "$str_contexts")
+		str_checks_rule=$(printf ',{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":false,"required_status_checks":[%s]}}' "$str_contexts")
 	fi
 
 	cat <<EOF
@@ -150,19 +147,19 @@ report_blocking_checks() {
 
 	if ! str_strict="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --paginate --jq \
 		"$str_rules | .parameters.strict_required_status_checks_policy" 2>&1)"; then
-		print_status "warning" "Could not READ the strict policy on $str_repo (so it is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
+		print_status "warning" "Could not READ the strict policy on $str_repo (so it is UNKNOWN, not confirmed off): ${str_strict:-no output from gh}"
 		return 2
 	fi
 	str_strict="${str_strict%%$'\n'*}"
 	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
-		print_status "warning" "strict_required_status_checks_policy is absent on $str_repo (ruleset '$RULESET_NAME') — UNKNOWN, not enforced"
+		print_status "warning" "strict_required_status_checks_policy is absent on $str_repo (ruleset '$RULESET_NAME') — UNKNOWN, not confirmed off"
 		return 2
 	fi
-	if [ "$str_strict" != "true" ]; then
-		print_status "error" "strict_required_status_checks_policy is NOT true on $str_repo (ruleset '$RULESET_NAME') — a PR can merge on a green run that never saw its base (blueprintx#307)"
+	if [ "$str_strict" != "false" ]; then
+		print_status "error" "strict_required_status_checks_policy is NOT false on $str_repo (ruleset '$RULESET_NAME') — every merge forces every other PR to update to the base and re-run its CI (blueprintx#1283)"
 		return 1
 	fi
-	print_status "success" "strict_required_status_checks_policy is enforced on $str_repo (ruleset '$RULESET_NAME', verified)"
+	print_status "success" "strict_required_status_checks_policy is off on $str_repo (ruleset '$RULESET_NAME', verified)"
 }
 
 assert_branch_protection_strict() {
@@ -174,18 +171,18 @@ assert_branch_protection_strict() {
 			print_status "info" "No classic branch protection on $str_repo:$str_branch (classic protection is absent; the ruleset check reports its own result)"
 			return 2
 		fi
-		print_status "warning" "Could not READ classic branch protection on $str_repo:$str_branch (so strict is UNKNOWN, not enforced): ${str_strict:-no output from gh}"
+		print_status "warning" "Could not READ classic branch protection on $str_repo:$str_branch (so strict is UNKNOWN, not confirmed off): ${str_strict:-no output from gh}"
 		return 2
 	fi
 	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
 		print_status "warning" "$str_repo:$str_branch has no required_status_checks under classic branch protection — nothing to assert strict on"
 		return 2
 	fi
-	if [ "$str_strict" != "true" ]; then
-		print_status "error" "required_status_checks.strict is NOT true on $str_repo:$str_branch (classic branch protection) — a PR can merge on a green run that never saw its base (blueprintx#307)"
+	if [ "$str_strict" != "false" ]; then
+		print_status "error" "required_status_checks.strict is NOT false on $str_repo:$str_branch (classic branch protection) — every merge forces every other PR to update to the base and re-run its CI (blueprintx#1283)"
 		return 1
 	fi
-	print_status "success" "required_status_checks.strict is enforced on $str_repo:$str_branch (classic branch protection, verified)"
+	print_status "success" "required_status_checks.strict is off on $str_repo:$str_branch (classic branch protection, verified)"
 }
 
 verify_strict_required_checks() {
@@ -193,9 +190,8 @@ verify_strict_required_checks() {
 		return 1
 	fi
 	local str_repo str_branch
-	str_repo="$(resolve_repo)"
-	if [ -z "$str_repo" ]; then
-		print_status "error" "No GitHub remote resolved — cannot verify branch protection"
+	if ! str_repo="$(resolve_repo enable_repo_rules)"; then
+		print_status "error" "Cannot verify branch protection without a resolved repository"
 		return 1
 	fi
 	if ! str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>&1)"; then
@@ -211,7 +207,7 @@ verify_strict_required_checks() {
 		return 1
 	fi
 	if [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ]; then
-		print_status "error" "Neither mechanism confirmed strict enforcement on $str_repo (both absent or unreadable) — absence is not proof (blueprintx#307)"
+		print_status "error" "Neither mechanism confirmed the strict policy is off on $str_repo (both absent or unreadable) — absence is not proof (blueprintx#1283)"
 		return 1
 	fi
 	return 0
@@ -252,7 +248,7 @@ ensure_optout_label() {
 check_ruleset_present() {
 	require_gh || return 0
 	local str_repo str_ids
-	str_repo="${GITHUB_REPOSITORY:-$(resolve_repo)}"
+	str_repo="${GITHUB_REPOSITORY:-$(resolve_repo enable_repo_rules || true)}"
 	if [ -z "$str_repo" ]; then
 		print_status "warning" "Could not resolve the repository (ruleset presence UNKNOWN, not confirmed)"
 		return 0
@@ -313,7 +309,7 @@ main() {
 	fi
 	if [ "${1:-}" = "stranded" ]; then
 		require_gh || return 0
-		report_stranded_prs "${GITHUB_REPOSITORY:-$(resolve_repo)}"
+		report_stranded_prs "${GITHUB_REPOSITORY:-$(resolve_repo enable_repo_rules || true)}"
 		return 0
 	fi
 
@@ -323,9 +319,7 @@ main() {
 	fi
 
 	local str_repo
-	str_repo="$(resolve_repo)"
-	if [ -z "$str_repo" ]; then
-		print_status "warning" "No GitHub remote resolved — skipping (push the repo to GitHub first)"
+	if ! str_repo="$(resolve_repo enable_repo_rules)"; then
 		return 0
 	fi
 

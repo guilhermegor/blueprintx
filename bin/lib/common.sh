@@ -160,6 +160,23 @@ sed_inplace() {
     return "$int_status"
 }
 
+warn_if_outdated() {
+    local str_installed="${BLUEPRINTX_VERSION:-0.0.0}" str_latest
+    str_installed="${str_installed#v}"
+    [ "$str_installed" = "0.0.0" ] && return 0
+    [[ "$str_installed" == *-* ]] && return 0
+    [ -n "${BLUEPRINTX_NO_UPDATE_CHECK:-}" ] && return 0
+    command -v curl >/dev/null 2>&1 || return 0
+    str_latest="$(curl -fsS -m 3 https://api.github.com/repos/guilhermegor/blueprintx/releases/latest 2>/dev/null |
+        sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1 || true)"
+    [ -n "$str_latest" ] || return 0
+    [ "$str_latest" = "$str_installed" ] && return 0
+    if [ "$(printf '%s\n%s\n' "$str_installed" "$str_latest" | sort -V 2>/dev/null | head -1)" = "$str_installed" ]; then
+        print_status "warning" "Installed BlueprintX $str_installed is older than the latest release $str_latest; templates may carry fixed bugs (set BLUEPRINTX_NO_UPDATE_CHECK=1 to skip this check)."
+    fi
+    return 0
+}
+
 resolve_default_branch() {
     local explicit="${1:-}"
     if [ -n "$explicit" ]; then
@@ -326,6 +343,8 @@ copy_repo_rules_provisioner() {
     blueprintx_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
     mkdir -p "$project_path/bin/lib"
     cp "$blueprintx_root/templates/common/bin/lib/common.sh" "$project_path/bin/lib/common.sh"
+    cp "$blueprintx_root/templates/python-common/bin/lib/repo_slug.sh" \
+        "$project_path/bin/lib/repo_slug.sh"
     cp "$blueprintx_root/templates/python-common/bin/enable_repo_rules.sh" \
         "$project_path/bin/enable_repo_rules.sh"
     cp "$required_checks_src" "$project_path/bin/required-checks.txt"

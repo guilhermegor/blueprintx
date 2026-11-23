@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/repo_slug.sh"
 
 MKDOCS_YML="$SCRIPT_DIR/../mkdocs.yml"
 PAGES_BRANCH="gh-pages"
@@ -18,47 +19,6 @@ require_gh() {
 		return 1
 	fi
 	return 0
-}
-
-repo_from_remote() {
-	git remote get-url origin 2>/dev/null |
-		sed -nE 's#^(git@github\.com:|ssh://git@github\.com/|https?://([^@/]+@)?github\.com/)([^/]+/[^/]+)/?$#\3#p' |
-		sed -E 's#\.git$##' || true
-}
-
-report_gh_failure() {
-	local str_err="$1" str_limit int_remaining int_reset str_when
-	str_limit="$(gh api rate_limit --jq '.resources.graphql | "\(.remaining) \(.reset)"' 2>/dev/null || true)"
-	int_remaining="${str_limit%% *}"
-	int_reset="${str_limit##* }"
-	if [ "$int_remaining" = "0" ]; then
-		str_when="$(date -d "@$int_reset" 2>/dev/null || date -r "$int_reset" 2>/dev/null || echo "epoch $int_reset")"
-		print_status "warning" "GitHub GraphQL rate limit exhausted — resets at $str_when; re-run 'poetry run poe enable_pages' after the reset${str_err:+ — gh said: $str_err}" >&2
-		return 0
-	fi
-	print_status "warning" "gh repo view failed: ${str_err:-no output}" >&2
-}
-
-resolve_repo() {
-	local str_slug
-	str_slug="$(repo_from_remote)"
-	if [ -n "$str_slug" ]; then
-		echo "$str_slug"
-		return 0
-	fi
-	local str_err
-	str_slug="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
-	if [ -n "$str_slug" ]; then
-		echo "$str_slug"
-		return 0
-	fi
-	str_err="$(gh repo view --json nameWithOwner 2>&1 >/dev/null || true)"
-	if [ -z "$(git remote)" ]; then
-		print_status "warning" "No GitHub remote resolved — push the repo to GitHub first" >&2
-	else
-		report_gh_failure "$str_err"
-	fi
-	return 1
 }
 
 uses_mike() {
@@ -81,8 +41,14 @@ set_pages_source() {
 			return 0
 		fi
 		print_status "info" "Setting GitHub Pages source to branch '$PAGES_BRANCH' for $str_repo (mike versioned docs)..."
-		if printf '{"source":{"branch":"%s","path":"/"}}' "$PAGES_BRANCH" |
+		if printf '{"build_type":"legacy","source":{"branch":"%s","path":"/"}}' "$PAGES_BRANCH" |
 			gh api -X "$str_method" "repos/$str_repo/pages" --input - >/dev/null 2>&1; then
+			local str_build_type
+			str_build_type="$(gh api "repos/$str_repo/pages" --jq .build_type 2>/dev/null || true)"
+			if [ "$str_build_type" != "legacy" ]; then
+				print_status "warning" "Pages source set but build_type reads back as '${str_build_type:-unknown}', not 'legacy' — the site may still deploy from Actions; set Settings → Pages → Deploy from a branch"
+				return 0
+			fi
 			print_status "success" "GitHub Pages now serves the versioned docs from '$PAGES_BRANCH'"
 			return 0
 		fi
@@ -100,7 +66,7 @@ set_pages_source() {
 
 enable_pages() {
 	local str_repo
-	if ! str_repo="$(resolve_repo)"; then
+	if ! str_repo="$(resolve_repo enable_pages)"; then
 		return 0
 	fi
 	set_pages_source "$str_repo"
