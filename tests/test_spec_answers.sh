@@ -476,8 +476,8 @@ test_ts_lib_answer_stream_order() {
     str_priv="$(ts_lib_stream git_remote=y create_repo=y)"
     str_full="$(ts_lib_stream review_bot_roster=y otel=n git_remote=y create_repo=y \
         repo_visibility=public kanban=y kanban_visibility=private protect_branch=y human_reviewers=y)"
-    if [ "$str_def" = "n,n,n" ] && [ "$str_remote" = "n,n,y,n" ] \
-        && [ "$str_priv" = "n,n,y,y,2,n,n" ] && [ "$str_full" = "y,n,y,y,1,y,3,y,y" ]; then
+    if [ "$str_def" = "y,n,n" ] && [ "$str_remote" = "y,n,y,n" ] \
+        && [ "$str_priv" = "y,n,y,y,2,n,n" ] && [ "$str_full" = "y,n,y,y,1,y,3,y,y" ]; then
         pass "ts-lib answer stream: roster, otel, git_remote, create_repo, visibility, kanban, protect, reviewers"
     else
         fail "ts-lib stream" "default=$str_def remote=$str_remote private=$str_priv full=$str_full"
@@ -706,7 +706,7 @@ test_etcher_chromeos_answer_stream_and_prompt_order() {
     str_got="$(sed -n '/^main() {/,/^}/p' "$REPO_ROOT/bin/scaffold/etcher_chromeos.sh" \
         | grep -E '^    (prompt_default_os|scaffold_prompt_review_bot_roster|prompt_git_remote_setup)( |$)' \
         | awk '{print $1}' | paste -sd' ' -)"
-    if [ "$str_def" = "chromeos-flex,n,n" ] && [ "$str_full" = "fydeos,y,y,n" ] \
+    if [ "$str_def" = "chromeos-flex,y,n" ] && [ "$str_full" = "fydeos,y,y,n" ] \
         && [[ "$str_bad" == *"'default_os' must be chromeos-flex or fydeos"* ]] \
         && [ "$str_got" = "prompt_default_os scaffold_prompt_review_bot_roster prompt_git_remote_setup" ]; then
         pass "etcher-chromeos stream: default_os, roster, git_remote, create_repo; bad default_os refused"
@@ -777,10 +777,10 @@ test_ventoy_usb_answer_stream_order() {
     str_full="$(ventoy_stream include_windows=n include_android=no persistence_size_mb=2048 \
         review_bot_roster=y git_remote=y create_repo=y)"
     str_bad="$(ventoy_stream persistence_size_mb=1500)"
-    if [ "$str_def" = "y,y,4096,n,n" ] && [ "$str_remote" = "y,y,4096,n,y,n" ] \
+    if [ "$str_def" = "y,y,4096,y,n" ] && [ "$str_remote" = "y,y,4096,y,y,n" ] \
         && [ "$str_full" = "n,n,2048,y,y,y,2,n,n" ] \
         && [ "$(ventoy_stream git_remote=y create_repo=y repo_visibility=public kanban=y kanban_visibility=public \
-            protect_branch=n)" = "y,y,4096,n,y,y,1,y,2,n" ] \
+            protect_branch=n)" = "y,y,4096,y,y,y,1,y,2,n" ] \
         && [[ "$str_bad" == *"'persistence_size_mb' must be a multiple of 1024"* ]]; then
         pass "ventoy-usb stream: windows, android, size, roster, git_remote, create_repo; bad size refused"
     else
