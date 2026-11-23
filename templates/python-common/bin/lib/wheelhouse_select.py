@@ -285,9 +285,7 @@ def _requested_extras(set_lines: set[str]) -> dict[str, set[str]]:
     return dict_extras
 
 
-def _applies_with_extras(
-    str_dep: str, *, dict_env: dict[str, str], set_extras: set[str]
-) -> bool:
+def _applies_with_extras(str_dep: str, *, dict_env: dict[str, str], set_extras: set[str]) -> bool:
     """Return whether a ``Requires-Dist`` marker holds under any requested extra.
 
     Parameters

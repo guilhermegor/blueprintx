@@ -611,6 +611,14 @@ def test_close_keeps_only_the_dependencies_whose_marker_holds_for_the_target(
 
 
 @_SKIP_NO_SCRIPT
+def test_wheelhouse_omits_a_win32_dependency_for_a_linux_target(tmp_path: Path) -> None:
+    """The win32-only dependency is not packed when the target is Linux."""
+    str_manifest = _build_for(tmp_path, dict_target=_LINUX_TARGET)
+
+    assert "pywin32_ctypes" not in str_manifest
+
+
+@_SKIP_NO_SCRIPT
 def test_wheelhouse_follows_a_dependency_chain_across_rounds(tmp_path: Path) -> None:
     """A dependency only discovered in the second round is still packed."""
     str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
