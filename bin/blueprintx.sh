@@ -736,6 +736,7 @@ run_create_flow_from_spec() {
 }
 
 run_create_flow() {
+    warn_if_outdated
     if [ -n "$SPEC_FILE" ]; then
         run_create_flow_from_spec
         return

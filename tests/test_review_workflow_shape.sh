@@ -77,6 +77,33 @@ ruff_installs_pinned() {
 check "every pipx install ruff under .github/workflows is pinned with ==<version>" \
 	ruff_installs_pinned
 
+main_run_never_cancelled() {
+	[ -f "$repo_workflows/$1" ] || return 1
+	! grep -qE "^ +cancel-in-progress: *(true|'true'|\"true\"|\\$\\{\\{ *true *\\}\\})( *#.*)?$" "$repo_workflows/$1"
+}
+check "scaffold_checks (push to main) never cancels a run unconditionally" \
+	main_run_never_cancelled scaffold_checks.yml
+
+push_runs_get_own_group() {
+	grep -qE '^ +group: .*github\.sha' "$repo_workflows/$1"
+}
+check "scaffold_checks push runs are keyed by sha, so none replaces a pending main run" \
+	push_runs_get_own_group scaffold_checks.yml
+
+every_suite_wired() {
+	local f b int_missing=0
+	for f in "$REPO_ROOT"/tests/test_*.sh; do
+		b="$(basename "$f")"
+		grep -rqE "^[^#]*bash tests/${b//./\\.}([^[:alnum:]_.-]|$)" "$repo_workflows" "$REPO_ROOT/.pre-commit-config.yaml" || {
+			echo "unwired: $b"
+			int_missing=1
+		}
+	done
+	[ "$int_missing" -eq 0 ]
+}
+check "every tests/test_*.sh is referenced by a workflow or the pre-commit config" \
+	every_suite_wired
+
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
 	exit 1

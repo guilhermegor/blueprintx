@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: scaffold_checks-${{ github.ref }}
-  cancel-in-progress: true
+  group: scaffold_checks-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
 
@@ -346,6 +346,27 @@ jobs:
       - name: Release tag targets the built SHA
         run: bash tests/test_release_target_sha.sh
 
+      - name: enable_pages requests the legacy build_type
+        run: bash tests/test_enable_pages.sh
+
+      - name: test_check_issue_scope
+        run: bash tests/test_check_issue_scope.sh
+
+      - name: test_check_orphan_pr_bodies
+        run: bash tests/test_check_orphan_pr_bodies.sh
+
+      - name: test_check_pr_file_count
+        run: bash tests/test_check_pr_file_count.sh
+
+      - name: test_check_precommit_ci_parity
+        run: bash tests/test_check_precommit_ci_parity.sh
+
+      - name: test_ts_agents_pairing_gate
+        run: bash tests/test_ts_agents_pairing_gate.sh
+
+      - name: test_enable_security
+        run: bash tests/test_enable_security.sh
+
   secret-scan:
     name: GitGuardian — secret scan
     runs-on: ubuntu-latest
@@ -443,6 +464,9 @@ jobs:
       - name: Should-fail regression tests for the scaffold first commit
         run: bash tests/test_scaffold_first_commit.sh
 
+      - name: Regression tests for the outdated-install warning
+        run: bash tests/test_warn_if_outdated.sh
+
       - name: Should-fail regression tests for the scaffold_lint_test.sh cleanup trap
         run: bash tests/test_scaffold_lint_test_cleanup.sh
 
@@ -536,6 +560,12 @@ jobs:
 
       - name: Run the scaffold --list-copies suite, every tier (blueprintx#872)
         run: bash tests/test_scaffold_list_copies.sh
+
+      - name: Install ruff
+        run: pipx install ruff==0.17.5
+
+      - name: Run the per-tier ruff overlay suite (blueprintx#1242)
+        run: bash tests/test_ruff_overlays.sh
 
   specs-structure:
     name: .specs/ structure guard

@@ -59,13 +59,29 @@ scaffold_copy_tooling_configs() {
 	cp "$COMMON_TEMPLATE_ROOT/CONTRIBUTING.md" "$str_project_path/CONTRIBUTING.md"
 	cp "$COMMON_TEMPLATE_ROOT/poe_tasks.toml" "$str_project_path/poe_tasks.toml"
 	cp "$COMMON_TEMPLATE_ROOT/pytest.ini" "$str_project_path/pytest.ini"
-	cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$str_project_path/ruff.toml"
 	cp "$COMMON_TEMPLATE_ROOT/CHANGELOG.md" "$str_project_path/CHANGELOG.md"
 	cp "$COMMON_TEMPLATE_ROOT/poetry.toml" "$str_project_path/poetry.toml"
 	cp "$COMMON_TEMPLATE_ROOT/.gitlint" "$str_project_path/.gitlint"
 	cp "$COMMON_TEMPLATE_ROOT/.coveragerc" "$str_project_path/.coveragerc"
 	cp "$SHARED_TEMPLATE_ROOT/PRINCIPLES.md" "$str_project_path/PRINCIPLES.md"
 	cp "$COMMON_TEMPLATE_ROOT/.cz.toml" "$str_project_path/.cz.toml"
+}
+
+scaffold_compose_ruff_toml() {
+	local str_tier="$1"
+	local str_project_path="$2"
+	local str_overlay
+
+	case "$str_tier" in
+	ddd-service-* | api-service-*) str_overlay=ddd-api-service ;;
+	mvc-service-*) str_overlay=mvc-service ;;
+	*)
+		print_status "error" "no ruff overlay for tier: $str_tier"
+		return 1
+		;;
+	esac
+	cp "$COMMON_TEMPLATE_ROOT/ruff.toml" "$str_project_path/ruff.toml"
+	cat "$COMMON_TEMPLATE_ROOT/ruff/$str_overlay.toml" >>"$str_project_path/ruff.toml"
 }
 
 scaffold_copy_shared_tests() {
@@ -234,6 +250,7 @@ scaffold_copy_common_templates() {
 	print_status "info" "Applying common Python templates..."
 	scaffold_render_pyproject "$str_tier" "$str_project_path"
 	scaffold_copy_tooling_configs "$str_project_path"
+	scaffold_compose_ruff_toml "$str_tier" "$str_project_path"
 	copy_poe_fragments "$str_tier" "$str_project_path"
 	scaffold_copy_shared_tests "$str_project_path"
 	scaffold_copy_shared_test_gates "$str_project_path"
