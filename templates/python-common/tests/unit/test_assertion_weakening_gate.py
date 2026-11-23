@@ -972,3 +972,10 @@ def test_widening_a_conditional_in_body_skip_to_skipif_is_flagged() -> None:
     str_old = "def test_a():\n    if not DB:\n        pytest.skip()\n    assert f() == 1\n"
     str_new = "@pytest.mark.skipif(True)\ndef test_a():\n    assert f() == 1\n"
     assert "skipif" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_moving_an_unconditional_skip_into_a_conditional_body_skip_is_not_flagged() -> None:
+    """``@skip`` -> ``if cond: pytest.skip()`` narrows the skip, like ``skip`` -> ``skipif``."""
+    str_old = "@pytest.mark.skip\ndef test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    if not DB:\n        pytest.skip()\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []

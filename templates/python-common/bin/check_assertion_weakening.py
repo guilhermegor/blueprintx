@@ -900,7 +900,7 @@ def _function_findings(
     set_old_markers = _skip_or_xfail_markers(node_old)
     set_new_markers = _skip_or_xfail_markers(node_new) - set_old_markers
     if "skip" in set_old_markers:
-        set_new_markers.discard("skipif")
+        set_new_markers -= {"skipif", "skip()"}
     if set_new_markers:
         str_markers = "/".join(sorted(set_new_markers))
         list_problems.append(f"{str_path}: {str_name}() newly marked {str_markers}")
