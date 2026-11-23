@@ -2955,7 +2955,21 @@ per-repo because sibling projects pin different versions.</p>
    with no error. This step also prunes whichever DB driver <code>DB_BACKEND</code> did not select —
    the native-DB tiers ship <code>pyodbc</code>/<code>oracledb</code>/<code>psycopg</code>/<code>mysql-connector-python</code>
    <strong>unconditionally</strong> (the backend is chosen at runtime from config, not at scaffold time),
-   so shipping all four in the wheelhouse is pure waste (measured 65 MB → 45 MB).</li>
+   so shipping all four in the wheelhouse is pure waste (measured 65 MB → 45 MB).
+   The bootstrap set (<code>requirements.txt</code>: Poetry and its plugins) gets the same treatment for its
+   <strong>transitive</strong> dependencies (blueprintx#1302). <code>pip download</code> with its dependencies would
+   evaluate their markers against the builder, so a Windows target built on Linux would lose
+   Poetry's <code>sys_platform == "win32"</code> requirements. Instead every download uses <code>--no-deps</code>
+   (the host-marker resolve never runs) and <code>wheelhouse_select.py close</code> repeats one round:
+   read <code>Requires-Dist</code> from the wheels already downloaded for the requirement set, keep the
+   lines whose marker holds for the TARGET (the same evaluator <code>select</code> uses), download what is
+   new, and stop when the set no longer changes. The project-lock constraint (<code>-c</code>) applies to
+   every round. Extras a parent requests (<code>cachecontrol[filecache]</code>) are carried per name and the
+   marker is evaluated once per requested extra; an <code>extra ==</code> dependency nobody requested is
+   dropped. The loop stops with an error after <code>WHEELHOUSE_CLOSURE_MAX_ROUNDS</code> rounds (default
+   50). Alternatives rejected: pip has no target-marker option, and a Poetry export would have
+   to resolve Poetry itself for the target. Known limit: when two parents narrow the same name
+   differently, pip may download two versions and both stay in the pack.</li>
 <li><strong>Pack</strong> — zip the downloaded wheels, split into fixed-size parts, and write
    <code>manifest.json</code> recording every part's sha256 plus the whole archive's sha256. A truncated
    <code>cat</code> of 1-of-5 parts otherwise writes a zip whose only symptom is <code>End-of-central-directory
