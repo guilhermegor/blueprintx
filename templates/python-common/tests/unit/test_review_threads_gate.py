@@ -5746,3 +5746,39 @@ def test_an_answered_finding_plus_a_new_one_is_not_carried() -> None:
     ]
     list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
     assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
+
+
+def test_the_escalated_body_really_parses_one_block() -> None:
+    """Guard for the escalation test: the Major body must parse, or it proves nothing."""
+    str_major = _outside_diff_body("src/a.py", str_line="52").replace("**Minor**", "**Major**")
+    assert len(_load_gate().body_findings(str_major)) == 1
+
+
+def test_the_other_path_body_really_parses_one_block() -> None:
+    """Guard for the other-path test: the src/b.py body must parse, or it proves nothing."""
+    assert len(_load_gate().body_findings(_outside_diff_body("src/b.py", str_line="52"))) == 1
+
+
+def _twice_body(str_line: str) -> str:
+    str_block = _outside_diff_body("src/a.py", str_line=str_line).split("\n", 2)[2]
+    return _outside_diff_body("src/a.py", str_line=str_line).replace("(1)", "(2)") + str_block
+
+
+def test_a_twice_answered_key_carries_a_later_body_with_it_twice() -> None:
+    """Positive witness for multiplicity: a body with a key twice, answered, carries its twin."""
+    list_reviews = [
+        _carry_review(_twice_body("40"), str_submitted=_CARRY_FIRST),
+        _carry_review(_twice_body("52"), str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert _body_problems(list_reviews, list_notices=list_notices) == []
+
+
+def test_a_review_without_submitted_at_never_carries_a_later_one() -> None:
+    """Fail-closed witness: no timestamp means the first body is unanswered, so nothing carries."""
+    list_reviews = [
+        {**_body_review(_outside_diff_body("src/a.py", str_line="40")), "submittedAt": None},
+        _carry_review(_outside_diff_body("src/a.py", str_line="52"), str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 2
