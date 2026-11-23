@@ -3239,8 +3239,8 @@ the stored answers.</p>
 </tr>
 <tr>
 <td><code>review_bot_roster</code></td>
-<td><code>n</code></td>
-<td><code>y</code> ships <code>.review-bots.yaml</code> (a PR review bot is expected).</td>
+<td><code>y</code></td>
+<td><code>y</code> ships <code>.review-bots.yaml</code> (an automated PR reviewer is expected); <code>n</code> ships the <code>adopted: false</code> opt-out stub.</td>
 </tr>
 <tr>
 <td><code>git_remote</code></td>
@@ -3294,7 +3294,7 @@ the stored answers.</p>
 <tr>
 <td><code>pipeline_intent</code></td>
 <td><code>n</code></td>
-<td><code>y</code> selects the multi-intent (<code>PIPELINE_INTENT</code> dispatch) pipeline shape. The scaffold script also accepts this directly as the <code>MULTI_PIPELINE_OPTIN=true</code> environment variable — set that instead of going through stdin if calling the scaffold script yourself.</td>
+<td><code>y</code> selects the multi-intent (<code>PIPELINE_INTENT</code> dispatch) pipeline shape. The scaffold script also accepts this directly as the <code>MULTI_PIPELINE_OPTIN=true</code> environment variable — set that instead of going through stdin if calling the scaffold script yourself. With <code>MULTI_PIPELINE_OPTIN=true</code> set, the scaffold never asks this question, so a spec's <code>pipeline_intent</code> is ignored and no answer is sent for it.</td>
 </tr>
 </tbody>
 </table>
@@ -3345,7 +3345,7 @@ the stored answers.</p>
 </tr>
 <tr>
 <td><code>review_bot_roster</code></td>
-<td><code>n</code></td>
+<td><code>y</code></td>
 <td>Same as the service tiers.</td>
 </tr>
 <tr>
@@ -3371,7 +3371,7 @@ answer shows up as the wrong visibility or the wrong protection payload.</p>
 <tbody>
 <tr>
 <td><code>review_bot_roster</code></td>
-<td><code>n</code></td>
+<td><code>y</code></td>
 <td>Same as the service tiers.</td>
 </tr>
 <tr>
@@ -3473,7 +3473,7 @@ the run with <code>Cause: GitHub rate limit</code>; the retry time is stated onl
 </tr>
 <tr>
 <td><code>review_bot_roster</code></td>
-<td><code>n</code></td>
+<td><code>y</code></td>
 <td>Same as the service tiers.</td>
 </tr>
 <tr>
@@ -3528,7 +3528,7 @@ the git remote prompt.</p>
 </tr>
 <tr>
 <td><code>review_bot_roster</code></td>
-<td><code>n</code></td>
+<td><code>y</code></td>
 <td>Same as the service tiers.</td>
 </tr>
 <tr>

@@ -3285,8 +3285,8 @@ CODEOWNERS, PR template). Without one, it ships an offline git-diff workflow ins
 projects also switch versioning: online = tag-driven, offline = a local <code>poe bump_version</code>
 (<code>cz bump</code>, run inside the generated project — not a BlueprintX <code>make</code> target).</p>
 <h2 id="i-dont-use-a-pr-review-bot-will-the-generated-projects-required-check-ever-pass">I don't use a PR review bot — will the generated project's required check ever pass?<a class="headerlink" href="#i-dont-use-a-pr-review-bot-will-the-generated-projects-required-check-ever-pass" title="Permanent link">&para;</a></h2>
-<p>The scaffolder asks <em>"Will one of these bots review PRs here: CodeRabbit (installed or
-ask-only), Greptile, Graphite, Copilot, reviewer-ladder App? Human-only review = no."</em>. The gate
+<p>The scaffolder asks <em>"Will one of these automated reviewers (CodeRabbit, Greptile, Graphite, Copilot,
+reviewer-ladder App) review PRs here? Answering no opts the review-thread check out: only human reviews will count."</em>. The gate
 only recognizes the bot logins in the roster, so a project reviewed only by humans answers no.
 Answer <strong>no</strong> and it ships <code>.review-bots.yaml</code> containing <code>adopted: false</code>
 (<code>templates/common/review-bots-optout.yaml</code>) instead of the real roster. The gate fails closed
