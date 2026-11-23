@@ -51,6 +51,20 @@ Three steps, run in order:
    the native-DB tiers ship `pyodbc`/`oracledb`/`psycopg`/`mysql-connector-python`
    **unconditionally** (the backend is chosen at runtime from config, not at scaffold time),
    so shipping all four in the wheelhouse is pure waste (measured 65 MB → 45 MB).
+   The bootstrap set (`requirements.txt`: Poetry and its plugins) gets the same treatment for its
+   **transitive** dependencies (blueprintx#1302). `pip download` with its dependencies would
+   evaluate their markers against the builder, so a Windows target built on Linux would lose
+   Poetry's `sys_platform == "win32"` requirements. Instead every download uses `--no-deps`
+   (the host-marker resolve never runs) and `wheelhouse_select.py close` repeats one round:
+   read `Requires-Dist` from the wheels already downloaded for the requirement set, keep the
+   lines whose marker holds for the TARGET (the same evaluator `select` uses), download what is
+   new, and stop when the set no longer changes. The project-lock constraint (`-c`) applies to
+   every round. Extras a parent requests (`cachecontrol[filecache]`) are carried per name and the
+   marker is evaluated once per requested extra; an `extra ==` dependency nobody requested is
+   dropped. The loop stops with an error after `WHEELHOUSE_CLOSURE_MAX_ROUNDS` rounds (default
+   50). Alternatives rejected: pip has no target-marker option, and a Poetry export would have
+   to resolve Poetry itself for the target. Known limit: when two parents narrow the same name
+   differently, pip may download two versions and both stay in the pack.
 3. **Pack** — zip the downloaded wheels, split into fixed-size parts, and write
    `manifest.json` recording every part's sha256 plus the whole archive's sha256. A truncated
    `cat` of 1-of-5 parts otherwise writes a zip whose only symptom is `End-of-central-directory

@@ -59,8 +59,9 @@ which runs before arming on purpose. No retry loop wraps the mutation, so an aut
 ## Assignee and linked issue (blueprintx#937)
 
 `check_pr_policy.sh assignee` fails when `ASSIGNEES` is blank. `check_pr_policy.sh linked-issue` reads
-`BRANCH`, `TITLE`, `TRACKER` and `CLOSING_COUNT`; `dependabot/` and `renovate/` branches skip it, since a
-dependency bump has no issue behind it. `release/` keeps its branch-rule exemption only.
+`BRANCH`, `TITLE`, `TRACKER` and `CLOSING_COUNT`; `dependabot/`, `renovate/` and `release/` branches skip it
+(the same `EXEMPT_BRANCHES` as the branch rule). A dependency bump has no issue behind it, and a release-prep
+PR must say `Refs #N`, not `Closes #N`, so the release issue stays open until the install is verified.
 
 | `TRACKER` | Passes when |
 |-----------|-------------|

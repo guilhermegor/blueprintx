@@ -5,7 +5,7 @@ Invoked by ``bin/build_wheelhouse.sh``, which owns the network I/O (``poetry exp
 a file its own tooling can lint and test rather than a shell heredoc (see ``bin/CLAUDE.md``,
 "The lib's Python companions").
 
-Three subcommands, one per piece:
+Four subcommands:
 
 ``select``
     Evaluate each exported requirement's PEP 508 marker against a TARGET environment
@@ -13,6 +13,11 @@ Three subcommands, one per piece:
     does not do this — it evaluates markers against the CURRENT interpreter and silently
     takes the wrong platform-specific pin (blueprintx#299's ``pywin32`` example). Also drops
     any package named by ``--drop`` (the DB_BACKEND driver-pruning step).
+
+``close``
+    One round of the transitive-dependency closure for the bootstrap set: read the
+    ``Requires-Dist`` of the already-downloaded wheels the seed names and keep the ones whose
+    marker holds for the TARGET (see ``docs/offline-wheelhouse.md``).
 
 ``pack``
     Zip a wheels directory, split it into fixed-size parts, and write a manifest recording
@@ -29,6 +34,7 @@ Three subcommands, one per piece:
 from __future__ import annotations
 
 import argparse
+from email.parser import Parser
 import hashlib
 import json
 from pathlib import Path
@@ -219,6 +225,123 @@ def select_requirements(args: argparse.Namespace) -> int:
     Path(args.out).write_text("\n".join(list_kept) + str_suffix, encoding="utf-8")
     str_target = f"{dict_env['sys_platform']}/{dict_env['python_version']}"
     print(f"selected {len(list_kept)} requirement(s) for {str_target}")
+    return 0
+
+
+def wheel_requires(path_wheel: Path) -> list[str]:
+    """Return the ``Requires-Dist`` header values of a wheel's ``METADATA``.
+
+    Parameters
+    ----------
+    path_wheel : Path
+        A downloaded ``*.whl``.
+
+    Returns
+    -------
+    list of str
+        Raw requirement lines, markers included; empty when the wheel requires nothing.
+
+    Raises
+    ------
+    SystemExit
+        When the wheel carries no ``<name>.dist-info/METADATA``.
+    """
+    with zipfile.ZipFile(path_wheel) as zip_in:
+        list_meta = [
+            str_member
+            for str_member in zip_in.namelist()
+            if str_member.endswith(".dist-info/METADATA") and str_member.count("/") == 1
+        ]
+        if not list_meta:
+            raise SystemExit(f"wheelhouse close: {path_wheel.name} has no dist-info/METADATA")
+        str_text = zip_in.read(list_meta[0]).decode("utf-8")
+    return Parser().parsestr(str_text, headersonly=True).get_all("Requires-Dist") or []
+
+
+_RE_EXTRAS = re.compile(r"\[([^\]]*)\]")
+
+
+def _requested_extras(set_lines: set[str]) -> dict[str, set[str]]:
+    """Map each requirement name to the extras its requirement lines ask for.
+
+    Parameters
+    ----------
+    set_lines : set of str
+        Requirement lines, each starting with a distribution name.
+
+    Returns
+    -------
+    dict[str, set[str]]
+        Normalized name to the requested extras, always including the empty extra.
+    """
+    dict_extras: dict[str, set[str]] = {}
+    for str_line in set_lines:
+        str_name = normalize(_RE_NAME.match(str_line).group(0))
+        cls_extras = _RE_EXTRAS.search(str_line.split(";", 1)[0])
+        list_extras = cls_extras.group(1).split(",") if cls_extras else []
+        dict_extras.setdefault(str_name, {""}).update(
+            normalize(str_extra.strip()) for str_extra in list_extras if str_extra.strip()
+        )
+    return dict_extras
+
+
+def _applies_with_extras(str_dep: str, *, dict_env: dict[str, str], set_extras: set[str]) -> bool:
+    """Return whether a ``Requires-Dist`` marker holds under any requested extra.
+
+    Parameters
+    ----------
+    str_dep : str
+        One ``Requires-Dist`` value, possibly carrying an ``extra ==`` marker.
+    dict_env : dict[str, str]
+        The target environment, from :func:`target_environment`.
+    set_extras : set of str
+        Extras the requesting lines activate; the empty extra is always present.
+
+    Returns
+    -------
+    bool
+        ``True`` when the marker evaluates true for at least one extra.
+    """
+    return any(
+        requirement_matches_target(str_dep, dict_env={**dict_env, "extra": str_extra})
+        for str_extra in set_extras
+    )
+
+
+def close_requirements(args: argparse.Namespace) -> int:
+    """Write the seed plus the TARGET-applicable dependencies of the wheels it names.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed ``close`` arguments (``seed``, ``wheels_dir``, ``out``, target fields).
+
+    Returns
+    -------
+    int
+        0 on success.
+    """
+    dict_env = target_environment(
+        args.target_python_version,
+        str_sys_platform=args.target_sys_platform,
+        str_platform_machine=args.target_platform_machine,
+        str_implementation=args.target_implementation,
+    )
+    set_lines = {
+        str_line.strip()
+        for str_line in Path(args.seed).read_text(encoding="utf-8").splitlines()
+        if _RE_NAME.match(str_line.strip())
+    }
+    dict_extras = _requested_extras(set_lines)
+    for path_wheel in sorted(Path(args.wheels_dir).glob("*.whl")):
+        str_name = normalize(path_wheel.name.split("-", 1)[0])
+        if str_name not in dict_extras:
+            continue
+        for str_dep in wheel_requires(path_wheel):
+            if _applies_with_extras(str_dep, dict_env=dict_env, set_extras=dict_extras[str_name]):
+                set_lines.add(str_dep.split(";", 1)[0].strip())
+    Path(args.out).write_text("\n".join(sorted(set_lines)) + "\n", encoding="utf-8")
+    print(f"closure holds {len(set_lines)} requirement(s)")
     return 0
 
 
@@ -573,8 +696,22 @@ def assemble_wheelhouse(args: argparse.Namespace) -> int:
     )
 
 
+def _add_target_arguments(obj_parser: argparse.ArgumentParser) -> None:
+    """Add the four ``--target-*`` options that describe the TARGET marker environment.
+
+    Parameters
+    ----------
+    obj_parser : argparse.ArgumentParser
+        The subcommand parser to extend.
+    """
+    obj_parser.add_argument("--target-python-version", required=True)
+    obj_parser.add_argument("--target-sys-platform", required=True)
+    obj_parser.add_argument("--target-platform-machine", required=True)
+    obj_parser.add_argument("--target-implementation", required=True)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    """Build the ``select`` / ``pack`` / ``assemble`` subcommand parser.
+    """Build the ``select`` / ``close`` / ``pack`` / ``assemble`` subcommand parser.
 
     Returns
     -------
@@ -587,12 +724,16 @@ def build_parser() -> argparse.ArgumentParser:
     obj_select = obj_sub.add_parser("select", help="filter requirements for a target environment")
     obj_select.add_argument("--requirements", required=True)
     obj_select.add_argument("--out", required=True)
-    obj_select.add_argument("--target-python-version", required=True)
-    obj_select.add_argument("--target-sys-platform", required=True)
-    obj_select.add_argument("--target-platform-machine", required=True)
-    obj_select.add_argument("--target-implementation", required=True)
+    _add_target_arguments(obj_select)
     obj_select.add_argument("--drop", action="append", default=[])
     obj_select.set_defaults(func=select_requirements)
+
+    obj_close = obj_sub.add_parser("close", help="add target-applicable wheel dependencies")
+    obj_close.add_argument("--seed", required=True)
+    obj_close.add_argument("--wheels-dir", required=True)
+    obj_close.add_argument("--out", required=True)
+    _add_target_arguments(obj_close)
+    obj_close.set_defaults(func=close_requirements)
 
     obj_pack = obj_sub.add_parser("pack", help="zip and split the wheels dir into a manifest")
     obj_pack.add_argument("--wheels-dir", required=True)
