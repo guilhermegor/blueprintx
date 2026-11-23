@@ -132,7 +132,9 @@ install_poetry_from_wheelhouse() {
 
 	compgen -G "$str_dir/poetry-*.whl" >/dev/null || return 1
 	print_status "info" "Installing Poetry from the offline wheelhouse: $str_dir"
-	"$PYTHON" -m pip install --no-index --find-links="$str_dir" "$@"
+	"$PYTHON" -m pip install --no-index --find-links="$str_dir" "$@" && return 0
+	print_status "warning" "Offline wheelhouse install failed — falling back to the network"
+	return 1
 }
 
 ensure_poetry() {
@@ -142,7 +144,7 @@ ensure_poetry() {
 	fi
 
 	print_status "warning" "Poetry not found — installing via $PYTHON -m pip ..."
-	local -a list_req=(poetry)
+	local -a list_req=("poetry>=2.3.3")
 	[[ -f "$PROJECT_ROOT/requirements.txt" ]] && list_req=(-r "$PROJECT_ROOT/requirements.txt")
 	if install_poetry_from_wheelhouse "${list_req[@]}"; then
 		:

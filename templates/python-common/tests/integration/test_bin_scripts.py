@@ -3293,7 +3293,7 @@ def test_poetry_installs_from_the_wheelhouse_without_touching_pypi(tmp_path: Pat
     _materialise_bin_lib(path_bin)
     path_wheels = tmp_path / "wheels"
     path_wheels.mkdir()
-    (path_wheels / "poetry-2.2.1-py3-none-any.whl").write_bytes(b"")
+    (path_wheels / "poetry-2.3.3-py3-none-any.whl").write_bytes(b"")
     path_log = tmp_path / "calls.log"
     path_stub = tmp_path / "stub_python"
     path_stub.write_text(f'#!/bin/sh\necho "$@" >> "{path_log}"\n', encoding="utf-8")
@@ -3303,7 +3303,7 @@ def test_poetry_installs_from_the_wheelhouse_without_touching_pypi(tmp_path: Pat
     str_script = (
         f'source "{path_bin}/lib/common.sh"; source "{path_bin}/lib/bootstrap.sh"; '
         f'PROJECT_ROOT="{tmp_path}"; PYTHON="{path_stub}"; '
-        'install_poetry_from_wheelhouse "poetry>=2.2"'
+        'install_poetry_from_wheelhouse "poetry>=2.3.3"'
     )
     cls_run = subprocess.run(  # noqa: S603
         [shutil.which("bash") or "bash", "-c", str_script],
@@ -3316,7 +3316,7 @@ def test_poetry_installs_from_the_wheelhouse_without_touching_pypi(tmp_path: Pat
 
     assert cls_run.returncode == 0, cls_run.stderr
     str_calls = path_log.read_text(encoding="utf-8")
-    assert f"--no-index --find-links={path_wheels} poetry>=2.2" in str_calls
+    assert f"--no-index --find-links={path_wheels} poetry>=2.3.3" in str_calls
 
 
 def test_poetry_requirement_excludes_the_path_traversal_releases() -> None:
@@ -3325,8 +3325,12 @@ def test_poetry_requirement_excludes_the_path_traversal_releases() -> None:
     Poetry 1.4.0 through 2.3.2 can write outside the target directory from a crafted wheel.
     """
     path_req = Path(__file__).resolve().parents[2] / "requirements.txt"
-    str_line = path_req.read_text(encoding="utf-8").splitlines()[0]
-    cls_spec = Requirement(str_line.split(";")[0].strip()).specifier
+    list_reqs = [
+        Requirement(str_line.split(";")[0].strip())
+        for str_line in path_req.read_text(encoding="utf-8").splitlines()
+        if str_line.strip()
+    ]
+    cls_spec = next(cls_req for cls_req in list_reqs if cls_req.name == "poetry").specifier
 
     assert cls_spec.contains("2.3.3")
     assert not cls_spec.contains("2.3.2")
