@@ -109,9 +109,8 @@ bundle_bootstrap() {
 close_bootstrap() {
 	local path_selected="$1" dir_wheels="$2" path_lock="$3"
 	local path_next="$path_selected.next"
-	local int_round
 
-	for int_round in $(seq 1 "$WHEELHOUSE_CLOSURE_MAX_ROUNDS"); do
+	for _ in $(seq 1 "$WHEELHOUSE_CLOSURE_MAX_ROUNDS"); do
 		"$PYTHON" "$SELECT_PY" close \
 			--seed "$path_selected" --wheels-dir "$dir_wheels" --out "$path_next" \
 			--target-python-version "$TARGET_PYVER" \
