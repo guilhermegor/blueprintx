@@ -897,7 +897,10 @@ def _function_findings(
         Findings, in the order the underlying checks appear.
     """
     list_problems = []
-    set_new_markers = _skip_or_xfail_markers(node_new) - _skip_or_xfail_markers(node_old)
+    set_old_markers = _skip_or_xfail_markers(node_old)
+    set_new_markers = _skip_or_xfail_markers(node_new) - set_old_markers
+    if "skip" in set_old_markers:
+        set_new_markers.discard("skipif")
     if set_new_markers:
         str_markers = "/".join(sorted(set_new_markers))
         list_problems.append(f"{str_path}: {str_name}() newly marked {str_markers}")

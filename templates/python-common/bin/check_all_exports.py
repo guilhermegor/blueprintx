@@ -178,13 +178,13 @@ def _extends(cls_node: ast.stmt) -> bool:
     Returns
     -------
     bool
-        ``True`` for ``+=``, ``.extend(...)``, ``.append(...)`` and a starred literal.
+        ``True`` for ``+=``, ``.extend``, ``.append`` and a reassignment reading ``__all__``.
     """
     cls_value = getattr(cls_node, "value", None)
-    is_starred = isinstance(cls_value, ast.List | ast.Tuple) and any(
-        isinstance(cls_elt, ast.Starred) for cls_elt in cls_value.elts
+    is_self_referential = isinstance(cls_node, ast.Assign | ast.AnnAssign) and any(
+        _all_target(cls_sub) for cls_sub in ast.walk(cls_value or ast.Pass())
     )
-    return is_starred or not isinstance(cls_node, ast.Assign | ast.AnnAssign)
+    return is_self_referential or not isinstance(cls_node, ast.Assign | ast.AnnAssign)
 
 
 def _literal_strings(cls_value: ast.expr | None) -> list[str]:
@@ -200,6 +200,8 @@ def _literal_strings(cls_value: ast.expr | None) -> list[str]:
     list of str
         The literal's string elements.
     """
+    if isinstance(cls_value, ast.BinOp) and isinstance(cls_value.op, ast.Add):
+        return [*_literal_strings(cls_value.left), *_literal_strings(cls_value.right)]
     if not isinstance(cls_value, ast.List | ast.Tuple):
         return []
     return [

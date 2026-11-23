@@ -958,3 +958,10 @@ def test_raises_keyword_form_broadened_to_exception_is_flagged() -> None:
 def test_test_support_modules_are_not_production_code(str_path: str) -> None:
     """Item 7 of #1258: a fixture or helper under ``tests/`` is not production code."""
     assert not gate._touches_production_code([("M", str_path, str_path)])
+
+
+def test_narrowing_skip_to_skipif_is_not_flagged() -> None:
+    """An unconditional skip made conditional narrows the skip; it is not newly skipped."""
+    str_old = "@pytest.mark.skip\ndef test_a():\n    assert f() == 1\n"
+    str_new = "@pytest.mark.skipif(sys.platform == 'x')\ndef test_a():\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []

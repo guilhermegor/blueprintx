@@ -1269,7 +1269,17 @@ def test_computed_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
         str_init="__all__ = ['a']\n__all__ = __all__ + ['b']\n",
         str_member="a = 1\n",
     )
-    assert _load_gate().declared_all(path_init) == ["a"]
+    assert _load_gate().declared_all(path_init) == ["a", "b"]
+
+
+def test_starred_foreign_list_replaces_the_declared_names(tmp_path: Path) -> None:
+    """Only a starred ``__all__`` extends; ``[*other, 'x']`` replaces what was declared."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = [*other, 'x']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["x"]
 
 
 def test_starred_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
@@ -1294,4 +1304,6 @@ def test_a_def_or_class_over_an_import_is_still_a_definition(
 ) -> None:
     """Only an ``= None`` style fallback is the dependency's; a def or class is real API."""
     path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
-    assert _load_gate().check_package(path_init) != []
+    list_problems = _load_gate().check_package(path_init)
+    assert len(list_problems) == 1
+    assert "'f'" in list_problems[0] or "'Thing'" in list_problems[0]
