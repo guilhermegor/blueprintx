@@ -517,8 +517,9 @@ def job_signature(list_lines: list) -> tuple:
     -------
     tuple
         The block's lines with the ``runs-on:`` key (and its continuation lines) removed;
-        any other 4-space line, quoted or oddly spaced keys included, ends the skip, so a changed ``name:``, ``if:``, ``env:``, ``steps:``, ``uses:`` or
-        any other key makes the job differ.
+        any other 4-space line, quoted or oddly spaced keys included, ends the skip, so a
+        changed ``name:``, ``if:``, ``env:``, ``steps:``, ``uses:`` or any other key makes the
+        job differ.
     """
     list_kept = []
     bool_skip = False
