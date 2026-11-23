@@ -117,7 +117,7 @@ cat >"$WORK_DIR/v/gh" <<'STUB'
 #!/bin/bash
 [ "$1 $2" = "auth status" ] && exit 0
 [ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
-str_rule='{"type":"required_status_checks","ruleset_id":42,"parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"Review threads answered"}]}}'
+str_rule='{"type":"required_status_checks","ruleset_id":42,"parameters":{"strict_required_status_checks_policy":false,"required_status_checks":[{"context":"Review threads answered"}]}}'
 case "$2" in
 repos/o/r) str_json='{"default_branch":"main"}' ;;
 repos/o/r/rulesets) [ -n "${STUB_TWO:-}" ] && str_json="[{\"id\":41,\"name\":\"pr-quality-gate\",\"enforcement\":\"disabled\"},{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"active\"}]" || str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
@@ -130,12 +130,16 @@ repos/o/r/rules/branches/main*)
 	esac
 	;;
 repos/o/r/branches/main/protection)
+	if [[ "${STUB_PROTECTION:-}" == classic-strict-* ]]; then
+		str_json="{\"required_status_checks\":{\"strict\":${STUB_PROTECTION#classic-strict-}}}"
+	else
 	[ "${STUB_PROTECTION:-}" = unprotected-500 ] && { echo "gh: Branch not protected (HTTP 500)" >&2; exit 1; }
 	[ "${STUB_PROTECTION:-}" = not-found ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 	[ "${STUB_PROTECTION:-}" = unprotected ] || { echo "gh: Server Error (HTTP 500)" >&2; exit 1; }
 	echo '{"message":"Branch not protected","documentation_url":"https://docs.github.com","status":"404"}'
 	echo "gh: Branch not protected (HTTP 404)" >&2
 	exit 1
+	fi
 	;;
 *) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
 esac
@@ -208,6 +212,60 @@ test_plain_404_without_the_message_stays_unknown() {
 }
 
 test_verify_picks_the_active_ruleset_not_the_first
+test_create_sends_strict_false() {
+    mkdir -p "$WORK_DIR/c" "$WORK_DIR/norepo"
+    cat >"$WORK_DIR/c/gh" <<'STUB'
+#!/bin/bash
+[ "$1 $2" = "auth status" ] && exit 0
+[ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
+[[ " $* " == *" -X POST "* && "$*" == *"/rulesets"* ]] && cat >"$STUB_CAPTURE"
+exit 0
+STUB
+    chmod +x "$WORK_DIR/c/gh"
+    rm -f "$WORK_DIR/payload.json"
+    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/c:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/payload.json" bash "$SCRIPT" >/dev/null 2>&1)
+    assert_has "the created ruleset sends strict false" '"strict_required_status_checks_policy":false' "$(cat "$WORK_DIR/payload.json" 2>/dev/null)"
+}
+
+test_update_puts_strict_false_on_an_existing_ruleset() {
+    mkdir -p "$WORK_DIR/u" "$WORK_DIR/norepo"
+    cat >"$WORK_DIR/u/gh" <<'STUB'
+#!/bin/bash
+[ "$1 $2" = "auth status" ] && exit 0
+[ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
+[[ " $* " == *" -X PUT "* && "$*" == *"/rulesets/42"* ]] && { cat >"$STUB_CAPTURE"; exit 0; }
+[ "$2" = "repos/o/r/rulesets" ] && { echo 42; exit 0; }
+exit 0
+STUB
+    chmod +x "$WORK_DIR/u/gh"
+    rm -f "$WORK_DIR/put.json"
+    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/u:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/put.json" bash "$SCRIPT" >/dev/null 2>&1)
+    assert_has "an existing ruleset is PUT with strict false" '"strict_required_status_checks_policy":false' "$(cat "$WORK_DIR/put.json" 2>/dev/null)"
+}
+
+test_verify_refuses_a_strict_true_ruleset() {
+    mkdir -p "$WORK_DIR/vt" "$WORK_DIR/norepo"
+    sed 's/"strict_required_status_checks_policy":false/"strict_required_status_checks_policy":true/' "$WORK_DIR/v/gh" >"$WORK_DIR/vt/gh"
+    chmod +x "$WORK_DIR/vt/gh"
+    assert_has "the sed made the stub strict true" '"strict_required_status_checks_policy":true' "$(cat "$WORK_DIR/vt/gh")"
+    assert_has "strict true is refused by name" "NOT false" "$( (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/vt:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT=active STUB_APPLIES=1 bash "$SCRIPT" verify 2>&1) )"
+    assert_has "strict true is no longer accepted" "rc=1" "$( (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/vt:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT=active STUB_APPLIES=1 bash "$SCRIPT" verify 2>&1; echo "rc=$?") )"
+}
+
+test_classic_strict_true_refused_false_accepted() {
+    local str_out
+    str_out="$(STUB_PROTECTION=classic-strict-true run_verify active 1 verify)"
+    assert_has "classic strict true is refused" "rc=1" "$str_out"
+    assert_has "classic strict true is named" "NOT false" "$str_out"
+    str_out="$(STUB_PROTECTION=classic-strict-false run_verify active 1 verify)"
+    assert_has "classic strict false is accepted" "rc=0" "$str_out"
+    assert_has "classic strict false reads as off, not absent" "is off on o/r:main (classic" "$str_out"
+}
+
+test_create_sends_strict_false
+test_update_puts_strict_false_on_an_existing_ruleset
+test_classic_strict_true_refused_false_accepted
+test_verify_refuses_a_strict_true_ruleset
 test_ruleset_only_repo_has_no_unreadable_protection_warning
 test_genuine_protection_read_failure_stays_unknown
 test_not_protected_text_on_a_5xx_stays_unknown

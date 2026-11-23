@@ -133,3 +133,93 @@ def test_empty_result_for_a_requested_group_fails_loudly(
 
     with pytest.raises(SystemExit, match="No requirements resolved"):
         MODULE.main()
+
+
+LIST_SPEC = [
+    {"version": "^1.26", "python": ">=3.11"},
+    {"version": "^1.24", "python": "<3.11"},
+]
+
+
+def test_multiple_constraints_list_expands_to_one_line_per_entry() -> None:
+    """A Poetry multiple-constraints list yields one requirement per entry."""
+    assert MODULE.build_requirements("numpy", union_spec=LIST_SPEC) == [
+        "numpy>=1.26,<2.0.0 ; python_version >= '3.11'",
+        "numpy>=1.24,<2.0.0 ; python_version < '3.11'",
+    ]
+
+
+def test_list_entry_with_unsupported_key_still_fails_loudly() -> None:
+    """One path/git/url entry inside a list aborts instead of being dropped."""
+    with pytest.raises(SystemExit, match="Unsupported dependency type"):
+        MODULE.build_requirements("pkg", union_spec=[{"version": "1"}, {"git": "https://x"}])
+
+
+def test_python_key_becomes_python_version_marker() -> None:
+    """A table's ``python`` constraint is no longer dropped."""
+    assert (
+        MODULE.build_requirement("pkg", union_spec={"version": "^1.0", "python": ">=3.11"})
+        == "pkg>=1.0,<2.0.0 ; python_version >= '3.11'"
+    )
+
+
+def test_python_key_merges_with_existing_markers() -> None:
+    """``python`` and ``markers`` are joined with ``and``."""
+    dict_spec = {"version": "1.0", "python": "<3.12", "markers": "sys_platform == 'win32'"}
+    assert (
+        MODULE.build_requirement("pkg", union_spec=dict_spec)
+        == "pkg==1.0 ; (python_version < '3.12') and (sys_platform == 'win32')"
+    )
+
+
+def test_patch_level_python_constraint_uses_python_full_version() -> None:
+    """``python_version`` is major.minor only, so a patch bound needs the full version."""
+    assert (
+        MODULE.build_requirement("pkg", union_spec={"version": "1.0", "python": ">=3.10.2"})
+        == "pkg==1.0 ; python_full_version >= '3.10.2'"
+    )
+
+
+@pytest.mark.parametrize(
+    ("str_python", "str_marker"),
+    [
+        (">3.11", "python_full_version > '3.11.0'"),
+        ("<=3.11", "python_full_version <= '3.11.0'"),
+        (">=3.11", "python_version >= '3.11'"),
+        ("<3.11", "python_version < '3.11'"),
+        (">3", "python_full_version > '3.0.0'"),
+        ("3.11.*", "python_full_version == '3.11.*'"),
+        (">=3.10 <3.12", "python_version >= '3.10' and python_version < '3.12'"),
+        (">=3.10, <3.12", "python_version >= '3.10' and python_version < '3.12'"),
+    ],
+)
+def test_python_bound_without_patch_picks_the_variable_poetry_picks(
+    *, str_python: str, str_marker: str
+) -> None:
+    """``>`` and ``<=`` on major.minor must not exclude or include a whole 3.11.x line."""
+    assert MODULE.python_marker(str_python) == str_marker
+
+
+def test_wildcard_with_ordering_operator_fails_loudly() -> None:
+    """PEP 440 allows ``.*`` only with ``==``/``!=``, so ``>=3.11.*`` is rejected here."""
+    with pytest.raises(SystemExit, match="Unsupported python constraint"):
+        MODULE.python_marker(">=3.11.*", str_name="pkg")
+
+
+def test_or_python_constraint_fails_loudly() -> None:
+    """A ``||`` python constraint aborts instead of emitting a wrong marker."""
+    with pytest.raises(SystemExit, match=r"Unsupported python constraint .*: pkg -> "):
+        MODULE.build_requirement("pkg", union_spec={"version": "1.0", "python": "^2.7 || ^3.6"})
+
+
+def test_wildcard_python_constraint_adds_no_marker() -> None:
+    """``python = "*"`` means any interpreter and leaves the line unmarked."""
+    assert (
+        MODULE.build_requirement("pkg", union_spec={"version": "1.0", "python": "*"}) == "pkg==1.0"
+    )
+
+
+def test_poetry_dependency_given_as_list_resolves_every_entry() -> None:
+    """The list form flows through the Poetry selector, not just the builder."""
+    dict_pyproject = {"tool": {"poetry": {"dependencies": {"numpy": LIST_SPEC}}}}
+    assert len(MODULE.select_requirements(dict_pyproject, list_groups=["main"])) == 2
