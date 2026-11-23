@@ -86,11 +86,16 @@ main() {
 		int_status=1
 	fi
 
-	if str_other="$(github_about)"; then
+	local int_about_rc=0
+	str_other="$(github_about)" || int_about_rc=$?
+	if [[ "$int_about_rc" -eq 0 ]]; then
 		compare "GitHub About" "$str_manifest" "$str_other" || int_status=1
 		int_compared=$((int_compared + 1))
-	else
+	elif [[ "$int_about_rc" -eq 3 ]]; then
 		print_status "warning" "SKIPPED GitHub About comparison: needs a github.com origin remote, gh and GH_TOKEN/GITHUB_TOKEN"
+	else
+		print_status "error" "GitHub About lookup failed (gh api exit $int_about_rc) with a token present, so it was not compared"
+		int_status=1
 	fi
 
 	if [[ "$int_compared" -eq 0 ]]; then

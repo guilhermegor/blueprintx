@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 import sys
 
 
@@ -43,6 +44,8 @@ TUPLE_UNSUPPORTED_KEYS = ("path", "git", "url")
 
 
 _INT_SEMVER_PARTS = 3
+
+_INT_PATCH_DOTS = 2
 
 
 def version_parts(str_raw: str) -> list[int]:
@@ -157,6 +160,111 @@ def normalize_version_spec(str_spec: str) -> str:
     return f"=={str_spec}"
 
 
+def python_marker(str_python: str, *, str_name: str = "") -> str:
+    """Translate a Poetry ``python`` constraint into a PEP 508 ``python_version`` marker.
+
+    Parameters
+    ----------
+    str_python : str
+        A constraint such as ``">=3.11"``, ``"^3.10"``, ``"3.11.*"`` or the space-separated
+        ``">=3.10 <3.12"``.
+    str_name : str
+        The dependency the constraint belongs to, named in the error.
+
+    Returns
+    -------
+    str
+        The marker expression, clauses joined with ``and``; empty for "any version".
+
+    Raises
+    ------
+    SystemExit
+        If the constraint uses ``||`` or a clause pip cannot express.
+    """
+    str_label = f"{str_name} -> {str_python}"
+    if "||" in str_python:
+        raise SystemExit(f"Unsupported python constraint for pip fallback: {str_label}")
+    str_spec = normalize_version_spec(re.sub(r"\s*,\s*|\s+(?=[<>=!~])", ",", str_python.strip()))
+    if not str_spec:
+        return ""
+    return " and ".join(
+        python_clause(str_clause, str_label=str_label) for str_clause in str_spec.split(",")
+    )
+
+
+def python_clause(str_clause: str, *, str_label: str) -> str:
+    """Render one normalised ``python`` clause as a marker comparison.
+
+    A clause carrying a patch component compares ``python_full_version``, because
+    ``python_version`` is only ``major.minor`` and ``>= '3.10.2'`` never holds on 3.10.
+    ``>3.11`` and ``<=3.11`` are zero-padded to ``3.11.0`` and compare the full version,
+    as Poetry does: ``python_version > '3.11'`` is false on 3.11.9.
+
+    Parameters
+    ----------
+    str_clause : str
+        One comparison such as ``">=3.10.2"``.
+    str_label : str
+        The dependency and constraint, named in the error.
+
+    Returns
+    -------
+    str
+        The marker comparison.
+
+    Raises
+    ------
+    SystemExit
+        If the clause is not a comparison pip can express.
+    """
+    cls_match = re.fullmatch(
+        r"(>=|<=|==|!=|~=|>|<)\s*(\d+(?:\.\d+)*(?:\.\*)?)", str_clause.strip()
+    )
+    if not cls_match or (
+        cls_match.group(2).endswith(".*") and cls_match.group(1) not in {"==", "!="}
+    ):
+        raise SystemExit(f"Unsupported python constraint for pip fallback: {str_label}")
+    str_op, str_bound = cls_match.groups()
+    int_dots = str_bound.count(".")
+    while int_dots < _INT_PATCH_DOTS and str_op in {">", "<="}:
+        str_bound = f"{str_bound}.0"
+        int_dots += 1
+    str_variable = "python_full_version" if int_dots >= _INT_PATCH_DOTS else "python_version"
+    return f"{str_variable} {str_op} '{str_bound}'"
+
+
+def build_requirements(str_name: str, *, union_spec: str | dict | list) -> list[str]:
+    """Render one Poetry dependency declaration as zero or more pip requirement lines.
+
+    A list value is Poetry's multiple-constraints form
+    (``dep = [{version = "...", python = "..."}, ...]``) and yields one line per entry.
+
+    Parameters
+    ----------
+    str_name : str
+        The dependency name as declared.
+    union_spec : str or dict or list
+        Its declaration.
+
+    Returns
+    -------
+    list of str
+        The requirement lines; empty when the dependency is skipped.
+
+    Raises
+    ------
+    SystemExit
+        If any entry is unsupported.
+    """
+    if isinstance(union_spec, list):
+        list_lines: list[str] = []
+        for union_entry in union_spec:
+            list_lines.extend(build_requirements(str_name, union_spec=union_entry))
+        return list_lines
+    str_line = build_requirement(str_name, union_spec=union_spec)
+    return [str_line] if str_line else []
+
+
 def build_requirement(str_name: str, *, union_spec: str | dict) -> str | None:
     """Render one Poetry dependency declaration as a pip requirement line.
 
@@ -166,7 +274,8 @@ def build_requirement(str_name: str, *, union_spec: str | dict) -> str | None:
         The dependency name as declared.
     union_spec : str or dict
         Its declaration: a version string, or a table carrying ``version``/``extras``/
-        ``markers``/``optional``.
+        ``markers``/``python``/``optional``. A ``python`` constraint becomes a
+        ``python_version`` marker, joined with any ``markers`` by ``and``.
 
     Returns
     -------
@@ -197,7 +306,18 @@ def build_requirement(str_name: str, *, union_spec: str | dict) -> str | None:
         list_extras = union_spec.get("extras") or []
         str_extras = f"[{','.join(list_extras)}]" if list_extras else ""
         str_version = normalize_version_spec(union_spec.get("version", ""))
-        str_markers = union_spec.get("markers", "")
+        list_markers = [
+            str_marker
+            for str_marker in (
+                python_marker(union_spec.get("python", ""), str_name=str_name),
+                union_spec.get("markers", ""),
+            )
+            if str_marker
+        ]
+        str_markers = " and ".join(
+            f"({str_marker})" if len(list_markers) > 1 else str_marker
+            for str_marker in list_markers
+        )
 
         str_requirement = f"{str_name}{str_extras}{str_version}"
         return f"{str_requirement} ; {str_markers}" if str_markers else str_requirement
@@ -246,17 +366,13 @@ def poetry_requirements(dict_poetry: dict, *, list_groups: list) -> list:
     list_requirements: list[str] = []
     if "main" in list_groups:
         for str_name, union_spec in dict_poetry.get("dependencies", {}).items():
-            str_line = build_requirement(str_name, union_spec=union_spec)
-            if str_line:
-                list_requirements.append(str_line)
+            list_requirements.extend(build_requirements(str_name, union_spec=union_spec))
 
     dict_group_table = dict_poetry.get("group", {})
     for str_group in list_groups:
         dict_deps = dict_group_table.get(str_group, {}).get("dependencies", {})
         for str_name, union_spec in dict_deps.items():
-            str_line = build_requirement(str_name, union_spec=union_spec)
-            if str_line:
-                list_requirements.append(str_line)
+            list_requirements.extend(build_requirements(str_name, union_spec=union_spec))
     return list_requirements
 
 

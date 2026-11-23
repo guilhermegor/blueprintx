@@ -67,7 +67,7 @@ linear_key_present() {
 
 check_linked_issue() {
 	local str_branch="$1" str_title="$2" str_tracker="${3:-github}" int_closing="${4:-0}" str_num str_re="" str_out="" str_err int_rc
-	[[ "$str_branch" =~ ^(dependabot|renovate)/ ]] && return 0
+	[[ "$str_branch" =~ $EXEMPT_BRANCHES ]] && return 0
 	case "${str_tracker,,}" in
 	github)
 		[[ "$int_closing" =~ ^[0-9]+$ ]] && ((int_closing > 0)) && return 0

@@ -6,9 +6,10 @@ docstring lists this as explicitly out of its scope, with its own false-positive
 
 **The failure mode**: a masked CPF/CNPJ literal (``"123.456.789-01"``) compared against a
 ``cpf``/``cnpj`` column matches **zero rows and raises nothing** — not an error, an empty
-result that reads as "no such customer". ``src/utils/br_identifiers.py`` re-exports
-``unmask_cpf``/``unmask_cnpj`` from ``purepii-br`` for exactly this; the gate catches the
-case where a masked literal reaches a comparison without going through them.
+result that reads as "no such customer". ``unmask_cpf``/``unmask_cnpj`` from ``purepii-br``
+(re-exported by ``src/utils/br_identifiers.py`` where the project ships it) exist for
+exactly this; the gate catches the case where a masked literal reaches a comparison
+without going through them.
 
 **Scope, deliberately narrow** (per the issue's own warning not to build the registry
 first): CPF and CNPJ only — the two identifiers this codebase actually has ``unmask_*``
@@ -140,7 +141,7 @@ def _mask_message(path_file: pathlib.Path, *, int_line: int, str_value: str) -> 
         f"{path_file}:{int_line}: masked identifier literal '{str_value}' compared "
         f"directly — a masked CPF/CNPJ never equals the unmasked value stored in the "
         f"column, so this matches ZERO rows and raises nothing. Pass it through "
-        f"unmask_cpf()/unmask_cnpj() (src/utils/br_identifiers.py) first, or if this is "
+        f"unmask_cpf()/unmask_cnpj() (purepii-br) first, or if this is "
         f"deliberate, annotate the line: # {_ALLOW_MARKER} <reason>"
     )
 
