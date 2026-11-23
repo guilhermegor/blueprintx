@@ -178,9 +178,13 @@ def _extends(cls_node: ast.stmt) -> bool:
     Returns
     -------
     bool
-        ``True`` for ``__all__ += [...]``, ``__all__.extend(...)`` and ``__all__.append(...)``.
+        ``True`` for ``+=``, ``.extend(...)``, ``.append(...)`` and a starred literal.
     """
-    return not isinstance(cls_node, ast.Assign | ast.AnnAssign)
+    cls_value = getattr(cls_node, "value", None)
+    is_starred = isinstance(cls_value, ast.List | ast.Tuple) and any(
+        isinstance(cls_elt, ast.Starred) for cls_elt in cls_value.elts
+    )
+    return is_starred or not isinstance(cls_node, ast.Assign | ast.AnnAssign)
 
 
 def _literal_strings(cls_value: ast.expr | None) -> list[str]:
@@ -251,10 +255,31 @@ def public_names(path_module: pathlib.Path) -> set[str]:
         Public names bound at module level by a def, class, or assignment.
     """
     list_nodes = list(_module_statements(_parse(path_module).body, bool_runtime=True))
+    set_rebound = _imported(list_nodes) - _defs_and_classes(list_nodes)
     return {
         str_name
-        for str_name in _definitions(list_nodes) - _imported(list_nodes)
+        for str_name in _definitions(list_nodes) - set_rebound
         if not str_name.startswith("_")
+    }
+
+
+def _defs_and_classes(list_nodes: Iterable[ast.stmt]) -> set[str]:
+    """Return the names bound by ``def`` or ``class``, which are real definitions.
+
+    Parameters
+    ----------
+    list_nodes : iterable of ast.stmt
+        Statements to read.
+
+    Returns
+    -------
+    set of str
+        The function and class names.
+    """
+    return {
+        cls_node.name
+        for cls_node in list_nodes
+        if isinstance(cls_node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
     }
 
 

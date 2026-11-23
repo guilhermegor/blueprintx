@@ -1270,3 +1270,28 @@ def test_computed_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
         str_member="a = 1\n",
     )
     assert _load_gate().declared_all(path_init) == ["a"]
+
+
+def test_starred_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
+    """``__all__ = [*__all__, 'b']`` extends the list; it must not drop ``'a'``."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = [*__all__, 'b']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a", "b"]
+
+
+@pytest.mark.parametrize(
+    "str_member",
+    [
+        "try:\n    from x import f\nexcept ImportError:\n    def f():\n        pass\n",
+        "from base import Thing\nclass Thing(Thing):\n    pass\n",
+    ],
+)
+def test_a_def_or_class_over_an_import_is_still_a_definition(
+    tmp_path: Path, *, str_member: str
+) -> None:
+    """Only an ``= None`` style fallback is the dependency's; a def or class is real API."""
+    path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
+    assert _load_gate().check_package(path_init) != []
