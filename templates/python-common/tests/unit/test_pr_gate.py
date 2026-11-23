@@ -946,3 +946,23 @@ def test_declared_axis_with_no_check_run_still_polls_to_the_budget(
 ) -> None:
     """A declared axis stays ``absent`` (non-terminal): its producer may just be slow."""
     assert _count_polls(monkeypatch, str_declared="tests,lint") == 5
+
+
+def test_main_keeps_an_armed_auto_merge_without_the_opt_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR without ``do-not-merge`` keeps its armed auto-merge through the pre-poll step."""
+    _set_env(monkeypatch)
+    dict_pr = {
+        **_DICT_MAIN_API_RESPONSES[_STR_PR_URL],
+        "labels": [],
+        "auto_merge": {"merge_method": "squash"},
+    }
+    monkeypatch.setattr(gate, "_api", _RoutedApi({_STR_PR_URL: dict_pr}))
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: ({}, {}))
+    list_calls: list = []
+    monkeypatch.setattr(
+        gate, "_disable_auto_merge", _CallRecorder(list_target=list_calls, str_label="disarm")
+    )
+    gate.main()
+    assert list_calls == []

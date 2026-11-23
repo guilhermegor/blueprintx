@@ -89,8 +89,11 @@ apply_ruleset() {
 	local str_repo="$1"
 	local str_id
 	local str_all
-	str_all=$(gh api "repos/$str_repo/rulesets" --paginate --jq \
-		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>/dev/null || true)
+	if ! str_all=$(gh api "repos/$str_repo/rulesets" --paginate --jq \
+		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1); then
+		print_status "warning" "Could not READ rulesets from $str_repo (so none is created or updated): ${str_all:-no output from gh}"
+		return 0
+	fi
 	str_id=$(printf '%s\n' "$str_all" | { grep -m1 ' active$' || printf '%s\n' "$str_all" | head -1; } | cut -d' ' -f1)
 
 	if [ -n "$str_id" ] && [ "$REQUIRED_CHECKS_FILE_MISSING" = "1" ]; then
