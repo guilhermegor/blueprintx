@@ -39,8 +39,8 @@ expect_closed_stdin_exit() {
             fi
         ' _ "$REPO_ROOT" "$str_prompt" </dev/null 2>&1
     )" || int_rc=$?
-    if [ "$int_rc" -eq 0 ] || [ "$int_rc" -eq 124 ]; then
-        fail "$str_prompt on closed stdin -> exit $int_rc (expected non-zero, not a timeout)"
+    if [ "$int_rc" -eq 0 ] || [ "$int_rc" -ge 124 ]; then
+        fail "$str_prompt on closed stdin -> exit $int_rc (expected a plain non-zero exit, not a timeout or signal)"
     elif [ "$(grep -c "stdin closed at $str_label" <<<"$str_out")" -ne 1 ]; then
         fail "$str_prompt -> expected one 'stdin closed at $str_label' message"
     else
@@ -64,11 +64,22 @@ expect_eof_default() {
 expect_eof_default prompt_license MIT
 expect_eof_default prompt_docs_locale en
 
-str_partial="$(printf '2' | timeout 5 bash -c 'str_root="$1"; set --; source "$str_root/bin/blueprintx.sh"; prompt_license' _ "$REPO_ROOT" 2>/dev/null)" || int_partial_rc=$?
-if [ "${int_partial_rc:-0}" -eq 0 ] && [ "$str_partial" = "Apache-2.0" ]; then
-    pass "prompt_license accepts a final answer with no trailing newline"
-else
-    fail "prompt_license on '2' without newline -> exit ${int_partial_rc:-0}, got '$str_partial', expected Apache-2.0"
-fi
+expect_partial_line() {
+    local str_call="$1" str_want="$2" str_out str_err int_rc=0
+    str_err="$(mktemp)"
+    str_out="$(printf '%s' "${3:-1}" | timeout 5 bash -c 'str_root="$1"; str_call="$2"; set --; source "$str_root/bin/blueprintx.sh"; $str_call' _ "$REPO_ROOT" "$str_call" 2>"$str_err")" || int_rc=$?
+    if [ "$int_rc" -ne 0 ] || [ -z "$str_out" ] || grep -q 'stdin closed' "$str_err"; then
+        fail "$str_call on a final answer with no newline -> exit $int_rc, got '$str_out'"
+    elif [ -n "$str_want" ] && [ "$str_out" != "$str_want" ]; then
+        fail "$str_call on a final answer with no newline -> got '$str_out', expected $str_want"
+    else
+        pass "$str_call accepts a final answer with no trailing newline"
+    fi
+    rm -f "$str_err"
+}
+
+expect_partial_line prompt_license Apache-2.0 2
+expect_partial_line prompt_language ""
+expect_partial_line "prompt_skeleton python" ""
 
 [ "$int_failures" -eq 0 ] || exit 1
