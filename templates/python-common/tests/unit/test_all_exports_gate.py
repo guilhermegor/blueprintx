@@ -1255,7 +1255,8 @@ def test_type_checking_stub_alone_is_not_a_public_definition(tmp_path: Path) -> 
         tmp_path,
         str_init="__all__ = []\n",
         str_member=(
-            "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    def helper():\n        pass\n"
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n    def helper():\n        pass\n"
         ),
     )
     assert _load_gate().check_package(path_init) == []
