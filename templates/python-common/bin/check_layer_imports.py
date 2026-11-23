@@ -492,7 +492,7 @@ def find_file_problems(
         Top-level package names that belong to this project.
     tuple_pkg_parts : tuple of str, optional
         The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
-        to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
+        to resolve RELATIVE imports for ``deny_layers``; empty means a file at the layer root.
     tuple_module_roots : tuple of pathlib.Path, optional
         Directories a first-party submodule named in a from-import is looked up under.
 
@@ -548,8 +548,9 @@ def relative_import_target(tuple_pkg_parts: tuple, *, cls_node: ast.ImportFrom) 
     Parameters
     ----------
     tuple_pkg_parts : tuple of str
-        The file's package path below the layer root, e.g. ``("utils", "sub")``. Empty when
-        the caller cannot supply it, in which case no relative import is resolved.
+        The file's package path below the layer root, e.g. ``("utils", "sub")``. Empty for a
+        file directly at the layer root, where ``from .x import y`` reaches ``x`` and a
+        two-dot import climbs past the root and resolves to nothing.
     cls_node : ast.ImportFrom
         The relative import statement (``level`` >= 1).
 
@@ -563,8 +564,6 @@ def relative_import_target(tuple_pkg_parts: tuple, *, cls_node: ast.ImportFrom) 
         so the ABSOLUTE form of an import was rejected while its relative twin passed, which
         is worse than not having the rule at all.
     """
-    if not tuple_pkg_parts:
-        return None
     int_climb = cls_node.level - 1
     tuple_base = (
         tuple_pkg_parts[: len(tuple_pkg_parts) - int_climb] if int_climb else tuple_pkg_parts
@@ -663,7 +662,7 @@ def import_targets(
             str_base = relative_import_target(tuple_pkg_parts, cls_node=cls_node)
             if str_base is not None:
                 list_targets.append((cls_node, str_base))
-            elif not tuple_pkg_parts or len(tuple_pkg_parts) < cls_node.level - 1:
+            elif len(tuple_pkg_parts) < cls_node.level - 1:
                 continue
         else:
             str_base = cls_node.module
@@ -712,7 +711,7 @@ def direction_problems(
         The parsed ``.layer-policy.yaml``.
     tuple_pkg_parts : tuple of str, optional
         The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
-        to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
+        to resolve RELATIVE imports for ``deny_layers``; empty means a file at the layer root.
     tuple_module_roots : tuple of pathlib.Path, optional
         Directories a dotted first-party module is looked up under, so ``from chassis import
         db_schema`` is checked as ``chassis.db_schema`` when that submodule exists.
@@ -731,7 +730,7 @@ def direction_problems(
         cls_tree, tuple_pkg_parts=tuple_pkg_parts, tuple_module_roots=tuple_module_roots
     )
     dict_found = {
-        (cls_node.lineno, str_key): (
+        (cls_node.lineno, cls_node.col_offset, str_key): (
             f"{path_file}:{cls_node.lineno}: layer '{str_layer}' must not import "
             f"'{str_target}'. {dict_deny[str_key]}"
         )

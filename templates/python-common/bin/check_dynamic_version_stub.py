@@ -59,10 +59,10 @@ def find_problem(dict_doc: dict) -> str:
     str
         A finding message, empty when the project is a no-op or carries the stub.
     """
-    dict_dynamic = _table(dict_doc, "tool", "poetry-dynamic-versioning")
+    dict_dynamic = _table(dict_doc, *STR_DYNAMIC_SECTION.split("."))
     if dict_dynamic.get("enable") is not True:
         return ""
-    str_found = _table(dict_doc, "tool", "poetry").get("version", "<missing>")
+    str_found = _table(dict_doc, *STR_POETRY_SECTION.split(".")).get("version", "<missing>")
     if str_found == STR_STUB:
         return ""
     return (
@@ -95,7 +95,7 @@ def main(list_argv: list) -> int:
     try:
         with path_pyproject.open("rb") as cls_file:
             dict_doc = tomllib.load(cls_file)
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as cls_exc:
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as cls_exc:
         print(f"{path_pyproject}: invalid TOML ({cls_exc})")
         return 1
     str_problem = find_problem(dict_doc)

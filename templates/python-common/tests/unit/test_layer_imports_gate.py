@@ -1001,3 +1001,69 @@ def test_src_qualified_deny_rejects_both_forms(tmp_path: Path, *, str_source: st
         encoding="utf-8",
     )
     assert "src.chassis.db_schema" in _output_at(_run_main(tmp_path), int_expected=1)
+
+
+@pytest.mark.parametrize(
+    "str_source",
+    ["from . import chassis\n", "from .chassis import db_schema\n"],
+    ids=["root-from-dot-import", "root-from-dot-module"],
+)
+def test_root_level_relative_import_of_a_denied_layer_is_rejected(
+    tmp_path: Path, *, str_source: str
+) -> None:
+    """A file directly under ``src/`` is not exempt: its one-dot imports reach ``src/``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    str_source : str
+        The import form under test.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis" / "db_schema").mkdir(parents=True)
+    (path_src / "main.py").write_text(str_source, encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        'layers:\n  __root__:\n    allow: {}\n    deny_layers:\n      chassis: "no"\n',
+        encoding="utf-8",
+    )
+    assert "must not import 'chassis" in _output_at(_run_main(tmp_path), int_expected=1)
+
+
+def test_two_statements_on_one_line_are_reported_separately(tmp_path: Path) -> None:
+    """The dedup key is the statement, not the line, so ``import a; import b`` is two findings.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis").mkdir(parents=True)
+    (path_src / "utils").mkdir()
+    (path_src / "utils" / "mod.py").write_text(
+        "import chassis.a; import chassis.b\n", encoding="utf-8"
+    )
+    (tmp_path / ".layer-policy.yaml").write_text(
+        'layers:\n  utils:\n    allow: {}\n    deny_layers:\n      chassis: "no"\n',
+        encoding="utf-8",
+    )
+    assert _output_at(_run_main(tmp_path), int_expected=1).count("must not import") == 2
+
+
+def test_dotted_deny_rejects_the_from_form_under_a_prefixed_layout(tmp_path: Path) -> None:
+    """With ``src_prefix_depth: 1`` the from-form is looked up under ``src/<pkg>/``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    """
+    path_pkg = tmp_path / "src" / "pkg"
+    (path_pkg / "chassis" / "db_schema").mkdir(parents=True)
+    (path_pkg / "utils").mkdir()
+    (path_pkg / "utils" / "mod.py").write_text("from chassis import db_schema\n", encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        "src_prefix_depth: 1\n" + _STR_DENY_POLICY, encoding="utf-8"
+    )
+    assert "chassis.db_schema" in _output_at(_run_main(tmp_path), int_expected=1)
