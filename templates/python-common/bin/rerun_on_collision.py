@@ -35,6 +35,7 @@ API = "https://api.github.com"
 DEFAULT_EXCLUDES = "poetry.lock,CHANGELOG.md"
 ZERO_SHA = "0" * 40
 PAGE_SIZE = 100
+FILE_CAP = 300
 
 
 def paths_of(files: list[dict]) -> set[str]:
@@ -80,7 +81,8 @@ def colliding_prs(
     globs = excludes or []
 
     def keep(str_path: str) -> bool:
-        return not any(fnmatch.fnmatch(str_path, g) for g in globs)
+        base = str_path.rsplit("/", 1)[-1]
+        return not any(fnmatch.fnmatch(str_path, g) or fnmatch.fnmatch(base, g) for g in globs)
 
     merged = {p for p in merge_files if keep(p)}
     return sorted(n for n, files in pr_files.items() if merged & {p for p in files if keep(p)})
@@ -101,17 +103,16 @@ def _call(str_method: str, *, str_path: str, str_token: str) -> object:
         return json.loads(resp.read() or b"null")
 
 
-def _paged(str_path: str, *, str_token: str, str_key: str = "") -> list:
-    """Collect every page of a list endpoint (``str_key`` names the list inside an object)."""
+def _paged(str_path: str, *, str_token: str) -> list:
+    """Collect every page of a list endpoint."""
     sep = "&" if "?" in str_path else "?"
     out: list = []
     page = 1
     while True:
         str_page = f"{str_path}{sep}per_page={PAGE_SIZE}&page={page}"
         data = _call("GET", str_path=str_page, str_token=str_token)
-        items = data[str_key] if str_key else data
-        out.extend(items)
-        if len(items) < PAGE_SIZE:
+        out.extend(data)
+        if len(data) < PAGE_SIZE:
             return out
         page += 1
 
@@ -130,13 +131,26 @@ def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[s
     return pr_files
 
 
-def _merge_files(repo: str, *, before: str, after: str, str_token: str) -> set[str]:
-    """Return the paths the push changed (a lone commit when ``before`` is the zero sha)."""
+def _merge_files(repo: str, *, before: str, after: str, str_token: str) -> set[str] | None:
+    """Return the paths the push changed, or None when GitHub capped the list at 300 files."""
     if before == ZERO_SHA:
-        commit = _call("GET", str_path=f"repos/{repo}/commits/{after}", str_token=str_token)
-        return paths_of(commit["files"])
-    str_cmp = f"repos/{repo}/compare/{before}...{after}"
-    return paths_of(_paged(str_cmp, str_token=str_token, str_key="files"))
+        data = _call("GET", str_path=f"repos/{repo}/commits/{after}", str_token=str_token)
+    else:
+        data = _call(
+            "GET", str_path=f"repos/{repo}/compare/{before}...{after}", str_token=str_token
+        )
+    files = data["files"]
+    return None if len(files) >= FILE_CAP else paths_of(files)
+
+
+def _targets(
+    merge: set[str] | None, *, pr_files: dict[int, set[str]], excludes: list[str]
+) -> list[int]:
+    """Pick the PRs to update; a truncated merge file list updates every open PR."""
+    if merge is None:
+        print(f"merge file list reached {FILE_CAP} (GitHub's cap): updating every open PR")
+        return sorted(pr_files)
+    return colliding_prs(merge, pr_files=pr_files, excludes=excludes)
 
 
 def main() -> int:
@@ -161,7 +175,7 @@ def main() -> int:
 
     pr_files = _open_pr_files(repo, branch=branch, str_token=token)
 
-    for num in colliding_prs(merge, pr_files=pr_files, excludes=excludes):
+    for num in _targets(merge, pr_files=pr_files, excludes=excludes):
         try:
             _call("PUT", str_path=f"repos/{repo}/pulls/{num}/update-branch", str_token=token)
             print(f"updated PR #{num}")

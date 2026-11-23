@@ -23,7 +23,7 @@ def test_no_overlap_selects_nothing() -> None:
 
 def test_hot_files_are_excluded_on_both_sides() -> None:
     """A lockfile shared by the merge and a PR does not count as a collision."""
-    prs = {1: {"poetry.lock"}, 2: {"x/poetry.lock", "a.py"}}
+    prs = {1: {"sub/poetry.lock"}, 2: {"x/poetry.lock", "a.py"}}
     list_hit = _MOD.colliding_prs({"poetry.lock", "a.py"}, pr_files=prs, excludes=["poetry.lock"])
     assert list_hit == [2]
 
@@ -37,3 +37,8 @@ def test_paths_of_includes_previous_filename_of_a_rename() -> None:
     """A renamed file contributes both its old and new path."""
     files = [{"filename": "b.py", "previous_filename": "a.py"}, {"filename": "c.py"}]
     assert _MOD.paths_of(files) == {"a.py", "b.py", "c.py"}
+
+
+def test_truncated_merge_updates_every_open_pr() -> None:
+    """A merge file list at GitHub's cap cannot be intersected, so every PR is selected."""
+    assert _MOD._targets(None, pr_files={1: {"a.py"}, 2: {"b.py"}}, excludes=[]) == [1, 2]
