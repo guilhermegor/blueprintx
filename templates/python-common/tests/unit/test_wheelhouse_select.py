@@ -425,13 +425,15 @@ if [[ "$1 $2 $3" == "-m pip download" ]]; then
 	shift 3
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
+		--no-deps) bool_no_deps=1; shift ;;
 		--dest) dir_dest="$2"; shift 2 ;;
 		-r) path_req="$2"; shift 2 ;;
 		*) shift ;;
 		esac
 	done
+	[[ -n "${bool_no_deps:-}" ]] || { echo "pip download ran without --no-deps" >&2; exit 9; }
 	while read -r str_line; do
-		str_name="${str_line%%[<>=!~; ]*}"
+		str_name="${str_line%%[<>=!~;[ ]*}"
 		[[ -n "$str_name" ]] || continue
 		str_stem="${str_name//-/_}"
 		cp "${STUB_INDEX:-/nonexistent}"/"$str_stem"-*.whl "$dir_dest"/ 2>/dev/null && continue
@@ -447,7 +449,11 @@ exec "@PY@" "$@"
 _POETRY_REQUIRES = (
     'Requires-Dist: pywin32-ctypes>=0.2 ; sys_platform == "win32"',
     'Requires-Dist: secretstorage>=3 ; sys_platform == "linux"',
+    'Requires-Dist: optional-only>=1 ; extra == "bar"',
+    "Requires-Dist: cachecontrol[filecache]>=0.14",
 )
+_CACHECONTROL_REQUIRES = ('Requires-Dist: filelock>=3 ; extra == "filecache"',)
+_CTYPES_REQUIRES = ('Requires-Dist: chained-dep>=1 ; sys_platform == "win32"',)
 
 
 def _stub_wheel(path_index: Path, *, str_stem: str, list_requires: tuple[str, ...]) -> None:
@@ -492,7 +498,16 @@ def _build_for(tmp_path: Path, *, dict_target: dict[str, str]) -> str:
     path_index = tmp_path / "index"
     path_index.mkdir()
     _stub_wheel(path_index, str_stem="poetry-2.4.0-py3-none-any", list_requires=_POETRY_REQUIRES)
-    _stub_wheel(path_index, str_stem="pywin32_ctypes-0.2.3-py3-none-any", list_requires=())
+    _stub_wheel(
+        path_index,
+        str_stem="pywin32_ctypes-0.2.3-py3-none-any",
+        list_requires=_CTYPES_REQUIRES,
+    )
+    _stub_wheel(
+        path_index,
+        str_stem="cachecontrol-0.14.0-py3-none-any",
+        list_requires=_CACHECONTROL_REQUIRES,
+    )
     _stub_wheel(path_index, str_stem="secretstorage-3.3.3-py3-none-any", list_requires=())
     path_shims = tmp_path / "shims"
     path_shims.mkdir()
@@ -589,6 +604,31 @@ def test_close_keeps_only_the_dependencies_whose_marker_holds_for_the_target(
     gate.close_requirements(args)
 
     assert (tmp_path / "out.txt").read_text(encoding="utf-8").splitlines() == [
+        "cachecontrol[filecache]>=0.14",
         "poetry>=2.4",
         "pywin32-ctypes>=0.2",
     ]
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_follows_a_dependency_chain_across_rounds(tmp_path: Path) -> None:
+    """A dependency only discovered in the second round is still packed."""
+    str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
+
+    assert "chained_dep-1.0-py3-none-any.whl" in str_manifest
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_expands_an_extra_requested_by_a_parent(tmp_path: Path) -> None:
+    """``cachecontrol[filecache]`` brings in the dependency gated on that extra."""
+    str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
+
+    assert "filelock-1.0-py3-none-any.whl" in str_manifest
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_omits_a_dependency_gated_on_an_unrequested_extra(tmp_path: Path) -> None:
+    """An ``extra == "bar"`` dependency nobody requested is not packed."""
+    str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
+
+    assert "optional_only" not in str_manifest

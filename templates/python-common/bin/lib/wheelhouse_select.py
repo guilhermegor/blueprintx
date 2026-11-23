@@ -258,6 +258,58 @@ def wheel_requires(path_wheel: Path) -> list[str]:
     return Parser().parsestr(str_text, headersonly=True).get_all("Requires-Dist") or []
 
 
+_RE_EXTRAS = re.compile(r"\[([^\]]*)\]")
+
+
+def _requested_extras(set_lines: set[str]) -> dict[str, set[str]]:
+    """Map each requirement name to the extras its requirement lines ask for.
+
+    Parameters
+    ----------
+    set_lines : set of str
+        Requirement lines, each starting with a distribution name.
+
+    Returns
+    -------
+    dict[str, set[str]]
+        Normalized name to the requested extras, always including the empty extra.
+    """
+    dict_extras: dict[str, set[str]] = {}
+    for str_line in set_lines:
+        str_name = normalize(_RE_NAME.match(str_line).group(0))
+        cls_extras = _RE_EXTRAS.search(str_line.split(";", 1)[0])
+        list_extras = cls_extras.group(1).split(",") if cls_extras else []
+        dict_extras.setdefault(str_name, {""}).update(
+            normalize(str_extra.strip()) for str_extra in list_extras if str_extra.strip()
+        )
+    return dict_extras
+
+
+def _applies_with_extras(
+    str_dep: str, *, dict_env: dict[str, str], set_extras: set[str]
+) -> bool:
+    """Return whether a ``Requires-Dist`` marker holds under any requested extra.
+
+    Parameters
+    ----------
+    str_dep : str
+        One ``Requires-Dist`` value, possibly carrying an ``extra ==`` marker.
+    dict_env : dict[str, str]
+        The target environment, from :func:`target_environment`.
+    set_extras : set of str
+        Extras the requesting lines activate; the empty extra is always present.
+
+    Returns
+    -------
+    bool
+        ``True`` when the marker evaluates true for at least one extra.
+    """
+    return any(
+        requirement_matches_target(str_dep, dict_env={**dict_env, "extra": str_extra})
+        for str_extra in set_extras
+    )
+
+
 def close_requirements(args: argparse.Namespace) -> int:
     """Write the seed plus the TARGET-applicable dependencies of the wheels it names.
 
@@ -280,14 +332,15 @@ def close_requirements(args: argparse.Namespace) -> int:
     set_lines = {
         str_line.strip()
         for str_line in Path(args.seed).read_text(encoding="utf-8").splitlines()
-        if str_line.strip()
+        if _RE_NAME.match(str_line.strip())
     }
-    set_names = {normalize(_RE_NAME.match(str_line).group(0)) for str_line in set_lines}
+    dict_extras = _requested_extras(set_lines)
     for path_wheel in sorted(Path(args.wheels_dir).glob("*.whl")):
-        if normalize(path_wheel.name.split("-", 1)[0]) not in set_names:
+        str_name = normalize(path_wheel.name.split("-", 1)[0])
+        if str_name not in dict_extras:
             continue
         for str_dep in wheel_requires(path_wheel):
-            if requirement_matches_target(str_dep, dict_env=dict_env):
+            if _applies_with_extras(str_dep, dict_env=dict_env, set_extras=dict_extras[str_name]):
                 set_lines.add(str_dep.split(";", 1)[0].strip())
     Path(args.out).write_text("\n".join(sorted(set_lines)) + "\n", encoding="utf-8")
     print(f"closure holds {len(set_lines)} requirement(s)")

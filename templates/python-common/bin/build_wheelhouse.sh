@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/lib/bootstrap.sh"
 
 WHEELHOUSE_DIR="${WHEELHOUSE_DIR:-$PROJECT_ROOT/../_wheels/$(basename "$PROJECT_ROOT")}"
 WHEELHOUSE_PART_MB="${WHEELHOUSE_PART_MB:-45}"
+WHEELHOUSE_CLOSURE_MAX_ROUNDS="${WHEELHOUSE_CLOSURE_MAX_ROUNDS:-50}"
 SELECT_PY="$SCRIPT_DIR/lib/wheelhouse_select.py"
 
 resolve_target_env() {
@@ -69,7 +70,9 @@ download_wheels() {
 	local path_selected="$1" dir_wheels="$2" path_constraints="${3:-}"
 	local -a args_pip=(-m pip download --no-deps --dest "$dir_wheels" -r "$path_selected")
 
-	[[ -n "$path_constraints" ]] && args_pip+=(-c "$path_constraints")
+	if [[ -n "$path_constraints" ]]; then
+		args_pip+=(-c "$path_constraints")
+	fi
 
 	ensure_dir "$dir_wheels"
 	if [[ -n "${WHEELHOUSE_PIP_PLATFORM:-}" ]]; then
@@ -106,18 +109,24 @@ bundle_bootstrap() {
 close_bootstrap() {
 	local path_selected="$1" dir_wheels="$2" path_lock="$3"
 	local path_next="$path_selected.next"
+	local int_round
 
-	while true; do
+	for int_round in $(seq 1 "$WHEELHOUSE_CLOSURE_MAX_ROUNDS"); do
 		"$PYTHON" "$SELECT_PY" close \
 			--seed "$path_selected" --wheels-dir "$dir_wheels" --out "$path_next" \
 			--target-python-version "$TARGET_PYVER" \
 			--target-sys-platform "$TARGET_SYSPLAT" \
 			--target-platform-machine "$TARGET_MACHINE" \
 			--target-implementation "$TARGET_IMPL"
-		cmp -s "$path_selected" "$path_next" && break
+		if cmp -s "$path_selected" "$path_next"; then
+			rm -f "$path_next"
+			return 0
+		fi
 		cp "$path_next" "$path_selected"
 		download_wheels "$path_selected" "$dir_wheels" "$path_lock"
 	done
+	print_status "error" "Bootstrap closure did not converge in $WHEELHOUSE_CLOSURE_MAX_ROUNDS rounds"
+	return 1
 }
 
 build_wheelhouse() {
