@@ -88,7 +88,7 @@ EOF
 apply_ruleset() {
 	local str_repo="$1"
 	local str_id
-	str_id=$(gh api "repos/$str_repo/rulesets" --jq \
+	str_id=$(gh api "repos/$str_repo/rulesets?per_page=100" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)
 
 	if [ -n "$str_id" ] && [ "$REQUIRED_CHECKS_FILE_MISSING" = "1" ]; then
@@ -118,7 +118,7 @@ apply_ruleset() {
 report_blocking_checks() {
 	local str_repo="$1" str_branch="$2"
 	local str_id str_enforcement str_live str_strict str_rules
-	if ! str_id="$(gh api "repos/$str_repo/rulesets" --jq \
+	if ! str_id="$(gh api "repos/$str_repo/rulesets?per_page=100" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
 		if [[ "$str_id" == *"(HTTP 404)"* ]]; then
 			print_status "info" "No rulesets on $str_repo (HTTP 404): the ruleset enforces no strict policy"
@@ -277,7 +277,7 @@ check_ruleset_present() {
 		print_status "warning" "Could not resolve the repository (ruleset presence UNKNOWN, not confirmed)"
 		return 0
 	fi
-	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
+	if ! str_ids="$(gh api "repos/$str_repo/rulesets?per_page=100" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\" and .enforcement == \"active\") | .id" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (presence UNKNOWN): ${str_ids:-no output from gh}"
 		return 0
@@ -300,7 +300,7 @@ confirm_ruleset_active() {
 		print_status "warning" "Protection NOT confirmed: could not resolve the default branch of $str_repo: ${str_branch:-no output from gh}"
 		return 1
 	fi
-	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
+	if ! str_ids="$(gh api "repos/$str_repo/rulesets?per_page=100" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\" and .enforcement == \"active\") | .id" 2>&1)"; then
 		print_status "warning" "Protection NOT confirmed: could not READ rulesets from $str_repo: ${str_ids:-no output from gh}"
 		return 1

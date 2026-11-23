@@ -132,7 +132,7 @@ indistinguishable from the promotion's and is committed with it — stash it fir
 
 **After the first push the project reads as online and a re-run does nothing.** That includes the
 ruleset step: it is best-effort, and `enable_repo_rules.sh` exits 0 even when GitHub refuses, so the
-script then runs `enable_repo_rules.sh verify` and reports "NOT in place" unless that exits 0. If it
+script then runs `enable_repo_rules.sh verify` (the strict policy is off) and `enable_repo_rules.sh confirm_ruleset` (an active `pr-quality-gate` ruleset applies to the default branch), and reports "NOT in place" unless both exit 0. If it
 did not, run `bash bin/enable_repo_rules.sh` yourself with repo-admin rights. What it applies is the
 same `pr-quality-gate` ruleset an online scaffold gets: a pull request is required, force-push,
 deletion and merge commits on `main` are blocked, and the always-running checks listed in

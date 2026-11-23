@@ -120,7 +120,7 @@ cat >"$WORK_DIR/v/gh" <<'STUB'
 str_rule='{"type":"required_status_checks","ruleset_id":42,"parameters":{"strict_required_status_checks_policy":false,"required_status_checks":[{"context":"Review threads answered"}]}}'
 case "$2" in
 repos/o/r) str_json='{"default_branch":"main"}' ;;
-repos/o/r/rulesets)
+repos/o/r/rulesets|repos/o/r/rulesets\?*)
 	[ "${STUB_RULESETS:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }
 	[ "${STUB_RULESETS:-}" = missing ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 	[ "${STUB_RULESETS:-}" = empty ] && str_json='[]' || str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
@@ -129,7 +129,6 @@ repos/o/r/rules/branches/main*)
 	[ "${STUB_EFFECTIVE:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }
 	[ "${STUB_EFFECTIVE:-}" = strict-true ] && STUB_APPLIES=4 && str_other='{"type":"required_status_checks","ruleset_id":99,"parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"x"}]}}'
 	case "$STUB_APPLIES" in
-	3) str_json="[$str_other]" ;;
 	4) str_json="[$str_rule,$str_other]" ;;
 	1) str_json="[$str_rule]" ;;
 	2) [[ " $* " == *" --paginate "* ]] && str_json="[] [$str_rule]" || str_json='[]' ;;
@@ -248,7 +247,7 @@ test_update_puts_strict_false_on_an_existing_ruleset() {
 [ "$1 $2" = "auth status" ] && exit 0
 [ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
 [[ " $* " == *" -X PUT "* && "$*" == *"/rulesets/42"* ]] && { cat >"$STUB_CAPTURE"; exit 0; }
-[ "$2" = "repos/o/r/rulesets" ] && { echo 42; exit 0; }
+[[ "$2" == repos/o/r/rulesets || "$2" == repos/o/r/rulesets\?* ]] && { echo 42; exit 0; }
 exit 0
 STUB
     chmod +x "$WORK_DIR/u/gh"
@@ -322,7 +321,7 @@ test_rerun_flips_an_existing_strict_true_ruleset_to_false() {
 [ "$1 $2" = "auth status" ] && exit 0
 [ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
 [[ " $* " == *" -X PUT "* && "$*" == *"/rulesets/42"* ]] && { cat >"$STUB_CAPTURE"; exit 0; }
-[ "$2" = "repos/o/r/rulesets" ] && { echo 42; exit 0; }
+[[ "$2" == repos/o/r/rulesets || "$2" == repos/o/r/rulesets\?* ]] && { echo 42; exit 0; }
 [ "$2" = "repos/o/r/rulesets/42" ] && { echo '{"rules":[{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true}}]}'; exit 0; }
 exit 0
 STUB

@@ -2152,8 +2152,8 @@ grouped by what they guard.
   `secret-scan.yml`, so nothing of those comes back. An offline project commits on `main` by
   design, which is why only `no-commit-to-branch` is skipped for the promotion commit.
   The ruleset step runs the project's own `bin/enable_repo_rules.sh` (the `pr-quality-gate`
-  ruleset), then `enable_repo_rules.sh verify`. It never aborts the promotion, since the
-  assets are already pushed; if the script is missing it warns, and when `verify` fails the
+  ruleset), then `enable_repo_rules.sh verify` and `enable_repo_rules.sh confirm_ruleset`. It never aborts the promotion, since the
+  assets are already pushed; if the script is missing it warns, and when `verify` or `confirm_ruleset` fails the
   final summary says branch protection on `main` is NOT in place.
 
   The online state is carried by `HAS_ORIGIN` and
