@@ -461,6 +461,9 @@ jobs:
       - name: Should-fail regression tests for the prompt tty guard
         run: bash tests/test_prompt_tty_guard.sh
 
+      - name: Should-fail regression tests for the menu on closed stdin
+        run: bash tests/test_menu_closed_stdin.sh
+
       - name: Should-fail regression tests for the scaffold first commit
         run: bash tests/test_scaffold_first_commit.sh
 
