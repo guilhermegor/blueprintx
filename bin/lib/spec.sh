@@ -74,6 +74,7 @@ _spec_answer_email() {
 }
 
 _spec_answer_pipeline_intent() {
+    [ "${MULTI_PIPELINE_OPTIN:-}" = "true" ] && return 0
     spec_yn "$1" pipeline_intent n
 }
 
@@ -82,7 +83,7 @@ _spec_answer_env_wise() {
 }
 
 _spec_answer_review_bot() {
-    spec_yn "$1" review_bot_roster n
+    spec_yn "$1" review_bot_roster y
 }
 
 _spec_answer_default_os() {
@@ -262,7 +263,7 @@ _spec_key_map() {
                 data_dir:n data_dir_base:logs data_dir_dated:n \
                 webhook:n webhook_platform:teams otel:n \
                 email:n email_backend:outlook env_wise_config:n \
-                review_bot_roster:n git_remote:n create_repo:n \
+                review_bot_roster:y git_remote:n create_repo:n \
                 repo_visibility:private kanban:n kanban_visibility:repo \
                 protect_branch:n human_reviewers:n)
             ;;
@@ -271,29 +272,29 @@ _spec_key_map() {
                 data_dir:n data_dir_base:logs data_dir_dated:n \
                 webhook:n webhook_platform:teams otel:n \
                 email:n email_backend:outlook pipeline_intent:n \
-                env_wise_config:n review_bot_roster:n git_remote:n create_repo:n \
+                env_wise_config:n review_bot_roster:y git_remote:n create_repo:n \
                 repo_visibility:private kanban:n kanban_visibility:repo \
                 protect_branch:n human_reviewers:n)
             ;;
         lib-minimal)
             keys=(zero_dependency:n logs:n otel:n docker_compose:n docker_db_backend:postgresql \
                 publish_pypi:y publish_test_pypi:y consume_private:n \
-                review_bot_roster:n git_remote:n create_repo:n \
+                review_bot_roster:y git_remote:n create_repo:n \
                 repo_visibility:private kanban:n kanban_visibility:repo \
                 protect_branch:n human_reviewers:n)
             ;;
         ts-lib)
-            keys=(review_bot_roster:n otel:n git_remote:n create_repo:n \
+            keys=(review_bot_roster:y otel:n git_remote:n create_repo:n \
                 repo_visibility:private kanban:n kanban_visibility:repo \
                 protect_branch:n human_reviewers:n)
             ;;
         ventoy-usb)
             keys=(include_windows:y include_android:y persistence_size_mb:4096 \
-                review_bot_roster:n git_remote:n create_repo:n repo_visibility:private \
+                review_bot_roster:y git_remote:n create_repo:n repo_visibility:private \
                 kanban:n kanban_visibility:repo protect_branch:n)
             ;;
         etcher-chromeos)
-            keys=(default_os:chromeos-flex review_bot_roster:n git_remote:n create_repo:n \
+            keys=(default_os:chromeos-flex review_bot_roster:y git_remote:n create_repo:n \
                 repo_visibility:private kanban:n kanban_visibility:repo \
                 protect_branch:n)
             ;;
