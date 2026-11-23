@@ -224,9 +224,10 @@ verify_strict_required_checks() {
 	if [ "$int_ruleset_result" -eq 1 ] || [ "$int_protection_result" -eq 1 ]; then
 		return 1
 	fi
-	if [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ] &&
-		{ [ "$int_ruleset_result" -ne 3 ] || [ "$int_protection_result" -ne 3 ]; }; then
-		print_status "error" "Neither mechanism confirmed the strict policy is off on $str_repo (at least one could not be read, or a ruleset is present but not blocking) — unreadable is not proof (blueprintx#1300)"
+	if [ "$int_ruleset_result" -eq 2 ] || [ "$int_protection_result" -eq 2 ] ||
+		{ [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ] &&
+			{ [ "$int_ruleset_result" -ne 3 ] || [ "$int_protection_result" -ne 3 ]; }; }; then
+		print_status "error" "The strict policy is not confirmed off on $str_repo (a mechanism could not be read, or a ruleset is present but not blocking) — unreadable is not proof (blueprintx#1300)"
 		return 1
 	fi
 	assert_no_effective_strict "$str_repo" "$str_branch" || return 1
