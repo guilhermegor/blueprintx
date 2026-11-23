@@ -343,7 +343,7 @@ EOF
     fi
 }
 
-test_definite_absence_leaves_protection_unapplied() {
+test_protection_requires_verify_and_confirm_ruleset() {
     local dir="$WORK_DIR/absent-ruleset" out_ok out_no_ruleset out_strict_on
     mkdir -p "$dir/bin"
     local run='source "$1"; PROJECT_PATH="$2"; SKIP_BRANCH_PROTECTION=false; apply_branch_protection; echo "applied=$PROTECTION_APPLIED"'
@@ -382,7 +382,7 @@ main() {
     test_copy_manifests_match_templates
     test_promotion_commit_skips_only_no_commit_to_branch
     test_mutations_on_offline_fixture
-    test_definite_absence_leaves_protection_unapplied
+    test_protection_requires_verify_and_confirm_ruleset
 
     if [ "$int_failures" -eq 0 ]; then
         echo "All promote_offline_to_online.sh refusal-path tests passed."

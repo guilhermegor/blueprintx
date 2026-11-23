@@ -186,6 +186,8 @@ test_confirm_ruleset_applied_only_when_confirmed() {
     assert_has "a ruleset not applying to the default branch is not confirmed" "rc=1" "$(run_verify active 0 confirm_ruleset)"
     assert_has "a disabled ruleset is not confirmed" "rc=1" "$(run_verify disabled 1 confirm_ruleset)"
     assert_has "unreadable rulesets are not confirmed" "rc=1" "$(STUB_RULESETS=forbidden run_verify active 1 confirm_ruleset)"
+    assert_has "a 404 on rulesets is not confirmed" "rc=1" "$(STUB_RULESETS=missing run_verify active 1 confirm_ruleset)"
+    assert_has "unreadable rules on the default branch are not confirmed" "rc=1" "$(STUB_EFFECTIVE=forbidden run_verify active 1 confirm_ruleset)"
     assert_has "unreadable rulesets stay fail-open for check_ruleset" "rc=0" "$(STUB_RULESETS=forbidden run_verify active 1 check_ruleset)"
 }
 

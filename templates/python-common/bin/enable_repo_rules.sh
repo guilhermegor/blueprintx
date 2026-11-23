@@ -121,7 +121,7 @@ report_blocking_checks() {
 	if ! str_id="$(gh api "repos/$str_repo/rulesets?per_page=100" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
 		if [[ "$str_id" == *"(HTTP 404)"* ]]; then
-			print_status "info" "No rulesets on $str_repo (HTTP 404): the ruleset enforces no strict policy"
+			print_status "info" "No rulesets on $str_repo (HTTP 404: none exist, or the token cannot see them); the other mechanisms must still confirm"
 			return 3
 		fi
 		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
