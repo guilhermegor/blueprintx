@@ -344,20 +344,22 @@ EOF
 }
 
 test_protection_requires_verify_and_confirm_ruleset() {
-    local dir="$WORK_DIR/absent-ruleset" out_ok out_no_ruleset out_strict_on
+    local dir="$WORK_DIR/absent-ruleset" out_ok out_old out_no_ruleset out_strict_on
     mkdir -p "$dir/bin"
     local run='source "$1"; PROJECT_PATH="$2"; SKIP_BRANCH_PROTECTION=false; apply_branch_protection; echo "applied=$PROTECTION_APPLIED"'
-    printf '#!/bin/bash\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
-    chmod +x "$dir/bin/enable_repo_rules.sh"
-    out_ok="$(bash -c "$run" _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
     printf '#!/bin/bash\n[ "${1:-}" = confirm_ruleset ] && exit 1\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
+    chmod +x "$dir/bin/enable_repo_rules.sh"
     out_no_ruleset="$(bash -c "$run" _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
     printf '#!/bin/bash\n[ "${1:-}" = verify ] && exit 1\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
     out_strict_on="$(bash -c "$run" _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
-    if [[ "$out_ok" == *"applied=true"* && "$out_no_ruleset" == *"applied=false"* && "$out_strict_on" == *"applied=false"* ]]; then
+    printf '#!/bin/bash\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
+    out_old="$(bash -c "$run" _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
+    printf '#!/bin/bash\n[ "${1:-}" = confirm_ruleset ] && exit 0\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
+    out_ok="$(bash -c "$run" _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
+    if [[ "$out_ok" == *"applied=true"* && "$out_old" == *"applied=false"* && "$out_no_ruleset" == *"applied=false"* && "$out_strict_on" == *"applied=false"* ]]; then
         echo "ok: protection is applied only when verify and confirm_ruleset both pass"
     else
-        echo "FAIL (protection flag): ok=$out_ok no_ruleset=$out_no_ruleset strict_on=$out_strict_on"
+        echo "FAIL (protection flag): ok=$out_ok old=$out_old no_ruleset=$out_no_ruleset strict_on=$out_strict_on"
         int_failures=$((int_failures + 1))
     fi
 }

@@ -553,6 +553,10 @@ apply_branch_protection() {
         return 0
     fi
     (cd "$PROJECT_PATH" && bash bin/enable_repo_rules.sh) || true
+    if ! grep -q 'confirm_ruleset' "$PROJECT_PATH/bin/enable_repo_rules.sh"; then
+        print_status "warning" "$PROJECT_PATH/bin/enable_repo_rules.sh predates confirm_ruleset, so protection cannot be confirmed; refresh it from the template."
+        return 0
+    fi
     if (cd "$PROJECT_PATH" && bash bin/enable_repo_rules.sh verify && bash bin/enable_repo_rules.sh confirm_ruleset); then
         PROTECTION_APPLIED=true
     fi
