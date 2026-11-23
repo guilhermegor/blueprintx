@@ -17,10 +17,11 @@ HOT FILES. Files nearly every PR touches would make every PR collide with every 
 matching ``RERUN_EXCLUDE_FILES`` (comma- or newline-separated ``fnmatch`` globs) are ignored on
 both sides. Default: ``poetry.lock,CHANGELOG.md``.
 
-TOKEN. Everything goes through ``GITHUB_TOKEN``. ⚠️ A branch update pushed with ``GITHUB_TOKEN``
-does NOT start workflows on the PR (GitHub suppresses token-triggered events to prevent
-recursion), so with the default token the branch is updated but CI may not re-run. Set
-``RERUN_TOKEN`` (a PAT or App token with ``pull-requests: write``) to make the update retrigger CI.
+TOKEN. By default everything goes through ``GITHUB_TOKEN`` (``contents: write`` and
+``pull-requests: write``). ⚠️ A branch update pushed with ``GITHUB_TOKEN`` does NOT start
+workflows on the PR (GitHub suppresses token-triggered events to prevent recursion), so with
+the default token the branch is updated but CI may not re-run. Set ``RERUN_TOKEN`` (a PAT or
+App token with ``contents: write`` and ``pull-requests: write``) to make the update retrigger CI.
 """
 
 import fnmatch
@@ -159,21 +160,21 @@ def main() -> int:
     Returns
     -------
     int
-        0 always for per-PR failures (logged); 1 only when the merge's files cannot be read.
+        0 always for per-PR failures (logged); 1 only when the merge's files or the
+        open-PR list cannot be read.
     """
     token = os.environ.get("RERUN_TOKEN") or os.environ["GITHUB_TOKEN"]
     repo = os.environ["GITHUB_REPOSITORY"]
-    before, after = os.environ.get("BEFORE_SHA", ZERO_SHA), os.environ["AFTER_SHA"]
+    before, after = os.environ.get("BEFORE_SHA") or ZERO_SHA, os.environ["AFTER_SHA"]
     branch = os.environ.get("BASE_BRANCH", "main")
     excludes = parse_excludes(os.environ.get("RERUN_EXCLUDE_FILES", DEFAULT_EXCLUDES))
 
     try:
         merge = _merge_files(repo, before=before, after=after, str_token=token)
-    except (urllib.error.URLError, TimeoutError) as err:
-        print(f"cannot read merge files: {err}", file=sys.stderr)
+        pr_files = _open_pr_files(repo, branch=branch, str_token=token)
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as err:
+        print(f"cannot read merge files or open PRs: {err}", file=sys.stderr)
         return 1
-
-    pr_files = _open_pr_files(repo, branch=branch, str_token=token)
 
     for num in _targets(merge, pr_files=pr_files, excludes=excludes):
         try:
