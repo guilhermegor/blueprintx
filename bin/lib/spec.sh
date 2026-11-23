@@ -74,6 +74,7 @@ _spec_answer_email() {
 }
 
 _spec_answer_pipeline_intent() {
+    [ "${MULTI_PIPELINE_OPTIN:-}" = "true" ] && return 0
     spec_yn "$1" pipeline_intent n
 }
 

@@ -484,6 +484,25 @@ test_ts_lib_answer_stream_order() {
     fi
 }
 
+mvc_stream() {
+    local file
+    file="$(write_spec "stream-$RANDOM" mvc-service-native-db "pipeline_intent=$1")"
+    bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        spec_stdin_for_skeleton mvc-service-native-db "$2"' _ "$REPO_ROOT" "$file"
+}
+
+test_multi_pipeline_env_drops_the_pipeline_intent_answer() {
+    local str_asked str_env
+    str_asked="$(diff <(mvc_stream y) <(mvc_stream n) | sed -n '1s/[acd].*//p')"
+    str_asked="$(mvc_stream y | sed "${str_asked:-0}d" | paste -sd, -)"
+    str_env="$(MULTI_PIPELINE_OPTIN=true mvc_stream y | paste -sd, -)"
+    if [ -n "$str_env" ] && [ "$str_asked" = "$str_env" ]; then
+        pass "MULTI_PIPELINE_OPTIN=true drops the pipeline_intent answer the scaffold never asks"
+    else
+        fail "multi-pipeline stream" "asked=$str_asked env=$str_env"
+    fi
+}
+
 test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes() {
     local str_got
     str_got="$(sed -n '/^main() {/,/^}/p' "$REPO_ROOT/bin/scaffold/ts_lib.sh" \
@@ -949,10 +968,7 @@ test_first_commit_works_without_a_git_identity() {
     fi
 }
 
-main() {
-    test_marker_step_uses_the_gates_page_set
-    test_marker_step_warns_when_the_gate_cannot_list_pages
-    test_marker_warning_names_the_real_gates_stdout_error
+run_answer_stream_tests() {
     test_ventoy_usb_answer_stream_order
     test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes
     test_ventoy_usb_bad_persistence_size_stops_before_anything_is_created
@@ -961,8 +977,16 @@ main() {
     test_an_undefined_test_name_fails_the_runner
     test_a_missing_tool_is_not_reported_as_an_undefined_test
     test_ts_lib_answer_stream_order
+    test_multi_pipeline_env_drops_the_pipeline_intent_answer
     test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes
     test_ts_lib_remote_keys_defaults
+}
+
+main() {
+    test_marker_step_uses_the_gates_page_set
+    test_marker_step_warns_when_the_gate_cannot_list_pages
+    test_marker_warning_names_the_real_gates_stdout_error
+    run_answer_stream_tests
     test_create_repo_runs_gh_with_the_chosen_visibility_and_protection
     test_kanban_yes_keeps_branch_protection_aligned
     test_kanban_lookup_skip_keeps_branch_protection_aligned
