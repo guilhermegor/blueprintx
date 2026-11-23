@@ -144,10 +144,11 @@ RE_CI_SCRIPT = re.compile(r"(^|/)bin/ci/[^/]+$")
 RE_GATE_SCRIPT = re.compile(r"(^|/)bin/(check|lint)_[^/]+\.(py|sh)$")
 RE_WORKFLOW_PATH = re.compile(r"\.github/workflows/.*\.ya?ml$")
 RE_TOP_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
-RE_JOB_KEY = re.compile(r"^ {4}([A-Za-z_-]+):")
-RE_JOB_KEY_LINE = re.compile(r"^ {4}[^\s#-]")
-SET_MOVABLE_JOB_KEYS = frozenset({"runs-on"})
-RE_UNMOVABLE_JOB_LINE = re.compile(r"^ {4}needs\s*:|<<\s*:|(?::|^\s*-)\s+[&*][\w-]")
+RE_MOVABLE_RUNNER = re.compile(r"""^ {4}runs-on:\s*(["']?)ubuntu-[\w.-]+\1\s*(#.*)?$""")
+RE_UNMOVABLE_JOB_LINE = re.compile(
+    r"""^ {2}[\w-]+:\s*[^\s#]|^ {4}["']?needs["']?\s*:|<<\s*:|(?:^|[\s\[{,])[&*][\w-]"""
+)
+RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
@@ -507,30 +508,21 @@ def precommit_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
 
 
 def job_signature(list_lines: list) -> tuple:
-    """Return a job block's comparable lines: everything bar ``runs-on``.
+    """Return a job block's comparable lines: everything bar a GitHub-hosted Ubuntu runner.
 
     Parameters
     ----------
     list_lines : list of str
-        The lines of one job block, below its ``  <id>:`` key.
+        The lines of one job block, its ``  <id>:`` line first.
 
     Returns
     -------
     tuple
-        The block's lines with the ``runs-on:`` key (and its continuation lines) removed;
-        any other 4-space line, quoted or oddly spaced keys included, ends the skip, so a
-        changed ``name:``, ``if:``, ``env:``, ``steps:``, ``uses:`` or any other key makes the
-        job differ.
+        The block's lines without a one-line ``runs-on: ubuntu-*`` key. Any other runner (a
+        Windows or macOS image, a self-hosted label, a multi-line sequence) stays compared,
+        since it can change the shell or leave the job queued forever.
     """
-    list_kept = []
-    bool_skip = False
-    for str_line in list_lines:
-        cls_key = RE_JOB_KEY.match(str_line)
-        if RE_JOB_KEY_LINE.match(str_line):
-            bool_skip = bool(cls_key) and cls_key.group(1) in SET_MOVABLE_JOB_KEYS
-        if not bool_skip:
-            list_kept.append(str_line)
-    return tuple(list_kept)
+    return tuple(str_line for str_line in list_lines if not RE_MOVABLE_RUNNER.match(str_line))
 
 
 def job_is_movable(tuple_sig: tuple) -> bool:
@@ -544,9 +536,10 @@ def job_is_movable(tuple_sig: tuple) -> bool:
     Returns
     -------
     bool
-        False when the block has a ``needs:`` key or a YAML anchor, alias or merge key:
-        what it depends on lives outside the block, so an identical text in another file
-        can still skip or change the job there.
+        False when the id line carries a value (a flow-style or aliased job), or the block
+        has a ``needs:`` key, quoted or not, or a YAML anchor, alias or merge key: what it
+        depends on lives outside the block, so an identical text in another file can still
+        skip or change the job there.
     """
     return not any(RE_UNMOVABLE_JOB_LINE.search(str_line) for str_line in tuple_sig)
 
@@ -579,10 +572,35 @@ def workflow_job_details(str_text: str) -> dict:
         cls_job = re.match(r"^ {2}([A-Za-z0-9_-]+):", str_line)
         if cls_job:
             str_id = cls_job.group(1)
-            dict_lines[str_id] = []
+            dict_lines[str_id] = [str_line]
         elif str_id:
             dict_lines[str_id].append(str_line)
     return {str_id: job_signature(list_lines) for str_id, list_lines in dict_lines.items()}
+
+
+def workflow_header(str_text: str) -> tuple:
+    """Return a workflow's top-level settings outside ``jobs:``, bar ``name:`` and comments.
+
+    Parameters
+    ----------
+    str_text : str
+        Full workflow YAML content.
+
+    Returns
+    -------
+    tuple of str
+        The non-blank lines of every top-level key other than ``jobs:`` and ``name:``, so a
+        job moved under a different ``on:``, ``env:``, ``defaults:``, ``concurrency:`` or
+        ``permissions:`` does not compare equal.
+    """
+    list_kept = []
+    bool_skip = False
+    for str_line in str_text.splitlines():
+        if RE_TOP_LEVEL_KEY.match(str_line):
+            bool_skip = bool(re.match(r"(jobs|name)\s*:", str_line))
+        if not bool_skip and str_line.strip() and not str_line.lstrip().startswith("#"):
+            list_kept.append(str_line)
+    return tuple(list_kept)
 
 
 def workflow_jobs(str_text: str) -> set:
@@ -615,10 +633,10 @@ def workflow_problems(
     str_shown : str
         Path to show in messages.
     dict_elsewhere : dict or None
-        Job id to the list of signatures of jobs newly added to a workflow file of the same
-        tree in this change. A removed job with an identical signature in that list is a
-        move, and the match is consumed (the list is mutated) so one new job covers one
-        removal.
+        Job id to the list of ``(workflow_header, job_signature)`` pairs of jobs newly added
+        to a workflow file of the same tree in this change. A removed job whose pair is in
+        that list is a move, and the match is consumed (the list is mutated) so one new job
+        covers one removal.
 
     Returns
     -------
@@ -626,12 +644,14 @@ def workflow_problems(
         One message per removed job.
     """
     dict_old = workflow_job_details(str_old)
+    tuple_header = workflow_header(str_old)
     dict_moved = dict_elsewhere or {}
     list_problems = []
     for str_id in sorted(set(dict_old) - workflow_jobs(str_new)):
         list_candidates = dict_moved.get(str_id, [])
-        if job_is_movable(dict_old[str_id]) and dict_old[str_id] in list_candidates:
-            list_candidates.remove(dict_old[str_id])
+        tuple_pair = (tuple_header, dict_old[str_id])
+        if job_is_movable(dict_old[str_id]) and tuple_pair in list_candidates:
+            list_candidates.remove(tuple_pair)
             continue
         list_problems.append(f"{str_shown}: workflow job {str_id!r} removed")
     return list_problems
@@ -666,13 +686,14 @@ def added_jobs(str_path: str, *, str_base: str) -> dict:
     Returns
     -------
     dict
-        Job id to ``job_signature`` for each job id new to this file.
+        Job id to ``(workflow_header, job_signature)`` for each job id new to this file.
     """
-    str_text = show(STR_INDEX_REF, str_path=str_path)
+    str_text = show(STR_INDEX_REF, str_path=str_path) or ""
     set_known = workflow_jobs(show(str_base, str_path=str_path) or "")
+    tuple_header = workflow_header(str_text)
     return {
-        str_id: tuple_sig
-        for str_id, tuple_sig in workflow_job_details(str_text or "").items()
+        str_id: (tuple_header, tuple_sig)
+        for str_id, tuple_sig in workflow_job_details(str_text).items()
         if str_id not in set_known
     }
 
@@ -690,7 +711,7 @@ def jobs_by_tree(list_changed: list, *, str_base: str) -> dict:
     Returns
     -------
     dict
-        Tree prefix to ``{job id: [signature, ...]}``. Only files directly under
+        Tree prefix to ``{job id: [(header, signature), ...]}``. Only files directly under
         ``.github/workflows/`` count, since GitHub runs no workflow in a subdirectory.
     """
     dict_trees: dict = {}

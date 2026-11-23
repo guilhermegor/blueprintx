@@ -971,6 +971,10 @@ def test_workflow_job_moved_with_a_softening_key_is_removed(
         "    env: *shared\n",
         "    env:\n      <<: *shared\n",
         "    steps:\n      - *gate_step\n",
+        '    "needs": [build]\n',
+        "    'needs': [build]\n",
+        "    steps: [*gate_step]\n",
+        "    env: !!map &shared\n      A: '1'\n",
     ],
 )
 def test_workflow_job_moved_with_outside_dependency_is_removed(
@@ -986,6 +990,69 @@ def test_workflow_job_moved_with_outside_dependency_is_removed(
     )
 
     assert len(list_findings) == 1
+
+
+def test_workflow_flow_style_job_moved_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A value on the id line hides the job body from the comparison, so it is never a move."""
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: "jobs:\n  gate: {name: G, steps: [{run: real}]}\n"},
+        dict_new={_STR_SOURCE: "jobs:\n", _STR_SIBLING: "jobs:\n  gate: {name: G, if: false}\n"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_the_same_settings_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only ``name:`` and comments may differ in the target's top-level settings."""
+    str_on = "on:\n  pull_request:\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"name: A\n{str_on}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"name: A\n{str_on}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"# moved\nname: B\n{str_on}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    "str_header", ["on: workflow_dispatch\n", "permissions: {}\n", "env:\n  STRICT: '0'\n"]
+)
+def test_workflow_job_moved_under_other_settings_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_header: str
+) -> None:
+    """A target whose ``on:`` or other top-level settings differ may never run the job."""
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"name: Other\n{str_header}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    "str_runner",
+    ["windows-latest", "self-hosted", "[self-hosted, gpu]", "\n      - self-hosted"],
+)
+def test_workflow_job_moved_to_a_non_ubuntu_runner_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_runner: str
+) -> None:
+    """Only a one-line ``ubuntu-*`` runner may change: another can change the shell or hang."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest", str_runner)
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
 
 
 def test_workflow_job_moved_with_a_different_runner_is_clean(

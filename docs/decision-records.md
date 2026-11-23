@@ -1356,20 +1356,25 @@ is shaped as it is; a generated project gets the behavior, not the history.
       same id is NEWLY ADDED to another top-level workflow file of the same tree (the repo's
       own `.github/workflows/`, or one `templates/<name>/.github/workflows/`) with an
       identical job block, so moving a job between files is a move, not a removal (#1311).
-      Everything in the block must match except `runs-on`, so a changed `name:`
-      (a required status-check context keys on the name), `steps:`, `if:`,
-      `continue-on-error`, `env:` or `uses:` makes it a removal. One new job excuses one
-      removal. It also counts as removed when the id is gone from the whole tree, when it
-      only reappears in a different tree, or when the target sits in a subdirectory (GitHub
-      runs no workflow there). A job with `needs:`, or with a YAML anchor, alias or merge key
-      (`&x`, `*x`, `<<:`), is never excused as a move: the job it needs, or the anchored
-      content, lives outside the compared block, so an identical text can still be skipped
-      (`if: false` on the needed job) or changed in the target. Known limits: `runs-on` is
-      not compared, so a move may change the runner (a Windows runner changes the default
-      shell, and an unmatched self-hosted label leaves the job queued, never reporting). The
-      target workflow's own `on:`, `env:`, `defaults:`, `concurrency:` and `permissions:`
-      are not compared, and neither is whether the target file is copied into generated
-      projects.
+      Everything in the block must match except a one-line `runs-on: ubuntu-*`, so a
+      changed `name:` (a required status-check context keys on the name), `steps:`, `if:`,
+      `continue-on-error`, `env:` or `uses:` makes it a removal. Any other runner (Windows
+      or macOS, which change the default shell, a self-hosted label that can leave the job
+      queued and never reporting, or a multi-line sequence) is compared too. The target
+      file's top-level settings outside `jobs:` (`on:`, `env:`, `defaults:`,
+      `concurrency:`, `permissions:`) must equal the source file's, bar `name:` and
+      comments, so a move into a file triggered only by `workflow_dispatch` is a removal.
+      One new job excuses one removal. It also counts as removed when the id is gone from
+      the whole tree, when it only reappears in a different tree, or when the target sits in
+      a subdirectory (GitHub runs no workflow there). A job is never excused as a move when
+      its id line carries a value (a flow-style `gate: {...}` or an aliased `gate: *base`,
+      whose body the line parser does not see), when it has `needs:` (quoted or not), or
+      when it has a YAML anchor, alias or merge key (`&x`, `*x`, `[*x]`, `!!map &x`,
+      `<<:`): the job it needs, or the anchored content, lives outside the compared block,
+      so an identical text can still be skipped (`if: false` on the needed job) or changed
+      in the target. Detection is textual and errs toward reporting: a shell `*word` in a
+      `run:` line also makes the job non-movable. Known limit: whether the target file is
+      copied into generated projects is not compared.
     - `assertion-weakening`: wired in pre-commit (`language: system`, `always_run`, so the
       caller's environment reaches it, including the `TEST_CHANGE_OK` hatch) and as its own
       `assertion_weakening.yaml` workflow (not a step of the matrix `test` job, whose check

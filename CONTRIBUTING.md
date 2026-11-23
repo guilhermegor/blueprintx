@@ -740,10 +740,12 @@ Configuration files in this repository carry no comments, so the reasoning lives
   follow the one-implementation rule; diff-scoped gates (`gate-integrity`, the PR file-count
   ceiling) compare against `merge-base(HEAD, main)` because they check a delta. `gate-integrity`
   treats a workflow job as moved when the same id is newly added to another top-level workflow
-  file of the same tree with an identical job block bar `runs-on`; a changed name,
-  steps, `if:` or `env:`, a job gone from the tree, a move across trees (template to root) or
-  into a subdirectory is still a removal (#1311), and so is any job with `needs:` or a YAML
-  anchor, alias or merge key, whose meaning lives outside the compared block. The
+  file of the same tree with an identical job block bar a one-line `runs-on: ubuntu-*`, under
+  the same top-level `on:`/`env:`/`permissions:` settings; a changed name, steps, `if:`,
+  `env:` or trigger, a job gone from the tree, a move across trees (template to root) or
+  into a subdirectory is still a removal (#1311), and so is a flow-style job or any job with
+  `needs:` or a YAML anchor, alias or merge key, whose meaning lives outside the compared
+  block. The
   complexity gate runs twice, the second time scoped to `templates/python-common`, which
   catches a template defect in about 3 seconds instead of in a five-tier CI matrix (measured on
   the two issues 270 and 271). Function length is not duplicated, since its discovery already walks the whole root.
