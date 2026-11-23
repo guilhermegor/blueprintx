@@ -486,8 +486,9 @@ test_ts_lib_answer_stream_order() {
 
 mvc_stream() {
     local file
-    file="$(write_spec "stream-$RANDOM" mvc-service-native-db "pipeline_intent=$1")"
-    bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+    file="$(write_spec "stream-$1-$RANDOM" mvc-service-native-db "pipeline_intent=$1")"
+    env -u MULTI_PIPELINE_OPTIN ${2:+MULTI_PIPELINE_OPTIN="$2"} \
+        bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
         spec_stdin_for_skeleton mvc-service-native-db "$2"' _ "$REPO_ROOT" "$file"
 }
 
@@ -495,7 +496,7 @@ test_multi_pipeline_env_drops_the_pipeline_intent_answer() {
     local str_asked str_env
     str_asked="$(diff <(mvc_stream y) <(mvc_stream n) | sed -n '1s/[acd].*//p')"
     str_asked="$(mvc_stream y | sed "${str_asked:-0}d" | paste -sd, -)"
-    str_env="$(MULTI_PIPELINE_OPTIN=true mvc_stream y | paste -sd, -)"
+    str_env="$(mvc_stream y true | paste -sd, -)"
     if [ -n "$str_env" ] && [ "$str_asked" = "$str_env" ]; then
         pass "MULTI_PIPELINE_OPTIN=true drops the pipeline_intent answer the scaffold never asks"
     else

@@ -119,7 +119,7 @@ Same as the DDD tiers, **minus `storage`** (MVC has no schema-less storage promp
 
 | Key | Default | Notes |
 |---|---|---|
-| `pipeline_intent` | `n` | `y` selects the multi-intent (`PIPELINE_INTENT` dispatch) pipeline shape. The scaffold script also accepts this directly as the `MULTI_PIPELINE_OPTIN=true` environment variable — set that instead of going through stdin if calling the scaffold script yourself. |
+| `pipeline_intent` | `n` | `y` selects the multi-intent (`PIPELINE_INTENT` dispatch) pipeline shape. The scaffold script also accepts this directly as the `MULTI_PIPELINE_OPTIN=true` environment variable — set that instead of going through stdin if calling the scaffold script yourself. With `MULTI_PIPELINE_OPTIN=true` set, the scaffold never asks this question, so a spec's `pipeline_intent` is ignored and no answer is sent for it. |
 
 ### `lib-minimal`
 
