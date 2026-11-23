@@ -88,8 +88,11 @@ printf '%s\n' "$BODY_A" > "$str_tmp/worktree/README.md"
 RUN_DIR="$str_tmp/worktree" run_case "a worktree dir instead of a git-dir exits 2" 2 \
     "not a git directory" "$BODY_A"
 
-python3 -c "print('['*100000)" > "$str_tmp/deep.json"
-run_case "an uncaught python crash exits 2, never 1" 2 "RecursionError" "$BODY_A" deep.json
+# ponytail: a stub python3 that dies like a traceback; deep JSON stopped recursing on 3.13+
+printf '%s\n' '#!/bin/bash' 'echo "RuntimeError: injected crash" >&2' 'exit 1' > "$str_tmp/bin/python3"
+chmod +x "$str_tmp/bin/python3"
+run_case "an uncaught python crash exits 2, never 1" 2 "injected crash" "$BODY_A"
+rm -f "$str_tmp/bin/python3"
 
 git -C "$str_tmp/norepo" init -q
 printf '%s\n' "$BODY_A" > "$str_tmp/norepo/.git/pr.md"
