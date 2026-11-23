@@ -346,13 +346,13 @@ EOF
 test_definite_absence_leaves_protection_unapplied() {
     local dir="$WORK_DIR/absent-ruleset" out
     mkdir -p "$dir/bin"
-    printf '#!/bin/bash\n[ "${1:-}" = verify ] && exit 0\n[ "${1:-}" = check_ruleset ] && exit 1\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
+    printf '#!/bin/bash\n[ "${1:-}" = verify ] && exit 0\n[ "${1:-}" = confirm_ruleset ] && exit 1\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
     chmod +x "$dir/bin/enable_repo_rules.sh"
     out="$(bash -c 'source "$1"; PROJECT_PATH="$2"; SKIP_BRANCH_PROTECTION=false; apply_branch_protection; echo "applied=$PROTECTION_APPLIED"' _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
     printf '#!/bin/bash\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
     local out_present
     out_present="$(bash -c 'source "$1"; PROJECT_PATH="$2"; SKIP_BRANCH_PROTECTION=false; apply_branch_protection; echo "applied=$PROTECTION_APPLIED"' _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
-    printf '#!/bin/bash\n[ "${1:-}" = verify ] && exit 0\n[ "${1:-}" = check_ruleset ] && exit 1\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
+    printf '#!/bin/bash\n[ "${1:-}" = verify ] && exit 0\n[ "${1:-}" = confirm_ruleset ] && exit 1\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
     out="$(bash -c 'source "$1"; PROJECT_PATH="$2"; SKIP_BRANCH_PROTECTION=false; apply_branch_protection; echo "applied=$PROTECTION_APPLIED"' _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
     if [[ "$out_present" == *"applied=true"* && "$out" == *"applied=false"* ]]; then
         echo "ok: a definite absence leaves PROTECTION_APPLIED false"

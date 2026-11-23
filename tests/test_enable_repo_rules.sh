@@ -181,6 +181,14 @@ test_check_ruleset_flags_a_disabled_ruleset() {
     assert_has "a disabled ruleset is not present" "rc=1" "$(run_verify disabled 1 check_ruleset)"
 }
 
+test_confirm_ruleset_applied_only_when_confirmed() {
+    assert_has "an active ruleset on the default branch is confirmed" "rc=0" "$(run_verify active 1 confirm_ruleset)"
+    assert_has "a ruleset not applying to the default branch is not confirmed" "rc=1" "$(run_verify active 0 confirm_ruleset)"
+    assert_has "a disabled ruleset is not confirmed" "rc=1" "$(run_verify disabled 1 confirm_ruleset)"
+    assert_has "unreadable rulesets are not confirmed" "rc=1" "$(STUB_RULESETS=forbidden run_verify active 1 confirm_ruleset)"
+    assert_has "unreadable rulesets stay fail-open for check_ruleset" "rc=0" "$(STUB_RULESETS=forbidden run_verify active 1 check_ruleset)"
+}
+
 test_ruleset_only_repo_has_no_unreadable_protection_warning() {
     local str_out
     str_out="$(STUB_PROTECTION=unprotected run_verify active 1 verify)"
@@ -336,6 +344,7 @@ test_verify_refuses_a_disabled_ruleset
 test_verify_refuses_a_ruleset_that_skips_the_default_branch
 test_verify_accepts_an_active_ruleset_on_the_default_branch
 test_check_ruleset_flags_a_disabled_ruleset
+test_confirm_ruleset_applied_only_when_confirmed
 test_check_ruleset_flags_missing
 test_check_ruleset_passes_when_present
 test_verify_reads_a_rule_on_a_later_page

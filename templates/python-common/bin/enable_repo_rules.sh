@@ -129,7 +129,7 @@ report_blocking_checks() {
 	fi
 	read -r str_id str_enforcement <<<"$(printf '%s\n' "$str_id" | head -1)"
 	if [ -z "$str_id" ]; then
-		print_status "info" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
+		print_status "info" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — this ruleset blocks nothing (classic protection and other rulesets are reported separately)"
 		return 3
 	fi
 	if [ "$str_enforcement" != "active" ]; then
@@ -287,6 +287,23 @@ check_ruleset_present() {
 	return 1
 }
 
+confirm_ruleset_active() {
+	require_gh || return 1
+	local str_repo str_branch str_ids str_id str_hit
+	str_repo="${GITHUB_REPOSITORY:-$(resolve_repo enable_repo_rules || true)}"
+	[ -n "$str_repo" ] || return 1
+	str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>/dev/null)" || return 1
+	[ -n "$str_branch" ] || return 1
+	str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
+		".[] | select(.name == \"$RULESET_NAME\" and .enforcement == \"active\") | .id" 2>/dev/null)" || return 1
+	for str_id in $str_ids; do
+		str_hit="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --paginate --jq \
+			".[] | select(.ruleset_id == $str_id) | .ruleset_id" 2>/dev/null)" || return 1
+		[ -n "$str_hit" ] && return 0
+	done
+	return 1
+}
+
 pr_has_codeql_analysis() {
 	local str_repo="$1" int_pr="$2" str_sha="$3"
 	local str_merge str_ref str_shas
@@ -328,6 +345,10 @@ main() {
 	fi
 	if [ "${1:-}" = "check_ruleset" ]; then
 		check_ruleset_present
+		return $?
+	fi
+	if [ "${1:-}" = "confirm_ruleset" ]; then
+		confirm_ruleset_active
 		return $?
 	fi
 	if [ "${1:-}" = "stranded" ]; then
