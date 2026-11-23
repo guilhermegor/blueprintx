@@ -859,7 +859,7 @@ def _collect_workflows(
         The gate's findings.
     """
     dict_blobs = {("base", str_k): str_v for str_k, str_v in dict_old.items()}
-    dict_blobs.update({("", str_k): str_v for str_k, str_v in dict_new.items()})
+    dict_blobs.update({(gate.STR_INDEX_REF, str_k): str_v for str_k, str_v in dict_new.items()})
     monkeypatch.setattr(
         gate, "show", lambda str_ref, *, str_path: dict_blobs.get((str_ref, str_path))
     )
@@ -961,6 +961,31 @@ def test_workflow_job_moved_with_a_softening_key_is_removed(
     str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
 
     assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+@pytest.mark.parametrize(
+    "str_extra",
+    [
+        "    needs: [build]\n",
+        "    env: &shared\n      A: '1'\n",
+        "    env: *shared\n",
+        "    env:\n      <<: *shared\n",
+        "    steps:\n      - *gate_step\n",
+    ],
+)
+def test_workflow_job_moved_with_outside_dependency_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
+) -> None:
+    """``needs:`` and YAML anchors point outside the block, so an identical text is no proof."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
 
 
 def test_workflow_job_moved_with_a_different_runner_is_clean(

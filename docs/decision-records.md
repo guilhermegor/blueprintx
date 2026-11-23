@@ -1361,9 +1361,15 @@ is shaped as it is; a generated project gets the behavior, not the history.
       `continue-on-error`, `env:` or `uses:` makes it a removal. One new job excuses one
       removal. It also counts as removed when the id is gone from the whole tree, when it
       only reappears in a different tree, or when the target sits in a subdirectory (GitHub
-      runs no workflow there). `needs:` is compared, since a skipped dependency skips the job. The target
-      workflow's own `on:`, `env:`, `defaults:`, `concurrency:` and `permissions:` are not
-      compared, and neither is whether the target file is copied into generated projects.
+      runs no workflow there). A job with `needs:`, or with a YAML anchor, alias or merge key
+      (`&x`, `*x`, `<<:`), is never excused as a move: the job it needs, or the anchored
+      content, lives outside the compared block, so an identical text can still be skipped
+      (`if: false` on the needed job) or changed in the target. Known limits: `runs-on` is
+      not compared, so a move may change the runner (a Windows runner changes the default
+      shell, and an unmatched self-hosted label leaves the job queued, never reporting). The
+      target workflow's own `on:`, `env:`, `defaults:`, `concurrency:` and `permissions:`
+      are not compared, and neither is whether the target file is copied into generated
+      projects.
     - `assertion-weakening`: wired in pre-commit (`language: system`, `always_run`, so the
       caller's environment reaches it, including the `TEST_CHANGE_OK` hatch) and as its own
       `assertion_weakening.yaml` workflow (not a step of the matrix `test` job, whose check

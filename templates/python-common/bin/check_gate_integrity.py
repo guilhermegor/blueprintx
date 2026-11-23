@@ -147,6 +147,7 @@ RE_TOP_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
 RE_JOB_KEY = re.compile(r"^ {4}([A-Za-z_-]+):")
 RE_JOB_KEY_LINE = re.compile(r"^ {4}[^\s#-]")
 SET_MOVABLE_JOB_KEYS = frozenset({"runs-on"})
+RE_UNMOVABLE_JOB_LINE = re.compile(r"^ {4}needs\s*:|<<\s*:|(?::|^\s*-)\s+[&*][\w-]")
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
@@ -532,6 +533,24 @@ def job_signature(list_lines: list) -> tuple:
     return tuple(list_kept)
 
 
+def job_is_movable(tuple_sig: tuple) -> bool:
+    """Return whether a job block can be judged by its own text alone.
+
+    Parameters
+    ----------
+    tuple_sig : tuple of str
+        A ``job_signature``.
+
+    Returns
+    -------
+    bool
+        False when the block has a ``needs:`` key or a YAML anchor, alias or merge key:
+        what it depends on lives outside the block, so an identical text in another file
+        can still skip or change the job there.
+    """
+    return not any(RE_UNMOVABLE_JOB_LINE.search(str_line) for str_line in tuple_sig)
+
+
 def workflow_job_details(str_text: str) -> dict:
     """Return each top-level job id of a workflow with its ``job_signature``.
 
@@ -611,7 +630,7 @@ def workflow_problems(
     list_problems = []
     for str_id in sorted(set(dict_old) - workflow_jobs(str_new)):
         list_candidates = dict_moved.get(str_id, [])
-        if dict_old[str_id] in list_candidates:
+        if job_is_movable(dict_old[str_id]) and dict_old[str_id] in list_candidates:
             list_candidates.remove(dict_old[str_id])
             continue
         list_problems.append(f"{str_shown}: workflow job {str_id!r} removed")
