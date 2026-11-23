@@ -52,6 +52,7 @@ for gate in "${GATES[@]}"; do
 	check "$label checks out the base, never the PR head" gate_checkout_is_base "$gate"
 	check "$label never reads a PR head ref" gate_lacks "$gate" 'pull_request\.head\.(ref|sha)|head_ref|refs/pull'
 	check "$label holds checks: write" gate_has "$gate" '^  checks: write$'
+	check "$label keeps actions: read for the pusher lookup" gate_has "$gate" '^  actions: read$'
 	check "$label names its job apart from the required context" gate_job_name_differs "$gate"
 	check "$label posts the result as a check-run even after a failure, not after a cancel" gate_posts_unless_cancelled "$gate"
 	check "$label serializes runs per PR" gate_serialized_per_pr "$gate"
