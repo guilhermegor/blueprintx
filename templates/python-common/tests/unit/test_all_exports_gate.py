@@ -1305,3 +1305,13 @@ def test_a_def_or_class_over_an_import_is_still_a_definition(
     """Only an ``= None`` style fallback is the dependency's; a def or class is real API."""
     path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
     assert str_name in _sole(_load_gate().check_package(path_init))
+
+
+def test_a_later_literal_sum_replaces_the_declared_names(tmp_path: Path) -> None:
+    """``__all__ = ['b'] + ['c']`` after ``['a']`` is the last assignment and wins."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = ['b'] + ['c']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["b", "c"]

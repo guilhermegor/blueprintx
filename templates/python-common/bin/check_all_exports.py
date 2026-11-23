@@ -143,7 +143,7 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
         if _extends(cls_node):
             list_names = [*(list_names or []), *list_found]
         elif list_names is not None and not isinstance(
-            getattr(cls_node, "value", None), ast.List | ast.Tuple
+            getattr(cls_node, "value", None), ast.List | ast.Tuple | ast.BinOp
         ):
             continue
         else:

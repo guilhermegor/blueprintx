@@ -538,7 +538,7 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
     Returns
     -------
     set of str
-        Subset of ``{"skip", "skipif", "xfail"}`` present as ``@pytest.mark.<name>``
+        Subset of ``{"skip", "skipif", "xfail", "skip()"}`` present as ``@pytest.mark.<name>``
         decorators, with ``skip`` also set by a ``pytest.skip(...)`` call in the body.
     """
     set_out = set()
@@ -547,7 +547,7 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
         if isinstance(target, ast.Attribute) and target.attr in _SKIP_MARKERS:
             set_out.add(target.attr)
     if any(_is_pytest_skip_call(node) for node in ast.walk(node_fn)):
-        set_out.add("skip")
+        set_out.add("skip()")
     return set_out
 
 
