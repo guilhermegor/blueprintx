@@ -818,3 +818,99 @@ def test_report_omits_the_terminal_hint_with_a_terminal(
     gate.report(["some finding"], str_base="base", int_changed_count=1)
 
     assert "interactive terminal" not in capsys.readouterr().out
+
+
+_STR_MOVED_JOB = (
+    "  gate-integrity:\n"
+    "    name: Gate integrity\n"
+    "    runs-on: ubuntu-latest\n"
+    "    steps:\n"
+    "      - run: python3 bin/check_gate_integrity.py\n"
+)
+_STR_KEPT_JOB = "  other:\n    name: Other\n    steps:\n      - run: echo hi\n"
+_STR_SOURCE = "templates/python-common/.github/workflows/scaffold_checks.yml"
+_STR_SIBLING = "templates/python-common/.github/workflows/gate_integrity.yml"
+_STR_ROOT_SIBLING = ".github/workflows/gate_integrity.yml"
+
+
+def _collect_workflows(
+    dict_old: dict[str, str], *, dict_new: dict[str, str], list_changed: list[tuple[str, str]]
+) -> list[str]:
+    """Run ``collect_problems`` over in-memory workflow blobs.
+
+    Parameters
+    ----------
+    dict_old : dict[str, str]
+        Path to content at the merge-base.
+    dict_new : dict[str, str]
+        Path to content in the index.
+    list_changed : list[tuple[str, str]]
+        ``(status_letter, path)`` rows.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
+    dict_blobs = {("base", k): v for k, v in dict_old.items()}
+    dict_blobs.update({("", k): v for k, v in dict_new.items()})
+    fn_original = gate.show
+    gate.show = lambda str_ref, *, str_path: dict_blobs.get((str_ref, str_path))
+    try:
+        return gate.collect_problems(list_changed, str_base="base")
+    finally:
+        gate.show = fn_original
+
+
+def _move_findings(str_target: str, *, str_job_new: str) -> list[str]:
+    """Move a job out of the template's ``scaffold_checks.yml`` into ``str_target``.
+
+    Parameters
+    ----------
+    str_target : str
+        Path of the workflow file that receives the job.
+    str_job_new : str
+        The job block as it appears in the target.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
+    return _collect_workflows(
+        {_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            str_target: f"jobs:\n{str_job_new}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", str_target)],
+    )
+
+
+def test_workflow_job_moved_within_the_tree_is_clean() -> None:
+    """Same id, name and steps in another workflow of the same tree is a move."""
+    assert _move_findings(_STR_SIBLING, str_job_new=_STR_MOVED_JOB) == []
+
+
+def test_workflow_job_moved_with_a_renamed_name_is_removed() -> None:
+    """A changed ``name:`` breaks the required status-check context, so it is a removal."""
+    str_job = _STR_MOVED_JOB.replace("Gate integrity", "Gate integrity check")
+
+    assert len(_move_findings(_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_moved_with_changed_steps_is_removed() -> None:
+    """Changed steps would hide a weakened command behind a move."""
+    str_job = _STR_MOVED_JOB.replace("check_gate_integrity.py", "check_gate_integrity.py || true")
+
+    assert len(_move_findings(_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_dropped_everywhere_is_removed() -> None:
+    """An id absent from every workflow of the tree is still a removal."""
+    assert len(_move_findings(_STR_SIBLING, str_job_new=_STR_KEPT_JOB)) == 1
+
+
+def test_workflow_job_moved_from_template_to_root_is_removed() -> None:
+    """Each tree is judged on its own: a template job cannot move into the repo's own CI."""
+    assert len(_move_findings(_STR_ROOT_SIBLING, str_job_new=_STR_MOVED_JOB)) == 1

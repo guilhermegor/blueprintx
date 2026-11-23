@@ -738,7 +738,10 @@ Configuration files in this repository carry no comments, so the reasoning lives
   check admits workflow `!reference` tags. Layers: generic hygiene, then Conventional Commits
   at `commit-msg`, then the shared gates. Gates that run over this repo with `--root .`
   follow the one-implementation rule; diff-scoped gates (`gate-integrity`, the PR file-count
-  ceiling) compare against `merge-base(HEAD, main)` because they check a delta. The
+  ceiling) compare against `merge-base(HEAD, main)` because they check a delta. `gate-integrity`
+  treats a workflow job moved to another workflow file of the same tree as a move when its id,
+  `name:` and steps are unchanged; a changed name or steps, a job gone from the tree, or a move
+  across trees (template to root) is still a removal (#1311). The
   complexity gate runs twice, the second time scoped to `templates/python-common`, which
   catches a template defect in about 3 seconds instead of in a five-tier CI matrix (measured on
   the two issues 270 and 271). Function length is not duplicated, since its discovery already walks the whole root.

@@ -26,7 +26,8 @@ files a change touches — never off arbitrary source):
 - a ``bin/ci/*`` file, or a ``bin/check_*``/``bin/lint_*`` gate script, DELETED
 - any watched config (``.pre-commit-config.yaml``, ``ruff.toml``, ``mypy.ini``, ``pytest.ini``)
   or workflow file DELETED outright — the most complete form of every weakening above
-- a job key removed from a changed workflow's ``jobs:`` block
+- a job key removed from a changed workflow's ``jobs:`` block, unless the same id reappears
+  in another workflow file of the same tree with the same ``name:`` and steps (a move)
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
   reads its diff rather than calling the GitHub API, the same "one implementation" reasoning
@@ -118,6 +119,8 @@ CI must check out with ``fetch-depth: 0`` — a shallow clone has no common ance
 import ast
 import configparser
 import difflib
+import functools
+import itertools
 import json
 import os
 import pathlib
@@ -140,6 +143,9 @@ RE_REQUIRED_CHECKS = re.compile(r"REQUIRED_CHECKS=\((.*?)\)", re.S)
 RE_CI_SCRIPT = re.compile(r"(^|/)bin/ci/[^/]+$")
 RE_GATE_SCRIPT = re.compile(r"(^|/)bin/(check|lint)_[^/]+\.(py|sh)$")
 RE_WORKFLOW_PATH = re.compile(r"\.github/workflows/.*\.ya?ml$")
+RE_JOB_NAME = re.compile(r"^ {4}name:\s*(.*)$")
+RE_JOB_STEPS = re.compile(r"^ {4}steps:")
+RE_JOB_KEY = re.compile(r"^ {4}\S")
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
@@ -498,6 +504,61 @@ def precommit_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     return [f"{str_shown}: pre-commit hook {str_id!r} removed" for str_id in sorted(set_removed)]
 
 
+def job_signature(list_lines: list) -> tuple:
+    """Return a job block's ``(name, steps)`` — the two things a move must not change.
+
+    Parameters
+    ----------
+    list_lines : list of str
+        The lines of one job block, below its ``  <id>:`` key.
+
+    Returns
+    -------
+    tuple
+        The ``name:`` value (``""`` when absent) and the ``steps:`` block's lines.
+    """
+    str_name = next((m.group(1).strip() for m in map(RE_JOB_NAME.match, list_lines) if m), "")
+    list_from_steps = list(itertools.dropwhile(lambda s: not RE_JOB_STEPS.match(s), list_lines))
+    list_steps = list_from_steps[:1] + list(
+        itertools.takewhile(lambda s: not RE_JOB_KEY.match(s), list_from_steps[1:])
+    )
+    return str_name, tuple(list_steps)
+
+
+def workflow_job_details(str_text: str) -> dict:
+    """Return each top-level job id of a workflow with its ``(name, steps)`` signature.
+
+    Parameters
+    ----------
+    str_text : str
+        Full workflow YAML content.
+
+    Returns
+    -------
+    dict
+        Job id to ``job_signature``, read as 2-space-indented keys directly under ``jobs:``
+        — the indentation this repo's workflows consistently use (avoids a YAML dependency
+        these scripts otherwise have no reason to carry; see the module docstring).
+    """
+    cls_match = re.search(r"(?m)^jobs:\s*$", str_text)
+    if not cls_match:
+        return {}
+    dict_lines: dict = {}
+    str_id = ""
+    for str_line in str_text[cls_match.end() :].splitlines():
+        if not str_line.strip():
+            continue
+        if not str_line.startswith(" "):
+            break
+        cls_job = re.match(r"^ {2}([A-Za-z0-9_-]+):", str_line)
+        if cls_job:
+            str_id = cls_job.group(1)
+            dict_lines[str_id] = []
+        elif str_id:
+            dict_lines[str_id].append(str_line)
+    return {str_id: job_signature(list_lines) for str_id, list_lines in dict_lines.items()}
+
+
 def workflow_jobs(str_text: str) -> set:
     """Return the top-level job ids under a workflow's ``jobs:`` block.
 
@@ -509,27 +570,15 @@ def workflow_jobs(str_text: str) -> set:
     Returns
     -------
     set of str
-        Job ids, read as 2-space-indented ``name:`` keys directly under ``jobs:`` — the
-        indentation this repo's workflows consistently use (avoids a YAML dependency these
-        scripts otherwise have no reason to carry; see the module docstring).
+        Job ids; see ``workflow_job_details``.
     """
-    cls_match = re.search(r"(?m)^jobs:\s*$", str_text)
-    if not cls_match:
-        return set()
-    set_jobs = set()
-    for str_line in str_text[cls_match.end() :].splitlines():
-        if not str_line.strip():
-            continue
-        if not str_line.startswith(" "):
-            break
-        cls_job = re.match(r"^ {2}([A-Za-z0-9_-]+):", str_line)
-        if cls_job:
-            set_jobs.add(cls_job.group(1))
-    return set_jobs
+    return set(workflow_job_details(str_text))
 
 
-def workflow_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
-    """Return job ids present at the merge-base and missing now.
+def workflow_problems(
+    str_old: str, *, str_new: str, str_shown: str, dict_elsewhere: dict | None = None
+) -> list:
+    """Return job ids present at the merge-base and missing now, bar a faithful move.
 
     Parameters
     ----------
@@ -539,14 +588,62 @@ def workflow_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
         Content in this change.
     str_shown : str
         Path to show in messages.
+    dict_elsewhere : dict or None
+        Job id to signature for the jobs of the OTHER workflow files of the same tree in
+        this change. A removed job found there with the same name and steps is a move.
 
     Returns
     -------
     list of str
         One message per removed job.
     """
-    set_removed = workflow_jobs(str_old) - workflow_jobs(str_new)
-    return [f"{str_shown}: workflow job {str_id!r} removed" for str_id in sorted(set_removed)]
+    dict_old = workflow_job_details(str_old)
+    dict_moved = dict_elsewhere or {}
+    set_removed = set(dict_old) - workflow_jobs(str_new)
+    return [
+        f"{str_shown}: workflow job {str_id!r} removed"
+        for str_id in sorted(set_removed)
+        if dict_moved.get(str_id) != dict_old[str_id]
+    ]
+
+
+def workflow_tree(str_path: str) -> str:
+    """Return the tree a workflow path belongs to: the prefix before ``.github/workflows/``.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative workflow path.
+
+    Returns
+    -------
+    str
+        ``""`` for the repo's own workflows, ``templates/<name>/`` for a template's.
+    """
+    return str_path.partition(".github/workflows/")[0]
+
+
+def jobs_by_tree(list_changed: list) -> dict:
+    """Return, per tree, the jobs of every changed workflow file that still exists.
+
+    Parameters
+    ----------
+    list_changed : list of tuple
+        ``(status_letter, path)`` rows from ``changed_paths``.
+
+    Returns
+    -------
+    dict
+        Tree prefix to ``{job id: signature}`` read from the index.
+    """
+    dict_trees: dict = {}
+    for str_status, str_path in list_changed:
+        str_text = show(STR_INDEX_REF, str_path=str_path)
+        if str_status != "D" and RE_WORKFLOW_PATH.search(str_path) and str_text:
+            dict_trees.setdefault(workflow_tree(str_path), {}).update(
+                workflow_job_details(str_text)
+            )
+    return dict_trees
 
 
 def required_checks_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
@@ -1066,7 +1163,11 @@ _DICT_DISPATCH = {
 
 
 def file_problems(
-    str_path: str, *, str_base: str, set_touched_stems: frozenset = frozenset()
+    str_path: str,
+    *,
+    str_base: str,
+    set_touched_stems: frozenset = frozenset(),
+    dict_trees: dict | None = None,
 ) -> list:
     """Return weakening findings for one changed, still-existing path.
 
@@ -1079,6 +1180,9 @@ def file_problems(
     set_touched_stems : frozenset of str
         Module stems the branch also touches (``touched_code_stems``) — gates the assertion
         checks on blueprintx#324's correlation signal.
+    dict_trees : dict or None
+        ``jobs_by_tree`` of the change — lets a workflow job moved to another file of the
+        same tree pass as a move.
 
     Returns
     -------
@@ -1093,7 +1197,9 @@ def file_problems(
 
     fn_analyzer = _DICT_DISPATCH.get(pathlib.Path(str_path).name)
     if fn_analyzer is None and RE_WORKFLOW_PATH.search(str_path):
-        fn_analyzer = workflow_problems
+        fn_analyzer = functools.partial(
+            workflow_problems, dict_elsewhere=(dict_trees or {}).get(workflow_tree(str_path))
+        )
     list_problems = (
         fn_analyzer(str_old, str_new=str_new, str_shown=str_path) if fn_analyzer else []
     )
@@ -1287,10 +1393,16 @@ def collect_problems(list_changed: list, *, str_base: str) -> list:
     """
     set_touched_stems = touched_code_stems(list_changed)
     list_problems = deletion_problems(list_changed, set_touched_stems=set_touched_stems)
+    dict_trees = jobs_by_tree(list_changed)
     for str_status, str_path in list_changed:
         if str_status != "D":
             list_problems.extend(
-                file_problems(str_path, str_base=str_base, set_touched_stems=set_touched_stems)
+                file_problems(
+                    str_path,
+                    str_base=str_base,
+                    set_touched_stems=set_touched_stems,
+                    dict_trees=dict_trees,
+                )
             )
     return list_problems
 
