@@ -87,10 +87,14 @@ jobs:
           done
           str_id=""
           case "$str_run" in
-          *" completed failure" | *" completed cancelled") str_id="${str_run%% *}" ;;
+          *" completed failure" | *" completed cancelled" | *" completed timed_out") str_id="${str_run%% *}" ;;
           esac
           if [ -z "$str_id" ]; then
-            echo "no failed or cancelled gate run for $HEAD_SHA; nothing to re-run"
+            case "$str_run" in
+            *" completed "*) echo "gate run for $HEAD_SHA did not fail; nothing to re-run" ;;
+            "") echo "no gate run for $HEAD_SHA; nothing to re-run" ;;
+            *) echo "::warning::gate run for $HEAD_SHA still $str_run after waiting; not re-run" ;;
+            esac
             exit 0
           fi
           gh run rerun "$str_id"

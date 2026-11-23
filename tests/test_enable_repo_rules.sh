@@ -211,7 +211,6 @@ test_plain_404_without_the_message_stays_unknown() {
     assert_has "the plain-404 path still verifies on the ruleset" "rc=0" "$str_out"
 }
 
-test_verify_picks_the_active_ruleset_not_the_first
 test_create_sends_strict_false() {
     mkdir -p "$WORK_DIR/c" "$WORK_DIR/norepo"
     cat >"$WORK_DIR/c/gh" <<'STUB'
@@ -225,6 +224,22 @@ STUB
     rm -f "$WORK_DIR/payload.json"
     (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/c:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/payload.json" bash "$SCRIPT" >/dev/null 2>&1)
     assert_has "the created ruleset sends strict false" '"strict_required_status_checks_policy":false' "$(cat "$WORK_DIR/payload.json" 2>/dev/null)"
+}
+
+test_apply_updates_the_active_twin() {
+    mkdir -p "$WORK_DIR/tw" "$WORK_DIR/norepo"
+    cat >"$WORK_DIR/tw/gh" <<'STUB'
+#!/bin/bash
+[ "$1 $2" = "auth status" ] && exit 0
+[ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
+[[ " $* " == *" -X PUT "* ]] && { cat >/dev/null; echo "$4" >"$STUB_CAPTURE"; exit 0; }
+[ "$2" = "repos/o/r/rulesets" ] && { printf '41 disabled\n42 active\n'; exit 0; }
+exit 0
+STUB
+    chmod +x "$WORK_DIR/tw/gh"
+    rm -f "$WORK_DIR/put_tw.txt"
+    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/tw:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/put_tw.txt" bash "$SCRIPT" >/dev/null 2>&1)
+    assert_has "the active twin is the one updated" "repos/o/r/rulesets/42" "$(cat "$WORK_DIR/put_tw.txt" 2>/dev/null)"
 }
 
 test_update_puts_strict_false_on_an_existing_ruleset() {
@@ -263,6 +278,8 @@ test_classic_strict_true_refused_false_accepted() {
 }
 
 test_create_sends_strict_false
+test_apply_updates_the_active_twin
+test_verify_picks_the_active_ruleset_not_the_first
 test_update_puts_strict_false_on_an_existing_ruleset
 test_classic_strict_true_refused_false_accepted
 test_verify_refuses_a_strict_true_ruleset
