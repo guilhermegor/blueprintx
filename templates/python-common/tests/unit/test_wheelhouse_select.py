@@ -431,33 +431,84 @@ if [[ "$1 $2 $3" == "-m pip download" ]]; then
 		*) shift ;;
 		esac
 	done
+	[[ -n "${bool_no_deps:-}" ]] || { echo "pip download ran without --no-deps" >&2; exit 9; }
 	while read -r str_line; do
-		str_name="${str_line%%[<>=; ]*}"
+		str_name="${str_line%%[<>=!~;[ ]*}"
 		[[ -n "$str_name" ]] || continue
-		[[ -n "${bool_no_deps:-}" && "$str_name" == poetry ]] && continue
-		case "$str_name" in
-		poetry) echo x >"$dir_dest/poetry-2.4.0-py3-none-any.whl" ;;
-		*) echo x >"$dir_dest/${str_name//-/_}-1.0-py3-none-any.whl" ;;
-		esac
+		str_stem="${str_name//-/_}"
+		cp "${STUB_INDEX:-/nonexistent}"/"$str_stem"-*.whl "$dir_dest"/ 2>/dev/null && continue
+		"@PY@" -c 'import sys, zipfile as z
+z.ZipFile(sys.argv[1], "w").writestr(sys.argv[2], "Name: x\\n")' \\
+			"$dir_dest/$str_stem-1.0-py3-none-any.whl" "$str_stem-1.0.dist-info/METADATA"
 	done <"$path_req"
 	exit 0
 fi
 exec "@PY@" "$@"
 """
 
-
-@pytest.mark.skipif(
-    not (_LIB.parent / "build_wheelhouse.sh").exists(),
-    reason="this tier does not ship bin/build_wheelhouse.sh",
+_POETRY_REQUIRES = (
+    'Requires-Dist: pywin32-ctypes>=0.2 ; sys_platform == "win32"',
+    'Requires-Dist: secretstorage>=3 ; sys_platform == "linux"',
+    'Requires-Dist: optional-only>=1 ; extra == "bar"',
+    "Requires-Dist: cachecontrol[filecache]>=0.14",
 )
-def test_wheelhouse_includes_poetry_wheel(tmp_path: Path) -> None:
-    """A lock with no Poetry still yields a Poetry wheel in the packed manifest."""
+_CACHECONTROL_REQUIRES = ('Requires-Dist: filelock>=3 ; extra == "filecache"',)
+_CTYPES_REQUIRES = ('Requires-Dist: chained-dep>=1 ; sys_platform == "win32"',)
+
+
+def _stub_wheel(path_index: Path, *, str_stem: str, list_requires: tuple[str, ...]) -> None:
+    """Write a minimal wheel whose METADATA carries the given ``Requires-Dist`` lines.
+
+    Parameters
+    ----------
+    path_index : Path
+        Directory acting as the stubbed package index.
+    str_stem : str
+        Wheel file stem, e.g. ``poetry-2.4.0-py3-none-any``.
+    list_requires : tuple[str, ...]
+        ``Requires-Dist`` header lines.
+    """
+    str_dist = str_stem.rsplit("-", 3)[0]
+    str_metadata = "\n".join(["Name: x", *list_requires, ""])
+    with zipfile.ZipFile(path_index / f"{str_stem}.whl", "w") as zip_out:
+        zip_out.writestr(f"{str_dist}.dist-info/METADATA", str_metadata)
+
+
+def _build_for(tmp_path: Path, *, dict_target: dict[str, str]) -> str:
+    """Run ``build_wheelhouse.sh build`` against a stubbed pip/index and return the manifest.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Scratch directory.
+    dict_target : dict[str, str]
+        ``WHEELHOUSE_*`` variables selecting the target environment.
+
+    Returns
+    -------
+    str
+        The text of the packed ``manifest.json``.
+    """
     path_project = tmp_path / "proj"
     shutil.copytree(_LIB.parent, path_project / "bin")
     shutil.copy(_LIB.parents[1] / "requirements.txt", path_project / "requirements.txt")
     (path_project / "bin" / "export_deps.sh").write_text(
         '#!/usr/bin/env bash\necho "requests==2.32.0" >"$OUTPUT_FILE"\n'
     )
+    path_index = tmp_path / "index"
+    path_index.mkdir()
+    _stub_wheel(path_index, str_stem="poetry-2.4.0-py3-none-any", list_requires=_POETRY_REQUIRES)
+    _stub_wheel(
+        path_index,
+        str_stem="pywin32_ctypes-0.2.3-py3-none-any",
+        list_requires=_CTYPES_REQUIRES,
+    )
+    _stub_wheel(
+        path_index,
+        str_stem="cachecontrol-0.14.0-py3-none-any",
+        list_requires=_CACHECONTROL_REQUIRES,
+    )
+    _stub_wheel(path_index, str_stem="secretstorage-3.3.3-py3-none-any", list_requires=())
     path_shims = tmp_path / "shims"
     path_shims.mkdir()
     path_shim = path_shims / "python3"
@@ -478,12 +529,114 @@ def test_wheelhouse_includes_poetry_wheel(tmp_path: Path) -> None:
         env={
             "PATH": f"{path_shims}:/usr/bin:/bin",
             "WHEELHOUSE_DIR": str(path_out),
-            "WHEELHOUSE_PIP_PLATFORM": "manylinux2014_x86_64",
+            "STUB_INDEX": str(path_index),
             "WHEELHOUSE_TARGET_PYTHON_VERSION": "3.12.2",
-            "WHEELHOUSE_TARGET_SYS_PLATFORM": "linux",
-            "WHEELHOUSE_TARGET_PLATFORM_MACHINE": "x86_64",
+            **dict_target,
         },
     )
+    return (path_out / "manifest.json").read_text()
 
-    str_manifest = (path_out / "manifest.json").read_text()
+
+_LINUX_TARGET = {
+    "WHEELHOUSE_PIP_PLATFORM": "manylinux2014_x86_64",
+    "WHEELHOUSE_TARGET_SYS_PLATFORM": "linux",
+    "WHEELHOUSE_TARGET_PLATFORM_MACHINE": "x86_64",
+}
+_WINDOWS_TARGET = {
+    "WHEELHOUSE_PIP_PLATFORM": "win_amd64",
+    "WHEELHOUSE_TARGET_SYS_PLATFORM": "win32",
+    "WHEELHOUSE_TARGET_PLATFORM_MACHINE": "AMD64",
+}
+_SKIP_NO_SCRIPT = pytest.mark.skipif(
+    not (_LIB.parent / "build_wheelhouse.sh").exists(),
+    reason="this tier does not ship bin/build_wheelhouse.sh",
+)
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_includes_poetry_wheel(tmp_path: Path) -> None:
+    """A lock with no Poetry still yields a Poetry wheel in the packed manifest."""
+    str_manifest = _build_for(tmp_path, dict_target=_LINUX_TARGET)
+
     assert "poetry-2.4.0-py3-none-any.whl" in str_manifest
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_includes_a_transitive_dependency_marked_for_the_target(
+    tmp_path: Path,
+) -> None:
+    """A win32-only dependency of Poetry is packed for a Windows target built on Linux.
+
+    pip evaluates the markers of transitive dependencies against the builder, so the
+    ``sys_platform == "win32"`` requirement was dropped (blueprintx#1302).
+    """
+    str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
+
+    assert "pywin32_ctypes-0.2.3-py3-none-any.whl" in str_manifest
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_omits_a_transitive_dependency_marked_for_another_platform(
+    tmp_path: Path,
+) -> None:
+    """A linux-only dependency of Poetry is not packed for a Windows target."""
+    str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
+
+    assert "secretstorage" not in str_manifest
+
+
+def test_close_keeps_only_the_dependencies_whose_marker_holds_for_the_target(
+    tmp_path: Path,
+) -> None:
+    """``close`` reads a wheel's ``Requires-Dist`` and evaluates it for the TARGET."""
+    _stub_wheel(tmp_path, str_stem="poetry-2.4.0-py3-none-any", list_requires=_POETRY_REQUIRES)
+    (tmp_path / "seed.txt").write_text("poetry>=2.4\n", encoding="utf-8")
+    args = argparse.Namespace(
+        seed=str(tmp_path / "seed.txt"),
+        wheels_dir=str(tmp_path),
+        out=str(tmp_path / "out.txt"),
+        target_python_version="3.12.2",
+        target_sys_platform="win32",
+        target_platform_machine="AMD64",
+        target_implementation="cpython",
+    )
+
+    gate.close_requirements(args)
+
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8").splitlines() == [
+        "cachecontrol[filecache]>=0.14",
+        "poetry>=2.4",
+        "pywin32-ctypes>=0.2",
+    ]
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_omits_a_win32_dependency_for_a_linux_target(tmp_path: Path) -> None:
+    """The win32-only dependency is not packed when the target is Linux."""
+    str_manifest = _build_for(tmp_path, dict_target=_LINUX_TARGET)
+
+    assert "pywin32_ctypes" not in str_manifest
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_follows_a_dependency_chain_across_rounds(tmp_path: Path) -> None:
+    """A dependency only discovered in the second round is still packed."""
+    str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
+
+    assert "chained_dep-1.0-py3-none-any.whl" in str_manifest
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_expands_an_extra_requested_by_a_parent(tmp_path: Path) -> None:
+    """``cachecontrol[filecache]`` brings in the dependency gated on that extra."""
+    str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
+
+    assert "filelock-1.0-py3-none-any.whl" in str_manifest
+
+
+@_SKIP_NO_SCRIPT
+def test_wheelhouse_omits_a_dependency_gated_on_an_unrequested_extra(tmp_path: Path) -> None:
+    """An ``extra == "bar"`` dependency nobody requested is not packed."""
+    str_manifest = _build_for(tmp_path, dict_target=_WINDOWS_TARGET)
+
+    assert "optional_only" not in str_manifest
