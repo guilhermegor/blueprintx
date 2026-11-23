@@ -1352,14 +1352,17 @@ is shaped as it is; a generated project gets the behavior, not the history.
     - `gate-integrity`: diff-scoped against `merge-base(HEAD, main)`, unlike every other hook,
       because it checks a delta: a hook, rule or exclude that was removed without a
       `gate-change-ok: <reason>` is a violation (#309). The same script BlueprintX runs over
-      itself. A workflow job id that leaves one workflow file is compared against the jobs of
-      every other changed workflow file of the same tree (the repo's own `.github/workflows/`,
-      or one `templates/<name>/.github/workflows/`), so moving a job between files is a move,
-      not a removal (#1311). It still counts as removed when the id is gone from the whole
-      tree, when its `name:` changed (a required status-check context keys on the name), when
-      its `steps:` changed (a move must not hide a weakened command), or when the id only
-      reappears in a different tree. Other keys of the job (`runs-on`, `needs`, `if`) are not
-      compared.
+      itself. A workflow job id that leaves one workflow file is excused only when the
+      same id is NEWLY ADDED to another top-level workflow file of the same tree (the repo's
+      own `.github/workflows/`, or one `templates/<name>/.github/workflows/`) with an
+      identical job block, so moving a job between files is a move, not a removal (#1311).
+      Everything in the block must match except `runs-on` and `needs`, so a changed `name:`
+      (a required status-check context keys on the name), `steps:`, `if:`,
+      `continue-on-error`, `env:` or `uses:` makes it a removal. One new job excuses one
+      removal. It also counts as removed when the id is gone from the whole tree, when it
+      only reappears in a different tree, or when the target sits in a subdirectory (GitHub
+      runs no workflow there). The target workflow's own triggers, `env:` and `permissions:`
+      are not compared.
     - `assertion-weakening`: wired in pre-commit (`language: system`, `always_run`, so the
       caller's environment reaches it, including the `TEST_CHANGE_OK` hatch) and as its own
       `assertion_weakening.yaml` workflow (not a step of the matrix `test` job, whose check

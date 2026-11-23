@@ -834,12 +834,18 @@ _STR_ROOT_SIBLING = ".github/workflows/gate_integrity.yml"
 
 
 def _collect_workflows(
-    dict_old: dict[str, str], *, dict_new: dict[str, str], list_changed: list[tuple[str, str]]
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    dict_old: dict[str, str],
+    dict_new: dict[str, str],
+    list_changed: list[tuple[str, str]],
 ) -> list[str]:
     """Run ``collect_problems`` over in-memory workflow blobs.
 
     Parameters
     ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub ``gate.show``.
     dict_old : dict[str, str]
         Path to content at the merge-base.
     dict_new : dict[str, str]
@@ -852,25 +858,33 @@ def _collect_workflows(
     list[str]
         The gate's findings.
     """
-    dict_blobs = {("base", k): v for k, v in dict_old.items()}
-    dict_blobs.update({("", k): v for k, v in dict_new.items()})
-    fn_original = gate.show
-    gate.show = lambda str_ref, *, str_path: dict_blobs.get((str_ref, str_path))
-    try:
-        return gate.collect_problems(list_changed, str_base="base")
-    finally:
-        gate.show = fn_original
+    dict_blobs = {("base", str_k): str_v for str_k, str_v in dict_old.items()}
+    dict_blobs.update({("", str_k): str_v for str_k, str_v in dict_new.items()})
+    monkeypatch.setattr(
+        gate, "show", lambda str_ref, *, str_path: dict_blobs.get((str_ref, str_path))
+    )
+    return gate.collect_problems(list_changed, str_base="base")
 
 
-def _move_findings(str_target: str, *, str_job_new: str) -> list[str]:
+def _move_findings(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    str_target: str,
+    str_job_new: str,
+    str_target_old: str = "",
+) -> list[str]:
     """Move a job out of the template's ``scaffold_checks.yml`` into ``str_target``.
 
     Parameters
     ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub ``gate.show``.
     str_target : str
         Path of the workflow file that receives the job.
     str_job_new : str
         The job block as it appears in the target.
+    str_target_old : str
+        The target's ``jobs:`` body at the merge-base; empty when the file is new.
 
     Returns
     -------
@@ -878,39 +892,164 @@ def _move_findings(str_target: str, *, str_job_new: str) -> list[str]:
         The gate's findings.
     """
     return _collect_workflows(
-        {_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        monkeypatch,
+        dict_old={
+            _STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}",
+            str_target: f"jobs:\n{str_target_old}",
+        },
         dict_new={
             _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
             str_target: f"jobs:\n{str_job_new}",
         },
-        list_changed=[("M", _STR_SOURCE), ("A", str_target)],
+        list_changed=[("M", _STR_SOURCE), ("M", str_target)],
     )
 
 
-def test_workflow_job_moved_within_the_tree_is_clean() -> None:
+def test_workflow_job_moved_within_the_tree_is_clean(monkeypatch: pytest.MonkeyPatch) -> None:
     """Same id, name and steps in another workflow of the same tree is a move."""
-    assert _move_findings(_STR_SIBLING, str_job_new=_STR_MOVED_JOB) == []
+    assert _move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=_STR_MOVED_JOB) == []
 
 
-def test_workflow_job_moved_with_a_renamed_name_is_removed() -> None:
+def test_workflow_job_moved_within_the_root_tree_is_clean(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The root tree is judged like a template tree."""
+    dict_old = {".github/workflows/a.yml": f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"}
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old=dict_old,
+        dict_new={
+            ".github/workflows/a.yml": f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_ROOT_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", ".github/workflows/a.yml"), ("A", _STR_ROOT_SIBLING)],
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_with_a_renamed_name_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A changed ``name:`` breaks the required status-check context, so it is a removal."""
     str_job = _STR_MOVED_JOB.replace("Gate integrity", "Gate integrity check")
 
-    assert len(_move_findings(_STR_SIBLING, str_job_new=str_job)) == 1
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
 
 
-def test_workflow_job_moved_with_changed_steps_is_removed() -> None:
+def test_workflow_job_moved_with_changed_steps_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Changed steps would hide a weakened command behind a move."""
     str_job = _STR_MOVED_JOB.replace("check_gate_integrity.py", "check_gate_integrity.py || true")
 
-    assert len(_move_findings(_STR_SIBLING, str_job_new=str_job)) == 1
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
 
 
-def test_workflow_job_dropped_everywhere_is_removed() -> None:
+@pytest.mark.parametrize(
+    "str_extra",
+    [
+        "    if: false\n",
+        "    continue-on-error: true\n",
+        "    env:\n      LINT_REQUIRED: '0'\n",
+        "    timeout-minutes: 1\n",
+    ],
+)
+def test_workflow_job_moved_with_a_softening_key_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
+) -> None:
+    """A key that skips or softens the job is not a faithful move."""
+    str_job = _STR_MOVED_JOB + str_extra
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_moved_with_a_different_runner_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``runs-on`` is the one key a move may change."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest", "ubuntu-24.04")
+
+    assert _move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job) == []
+
+
+def test_workflow_job_moved_with_unindented_changed_steps_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The non-indented sequence style must not collapse the steps out of the comparison."""
+    str_old = "  gate-integrity:\n    name: G\n    steps:\n    - run: a\n"
+    str_new = "  gate-integrity:\n    name: G\n    steps:\n    - run: b\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_old}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_new}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_dropped_everywhere_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
     """An id absent from every workflow of the tree is still a removal."""
-    assert len(_move_findings(_STR_SIBLING, str_job_new=_STR_KEPT_JOB)) == 1
+    list_findings = _move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=_STR_KEPT_JOB)
+
+    assert len(list_findings) == 1
 
 
-def test_workflow_job_moved_from_template_to_root_is_removed() -> None:
+def test_workflow_job_moved_from_template_to_root_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Each tree is judged on its own: a template job cannot move into the repo's own CI."""
-    assert len(_move_findings(_STR_ROOT_SIBLING, str_job_new=_STR_MOVED_JOB)) == 1
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_ROOT_SIBLING, str_job_new=_STR_MOVED_JOB
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_into_a_subdirectory_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GitHub runs no workflow below ``.github/workflows/``, so that is not a move."""
+    str_target = "templates/python-common/.github/workflows/archive/gate_integrity.yml"
+
+    assert len(_move_findings(monkeypatch, str_target=str_target, str_job_new=_STR_MOVED_JOB)) == 1
+
+
+def test_workflow_job_matching_a_preexisting_target_job_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The target's own older job of that id is not a destination: only a new id is."""
+    str_old_target = _STR_MOVED_JOB.replace("Gate integrity", "Other meaning")
+
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB,
+        str_target_old=str_old_target,
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_removal_names_the_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The finding names the removed job and its source file."""
+    list_findings = _move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=_STR_KEPT_JOB)
+
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
+
+
+def test_workflow_one_new_job_covers_one_removal_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two removed copies of a job cannot both be excused by one new copy."""
+    str_other = "templates/python-common/.github/workflows/other.yml"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={
+            _STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}",
+            str_other: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            str_other: "jobs:\n  keep:\n    name: k\n",
+            _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("M", str_other), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
