@@ -179,7 +179,7 @@ assert_branch_protection_strict() {
 		return 2
 	fi
 	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
-		print_status "warning" "$str_repo:$str_branch has no required_status_checks under classic branch protection — no strict policy is enforced"
+		print_status "info" "$str_repo:$str_branch has no required_status_checks under classic branch protection — no strict policy is enforced"
 		return 3
 	fi
 	if [ "$str_strict" != "false" ]; then
@@ -290,18 +290,33 @@ check_ruleset_present() {
 
 confirm_ruleset_active() {
 	require_gh || return 1
-	local str_repo str_branch str_ids str_id str_hit
+	local str_repo str_branch str_ids str_id str_rules
 	str_repo="${GITHUB_REPOSITORY:-$(resolve_repo enable_repo_rules || true)}"
-	[ -n "$str_repo" ] || return 1
-	str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>/dev/null)" || return 1
-	[ -n "$str_branch" ] || return 1
-	str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
-		".[] | select(.name == \"$RULESET_NAME\" and .enforcement == \"active\") | .id" 2>/dev/null)" || return 1
+	if [ -z "$str_repo" ]; then
+		print_status "warning" "Protection NOT confirmed: could not resolve the repository"
+		return 1
+	fi
+	if ! str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>&1)" || [ -z "$str_branch" ]; then
+		print_status "warning" "Protection NOT confirmed: could not resolve the default branch of $str_repo: ${str_branch:-no output from gh}"
+		return 1
+	fi
+	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --jq \
+		".[] | select(.name == \"$RULESET_NAME\" and .enforcement == \"active\") | .id" 2>&1)"; then
+		print_status "warning" "Protection NOT confirmed: could not READ rulesets from $str_repo: ${str_ids:-no output from gh}"
+		return 1
+	fi
+	if [ -z "$str_ids" ]; then
+		print_status "warning" "Protection NOT confirmed: no active '$RULESET_NAME' ruleset on $str_repo"
+		return 1
+	fi
+	if ! str_rules="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --paginate --jq '.[].ruleset_id' 2>&1)"; then
+		print_status "warning" "Protection NOT confirmed: could not READ the rules applying to $str_repo:$str_branch: ${str_rules:-no output from gh}"
+		return 1
+	fi
 	for str_id in $str_ids; do
-		str_hit="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --paginate --jq \
-			".[] | select(.ruleset_id == $str_id) | .ruleset_id" 2>/dev/null)" || return 1
-		[ -n "$str_hit" ] && return 0
+		grep -qxF "$str_id" <<<"$str_rules" && return 0
 	done
+	print_status "warning" "Protection NOT confirmed: '$RULESET_NAME' is active on $str_repo but applies no rule to $str_repo:$str_branch"
 	return 1
 }
 
@@ -356,6 +371,10 @@ main() {
 		require_gh || return 0
 		report_stranded_prs "${GITHUB_REPOSITORY:-$(resolve_repo enable_repo_rules || true)}"
 		return 0
+	fi
+	if [ $# -gt 0 ]; then
+		print_status "error" "Unknown argument '$1' (expected: verify, check_ruleset, confirm_ruleset, stranded, or none)"
+		return 2
 	fi
 
 	print_status "section" "Repository Rules & Merge Settings"

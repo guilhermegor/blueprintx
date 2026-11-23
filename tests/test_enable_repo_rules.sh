@@ -127,9 +127,10 @@ repos/o/r/rulesets)
 repos/o/r/rulesets/42) str_json="{\"rules\":[$str_rule]}" ;;
 repos/o/r/rules/branches/main*)
 	[ "${STUB_EFFECTIVE:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }
-	[ "${STUB_EFFECTIVE:-}" = strict-true ] && STUB_APPLIES=3 && str_other='{"type":"required_status_checks","ruleset_id":99,"parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"x"}]}}'
+	[ "${STUB_EFFECTIVE:-}" = strict-true ] && STUB_APPLIES=4 && str_other='{"type":"required_status_checks","ruleset_id":99,"parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"x"}]}}'
 	case "$STUB_APPLIES" in
 	3) str_json="[$str_other]" ;;
+	4) str_json="[$str_rule,$str_other]" ;;
 	1) str_json="[$str_rule]" ;;
 	2) [[ " $* " == *" --paginate "* ]] && str_json="[] [$str_rule]" || str_json='[]' ;;
 	*) str_json='[]' ;;
@@ -187,6 +188,10 @@ test_confirm_ruleset_applied_only_when_confirmed() {
     assert_has "a disabled ruleset is not confirmed" "rc=1" "$(run_verify disabled 1 confirm_ruleset)"
     assert_has "unreadable rulesets are not confirmed" "rc=1" "$(STUB_RULESETS=forbidden run_verify active 1 confirm_ruleset)"
     assert_has "unreadable rulesets stay fail-open for check_ruleset" "rc=0" "$(STUB_RULESETS=forbidden run_verify active 1 check_ruleset)"
+}
+
+test_unknown_argument_is_rejected() {
+    assert_has "an unknown argument exits 2" "rc=2" "$(run_verify active 1 confirm_rulesets)"
 }
 
 test_ruleset_only_repo_has_no_unreadable_protection_warning() {
@@ -301,6 +306,7 @@ test_absence_fails_when_another_ruleset_enforces_strict() {
     assert_has "unreadable effective rules fail" "rc=1" "$str_out"
     str_out="$(STUB_PROTECTION=classic-strict-false STUB_EFFECTIVE=strict-true run_verify active 1 verify)"
     assert_has "a verified classic false still fails on another strict ruleset" "rc=1" "$str_out"
+    assert_has "the gate ruleset is present, so the other ruleset is the named cause" "Another ruleset" "$str_out"
     str_out="$(STUB_RULESETS=empty STUB_PROTECTION=classic-strict-false run_verify active 1 verify)"
     assert_has "absent ruleset with classic false passes" "rc=0" "$str_out"
 }
@@ -345,6 +351,7 @@ test_verify_refuses_a_ruleset_that_skips_the_default_branch
 test_verify_accepts_an_active_ruleset_on_the_default_branch
 test_check_ruleset_flags_a_disabled_ruleset
 test_confirm_ruleset_applied_only_when_confirmed
+test_unknown_argument_is_rejected
 test_check_ruleset_flags_missing
 test_check_ruleset_passes_when_present
 test_verify_reads_a_rule_on_a_later_page
