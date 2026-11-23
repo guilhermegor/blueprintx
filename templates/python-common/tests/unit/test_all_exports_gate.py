@@ -1293,17 +1293,15 @@ def test_starred_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "str_member",
+    ("str_member", "str_name"),
     [
-        "try:\n    from x import f\nexcept ImportError:\n    def f():\n        pass\n",
-        "from base import Thing\nclass Thing(Thing):\n    pass\n",
+        ("try:\n    from x import f\nexcept ImportError:\n    def f():\n        pass\n", "'f'"),
+        ("from base import Thing\nclass Thing(Thing):\n    pass\n", "'Thing'"),
     ],
 )
 def test_a_def_or_class_over_an_import_is_still_a_definition(
-    tmp_path: Path, *, str_member: str
+    tmp_path: Path, *, str_member: str, str_name: str
 ) -> None:
     """Only an ``= None`` style fallback is the dependency's; a def or class is real API."""
     path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
-    list_problems = _load_gate().check_package(path_init)
-    assert len(list_problems) == 1
-    assert "'f'" in list_problems[0] or "'Thing'" in list_problems[0]
+    assert str_name in _sole(_load_gate().check_package(path_init))
