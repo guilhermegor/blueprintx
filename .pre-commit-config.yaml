@@ -323,6 +323,13 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/common\.sh|bin/lib/scaffold_[^/]+\.sh|bin/scaffold/[^/]+\.sh|tests/test_prompt_tty_guard\.sh)$
 
+      - id: menu-closed-stdin-tests
+        name: scaffold menu closed-stdin should-fail tests (blueprintx#1268)
+        entry: bash tests/test_menu_closed_stdin.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/blueprintx\.sh|bin/lib/common\.sh|tests/test_menu_closed_stdin\.sh)$
+
       - id: scaffold-first-commit-tests
         name: scaffold first-commit should-fail tests (blueprintx#812)
         entry: bash tests/test_scaffold_first_commit.sh
@@ -350,6 +357,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(bin/lib/(spec|common|scaffold_docs_locale|scaffold_readme)\.sh|templates/python-common/(README\.md|docs/(changelog\.md|pt-BR/.*))|templates/python-common/bin/check_(docs_(language|gap)|comment_language)\.py|bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/lib-minimal/.*|tests/test_spec_answers\.sh)$
+
+      - id: spec-review-bot-default-test
+        name: spec review_bot_roster defaults to y (blueprintx#1307)
+        entry: bash tests/test_spec_review_bot_default.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/(spec|scaffold_git_remote)\.sh|tests/test_spec_review_bot_default\.sh)$
 
       - id: zero-dependency-type-checker-tests
         name: zero-dependency TypeChecker metaclass tests (blueprintx#1204)
@@ -420,6 +434,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(bin/lib/[a-z_]+\.sh|bin/scaffold/[a-z_]+\.sh|templates/.*|tests/test_scaffold_list_copies\.sh)$
+
+      - id: ruff-overlays-tests
+        name: per-tier ruff overlay tests (blueprintx#1242)
+        entry: bash tests/test_ruff_overlays.sh
+        language: system
+        pass_filenames: false
+        files: ^(templates/python-common/ruff(\.toml|/.*)|tests/test_ruff_overlays\.sh)$
 
       - id: specs-structure
         name: .specs/ structure guard (blueprintx#447)

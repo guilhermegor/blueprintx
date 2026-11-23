@@ -1472,7 +1472,7 @@ def test_a_declared_completion_is_evidence_the_reviewer_ran() -> None:
             set_reviewers=_ROSTER,
             str_pr_author="h",
             str_head_oid=_HEAD,
-            str_head_date=_HEAD_DATE,
+            str_push_time=_HEAD_DATE,
             list_notices=[_notice("coderabbitai", str_body=_NOTICE_PERFORMED)],
         )
         is None
@@ -1494,7 +1494,7 @@ def test_a_completion_predating_the_head_commit_is_not_evidence() -> None:
             set_reviewers=_ROSTER,
             str_pr_author="h",
             str_head_oid=_HEAD,
-            str_head_date="2026-06-01T00:00:00Z",
+            str_push_time="2026-06-01T00:00:00Z",
             list_notices=[
                 _notice(
                     "coderabbitai", str_body=_NOTICE_PERFORMED, str_created="2026-05-01T00:00:00Z"
@@ -1503,6 +1503,160 @@ def test_a_completion_predating_the_head_commit_is_not_evidence() -> None:
         )
         is not None
     )
+
+
+def _problem_for_push(str_push_time: str, *, str_created: str, str_body: str) -> str | None:
+    return _load_gate().find_missing_review_problem(
+        [],
+        set_reviewers=_ROSTER,
+        str_pr_author="h",
+        str_head_oid=_HEAD,
+        str_head_date="2026-01-01T09:00:00Z",
+        str_push_time=str_push_time,
+        list_notices=[_notice("coderabbitai", str_body=str_body, str_created=str_created)],
+    )
+
+
+def test_a_notice_older_than_the_push_fails_though_newer_than_the_commit() -> None:
+    """blueprintx#1220 witness: committed 09:00, notice 10:00, first run 11:00 -> refused.
+
+    ``committedDate`` is not a push time; the old comparison (10:00 >= 09:00) passed this.
+    """
+    str_problem = _problem_for_push(
+        "2026-01-01T11:00:00Z", str_created="2026-01-01T10:00:00Z", str_body=_NOTICE_PERFORMED
+    )
+    assert f"predates the push of {_HEAD[:7]}" in str_problem
+
+
+def test_a_notice_after_the_push_is_accepted() -> None:
+    """The control for the witness above: the same notice at 12:00 passes."""
+    assert (
+        _problem_for_push(
+            "2026-01-01T11:00:00Z", str_created="2026-01-01T12:00:00Z", str_body=_NOTICE_PERFORMED
+        )
+        is None
+    )
+
+
+def test_an_unreadable_push_time_fails_closed_and_says_so() -> None:
+    """No runs and no check-runs -> empty push time -> the notice is not trusted."""
+    str_problem = _problem_for_push(
+        "", str_created="2099-01-01T00:00:00Z", str_body=_NOTICE_PERFORMED
+    )
+    assert "push time" in str_problem
+
+
+@pytest.mark.parametrize(
+    ("str_sha", "bool_accepted"),
+    [
+        pytest.param(_HEAD[:7], True, id="prefix-of-head"),
+        pytest.param(_HEAD, True, id="full-head"),
+        pytest.param("0123abc", False, id="other-commit"),
+        pytest.param("commit deadbee", False, id="labelled-all-letter-other-commit"),
+        pytest.param("", True, id="no-sha-time-only"),
+    ],
+)
+def test_a_notice_sha_must_prefix_match_the_head(*, str_sha: str, bool_accepted: bool) -> None:
+    """A 7-40 hex token in the notice names the head it described, or the notice is refused.
+
+    Parameters
+    ----------
+    str_sha : str
+        The sha written into the notice; empty writes none.
+    bool_accepted : bool
+        Whether the notice may satisfy the gate.
+    """
+    str_problem = _problem_for_push(
+        "2026-01-01T11:00:00Z",
+        str_created="2026-01-01T12:00:00Z",
+        str_body=f"Review finished. {str_sha}",
+    )
+    assert (str_problem is None) is bool_accepted
+
+
+def test_an_all_letter_word_is_not_read_as_a_sha() -> None:
+    """``acceded`` is seven hex letters and English; only a token with a digit is a sha."""
+    assert (
+        _problem_for_push(
+            "2026-01-01T11:00:00Z",
+            str_created="2026-01-01T12:00:00Z",
+            str_body="Review finished. Author acceded.",
+        )
+        is None
+    )
+
+
+def _stub_rest(
+    monkeypatch: pytest.MonkeyPatch, *, list_runs: object, list_checks: object
+) -> ModuleType:
+    cls_gate = _load_gate()
+    dict_by_key = {"workflow_runs": list_runs, "check_runs": list_checks}
+    monkeypatch.setattr(cls_gate, "_gh_rest_list", lambda _path, *, str_key: dict_by_key[str_key])
+    return cls_gate
+
+
+def test_fetch_head_push_time_takes_the_newest_run_of_this_pr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Thread 4653332749 (b): the PR returned to a sha it had at 09:00; the newest run wins."""
+    cls_gate = _stub_rest(
+        monkeypatch,
+        list_runs=[
+            {"created_at": "2026-01-01T11:00:00Z", "pull_requests": [{"number": 8}]},
+            {"created_at": "2026-01-01T09:00:00Z", "pull_requests": [{"number": 8}]},
+        ],
+        list_checks=None,
+    )
+    str_time = cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8")
+    assert str_time == "2026-01-01T11:00:00Z"
+
+
+def test_fetch_head_push_time_ignores_runs_of_another_pr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Thread 4653332749: the sha ran at 09:00 for PR 7; this PR (8) was pushed at 11:00."""
+    cls_gate = _stub_rest(
+        monkeypatch,
+        list_runs=[
+            {"created_at": "2026-01-01T09:00:00Z", "pull_requests": [{"number": 7}]},
+            {"created_at": "2026-01-01T11:00:00Z", "pull_requests": [{"number": 8}]},
+        ],
+        list_checks=None,
+    )
+    str_time = cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8")
+    assert str_time == "2026-01-01T11:00:00Z"
+
+
+def test_fetch_head_push_time_is_empty_when_no_run_belongs_to_this_pr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Runs exist for the sha but none for this PR -> fail closed, no check-run fallback."""
+    cls_gate = _stub_rest(
+        monkeypatch,
+        list_runs=[{"created_at": "2026-01-01T09:00:00Z", "pull_requests": [{"number": 7}]}],
+        list_checks=[{"started_at": "2026-01-01T09:00:00Z"}],
+    )
+    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8") == ""
+
+
+def test_fetch_head_push_time_has_no_repository_wide_check_run_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Thread 4653332749 (a): no run lists this PR -> empty, whatever the check-runs say."""
+    cls_gate = _stub_rest(
+        monkeypatch,
+        list_runs=[],
+        list_checks=[{"started_at": "2026-01-01T11:15:00Z"}],
+    )
+    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8") == ""
+
+
+def test_fetch_head_push_time_is_empty_when_neither_source_is_readable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Runs endpoint returns ``[]`` and check-runs is unreadable -> fail closed."""
+    cls_gate = _stub_rest(monkeypatch, list_runs=[], list_checks=None)
+    assert cls_gate.fetch_head_push_time("o/r", str_head_oid=_HEAD, str_number="8") == ""
 
 
 def test_an_unknown_head_date_is_not_evidence() -> None:
@@ -1518,7 +1672,7 @@ def test_an_unknown_head_date_is_not_evidence() -> None:
             set_reviewers=_ROSTER,
             str_pr_author="h",
             str_head_oid=_HEAD,
-            str_head_date="",
+            str_push_time="",
             list_notices=[_notice("coderabbitai", str_body=_NOTICE_PERFORMED)],
         )
         is not None
@@ -2116,11 +2270,83 @@ def test_review_body_findings_on_a_superseded_commit_still_need_a_reply() -> Non
     assert len(_body_problems([dict_stale], list_notices=[])) == 1
 
 
-def test_review_body_one_reply_after_both_reviews_answers_both() -> None:
-    """Deliberate: one reply posted after the latest findings body covers the earlier ones."""
-    dict_late = {**_body_review(_BODY_MAJOR), "submittedAt": "2026-01-02T12:00:00Z"}
-    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created=_BODY_AFTER)]
-    assert _body_problems([_body_review(_BODY_MAJOR), dict_late], list_notices=list_notices) == []
+def _two_reviews() -> list[dict]:
+    dict_a = {**_body_review(_BODY_MAJOR), "fullDatabaseId": "1111111"}
+    dict_b = {**dict_a, "fullDatabaseId": "2222222", "submittedAt": "2026-01-02T12:00:00Z"}
+    return [dict_a, dict_b]
+
+
+def _reply(str_text: str) -> list[dict]:
+    return [_notice("someone", str_body=f"{_BODY_REPLY} {str_text}", str_created=_BODY_AFTER)]
+
+
+def test_review_body_generic_reply_answers_only_the_newest_review() -> None:
+    """blueprintx#1220 item 3: one generic reply after A and B answers B; A stays open.
+
+    Replaces the old test that pinned "one reply covers every earlier review", the behaviour
+    the approved design removes.
+    """
+    list_problems = _body_problems(_two_reviews(), list_notices=_reply(""))
+    assert [("1111111" in s, "2222222" in s) for s in list_problems] == [(True, False)]
+
+
+def test_review_body_batch_reply_naming_both_reviews_answers_both() -> None:
+    """The control for the witness above: ``reviews 1111111, 2222222`` names each one."""
+    assert _body_problems(_two_reviews(), list_notices=_reply("reviews 1111111, 2222222")) == []
+
+
+@pytest.mark.parametrize(
+    "str_ref",
+    ["review 1111111", "see #pullrequestreview-1111111", "re: 1111111"],
+    ids=["id", "url-fragment", "re-id"],
+)
+def test_review_body_explicit_reference_answers_that_review_even_when_older(
+    str_ref: str,
+) -> None:
+    """A reply naming A answers A, but then it is not a generic answer for B.
+
+    Parameters
+    ----------
+    str_ref : str
+        How the reply refers to review A.
+    """
+    list_problems = _body_problems(_two_reviews(), list_notices=_reply(str_ref))
+    assert [("1111111" in s, "2222222" in s) for s in list_problems] == [(False, True)]
+
+
+def test_review_body_ambiguous_quotation_names_neither_review() -> None:
+    """Two reviews open with the same line, so quoting it is not an answer to either.
+
+    The generic rule then answers only the newest, and the older one is still reported.
+    """
+    str_first = _BODY_MAJOR.strip().splitlines()[0]
+    list_problems = _body_problems(
+        _two_reviews(), list_notices=_reply(f"\n> {str_first}\n\nDone.")
+    )
+    assert [("1111111" in s, "2222222" in s) for s in list_problems] == [(True, False)]
+
+
+def test_review_body_reference_to_a_clean_review_is_not_a_generic_answer() -> None:
+    """A reply naming clean review 2222222 must not clear findings review 1111111."""
+    dict_findings = {**_body_review(_BODY_MAJOR), "fullDatabaseId": "1111111"}
+    dict_clean = {
+        **_body_review("Nothing to report."),
+        "fullDatabaseId": "2222222",
+        "submittedAt": "2026-01-02T12:00:00Z",
+    }
+    list_problems = _body_problems(
+        [dict_findings, dict_clean], list_notices=_reply("reply to review 2222222")
+    )
+    assert len(list_problems) == 1
+
+
+def test_review_body_blockquote_of_the_first_line_answers_that_review() -> None:
+    """Quoting a review's first line names it without needing its id."""
+    str_first = _BODY_MAJOR.strip().splitlines()[0]
+    dict_other = {**_two_reviews()[1], "body": "Other review\n" + _BODY_MAJOR}
+    list_reviews = [_two_reviews()[0], dict_other]
+    list_problems = _body_problems(list_reviews, list_notices=_reply(f"\n> {str_first}\n\nDone."))
+    assert [("2222222" in s) for s in list_problems] == [True]
 
 
 def test_review_body_reply_from_a_graphql_bot_is_a_problem() -> None:
@@ -2919,7 +3145,7 @@ def test_completion_is_seen_past_the_display_budget() -> None:
     assert cls_gate.reviewer_declared_completion(
         [_notice("coderabbitai[bot]", str_body=f"{_STR_FILLER} Review finished.")],
         set_roster=_ROSTER_NORMALISED,
-        str_head_date=_HEAD_DATE,
+        str_push_time=_HEAD_DATE,
     )
 
 
@@ -3619,6 +3845,31 @@ def test_patch_fingerprint_ignores_hunk_line_numbers() -> None:
     assert cls_gate.patch_fingerprint([dict_at_review]) == cls_gate.patch_fingerprint(
         [dict_at_head]
     )
+
+
+def test_patch_fingerprint_same_edit_at_another_line_matches() -> None:
+    """Pins the blueprintx#1220 decision: the edit location is NOT in the digest."""
+    cls_gate = _load_gate()
+    dict_at_ten = {
+        "filename": "a",
+        "status": "modified",
+        "patch": "@@ -10,3 +10,4 @@\n ctx\n+y\n ctx",
+    }
+    dict_at_forty = {
+        "filename": "a",
+        "status": "modified",
+        "patch": "@@ -40,3 +41,4 @@\n ctx\n+y\n ctx",
+    }
+    assert cls_gate.patch_fingerprint([dict_at_ten]) == cls_gate.patch_fingerprint([dict_at_forty])
+
+
+def test_patch_fingerprint_same_patch_in_another_file_differs() -> None:
+    """The path IS in the digest: the identical edit to another file is different code."""
+    cls_gate = _load_gate()
+    str_patch = "@@ -1 +1 @@\n-x\n+y"
+    dict_one = {"filename": "src/a.py", "status": "modified", "patch": str_patch}
+    dict_other = {"filename": "src/b.py", "status": "modified", "patch": str_patch}
+    assert cls_gate.patch_fingerprint([dict_one]) != cls_gate.patch_fingerprint([dict_other])
 
 
 def test_patch_fingerprint_ignores_unchanged_context_lines() -> None:
@@ -5253,6 +5504,7 @@ def test_a_head_review_older_than_the_latest_retarget_does_not_count(
     """Retargeting without a push leaves the head SHA alone but changes the diff reviewed."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_head_push_time", lambda *_, **__: "")
     dict_pr = {
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
@@ -5284,6 +5536,7 @@ def test_a_head_review_after_the_latest_retarget_still_counts(
     """The cutoff only refuses reviews that predate the retarget."""
     cls_gate = _load_gate()
     monkeypatch.setattr(cls_gate, "fetch_patch_fingerprint", lambda *_, **__: "same patch")
+    monkeypatch.setattr(cls_gate, "fetch_head_push_time", lambda *_, **__: "")
     dict_pr = {
         "author": {"login": "someone"},
         "headRefOid": _HEAD,
@@ -5331,7 +5584,7 @@ def _pr_with_notice_and_retarget(str_retarget: str) -> dict:
     ],
 )
 def test_a_completion_notice_counts_only_after_the_latest_retarget(
-    *, str_retarget: str, bool_expected_problem: bool
+    *, str_retarget: str, bool_expected_problem: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A notice is held to the same base-change cutoff as a review object.
 
@@ -5345,8 +5598,11 @@ def test_a_completion_notice_counts_only_after_the_latest_retarget(
         When the base branch was last changed.
     bool_expected_problem : bool
         Whether the gate must still report a missing review.
+    monkeypatch : pytest.MonkeyPatch
+        Pins the head push time, which would otherwise be read from the REST API.
     """
     cls_gate = _load_gate()
+    monkeypatch.setattr(cls_gate, "fetch_head_push_time", lambda *_, **__: _HEAD_DATE)
     str_problem, _ = cls_gate._missing_review(
         _pr_with_notice_and_retarget(str_retarget),
         str_repo_full="o/r",

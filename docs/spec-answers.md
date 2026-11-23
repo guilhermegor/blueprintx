@@ -102,7 +102,7 @@ the stored answers.
 | `otel` | `n` | OpenTelemetry OTLP log export. |
 | `email` | `n` | `y` also reads `email_backend` (`outlook`\|`smtp`). |
 | `env_wise_config` | `n` | Split `inputs.yaml`/`outputs.yaml` into `_dev`/`_prd` pairs. |
-| `review_bot_roster` | `n` | `y` ships `.review-bots.yaml` (a PR review bot is expected). |
+| `review_bot_roster` | `y` | `y` ships `.review-bots.yaml` (an automated PR reviewer is expected); `n` ships the `adopted: false` opt-out stub. |
 | `git_remote` | `n` | `y` adds `origin` and answers the remote prompt. Leave `n` for unattended runs that should not touch GitHub. |
 | `create_repo` | `n` | `y` creates the repo on GitHub and pushes. Needs `git_remote=y`; same preflight as `ts-lib`. |
 | `repo_visibility` | `private` | `public` or `private`. Read only when `create_repo=y`. |
@@ -119,7 +119,7 @@ Same as the DDD tiers, **minus `storage`** (MVC has no schema-less storage promp
 
 | Key | Default | Notes |
 |---|---|---|
-| `pipeline_intent` | `n` | `y` selects the multi-intent (`PIPELINE_INTENT` dispatch) pipeline shape. The scaffold script also accepts this directly as the `MULTI_PIPELINE_OPTIN=true` environment variable — set that instead of going through stdin if calling the scaffold script yourself. |
+| `pipeline_intent` | `n` | `y` selects the multi-intent (`PIPELINE_INTENT` dispatch) pipeline shape. The scaffold script also accepts this directly as the `MULTI_PIPELINE_OPTIN=true` environment variable — set that instead of going through stdin if calling the scaffold script yourself. With `MULTI_PIPELINE_OPTIN=true` set, the scaffold never asks this question, so a spec's `pipeline_intent` is ignored and no answer is sent for it. |
 
 ### `lib-minimal`
 
@@ -132,7 +132,7 @@ Same as the DDD tiers, **minus `storage`** (MVC has no schema-less storage promp
 | `publish_pypi` | `y` | Ship `release-pypi.yaml`. |
 | `publish_test_pypi` | `y` | Ship `release-test-pypi.yaml`. |
 | `consume_private` | `n` | Append a commented private-source template to `pyproject.toml`. |
-| `review_bot_roster` | `n` | Same as the service tiers. |
+| `review_bot_roster` | `y` | Same as the service tiers. |
 | `git_remote` | `n` | Same as the service tiers, including the `create_repo` block above. |
 
 ### `ts-lib`
@@ -144,7 +144,7 @@ answer shows up as the wrong visibility or the wrong protection payload.
 
 | Key | Default | Notes |
 |---|---|---|
-| `review_bot_roster` | `n` | Same as the service tiers. |
+| `review_bot_roster` | `y` | Same as the service tiers. |
 | `otel` | `n` | Ships the OTLP log-export helper. |
 | `git_remote` | `n` | `y` adds `origin`. Alone it creates nothing on GitHub. |
 | `create_repo` | `n` | `y` creates the repo on GitHub and pushes. Needs `git_remote=y`. |
@@ -198,7 +198,7 @@ human_reviewers=n
 | `include_windows` | `y` | `n` skips the Windows ISOs and the `dotfiles/windows` installers. |
 | `include_android` | `y` | `n` skips the Android ISOs. |
 | `persistence_size_mb` | `4096` | A multiple of 1024, at least 1024; anything else stops the run naming the key. |
-| `review_bot_roster` | `n` | Same as the service tiers. |
+| `review_bot_roster` | `y` | Same as the service tiers. |
 | `git_remote` | `n` | `y` adds `origin`. Alone it creates nothing on GitHub. |
 | `create_repo` | `n` | `y` creates the repo on GitHub and pushes. Needs `git_remote=y`. |
 | `repo_visibility` | `private` | `public` or `private`. Read only when `create_repo=y`. Defaults to `private`, as for `ts-lib`: a repo made public by omission cannot be taken back. |
@@ -215,7 +215,7 @@ the git remote prompt.
 | Key | Default | Notes |
 |---|---|---|
 | `default_os` | `chromeos-flex` | `chromeos-flex` or `fydeos`; stamped into the CLI as the `--os` default. Anything else stops the run naming the key. |
-| `review_bot_roster` | `n` | Same as the service tiers. |
+| `review_bot_roster` | `y` | Same as the service tiers. |
 | `git_remote` | `n` | `y` adds `origin`. |
 | `create_repo`, `repo_visibility`, `kanban`, `kanban_visibility`, `protect_branch` | as `ts-lib` | Same keys and defaults. This tier does not ask `human_reviewers`. |
 

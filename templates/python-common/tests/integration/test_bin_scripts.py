@@ -26,6 +26,7 @@ import sys
 import time
 from types import MappingProxyType
 
+from packaging.requirements import Requirement
 import pytest
 import yaml
 
@@ -3280,3 +3281,97 @@ def test_check_urls_hook_selects_files_the_way_the_script_does() -> None:
     assert len(list_hooks) == 1
     assert list_hooks[0].get("files") == r"\.py$"
     assert "types" not in list_hooks[0]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the stub interpreter is a POSIX shell script")
+def test_poetry_installs_from_the_wheelhouse_without_touching_pypi(tmp_path: Path) -> None:
+    """A wheelhouse holding a Poetry wheel is installed ``--no-index``, never from PyPI.
+
+    The stub interpreter logs its argv, so the assertion is on the pip command itself.
+    """
+    path_bin = tmp_path / "bin"
+    _materialise_bin_lib(path_bin)
+    path_wheels = tmp_path / "wheels"
+    path_wheels.mkdir()
+    (path_wheels / "poetry-2.3.3-py3-none-any.whl").write_bytes(b"")
+    path_log = tmp_path / "calls.log"
+    path_stub = tmp_path / "stub_python"
+    path_stub.write_text(f'#!/bin/sh\necho "$@" >> "{path_log}"\n', encoding="utf-8")
+    path_stub.chmod(0o755)
+
+    dict_env = dict(os.environ, WHEELHOUSE_WHEELS_DIR=str(path_wheels))
+    str_script = (
+        f'source "{path_bin}/lib/common.sh"; source "{path_bin}/lib/bootstrap.sh"; '
+        f'PROJECT_ROOT="{tmp_path}"; PYTHON="{path_stub}"; '
+        'install_poetry_from_wheelhouse "poetry>=2.3.3"'
+    )
+    cls_run = subprocess.run(  # noqa: S603
+        [shutil.which("bash") or "bash", "-c", str_script],
+        env=dict_env,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+    assert cls_run.returncode == 0, cls_run.stderr
+    str_calls = path_log.read_text(encoding="utf-8")
+    assert f"--no-index --find-links={path_wheels} poetry>=2.3.3" in str_calls
+
+
+def test_poetry_requirement_excludes_the_path_traversal_releases() -> None:
+    """``requirements.txt`` must floor Poetry at the GHSA-2599-h6xx-hpxp fix.
+
+    Poetry 1.4.0 through 2.3.2 can write outside the target directory from a crafted wheel.
+    """
+    path_req = Path(__file__).resolve().parents[2] / "requirements.txt"
+    list_reqs = [
+        Requirement(str_line.split(";")[0].strip())
+        for str_line in path_req.read_text(encoding="utf-8").splitlines()
+        if str_line.strip()
+    ]
+    cls_spec = next(cls_req for cls_req in list_reqs if cls_req.name == "poetry").specifier
+
+    assert cls_spec.contains("2.3.3")
+    assert not cls_spec.contains("2.3.2")
+
+
+def test_unparseable_dependency_never_reaches_the_success_message(tmp_path: Path) -> None:
+    """An unsupported dependency makes the pip fallback fail, never report success.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary directory holding a ``pyproject.toml`` with a git dependency.
+    """
+    path_lib = Path(__file__).resolve().parents[2] / "bin" / "lib"
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.poetry.dependencies]\npython = "^3.10"\n'
+        'broken = {git = "https://example.invalid/x.git"}\n',
+        encoding="utf-8",
+    )
+    str_script = (
+        f'export PROJECT_ROOT="{tmp_path}" PYTHON="{sys.executable}"; '
+        f'source "{path_lib}/common.sh"; source "{path_lib}/bootstrap.sh"; '
+        f'source "{path_lib}/pip_fallback.sh"; '
+        "pip_fallback_ensure_toml_reader() { return 0; }; "
+        f'pip_fallback_install_groups_in_venv "{shutil.which("false") or "false"}" main deps'
+    )
+    dict_env = dict(os.environ)
+    dict_env.pop("_BX_PIP_FALLBACK_LOADED", None)
+    dict_env.pop("FORCE_COLOR", None)
+    dict_env.pop("CLICOLOR_FORCE", None)
+    dict_env.pop("NO_COLOR", None)
+    cls_result = subprocess.run(  # noqa: S603
+        [_STR_BASH, "-c", str_script],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=dict_env,
+    )
+    str_output = cls_result.stdout + cls_result.stderr
+
+    assert cls_result.returncode != 0
+    assert "Unsupported dependency type for pip fallback: broken -> git" in str_output
+    assert "installed with pip fallback" not in str_output

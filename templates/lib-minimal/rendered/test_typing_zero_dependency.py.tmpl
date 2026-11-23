@@ -1,7 +1,7 @@
 """Smoke test: the dependency-free type_checker resolves in the wheel layout."""
 
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, runtime_checkable
 
 import pytest
 
@@ -139,6 +139,67 @@ class _Record(TypedDict):
     """A ``TypedDict``, which ``isinstance`` also rejects."""
 
     name: str
+
+
+@runtime_checkable
+class _Sized(Protocol):
+    """A ``runtime_checkable`` Protocol, which ``isinstance`` accepts."""
+
+    def __len__(self) -> int:
+        """Return the length."""
+
+
+@type_checker
+def _sized_optional(value: _Sized | None) -> object:
+    """Return ``value`` unchanged; a usable Protocol sits inside a union.
+
+    Parameters
+    ----------
+    value : _Sized | None
+        A sized object or ``None``.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
+
+
+@type_checker
+def _variadic_union(*values: int | str, **named: int | str) -> int:
+    """Count variadic values whose annotation is a union.
+
+    Parameters
+    ----------
+    *values : int | str
+        Positional values.
+    **named : int | str
+        Keyword values.
+
+    Returns
+    -------
+    int
+        How many values were given.
+    """
+    return len(values) + len(named)
+
+
+@type_checker
+def _duplicate_origins(value: list[int] | list[str]) -> object:
+    """Return ``value`` unchanged; both union members share one origin class.
+
+    Parameters
+    ----------
+    value : list[int] | list[str]
+        A list.
+
+    Returns
+    -------
+    object
+        The same value.
+    """
+    return value
 
 
 @type_checker
@@ -328,7 +389,7 @@ def test_generic_alias_accepts_origin_class() -> None:
 
 def test_generic_alias_rejects_other_class() -> None:
     """A generic alias rejects a value that is not its origin class."""
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match=r"list, got tuple"):
         _generic((1,))  # type: ignore[arg-type]
 
 
@@ -356,6 +417,45 @@ def test_generic_alias_inside_a_union_rejects_other_class() -> None:
     """``list[int] | None`` rejects a value that is neither."""
     with pytest.raises(TypeError, match=r"list \| None"):
         _generic_optional("a")  # type: ignore[arg-type]
+
+
+def test_usable_protocol_member_accepts_a_satisfying_value() -> None:
+    """A ``runtime_checkable`` Protocol member accepts a value that satisfies it."""
+    assert _sized_optional([1]) == [1]
+
+
+def test_usable_protocol_member_rejects_other_value() -> None:
+    """A ``runtime_checkable`` Protocol member rejects a value that does not satisfy it."""
+    with pytest.raises(TypeError, match=r"_Sized \| None, got int"):
+        _sized_optional(5)  # type: ignore[arg-type]
+
+
+def test_variadic_union_accepts_each_member() -> None:
+    """``*args`` and ``**kwargs`` check each element against every union member."""
+    assert _variadic_union(1, "a", x=2, y="b") == 4
+
+
+def test_variadic_union_rejects_positional_non_member() -> None:
+    """A ``*args`` element outside the union is rejected."""
+    with pytest.raises(TypeError, match=r"int \| str, got float"):
+        _variadic_union(1, 2.5)  # type: ignore[arg-type]
+
+
+def test_variadic_union_rejects_keyword_non_member() -> None:
+    """A ``**kwargs`` value outside the union is rejected."""
+    with pytest.raises(TypeError, match=r"int \| str, got float"):
+        _variadic_union(x=2.5)  # type: ignore[arg-type]
+
+
+def test_bool_matches_float_alone_inside_a_union() -> None:
+    """``bool`` is an ``int`` subclass, so ``float | None`` accepts it as ``float`` does."""
+    assert _scale(True) == _float_optional(True)
+
+
+def test_error_message_lists_each_class_once() -> None:
+    """``list[int] | list[str]`` is shown as ``list``, not ``list | list``."""
+    with pytest.raises(TypeError, match=r"hint list, got tuple"):
+        _duplicate_origins((1,))  # type: ignore[arg-type]
 
 
 def test_any_member_makes_a_union_accept_anything() -> None:

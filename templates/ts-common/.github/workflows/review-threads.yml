@@ -13,6 +13,10 @@ permissions:
   pull-requests: read
   checks: write
 
+concurrency:
+  group: review-gate-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
 
   review-gate-runner:
@@ -54,7 +58,7 @@ jobs:
         run: python bin/check_review_threads.py
 
       - name: Post the required result as a check-run on the PR head
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}

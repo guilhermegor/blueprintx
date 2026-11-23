@@ -42,8 +42,8 @@ projects also switch versioning: online = tag-driven, offline = a local `poe bum
 
 ## I don't use a PR review bot — will the generated project's required check ever pass?
 
-The scaffolder asks *"Will one of these bots review PRs here: CodeRabbit (installed or
-ask-only), Greptile, Graphite, Copilot, reviewer-ladder App? Human-only review = no."*. The gate
+The scaffolder asks *"Will one of these automated reviewers (CodeRabbit, Greptile, Graphite, Copilot,
+reviewer-ladder App) review PRs here? Answering no opts the review-thread check out: only human reviews will count."*. The gate
 only recognizes the bot logins in the roster, so a project reviewed only by humans answers no.
 Answer **no** and it ships `.review-bots.yaml` containing `adopted: false`
 (`templates/common/review-bots-optout.yaml`) instead of the real roster. The gate fails closed
@@ -213,7 +213,7 @@ A review is pinned to the commit it was written against. When no review names th
 gate asks whether the PR's **own patch** changed between the reviewed commit `R` and the head
 `H`. If it did not, the review covers `H` and the gate prints
 `review at R still covers H: the head only merges the base, the PR's own patch is unchanged`.
-That is the case of `update-branch` under the strict-serial ruleset: main is merged in, no code
+That is the case of `update-branch`, which the former strict-serial ruleset (off since 2026-11-21, #1285) forced: main is merged in, no code
 is written, and a second review of the same diff would only spend a reviewer rung.
 
 The patch is the diff from the merge base with the base branch to the commit. It is
@@ -384,6 +384,12 @@ the same protection from the autouse `isolate_git_environment` fixture in
 ## Which install methods are supported?
 
 Homebrew, Chocolatey, apt, and `make install` from a clone — see the project README.
+
+## Why does `blueprintx new` warn that my install is older than the latest release?
+
+A scaffold copies the templates of the installed package, so a lagging install reintroduces defects `main` already fixed. `warn_if_outdated` in `bin/lib/common.sh` runs at the start of the create flow, asks the public `https://api.github.com/repos/guilhermegor/blueprintx/releases/latest` with `curl -m 3` (no `gh`, login or GNU `timeout` needed, so it also works on stock macOS), and prints one warning when the installed version sorts below the latest tag.
+
+The check never blocks or fails a scaffold. It stays silent when `curl` is absent, the network is offline, the request times out or fails, the install is a development checkout (the `0.0.0` stub) or a prerelease, or `BLUEPRINTX_NO_UPDATE_CHECK` is set to any non-empty value. Upgrade through the package manager you installed with. The should-fail witness is `tests/test_warn_if_outdated.sh`, which stubs `curl`.
 
 ## Why does the coverage badge 404 before the first push to main?
 

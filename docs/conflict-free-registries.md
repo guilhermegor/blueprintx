@@ -2,8 +2,8 @@
 
 A library grows one module at a time, and each new module used to touch the same shared spots:
 the package `__init__.py` (import and `__all__`), a docs nav, a README table, and often a
-hard-coded count. Parallel PRs conflicted there, and with a strict "require up to date" ruleset
-the conflict resolution changed the PR's own patch, so the review-thread gate (correctly) dropped
+hard-coded count. Parallel PRs conflicted there, and under the former strict "require up to date"
+ruleset (turned off 2026-11-21, #1285) the conflict resolution changed the PR's own patch, so the review-thread gate (correctly) dropped
 the earlier review. Every merge then cost every other open PR a fresh review.
 
 The approach below was measured in `guilhermegor/layouts-cvm#55` and adopted here unchanged

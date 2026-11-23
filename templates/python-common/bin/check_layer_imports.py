@@ -476,6 +476,7 @@ def find_file_problems(
     dict_policy: dict,
     set_first_party: set[str],
     tuple_pkg_parts: tuple = (),
+    tuple_module_roots: tuple = (),
 ) -> list[str]:
     """Return every import-policy violation in one file (never raises).
 
@@ -491,7 +492,9 @@ def find_file_problems(
         Top-level package names that belong to this project.
     tuple_pkg_parts : tuple of str, optional
         The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
-        to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
+        to resolve RELATIVE imports for ``deny_layers``; empty means a file at the layer root.
+    tuple_module_roots : tuple of pathlib.Path, optional
+        Directories a first-party submodule named in a from-import is looked up under.
 
     Returns
     -------
@@ -525,6 +528,7 @@ def find_file_problems(
         str_layer=str_layer,
         dict_policy=dict_policy,
         tuple_pkg_parts=tuple_pkg_parts,
+        tuple_module_roots=tuple_module_roots,
     )
 
 
@@ -544,8 +548,9 @@ def relative_import_target(tuple_pkg_parts: tuple, *, cls_node: ast.ImportFrom) 
     Parameters
     ----------
     tuple_pkg_parts : tuple of str
-        The file's package path below the layer root, e.g. ``("utils", "sub")``. Empty when
-        the caller cannot supply it, in which case no relative import is resolved.
+        The file's package path below the layer root, e.g. ``("utils", "sub")``. Empty for a
+        file directly at the layer root, where ``from .x import y`` reaches ``x`` and a
+        two-dot import climbs past the root and resolves to nothing.
     cls_node : ast.ImportFrom
         The relative import statement (``level`` >= 1).
 
@@ -559,8 +564,6 @@ def relative_import_target(tuple_pkg_parts: tuple, *, cls_node: ast.ImportFrom) 
         so the ABSOLUTE form of an import was rejected while its relative twin passed, which
         is worse than not having the rule at all.
     """
-    if not tuple_pkg_parts:
-        return None
     int_climb = cls_node.level - 1
     tuple_base = (
         tuple_pkg_parts[: len(tuple_pkg_parts) - int_climb] if int_climb else tuple_pkg_parts
@@ -571,6 +574,107 @@ def relative_import_target(tuple_pkg_parts: tuple, *, cls_node: ast.ImportFrom) 
     return ".".join(tuple_full) if tuple_full else None
 
 
+def is_first_party_module(str_dotted: str, *, tuple_module_roots: tuple) -> bool:
+    """Return whether a dotted name is a module or package under one of the roots.
+
+    Parameters
+    ----------
+    str_dotted : str
+        Dotted path, e.g. ``chassis.db_schema``.
+    tuple_module_roots : tuple of pathlib.Path
+        Directories the path is resolved under.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``<root>/a/b.py`` or the directory ``<root>/a/b``; a plain imported
+        symbol (a class, a function) is neither, so it is never mistaken for a module.
+    """
+    path_rel = pathlib.Path(*str_dotted.split("."))
+    return any(
+        path_root.joinpath(path_rel).with_suffix(".py").is_file()
+        or path_root.joinpath(path_rel).is_dir()
+        for path_root in tuple_module_roots
+    )
+
+
+def from_import_submodules(
+    cls_node: ast.ImportFrom, *, str_base: str | None, tuple_module_roots: tuple
+) -> list[str]:
+    """Return ``<base>.<name>`` for each from-list name that is a first-party submodule.
+
+    Parameters
+    ----------
+    cls_node : ast.ImportFrom
+        The import statement.
+    str_base : str or None
+        The statement's module as a dotted path (resolved for a relative import), or ``None``
+        when it resolves to the layer root itself.
+    tuple_module_roots : tuple of pathlib.Path
+        Directories a dotted first-party module is looked up under.
+
+    Returns
+    -------
+    list of str
+        Dotted submodule paths; a symbol that is not a module yields nothing.
+    """
+    list_candidates = [
+        f"{str_base}.{cls_alias.name}" if str_base else cls_alias.name
+        for cls_alias in cls_node.names
+        if cls_alias.name != "*"
+    ]
+    return [
+        str_candidate
+        for str_candidate in list_candidates
+        if is_first_party_module(str_candidate, tuple_module_roots=tuple_module_roots)
+    ]
+
+
+def import_targets(
+    cls_tree: ast.Module, *, tuple_pkg_parts: tuple, tuple_module_roots: tuple
+) -> list[tuple[ast.AST, str]]:
+    """Return ``(node, dotted target)`` for every module an import statement reaches.
+
+    ``from chassis import db_schema`` reaches ``chassis.db_schema`` exactly as
+    ``import chassis.db_schema`` does, so both the statement's module and each from-list name
+    that is a known first-party submodule are targets, relative imports included.
+
+    Parameters
+    ----------
+    cls_tree : ast.Module
+        The parsed module.
+    tuple_pkg_parts : tuple of str
+        The file's package path below the layer root, for relative imports.
+    tuple_module_roots : tuple of pathlib.Path
+        Directories a dotted first-party module is looked up under.
+
+    Returns
+    -------
+    list of tuple
+        One entry per target; an unresolvable relative import yields nothing.
+    """
+    list_targets: list[tuple[ast.AST, str]] = []
+    for cls_node in ast.walk(cls_tree):
+        list_targets += [(cls_node, str_module) for str_module in imported_modules(cls_node)]
+        if not isinstance(cls_node, ast.ImportFrom):
+            continue
+        if cls_node.level:
+            str_base = relative_import_target(tuple_pkg_parts, cls_node=cls_node)
+            if str_base is not None:
+                list_targets.append((cls_node, str_base))
+            elif len(tuple_pkg_parts) < cls_node.level - 1:
+                continue
+        else:
+            str_base = cls_node.module
+        list_targets += [
+            (cls_node, str_sub)
+            for str_sub in from_import_submodules(
+                cls_node, str_base=str_base, tuple_module_roots=tuple_module_roots
+            )
+        ]
+    return list_targets
+
+
 def direction_problems(
     cls_tree: ast.Module,
     *,
@@ -578,6 +682,7 @@ def direction_problems(
     str_layer: str,
     dict_policy: dict,
     tuple_pkg_parts: tuple = (),
+    tuple_module_roots: tuple = (),
 ) -> list[str]:
     """Return every import that points the WRONG WAY between first-party layers.
 
@@ -606,7 +711,10 @@ def direction_problems(
         The parsed ``.layer-policy.yaml``.
     tuple_pkg_parts : tuple of str, optional
         The file's package path below the layer root, e.g. ``("utils", "sub")``. Needed only
-        to resolve RELATIVE imports for ``deny_layers``; empty leaves them unresolved.
+        to resolve RELATIVE imports for ``deny_layers``; empty means a file at the layer root.
+    tuple_module_roots : tuple of pathlib.Path, optional
+        Directories a dotted first-party module is looked up under, so ``from chassis import
+        db_schema`` is checked as ``chassis.db_schema`` when that submodule exists.
 
     Returns
     -------
@@ -618,25 +726,19 @@ def direction_problems(
     if not dict_deny:
         return []
 
-    list_targets = [
-        (cls_node, str_module)
-        for cls_node in ast.walk(cls_tree)
-        for str_module in imported_modules(cls_node)
-    ]
-    list_targets += [
-        (cls_node, str_target)
-        for cls_node in ast.walk(cls_tree)
-        if isinstance(cls_node, ast.ImportFrom) and cls_node.level
-        for str_target in [relative_import_target(tuple_pkg_parts, cls_node=cls_node)]
-        if str_target is not None
-    ]
-    return [
-        f"{path_file}:{cls_node.lineno}: layer '{str_layer}' must not import "
-        f"'{str_target}'. {dict_deny[str_key]}"
-        for cls_node, str_target in list_targets
+    list_targets = import_targets(
+        cls_tree, tuple_pkg_parts=tuple_pkg_parts, tuple_module_roots=tuple_module_roots
+    )
+    dict_found = {
+        (cls_node.lineno, cls_node.col_offset, str_key): (
+            f"{path_file}:{cls_node.lineno}: layer '{str_layer}' must not import "
+            f"'{str_target}'. {dict_deny[str_key]}"
+        )
+        for cls_node, str_target in reversed(list_targets)
         for str_key in [_matching_deny_key(str_target, dict_deny=dict_deny)]
         if str_key is not None
-    ]
+    }
+    return list(reversed(dict_found.values()))
 
 
 def imported_modules(cls_node: ast.AST) -> list[str]:
@@ -902,6 +1004,7 @@ def main() -> int:
     list_all: list[str] = []
     for path_file in list_modules:
         tuple_rel = path_file.relative_to(path_src).parts[int_prefix:]
+        tuple_prefix = path_file.relative_to(path_src).parts[:int_prefix]
         str_layer = resolve_layer(tuple_rel, dict_policy=dict_policy)
         if not _under_prefix_marker(
             path_file.relative_to(path_src).parts, dict_policy=dict_policy
@@ -914,6 +1017,7 @@ def main() -> int:
                 dict_policy=dict_policy,
                 set_first_party=set_first_party,
                 tuple_pkg_parts=tuple_rel[:-1],
+                tuple_module_roots=(path_src, path_src.joinpath(*tuple_prefix), path_root),
             )
         )
         list_all.extend(

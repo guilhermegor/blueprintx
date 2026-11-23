@@ -317,8 +317,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          str_source="$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '.source.branch + ":" + .source.path' 2>/dev/null || true)"
-          if [ "$str_source" = "gh-pages:/" ]; then
+          str_source="$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '.build_type + ":" + .source.branch + ":" + .source.path' 2>/dev/null || true)"
+          if [ "$str_source" = "legacy:gh-pages:/" ]; then
             if gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" >/dev/null 2>&1; then
               echo 'Requested a Pages build: pushes made with `GITHUB_TOKEN` do not trigger one.' >> "$GITHUB_STEP_SUMMARY"
             else
