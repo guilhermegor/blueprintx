@@ -349,10 +349,15 @@ test_definite_absence_leaves_protection_unapplied() {
     printf '#!/bin/bash\n[ "${1:-}" = verify ] && exit 0\n[ "${1:-}" = check_ruleset ] && exit 1\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
     chmod +x "$dir/bin/enable_repo_rules.sh"
     out="$(bash -c 'source "$1"; PROJECT_PATH="$2"; SKIP_BRANCH_PROTECTION=false; apply_branch_protection; echo "applied=$PROTECTION_APPLIED"' _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
-    if [[ "$out" == *"applied=false"* ]]; then
+    printf '#!/bin/bash\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
+    local out_present
+    out_present="$(bash -c 'source "$1"; PROJECT_PATH="$2"; SKIP_BRANCH_PROTECTION=false; apply_branch_protection; echo "applied=$PROTECTION_APPLIED"' _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
+    printf '#!/bin/bash\n[ "${1:-}" = verify ] && exit 0\n[ "${1:-}" = check_ruleset ] && exit 1\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
+    out="$(bash -c 'source "$1"; PROJECT_PATH="$2"; SKIP_BRANCH_PROTECTION=false; apply_branch_protection; echo "applied=$PROTECTION_APPLIED"' _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
+    if [[ "$out_present" == *"applied=true"* && "$out" == *"applied=false"* ]]; then
         echo "ok: a definite absence leaves PROTECTION_APPLIED false"
     else
-        echo "FAIL (definite absence): PROTECTION_APPLIED was not false: $out"
+        echo "FAIL (definite absence): PROTECTION_APPLIED present=$out_present absent=$out"
         int_failures=$((int_failures + 1))
     fi
 }
