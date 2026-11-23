@@ -343,6 +343,20 @@ EOF
     fi
 }
 
+test_definite_absence_leaves_protection_unapplied() {
+    local dir="$WORK_DIR/absent-ruleset" out
+    mkdir -p "$dir/bin"
+    printf '#!/bin/bash\n[ "${1:-}" = verify ] && exit 0\n[ "${1:-}" = check_ruleset ] && exit 1\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
+    chmod +x "$dir/bin/enable_repo_rules.sh"
+    out="$(bash -c 'source "$1"; PROJECT_PATH="$2"; SKIP_BRANCH_PROTECTION=false; apply_branch_protection; echo "applied=$PROTECTION_APPLIED"' _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
+    if [[ "$out" == *"applied=false"* ]]; then
+        echo "ok: a definite absence leaves PROTECTION_APPLIED false"
+    else
+        echo "FAIL (definite absence): PROTECTION_APPLIED was not false: $out"
+        int_failures=$((int_failures + 1))
+    fi
+}
+
 main() {
     test_unknown_tier
     test_supported_tiers_are_known
@@ -363,6 +377,7 @@ main() {
     test_copy_manifests_match_templates
     test_promotion_commit_skips_only_no_commit_to_branch
     test_mutations_on_offline_fixture
+    test_definite_absence_leaves_protection_unapplied
 
     if [ "$int_failures" -eq 0 ]; then
         echo "All promote_offline_to_online.sh refusal-path tests passed."

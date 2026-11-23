@@ -553,7 +553,7 @@ apply_branch_protection() {
         return 0
     fi
     (cd "$PROJECT_PATH" && bash bin/enable_repo_rules.sh) || true
-    if (cd "$PROJECT_PATH" && bash bin/enable_repo_rules.sh verify); then
+    if (cd "$PROJECT_PATH" && bash bin/enable_repo_rules.sh check_ruleset); then
         PROTECTION_APPLIED=true
     fi
 }
