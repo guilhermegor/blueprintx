@@ -741,7 +741,7 @@ Configuration files in this repository carry no comments, so the reasoning lives
   ceiling) compare against `merge-base(HEAD, main)` because they check a delta. `gate-integrity`
   treats a workflow job as moved when the same id is newly added to another top-level workflow
   file of the same tree with an identical job block bar a one-line hosted `runs-on`
-  (`ubuntu-latest`, `ubuntu-22.04` or `ubuntu-24.04`, optionally `-arm`, the same architecture
+  (`ubuntu-latest`, `ubuntu-22.04` or `ubuntu-24.04`, each optionally `-arm`, the same architecture
   on both sides), outside an `on: workflow_call` file, under
   the same top-level `on:`/`env:`/`permissions:` settings; a changed name, steps, `if:`,
   `env:` or trigger, a job gone from the tree, a move across trees (template to root) or

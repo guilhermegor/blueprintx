@@ -1358,7 +1358,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
       identical job block, so moving a job between files is a move, not a removal (#1311).
       Everything in the block, blank lines inside it included (they matter in a folded
       `run: >`), must match except a one-line `runs-on:` naming a hosted image
-      (`ubuntu-latest`, `ubuntu-22.04` or `ubuntu-24.04`, optionally `-arm`: the labels
+      (`ubuntu-latest`, `ubuntu-22.04` or `ubuntu-24.04`, each optionally `-arm`: the labels
       GitHub serves, so a retired or invented image is compared), which may change within
       one architecture but not vanish (swapping images still changes the preinstalled
       toolchain, which fails loudly rather than silently): an x86_64 job moved onto an `-arm` image is compared,

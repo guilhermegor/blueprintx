@@ -148,12 +148,13 @@ RE_GATE_SCRIPT = re.compile(r"(^|/)bin/(check|lint)_[^/]+\.(py|sh)$")
 RE_WORKFLOW_PATH = re.compile(r"\.github/workflows/.*\.ya?ml$")
 RE_TOP_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
 RE_MOVABLE_RUNNER = re.compile(
-    r"""^ {4}runs-on:\s*(["']?)ubuntu-(latest|(?:22|24)\.04(-arm)?)\1\s*(#.*)?$"""
+    r"""^ {4}runs-on:\s*(["']?)ubuntu-(latest|(?:22|24)\.04(-arm)?)\1(?:\s+#.*)?\s*$"""
 )
 STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu{}>"
 RE_JOB_ID_LINE = re.compile(r"""^ {2}(["']?)([A-Za-z0-9_-]+)\1\s*:""")
 RE_UNMOVABLE_JOB_LINE = re.compile(
-    r"""^ {2}(["']?)[\w-]+\1\s*:\s*[^\s#]|^ {4}["']?needs["']?\s*:"""
+    r"""^ {2}(["']?)[\w-]+\1\s*:\s*[^\s#]|^ {4,}["']?needs["']?\s*:"""
+    r"""|github\.workflow"""
     r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]"""
 )
 RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
@@ -557,7 +558,8 @@ def job_is_movable(tuple_sig: tuple) -> bool:
     -------
     bool
         False when the id line carries a value (a flow-style or aliased job), or the block
-        has a ``needs:`` key, quoted or not, or a YAML anchor, alias or merge key: what it
+        has a ``needs:`` key, quoted or not, or reads ``github.workflow`` (the workflow ``name:``
+        a move may change), or a YAML anchor, alias or merge key: what it
         depends on lives outside the block, so an identical text in another file can still
         skip or change the job there.
     """

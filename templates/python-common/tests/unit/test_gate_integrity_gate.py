@@ -1068,6 +1068,7 @@ def test_workflow_job_moved_under_other_settings_is_removed(
         "ubuntu-latest-arm",
         "ubuntu-20.04",
         "ubuntu-99.99",
+        "ubuntu-latest#x",
     ],
 )
 def test_workflow_job_moved_to_a_non_ubuntu_runner_is_removed(
@@ -1298,3 +1299,16 @@ def test_workflow_one_new_job_covers_one_removal_only(monkeypatch: pytest.Monkey
     )
 
     assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    "str_extra",
+    ["      needs: [x]\n", "    if: github.workflow == 'Scaffold checks'\n"],
+)
+def test_workflow_job_moved_with_a_hidden_dependency_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
+) -> None:
+    """A deeper-indented ``needs:`` or a ``github.workflow`` read is judged unmovable."""
+    str_job = _STR_MOVED_JOB + str_extra
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
