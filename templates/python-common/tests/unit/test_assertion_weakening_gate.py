@@ -935,7 +935,7 @@ def test_a_newly_added_pytest_skip_call_is_flagged() -> None:
     """Item 5 of #1258: ``pytest.skip()`` inside the body turns the test off too."""
     str_old = "def test_a():\n    assert f() == 1\n"
     str_new = "def test_a():\n    pytest.skip('later')\n    assert f() == 1\n"
-    assert "skip" in _sole_finding(str_old, str_new=str_new)
+    assert "skip()" in _sole_finding(str_old, str_new=str_new)
 
 
 def test_raises_keyword_form_is_not_read_as_broadened() -> None:
@@ -978,4 +978,25 @@ def test_moving_an_unconditional_skip_into_a_conditional_body_skip_is_not_flagge
     """``@skip`` -> ``if cond: pytest.skip()`` narrows the skip, like ``skip`` -> ``skipif``."""
     str_old = "@pytest.mark.skip\ndef test_a():\n    assert f() == 1\n"
     str_new = "def test_a():\n    if not DB:\n        pytest.skip()\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_changed_skipif_condition_is_flagged() -> None:
+    """``skipif(a)`` -> ``skipif(True)`` widens the skip; the condition is part of the label."""
+    str_old = "@pytest.mark.skipif(a)\ndef test_a():\n    assert f() == 1\n"
+    str_new = "@pytest.mark.skipif(True)\ndef test_a():\n    assert f() == 1\n"
+    assert "skipif:True" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_making_a_guarded_skip_unconditional_is_flagged() -> None:
+    """``if not DB: pytest.skip()`` -> bare ``pytest.skip()`` turns the test off outright."""
+    str_old = "def test_a():\n    if not DB:\n        pytest.skip()\n    assert f() == 1\n"
+    str_new = "def test_a():\n    pytest.skip()\n    assert f() == 1\n"
+    assert "skip()" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_skipif_to_a_guarded_body_skip_is_not_flagged() -> None:
+    """``@skipif(c)`` -> ``if c: pytest.skip()`` is the same condition moved into the body."""
+    str_old = "@pytest.mark.skipif(c)\ndef test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    if c:\n        pytest.skip()\n    assert f() == 1\n"
     assert _findings(str_old, str_new=str_new) == []

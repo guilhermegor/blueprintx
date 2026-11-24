@@ -1322,14 +1322,17 @@ def test_a_later_literal_sum_replaces_the_declared_names(tmp_path: Path) -> None
     [
         "from .defaults import TIMEOUT\nTIMEOUT = 30\n",
         "from ._impl import helper\nhelper = wrap(helper)\n",
+        "from .defaults import TIMEOUT\nTIMEOUT = DEFAULT_TIMEOUT\n",
+        "from .x import settings\nsettings = None\n",
     ],
 )
 def test_a_real_override_of_an_imported_name_is_still_public(
     tmp_path: Path, *, str_member: str
 ) -> None:
-    """Only a ``None``/bare-name fallback belongs to the dependency; a value is real API."""
+    """Only a fallback inside ``except``/``TYPE_CHECKING`` else is the dependency's name."""
     path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
-    assert len(_load_gate().check_package(path_init)) == 1
+    str_name = str_member.splitlines()[1].split()[0]
+    assert f"'{str_name}'" in _sole(_load_gate().check_package(path_init))
 
 
 def test_a_type_checking_import_with_an_else_fallback_is_not_public(tmp_path: Path) -> None:

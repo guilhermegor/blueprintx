@@ -260,7 +260,9 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     """
     list_body = _parse(path_module).body
     list_nodes = list(_module_statements(list_body, bool_runtime=True))
-    set_rebound = _imported(_module_statements(list_body)) & _placeholder_names(list_nodes)
+    set_rebound = _imported(_module_statements(list_body)) & _placeholder_names(
+        _module_statements(list_body)
+    )
     set_rebound -= _defs_and_classes(list_nodes)
     return {
         str_name
@@ -269,28 +271,51 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     }
 
 
+def _fallback_bodies(cls_node: ast.stmt) -> list[list[ast.stmt]]:
+    """Return the bodies where a dependency fallback lives.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement, possibly a block.
+
+    Returns
+    -------
+    list of list of ast.stmt
+        The ``except`` handler bodies of a ``try``, or the ``else`` of an ``if TYPE_CHECKING:``.
+    """
+    if isinstance(cls_node, ast.Try):
+        return [cls_handler.body for cls_handler in cls_node.handlers]
+    if _is_type_checking(cls_node) and isinstance(cls_node, ast.If):
+        return [cls_node.orelse]
+    return []
+
+
 def _placeholder_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
-    """Return the names assigned ``None`` or another bare name, the dependency-fallback shape.
+    """Return names assigned ``None`` or a bare name inside a fallback body.
 
     Parameters
     ----------
     list_nodes : iterable of ast.stmt
-        Statements to read.
+        Statements to read, blocks included.
 
     Returns
     -------
     set of str
-        Targets of ``x = None`` and ``x = Any``, never of ``x = 30`` or ``x = wrap(x)``.
+        Targets of ``x = None`` and ``x = Any`` in an ``except`` handler or ``TYPE_CHECKING``
+        else branch, never a top-level ``x = None`` or ``x = DEFAULT``.
     """
     return {
         cls_target.id
         for cls_node in list_nodes
-        if isinstance(cls_node, ast.Assign)
+        for list_body in _fallback_bodies(cls_node)
+        for cls_stmt in list_body
+        if isinstance(cls_stmt, ast.Assign)
         and (
-            isinstance(cls_node.value, ast.Name)
-            or (isinstance(cls_node.value, ast.Constant) and cls_node.value.value is None)
+            isinstance(cls_stmt.value, ast.Name)
+            or (isinstance(cls_stmt.value, ast.Constant) and cls_stmt.value.value is None)
         )
-        for cls_target in cls_node.targets
+        for cls_target in cls_stmt.targets
         if isinstance(cls_target, ast.Name)
     }
 

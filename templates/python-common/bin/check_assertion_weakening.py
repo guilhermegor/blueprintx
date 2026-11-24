@@ -538,18 +538,100 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
     Returns
     -------
     set of str
-        Subset of ``{"skip", "skipif", "xfail", "skip()"}`` present as ``@pytest.mark.<name>``
-        decorators, plus ``skip()`` for a ``pytest.skip(...)`` call in the body, a distinct label
-        so only the ``@skip`` decorator is exempt when narrowed.
+        Decorator labels (``skip``, ``xfail``, ``skipif:<condition>``), plus ``skip()`` for a
+        bare ``pytest.skip(...)`` statement and ``skip(if)`` for a guarded one.
     """
     set_out = set()
     for dec in node_fn.decorator_list:
         target = dec.func if isinstance(dec, ast.Call) else dec
         if isinstance(target, ast.Attribute) and target.attr in _SKIP_MARKERS:
-            set_out.add(target.attr)
-    if any(_is_pytest_skip_call(node) for node in ast.walk(node_fn)):
-        set_out.add("skip()")
+            set_out.add(_marker_label(dec, str_name=target.attr))
+    for node in ast.walk(node_fn):
+        if _is_pytest_skip_call(node):
+            set_out.add("skip()" if _is_top_level_call(node_fn, node=node) else "skip(if)")
     return set_out
+
+
+def _marker_label(dec: ast.expr, *, str_name: str) -> str:
+    """Return the label of a marker decorator; a ``skipif`` label carries its condition.
+
+    Parameters
+    ----------
+    dec : ast.expr
+        The decorator expression.
+    str_name : str
+        The marker name after ``pytest.mark.``.
+
+    Returns
+    -------
+    str
+        ``str_name``, or ``skipif:<condition source>`` so a changed condition is a change.
+    """
+    if str_name == "skipif" and isinstance(dec, ast.Call) and dec.args:
+        return f"skipif:{ast.unparse(dec.args[0])}"
+    return str_name
+
+
+def _is_top_level_call(node_fn: ast.FunctionDef, *, node: ast.AST) -> bool:
+    """Return whether a call is a bare statement of the function body, so it always runs.
+
+    Parameters
+    ----------
+    node_fn : ast.FunctionDef
+        The test function.
+    node : ast.AST
+        The call.
+
+    Returns
+    -------
+    bool
+        ``True`` when the call is an ``Expr`` statement directly in the body.
+    """
+    return any(
+        isinstance(cls_stmt, ast.Expr) and cls_stmt.value is node for cls_stmt in node_fn.body
+    )
+
+
+def _is_conditional_marker(str_marker: str) -> bool:
+    """Return whether a skip label is conditional (``skipif`` or an in-body guarded skip).
+
+    Parameters
+    ----------
+    str_marker : str
+        A label from ``_skip_or_xfail_markers``.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``skipif:...`` and ``skip(if)``.
+    """
+    return str_marker.startswith("skipif") or str_marker == "skip(if)"
+
+
+def _newly_marked(*, set_old: set, set_new: set) -> set:
+    """Return the labels newly added, minus conditional skips that narrow an old skip.
+
+    Parameters
+    ----------
+    set_old : set
+        Labels before the change.
+    set_new : set
+        Labels after the change.
+
+    Returns
+    -------
+    set
+        Newly added labels. A conditional label is exempt when the old test was unconditionally
+        skipped, or already carried a ``skipif`` (``@skipif(c)`` to ``if c: pytest.skip()``).
+    """
+    set_added = set_new - set_old
+    has_unconditional = bool(set_old & {"skip", "skip()"})
+    has_skipif = any(str_m.startswith("skipif") for str_m in set_old)
+    if has_unconditional:
+        return {str_m for str_m in set_added if not _is_conditional_marker(str_m)}
+    if has_skipif:
+        return set_added - {"skip(if)"}
+    return set_added
 
 
 def _is_pytest_skip_call(node: ast.AST) -> bool:
@@ -898,10 +980,9 @@ def _function_findings(
         Findings, in the order the underlying checks appear.
     """
     list_problems = []
-    set_old_markers = _skip_or_xfail_markers(node_old)
-    set_new_markers = _skip_or_xfail_markers(node_new) - set_old_markers
-    if "skip" in set_old_markers:
-        set_new_markers -= {"skipif", "skip()"}
+    set_new_markers = _newly_marked(
+        set_old=_skip_or_xfail_markers(node_old), set_new=_skip_or_xfail_markers(node_new)
+    )
     if set_new_markers:
         str_markers = "/".join(sorted(set_new_markers))
         list_problems.append(f"{str_path}: {str_name}() newly marked {str_markers}")
