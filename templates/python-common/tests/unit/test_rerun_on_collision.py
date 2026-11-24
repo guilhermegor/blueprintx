@@ -118,5 +118,6 @@ def test_update_failures_are_logged_and_the_run_still_exits_0(
     prs = [{"number": n, "draft": False, "user": {"type": "User"}} for n in (1, 2)]
     err = urllib.error.HTTPError("u", 422, "m", None, None)
     side = [{"files": [{"filename": "a.py"}]}, prs, [{"filename": "a.py"}], [{"filename": "a.py"}]]
-    monkeypatch.setattr(_MOD, "_call", mock.Mock(side_effect=[*side, err, ConnectionResetError()]))
-    assert _MOD.main() == 0
+    fake_call = mock.Mock(side_effect=[*side, err, ConnectionResetError()])
+    monkeypatch.setattr(_MOD, "_call", fake_call)
+    assert (_MOD.main(), fake_call.call_count) == (0, 6)

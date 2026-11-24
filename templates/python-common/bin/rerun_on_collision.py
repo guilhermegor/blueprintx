@@ -174,7 +174,7 @@ def main() -> int:
     """
     token = os.environ.get("RERUN_TOKEN")
     if not token:
-        print("RERUN_TOKEN is not set: skipping, an update pushed with GITHUB_TOKEN starts no CI")
+        print("::warning::RERUN_TOKEN is not set: skipping, a GITHUB_TOKEN update starts no CI")
         return 0
     repo = os.environ["GITHUB_REPOSITORY"]
     before, after = os.environ.get("BEFORE_SHA") or ZERO_SHA, os.environ["AFTER_SHA"]
