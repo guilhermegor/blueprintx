@@ -1379,7 +1379,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
       moves out of an `on: workflow_call` file: its callers `uses:` the source path, so the
       job would stop running. Two limits stay: a workflow that waits on the source through
       `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read,
-      and a column-0 comment inside `jobs:` is skipped rather than ending the parse.
+      and a column-0 comment inside `jobs:` is not compared.
       One new job excuses one removal. It also counts as removed when the id is gone from
       the whole tree, when it only reappears in a different tree, or when the target sits in
       a subdirectory (GitHub runs no workflow there). A job is never excused as a move when

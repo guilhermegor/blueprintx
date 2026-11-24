@@ -1303,7 +1303,11 @@ def test_workflow_one_new_job_covers_one_removal_only(monkeypatch: pytest.Monkey
 
 @pytest.mark.parametrize(
     "str_extra",
-    ["      needs: [x]\n", "    if: github.workflow == 'Scaffold checks'\n"],
+    [
+        "      needs: [x]\n",
+        "    if: github.workflow == 'Scaffold checks'\n",
+        "    env:\n      N: $GITHUB_WORKFLOW\n",
+    ],
 )
 def test_workflow_job_moved_with_a_hidden_dependency_is_removed(
     monkeypatch: pytest.MonkeyPatch, *, str_extra: str
@@ -1312,3 +1316,21 @@ def test_workflow_job_moved_with_a_hidden_dependency_is_removed(
     str_job = _STR_MOVED_JOB + str_extra
 
     assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_moved_from_a_file_deriving_env_from_the_workflow_name_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A header ``env:`` built from ``github.workflow`` changes value when the name does."""
+    str_header = "env:\n  WF: ${{ github.workflow }}\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"name: A\n{str_header}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"name: A\n{str_header}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"name: B\n{str_header}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1

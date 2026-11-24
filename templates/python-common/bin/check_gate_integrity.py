@@ -28,9 +28,9 @@ files a change touches — never off arbitrary source):
   or workflow file DELETED outright — the most complete form of every weakening above
 - a job key removed from a changed workflow's ``jobs:`` block, unless the same id reappears
   in a workflow file of the same tree, newly added there, with an identical job block bar a
-  hosted ``ubuntu-latest``/``ubuntu-22.04``/``ubuntu-24.04`` (optionally ``-arm``) ``runs-on``
-  of the same architecture, under the same top-level settings, outside a ``workflow_call``
-  file, with no ``needs:``, anchor, alias or flow-style id, and no word
+  hosted ``ubuntu-latest``, or ``ubuntu-22.04``/``ubuntu-24.04`` each optionally ``-arm``,
+  ``runs-on`` of the same architecture, under the same top-level settings, outside a
+  ``workflow_call`` file, with no ``needs:``, anchor, alias or flow-style id, and no word
   left in the source file that names it (a move)
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
@@ -148,15 +148,17 @@ RE_GATE_SCRIPT = re.compile(r"(^|/)bin/(check|lint)_[^/]+\.(py|sh)$")
 RE_WORKFLOW_PATH = re.compile(r"\.github/workflows/.*\.ya?ml$")
 RE_TOP_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
 RE_MOVABLE_RUNNER = re.compile(
-    r"""^ {4}runs-on:\s*(["']?)ubuntu-(latest|(?:22|24)\.04(-arm)?)\1(?:\s+#.*)?\s*$"""
+    r"""^ {4}runs-on:\s+(["']?)ubuntu-(latest|(?:22|24)\.04(-arm)?)\1(?:\s+#.*)?\s*$"""
 )
 STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu{}>"
 RE_JOB_ID_LINE = re.compile(r"""^ {2}(["']?)([A-Za-z0-9_-]+)\1\s*:""")
 RE_UNMOVABLE_JOB_LINE = re.compile(
     r"""^ {2}(["']?)[\w-]+\1\s*:\s*[^\s#]|^ {4,}["']?needs["']?\s*:"""
-    r"""|github\.workflow"""
-    r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]"""
+    r"""|github[._]workflow"""
+    r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]""",
+    re.IGNORECASE,
 )
+RE_WORKFLOW_NAME_READ = re.compile(r"github[._]workflow", re.IGNORECASE)
 RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
@@ -528,8 +530,8 @@ def job_signature(list_lines: list) -> tuple:
     -------
     tuple
         The block's lines, trailing blank lines dropped, with a one-line ``runs-on:`` naming a
-        hosted image (``ubuntu-latest``, ``ubuntu-22.04``/``ubuntu-24.04``, optionally ``-arm``)
-        replaced by
+        hosted image (``ubuntu-latest``, or ``ubuntu-22.04``/``ubuntu-24.04`` each optionally
+        ``-arm``) replaced by
         one placeholder per architecture, so a move may swap those images within x86_64 or
         within arm64 but not change architecture or drop ``runs-on``. Any other
         runner (Windows, macOS, a self-hosted or larger-runner label, a sequence) stays
@@ -673,7 +675,10 @@ def workflow_problems(
         list_candidates = dict_moved.get(str_id, [])
         tuple_pair = (tuple_header, dict_old[str_id])
         bool_referenced = bool(re.search(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])", str_new))
-        bool_reusable = any("workflow_call" in str_line for str_line in tuple_header)
+        bool_reusable = any(
+            "workflow_call" in str_line or RE_WORKFLOW_NAME_READ.search(str_line)
+            for str_line in tuple_header
+        )
         bool_movable = (
             job_is_movable(dict_old[str_id]) and not bool_referenced and not bool_reusable
         )
