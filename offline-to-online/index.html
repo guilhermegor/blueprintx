@@ -3198,7 +3198,7 @@ path, so an uncommitted edit of your own to one of those files (for example <cod
 indistinguishable from the promotion's and is committed with it — stash it first.</p>
 <p><strong>After the first push the project reads as online and a re-run does nothing.</strong> That includes the
 ruleset step: it is best-effort, and <code>enable_repo_rules.sh</code> exits 0 even when GitHub refuses, so the
-script then runs <code>enable_repo_rules.sh verify</code> and reports "NOT in place" unless that exits 0. If it
+script then runs <code>enable_repo_rules.sh verify</code> (the strict policy is off) and <code>enable_repo_rules.sh confirm_ruleset</code> (an active <code>pr-quality-gate</code> ruleset applies to the default branch), and reports "NOT in place" unless both exit 0. If it
 did not, run <code>bash bin/enable_repo_rules.sh</code> yourself with repo-admin rights. What it applies is the
 same <code>pr-quality-gate</code> ruleset an online scaffold gets: a pull request is required, force-push,
 deletion and merge commits on <code>main</code> are blocked, and the always-running checks listed in
