@@ -28,5 +28,5 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
           BASE_BRANCH: ${{ github.ref_name }}
-          RERUN_EXCLUDE_FILES: ${{ vars.RERUN_EXCLUDE_FILES || 'poetry.lock,CHANGELOG.md' }}
+          RERUN_EXCLUDE_FILES: ${{ vars.RERUN_EXCLUDE_FILES }}
         run: python bin/rerun_on_collision.py
