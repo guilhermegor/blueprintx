@@ -1,9 +1,9 @@
 """Should-fail witnesses for the collision selector (blueprintx#1286)."""
 
 import importlib.util
-import urllib.error
 from pathlib import Path
 from unittest import mock
+import urllib.error
 
 import pytest
 
