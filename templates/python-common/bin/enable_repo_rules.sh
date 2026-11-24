@@ -89,7 +89,7 @@ apply_ruleset() {
 	local str_repo="$1"
 	local str_id
 	local str_all
-	if ! str_all=$(gh api "repos/$str_repo/rulesets" --paginate --jq \
+	if ! str_all=$(gh api "repos/$str_repo/rulesets?per_page=100&includes_parents=false" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1); then
 		print_status "warning" "Could not READ rulesets from $str_repo (so none is created or updated): ${str_all:-no output from gh}"
 		return 0
@@ -123,15 +123,15 @@ apply_ruleset() {
 report_blocking_checks() {
 	local str_repo="$1" str_branch="$2"
 	local str_id str_enforcement str_live str_strict str_rules
-	if ! str_id="$(gh api "repos/$str_repo/rulesets" --paginate --jq \
+	if ! str_id="$(gh api "repos/$str_repo/rulesets?per_page=100&includes_parents=false" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
 		return 2
 	fi
 	read -r str_id str_enforcement <<<"$(printf '%s\n' "$str_id" | grep -m1 ' active$' || printf '%s\n' "$str_id" | head -1)"
 	if [ -z "$str_id" ]; then
-		print_status "warning" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — nothing blocks a merge"
-		return 2
+		print_status "info" "Ruleset '$RULESET_NAME' is NOT present on $str_repo — this ruleset blocks nothing (classic protection and other rulesets are reported separately)"
+		return 3
 	fi
 	if [ "$str_enforcement" != "active" ]; then
 		print_status "warning" "Ruleset '$RULESET_NAME' on $str_repo has enforcement '${str_enforcement:-unknown}', not 'active' — its rules block nothing"
@@ -174,20 +174,34 @@ assert_branch_protection_strict() {
 		'.required_status_checks.strict' 2>&1)"; then
 		if [[ "$str_strict" == *"Branch not protected"* && "$str_strict" == *"(HTTP 404)"* ]]; then
 			print_status "info" "No classic branch protection on $str_repo:$str_branch (classic protection is absent; the ruleset check reports its own result)"
-			return 2
+			return 3
 		fi
 		print_status "warning" "Could not READ classic branch protection on $str_repo:$str_branch (so strict is UNKNOWN, not confirmed off): ${str_strict:-no output from gh}"
 		return 2
 	fi
 	if [ "$str_strict" = "null" ] || [ -z "$str_strict" ]; then
-		print_status "warning" "$str_repo:$str_branch has no required_status_checks under classic branch protection — nothing to assert strict on"
-		return 2
+		print_status "info" "$str_repo:$str_branch has no required_status_checks under classic branch protection — no strict policy is enforced"
+		return 3
 	fi
 	if [ "$str_strict" != "false" ]; then
-		print_status "error" "required_status_checks.strict is NOT false on $str_repo:$str_branch (classic branch protection) — every merge forces every other PR to update to the base and re-run its CI (blueprintx#1283)"
+		print_status "error" "required_status_checks.strict is NOT false on $str_repo:$str_branch (classic branch protection) — every merge forces every other PR to update to the base and re-run its CI (blueprintx#1283). Remedy: gh api -X PATCH repos/$str_repo/branches/$str_branch/protection/required_status_checks -F strict=false (this script does not manage classic protection)"
 		return 1
 	fi
 	print_status "success" "required_status_checks.strict is off on $str_repo:$str_branch (classic branch protection, verified)"
+}
+
+assert_no_effective_strict() {
+	local str_repo="$1" str_branch="$2"
+	local str_flags
+	if ! str_flags="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --paginate --jq \
+		'.[] | select(.type == "required_status_checks") | .parameters.strict_required_status_checks_policy' 2>&1)"; then
+		print_status "error" "Could not READ the effective rules on $str_repo:$str_branch (so a strict policy from another or organization ruleset is UNKNOWN, not absent): ${str_flags:-no output from gh}"
+		return 1
+	fi
+	if grep -qx true <<<"$str_flags"; then
+		print_status "error" "Another ruleset (possibly organization-level) sets strict_required_status_checks_policy true on $str_repo:$str_branch — set it to false there (blueprintx#1300)"
+		return 1
+	fi
 }
 
 verify_strict_required_checks() {
@@ -211,9 +225,15 @@ verify_strict_required_checks() {
 	if [ "$int_ruleset_result" -eq 1 ] || [ "$int_protection_result" -eq 1 ]; then
 		return 1
 	fi
-	if [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ]; then
-		print_status "error" "Neither mechanism confirmed the strict policy is off on $str_repo (both absent or unreadable) — absence is not proof (blueprintx#1283)"
+	if [ "$int_ruleset_result" -eq 2 ] || [ "$int_protection_result" -eq 2 ] ||
+		{ [ "$int_ruleset_result" -ne 0 ] && [ "$int_protection_result" -ne 0 ] &&
+			{ [ "$int_ruleset_result" -ne 3 ] || [ "$int_protection_result" -ne 3 ]; }; }; then
+		print_status "error" "The strict policy is not confirmed off on $str_repo (a mechanism could not be read, or a ruleset is present but not blocking) — unreadable is not proof (blueprintx#1300)"
 		return 1
+	fi
+	assert_no_effective_strict "$str_repo" "$str_branch" || return 1
+	if [ "$int_ruleset_result" -eq 3 ] && [ "$int_protection_result" -eq 3 ]; then
+		print_status "success" "Ruleset '$RULESET_NAME' absent and no classic strict policy on $str_repo:$str_branch; no other rule enforces strict (definite absence, verified)"
 	fi
 	return 0
 }
@@ -258,7 +278,7 @@ check_ruleset_present() {
 		print_status "warning" "Could not resolve the repository (ruleset presence UNKNOWN, not confirmed)"
 		return 0
 	fi
-	if ! str_ids="$(gh api "repos/$str_repo/rulesets" --paginate --jq \
+	if ! str_ids="$(gh api "repos/$str_repo/rulesets?per_page=100" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\" and .enforcement == \"active\") | .id" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (presence UNKNOWN): ${str_ids:-no output from gh}"
 		return 0
@@ -266,6 +286,38 @@ check_ruleset_present() {
 	[ -n "$str_ids" ] && return 0
 	[ "${GITHUB_ACTIONS:-}" = "true" ] && echo "::warning title=Ruleset missing::'$RULESET_NAME' is not enabled on $str_repo, so merges are unprotected. A maintainer with admin rights must run 'poe enable_repo_rules'."
 	print_status "error" "Ruleset '$RULESET_NAME' is NOT present and active on $str_repo — run 'poe enable_repo_rules' (needs repo-admin)"
+	return 1
+}
+
+confirm_ruleset_active() {
+	require_gh || return 1
+	local str_repo str_branch str_ids str_id str_rules
+	str_repo="${GITHUB_REPOSITORY:-$(resolve_repo enable_repo_rules || true)}"
+	if [ -z "$str_repo" ]; then
+		print_status "warning" "Protection NOT confirmed: could not resolve the repository"
+		return 1
+	fi
+	if ! str_branch="$(gh api "repos/$str_repo" --jq .default_branch 2>&1)" || [ -z "$str_branch" ]; then
+		print_status "warning" "Protection NOT confirmed: could not resolve the default branch of $str_repo: ${str_branch:-no output from gh}"
+		return 1
+	fi
+	if ! str_ids="$(gh api "repos/$str_repo/rulesets?per_page=100" --paginate --jq \
+		".[] | select(.name == \"$RULESET_NAME\" and .enforcement == \"active\") | .id" 2>&1)"; then
+		print_status "warning" "Protection NOT confirmed: could not READ rulesets from $str_repo: ${str_ids:-no output from gh}"
+		return 1
+	fi
+	if [ -z "$str_ids" ]; then
+		print_status "warning" "Protection NOT confirmed: no active '$RULESET_NAME' ruleset on $str_repo"
+		return 1
+	fi
+	if ! str_rules="$(gh api "repos/$str_repo/rules/branches/$str_branch?per_page=100" --paginate --jq '.[].ruleset_id' 2>&1)"; then
+		print_status "warning" "Protection NOT confirmed: could not READ the rules applying to $str_repo:$str_branch: ${str_rules:-no output from gh}"
+		return 1
+	fi
+	for str_id in $str_ids; do
+		grep -qxF "$str_id" <<<"$str_rules" && return 0
+	done
+	print_status "warning" "Protection NOT confirmed: '$RULESET_NAME' is active on $str_repo but applies no rule to $str_repo:$str_branch"
 	return 1
 }
 
@@ -312,10 +364,18 @@ main() {
 		check_ruleset_present
 		return $?
 	fi
+	if [ "${1:-}" = "confirm_ruleset" ]; then
+		confirm_ruleset_active
+		return $?
+	fi
 	if [ "${1:-}" = "stranded" ]; then
 		require_gh || return 0
 		report_stranded_prs "${GITHUB_REPOSITORY:-$(resolve_repo enable_repo_rules || true)}"
 		return 0
+	fi
+	if [ $# -gt 0 ]; then
+		print_status "error" "Unknown argument '$1' (expected: verify, check_ruleset, confirm_ruleset, stranded, or none)"
+		return 2
 	fi
 
 	print_status "section" "Repository Rules & Merge Settings"

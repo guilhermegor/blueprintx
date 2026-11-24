@@ -476,11 +476,31 @@ test_ts_lib_answer_stream_order() {
     str_priv="$(ts_lib_stream git_remote=y create_repo=y)"
     str_full="$(ts_lib_stream review_bot_roster=y otel=n git_remote=y create_repo=y \
         repo_visibility=public kanban=y kanban_visibility=private protect_branch=y human_reviewers=y)"
-    if [ "$str_def" = "n,n,n" ] && [ "$str_remote" = "n,n,y,n" ] \
-        && [ "$str_priv" = "n,n,y,y,2,n,n" ] && [ "$str_full" = "y,n,y,y,1,y,3,y,y" ]; then
+    if [ "$str_def" = "y,n,n" ] && [ "$str_remote" = "y,n,y,n" ] \
+        && [ "$str_priv" = "y,n,y,y,2,n,n" ] && [ "$str_full" = "y,n,y,y,1,y,3,y,y" ]; then
         pass "ts-lib answer stream: roster, otel, git_remote, create_repo, visibility, kanban, protect, reviewers"
     else
         fail "ts-lib stream" "default=$str_def remote=$str_remote private=$str_priv full=$str_full"
+    fi
+}
+
+mvc_stream() {
+    local file
+    file="$(write_spec "stream-$1-$RANDOM" mvc-service-native-db "pipeline_intent=$1")"
+    env -u MULTI_PIPELINE_OPTIN ${2:+MULTI_PIPELINE_OPTIN="$2"} \
+        bash -c 'source "$1/bin/lib/common.sh"; source "$1/bin/lib/spec.sh"
+        spec_stdin_for_skeleton mvc-service-native-db "$2"' _ "$REPO_ROOT" "$file"
+}
+
+test_multi_pipeline_env_drops_the_pipeline_intent_answer() {
+    local str_asked str_env
+    str_asked="$(diff <(mvc_stream y) <(mvc_stream n) | sed -n '1s/[acd].*//p')"
+    str_asked="$(mvc_stream y | sed "${str_asked:-0}d" | paste -sd, -)"
+    str_env="$(mvc_stream y true | paste -sd, -)"
+    if [ -n "$str_env" ] && [ "$str_asked" = "$str_env" ]; then
+        pass "MULTI_PIPELINE_OPTIN=true drops the pipeline_intent answer the scaffold never asks"
+    else
+        fail "multi-pipeline stream" "asked=$str_asked env=$str_env"
     fi
 }
 
@@ -706,7 +726,7 @@ test_etcher_chromeos_answer_stream_and_prompt_order() {
     str_got="$(sed -n '/^main() {/,/^}/p' "$REPO_ROOT/bin/scaffold/etcher_chromeos.sh" \
         | grep -E '^    (prompt_default_os|scaffold_prompt_review_bot_roster|prompt_git_remote_setup)( |$)' \
         | awk '{print $1}' | paste -sd' ' -)"
-    if [ "$str_def" = "chromeos-flex,n,n" ] && [ "$str_full" = "fydeos,y,y,n" ] \
+    if [ "$str_def" = "chromeos-flex,y,n" ] && [ "$str_full" = "fydeos,y,y,n" ] \
         && [[ "$str_bad" == *"'default_os' must be chromeos-flex or fydeos"* ]] \
         && [ "$str_got" = "prompt_default_os scaffold_prompt_review_bot_roster prompt_git_remote_setup" ]; then
         pass "etcher-chromeos stream: default_os, roster, git_remote, create_repo; bad default_os refused"
@@ -777,10 +797,10 @@ test_ventoy_usb_answer_stream_order() {
     str_full="$(ventoy_stream include_windows=n include_android=no persistence_size_mb=2048 \
         review_bot_roster=y git_remote=y create_repo=y)"
     str_bad="$(ventoy_stream persistence_size_mb=1500)"
-    if [ "$str_def" = "y,y,4096,n,n" ] && [ "$str_remote" = "y,y,4096,n,y,n" ] \
+    if [ "$str_def" = "y,y,4096,y,n" ] && [ "$str_remote" = "y,y,4096,y,y,n" ] \
         && [ "$str_full" = "n,n,2048,y,y,y,2,n,n" ] \
         && [ "$(ventoy_stream git_remote=y create_repo=y repo_visibility=public kanban=y kanban_visibility=public \
-            protect_branch=n)" = "y,y,4096,n,y,y,1,y,2,n" ] \
+            protect_branch=n)" = "y,y,4096,y,y,y,1,y,2,n" ] \
         && [[ "$str_bad" == *"'persistence_size_mb' must be a multiple of 1024"* ]]; then
         pass "ventoy-usb stream: windows, android, size, roster, git_remote, create_repo; bad size refused"
     else
@@ -949,10 +969,7 @@ test_first_commit_works_without_a_git_identity() {
     fi
 }
 
-main() {
-    test_marker_step_uses_the_gates_page_set
-    test_marker_step_warns_when_the_gate_cannot_list_pages
-    test_marker_warning_names_the_real_gates_stdout_error
+run_answer_stream_tests() {
     test_ventoy_usb_answer_stream_order
     test_ventoy_usb_scaffold_asks_the_prompts_the_stream_assumes
     test_ventoy_usb_bad_persistence_size_stops_before_anything_is_created
@@ -961,8 +978,16 @@ main() {
     test_an_undefined_test_name_fails_the_runner
     test_a_missing_tool_is_not_reported_as_an_undefined_test
     test_ts_lib_answer_stream_order
+    test_multi_pipeline_env_drops_the_pipeline_intent_answer
     test_ts_lib_scaffold_asks_the_prompts_the_stream_assumes
     test_ts_lib_remote_keys_defaults
+}
+
+main() {
+    test_marker_step_uses_the_gates_page_set
+    test_marker_step_warns_when_the_gate_cannot_list_pages
+    test_marker_warning_names_the_real_gates_stdout_error
+    run_answer_stream_tests
     test_create_repo_runs_gh_with_the_chosen_visibility_and_protection
     test_kanban_yes_keeps_branch_protection_aligned
     test_kanban_lookup_skip_keeps_branch_protection_aligned
