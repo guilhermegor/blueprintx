@@ -1,7 +1,9 @@
 """Should-fail witnesses for the collision selector (blueprintx#1286)."""
 
 import importlib.util
+import urllib.error
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -100,5 +102,21 @@ def test_main_exits_1_when_the_merge_cannot_be_read(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("RERUN_TOKEN", "x")
     monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
     monkeypatch.setenv("AFTER_SHA", "b")
+    monkeypatch.delenv("BEFORE_SHA", raising=False)
     monkeypatch.setattr(_MOD, "_call", _answers(None))
     assert _MOD.main() == 1
+
+
+def test_update_failures_are_logged_and_the_run_still_exits_0(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An HTTP error on one update and a dropped connection on the next both leave exit 0."""
+    monkeypatch.setenv("RERUN_TOKEN", "x")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("AFTER_SHA", "b")
+    monkeypatch.delenv("BEFORE_SHA", raising=False)
+    prs = [{"number": n, "draft": False, "user": {"type": "User"}} for n in (1, 2)]
+    err = urllib.error.HTTPError("u", 422, "m", None, None)
+    side = [{"files": [{"filename": "a.py"}]}, prs, [{"filename": "a.py"}], [{"filename": "a.py"}]]
+    monkeypatch.setattr(_MOD, "_call", mock.Mock(side_effect=[*side, err, ConnectionResetError()]))
+    assert _MOD.main() == 0
