@@ -539,16 +539,45 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
     -------
     set of str
         Decorator labels (``skip``, ``xfail``, ``skipif:<condition>``), plus ``skip()`` for a
-        bare ``pytest.skip(...)`` statement and ``skip(if)`` for a guarded one.
+        ``pytest.skip(...)`` call outside any ``if`` and ``skip(if):<test>`` for a guarded one.
     """
     set_out = set()
     for dec in node_fn.decorator_list:
         target = dec.func if isinstance(dec, ast.Call) else dec
         if isinstance(target, ast.Attribute) and target.attr in _SKIP_MARKERS:
             set_out.add(_marker_label(dec, str_name=target.attr))
-    for node in ast.walk(node_fn):
+    set_out.update(_body_skip_labels(node_fn.body, str_guard=None))
+    return set_out
+
+
+def _body_skip_labels(list_body: list, *, str_guard: str | None) -> set:
+    """Return the labels of ``pytest.skip()`` calls in a body, nested defs and lambdas excluded.
+
+    Parameters
+    ----------
+    list_body : list
+        Statements (or expressions) to read.
+    str_guard : str or None
+        The source of the innermost enclosing ``if`` test, ``None`` when the call always runs.
+
+    Returns
+    -------
+    set
+        ``skip()`` for an unguarded call, ``skip(if):<guard>`` for a guarded one. ``with`` and
+        ``try`` wrappers are not guards.
+    """
+    set_out = set()
+    for node in list_body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ClassDef):
+            continue
         if _is_pytest_skip_call(node):
-            set_out.add("skip()" if _is_top_level_call(node_fn, node=node) else "skip(if)")
+            set_out.add("skip()" if str_guard is None else f"skip(if):{str_guard}")
+        if isinstance(node, ast.If):
+            str_test = ast.unparse(node.test)
+            set_out |= _body_skip_labels(node.body, str_guard=str_test)
+            set_out |= _body_skip_labels(node.orelse, str_guard=f"not ({str_test})")
+        else:
+            set_out |= _body_skip_labels(list(ast.iter_child_nodes(node)), str_guard=str_guard)
     return set_out
 
 
@@ -565,35 +594,16 @@ def _marker_label(dec: ast.expr, *, str_name: str) -> str:
     Returns
     -------
     str
-        ``str_name``, or ``skipif:<condition source>`` so a changed condition is a change.
+        ``str_name``, or ``skipif:<condition sources>`` so a changed condition is a change.
     """
-    if str_name == "skipif" and isinstance(dec, ast.Call) and dec.args:
-        return f"skipif:{ast.unparse(dec.args[0])}"
-    return str_name
+    if str_name != "skipif" or not isinstance(dec, ast.Call):
+        return str_name
+    list_cond = [*dec.args, *(kw.value for kw in dec.keywords if kw.arg == "condition")]
+    return "skipif:" + ",".join(ast.unparse(cond) for cond in list_cond)
 
 
-def _is_top_level_call(node_fn: ast.FunctionDef, *, node: ast.AST) -> bool:
-    """Return whether a call is a bare statement of the function body, so it always runs.
-
-    Parameters
-    ----------
-    node_fn : ast.FunctionDef
-        The test function.
-    node : ast.AST
-        The call.
-
-    Returns
-    -------
-    bool
-        ``True`` when the call is an ``Expr`` statement directly in the body.
-    """
-    return any(
-        isinstance(cls_stmt, ast.Expr) and cls_stmt.value is node for cls_stmt in node_fn.body
-    )
-
-
-def _is_conditional_marker(str_marker: str) -> bool:
-    """Return whether a skip label is conditional (``skipif`` or an in-body guarded skip).
+def _marker_condition(str_marker: str) -> str | None:
+    """Return the condition source of a conditional skip label, ``None`` for an unconditional one.
 
     Parameters
     ----------
@@ -602,14 +612,17 @@ def _is_conditional_marker(str_marker: str) -> bool:
 
     Returns
     -------
-    bool
-        ``True`` for ``skipif:...`` and ``skip(if)``.
+    str or None
+        The text after ``skipif:`` or ``skip(if):``.
     """
-    return str_marker.startswith("skipif") or str_marker == "skip(if)"
+    for str_prefix in ("skipif:", "skip(if):"):
+        if str_marker.startswith(str_prefix):
+            return str_marker[len(str_prefix) :]
+    return None
 
 
 def _newly_marked(*, set_old: set, set_new: set) -> set:
-    """Return the labels newly added, minus conditional skips that narrow an old skip.
+    """Return the labels newly added, minus restatements of what the old test already skipped.
 
     Parameters
     ----------
@@ -621,17 +634,24 @@ def _newly_marked(*, set_old: set, set_new: set) -> set:
     Returns
     -------
     set
-        Newly added labels. A conditional label is exempt when the old test was unconditionally
-        skipped, or already carried a ``skipif`` (``@skipif(c)`` to ``if c: pytest.skip()``).
+        Newly added labels. An unconditional ``skip``/``skip()`` is the same as the other
+        spelling; a conditional skip is exempt when the old test was unconditionally skipped, or
+        already skipped on the very same condition in the other form (``@skipif(c)`` and
+        ``if c: pytest.skip()``).
     """
     set_added = set_new - set_old
+    set_conds = {_marker_condition(str_m) for str_m in set_old} - {None}
     has_unconditional = bool(set_old & {"skip", "skip()"})
-    has_skipif = any(str_m.startswith("skipif") for str_m in set_old)
     if has_unconditional:
-        return {str_m for str_m in set_added if not _is_conditional_marker(str_m)}
-    if has_skipif:
-        return set_added - {"skip(if)"}
-    return set_added
+        set_added -= {"skip", "skip()"}
+    return {
+        str_m
+        for str_m in set_added
+        if not (
+            (cond := _marker_condition(str_m)) is not None
+            and (has_unconditional or cond in set_conds)
+        )
+    }
 
 
 def _is_pytest_skip_call(node: ast.AST) -> bool:

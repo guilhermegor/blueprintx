@@ -1357,3 +1357,26 @@ def test_a_non_literal_sum_after_a_literal_keeps_the_declared_names(tmp_path: Pa
         str_member="a = 1\n",
     )
     assert _load_gate().declared_all(path_init) == ["a"]
+
+
+def test_a_partly_literal_sum_keeps_the_known_names(tmp_path: Path) -> None:
+    """``__all__ = _a.__all__ + ['x']`` adds ``'x'`` and keeps what was declared."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = _a.__all__ + ['x']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a", "x"]
+
+
+def test_an_unrelated_handler_does_not_exempt_an_import(tmp_path: Path) -> None:
+    """The fallback must sit in the handler of the ``try`` that imported the name."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "from .defaults import TIMEOUT\n"
+            "try:\n    load()\nexcept KeyError:\n    TIMEOUT = None\n"
+        ),
+    )
+    assert "'TIMEOUT'" in _sole(_load_gate().check_package(path_init))

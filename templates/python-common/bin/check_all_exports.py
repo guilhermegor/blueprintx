@@ -92,7 +92,8 @@ def _module_statements(
 ) -> Iterator[ast.stmt]:
     """Yield the statements bound at module level, descending into ``if``/``try``/``with`` blocks.
 
-    A guarded import (``try:``, ``if TYPE_CHECKING:``, ``if sys.version_info``, ``with suppress``)
+    A guarded import (``try:``, ``if sys.version_info``, ``with suppress``, and
+    ``if TYPE_CHECKING:`` unless ``bool_runtime`` is set)
     still binds a module-level name; function and class bodies do not, so they are not entered.
 
     Parameters
@@ -169,6 +170,43 @@ def _all_target(cls_node: ast.AST) -> bool:
     return isinstance(cls_node, ast.Name) and cls_node.id == "__all__"
 
 
+def _sum_leaves(cls_value: ast.expr) -> list[ast.expr]:
+    """Return the operands of a ``+`` chain, the value itself when it is not one.
+
+    Parameters
+    ----------
+    cls_value : ast.expr
+        An expression.
+
+    Returns
+    -------
+    list of ast.expr
+        The non-``+`` operands, left to right.
+    """
+    if isinstance(cls_value, ast.BinOp) and isinstance(cls_value.op, ast.Add):
+        return [*_sum_leaves(cls_value.left), *_sum_leaves(cls_value.right)]
+    return [cls_value]
+
+
+def _is_partial_sum(cls_value: ast.expr | None) -> bool:
+    """Return whether a value is a ``+`` chain with an operand that is not a list or tuple literal.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``_a.__all__ + ['x']``; its readable names add to what is known.
+    """
+    if not (isinstance(cls_value, ast.BinOp) and isinstance(cls_value.op, ast.Add)):
+        return False
+    list_leaves = _sum_leaves(cls_value)
+    return any(not isinstance(cls_leaf, ast.List | ast.Tuple) for cls_leaf in list_leaves)
+
+
 def _extends(cls_node: ast.stmt) -> bool:
     """Return whether a statement adds to ``__all__`` rather than assigning it.
 
@@ -186,7 +224,11 @@ def _extends(cls_node: ast.stmt) -> bool:
     is_self_referential = isinstance(cls_node, ast.Assign | ast.AnnAssign) and any(
         _all_target(cls_sub) for cls_sub in ast.walk(cls_value or ast.Pass())
     )
-    return is_self_referential or not isinstance(cls_node, ast.Assign | ast.AnnAssign)
+    return (
+        is_self_referential
+        or _is_partial_sum(cls_value)
+        or not isinstance(cls_node, ast.Assign | ast.AnnAssign)
+    )
 
 
 def _literal_strings(cls_value: ast.expr | None) -> list[str]:
@@ -260,9 +302,7 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     """
     list_body = _parse(path_module).body
     list_nodes = list(_module_statements(list_body, bool_runtime=True))
-    set_rebound = _imported(_module_statements(list_body)) & _placeholder_names(
-        _module_statements(list_body)
-    )
+    set_rebound = _placeholder_names(_module_statements(list_body))
     set_rebound -= _defs_and_classes(list_nodes)
     return {
         str_name
@@ -271,8 +311,8 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     }
 
 
-def _fallback_bodies(cls_node: ast.stmt) -> list[list[ast.stmt]]:
-    """Return the bodies where a dependency fallback lives.
+def _fallback_pairs(cls_node: ast.stmt) -> list[tuple[list[ast.stmt], list[ast.stmt]]]:
+    """Return ``(guarded import body, fallback body)`` pairs of a block.
 
     Parameters
     ----------
@@ -281,18 +321,19 @@ def _fallback_bodies(cls_node: ast.stmt) -> list[list[ast.stmt]]:
 
     Returns
     -------
-    list of list of ast.stmt
-        The ``except`` handler bodies of a ``try``, or the ``else`` of an ``if TYPE_CHECKING:``.
+    list of tuple
+        ``(try body, handler body)`` per ``except``, or ``(if body, else body)`` for an
+        ``if TYPE_CHECKING:``.
     """
     if isinstance(cls_node, ast.Try):
-        return [cls_handler.body for cls_handler in cls_node.handlers]
-    if _is_type_checking(cls_node) and isinstance(cls_node, ast.If):
-        return [cls_node.orelse]
+        return [(cls_node.body, cls_handler.body) for cls_handler in cls_node.handlers]
+    if isinstance(cls_node, ast.If) and _is_type_checking(cls_node):
+        return [(cls_node.body, cls_node.orelse)]
     return []
 
 
 def _placeholder_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
-    """Return names assigned ``None`` or a bare name inside a fallback body.
+    """Return imported names that the same block rebinds to ``None`` or a bare name.
 
     Parameters
     ----------
@@ -302,13 +343,33 @@ def _placeholder_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
     Returns
     -------
     set of str
-        Targets of ``x = None`` and ``x = Any`` in an ``except`` handler or ``TYPE_CHECKING``
-        else branch, never a top-level ``x = None`` or ``x = DEFAULT``.
+        Names imported in a ``try`` body (or ``TYPE_CHECKING`` body) and assigned a placeholder
+        in its ``except`` handler (or ``else``). An import elsewhere, or an unrelated handler,
+        does not count.
+    """
+    set_out = set()
+    for cls_node in list_nodes:
+        for list_import_body, list_fallback in _fallback_pairs(cls_node):
+            set_imported = _imported(_module_statements(list_import_body))
+            set_out |= set_imported & _placeholder_assigns(list_fallback)
+    return set_out
+
+
+def _placeholder_assigns(list_body: list[ast.stmt]) -> set[str]:
+    """Return the names a body assigns ``None`` or a bare name.
+
+    Parameters
+    ----------
+    list_body : list of ast.stmt
+        A fallback body.
+
+    Returns
+    -------
+    set of str
+        Targets of ``x = None`` and ``x = Any``.
     """
     return {
         cls_target.id
-        for cls_node in list_nodes
-        for list_body in _fallback_bodies(cls_node)
         for cls_stmt in list_body
         if isinstance(cls_stmt, ast.Assign)
         and (

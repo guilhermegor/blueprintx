@@ -1000,3 +1000,54 @@ def test_skipif_to_a_guarded_body_skip_is_not_flagged() -> None:
     str_old = "@pytest.mark.skipif(c)\ndef test_a():\n    assert f() == 1\n"
     str_new = "def test_a():\n    if c:\n        pytest.skip()\n    assert f() == 1\n"
     assert _findings(str_old, str_new=str_new) == []
+
+
+_GUARDED = "def test_a():\n    if {cond}:\n        pytest.skip()\n    assert f() == 1\n"
+
+
+def test_widening_a_guarded_skip_condition_is_flagged() -> None:
+    """``if not DB: pytest.skip()`` -> ``if True: pytest.skip()`` skips everywhere."""
+    found = _sole_finding(
+        _GUARDED.format(cond="not DB"), str_new=_GUARDED.format(cond="True")
+    )
+    assert "skip(if):True" in found
+
+
+def test_a_second_guarded_skip_is_flagged() -> None:
+    """A new guarded skip with a new condition is a new way to turn the test off."""
+    str_new = (
+        "def test_a():\n    if not DB:\n        pytest.skip()\n"
+        "    if True:\n        pytest.skip()\n    assert f() == 1\n"
+    )
+    assert "skip(if):True" in _sole_finding(_GUARDED.format(cond="not DB"), str_new=str_new)
+
+
+def test_a_skip_wrapped_in_with_is_unconditional() -> None:
+    """``with ctx: pytest.skip()`` always runs; it is not a guard."""
+    str_new = "def test_a():\n    with ctx:\n        pytest.skip()\n    assert f() == 1\n"
+    assert "skip()" in _sole_finding(_GUARDED.format(cond="not DB"), str_new=str_new)
+
+
+def test_a_skip_in_a_nested_helper_is_not_a_skip() -> None:
+    """A ``pytest.skip()`` inside a closure that is never called does not turn the test off."""
+    str_new = "def test_a():\n    def helper():\n        pytest.skip()\n    assert f() == 1\n"
+    assert _findings("def test_a():\n    assert f() == 1\n", str_new=str_new) == []
+
+
+def test_skipif_to_a_body_skip_on_another_condition_is_flagged() -> None:
+    """Moving ``@skipif(a)`` into ``if b: pytest.skip()`` changes the condition."""
+    str_old = "@pytest.mark.skipif(a)\ndef test_a():\n    assert f() == 1\n"
+    assert "skip(if):b" in _sole_finding(str_old, str_new=_GUARDED.format(cond="b"))
+
+
+def test_a_guarded_body_skip_to_skipif_on_the_same_condition_is_not_flagged() -> None:
+    """``if c: pytest.skip()`` -> ``@skipif(c)`` is the same condition moved out."""
+    str_new = "@pytest.mark.skipif(c)\ndef test_a():\n    assert f() == 1\n"
+    assert _findings(_GUARDED.format(cond="c"), str_new=str_new) == []
+
+
+def test_an_unconditional_skip_in_the_other_spelling_is_not_flagged() -> None:
+    """``@skip`` -> bare ``pytest.skip()`` is the same unconditional skip."""
+    str_old = "@pytest.mark.skip\ndef test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    pytest.skip()\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
