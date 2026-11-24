@@ -162,6 +162,8 @@ RE_UNMOVABLE_JOB_LINE = re.compile(
 RE_WORKFLOW_NAME_READ = re.compile(r"github[._]workflow", re.IGNORECASE)
 RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
 STR_FLOW_CONCURRENCY = "{flow}"
+RE_CONCURRENCY_KEY = r"""["']?concurrency["']?\s*:"""
+RE_SKIPPED_HEADER_KEY = r"""(jobs|name|["']?concurrency["']?)\s*:"""
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
@@ -624,10 +626,33 @@ def workflow_header(str_text: str) -> tuple:
     bool_skip = False
     for str_line in str_text.splitlines():
         if RE_TOP_LEVEL_KEY.match(str_line):
-            bool_skip = bool(re.match(r"(jobs|name|concurrency)\s*:", str_line))
+            bool_skip = bool(re.match(RE_SKIPPED_HEADER_KEY, str_line))
         if not bool_skip and str_line.strip() and not str_line.lstrip().startswith("#"):
             list_kept.append(str_line)
     return tuple(list_kept)
+
+
+def concurrency_block(str_text: str) -> str:
+    """Return the non-blank, non-comment lines of the top-level ``concurrency:`` key.
+
+    Parameters
+    ----------
+    str_text : str
+        Full workflow YAML content.
+
+    Returns
+    -------
+    str
+        The lines joined by newlines, ``""`` when there is none. The key may be quoted.
+    """
+    list_kept = []
+    bool_in = False
+    for str_line in str_text.splitlines():
+        if RE_TOP_LEVEL_KEY.match(str_line):
+            bool_in = bool(re.match(RE_CONCURRENCY_KEY, str_line))
+        if bool_in and str_line.strip() and not str_line.lstrip().startswith("#"):
+            list_kept.append(str_line)
+    return "\n".join(list_kept)
 
 
 def workflow_concurrency(str_text: str) -> str:
@@ -644,35 +669,30 @@ def workflow_concurrency(str_text: str) -> str:
         The ``group:`` value (or the one-line ``concurrency: <group>`` form) with quotes
         stripped and ``github.workflow`` replaced by the workflow's ``name:``; ``""`` when
         there is no block, and ``STR_FLOW_CONCURRENCY`` for a flow-style ``{...}`` mapping, which
-        is not parsed and so never excuses a move. ``${{ }}`` bodies are compared without
-        whitespace or case. A block without a ``group:`` returns its raw text, so it still
+        is not parsed and so never excuses a move; a block-scalar group is treated alike.
+        ``${{ }}`` bodies are compared without whitespace, and the whole group without case
+        (GitHub treats group names as case-insensitive). A block without a ``group:`` returns its raw text, so it still
         compares equal only to an identical one. Only the group decides a collision, so
         ``cancel-in-progress:`` and comments do not matter; two unnamed workflows both read
         ``github.workflow`` as ``""`` and so compare equal, which errs toward reporting.
     """
-    list_kept = []
-    bool_in = False
-    for str_line in str_text.splitlines():
-        if RE_TOP_LEVEL_KEY.match(str_line):
-            bool_in = bool(re.match(r"concurrency\s*:", str_line))
-        if bool_in and str_line.strip() and not str_line.lstrip().startswith("#"):
-            list_kept.append(str_line)
-    str_block = "\n".join(list_kept)
-    if re.match(r"concurrency:\s*\{", str_block):
+    str_block = concurrency_block(str_text)
+    if re.match(rf"{RE_CONCURRENCY_KEY}\s*\{{", str_block):
         return STR_FLOW_CONCURRENCY
     str_block = re.sub(
         r"\$\{\{(.*?)\}\}",
-        lambda cls_m: "${{" + re.sub(r"\s+", "", cls_m.group(1)).lower() + "}}",
+        lambda cls_m: "${{" + re.sub(r"\s+", "", cls_m.group(1)) + "}}",
         str_block,
-    )
-    cls_group = re.search(r"(?m)(?:^|\s)group:[ \t]*([^#\n]+)", str_block) or re.match(
-        r"concurrency:\s*([^\s#][^#\n]*)", str_block
-    )
-    str_group = cls_group.group(1) if cls_group else str_block
+    ).lower()
+    cls_group = re.search(
+        r"""(?m)(?:^|\s)["']?group["']?:[ \t]*([^#\n]+)""", str_block
+    ) or re.match(rf"{RE_CONCURRENCY_KEY}[ \t]*([^\s#][^#\n]*)", str_block)
+    str_group = cls_group.group(1).strip() if cls_group else str_block
+    if str_group[:1] in {"|", ">"}:
+        return STR_FLOW_CONCURRENCY
     cls_name = re.search(r"(?m)^name:[ \t]*([^#\n]*)", str_text)
-    str_name = cls_name.group(1).strip().strip("\"'") if cls_name else ""
-    str_group = str_group.replace("${{github.workflow}}", str_name)
-    return str_group.strip().strip("\"'")
+    str_name = cls_name.group(1).strip().strip("\"'").lower() if cls_name else ""
+    return str_group.replace("${{github.workflow}}", str_name).strip().strip("\"'")
 
 
 def find_move(list_candidates: list, *, tuple_pair: tuple, str_concurrency: str) -> tuple:

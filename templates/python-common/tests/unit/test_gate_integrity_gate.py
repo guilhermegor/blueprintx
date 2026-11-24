@@ -1549,3 +1549,43 @@ def test_workflow_job_moved_into_an_unparsed_or_respelled_same_group_is_removed(
     )
 
     assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        ("concurrency:\n  group: CI-x\n", "concurrency:\n  group: ci-x\n"),
+        (
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            "name: ci\nconcurrency:\n  group: ${{ github.workflow }}\n",
+        ),
+        ('"concurrency":\n  group: ci\n', '"concurrency":\n  group: ci\n'),
+        ("concurrency:\n  group: ci\n", "'concurrency':\n  \"group\": ci\n"),
+        ("concurrency:\n  group: ci\n", "concurrency : { group: ci }\n"),
+        ("concurrency:\n  group: ci\n", "concurrency:\n  group: |\n    ci\n"),
+        (
+            "concurrency:\n  cancel-in-progress: true\n",
+            "concurrency:\n  cancel-in-progress: true\n",
+        ),
+    ],
+)
+def test_workflow_job_moved_into_a_group_the_parser_must_not_excuse_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """Case, quoted keys, a spaced flow key, block scalars and group-less blocks stay reported."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_into_flow_concurrency_from_none_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no source group there is nothing to collide with, flow style or not."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source="", str_target="concurrency: {group: ci}\n"
+    )
+
+    assert list_findings == []
