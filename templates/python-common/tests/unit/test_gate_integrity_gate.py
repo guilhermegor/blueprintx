@@ -1358,3 +1358,83 @@ def test_deletion_of_a_renamed_test_file_reports_when_its_code_changed() -> None
     assert list_findings == [
         "tests/unit/test_a.py: test file deleted while its code under test changed"
     ]
+
+
+@pytest.mark.parametrize(
+    ("str_from", "str_to"),
+    [
+        ("ubuntu-latest", "ubuntu-24.04"),
+        ("ubuntu-22.04-arm", "ubuntu-24.04-arm"),
+        ("ubuntu-latest", '"ubuntu-latest"'),
+        ("ubuntu-latest", "ubuntu-latest  # pinned"),
+    ],
+)
+def test_workflow_job_moved_between_hosted_runners_is_clean(
+    monkeypatch: pytest.MonkeyPatch, *, str_from: str, str_to: str
+) -> None:
+    """Hosted images of one architecture, quoted or commented, are the same runner."""
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB.replace("ubuntu-latest", str_to),
+        str_job_old=_STR_MOVED_JOB.replace("ubuntu-latest", str_from),
+    )
+
+    assert list_findings == []
+
+
+def _move_under_concurrency(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> list[str]:
+    """Move a job between workflows whose ``concurrency:`` blocks are given.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub ``gate.show``.
+    str_source : str
+        The source workflow's ``concurrency:`` block, or empty.
+    str_target : str
+        The target workflow's ``concurrency:`` block, or empty.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
+    return _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"{str_source}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"{str_source}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"{str_target}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+
+def test_workflow_job_moved_under_an_identical_concurrency_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two workflows sharing one group cancel or queue each other's required check."""
+    str_block = "concurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: true\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_block, str_target=str_block
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_a_different_concurrency_group_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A group of its own is the intended shape of a moved job's workflow."""
+    str_source = "concurrency:\n  group: ci-${{ github.ref }}\n"
+    str_target = "concurrency:\n  group: gate-${{ github.ref }}\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert list_findings == []

@@ -1360,8 +1360,10 @@ is shaped as it is; a generated project gets the behavior, not the history.
       `run: >`), must match except a one-line `runs-on:` naming a hosted image
       (`ubuntu-latest`, or `ubuntu-22.04`/`ubuntu-24.04` each optionally `-arm`: the labels
       GitHub serves, so a retired or invented image is compared), which may change within
-      one architecture but not vanish (swapping images still changes the preinstalled
-      toolchain, which fails loudly rather than silently): an x86_64 job moved onto an `-arm` image is compared,
+      one architecture but not vanish (an image swap can change the preinstalled
+      toolchain; a gate that skips when its tool is absent stays green unless the job sets a
+      `*_REQUIRED` variable, and that variable is part of the compared `env:`, so the risk
+      is accepted for the three images only): an x86_64 job moved onto an `-arm` image is compared,
       since an architecture-specific download in its steps would break.
       So a changed `name:` (a required status-check context keys on the name), `steps:`,
       `if:`, `continue-on-error`, `env:` or `uses:` makes it a removal. Any other runner
@@ -1374,8 +1376,13 @@ is shaped as it is; a generated project gets the behavior, not the history.
       move a removal too; it errs toward reporting, as does a comment between jobs, which
       the parser keeps with the job above it. The target
       file's top-level settings outside `jobs:` (`on:`, `env:`, `defaults:`,
-      `concurrency:`, `permissions:`) must equal the source file's, bar `name:` and
-      whole-line comments (a trailing `# x` on a setting is compared), so a move into a file triggered only by `workflow_dispatch` is a removal. A job never
+      `permissions:`, `run-name:`) must equal the source file's, bar `name:` and
+      whole-line comments (a trailing `# x` on a setting is compared), so a move into a file
+      triggered only by `workflow_dispatch` is a removal. A top-level setting or a job that reads
+      the workflow name (`github.workflow`, or `GITHUB_WORKFLOW` in a script, either case)
+      is never moved, since the move changes that name. The `concurrency:` block is judged
+      apart: it may change, but a non-empty block identical to the source's is a removal,
+      since two workflows in one group cancel or queue each other's required check. A job never
       moves out of an `on: workflow_call` file: its callers `uses:` the source path, so the
       job would stop running. Two limits stay: a workflow that waits on the source through
       `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read,

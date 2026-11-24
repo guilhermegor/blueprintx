@@ -29,8 +29,9 @@ files a change touches — never off arbitrary source):
 - a job key removed from a changed workflow's ``jobs:`` block, unless the same id reappears
   in a workflow file of the same tree, newly added there, with an identical job block bar a
   hosted ``ubuntu-latest``, or ``ubuntu-22.04``/``ubuntu-24.04`` each optionally ``-arm``,
-  ``runs-on`` of the same architecture, under the same top-level settings, outside a
-  ``workflow_call`` file, with no ``needs:``, anchor, alias or flow-style id, and no word
+  ``runs-on`` of the same architecture, under the same top-level settings (a different
+  ``concurrency:`` block, no read of ``github.workflow``), outside a ``workflow_call``
+  file, with no ``needs:``, anchor, alias or flow-style id, and no word
   left in the source file that names it (a move)
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
@@ -613,7 +614,8 @@ def workflow_header(str_text: str) -> tuple:
     Returns
     -------
     tuple of str
-        The non-blank lines of every top-level key other than ``jobs:`` and ``name:``, so a
+        The non-blank lines of every top-level key other than ``jobs:``, ``name:`` and
+        ``concurrency:`` (see ``workflow_concurrency``), so a
         job moved under a different ``on:``, ``env:``, ``defaults:``, ``concurrency:`` or
         ``permissions:`` does not compare equal.
     """
@@ -621,10 +623,63 @@ def workflow_header(str_text: str) -> tuple:
     bool_skip = False
     for str_line in str_text.splitlines():
         if RE_TOP_LEVEL_KEY.match(str_line):
-            bool_skip = bool(re.match(r"(jobs|name)\s*:", str_line))
+            bool_skip = bool(re.match(r"(jobs|name|concurrency)\s*:", str_line))
         if not bool_skip and str_line.strip() and not str_line.lstrip().startswith("#"):
             list_kept.append(str_line)
     return tuple(list_kept)
+
+
+def workflow_concurrency(str_text: str) -> tuple:
+    """Return the non-blank, non-comment lines of a workflow's top-level ``concurrency:`` block.
+
+    Parameters
+    ----------
+    str_text : str
+        Full workflow YAML content.
+
+    Returns
+    -------
+    tuple of str
+        The block's lines, empty when the workflow has none. A move may change it, but not
+        keep an identical one: two workflows with one group cancel or queue each other.
+    """
+    list_kept = []
+    bool_in = False
+    for str_line in str_text.splitlines():
+        if RE_TOP_LEVEL_KEY.match(str_line):
+            bool_in = bool(re.match(r"concurrency\s*:", str_line))
+        if bool_in and str_line.strip() and not str_line.lstrip().startswith("#"):
+            list_kept.append(str_line)
+    return tuple(list_kept)
+
+
+def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tuple) -> tuple:
+    """Return the first candidate that is a faithful destination, or ``()``.
+
+    Parameters
+    ----------
+    list_candidates : list of tuple
+        ``(workflow_header, job_signature, workflow_concurrency)`` of the new jobs.
+    tuple_pair : tuple
+        The removed job's ``(workflow_header, job_signature)``.
+    tuple_concurrency : tuple
+        The source workflow's ``workflow_concurrency``.
+
+    Returns
+    -------
+    tuple
+        The matching candidate; ``()`` when none matches or its concurrency block equals a
+        non-empty source one.
+    """
+    return next(
+        (
+            tuple_cand
+            for tuple_cand in list_candidates
+            if tuple_cand[:2] == tuple_pair
+            and (not tuple_concurrency or tuple_cand[2] != tuple_concurrency)
+        ),
+        (),
+    )
 
 
 def workflow_jobs(str_text: str) -> set:
@@ -657,10 +712,11 @@ def workflow_problems(
     str_shown : str
         Path to show in messages.
     dict_elsewhere : dict or None
-        Job id to the list of ``(workflow_header, job_signature)`` pairs of jobs newly added
-        to a workflow file of the same tree in this change. A removed job whose pair is in
-        that list is a move, and the match is consumed (the list is mutated) so one new job
-        covers one removal.
+        Job id to the list of ``(workflow_header, job_signature, workflow_concurrency)`` of
+        jobs newly added to a workflow file of the same tree in this change. A removed job
+        whose header and signature match one, with a concurrency block that differs from a
+        non-empty source one, is a move, and the match is consumed (the list is mutated) so
+        one new job covers one removal.
 
     Returns
     -------
@@ -669,21 +725,25 @@ def workflow_problems(
     """
     dict_old = workflow_job_details(str_old)
     tuple_header = workflow_header(str_old)
+    tuple_concurrency = workflow_concurrency(str_old)
     dict_moved = dict_elsewhere or {}
     list_problems = []
     for str_id in sorted(set(dict_old) - workflow_jobs(str_new)):
         list_candidates = dict_moved.get(str_id, [])
         tuple_pair = (tuple_header, dict_old[str_id])
         bool_referenced = bool(re.search(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])", str_new))
-        bool_reusable = any(
+        bool_context_bound = any(
             "workflow_call" in str_line or RE_WORKFLOW_NAME_READ.search(str_line)
             for str_line in tuple_header
         )
         bool_movable = (
-            job_is_movable(dict_old[str_id]) and not bool_referenced and not bool_reusable
+            job_is_movable(dict_old[str_id]) and not bool_referenced and not bool_context_bound
         )
-        if bool_movable and tuple_pair in list_candidates:
-            list_candidates.remove(tuple_pair)
+        tuple_found = find_move(
+            list_candidates, tuple_pair=tuple_pair, tuple_concurrency=tuple_concurrency
+        )
+        if bool_movable and tuple_found:
+            list_candidates.remove(tuple_found)
             continue
         list_problems.append(f"{str_shown}: workflow job {str_id!r} removed")
     return list_problems
@@ -718,13 +778,15 @@ def added_jobs(str_path: str, *, str_base: str) -> dict:
     Returns
     -------
     dict
-        Job id to ``(workflow_header, job_signature)`` for each job id new to this file.
+        Job id to ``(workflow_header, job_signature, workflow_concurrency)`` for each job id
+        new to this file.
     """
     str_text = show(STR_INDEX_REF, str_path=str_path) or ""
     set_known = workflow_jobs(show(str_base, str_path=str_path) or "")
     tuple_header = workflow_header(str_text)
+    tuple_concurrency = workflow_concurrency(str_text)
     return {
-        str_id: (tuple_header, tuple_sig)
+        str_id: (tuple_header, tuple_sig, tuple_concurrency)
         for str_id, tuple_sig in workflow_job_details(str_text).items()
         if str_id not in set_known
     }
