@@ -539,7 +539,8 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
     -------
     set of str
         Subset of ``{"skip", "skipif", "xfail", "skip()"}`` present as ``@pytest.mark.<name>``
-        decorators, with ``skip`` also set by a ``pytest.skip(...)`` call in the body.
+        decorators, plus ``skip()`` for a ``pytest.skip(...)`` call in the body, a distinct label
+        so only the ``@skip`` decorator is exempt when narrowed.
     """
     set_out = set()
     for dec in node_fn.decorator_list:

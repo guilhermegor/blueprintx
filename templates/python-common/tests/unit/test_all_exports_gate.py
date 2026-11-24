@@ -1315,3 +1315,42 @@ def test_a_later_literal_sum_replaces_the_declared_names(tmp_path: Path) -> None
         str_member="a = 1\n",
     )
     assert _load_gate().declared_all(path_init) == ["b", "c"]
+
+
+@pytest.mark.parametrize(
+    "str_member",
+    [
+        "from .defaults import TIMEOUT\nTIMEOUT = 30\n",
+        "from ._impl import helper\nhelper = wrap(helper)\n",
+    ],
+)
+def test_a_real_override_of_an_imported_name_is_still_public(
+    tmp_path: Path, *, str_member: str
+) -> None:
+    """Only a ``None``/bare-name fallback belongs to the dependency; a value is real API."""
+    path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
+    assert len(_load_gate().check_package(path_init)) == 1
+
+
+def test_a_type_checking_import_with_an_else_fallback_is_not_public(tmp_path: Path) -> None:
+    """``if TYPE_CHECKING: from x import N`` / ``else: N = Any`` is the dependency's name."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "from typing import TYPE_CHECKING, Any\n"
+            "if TYPE_CHECKING:\n    from numpy.typing import NDArray\n"
+            "else:\n    NDArray = Any\n"
+        ),
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_a_non_literal_sum_after_a_literal_keeps_the_declared_names(tmp_path: Path) -> None:
+    """``__all__ = _a.__all__ + _b.__all__`` is unreadable; it must not empty the list."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = _a.__all__ + _b.__all__\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]

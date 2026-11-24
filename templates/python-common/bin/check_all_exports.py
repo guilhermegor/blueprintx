@@ -142,8 +142,10 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
             continue
         if _extends(cls_node):
             list_names = [*(list_names or []), *list_found]
-        elif list_names is not None and not isinstance(
-            getattr(cls_node, "value", None), ast.List | ast.Tuple | ast.BinOp
+        elif (
+            list_names is not None
+            and not list_found
+            and not isinstance(getattr(cls_node, "value", None), ast.List | ast.Tuple)
         ):
             continue
         else:
@@ -256,12 +258,40 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     set of str
         Public names bound at module level by a def, class, or assignment.
     """
-    list_nodes = list(_module_statements(_parse(path_module).body, bool_runtime=True))
-    set_rebound = _imported(list_nodes) - _defs_and_classes(list_nodes)
+    list_body = _parse(path_module).body
+    list_nodes = list(_module_statements(list_body, bool_runtime=True))
+    set_rebound = _imported(_module_statements(list_body)) & _placeholder_names(list_nodes)
+    set_rebound -= _defs_and_classes(list_nodes)
     return {
         str_name
         for str_name in _definitions(list_nodes) - set_rebound
         if not str_name.startswith("_")
+    }
+
+
+def _placeholder_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
+    """Return the names assigned ``None`` or another bare name, the dependency-fallback shape.
+
+    Parameters
+    ----------
+    list_nodes : iterable of ast.stmt
+        Statements to read.
+
+    Returns
+    -------
+    set of str
+        Targets of ``x = None`` and ``x = Any``, never of ``x = 30`` or ``x = wrap(x)``.
+    """
+    return {
+        cls_target.id
+        for cls_node in list_nodes
+        if isinstance(cls_node, ast.Assign)
+        and (
+            isinstance(cls_node.value, ast.Name)
+            or (isinstance(cls_node.value, ast.Constant) and cls_node.value.value is None)
+        )
+        for cls_target in cls_node.targets
+        if isinstance(cls_target, ast.Name)
     }
 
 
