@@ -140,7 +140,7 @@ check that counts, because it requires an active `pr-quality-gate` ruleset that 
 the default branch. If the step reports "NOT in place", run `bash bin/enable_repo_rules.sh`
 yourself with repo-admin rights. What it applies is the
 same `pr-quality-gate` ruleset an online scaffold gets: a pull request is required, force-push,
-deletion and merge commits on `main` are blocked, and the always-running checks listed in
+deletion and merge commits on the default branch are blocked, and the always-running checks listed in
 `bin/required-checks.txt` are required.
 
 ## Verification
