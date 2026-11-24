@@ -1402,3 +1402,19 @@ def test_a_real_fallback_implementation_is_public(tmp_path: Path) -> None:
         ),
     )
     assert "'parse'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_fallback",
+    ["x: Any = None", "x = typing.Any"],
+)
+def test_annotated_and_attribute_placeholders_are_the_dependencys(
+    tmp_path: Path, *, str_fallback: str
+) -> None:
+    """``x: Any = None`` and ``x = typing.Any`` in the handler are placeholders too."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=f"try:\n    import x\nexcept ImportError:\n    {str_fallback}\n",
+    )
+    assert _load_gate().check_package(path_init) == []

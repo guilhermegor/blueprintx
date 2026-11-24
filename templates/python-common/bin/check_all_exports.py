@@ -355,6 +355,26 @@ def _placeholder_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
     return set_out
 
 
+def _is_placeholder(cls_value: ast.expr | None) -> bool:
+    """Return whether a value is ``None``, ``Any``, ``typing.Any`` or ``object``.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    bool
+        ``True`` for the stand-ins a missing dependency's name is bound to.
+    """
+    if isinstance(cls_value, ast.Constant):
+        return cls_value.value is None
+    if isinstance(cls_value, ast.Attribute):
+        return cls_value.attr == "Any"
+    return isinstance(cls_value, ast.Name) and cls_value.id in {"Any", "object"}
+
+
 def _placeholder_assigns(list_body: list[ast.stmt]) -> set[str]:
     """Return the names a body assigns ``None``, ``Any`` or ``object``.
 
@@ -366,19 +386,16 @@ def _placeholder_assigns(list_body: list[ast.stmt]) -> set[str]:
     Returns
     -------
     set of str
-        Targets of ``x = None``, ``x = Any`` and ``x = object``, never ``x = slow_parse``.
+        Targets of ``x = None``, ``x: Any = None``, ``x = typing.Any`` and ``x = object``,
+        never ``x = slow_parse``.
     """
-    return {
-        cls_target.id
-        for cls_stmt in list_body
-        if isinstance(cls_stmt, ast.Assign)
-        and (
-            (isinstance(cls_stmt.value, ast.Name) and cls_stmt.value.id in {"Any", "object"})
-            or (isinstance(cls_stmt.value, ast.Constant) and cls_stmt.value.value is None)
-        )
-        for cls_target in cls_stmt.targets
-        if isinstance(cls_target, ast.Name)
-    }
+    set_out = set()
+    for cls_stmt in list_body:
+        if isinstance(cls_stmt, ast.Assign) and _is_placeholder(cls_stmt.value):
+            set_out.update(c.id for c in cls_stmt.targets if isinstance(c, ast.Name))
+        if isinstance(cls_stmt, ast.AnnAssign) and _is_placeholder(cls_stmt.value):
+            set_out.update(c.id for c in [cls_stmt.target] if isinstance(c, ast.Name))
+    return set_out
 
 
 def _defs_and_classes(list_nodes: Iterable[ast.stmt]) -> set[str]:

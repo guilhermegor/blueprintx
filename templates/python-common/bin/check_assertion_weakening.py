@@ -80,6 +80,7 @@ RE_TEST_TREE = re.compile(r"(^|/)tests/")
 STR_INDEX_REF = ""
 
 _SKIP_MARKERS = frozenset({"skip", "skipif", "xfail"})
+_RUNTIME_OFF = frozenset({"skip", "importorskip", "xfail"})
 
 _INT_MIN_FIELDS = 2
 _MIN_EQ_ARGS = 2
@@ -563,7 +564,8 @@ def _body_skip_labels(list_body: list, *, tuple_guards: tuple[str, ...]) -> set:
     Returns
     -------
     set
-        ``skip()`` for an unguarded call, ``skip(if):<guards joined by "and">`` otherwise.
+        ``skip()`` (or ``importorskip()``/``xfail()``) for an unguarded call, ``skip(if):<guards>``
+        otherwise.
         ``with`` and a ``try`` body are not guards; an ``except`` handler, an ``else``, a loop
         or ``match`` body, an ``if``/conditional-expression branch are.
     """
@@ -571,27 +573,32 @@ def _body_skip_labels(list_body: list, *, tuple_guards: tuple[str, ...]) -> set:
     for node in list_body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ClassDef):
             continue
-        if _is_pytest_skip_call(node):
-            set_out.add(_skip_label(tuple_guards))
+        str_call = _skip_call_name(node)
+        if str_call:
+            set_out.add(_skip_label(tuple_guards, str_call=str_call))
         for list_child, tuple_inner in _guarded_children(node, tuple_guards=tuple_guards):
             set_out |= _body_skip_labels(list_child, tuple_guards=tuple_inner)
     return set_out
 
 
-def _skip_label(tuple_guards: tuple[str, ...]) -> str:
-    """Return ``skip()`` for no guards, else ``skip(if):`` and the guards joined by ``and``.
+def _skip_label(tuple_guards: tuple[str, ...], *, str_call: str) -> str:
+    """Return ``<call>()`` for no guards, else ``<call>(if):`` and the guards joined by ``and``.
 
     Parameters
     ----------
     tuple_guards : tuple of str
         The enclosing guards.
+    str_call : str
+        ``skip``, ``importorskip`` or ``xfail``.
 
     Returns
     -------
     str
         The label.
     """
-    return "skip(if):" + " and ".join(tuple_guards) if tuple_guards else "skip()"
+    if not tuple_guards:
+        return f"{str_call}()"
+    return f"{str_call}(if):" + " and ".join(tuple_guards)
 
 
 def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
@@ -623,7 +630,7 @@ def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
 
 
 def _guard_kind(node: ast.AST) -> str | None:
-    """Return a guard name for a node whose children may not run, ``None`` otherwise.
+    """Return a guard text for a node whose children may not run, ``None`` otherwise.
 
     Parameters
     ----------
@@ -633,17 +640,20 @@ def _guard_kind(node: ast.AST) -> str | None:
     Returns
     -------
     str or None
-        ``except`` for a handler, ``loop`` for ``for``/``while``, ``match`` for a case.
+        ``except <type>`` for a handler, ``for <iterable>`` or the ``while`` test (``while
+        True`` is no guard), ``match <pattern>`` for a case.
     """
     if isinstance(node, ast.ExceptHandler):
-        return "except"
-    if isinstance(node, ast.For | ast.AsyncFor | ast.While):
-        return "loop"
-    return "match" if isinstance(node, ast.match_case) else None
+        return "except " + (ast.unparse(node.type) if node.type else "")
+    if isinstance(node, ast.For | ast.AsyncFor):
+        return f"for {ast.unparse(node.iter)}"
+    if isinstance(node, ast.While):
+        return None if ast.unparse(node.test) == "True" else f"while {ast.unparse(node.test)}"
+    return f"match {ast.unparse(node.pattern)}" if isinstance(node, ast.match_case) else None
 
 
 def _marker_label(dec: ast.expr, *, str_name: str) -> str:
-    """Return the label of a marker decorator; a ``skipif`` label carries its condition.
+    """Return the label of a marker decorator, carrying its condition where it has one.
 
     Parameters
     ----------
@@ -655,16 +665,23 @@ def _marker_label(dec: ast.expr, *, str_name: str) -> str:
     Returns
     -------
     str
-        ``str_name``, or ``skipif:<condition sources>`` so a changed condition is a change.
+        ``skipif:<conditions joined by or>``; ``xfail:<conditions>`` plus ``;lax`` unless
+        ``strict=True``; otherwise the bare name.
     """
-    if str_name != "skipif" or not isinstance(dec, ast.Call):
-        return str_name
+    if str_name == "skip":
+        return "skip"
+    if not isinstance(dec, ast.Call):
+        return "xfail:;lax" if str_name == "xfail" else str_name
     list_cond = [*dec.args, *(kw.value for kw in dec.keywords if kw.arg == "condition")]
-    return "skipif:" + ",".join(ast.unparse(cond) for cond in list_cond)
+    str_cond = " or ".join(ast.unparse(cond) for cond in list_cond)
+    if str_name == "skipif":
+        return f"skipif:{str_cond}"
+    is_strict = any(kw.arg == "strict" and ast.unparse(kw.value) == "True" for kw in dec.keywords)
+    return f"xfail:{str_cond}" + ("" if is_strict else ";lax")
 
 
 def _marker_condition(str_marker: str) -> str | None:
-    """Return the condition source of a conditional skip label, ``None`` for an unconditional one.
+    """Return the condition source of a conditional skip label, ``None`` for any other label.
 
     Parameters
     ----------
@@ -674,12 +691,11 @@ def _marker_condition(str_marker: str) -> str | None:
     Returns
     -------
     str or None
-        The text after ``skipif:`` or ``skip(if):``.
+        The text after ``skipif:`` or ``<call>(if):``.
     """
-    for str_prefix in ("skipif:", "skip(if):"):
-        if str_marker.startswith(str_prefix):
-            return str_marker[len(str_prefix) :]
-    return None
+    str_head, str_sep, str_tail = str_marker.partition(":")
+    is_conditional = str_head == "skipif" or str_head.endswith("(if)")
+    return str_tail if str_sep and is_conditional else None
 
 
 def _newly_marked(*, set_old: set, set_new: set) -> set:
@@ -715,8 +731,8 @@ def _newly_marked(*, set_old: set, set_new: set) -> set:
     }
 
 
-def _is_pytest_skip_call(node: ast.AST) -> bool:
-    """Return whether a node is a ``pytest.skip(...)`` call.
+def _skip_call_name(node: ast.AST) -> str | None:
+    """Return ``skip``, ``importorskip`` or ``xfail`` for a call that turns a test off at run time.
 
     Parameters
     ----------
@@ -725,16 +741,15 @@ def _is_pytest_skip_call(node: ast.AST) -> bool:
 
     Returns
     -------
-    bool
-        ``True`` for the call form, which turns a test off at run time.
+    str or None
+        The function name for ``pytest.<name>(...)`` or a bare ``<name>(...)`` (the
+        ``from pytest import skip`` spelling), ``None`` for anything else.
     """
     func = node.func if isinstance(node, ast.Call) else None
-    return (
-        isinstance(func, ast.Attribute)
-        and func.attr == "skip"
-        and isinstance(func.value, ast.Name)
-        and func.value.id == "pytest"
-    )
+    if isinstance(func, ast.Name) and func.id in _RUNTIME_OFF:
+        return func.id
+    is_pytest = isinstance(func, ast.Attribute) and ast.unparse(func.value) == "pytest"
+    return func.attr if is_pytest and func.attr in _RUNTIME_OFF else None
 
 
 def _is_literal_ish(node: ast.expr) -> bool:

@@ -1074,3 +1074,58 @@ def test_nested_guards_are_all_kept() -> None:
     str_old = "def test_a():\n    if a:\n        if b:\n            pytest.skip()\n    assert 1\n"
     str_new = "@pytest.mark.skipif(b)\ndef test_a():\n    assert 1\n"
     assert "skipif:b" in _sole_finding(str_old, str_new=str_new)
+
+
+_EXC = (
+    "def test_a():\n    try:\n        {body}\n    except {exc}:\n"
+    "        pytest.skip()\n    assert 1\n"
+)
+
+
+def test_changing_the_except_type_of_a_skip_is_flagged() -> None:
+    """Skipping on ``AssertionError`` turns a failing test into a green one."""
+    str_old = _EXC.format(body="import db", exc="ImportError")
+    str_new = _EXC.format(body="import db", exc="AssertionError")
+    assert "except AssertionError" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_widening_the_except_type_of_a_skip_is_flagged() -> None:
+    """``except ImportError`` -> ``except Exception`` skips on far more."""
+    str_old = _EXC.format(body="import db", exc="ImportError")
+    str_new = _EXC.format(body="import db", exc="Exception")
+    assert "except Exception" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_always_true_loop_skip_is_unconditional() -> None:
+    """``while True: pytest.skip()`` always runs; it is not a guard."""
+    str_old = "def test_a():\n    while c:\n        pytest.skip()\n    assert 1\n"
+    str_new = "def test_a():\n    while True:\n        pytest.skip()\n    assert 1\n"
+    assert "skip()" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    ("str_call", "str_label"),
+    [
+        ("pytest.importorskip('db')", "importorskip()"),
+        ("pytest.xfail('no')", "xfail()"),
+        ("skip()", "skip()"),
+    ],
+)
+def test_other_ways_to_turn_a_test_off_are_flagged(*, str_call: str, str_label: str) -> None:
+    """``importorskip``, ``xfail()`` and the ``from pytest import skip`` form are skips too."""
+    str_new = f"def test_a():\n    {str_call}\n    assert f() == 1\n"
+    assert str_label in _sole_finding("def test_a():\n    assert f() == 1\n", str_new=str_new)
+
+
+def test_dropping_xfail_strict_is_flagged() -> None:
+    """A lax ``xfail`` lets an XPASS through; ``strict=True`` -> lax is a weakening."""
+    str_old = "@pytest.mark.xfail(strict=True)\ndef test_a():\n    assert f() == 1\n"
+    str_new = "@pytest.mark.xfail\ndef test_a():\n    assert f() == 1\n"
+    assert "xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_skipif_with_two_conditions_matches_an_or_guard() -> None:
+    """``skipif(a, b)`` skips when either holds, the same as ``if a or b: pytest.skip()``."""
+    str_old = "@pytest.mark.skipif(a, b)\ndef test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    if a or b:\n        pytest.skip()\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
