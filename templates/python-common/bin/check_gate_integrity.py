@@ -616,8 +616,8 @@ def workflow_header(str_text: str) -> tuple:
     tuple of str
         The non-blank lines of every top-level key other than ``jobs:``, ``name:`` and
         ``concurrency:`` (see ``workflow_concurrency``), so a
-        job moved under a different ``on:``, ``env:``, ``defaults:``, ``concurrency:`` or
-        ``permissions:`` does not compare equal.
+        job moved under a different ``on:``, ``env:``, ``defaults:`` or ``permissions:``
+        does not compare equal.
     """
     list_kept = []
     bool_skip = False
@@ -629,8 +629,8 @@ def workflow_header(str_text: str) -> tuple:
     return tuple(list_kept)
 
 
-def workflow_concurrency(str_text: str) -> tuple:
-    """Return the non-blank, non-comment lines of a workflow's top-level ``concurrency:`` block.
+def workflow_concurrency(str_text: str) -> str:
+    """Return the group a workflow's top-level ``concurrency:`` evaluates to, or ``""``.
 
     Parameters
     ----------
@@ -639,9 +639,13 @@ def workflow_concurrency(str_text: str) -> tuple:
 
     Returns
     -------
-    tuple of str
-        The block's lines, empty when the workflow has none. A move may change it, but not
-        keep an identical one: two workflows with one group cancel or queue each other.
+    str
+        The ``group:`` value (or the one-line ``concurrency: <group>`` form) with quotes
+        stripped and ``github.workflow`` replaced by the workflow's ``name:``; ``""`` when
+        there is no block. A block without a ``group:`` returns its raw text, so it still
+        compares equal only to an identical one. Only the group decides a collision, so
+        ``cancel-in-progress:`` and comments do not matter; two unnamed workflows both read
+        ``github.workflow`` as ``""`` and so compare equal, which errs toward reporting.
     """
     list_kept = []
     bool_in = False
@@ -650,10 +654,18 @@ def workflow_concurrency(str_text: str) -> tuple:
             bool_in = bool(re.match(r"concurrency\s*:", str_line))
         if bool_in and str_line.strip() and not str_line.lstrip().startswith("#"):
             list_kept.append(str_line)
-    return tuple(list_kept)
+    str_block = "\n".join(list_kept)
+    cls_group = re.search(r"(?m)(?:^|[\s{,])group:[ \t]*([^#\n]+)", str_block) or re.match(
+        r"concurrency:\s*([^{\s#][^#\n]*)", str_block
+    )
+    str_group = cls_group.group(1) if cls_group else str_block
+    cls_name = re.search(r"(?m)^name:[ \t]*([^#\n]*)", str_text)
+    str_name = cls_name.group(1).strip().strip("\"'") if cls_name else ""
+    str_group = re.sub(r"\$\{\{\s*github\.workflow\s*\}\}", lambda _: str_name, str_group)
+    return str_group.strip().strip("\"'")
 
 
-def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tuple) -> tuple:
+def find_move(list_candidates: list, *, tuple_pair: tuple, str_concurrency: str) -> tuple:
     """Return the first candidate that is a faithful destination, or ``()``.
 
     Parameters
@@ -662,13 +674,13 @@ def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tu
         ``(workflow_header, job_signature, workflow_concurrency)`` of the new jobs.
     tuple_pair : tuple
         The removed job's ``(workflow_header, job_signature)``.
-    tuple_concurrency : tuple
+    str_concurrency : str
         The source workflow's ``workflow_concurrency``.
 
     Returns
     -------
     tuple
-        The matching candidate; ``()`` when none matches or its concurrency block equals a
+        The matching candidate; ``()`` when none matches or its concurrency group equals a
         non-empty source one.
     """
     return next(
@@ -676,7 +688,7 @@ def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tu
             tuple_cand
             for tuple_cand in list_candidates
             if tuple_cand[:2] == tuple_pair
-            and (not tuple_concurrency or tuple_cand[2] != tuple_concurrency)
+            and (not str_concurrency or tuple_cand[2] != str_concurrency)
         ),
         (),
     )
@@ -714,7 +726,7 @@ def workflow_problems(
     dict_elsewhere : dict or None
         Job id to the list of ``(workflow_header, job_signature, workflow_concurrency)`` of
         jobs newly added to a workflow file of the same tree in this change. A removed job
-        whose header and signature match one, with a concurrency block that differs from a
+        whose header and signature match one, with a concurrency group that differs from a
         non-empty source one, is a move, and the match is consumed (the list is mutated) so
         one new job covers one removal.
 
@@ -725,7 +737,7 @@ def workflow_problems(
     """
     dict_old = workflow_job_details(str_old)
     tuple_header = workflow_header(str_old)
-    tuple_concurrency = workflow_concurrency(str_old)
+    str_concurrency = workflow_concurrency(str_old)
     dict_moved = dict_elsewhere or {}
     list_problems = []
     for str_id in sorted(set(dict_old) - workflow_jobs(str_new)):
@@ -740,7 +752,7 @@ def workflow_problems(
             job_is_movable(dict_old[str_id]) and not bool_referenced and not bool_context_bound
         )
         tuple_found = find_move(
-            list_candidates, tuple_pair=tuple_pair, tuple_concurrency=tuple_concurrency
+            list_candidates, tuple_pair=tuple_pair, str_concurrency=str_concurrency
         )
         if bool_movable and tuple_found:
             list_candidates.remove(tuple_found)
@@ -784,9 +796,9 @@ def added_jobs(str_path: str, *, str_base: str) -> dict:
     str_text = show(STR_INDEX_REF, str_path=str_path) or ""
     set_known = workflow_jobs(show(str_base, str_path=str_path) or "")
     tuple_header = workflow_header(str_text)
-    tuple_concurrency = workflow_concurrency(str_text)
+    str_concurrency = workflow_concurrency(str_text)
     return {
-        str_id: (tuple_header, tuple_sig, tuple_concurrency)
+        str_id: (tuple_header, tuple_sig, str_concurrency)
         for str_id, tuple_sig in workflow_job_details(str_text).items()
         if str_id not in set_known
     }
@@ -805,7 +817,7 @@ def jobs_by_tree(list_changed: list, *, str_base: str) -> dict:
     Returns
     -------
     dict
-        Tree prefix to ``{job id: [(header, signature), ...]}``. Only files directly under
+        Tree prefix to ``{job id: [(header, signature, group), ...]}``. Only files directly under
         ``.github/workflows/`` count, since GitHub runs no workflow in a subdirectory.
     """
     dict_trees: dict = {}

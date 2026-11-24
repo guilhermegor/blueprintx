@@ -1363,7 +1363,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
       one architecture but not vanish (an image swap can change the preinstalled
       toolchain; a gate that skips when its tool is absent stays green unless the job sets a
       `*_REQUIRED` variable, and that variable is part of the compared `env:`, so the risk
-      is accepted for the three images only): an x86_64 job moved onto an `-arm` image is compared,
+      is accepted for these five hosted images only): an x86_64 job moved onto an `-arm` image is compared,
       since an architecture-specific download in its steps would break.
       So a changed `name:` (a required status-check context keys on the name), `steps:`,
       `if:`, `continue-on-error`, `env:` or `uses:` makes it a removal. Any other runner

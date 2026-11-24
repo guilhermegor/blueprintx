@@ -1438,3 +1438,78 @@ def test_workflow_job_moved_under_a_different_concurrency_group_is_clean(
     )
 
     assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    "str_target",
+    [
+        "concurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: false\n",
+        "concurrency: ci-${{ github.ref }}\n",
+        "concurrency:\n  group: 'ci-${{ github.ref }}'  # same group\n",
+    ],
+)
+def test_workflow_job_moved_into_the_same_group_in_another_form_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_target: str
+) -> None:
+    """The group decides the collision, not the block's text."""
+    str_source = "concurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: true\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_a_workflow_keyed_group_is_clean_when_names_differ(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``github.workflow`` evaluates per workflow, so a verbatim copy is a group of its own."""
+    str_block = "concurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch,
+        str_source=f"name: CI\n{str_block}",
+        str_target=f"name: Gate\n{str_block}",
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_under_a_workflow_keyed_group_is_removed_when_names_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Equal names make the evaluated groups equal."""
+    str_block = "name: CI\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_block, str_target=str_block
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_from_a_concurrency_group_into_none_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target with no group cannot collide with the source's."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source="concurrency:\n  group: ci-${{ github.ref }}\n", str_target=""
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_with_identical_unindented_steps_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Witness that the non-indented sequence style compares equal when truly identical."""
+    str_job = "  gate-integrity:\n    name: G\n    steps:\n    - run: a\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert list_findings == []

@@ -744,7 +744,7 @@ Configuration files in this repository carry no comments, so the reasoning lives
   (`ubuntu-latest`, or `ubuntu-22.04`/`ubuntu-24.04` each optionally `-arm`, the same architecture
   on both sides), outside an `on: workflow_call` file, under
   the same top-level settings (`on:`, `env:`, `defaults:`, `permissions:`, `run-name:`, with
-  `name:` free), a `concurrency:` block that differs from the source's, and no read of
+  `name:` free), a `concurrency:` group that is not identical to a non-empty source group (`github.workflow` read as the `name:`), and no read of
   `github.workflow`/`GITHUB_WORKFLOW`; a changed name, steps, `if:`,
   `env:` or trigger, a job gone from the tree, a move across trees (template to root) or
   into a subdirectory is still a removal (#1311), and so is a flow-style job or any job with
