@@ -363,6 +363,19 @@ def read_or_skip(args: argparse.Namespace) -> tuple:
         return None, None, 0
 
 
+def check_run_producers(set_req: set, *, path_workflows: pathlib.Path) -> list:
+    """Fail each required check-run context that no workflow posts (it would block forever)."""
+    list_texts = [
+        f.read_text(encoding="utf-8")
+        for f in [*path_workflows.glob("*.yml"), *path_workflows.glob("*.yaml")]
+    ]
+    return [
+        f"required check-run '{n}' is posted by no workflow in {path_workflows}"
+        for n in CHECK_RUN_CONTEXTS
+        if n in set_req and not any(f'name="{n}"' in t for t in list_texts)
+    ]
+
+
 def check_required_list(args: argparse.Namespace) -> int:
     """Generated-project mode: every name in a plain list must be emitted unconditionally."""
     if yaml is None:
@@ -379,6 +392,7 @@ def check_required_list(args: argparse.Namespace) -> int:
             "external": {n: "" for n in CHECK_RUN_CONTEXTS if n in set_req},
         },
     )
+    list_err += check_run_producers(set_req, path_workflows=pathlib.Path(args.workflows))
     for str_msg in list_err:
         print(f"::error::{str_msg}", file=sys.stderr)
     print(f"findings={len(list_err)}")

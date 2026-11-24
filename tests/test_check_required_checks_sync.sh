@@ -276,6 +276,21 @@ list_mode "Dependent gate"
 check "list mode: a job needing a conditional job cannot be required" "$int_rc" 1 "Dependent gate" "$str_out"
 list_mode "Filtered gate"
 check "list mode: a branch-filtered job cannot be required" "$int_rc" 1 "Filtered gate" "$str_out"
+list_mode "Review threads answered"
+check "list mode: a required check-run no workflow posts is refused" "$int_rc" 1 "is posted by no workflow" "$str_out"
+cat >"$str_tmp/wf/poster.yml" <<'EOF'
+name: Poster
+on:
+  issue_comment:
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - run: post name="Review threads answered"
+EOF
+list_mode "Review threads answered"
+check "list mode: a workflow that posts the check-run satisfies it" "$int_rc" 0 "findings=0" "$str_out"
+
 for str_tier in python-common ts-common bash-cli; do
 	int_rc=0
 	str_out="$(python3 "$GATE" --workflows "$REPO_ROOT/templates/$str_tier/.github/workflows" \

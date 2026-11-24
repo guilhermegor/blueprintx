@@ -15,7 +15,7 @@ permissions:
   checks: write
 
 concurrency:
-  group: review-gate-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: review-gate-${{ (github.event.pull_request.head.repo.fork && startsWith(github.event_name, 'pull_request_review') && github.run_id) || github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -47,6 +47,18 @@ jobs:
             echo "No .github/.review-bots.yaml — the gate fails closed; add one, or set adopted: false (the base branch must declare it too)."
           fi
 
+      - name: Read the PR head before the gate evaluates it
+        id: head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
+          echo "sha=$str_head" >>"$GITHUB_OUTPUT"
+
       - name: Every review thread is answered and resolved
         id: gate
         continue-on-error: true
@@ -65,6 +77,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           GATE_OUTCOME: ${{ steps.gate.outcome }}
+          EVALUATED_HEAD: ${{ steps.head.outputs.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -74,11 +87,9 @@ jobs:
             str_conclusion=success
             str_title="Every review thread is answered and resolved"
           fi
-          str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
-          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
           gh api "repos/${GITHUB_REPOSITORY}/check-runs" -X POST \
             -f name="Review threads answered" \
-            -f head_sha="$str_head" \
+            -f head_sha="$EVALUATED_HEAD" \
             -f status=completed \
             -f conclusion="$str_conclusion" \
             -f details_url="$RUN_URL" \

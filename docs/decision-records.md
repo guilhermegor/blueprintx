@@ -46,6 +46,13 @@ seeds `REQUIRED_CHECKS` with its name) inline; the changelog half moves here.
 > `REQUIRED_CHECKS` in bin/enable_repo_rules.sh shipped EMPTY, so a generated project ran its CI
 > and blocked nothing. Measured upstream: a PR merged with 32 of 47 checks passed.
 
+> UPDATE 2026-11-23 (#1249, #1280). The three review-thread workflows now post the required
+> context as an explicit check-run from a step, so the newest run always publishes the verdict and
+> a cancelled or queued older run no longer strands an `Expected` context. They therefore carry a
+> per-PR `concurrency:` group with `cancel-in-progress: true`, which stops a slower run from
+> posting a stale success last. A read-only `pull_request_review*` run from a fork gets its own
+> group (its `run_id`), so it cannot cancel a run that can write.
+
 **Not yet applied** to `.github/workflows/review_threads.yml` (root) — that file
 carries the same block (dated text: "SUPERSEDED 2026-08-17 (#173, PR #185)") plus
 two more below, and is held by PRs #491/#492 as of this writing. Follow-up once

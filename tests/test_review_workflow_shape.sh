@@ -42,7 +42,41 @@ gate_lacks() { ! grep -qE "$2" "$1"; }
 gate_job_name_differs() { ! grep -qE '^    name: Review threads answered$' "$1"; }
 gate_posts_unless_cancelled() { grep -qE '^        if: \$\{\{ !cancelled\(\) \}\}$' "$1" && grep -q 'check-runs' "$1" && grep -q 'conclusion="\$str_conclusion"' "$1"; }
 gate_serialized_per_pr() { grep -qE '^  cancel-in-progress: true$' "$1" && grep -qE '^  group: review-gate-' "$1"; }
-gate_checkout_is_base() { grep -qE 'ref: \$\{\{ github\.event\.repository\.default_branch \}\}$' "$1"; }
+gate_checkout_is_base() {
+	local int_all int_base
+	int_all=$(grep -cE 'uses: actions/checkout@' "$1")
+	int_base=$(grep -cE '^ +ref: \$\{\{ github\.event\.repository\.default_branch \}\}$' "$1")
+	[ "$int_all" -ge 1 ] && [ "$int_all" -eq "$int_base" ]
+}
+gate_run_blocks_clean() {
+	awk '
+		/^ +run: [|>]/ { inrun = 1; match($0, /^ +/); ind = RLENGTH; next }
+		/^ +run: / { if ($0 ~ BAD) bad = 1; inrun = 0; next }
+		inrun { match($0, /^ */); if (RLENGTH <= ind && $0 !~ /^ *$/) inrun = 0; else if ($0 ~ BAD) bad = 1 }
+		END { exit bad }
+	' BAD='\$\{\{[^}]*(comment\.body|issue\.(title|body)|pull_request\.(title|body)|review\.body|head_ref|head\.ref|label\.name)' "$1"
+}
+gate_run_blocks_reject_injection() {
+	local str_dir rc=0
+	str_dir=$(mktemp -d)
+	printf 'jobs:\n  j:\n    steps:\n      - name: x\n        run: |\n          echo "${{ github.event.comment.body }}"\n' >"$str_dir/bad.yml"
+	printf 'jobs:\n  j:\n    steps:\n      - name: x\n        env:\n          B: ${{ github.event.comment.body }}\n        run: echo "$B"\n' >"$str_dir/ok.yml"
+	gate_run_blocks_clean "$str_dir/bad.yml" && rc=1
+	gate_run_blocks_clean "$str_dir/ok.yml" || rc=1
+	rm -rf "$str_dir"
+	return $rc
+}
+gate_checkout_rejects_second_head() {
+	local str_dir rc=0
+	str_dir=$(mktemp -d)
+	{
+		printf '      - uses: actions/checkout@x\n        with:\n          ref: ${{ github.event.repository.default_branch }}\n'
+		printf "      - uses: actions/checkout@x\n        with:\n          ref: \${{ github.event.pull_request['head']['sha'] }}\n"
+	} >"$str_dir/two.yml"
+	gate_checkout_is_base "$str_dir/two.yml" && rc=1
+	rm -rf "$str_dir"
+	return $rc
+}
 
 for gate in "${GATES[@]}"; do
 	label="${gate#"$REPO_ROOT"/}"
@@ -50,12 +84,14 @@ for gate in "${GATES[@]}"; do
 	check "$label keeps no plain pull_request event" gate_lacks "$gate" '^  pull_request:$'
 	check "$label re-runs on edited" gate_has "$gate" 'types: \[opened, synchronize, reopened, edited'
 	check "$label checks out the base, never the PR head" gate_checkout_is_base "$gate"
-	check "$label never reads a PR head ref" gate_lacks "$gate" 'pull_request\.head\.(ref|sha)|head_ref|refs/pull'
+	check "$label never reads a PR head ref" gate_lacks "$gate" 'pull_request\.head\.(ref|sha)|pull_request\[.head|head_ref|refs/pull'
 	check "$label holds checks: write" gate_has "$gate" '^  checks: write$'
 	check "$label keeps actions: read for the pusher lookup" gate_has "$gate" '^  actions: read$'
 	check "$label names its job apart from the required context" gate_job_name_differs "$gate"
 	check "$label posts the result as a check-run even after a failure, not after a cancel" gate_posts_unless_cancelled "$gate"
 	check "$label serializes runs per PR" gate_serialized_per_pr "$gate"
+	check "$label interpolates no author-controlled event field into a run: block" gate_run_blocks_clean "$gate"
+	check "$label publishes against the head read before the gate ran" gate_has "$gate" 'head_sha="\$EVALUATED_HEAD"'
 done
 GATE_WF="$REPO_ROOT/.github/workflows/review_threads.yml"
 gate_step() {
