@@ -144,7 +144,11 @@ RE_CI_SCRIPT = re.compile(r"(^|/)bin/ci/[^/]+$")
 RE_GATE_SCRIPT = re.compile(r"(^|/)bin/(check|lint)_[^/]+\.(py|sh)$")
 RE_WORKFLOW_PATH = re.compile(r"\.github/workflows/.*\.ya?ml$")
 RE_TOP_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
-RE_MOVABLE_RUNNER = re.compile(r"""^ {4}runs-on:\s*(["']?)ubuntu-[\w.-]+\1\s*(#.*)?$""")
+RE_MOVABLE_RUNNER = re.compile(
+    r"""^ {4}runs-on:\s*(["']?)ubuntu-(latest|\d\d\.\d\d)(-arm)?\1\s*(#.*)?$"""
+)
+STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu>"
+RE_JOB_ID_LINE = re.compile(r"""^ {2}(["']?)([A-Za-z0-9_-]+)\1\s*:""")
 RE_UNMOVABLE_JOB_LINE = re.compile(
     r"""^ {2}[\w-]+:\s*[^\s#]|^ {4}["']?needs["']?\s*:|<<\s*:|(?:^|[\s\[{,])[&*][\w-]"""
 )
@@ -508,7 +512,7 @@ def precommit_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
 
 
 def job_signature(list_lines: list) -> tuple:
-    """Return a job block's comparable lines: everything bar a GitHub-hosted Ubuntu runner.
+    """Return a job block's comparable lines, with a GitHub-hosted Ubuntu runner normalised.
 
     Parameters
     ----------
@@ -518,11 +522,19 @@ def job_signature(list_lines: list) -> tuple:
     Returns
     -------
     tuple
-        The block's lines without a one-line ``runs-on: ubuntu-*`` key. Any other runner (a
-        Windows or macOS image, a self-hosted label, a multi-line sequence) stays compared,
-        since it can change the shell or leave the job queued forever.
+        The block's lines, trailing blank lines dropped, with a one-line ``runs-on:`` naming a
+        hosted image (``ubuntu-latest``, ``ubuntu-NN.NN``, optionally ``-arm``) replaced by
+        one placeholder, so a move may swap those images but not drop ``runs-on``. Any other
+        runner (Windows, macOS, a self-hosted or larger-runner label, a sequence) stays
+        compared, since it can change the shell or leave the job queued forever.
     """
-    return tuple(str_line for str_line in list_lines if not RE_MOVABLE_RUNNER.match(str_line))
+    list_kept = [
+        STR_HOSTED_RUNNER if RE_MOVABLE_RUNNER.match(str_line) else str_line
+        for str_line in list_lines
+    ]
+    while list_kept and not list_kept[-1].strip():
+        list_kept.pop()
+    return tuple(list_kept)
 
 
 def job_is_movable(tuple_sig: tuple) -> bool:
@@ -565,13 +577,11 @@ def workflow_job_details(str_text: str) -> dict:
     dict_lines: dict = {}
     str_id = ""
     for str_line in str_text[cls_match.end() :].splitlines():
-        if not str_line.strip():
-            continue
-        if not str_line.startswith(" "):
+        if str_line.strip() and not str_line.startswith(" "):
             break
-        cls_job = re.match(r"^ {2}([A-Za-z0-9_-]+):", str_line)
+        cls_job = RE_JOB_ID_LINE.match(str_line)
         if cls_job:
-            str_id = cls_job.group(1)
+            str_id = cls_job.group(2)
             dict_lines[str_id] = [str_line]
         elif str_id:
             dict_lines[str_id].append(str_line)
@@ -650,7 +660,9 @@ def workflow_problems(
     for str_id in sorted(set(dict_old) - workflow_jobs(str_new)):
         list_candidates = dict_moved.get(str_id, [])
         tuple_pair = (tuple_header, dict_old[str_id])
-        if job_is_movable(dict_old[str_id]) and tuple_pair in list_candidates:
+        bool_referenced = re.search(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])", str_new)
+        bool_movable = job_is_movable(dict_old[str_id]) and not bool_referenced
+        if bool_movable and tuple_pair in list_candidates:
             list_candidates.remove(tuple_pair)
             continue
         list_problems.append(f"{str_shown}: workflow job {str_id!r} removed")
@@ -719,8 +731,8 @@ def jobs_by_tree(list_changed: list, *, str_base: str) -> dict:
         if str_status == "D" or not RE_TOP_WORKFLOW_PATH.search(str_path):
             continue
         dict_tree = dict_trees.setdefault(workflow_tree(str_path), {})
-        for str_id, tuple_sig in added_jobs(str_path, str_base=str_base).items():
-            dict_tree.setdefault(str_id, []).append(tuple_sig)
+        for str_id, tuple_pair in added_jobs(str_path, str_base=str_base).items():
+            dict_tree.setdefault(str_id, []).append(tuple_pair)
     return dict_trees
 
 

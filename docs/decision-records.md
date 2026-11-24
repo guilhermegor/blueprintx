@@ -1356,11 +1356,16 @@ is shaped as it is; a generated project gets the behavior, not the history.
       same id is NEWLY ADDED to another top-level workflow file of the same tree (the repo's
       own `.github/workflows/`, or one `templates/<name>/.github/workflows/`) with an
       identical job block, so moving a job between files is a move, not a removal (#1311).
-      Everything in the block must match except a one-line `runs-on: ubuntu-*`, so a
-      changed `name:` (a required status-check context keys on the name), `steps:`, `if:`,
-      `continue-on-error`, `env:` or `uses:` makes it a removal. Any other runner (Windows
-      or macOS, which change the default shell, a self-hosted label that can leave the job
-      queued and never reporting, or a multi-line sequence) is compared too. The target
+      Everything in the block, blank lines inside it included (they matter in a folded
+      `run: >`), must match except a one-line `runs-on:` naming a hosted image
+      (`ubuntu-latest`, `ubuntu-NN.NN`, optionally `-arm`), which may change but not vanish.
+      So a changed `name:` (a required status-check context keys on the name), `steps:`,
+      `if:`, `continue-on-error`, `env:` or `uses:` makes it a removal. Any other runner
+      (Windows or macOS, which change the default shell, a self-hosted or larger-runner
+      label such as `ubuntu-latest-64core` that can leave the job queued and never
+      reporting, or a sequence) is compared too. A move is also refused while the source
+      file still names the moved id (a job left behind that `needs:` it would make the
+      whole source workflow invalid). The target
       file's top-level settings outside `jobs:` (`on:`, `env:`, `defaults:`,
       `concurrency:`, `permissions:`) must equal the source file's, bar `name:` and
       comments, so a move into a file triggered only by `workflow_dispatch` is a removal.
@@ -1374,7 +1379,9 @@ is shaped as it is; a generated project gets the behavior, not the history.
       so an identical text can still be skipped (`if: false` on the needed job) or changed
       in the target. Detection is textual and errs toward reporting: a shell `*word` in a
       `run:` line also makes the job non-movable. Known limit: whether the target file is
-      copied into generated projects is not compared.
+      copied into generated projects is not compared. Moving a file's last job out and
+      deleting the file is still reported by the deletion check, so a workflow split or
+      rename needs `gate-change-ok:`.
     - `assertion-weakening`: wired in pre-commit (`language: system`, `always_run`, so the
       caller's environment reaches it, including the `TEST_CHANGE_OK` hatch) and as its own
       `assertion_weakening.yaml` workflow (not a step of the matrix `test` job, whose check

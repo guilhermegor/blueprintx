@@ -1044,7 +1044,14 @@ def test_workflow_job_moved_under_other_settings_is_removed(
 
 @pytest.mark.parametrize(
     "str_runner",
-    ["windows-latest", "self-hosted", "[self-hosted, gpu]", "\n      - self-hosted"],
+    [
+        "windows-latest",
+        "self-hosted",
+        "[self-hosted, gpu]",
+        "\n      - self-hosted",
+        "ubuntu-latest-64core",
+        "ubuntu-nonexistent",
+    ],
 )
 def test_workflow_job_moved_to_a_non_ubuntu_runner_is_removed(
     monkeypatch: pytest.MonkeyPatch, *, str_runner: str
@@ -1053,6 +1060,58 @@ def test_workflow_job_moved_to_a_non_ubuntu_runner_is_removed(
     str_job = _STR_MOVED_JOB.replace("ubuntu-latest", str_runner)
 
     assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_moved_without_runs_on_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hosted runner may change, never vanish."""
+    str_job = _STR_MOVED_JOB.replace("    runs-on: ubuntu-latest\n", "")
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_moved_away_from_its_dependents_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A job left behind that still ``needs:`` the moved one breaks the source workflow."""
+    str_dependent = "  report:\n    needs: [gate-integrity]\n    runs-on: ubuntu-latest\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{str_dependent}"},
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{str_dependent}",
+            _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_without_a_folded_blank_line_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A blank line inside a folded scalar changes what runs, so it is compared."""
+    str_job = f"{_STR_MOVED_JOB}      - run: >\n          check\n\n          --strict\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"jobs:\n{str_job.replace(chr(10) * 2, chr(10))}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_quoted_job_id_removal_is_reported() -> None:
+    """A quoted id is a job of its own, so dropping it is a removal."""
+    str_old = f'jobs:\n{_STR_KEPT_JOB}  "gate":\n    runs-on: ubuntu-latest\n'
+
+    assert (
+        len(gate.workflow_problems(str_old, str_new=f"jobs:\n{_STR_KEPT_JOB}", str_shown="w")) == 1
+    )
 
 
 def test_workflow_job_moved_with_a_different_runner_is_clean(
