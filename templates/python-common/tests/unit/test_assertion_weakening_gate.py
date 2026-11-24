@@ -1007,9 +1007,7 @@ _GUARDED = "def test_a():\n    if {cond}:\n        pytest.skip()\n    assert f()
 
 def test_widening_a_guarded_skip_condition_is_flagged() -> None:
     """``if not DB: pytest.skip()`` -> ``if True: pytest.skip()`` skips everywhere."""
-    found = _sole_finding(
-        _GUARDED.format(cond="not DB"), str_new=_GUARDED.format(cond="True")
-    )
+    found = _sole_finding(_GUARDED.format(cond="not DB"), str_new=_GUARDED.format(cond="True"))
     assert "skip(if):True" in found
 
 
