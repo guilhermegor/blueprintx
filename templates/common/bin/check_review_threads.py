@@ -2019,13 +2019,16 @@ def _parses_completely(list_lines: list[str], *, int_parsed: int) -> bool:
 
 
 def _new_finding_names(list_found: list[dict[str, str]], *, cnt_new: Counter[str]) -> str:
-    """Return a count, then ``path: title`` for each still-unanswered finding, ``; `` joined."""
+    """Return a count, then ``path[:line]: title`` per unanswered finding, ``; `` joined."""
     cnt_left = Counter(cnt_new)
     list_names = []
     for dict_found in list_found:
         if cnt_left[dict_found["key"]] > 0:
             cnt_left[dict_found["key"]] -= 1
-            list_names.append(f"{dict_found['path']}: {dict_found['title']}")
+            str_where = dict_found["path"] + (
+                f":{dict_found['line']}" if dict_found["line"] else ""
+            )
+            list_names.append(f"{str_where}: {dict_found['title']}")
     return f"{len(list_names)} new: " + "; ".join(list_names)
 
 

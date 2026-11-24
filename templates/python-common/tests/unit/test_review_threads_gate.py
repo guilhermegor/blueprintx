@@ -5842,6 +5842,18 @@ def test_a_truncated_new_finding_list_ends_with_an_ellipsis() -> None:
     assert "…" in _partly_new_problems(_answered_plus_many_new_body(8))[0]
 
 
+def test_a_truncated_new_finding_list_is_exactly_the_cap_long() -> None:
+    """Should-fail witness: the shown names, ellipsis included, are exactly the cap long."""
+    str_problem = _partly_new_problems(_answered_plus_many_new_body(8))[0]
+    str_names = str_problem.split("— ", 1)[1].split(" [review", 1)[0]
+    assert len(str_names) == _load_gate()._INT_NEW_NAMES_CAP
+
+
+def test_the_many_new_body_really_parses_nine_blocks() -> None:
+    """Guard for the truncation tests: every appended block must parse, or they prove nothing."""
+    assert len(_load_gate().body_findings(_answered_plus_many_new_body(8))) == 9
+
+
 def test_a_short_new_finding_list_has_no_ellipsis() -> None:
     """A list under the cut is shown whole, with no marker."""
     assert "…" not in _answered_plus_new_problem()
@@ -5859,7 +5871,7 @@ def test_a_partly_new_body_that_does_not_parse_is_one_problem() -> None:
 
 def test_a_partly_new_body_that_does_not_parse_keeps_the_old_message() -> None:
     """Fail-closed witness: a declared count the blocks miss falls back to the generic message."""
-    assert "new:" not in _partly_new_problems(_miscounted_partly_new_body())[0]
+    assert "lists findings in its body" in _partly_new_problems(_miscounted_partly_new_body())[0]
 
 
 def test_a_partly_new_body_message_keeps_the_roster_and_bot_clause() -> None:
@@ -5883,3 +5895,8 @@ def test_a_partly_new_body_answered_later_is_no_problem() -> None:
 def test_a_repeated_key_beyond_its_answered_count_is_counted_as_new() -> None:
     """The multiplicity rule: a key answered once and listed twice has one new finding."""
     assert "1 new:" in _partly_new_problems(_twice_body("52"))[0]
+
+
+def test_a_partly_new_finding_name_carries_its_line() -> None:
+    """Should-fail witness: the new finding is named with its line, so twins stay apart."""
+    assert "src/a.py:90: A different finding." in _answered_plus_new_problem()
