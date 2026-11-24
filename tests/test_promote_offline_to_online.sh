@@ -356,7 +356,7 @@ test_protection_requires_verify_and_confirm_ruleset() {
     out_old="$(bash -c "$run" _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
     printf '#!/bin/bash\n[ "${1:-}" = "confirm_ruleset" ] && exit 0\nexit 0\n' >"$dir/bin/enable_repo_rules.sh"
     out_ok="$(bash -c "$run" _ "$PROMOTE_SCRIPT" "$dir" 2>&1)"
-    if [[ "$out_ok" == *"applied=true"* && "$out_old" == *"applied=false"* && "$out_no_ruleset" == *"applied=false"* && "$out_strict_on" == *"applied=false"* ]]; then
+    if [[ "$out_ok" == *"applied=true"* && "$out_old" == *"applied=false"* && "$out_old" == *"predates confirm_ruleset"* && "$out_no_ruleset" == *"applied=false"* && "$out_strict_on" == *"applied=false"* ]]; then
         echo "ok: protection is applied only when verify and confirm_ruleset both pass"
     else
         echo "FAIL (protection flag): ok=$out_ok old=$out_old no_ruleset=$out_no_ruleset strict_on=$out_strict_on"

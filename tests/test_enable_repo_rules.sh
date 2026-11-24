@@ -283,7 +283,7 @@ test_verify_passes_on_definite_absence_of_both_mechanisms() {
     assert_has "no ruleset and no classic protection passes" "rc=0" "$str_out"
     assert_has "definite absence is named as such" "definite absence" "$str_out"
     str_out="$(STUB_RULESETS=missing STUB_PROTECTION=unprotected run_verify active 1 verify)"
-    assert_has "a 404 on rulesets plus no classic protection passes" "rc=0" "$str_out"
+    assert_has "a 404 on rulesets is unknown, not absence" "rc=1" "$str_out"
 }
 
 test_verify_fails_when_a_mechanism_is_unreadable() {
