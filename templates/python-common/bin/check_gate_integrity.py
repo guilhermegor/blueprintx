@@ -30,9 +30,10 @@ files a change touches — never off arbitrary source):
   in a workflow file of the same tree, newly added there, with an identical job block bar a
   hosted ``ubuntu-latest``, or ``ubuntu-22.04``/``ubuntu-24.04`` each optionally ``-arm``,
   ``runs-on`` of the same architecture, under the same top-level settings (a ``concurrency:``
-  group not identical to a non-empty source group, no flow-style ``{...}`` concurrency, no read
-  of ``github.workflow``), outside a ``workflow_call`` file, with no ``needs:``, anchor, alias or
-  flow-style id, and no word left in the source file that names it (a move)
+  group that equals no non-empty source group (a group the parser cannot read as one plain
+  line counts as equal), no read of ``github.workflow``), outside a ``workflow_call`` file,
+  with no ``needs:``, anchor, alias or flow-style id, and no word left in the source file that
+  names it (a move)
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
   reads its diff rather than calling the GitHub API, the same "one implementation" reasoning
@@ -155,7 +156,7 @@ STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu{}>"
 RE_JOB_ID_LINE = re.compile(r"""^ {2}(["']?)([A-Za-z0-9_-]+)\1\s*:""")
 RE_UNMOVABLE_JOB_LINE = re.compile(
     r"""^ {2}(["']?)[\w-]+\1\s*:\s*[^\s#]|^ {4,}["']?needs["']?\s*:"""
-    r"""|github(?:[._]|\[\s*["']\s*)workflow"""
+    r"""|^ {3,}[{\[]|github(?:[._]|\[\s*["']\s*)workflow"""
     r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]""",
     re.IGNORECASE,
 )
@@ -163,6 +164,7 @@ RE_WORKFLOW_NAME_READ = re.compile(r"""github(?:[._]|\[\s*["']\s*)workflow""", r
 RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
 STR_FLOW_CONCURRENCY = "{flow}"
 RE_CONCURRENCY_KEY = r"""["']?concurrency["']?\s*:"""
+RE_MAPPING_KEY_LINE = re.compile(r"""^\s+["']?[\w-]+["']?\s*:""")
 RE_SKIPPED_HEADER_KEY = r"""(jobs|name|["']?concurrency["']?)\s*:"""
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
@@ -672,13 +674,13 @@ def workflow_concurrency(str_text: str) -> str:
         is not parsed and so never excuses a move; a block-scalar group is treated alike.
         ``${{ }}`` bodies are compared without whitespace, and the whole group without case
         (GitHub treats group names as case-insensitive). A block whose group is not a one-line
-        plain value (none, or a multi-line scalar) is unparsed like a flow mapping. Only the group
-        decides a collision, so ``cancel-in-progress:`` and comments do not matter; two
-        unnamed workflows both read
-        ``github.workflow`` as ``""`` and so compare equal, which errs toward reporting.
+        plain value (none, a continued or block-scalar value, a tagged or anchored flow mapping)
+        is unparsed like a flow mapping, and so is a ``github.workflow`` group in an unnamed
+        file, whose evaluated name is its path. Only the group
+        decides a collision, so ``cancel-in-progress:`` and comments do not matter.
     """
     str_block = concurrency_block(str_text)
-    if re.match(rf"{RE_CONCURRENCY_KEY}\s*\{{", str_block):
+    if re.match(rf"{RE_CONCURRENCY_KEY}\s*(?:[!&]\S*\s+)*\{{", str_block):
         return STR_FLOW_CONCURRENCY
     str_block = re.sub(
         r"\$\{\{(.*?)\}\}",
@@ -689,10 +691,16 @@ def workflow_concurrency(str_text: str) -> str:
         r"""(?m)(?:^|\s)["']?group["']?[ \t]*:[ \t]*([^#\n]+)""", str_block
     ) or re.match(rf"{RE_CONCURRENCY_KEY}[ \t]*([^\s#][^#\n]*)", str_block)
     str_group = cls_group.group(1).strip() if cls_group else ""
-    if str_block and (not str_group or str_group[:1] in {"|", ">"}):
-        return STR_FLOW_CONCURRENCY
-    cls_name = re.search(r"(?m)^name:[ \t]*([^#\n]*)", str_text)
+    bool_continued = any(
+        not RE_MAPPING_KEY_LINE.match(str_line) for str_line in str_block.splitlines()[1:]
+    )
+    cls_name = re.search(r"""(?m)^["']?name["']?[ \t]*:[ \t]*([^#\n]*)""", str_text)
     str_name = cls_name.group(1).strip().strip("\"'").lower() if cls_name else ""
+    bool_unread = "${{github.workflow}}" in str_group and not str_name
+    if str_block and (
+        not str_group or str_group[:1] in {"|", ">"} or bool_continued or bool_unread
+    ):
+        return STR_FLOW_CONCURRENCY
     return str_group.replace("${{github.workflow}}", str_name).strip().strip("\"'")
 
 

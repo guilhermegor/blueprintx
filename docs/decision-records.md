@@ -1387,13 +1387,15 @@ is shaped as it is; a generated project gets the behavior, not the history.
       models an unnamed workflow as empty where GitHub uses its path) may change. A target
       group that equals a non-empty source group, at the merge-base or after this change, is
       a removal, since two workflows in one group cancel or queue each other's required check.
-      A group the parser does not read as one plain line (a flow mapping, a block scalar, a
-      multi-line value, no `group:`) is unparsed and never excuses a move beside a non-empty
+      A group the parser does not read as one plain line (a flow mapping, also tagged or
+      anchored, a block scalar, a continued value, no `group:`, or a `github.workflow` group in
+      an unnamed file) is unparsed and never excuses a move beside a non-empty
       source group. A job never moves out of an `on: workflow_call` file: its callers `uses:`
       the source path, so the job would stop running. Known limits, not caught: a required-
       workflows ruleset names a workflow by file path, so moving its job defeats it while the
       gate sees a move; the hosted-image list ages when GitHub retires a label; a target group
-      equal to a third workflow's, or a constant target group that makes runs across PRs
+      equal to a third workflow's, per-workflow state such as `github.run_number` and
+      `run_attempt` that changes when a job moves, a constant target group that makes runs across PRs
       cancel each other, and a target job whose `name:` repeats an existing check context.
       Two more limits stay: a workflow that waits on the source through
       `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read,

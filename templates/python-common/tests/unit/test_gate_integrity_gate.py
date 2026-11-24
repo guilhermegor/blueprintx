@@ -1602,7 +1602,7 @@ def test_workflow_job_moved_into_flow_concurrency_from_none_is_clean(
 def test_workflow_job_moved_into_a_spaced_or_multiline_group_is_removed(
     monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
 ) -> None:
-    """A group the parser cannot read as one line is unparsed, so it never excuses a move."""
+    """A spaced key parses to an equal group; a multi-line value is unparsed. Both are reported."""
     list_findings = _move_under_concurrency(
         monkeypatch, str_source=str_source, str_target=str_target
     )
@@ -1634,6 +1634,50 @@ def test_workflow_job_reading_the_name_through_an_index_is_removed(
 ) -> None:
     """``github['workflow']`` reads the workflow name like ``github.workflow``."""
     str_job = _STR_MOVED_JOB + "      - run: echo ${{ github['workflow'] }}\n"
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        ("concurrency:\n  group: ci- x\n", "concurrency:\n  group: ci-\n    x\n"),
+        ("concurrency:\n  group: ci- x\n", 'concurrency:\n  group: "ci-\n    x"\n'),
+        ("concurrency:\n  group: ci\n", "concurrency: !!map { group: ci }\n"),
+        ("concurrency:\n  group: ci\n", "concurrency: &c { group: ci }\n"),
+        (
+            '"name": CI\nconcurrency:\n  group: ${{ github.workflow }}\n',
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+        ),
+        (
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            '"name": CI\nconcurrency:\n  group: ${{ github.workflow }}\n',
+        ),
+        (
+            "concurrency:\n  group: ${{ github.workflow }}\n",
+            "concurrency:\n  group: ${{ github.workflow }}\n",
+        ),
+    ],
+)
+def test_workflow_job_moved_into_a_continued_tagged_or_unnamed_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """A continued value, a tagged flow mapping or an unread name never excuses a move."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_with_a_flow_body_on_the_line_after_its_id_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A job whose body is a flow mapping can hide ``needs:`` and is never excused."""
+    str_job = "  gate-integrity:\n    {needs: [other], runs-on: ubuntu-latest}\n"
     list_findings = _move_findings(
         monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
     )
