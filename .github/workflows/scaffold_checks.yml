@@ -519,6 +519,9 @@ jobs:
       - name: Run the --spec should-fail suite (blueprintx#629)
         run: bash tests/test_spec_answers.sh
 
+      - name: Run the review_bot_roster spec default test (blueprintx#1307)
+        run: bash tests/test_spec_review_bot_default.sh
+
       - name: Run the zero-dependency TypeChecker suite (blueprintx#1204)
         run: bash tests/test_zero_dependency_type_checker_meta.sh
 

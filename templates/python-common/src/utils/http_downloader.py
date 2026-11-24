@@ -15,6 +15,7 @@ NOT followed (a redirect could hop to an internal target that bypasses the up-fr
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from http.client import HTTPMessage, HTTPResponse
 import ipaddress
 from pathlib import Path
@@ -139,7 +140,10 @@ def download_file(str_url: str, *, path_dest: Path, int_timeout_s: int = _TIMEOU
         If the URL is empty, its scheme is not http/https, or its host resolves to a
         non-public (private / loopback / link-local / reserved) address.
     OSError
-        If the download fails (network error, non-2xx status, redirect, timeout, write).
+        If the download fails transiently (network error, 5xx status, timeout, write); these
+        are retried.
+    RuntimeError
+        If the server answers an HTTP status below 500 (4xx, blocked redirect); not retried.
     """
     _assert_url_allowed(str_url)
     path_dest.parent.mkdir(parents=True, exist_ok=True)
@@ -202,7 +206,11 @@ def _fetch_bytes(
     Raises
     ------
     OSError
-        On a non-2xx status or any transport failure.
+        On a 5xx status or any transport failure — the transient cases ``download_file`` retries.
+    RuntimeError
+        On an HTTP status below 500 (4xx, or a blocked 3xx). ``urllib.error.HTTPError``
+        subclasses ``OSError``, so left as is it would be retried under
+        ``tuple_exceptions=(OSError,)``; a 401/403 never succeeds on a second attempt.
     """
     cls_request = request.Request(str_url, method="GET")  # noqa: S310
     try:
@@ -211,6 +219,10 @@ def _fetch_bytes(
             if not _HTTP_OK_MIN <= int_status <= _HTTP_OK_MAX:
                 raise OSError(f"Download returned status {int_status} for {str_url!r}")
             return cls_response.read()
+    except error.HTTPError as cls_err:
+        if cls_err.code < HTTPStatus.INTERNAL_SERVER_ERROR:
+            raise RuntimeError(f"Download rejected {str_url!r}: {cls_err}") from cls_err
+        raise OSError(f"Failed to download {str_url!r}: {cls_err}") from cls_err
     except error.URLError as cls_err:
         raise OSError(f"Failed to download {str_url!r}: {cls_err}") from cls_err
 

@@ -842,3 +842,228 @@ def test_a_dotted_deny_also_catches_the_relative_form(tmp_path: Path) -> None:
     (tmp_path / ".layer-policy.yaml").write_text(_STR_SUBLAYER_POLICY, encoding="utf-8")
 
     assert "chassis.db_schema" in _output_at(_run_main(tmp_path), int_expected=1)
+
+
+_STR_DENY_POLICY = """\
+layers:
+  utils:
+    allow: {}
+    deny_layers:
+      chassis.db_schema: "utils must not reach the db providers"
+"""
+
+
+def _deny_project(tmp_path: Path, *, str_source: str) -> tuple[int, str]:
+    """Run the gate over a ``utils`` module that may not import ``chassis.db_schema``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    str_source : str
+        Source of ``src/utils/mod.py``.
+
+    Returns
+    -------
+    tuple of (int, str)
+        The exit code and everything printed.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis" / "db_schema").mkdir(parents=True)
+    (path_src / "chassis" / "db_schema" / "__init__.py").write_text("", encoding="utf-8")
+    (path_src / "chassis" / "typing.py").write_text("class Thing:\n    pass\n", encoding="utf-8")
+    (path_src / "utils").mkdir()
+    (path_src / "utils" / "mod.py").write_text(str_source, encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(_STR_DENY_POLICY, encoding="utf-8")
+    return _run_main(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "str_source",
+    [
+        "import chassis.db_schema\n",
+        "from chassis import db_schema\n",
+        "from chassis import db_schema as handlers\n",
+        "from chassis import typing, db_schema\n",
+        "from ..chassis import db_schema\n",
+    ],
+    ids=["import-form", "from-form", "from-aliased", "from-among-others", "relative-from"],
+)
+def test_dotted_deny_rule_rejects_every_form_of_the_submodule(
+    tmp_path: Path, *, str_source: str
+) -> None:
+    """A dotted deny key rejects ``import a.b`` and ``from a import b`` alike.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    str_source : str
+        The import form under test.
+    """
+    assert "chassis.db_schema" in _output_at(
+        _deny_project(tmp_path, str_source=str_source), int_expected=1
+    )
+
+
+@pytest.mark.parametrize(
+    "str_source",
+    [
+        "from chassis import typing\n",
+        "from chassis.typing import Thing\n",
+        "from chassis import NotAModule\n",
+        "from ..chassis import NotAModule\n",
+        "from ..chassis import typing\n",
+    ],
+    ids=[
+        "other-submodule",
+        "symbol-of-submodule",
+        "bare-symbol",
+        "relative-symbol",
+        "relative-ok",
+    ],
+)
+def test_dotted_deny_rule_spares_what_is_not_the_denied_submodule(
+    tmp_path: Path, *, str_source: str
+) -> None:
+    """Only a known submodule is expanded; a plain imported symbol is never a module.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    str_source : str
+        The import form under test.
+    """
+    assert "OK" in _output_at(_deny_project(tmp_path, str_source=str_source), int_expected=0)
+
+
+def test_root_relative_from_import_of_a_denied_layer_is_rejected(tmp_path: Path) -> None:
+    """``from .. import chassis`` from ``utils/`` reaches the ``chassis`` layer itself.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis").mkdir(parents=True)
+    (path_src / "utils").mkdir()
+    (path_src / "utils" / "mod.py").write_text("from .. import chassis\n", encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        'layers:\n  utils:\n    allow: {}\n    deny_layers:\n      chassis: "no"\n',
+        encoding="utf-8",
+    )
+    assert "must not import 'chassis'" in _output_at(_run_main(tmp_path), int_expected=1)
+
+
+def test_one_statement_reaching_a_denied_layer_is_reported_once(tmp_path: Path) -> None:
+    """``from chassis import db_schema`` under a ``chassis`` deny key is one finding, not two.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis" / "db_schema").mkdir(parents=True)
+    (path_src / "utils").mkdir()
+    (path_src / "utils" / "mod.py").write_text("from chassis import db_schema\n", encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        'layers:\n  utils:\n    allow: {}\n    deny_layers:\n      chassis: "no"\n',
+        encoding="utf-8",
+    )
+    assert _output_at(_run_main(tmp_path), int_expected=1).count("must not import") == 1
+
+
+@pytest.mark.parametrize(
+    "str_source",
+    ["import src.chassis.db_schema\n", "from src.chassis import db_schema\n"],
+    ids=["import-form", "from-form"],
+)
+def test_src_qualified_deny_rejects_both_forms(tmp_path: Path, *, str_source: str) -> None:
+    """A ``src.``-qualified deny key catches the from-form too, not only ``import a.b``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    str_source : str
+        The import form under test.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis").mkdir(parents=True)
+    (path_src / "chassis" / "db_schema.py").write_text("", encoding="utf-8")
+    (path_src / "utils").mkdir()
+    (path_src / "utils" / "mod.py").write_text(str_source, encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        _STR_DENY_POLICY.replace("chassis.db_schema:", "src.chassis.db_schema:"),
+        encoding="utf-8",
+    )
+    assert "src.chassis.db_schema" in _output_at(_run_main(tmp_path), int_expected=1)
+
+
+@pytest.mark.parametrize(
+    "str_source",
+    ["from . import chassis\n", "from .chassis import db_schema\n"],
+    ids=["root-from-dot-import", "root-from-dot-module"],
+)
+def test_root_level_relative_import_of_a_denied_layer_is_rejected(
+    tmp_path: Path, *, str_source: str
+) -> None:
+    """A file directly under ``src/`` is not exempt: its one-dot imports reach ``src/``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    str_source : str
+        The import form under test.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis" / "db_schema").mkdir(parents=True)
+    (path_src / "main.py").write_text(str_source, encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        'layers:\n  __root__:\n    allow: {}\n    deny_layers:\n      chassis: "no"\n',
+        encoding="utf-8",
+    )
+    assert "must not import 'chassis" in _output_at(_run_main(tmp_path), int_expected=1)
+
+
+def test_two_statements_on_one_line_are_reported_separately(tmp_path: Path) -> None:
+    """The dedup key is the statement, not the line, so ``import a; import b`` is two findings.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    """
+    path_src = tmp_path / "src"
+    (path_src / "chassis").mkdir(parents=True)
+    (path_src / "utils").mkdir()
+    (path_src / "utils" / "mod.py").write_text(
+        "import chassis.a; import chassis.b\n", encoding="utf-8"
+    )
+    (tmp_path / ".layer-policy.yaml").write_text(
+        'layers:\n  utils:\n    allow: {}\n    deny_layers:\n      chassis: "no"\n',
+        encoding="utf-8",
+    )
+    assert _output_at(_run_main(tmp_path), int_expected=1).count("must not import") == 2
+
+
+def test_dotted_deny_rejects_the_from_form_under_a_prefixed_layout(tmp_path: Path) -> None:
+    """With ``src_prefix_depth: 1`` the from-form is looked up under ``src/<pkg>/``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest throwaway directory.
+    """
+    path_pkg = tmp_path / "src" / "pkg"
+    (path_pkg / "chassis" / "db_schema").mkdir(parents=True)
+    (path_pkg / "utils").mkdir()
+    (path_pkg / "utils" / "mod.py").write_text("from chassis import db_schema\n", encoding="utf-8")
+    (tmp_path / ".layer-policy.yaml").write_text(
+        "src_prefix_depth: 1\n" + _STR_DENY_POLICY, encoding="utf-8"
+    )
+    assert "chassis.db_schema" in _output_at(_run_main(tmp_path), int_expected=1)

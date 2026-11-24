@@ -358,6 +358,13 @@ repos:
         pass_filenames: false
         files: ^(bin/lib/(spec|common|scaffold_docs_locale|scaffold_readme)\.sh|templates/python-common/(README\.md|docs/(changelog\.md|pt-BR/.*))|templates/python-common/bin/check_(docs_(language|gap)|comment_language)\.py|bin/blueprintx\.sh|bin/scaffold/python_[^/]+\.sh|templates/lib-minimal/.*|tests/test_spec_answers\.sh)$
 
+      - id: spec-review-bot-default-test
+        name: spec review_bot_roster defaults to y (blueprintx#1307)
+        entry: bash tests/test_spec_review_bot_default.sh
+        language: system
+        pass_filenames: false
+        files: ^(bin/lib/(spec|scaffold_git_remote)\.sh|tests/test_spec_review_bot_default\.sh)$
+
       - id: zero-dependency-type-checker-tests
         name: zero-dependency TypeChecker metaclass tests (blueprintx#1204)
         entry: bash tests/test_zero_dependency_type_checker_meta.sh
