@@ -2018,14 +2018,14 @@ def _parses_completely(list_lines: list[str], *, int_parsed: int) -> bool:
 
 
 def _new_finding_names(list_found: list[dict[str, str]], *, cnt_new: Counter[str]) -> str:
-    """Return ``path: title`` for each finding whose key is still unanswered, ``; `` joined."""
+    """Return a count, then ``path: title`` for each still-unanswered finding, ``; `` joined."""
     cnt_left = Counter(cnt_new)
     list_names = []
     for dict_found in list_found:
         if cnt_left[dict_found["key"]] > 0:
             cnt_left[dict_found["key"]] -= 1
             list_names.append(f"{dict_found['path']}: {dict_found['title']}")
-    return "; ".join(list_names)
+    return f"{len(list_names)} new: " + "; ".join(list_names)
 
 
 def _carried_reviews(
@@ -2167,9 +2167,10 @@ def _unanswered_message(
     str_id = _review_id(dict_review)
     str_ref = f" [review {str_id}]" if str_id else ""
     if str_new:
+        str_new = str_new if len(str_new) <= 200 else f"{str_new[:199]}…"
         return (
             f"{(dict_review.get('author') or {}).get('login')}'s review repeats answered "
-            f"findings and adds new ones nobody answered — {str_new[:200]}{str_ref}"
+            f"findings and adds new ones nobody answered — {str_new}{str_ref}"
         )
     return (
         f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "

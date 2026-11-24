@@ -5784,13 +5784,19 @@ def test_a_review_without_submitted_at_never_carries_a_later_one() -> None:
     assert len(_body_problems(list_reviews, list_notices=list_notices)) == 2
 
 
-def _answered_plus_new_problem() -> str:
+def _partly_new_problems(str_second_body: str) -> list[str]:
     list_reviews = [
         _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
-        _carry_review(_answered_plus_new_body(), str_submitted=_CARRY_SECOND),
+        _carry_review(str_second_body, str_submitted=_CARRY_SECOND),
     ]
     list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
-    return _body_problems(list_reviews, list_notices=list_notices)[0]
+    return _body_problems(list_reviews, list_notices=list_notices)
+
+
+def _answered_plus_new_problem() -> str:
+    list_problems = _partly_new_problems(_answered_plus_new_body())
+    assert len(list_problems) == 1
+    return list_problems[0]
 
 
 def test_a_partly_new_body_names_the_new_finding() -> None:
@@ -5801,3 +5807,42 @@ def test_a_partly_new_body_names_the_new_finding() -> None:
 def test_a_partly_new_body_does_not_name_the_answered_finding() -> None:
     """Should-fail witness: the already-answered finding is not named again."""
     assert _CARRY_TITLE not in _answered_plus_new_problem()
+
+
+def _answered_plus_many_new_body(int_new: int) -> str:
+    """The answered finding plus ``int_new`` long, distinctly titled new ones."""
+    str_head = _outside_diff_body("src/a.py", str_line="52").replace("(1)", f"({int_new + 1})")
+    return str_head + "".join(
+        _outside_diff_body(
+            "src/a.py",
+            str_line="9",
+            str_title=f"Another long finding title number {int_i} {'x' * 30}",
+        ).split("\n", 2)[2]
+        for int_i in range(int_new)
+    )
+
+
+def test_a_partly_new_body_states_how_many_findings_are_new() -> None:
+    """Should-fail witness: the problem opens with the count of new findings."""
+    assert "1 new:" in _answered_plus_new_problem()
+
+
+def test_a_truncated_new_finding_list_ends_with_an_ellipsis() -> None:
+    """Should-fail witness: a list cut at 200 characters says so and keeps the full count."""
+    list_problems = _partly_new_problems(_answered_plus_many_new_body(8))
+    assert len(list_problems) == 1
+    assert "8 new:" in list_problems[0]
+    assert "…" in list_problems[0]
+
+
+def test_a_short_new_finding_list_has_no_ellipsis() -> None:
+    """A list under the cut is shown whole, with no marker."""
+    assert "…" not in _answered_plus_new_problem()
+
+
+def test_a_partly_new_body_that_does_not_parse_keeps_the_old_message() -> None:
+    """Fail-closed witness: a declared count the blocks miss falls back to the generic message."""
+    str_body = _answered_plus_new_body().replace("(2)", "(3)")
+    list_problems = _partly_new_problems(str_body)
+    assert len(list_problems) == 1
+    assert "new:" not in list_problems[0]
