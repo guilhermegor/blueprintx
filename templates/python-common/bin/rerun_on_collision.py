@@ -116,6 +116,8 @@ def _paged(str_path: str, *, str_token: str) -> list:
     while True:
         str_page = f"{str_path}{sep}per_page={PAGE_SIZE}&page={page}"
         data = _call("GET", str_path=str_page, str_token=str_token)
+        if not isinstance(data, list):
+            raise ValueError(f"{str_path}: expected a list, got {type(data).__name__}")
         out.extend(data)
         if len(data) < PAGE_SIZE:
             return out
@@ -128,12 +130,12 @@ def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[s
     for pr in _paged(
         f"repos/{repo}/pulls?state=open&base={urllib.parse.quote(branch)}", str_token=str_token
     ):
-        if pr["draft"] or pr["user"]["type"] == "Bot":
+        if pr["draft"] or (pr["user"] or {}).get("type") == "Bot":
             continue
         str_files = f"repos/{repo}/pulls/{pr['number']}/files"
         try:
             pr_files[pr["number"]] = paths_of(_paged(str_files, str_token=str_token))
-        except (OSError, ValueError, KeyError) as err:
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as err:
             pr_files[pr["number"]] = set()
             print(f"skip PR #{pr['number']}: cannot read files: {err}")
     return pr_files

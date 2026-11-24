@@ -56,3 +56,10 @@ def test_main_skips_without_rerun_token(monkeypatch: pytest.MonkeyPatch) -> None
 def test_unreadable_pr_is_kept_for_the_full_update_fallback() -> None:
     """A PR with an empty file set is still selected when the merge list was truncated."""
     assert _MOD._targets(None, pr_files={1: set(), 2: {"b.py"}}, excludes=[]) == [1, 2]
+
+
+def test_a_non_list_page_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A list endpoint answering null raises ValueError instead of corrupting the result."""
+    monkeypatch.setattr(_MOD, "_call", lambda *a, **k: None)
+    with pytest.raises(ValueError, match="expected a list"):
+        _MOD._paged("repos/o/r/pulls", str_token="t")
