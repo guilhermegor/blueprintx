@@ -125,3 +125,17 @@ def test_update_failures_are_logged_and_the_run_still_exits_0(
     fake_call = mock.Mock(side_effect=[*side, err, ConnectionResetError()])
     monkeypatch.setattr(_MOD, "_call", fake_call)
     assert (_MOD.main(), fake_call.call_count) == (0, 6)
+
+
+def test_empty_exclude_variable_uses_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty RERUN_EXCLUDE_FILES falls back to the default globs, as the workflow does."""
+    seen = mock.Mock(return_value=[])
+    monkeypatch.setattr(_MOD, "parse_excludes", seen)
+    monkeypatch.setenv("RERUN_TOKEN", "x")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("AFTER_SHA", "b")
+    monkeypatch.setenv("RERUN_EXCLUDE_FILES", "")
+    monkeypatch.delenv("BEFORE_SHA", raising=False)
+    monkeypatch.setattr(_MOD, "_call", _answers(None))
+    _MOD.main()
+    assert seen.call_args.args == (_MOD.DEFAULT_EXCLUDES,)

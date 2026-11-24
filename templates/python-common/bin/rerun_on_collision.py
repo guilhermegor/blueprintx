@@ -137,7 +137,7 @@ def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[s
             pr_files[pr["number"]] = paths_of(_paged(str_files, str_token=str_token))
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as err:
             pr_files[pr["number"]] = set()
-            print(f"skip PR #{pr['number']}: cannot read files: {err}")
+            print(f"::warning::skip PR #{pr['number']}: cannot read files: {err}")
     return pr_files
 
 
@@ -179,7 +179,7 @@ def main() -> int:
     repo = os.environ["GITHUB_REPOSITORY"]
     before, after = os.environ.get("BEFORE_SHA") or ZERO_SHA, os.environ["AFTER_SHA"]
     branch = os.environ.get("BASE_BRANCH", "main")
-    excludes = parse_excludes(os.environ.get("RERUN_EXCLUDE_FILES", DEFAULT_EXCLUDES))
+    excludes = parse_excludes(os.environ.get("RERUN_EXCLUDE_FILES") or DEFAULT_EXCLUDES)
 
     try:
         merge = _merge_files(repo, before=before, after=after, str_token=token)
