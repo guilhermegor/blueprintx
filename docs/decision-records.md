@@ -1381,10 +1381,14 @@ is shaped as it is; a generated project gets the behavior, not the history.
       triggered only by `workflow_dispatch` is a removal. A top-level setting or a job that reads
       the workflow name (`github.workflow`, or `GITHUB_WORKFLOW` in a script, either case)
       is never moved, since the move changes that name. The `concurrency:` block is judged
-      apart: it may change, but a non-empty block identical to the source's is a removal,
-      since two workflows in one group cancel or queue each other's required check. A job never
+      apart: its evaluated `group:` (`${{ }}` bodies compared without whitespace or case, `github.workflow`
+      read as the name) may change, but a non-empty source group that the target repeats, or any
+      flow-style `{group: ...}` mapping, is a removal, since two workflows in one group cancel or queue each other's required check. A job never
       moves out of an `on: workflow_call` file: its callers `uses:` the source path, so the
-      job would stop running. Two limits stay: a workflow that waits on the source through
+      job would stop running. The gate cannot see a third workflow, so a target group equal to another
+      workflow's, or a
+      target job whose `name:` repeats an existing check context, is not caught. Two limits
+      stay: a workflow that waits on the source through
       `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read,
       and a column-0 comment inside `jobs:` is not compared.
       One new job excuses one removal. It also counts as removed when the id is gone from

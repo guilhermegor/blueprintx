@@ -1513,3 +1513,39 @@ def test_workflow_job_moved_with_identical_unindented_steps_is_clean(
     )
 
     assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        (
+            "concurrency:\n  group: ci-${{ github.ref }}\n",
+            "concurrency: {group: ci-${{ github.ref }}, cancel-in-progress: true}\n",
+        ),
+        (
+            "concurrency: {group: ci}\n",
+            "concurrency:\n  group: ci\n",
+        ),
+        (
+            "concurrency:\n  group: ci-${{ github.ref }}\n",
+            "concurrency:\n  group: ci-${{github.ref}}\n",
+        ),
+        (
+            "concurrency:\n  group: ci-${{ github.ref }}\n",
+            "concurrency:\n  group: ci-${{ GitHub.Ref }}\n",
+        ),
+        (
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            "name: CI\nconcurrency:\n  group: ${{GitHub.Workflow}}\n",
+        ),
+    ],
+)
+def test_workflow_job_moved_into_an_unparsed_or_respelled_same_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """A flow mapping is never excused, and expression spelling does not change the group."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1

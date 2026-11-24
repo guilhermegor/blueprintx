@@ -29,10 +29,10 @@ files a change touches — never off arbitrary source):
 - a job key removed from a changed workflow's ``jobs:`` block, unless the same id reappears
   in a workflow file of the same tree, newly added there, with an identical job block bar a
   hosted ``ubuntu-latest``, or ``ubuntu-22.04``/``ubuntu-24.04`` each optionally ``-arm``,
-  ``runs-on`` of the same architecture, under the same top-level settings (a different
-  ``concurrency:`` block, no read of ``github.workflow``), outside a ``workflow_call``
-  file, with no ``needs:``, anchor, alias or flow-style id, and no word
-  left in the source file that names it (a move)
+  ``runs-on`` of the same architecture, under the same top-level settings (a ``concurrency:``
+  group not identical to a non-empty source group, no flow-style ``{...}`` concurrency, no read
+  of ``github.workflow``), outside a ``workflow_call`` file, with no ``needs:``, anchor, alias or
+  flow-style id, and no word left in the source file that names it (a move)
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
   reads its diff rather than calling the GitHub API, the same "one implementation" reasoning
@@ -161,6 +161,7 @@ RE_UNMOVABLE_JOB_LINE = re.compile(
 )
 RE_WORKFLOW_NAME_READ = re.compile(r"github[._]workflow", re.IGNORECASE)
 RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
+STR_FLOW_CONCURRENCY = "{flow}"
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
@@ -642,7 +643,9 @@ def workflow_concurrency(str_text: str) -> str:
     str
         The ``group:`` value (or the one-line ``concurrency: <group>`` form) with quotes
         stripped and ``github.workflow`` replaced by the workflow's ``name:``; ``""`` when
-        there is no block. A block without a ``group:`` returns its raw text, so it still
+        there is no block, and ``STR_FLOW_CONCURRENCY`` for a flow-style ``{...}`` mapping, which
+        is not parsed and so never excuses a move. ``${{ }}`` bodies are compared without
+        whitespace or case. A block without a ``group:`` returns its raw text, so it still
         compares equal only to an identical one. Only the group decides a collision, so
         ``cancel-in-progress:`` and comments do not matter; two unnamed workflows both read
         ``github.workflow`` as ``""`` and so compare equal, which errs toward reporting.
@@ -655,13 +658,20 @@ def workflow_concurrency(str_text: str) -> str:
         if bool_in and str_line.strip() and not str_line.lstrip().startswith("#"):
             list_kept.append(str_line)
     str_block = "\n".join(list_kept)
-    cls_group = re.search(r"(?m)(?:^|[\s{,])group:[ \t]*([^#\n]+)", str_block) or re.match(
-        r"concurrency:\s*([^{\s#][^#\n]*)", str_block
+    if re.match(r"concurrency:\s*\{", str_block):
+        return STR_FLOW_CONCURRENCY
+    str_block = re.sub(
+        r"\$\{\{(.*?)\}\}",
+        lambda cls_m: "${{" + re.sub(r"\s+", "", cls_m.group(1)).lower() + "}}",
+        str_block,
+    )
+    cls_group = re.search(r"(?m)(?:^|\s)group:[ \t]*([^#\n]+)", str_block) or re.match(
+        r"concurrency:\s*([^\s#][^#\n]*)", str_block
     )
     str_group = cls_group.group(1) if cls_group else str_block
     cls_name = re.search(r"(?m)^name:[ \t]*([^#\n]*)", str_text)
     str_name = cls_name.group(1).strip().strip("\"'") if cls_name else ""
-    str_group = re.sub(r"\$\{\{\s*github\.workflow\s*\}\}", lambda _: str_name, str_group)
+    str_group = str_group.replace("${{github.workflow}}", str_name)
     return str_group.strip().strip("\"'")
 
 
@@ -688,7 +698,13 @@ def find_move(list_candidates: list, *, tuple_pair: tuple, str_concurrency: str)
             tuple_cand
             for tuple_cand in list_candidates
             if tuple_cand[:2] == tuple_pair
-            and (not str_concurrency or tuple_cand[2] != str_concurrency)
+            and not (
+                str_concurrency
+                and (
+                    tuple_cand[2] == str_concurrency
+                    or STR_FLOW_CONCURRENCY in {str_concurrency, tuple_cand[2]}
+                )
+            )
         ),
         (),
     )
