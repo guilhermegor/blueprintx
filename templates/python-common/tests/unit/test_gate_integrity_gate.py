@@ -1589,3 +1589,53 @@ def test_workflow_job_moved_into_flow_concurrency_from_none_is_clean(
     )
 
     assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        ("concurrency:\n  group : ci\n", "concurrency:\n  group: ci\n"),
+        ("concurrency:\n  group:\n    ci-x\n", "concurrency:\n  group: ci-x\n"),
+        ("concurrency:\n  group: ci-x\n", "concurrency:\n  group:\n    ci-x\n"),
+    ],
+)
+def test_workflow_job_moved_into_a_spaced_or_multiline_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """A group the parser cannot read as one line is unparsed, so it never excuses a move."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_into_the_group_the_source_takes_in_the_same_change_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Judging the source by its base group alone misses a group both files share afterwards."""
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={
+            _STR_SOURCE: f"concurrency:\n  group: ci\njobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"
+        },
+        dict_new={
+            _STR_SOURCE: f"concurrency:\n  group: gate\njobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"concurrency:\n  group: gate\njobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_reading_the_name_through_an_index_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``github['workflow']`` reads the workflow name like ``github.workflow``."""
+    str_job = _STR_MOVED_JOB + "      - run: echo ${{ github['workflow'] }}\n"
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert len(list_findings) == 1

@@ -155,11 +155,11 @@ STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu{}>"
 RE_JOB_ID_LINE = re.compile(r"""^ {2}(["']?)([A-Za-z0-9_-]+)\1\s*:""")
 RE_UNMOVABLE_JOB_LINE = re.compile(
     r"""^ {2}(["']?)[\w-]+\1\s*:\s*[^\s#]|^ {4,}["']?needs["']?\s*:"""
-    r"""|github[._]workflow"""
+    r"""|github(?:[._]|\[\s*["']\s*)workflow"""
     r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]""",
     re.IGNORECASE,
 )
-RE_WORKFLOW_NAME_READ = re.compile(r"github[._]workflow", re.IGNORECASE)
+RE_WORKFLOW_NAME_READ = re.compile(r"""github(?:[._]|\[\s*["']\s*)workflow""", re.IGNORECASE)
 RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
 STR_FLOW_CONCURRENCY = "{flow}"
 RE_CONCURRENCY_KEY = r"""["']?concurrency["']?\s*:"""
@@ -671,8 +671,8 @@ def workflow_concurrency(str_text: str) -> str:
         there is no block, and ``STR_FLOW_CONCURRENCY`` for a flow-style ``{...}`` mapping, which
         is not parsed and so never excuses a move; a block-scalar group is treated alike.
         ``${{ }}`` bodies are compared without whitespace, and the whole group without case
-        (GitHub treats group names as case-insensitive). A block without a ``group:`` returns
-        its raw text, so it still compares equal only to an identical one. Only the group
+        (GitHub treats group names as case-insensitive). A block whose group is not a one-line
+        plain value (none, or a multi-line scalar) is unparsed like a flow mapping. Only the group
         decides a collision, so ``cancel-in-progress:`` and comments do not matter; two
         unnamed workflows both read
         ``github.workflow`` as ``""`` and so compare equal, which errs toward reporting.
@@ -686,17 +686,37 @@ def workflow_concurrency(str_text: str) -> str:
         str_block,
     ).lower()
     cls_group = re.search(
-        r"""(?m)(?:^|\s)["']?group["']?:[ \t]*([^#\n]+)""", str_block
+        r"""(?m)(?:^|\s)["']?group["']?[ \t]*:[ \t]*([^#\n]+)""", str_block
     ) or re.match(rf"{RE_CONCURRENCY_KEY}[ \t]*([^\s#][^#\n]*)", str_block)
-    str_group = cls_group.group(1).strip() if cls_group else str_block
-    if str_group[:1] in {"|", ">"}:
+    str_group = cls_group.group(1).strip() if cls_group else ""
+    if str_block and (not str_group or str_group[:1] in {"|", ">"}):
         return STR_FLOW_CONCURRENCY
     cls_name = re.search(r"(?m)^name:[ \t]*([^#\n]*)", str_text)
     str_name = cls_name.group(1).strip().strip("\"'").lower() if cls_name else ""
     return str_group.replace("${{github.workflow}}", str_name).strip().strip("\"'")
 
 
-def find_move(list_candidates: list, *, tuple_pair: tuple, str_concurrency: str) -> tuple:
+def groups_collide(str_source: str, *, str_target: str) -> bool:
+    """Return whether two ``workflow_concurrency`` values can share a group.
+
+    Parameters
+    ----------
+    str_source : str
+        The source workflow's group; ``""`` when it has none.
+    str_target : str
+        The target workflow's group.
+
+    Returns
+    -------
+    bool
+        ``True`` when the source has a group and the two are equal or either is unparsed.
+    """
+    return bool(str_source) and (
+        str_source == str_target or STR_FLOW_CONCURRENCY in {str_source, str_target}
+    )
+
+
+def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tuple) -> tuple:
     """Return the first candidate that is a faithful destination, or ``()``.
 
     Parameters
@@ -705,26 +725,22 @@ def find_move(list_candidates: list, *, tuple_pair: tuple, str_concurrency: str)
         ``(workflow_header, job_signature, workflow_concurrency)`` of the new jobs.
     tuple_pair : tuple
         The removed job's ``(workflow_header, job_signature)``.
-    str_concurrency : str
-        The source workflow's ``workflow_concurrency``.
+    tuple_concurrency : tuple of str
+        The source workflow's ``workflow_concurrency`` at the merge-base and in this change.
 
     Returns
     -------
     tuple
-        The matching candidate; ``()`` when none matches or its concurrency group equals a
-        non-empty source one.
+        The matching candidate; ``()`` when none matches or its concurrency group collides
+        with either source group (see ``groups_collide``).
     """
     return next(
         (
             tuple_cand
             for tuple_cand in list_candidates
             if tuple_cand[:2] == tuple_pair
-            and not (
-                str_concurrency
-                and (
-                    tuple_cand[2] == str_concurrency
-                    or STR_FLOW_CONCURRENCY in {str_concurrency, tuple_cand[2]}
-                )
+            and not any(
+                groups_collide(str_src, str_target=tuple_cand[2]) for str_src in tuple_concurrency
             )
         ),
         (),
@@ -774,7 +790,7 @@ def workflow_problems(
     """
     dict_old = workflow_job_details(str_old)
     tuple_header = workflow_header(str_old)
-    str_concurrency = workflow_concurrency(str_old)
+    tuple_concurrency = (workflow_concurrency(str_old), workflow_concurrency(str_new))
     dict_moved = dict_elsewhere or {}
     list_problems = []
     for str_id in sorted(set(dict_old) - workflow_jobs(str_new)):
@@ -789,7 +805,7 @@ def workflow_problems(
             job_is_movable(dict_old[str_id]) and not bool_referenced and not bool_context_bound
         )
         tuple_found = find_move(
-            list_candidates, tuple_pair=tuple_pair, str_concurrency=str_concurrency
+            list_candidates, tuple_pair=tuple_pair, tuple_concurrency=tuple_concurrency
         )
         if bool_movable and tuple_found:
             list_candidates.remove(tuple_found)

@@ -1379,18 +1379,23 @@ is shaped as it is; a generated project gets the behavior, not the history.
       `permissions:`, `run-name:`) must equal the source file's, bar `name:` and
       whole-line comments (a trailing `# x` on a setting is compared), so a move into a file
       triggered only by `workflow_dispatch` is a removal. A top-level setting or a job that reads
-      the workflow name (`github.workflow`, or `GITHUB_WORKFLOW` in a script, either case)
-      is never moved, since the move changes that name. The `concurrency:` block is judged
-      apart: its evaluated `group:` (compared without case, `${{ }}` bodies also without whitespace, `github.workflow`
-      read as the name) may change, but a non-empty source group that the target repeats, or any
-      flow-style `{group: ...}` mapping or block-scalar group beside a non-empty source group, is a removal, since two workflows in one group cancel or queue each other's required check. A job never
-      moves out of an `on: workflow_call` file: its callers `uses:` the source path, so the
-      job would stop running. A required-workflows ruleset names a workflow by file path, so moving its job defeats it
-      while the gate sees a move; the hosted-image list ages when GitHub retires a label. The
-      gate cannot see a third workflow, so a target group equal to another
-      workflow's, or a
-      target job whose `name:` repeats an existing check context, is not caught. Two limits
-      stay: a workflow that waits on the source through
+      the workflow name (`github.workflow`, `github['workflow']`, or `GITHUB_WORKFLOW` in a
+      script line of the job, either case) is never moved, since the move changes that name;
+      a script or action that reads it internally is invisible to this textual check. The
+      `concurrency:` block is judged apart: its evaluated `group:` (compared without case,
+      `${{ }}` bodies also without whitespace, `github.workflow` read as the `name:`, which
+      models an unnamed workflow as empty where GitHub uses its path) may change. A target
+      group that equals a non-empty source group, at the merge-base or after this change, is
+      a removal, since two workflows in one group cancel or queue each other's required check.
+      A group the parser does not read as one plain line (a flow mapping, a block scalar, a
+      multi-line value, no `group:`) is unparsed and never excuses a move beside a non-empty
+      source group. A job never moves out of an `on: workflow_call` file: its callers `uses:`
+      the source path, so the job would stop running. Known limits, not caught: a required-
+      workflows ruleset names a workflow by file path, so moving its job defeats it while the
+      gate sees a move; the hosted-image list ages when GitHub retires a label; a target group
+      equal to a third workflow's, or a constant target group that makes runs across PRs
+      cancel each other, and a target job whose `name:` repeats an existing check context.
+      Two more limits stay: a workflow that waits on the source through
       `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read,
       and a column-0 comment inside `jobs:` is not compared.
       One new job excuses one removal. It also counts as removed when the id is gone from
