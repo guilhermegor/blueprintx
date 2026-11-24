@@ -5860,3 +5860,26 @@ def test_a_partly_new_body_that_does_not_parse_is_one_problem() -> None:
 def test_a_partly_new_body_that_does_not_parse_keeps_the_old_message() -> None:
     """Fail-closed witness: a declared count the blocks miss falls back to the generic message."""
     assert "new:" not in _partly_new_problems(_miscounted_partly_new_body())[0]
+
+
+def test_a_partly_new_body_message_keeps_the_roster_and_bot_clause() -> None:
+    """Should-fail witness: the message still says roster and bot replies do not count."""
+    assert "outside the reviewer roster (and no bot)" in _answered_plus_new_problem()
+
+
+def test_a_partly_new_body_answered_later_is_no_problem() -> None:
+    """A reply after the partly new review clears it."""
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(_answered_plus_new_body(), str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [
+        _notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z"),
+        _notice("someone", str_body=_BODY_REPLY, str_created="2026-01-05T00:00:00Z"),
+    ]
+    assert _body_problems(list_reviews, list_notices=list_notices) == []
+
+
+def test_a_repeated_key_beyond_its_answered_count_is_counted_as_new() -> None:
+    """The multiplicity rule: a key answered once and listed twice has one new finding."""
+    assert "1 new:" in _partly_new_problems(_twice_body("52"))[0]

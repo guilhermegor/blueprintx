@@ -2175,7 +2175,8 @@ def _unanswered_message(
         )
         return (
             f"{(dict_review.get('author') or {}).get('login')}'s review repeats answered "
-            f"findings and adds new ones nobody answered — {str_new}{str_ref}"
+            f"findings and adds new ones nobody outside the reviewer roster (and no bot) "
+            f"answered — {str_new}{str_ref}"
         )
     return (
         f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
