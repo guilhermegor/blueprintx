@@ -10,19 +10,18 @@ Every shape here was measured on a real PR (blueprintx#170), including the one t
 the gate: 14 threads all reading ``isResolved: true`` while 11 held no author reply at all.
 """
 
-from collections.abc import Callable
 import copy
 import functools
 import importlib.util
 import json
-from pathlib import Path
 import re
 import subprocess
+from collections.abc import Callable
+from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock, call
 
 import pytest
-
 
 _INT_1260 = 1260
 _INT_2 = 2
@@ -5782,3 +5781,22 @@ def test_a_review_without_submitted_at_never_carries_a_later_one() -> None:
     ]
     list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
     assert len(_body_problems(list_reviews, list_notices=list_notices)) == 2
+
+
+def _answered_plus_new_problem() -> str:
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(_answered_plus_new_body(), str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    return _body_problems(list_reviews, list_notices=list_notices)[0]
+
+
+def test_a_partly_new_body_names_the_new_finding() -> None:
+    """Should-fail witness: the problem names the unanswered finding by its title."""
+    assert "A different finding." in _answered_plus_new_problem()
+
+
+def test_a_partly_new_body_does_not_name_the_answered_finding() -> None:
+    """Should-fail witness: the already-answered finding is not named again."""
+    assert _CARRY_TITLE not in _answered_plus_new_problem()
