@@ -88,7 +88,7 @@ EOF
 apply_ruleset() {
 	local str_repo="$1"
 	local str_id
-	str_id=$(gh api "repos/$str_repo/rulesets?per_page=100" --paginate --jq \
+	str_id=$(gh api "repos/$str_repo/rulesets?per_page=100&includes_parents=false" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | .id" 2>/dev/null | head -1 || true)
 
 	if [ -n "$str_id" ] && [ "$REQUIRED_CHECKS_FILE_MISSING" = "1" ]; then
@@ -118,7 +118,7 @@ apply_ruleset() {
 report_blocking_checks() {
 	local str_repo="$1" str_branch="$2"
 	local str_id str_enforcement str_live str_strict str_rules
-	if ! str_id="$(gh api "repos/$str_repo/rulesets?per_page=100" --paginate --jq \
+	if ! str_id="$(gh api "repos/$str_repo/rulesets?per_page=100&includes_parents=false" --paginate --jq \
 		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
 		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
 		return 2
@@ -193,7 +193,7 @@ assert_no_effective_strict() {
 		print_status "error" "Could not READ the effective rules on $str_repo:$str_branch (so a strict policy from another or organization ruleset is UNKNOWN, not absent): ${str_flags:-no output from gh}"
 		return 1
 	fi
-	if [[ "$str_flags" == *true* ]]; then
+	if grep -qx true <<<"$str_flags"; then
 		print_status "error" "Another ruleset (possibly organization-level) sets strict_required_status_checks_policy true on $str_repo:$str_branch — set it to false there (blueprintx#1300)"
 		return 1
 	fi
