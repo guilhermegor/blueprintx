@@ -5827,12 +5827,19 @@ def test_a_partly_new_body_states_how_many_findings_are_new() -> None:
     assert "1 new:" in _answered_plus_new_problem()
 
 
+def test_a_truncated_new_finding_list_is_one_problem() -> None:
+    """A list cut at 200 characters is still reported as a single problem."""
+    assert len(_partly_new_problems(_answered_plus_many_new_body(8))) == 1
+
+
+def test_a_truncated_new_finding_list_keeps_the_full_count() -> None:
+    """Should-fail witness: the cut does not shrink the stated count of new findings."""
+    assert "8 new:" in _partly_new_problems(_answered_plus_many_new_body(8))[0]
+
+
 def test_a_truncated_new_finding_list_ends_with_an_ellipsis() -> None:
-    """Should-fail witness: a list cut at 200 characters says so and keeps the full count."""
-    list_problems = _partly_new_problems(_answered_plus_many_new_body(8))
-    assert len(list_problems) == 1
-    assert "8 new:" in list_problems[0]
-    assert "…" in list_problems[0]
+    """Should-fail witness: a list cut at 200 characters says so."""
+    assert "…" in _partly_new_problems(_answered_plus_many_new_body(8))[0]
 
 
 def test_a_short_new_finding_list_has_no_ellipsis() -> None:
@@ -5840,9 +5847,16 @@ def test_a_short_new_finding_list_has_no_ellipsis() -> None:
     assert "…" not in _answered_plus_new_problem()
 
 
+def _miscounted_partly_new_body() -> str:
+    """Return a partly new body whose declared count the finding blocks do not match."""
+    return _answered_plus_new_body().replace("(2)", "(3)")
+
+
+def test_a_partly_new_body_that_does_not_parse_is_one_problem() -> None:
+    """A declared count the blocks miss still yields a single problem."""
+    assert len(_partly_new_problems(_miscounted_partly_new_body())) == 1
+
+
 def test_a_partly_new_body_that_does_not_parse_keeps_the_old_message() -> None:
     """Fail-closed witness: a declared count the blocks miss falls back to the generic message."""
-    str_body = _answered_plus_new_body().replace("(2)", "(3)")
-    list_problems = _partly_new_problems(str_body)
-    assert len(list_problems) == 1
-    assert "new:" not in list_problems[0]
+    assert "new:" not in _partly_new_problems(_miscounted_partly_new_body())[0]
