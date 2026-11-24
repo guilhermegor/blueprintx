@@ -749,7 +749,7 @@ Configuration files in this repository carry no comments, so the reasoning lives
   `env:` or trigger, a job gone from the tree, a move across trees (template to root) or
   into a subdirectory is still a removal (#1311), and so is a flow-style job or any job with
   `needs:` or a YAML anchor, alias or merge key, whose meaning lives outside the compared
-  block, or one whose id the source file still names as a word. Every diff-scoped check reads a
+  block, or one whose id the source file still names as a word. `gate-integrity` reads a
   renamed file as a deletion plus an addition, so a `git mv` of a gate script, a watched
   config or a workflow needs `gate-change-ok:` like a deletion does, and a test file renamed
   while its code under test changes reports as a deleted test. The

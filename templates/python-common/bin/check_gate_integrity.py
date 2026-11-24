@@ -674,9 +674,10 @@ def workflow_concurrency(str_text: str) -> str:
         is not parsed and so never excuses a move; a block-scalar group is treated alike.
         ``${{ }}`` bodies are compared without whitespace, and the whole group without case
         (GitHub treats group names as case-insensitive). A block whose group is not a one-line
-        plain value (none, a continued or block-scalar value, a tagged or anchored flow mapping)
-        is unparsed like a flow mapping, and so is a ``github.workflow`` group in an unnamed
-        file, whose evaluated name is its path. Only the group
+        plain value (none; a continued, unbalanced-quote, block-scalar, alias or tagged value; a
+        tagged or anchored flow mapping) is unparsed like a flow mapping, and so is a group that
+        reads ``github.workflow`` in any spelling but the exact ``${{ github.workflow }}`` token,
+        or that token in an unnamed file, whose evaluated name is its path. Only the group
         decides a collision, so ``cancel-in-progress:`` and comments do not matter.
     """
     str_block = concurrency_block(str_text)
@@ -688,18 +689,22 @@ def workflow_concurrency(str_text: str) -> str:
         str_block,
     ).lower()
     cls_group = re.search(
-        r"""(?m)(?:^|\s)["']?group["']?[ \t]*:[ \t]*([^#\n]+)""", str_block
-    ) or re.match(rf"{RE_CONCURRENCY_KEY}[ \t]*([^\s#][^#\n]*)", str_block)
+        r"""(?m)(?:^|\s)["']?group["']?[ \t]*:[ \t]*((?:[^#\n]|(?<!\s)#)+)""", str_block
+    ) or re.match(rf"{RE_CONCURRENCY_KEY}[ \t]*([^\s#](?:[^#\n]|(?<!\s)#)*)", str_block)
     str_group = cls_group.group(1).strip() if cls_group else ""
     bool_continued = any(
         not RE_MAPPING_KEY_LINE.match(str_line) for str_line in str_block.splitlines()[1:]
     )
-    cls_name = re.search(r"""(?m)^["']?name["']?[ \t]*:[ \t]*([^#\n]*)""", str_text)
+    cls_name = re.search(r"""(?m)^["']?name["']?[ \t]*:[ \t]*((?:[^#\n]|(?<!\s)#)*)""", str_text)
     str_name = cls_name.group(1).strip().strip("\"'").lower() if cls_name else ""
-    bool_unread = "${{github.workflow}}" in str_group and not str_name
-    if str_block and (
-        not str_group or str_group[:1] in {"|", ">"} or bool_continued or bool_unread
-    ):
+    str_rest = str_group.replace("${{github.workflow}}", "")
+    bool_unread = bool(RE_WORKFLOW_NAME_READ.search(str_rest)) or (
+        "${{github.workflow}}" in str_group and not str_name
+    )
+    bool_opaque = str_group[:1] in {"|", ">", "*", "!", "&"} or (
+        str_group[:1] in {"'", '"'} and str_group[-1:] != str_group[:1]
+    )
+    if str_block and (not str_group or bool_opaque or bool_continued or bool_unread):
         return STR_FLOW_CONCURRENCY
     return str_group.replace("${{github.workflow}}", str_name).strip().strip("\"'")
 

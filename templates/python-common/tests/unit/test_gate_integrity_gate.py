@@ -1683,3 +1683,56 @@ def test_workflow_job_with_a_flow_body_on_the_line_after_its_id_is_removed(
     )
 
     assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        ("concurrency:\n  group: ci\n", "concurrency: *c\n"),
+        ("concurrency:\n  group: ci\n", "concurrency:\n  group: !!str ci\n"),
+        ("concurrency:\n  group: ci- abc:\n", 'concurrency:\n  group: "ci-\n    abc:"\n'),
+        (
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            "name: CI\nconcurrency:\n  group: ${{ github['workflow'] }}\n",
+        ),
+        (
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            "name: CI\nconcurrency:\n  group: ${{ format('{0}', github.workflow) }}\n",
+        ),
+    ],
+)
+def test_workflow_job_moved_into_an_alias_or_respelled_name_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """An alias, a tag, an unbalanced quote or another spelling of the name read is unparsed."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_a_group_with_a_hash_inside_a_word_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a space-preceded ``#`` starts a comment, so ``pr#x`` is the whole group."""
+    list_findings = _move_under_concurrency(
+        monkeypatch,
+        str_source="concurrency:\n  group: pr#x\n",
+        str_target="concurrency:\n  group: pr#x\n",
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_groups_differing_after_a_hash_in_a_word_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The text after an in-word ``#`` is part of the group, so these two differ."""
+    list_findings = _move_under_concurrency(
+        monkeypatch,
+        str_source="concurrency:\n  group: pr#x\n",
+        str_target="concurrency:\n  group: pr#y\n",
+    )
+
+    assert list_findings == []

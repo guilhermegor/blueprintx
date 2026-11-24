@@ -1383,18 +1383,19 @@ is shaped as it is; a generated project gets the behavior, not the history.
       script line of the job, either case) is never moved, since the move changes that name;
       a script or action that reads it internally is invisible to this textual check. The
       `concurrency:` block is judged apart: its evaluated `group:` (compared without case,
-      `${{ }}` bodies also without whitespace, `github.workflow` read as the `name:`, which
-      models an unnamed workflow as empty where GitHub uses its path) may change. A target
+      `${{ }}` bodies also without whitespace, the exact `${{ github.workflow }}` token read as the `name:`) may change. A target
       group that equals a non-empty source group, at the merge-base or after this change, is
       a removal, since two workflows in one group cancel or queue each other's required check.
       A group the parser does not read as one plain line (a flow mapping, also tagged or
-      anchored, a block scalar, a continued value, no `group:`, or a `github.workflow` group in
-      an unnamed file) is unparsed and never excuses a move beside a non-empty
+      anchored, a block scalar, an alias, an unbalanced quote, a continued value, no `group:`, a
+      `github.workflow` group in an unnamed file, or any other spelling of the name read) is unparsed and never excuses a move beside a non-empty
       source group. A job never moves out of an `on: workflow_call` file: its callers `uses:`
       the source path, so the job would stop running. Known limits, not caught: a required-
       workflows ruleset names a workflow by file path, so moving its job defeats it while the
       gate sees a move; the hosted-image list ages when GitHub retires a label; a target group
-      equal to a third workflow's, per-workflow state such as `github.run_number` and
+      equal to a third workflow's, `${{ }}` bodies that differ as text but evaluate equal (`${{ 'ci' }}-x`
+      against `ci-x`), a job line starting with `[` or `{` (a shell test or brace group, always
+      refused as a possible flow body), per-workflow state such as `github.run_number` and
       `run_attempt` that changes when a job moves, a constant target group that makes runs across PRs
       cancel each other, and a target job whose `name:` repeats an existing check context.
       Two more limits stay: a workflow that waits on the source through
