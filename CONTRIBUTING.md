@@ -741,13 +741,15 @@ Configuration files in this repository carry no comments, so the reasoning lives
   ceiling) compare against `merge-base(HEAD, main)` because they check a delta. `gate-integrity`
   treats a workflow job as moved when the same id is newly added to another top-level workflow
   file of the same tree with an identical job block bar a one-line hosted `runs-on`
-  (`ubuntu-latest` or `ubuntu-NN.NN`, the same architecture on both sides), under
+  (`ubuntu-latest`, `ubuntu-22.04` or `ubuntu-24.04`, optionally `-arm`, the same architecture
+  on both sides), outside an `on: workflow_call` file, under
   the same top-level `on:`/`env:`/`permissions:` settings; a changed name, steps, `if:`,
   `env:` or trigger, a job gone from the tree, a move across trees (template to root) or
   into a subdirectory is still a removal (#1311), and so is a flow-style job or any job with
   `needs:` or a YAML anchor, alias or merge key, whose meaning lives outside the compared
-  block, or one whose id the source file still names as a word. A renamed file is read as a
-  deletion plus an addition. The
+  block, or one whose id the source file still names as a word. Every diff-scoped check reads a
+  renamed file as a deletion plus an addition, so a `git mv` of a gate script, a watched
+  config or a workflow needs `gate-change-ok:` like a deletion does. The
   complexity gate runs twice, the second time scoped to `templates/python-common`, which
   catches a template defect in about 3 seconds instead of in a five-tier CI matrix (measured on
   the two issues 270 and 271). Function length is not duplicated, since its discovery already walks the whole root.

@@ -1065,6 +1065,9 @@ def test_workflow_job_moved_under_other_settings_is_removed(
         "\n      - self-hosted",
         "ubuntu-latest-64core",
         "ubuntu-nonexistent",
+        "ubuntu-latest-arm",
+        "ubuntu-20.04",
+        "ubuntu-99.99",
     ],
 )
 def test_workflow_job_moved_to_a_non_ubuntu_runner_is_removed(
@@ -1074,6 +1077,48 @@ def test_workflow_job_moved_to_a_non_ubuntu_runner_is_removed(
     str_job = _STR_MOVED_JOB.replace("ubuntu-latest", str_runner)
 
     assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_moved_between_reusable_workflows_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Callers still ``uses:`` the source file, so a job moved out of it stops running."""
+    str_on = "on:\n  workflow_call:\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"{str_on}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"{str_on}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"{str_on}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_removed_after_a_column_zero_comment_is_reported() -> None:
+    """A comment at column 0 inside ``jobs:`` must not end the parse and hide later jobs."""
+    str_old = f"jobs:\n{_STR_KEPT_JOB}# section\n{_STR_MOVED_JOB}"
+
+    assert gate.workflow_problems(str_old, str_new=f"jobs:\n{_STR_KEPT_JOB}", str_shown="w") == [
+        "w: workflow job 'gate-integrity' removed"
+    ]
+
+
+def test_workflow_job_moved_while_its_id_is_still_a_word_in_the_source_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reference search is whole-word over the source file and errs toward reporting."""
+    str_kept = _STR_KEPT_JOB.replace("echo hi", "make gate-integrity")
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{str_kept}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{str_kept}", _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
 
 
 def test_workflow_job_moved_without_runs_on_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:

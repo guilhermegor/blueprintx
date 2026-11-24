@@ -1358,8 +1358,10 @@ is shaped as it is; a generated project gets the behavior, not the history.
       identical job block, so moving a job between files is a move, not a removal (#1311).
       Everything in the block, blank lines inside it included (they matter in a folded
       `run: >`), must match except a one-line `runs-on:` naming a hosted image
-      (`ubuntu-latest`, `ubuntu-NN.NN`, optionally `-arm`), which may change within one
-      architecture but not vanish: an x86_64 job moved onto an `-arm` image is compared,
+      (`ubuntu-latest`, `ubuntu-22.04` or `ubuntu-24.04`, optionally `-arm`: the labels
+      GitHub serves, so a retired or invented image is compared), which may change within
+      one architecture but not vanish (swapping images still changes the preinstalled
+      toolchain, which fails loudly rather than silently): an x86_64 job moved onto an `-arm` image is compared,
       since an architecture-specific download in its steps would break.
       So a changed `name:` (a required status-check context keys on the name), `steps:`,
       `if:`, `continue-on-error`, `env:` or `uses:` makes it a removal. Any other runner
@@ -1373,7 +1375,11 @@ is shaped as it is; a generated project gets the behavior, not the history.
       the parser keeps with the job above it. The target
       file's top-level settings outside `jobs:` (`on:`, `env:`, `defaults:`,
       `concurrency:`, `permissions:`) must equal the source file's, bar `name:` and
-      whole-line comments (a trailing `# x` on a setting is compared), so a move into a file triggered only by `workflow_dispatch` is a removal.
+      whole-line comments (a trailing `# x` on a setting is compared), so a move into a file triggered only by `workflow_dispatch` is a removal. A job never
+      moves out of an `on: workflow_call` file: its callers `uses:` the source path, so the
+      job would stop running. Two limits stay: a workflow that waits on the source through
+      `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read,
+      and a column-0 comment inside `jobs:` is skipped rather than ending the parse.
       One new job excuses one removal. It also counts as removed when the id is gone from
       the whole tree, when it only reappears in a different tree, or when the target sits in
       a subdirectory (GitHub runs no workflow there). A job is never excused as a move when
