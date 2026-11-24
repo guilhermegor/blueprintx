@@ -51,3 +51,8 @@ def test_main_skips_without_rerun_token(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.delenv("RERUN_TOKEN", raising=False)
     monkeypatch.setattr(_MOD, "_call", lambda *a, **k: (_ for _ in ()).throw(AssertionError))
     assert _MOD.main() == 0
+
+
+def test_unreadable_pr_is_kept_for_the_full_update_fallback() -> None:
+    """A PR with an empty file set is still selected when the merge list was truncated."""
+    assert _MOD._targets(None, pr_files={1: set(), 2: {"b.py"}}, excludes=[]) == [1, 2]

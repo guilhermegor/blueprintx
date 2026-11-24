@@ -22,6 +22,8 @@ TOKEN. The script only runs with the ``RERUN_TOKEN`` secret (a PAT or App token 
 starts no workflows on the PR (GitHub suppresses token-triggered events), so the PR would sit
 on "waiting for status" with no checks on its new head; without the secret the script logs and
 exits 0 without touching any PR.
+Draft and bot-authored PRs (Dependabot, Renovate) are never updated: a push to a bot branch makes
+the bot stop maintaining it.
 """
 
 import fnmatch
@@ -131,6 +133,7 @@ def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[s
         try:
             pr_files[pr["number"]] = paths_of(_paged(str_files, str_token=str_token))
         except (OSError, ValueError, KeyError) as err:
+            pr_files[pr["number"]] = set()
             print(f"skip PR #{pr['number']}: cannot read files: {err}")
     return pr_files
 
