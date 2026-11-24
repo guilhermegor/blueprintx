@@ -671,9 +671,10 @@ def workflow_concurrency(str_text: str) -> str:
         there is no block, and ``STR_FLOW_CONCURRENCY`` for a flow-style ``{...}`` mapping, which
         is not parsed and so never excuses a move; a block-scalar group is treated alike.
         ``${{ }}`` bodies are compared without whitespace, and the whole group without case
-        (GitHub treats group names as case-insensitive). A block without a ``group:`` returns its raw text, so it still
-        compares equal only to an identical one. Only the group decides a collision, so
-        ``cancel-in-progress:`` and comments do not matter; two unnamed workflows both read
+        (GitHub treats group names as case-insensitive). A block without a ``group:`` returns
+        its raw text, so it still compares equal only to an identical one. Only the group
+        decides a collision, so ``cancel-in-progress:`` and comments do not matter; two
+        unnamed workflows both read
         ``github.workflow`` as ``""`` and so compare equal, which errs toward reporting.
     """
     str_block = concurrency_block(str_text)
