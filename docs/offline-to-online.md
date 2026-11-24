@@ -132,11 +132,17 @@ indistinguishable from the promotion's and is committed with it — stash it fir
 
 **After the first push the project reads as online and a re-run does nothing.** That includes the
 ruleset step: it is best-effort, and `enable_repo_rules.sh` exits 0 even when GitHub refuses, so the
-script then runs `enable_repo_rules.sh verify` (the strict policy is off) and `enable_repo_rules.sh confirm_ruleset` (an active `pr-quality-gate` ruleset applies to the default branch), and reports "NOT in place" unless both exit 0. If it
-did not, run `bash bin/enable_repo_rules.sh` yourself with repo-admin rights. What it applies is the
-same `pr-quality-gate` ruleset an online scaffold gets: a pull request is required, force-push,
-deletion and merge commits on `main` are blocked, and the always-running checks listed in
-`bin/required-checks.txt` are required.
+script then runs
+`bash bin/enable_repo_rules.sh verify && bash bin/enable_repo_rules.sh confirm_ruleset`
+and reports "NOT in place" unless both exit 0. `verify` confirms the strict policy is off, but on
+its own it is not enough: it also passes when protection is definitely absent. `confirm_ruleset`
+is the check that counts, because it requires an active `pr-quality-gate` ruleset that applies a
+rule to the default branch. If the step reports "NOT in place", run `bash bin/enable_repo_rules.sh`
+yourself with repo-admin rights, then run the same `verify && confirm_ruleset` line to confirm it
+took effect, since the apply step exits 0 even when GitHub refuses. What it applies is the same
+`pr-quality-gate` ruleset an online scaffold gets: a pull request is required, force-push,
+deletion and merge commits on the default branch are blocked, and the always-running checks listed
+in `bin/required-checks.txt` are required.
 
 ## Verification
 
