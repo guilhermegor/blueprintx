@@ -3198,11 +3198,17 @@ path, so an uncommitted edit of your own to one of those files (for example <cod
 indistinguishable from the promotion's and is committed with it — stash it first.</p>
 <p><strong>After the first push the project reads as online and a re-run does nothing.</strong> That includes the
 ruleset step: it is best-effort, and <code>enable_repo_rules.sh</code> exits 0 even when GitHub refuses, so the
-script then runs <code>enable_repo_rules.sh verify</code> (the strict policy is off) and <code>enable_repo_rules.sh confirm_ruleset</code> (an active <code>pr-quality-gate</code> ruleset applies to the default branch), and reports "NOT in place" unless both exit 0. If it
-did not, run <code>bash bin/enable_repo_rules.sh</code> yourself with repo-admin rights. What it applies is the
-same <code>pr-quality-gate</code> ruleset an online scaffold gets: a pull request is required, force-push,
-deletion and merge commits on <code>main</code> are blocked, and the always-running checks listed in
-<code>bin/required-checks.txt</code> are required.</p>
+script then runs
+<code>bash bin/enable_repo_rules.sh verify &amp;&amp; bash bin/enable_repo_rules.sh confirm_ruleset</code>
+and reports "NOT in place" unless both exit 0. <code>verify</code> confirms the strict policy is off, but on
+its own it is not enough: it also passes when protection is definitely absent. <code>confirm_ruleset</code>
+is the check that counts, because it requires an active <code>pr-quality-gate</code> ruleset that applies a
+rule to the default branch. If the step reports "NOT in place", run <code>bash bin/enable_repo_rules.sh</code>
+yourself with repo-admin rights, then run the same <code>verify &amp;&amp; confirm_ruleset</code> line to confirm it
+took effect, since the apply step exits 0 even when GitHub refuses. What it applies is the same
+<code>pr-quality-gate</code> ruleset an online scaffold gets: a pull request is required, force-push,
+deletion and merge commits on the default branch are blocked, and the always-running checks listed
+in <code>bin/required-checks.txt</code> are required.</p>
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
 <p><code>bash -n</code> and <code>shellcheck --severity=warning --exclude=SC1091</code> pass clean (mirrors CI's
 <code>shellcheck</code> pre-commit hook). <code>tests/test_promote_offline_to_online.sh</code> exercises the refusal
