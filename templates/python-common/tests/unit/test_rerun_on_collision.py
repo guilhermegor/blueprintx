@@ -62,4 +62,4 @@ def test_a_non_list_page_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     """A list endpoint answering null raises ValueError instead of corrupting the result."""
     monkeypatch.setattr(_MOD, "_call", lambda *a, **k: None)
     with pytest.raises(ValueError, match="expected a list"):
-        _MOD._paged("repos/o/r/pulls", str_token="t")
+        _MOD._paged("repos/o/r/pulls", **{"str_token": ""})
