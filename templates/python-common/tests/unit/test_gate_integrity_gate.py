@@ -872,6 +872,7 @@ def _move_findings(
     str_target: str,
     str_job_new: str,
     str_target_old: str = "",
+    str_job_old: str = _STR_MOVED_JOB,
 ) -> list[str]:
     """Move a job out of the template's ``scaffold_checks.yml`` into ``str_target``.
 
@@ -885,6 +886,8 @@ def _move_findings(
         The job block as it appears in the target.
     str_target_old : str
         The target's ``jobs:`` body at the merge-base; empty when the file is new.
+    str_job_old : str
+        The job block as it appeared in the source.
 
     Returns
     -------
@@ -894,7 +897,7 @@ def _move_findings(
     return _collect_workflows(
         monkeypatch,
         dict_old={
-            _STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}",
+            _STR_SOURCE: f"jobs:\n{str_job_old}{_STR_KEPT_JOB}",
             str_target: f"jobs:\n{str_target_old}",
         },
         dict_new={
@@ -1315,7 +1318,11 @@ def test_workflow_job_moved_with_a_hidden_dependency_is_removed(
     """A deeper-indented ``needs:`` or a ``github.workflow`` read is judged unmovable."""
     str_job = _STR_MOVED_JOB + str_extra
 
-    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert len(list_findings) == 1
 
 
 def test_workflow_job_moved_from_a_file_deriving_env_from_the_workflow_name_is_removed(
@@ -1334,3 +1341,20 @@ def test_workflow_job_moved_from_a_file_deriving_env_from_the_workflow_name_is_r
     )
 
     assert len(list_findings) == 1
+
+
+def test_deletion_of_a_renamed_test_file_reports_when_its_code_changed() -> None:
+    """A renamed test file reads as delete plus add, so renaming it can not hide a gutting."""
+    list_changed = [
+        ("D", "tests/unit/test_a.py"),
+        ("A", "tests/unit/test_b.py"),
+        ("M", "src/a.py"),
+    ]
+
+    list_findings = gate.deletion_problems(
+        list_changed, set_touched_stems=gate.touched_code_stems(list_changed)
+    )
+
+    assert list_findings == [
+        "tests/unit/test_a.py: test file deleted while its code under test changed"
+    ]
