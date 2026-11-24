@@ -992,12 +992,26 @@ def test_workflow_job_moved_with_outside_dependency_is_removed(
     assert len(list_findings) == 1
 
 
-def test_workflow_flow_style_job_moved_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A value on the id line hides the job body from the comparison, so it is never a move."""
+@pytest.mark.parametrize(
+    "str_id_line",
+    ["  gate: {name: G, steps: [{run: real}]}\n", '  "gate": {name: G, steps: [{run: real}]}\n'],
+)
+def test_workflow_flow_style_job_moved_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_id_line: str
+) -> None:
+    """A value on the id line, quoted id or not, makes the job unmovable even when unchanged.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Used to stub the base and working-tree reads.
+    str_id_line : str
+        The flow-style job line, identical in the source and the target.
+    """
     list_findings = _collect_workflows(
         monkeypatch,
-        dict_old={_STR_SOURCE: "jobs:\n  gate: {name: G, steps: [{run: real}]}\n"},
-        dict_new={_STR_SOURCE: "jobs:\n", _STR_SIBLING: "jobs:\n  gate: {name: G, if: false}\n"},
+        dict_old={_STR_SOURCE: f"jobs:\n{str_id_line}"},
+        dict_new={_STR_SOURCE: "jobs:\n", _STR_SIBLING: f"jobs:\n{str_id_line}"},
         list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
     )
 
@@ -1121,6 +1135,38 @@ def test_workflow_job_moved_with_a_different_runner_is_clean(
     str_job = _STR_MOVED_JOB.replace("ubuntu-latest", "ubuntu-24.04")
 
     assert _move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job) == []
+
+
+def test_workflow_job_moved_to_another_architecture_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An x86_64 job moved onto an arm64 image is compared, not excused as a runner swap."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest", "ubuntu-24.04-arm")
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_changed_paths_reports_a_rename_as_a_delete_and_an_add(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A staged ``git mv`` must surface its old path, or its removed jobs go unreported.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided scratch directory.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate's git helper inside the repo.
+    """
+    _git_in(tmp_path, "init", "-q", "--initial-branch=main")
+    _git_in(tmp_path, "config", "user.email", "t@example.com")
+    _git_in(tmp_path, "config", "user.name", "t")
+    _commit_file(tmp_path, str_name="checks.yml")
+    str_base = _git_in(tmp_path, "rev-parse", "HEAD")
+    _git_in(tmp_path, "mv", "checks.yml", "renamed.yml")
+    monkeypatch.chdir(tmp_path)
+
+    assert sorted(gate.changed_paths(str_base)) == [("A", "renamed.yml"), ("D", "checks.yml")]
 
 
 def test_workflow_job_moved_with_unindented_changed_steps_is_removed(

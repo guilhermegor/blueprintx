@@ -1358,17 +1358,22 @@ is shaped as it is; a generated project gets the behavior, not the history.
       identical job block, so moving a job between files is a move, not a removal (#1311).
       Everything in the block, blank lines inside it included (they matter in a folded
       `run: >`), must match except a one-line `runs-on:` naming a hosted image
-      (`ubuntu-latest`, `ubuntu-NN.NN`, optionally `-arm`), which may change but not vanish.
+      (`ubuntu-latest`, `ubuntu-NN.NN`, optionally `-arm`), which may change within one
+      architecture but not vanish: an x86_64 job moved onto an `-arm` image is compared,
+      since an architecture-specific download in its steps would break.
       So a changed `name:` (a required status-check context keys on the name), `steps:`,
       `if:`, `continue-on-error`, `env:` or `uses:` makes it a removal. Any other runner
       (Windows or macOS, which change the default shell, a self-hosted or larger-runner
       label such as `ubuntu-latest-64core` that can leave the job queued and never
       reporting, or a sequence) is compared too. A move is also refused while the source
       file still names the moved id (a job left behind that `needs:` it would make the
-      whole source workflow invalid). The target
+      whole source workflow invalid). That check is a whole-word search over the source
+      file, so an id that also appears as a word elsewhere (`lint` in `make lint`) makes the
+      move a removal too; it errs toward reporting, as does a comment between jobs, which
+      the parser keeps with the job above it. The target
       file's top-level settings outside `jobs:` (`on:`, `env:`, `defaults:`,
       `concurrency:`, `permissions:`) must equal the source file's, bar `name:` and
-      comments, so a move into a file triggered only by `workflow_dispatch` is a removal.
+      whole-line comments (a trailing `# x` on a setting is compared), so a move into a file triggered only by `workflow_dispatch` is a removal.
       One new job excuses one removal. It also counts as removed when the id is gone from
       the whole tree, when it only reappears in a different tree, or when the target sits in
       a subdirectory (GitHub runs no workflow there). A job is never excused as a move when

@@ -27,8 +27,10 @@ files a change touches — never off arbitrary source):
 - any watched config (``.pre-commit-config.yaml``, ``ruff.toml``, ``mypy.ini``, ``pytest.ini``)
   or workflow file DELETED outright — the most complete form of every weakening above
 - a job key removed from a changed workflow's ``jobs:`` block, unless the same id reappears
-  in a workflow file of the same tree, newly added there, with an identical job block bar
-  ``runs-on`` (a move)
+  in a workflow file of the same tree, newly added there, with an identical job block bar a
+  hosted ``ubuntu-latest``/``ubuntu-NN.NN`` ``runs-on`` of the same architecture, under the
+  same top-level settings, with no ``needs:``, anchor, alias or flow-style id, and no word
+  left in the source file that names it (a move)
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
   reads its diff rather than calling the GitHub API, the same "one implementation" reasoning
@@ -147,10 +149,11 @@ RE_TOP_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
 RE_MOVABLE_RUNNER = re.compile(
     r"""^ {4}runs-on:\s*(["']?)ubuntu-(latest|\d\d\.\d\d)(-arm)?\1\s*(#.*)?$"""
 )
-STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu>"
+STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu{}>"
 RE_JOB_ID_LINE = re.compile(r"""^ {2}(["']?)([A-Za-z0-9_-]+)\1\s*:""")
 RE_UNMOVABLE_JOB_LINE = re.compile(
-    r"""^ {2}[\w-]+:\s*[^\s#]|^ {4}["']?needs["']?\s*:|<<\s*:|(?:^|[\s\[{,])[&*][\w-]"""
+    r"""^ {2}(["']?)[\w-]+\1\s*:\s*[^\s#]|^ {4}["']?needs["']?\s*:"""
+    r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]"""
 )
 RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
@@ -258,7 +261,7 @@ def changed_paths(str_base: str) -> list:
     list of tuple
         ``(status_letter, path)``, e.g. ``("D", "bin/ci/check_actions.sh")``.
     """
-    str_out = _git(["diff", "--cached", "--name-status", str_base])
+    str_out = _git(["diff", "--cached", "--name-status", "--no-renames", str_base])
     list_rows = []
     for str_line in str_out.splitlines():
         list_parts = str_line.split("\t")
@@ -524,12 +527,15 @@ def job_signature(list_lines: list) -> tuple:
     tuple
         The block's lines, trailing blank lines dropped, with a one-line ``runs-on:`` naming a
         hosted image (``ubuntu-latest``, ``ubuntu-NN.NN``, optionally ``-arm``) replaced by
-        one placeholder, so a move may swap those images but not drop ``runs-on``. Any other
+        one placeholder per architecture, so a move may swap those images within x86_64 or
+        within arm64 but not change architecture or drop ``runs-on``. Any other
         runner (Windows, macOS, a self-hosted or larger-runner label, a sequence) stays
         compared, since it can change the shell or leave the job queued forever.
     """
     list_kept = [
-        STR_HOSTED_RUNNER if RE_MOVABLE_RUNNER.match(str_line) else str_line
+        STR_HOSTED_RUNNER.format(cls_match.group(3) or "")
+        if (cls_match := RE_MOVABLE_RUNNER.match(str_line))
+        else str_line
         for str_line in list_lines
     ]
     while list_kept and not list_kept[-1].strip():
@@ -660,7 +666,7 @@ def workflow_problems(
     for str_id in sorted(set(dict_old) - workflow_jobs(str_new)):
         list_candidates = dict_moved.get(str_id, [])
         tuple_pair = (tuple_header, dict_old[str_id])
-        bool_referenced = re.search(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])", str_new)
+        bool_referenced = bool(re.search(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])", str_new))
         bool_movable = job_is_movable(dict_old[str_id]) and not bool_referenced
         if bool_movable and tuple_pair in list_candidates:
             list_candidates.remove(tuple_pair)
