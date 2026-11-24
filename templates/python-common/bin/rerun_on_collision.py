@@ -125,7 +125,7 @@ def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[s
     for pr in _paged(
         f"repos/{repo}/pulls?state=open&base={urllib.parse.quote(branch)}", str_token=str_token
     ):
-        if pr["draft"]:
+        if pr["draft"] or pr["user"]["type"] == "Bot":
             continue
         str_files = f"repos/{repo}/pulls/{pr['number']}/files"
         try:
