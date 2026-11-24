@@ -23,7 +23,8 @@ starts no workflows on the PR (GitHub suppresses token-triggered events), so the
 on "waiting for status" with no checks on its new head; without the secret the script logs and
 exits 0 without touching any PR.
 Draft and bot-authored PRs (Dependabot, Renovate) are never updated: a push to a bot branch makes
-the bot stop maintaining it.
+the bot stop maintaining it. A PR whose files cannot be read is logged and skipped (it is still
+updated when the merge file list was truncated).
 """
 
 import fnmatch
@@ -181,7 +182,7 @@ def main() -> int:
     try:
         merge = _merge_files(repo, before=before, after=after, str_token=token)
         pr_files = _open_pr_files(repo, branch=branch, str_token=token)
-    except (OSError, ValueError, KeyError) as err:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as err:
         print(f"cannot read merge files or open PRs: {err}", file=sys.stderr)
         return 1
 
