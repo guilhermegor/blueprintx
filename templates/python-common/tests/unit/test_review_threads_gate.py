@@ -5810,7 +5810,7 @@ def test_a_partly_new_body_does_not_name_the_answered_finding() -> None:
 
 
 def _answered_plus_many_new_body(int_new: int) -> str:
-    """The answered finding plus ``int_new`` long, distinctly titled new ones."""
+    """Build the answered finding plus ``int_new`` long, distinctly titled new ones."""
     str_head = _outside_diff_body("src/a.py", str_line="52").replace("(1)", f"({int_new + 1})")
     return str_head + "".join(
         _outside_diff_body(

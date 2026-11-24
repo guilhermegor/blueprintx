@@ -1965,6 +1965,7 @@ _RE_BODY_FINDING_BLOCK = re.compile(
     re.MULTILINE,
 )
 _STR_KEY_VERSION = "v3:"
+_INT_NEW_NAMES_CAP = 200
 
 
 def body_finding_key(str_path: str, *, str_title: str, str_severity: str = "") -> str:
@@ -2167,7 +2168,11 @@ def _unanswered_message(
     str_id = _review_id(dict_review)
     str_ref = f" [review {str_id}]" if str_id else ""
     if str_new:
-        str_new = str_new if len(str_new) <= 200 else f"{str_new[:199]}…"
+        str_new = (
+            str_new
+            if len(str_new) <= _INT_NEW_NAMES_CAP
+            else f"{str_new[: _INT_NEW_NAMES_CAP - 1]}…"
+        )
         return (
             f"{(dict_review.get('author') or {}).get('login')}'s review repeats answered "
             f"findings and adds new ones nobody answered — {str_new}{str_ref}"
