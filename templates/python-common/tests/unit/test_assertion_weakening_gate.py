@@ -1129,3 +1129,26 @@ def test_skipif_with_two_conditions_matches_an_or_guard() -> None:
     str_old = "@pytest.mark.skipif(a, b)\ndef test_a():\n    assert f() == 1\n"
     str_new = "def test_a():\n    if a or b:\n        pytest.skip()\n    assert f() == 1\n"
     assert _findings(str_old, str_new=str_new) == []
+
+
+def test_nested_or_guard_is_parenthesised() -> None:
+    """``if a or b: if c: skip`` is ``(a or b) and (c)``, not ``a or b and c``."""
+    str_old = (
+        "def test_a():\n    if a or b:\n        if c:\n            pytest.skip()\n    assert 1\n"
+    )
+    str_new = "@pytest.mark.skipif(a or b and c)\ndef test_a():\n    assert 1\n"
+    assert "skipif:a or (b and c)" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_while_one_is_unconditional() -> None:
+    """``while 1: pytest.skip()`` always runs, like ``while True``."""
+    str_old = "def test_a():\n    while c:\n        pytest.skip()\n    assert 1\n"
+    str_new = "def test_a():\n    while 1:\n        pytest.skip()\n    assert 1\n"
+    assert "skip()" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_xfail_call_after_an_unconditional_skip_is_not_flagged() -> None:
+    """A test already skipped outright gains nothing from an added ``pytest.xfail()``."""
+    str_old = "@pytest.mark.skip\ndef test_a():\n    assert 1\n"
+    str_new = "@pytest.mark.skip\ndef test_a():\n    pytest.xfail()\n    assert 1\n"
+    assert _findings(str_old, str_new=str_new) == []

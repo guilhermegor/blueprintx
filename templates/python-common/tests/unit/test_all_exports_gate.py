@@ -1272,14 +1272,14 @@ def test_computed_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
     assert _load_gate().declared_all(path_init) == ["a", "b"]
 
 
-def test_starred_foreign_list_replaces_the_declared_names(tmp_path: Path) -> None:
-    """Only a starred ``__all__`` extends; ``[*other, 'x']`` replaces what was declared."""
+def test_starred_foreign_list_keeps_the_declared_names(tmp_path: Path) -> None:
+    """``[*_a.__all__, 'x']`` is as unreadable as ``_a.__all__ + ['x']``; both keep and add."""
     path_init = _package(
         tmp_path,
-        str_init="__all__ = ['a']\n__all__ = [*other, 'x']\n",
+        str_init="__all__ = ['a']\n__all__ = [*_a.__all__, 'x']\n",
         str_member="a = 1\n",
     )
-    assert _load_gate().declared_all(path_init) == ["x"]
+    assert _load_gate().declared_all(path_init) == ["a", "x"]
 
 
 def test_starred_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
@@ -1418,3 +1418,13 @@ def test_annotated_and_attribute_placeholders_are_the_dependencys(
         str_member=f"try:\n    import x\nexcept ImportError:\n    {str_fallback}\n",
     )
     assert _load_gate().check_package(path_init) == []
+
+
+def test_a_subtracting_augmented_assignment_does_not_add_names(tmp_path: Path) -> None:
+    """``__all__ -= ['x']`` is not an extension; it must not put ``'x'`` in the export set."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ -= ['x']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]

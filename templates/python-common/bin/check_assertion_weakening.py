@@ -581,6 +581,31 @@ def _body_skip_labels(list_body: list, *, tuple_guards: tuple[str, ...]) -> set:
     return set_out
 
 
+def _join_conditions(list_text: list[str], *, cls_op: ast.boolop) -> str:
+    """Join condition sources with ``and``/``or``, parenthesising exactly where precedence needs.
+
+    Parameters
+    ----------
+    list_text : list of str
+        Condition sources; a guard that is not an expression (``except X``) is kept whole.
+    cls_op : ast.boolop
+        ``ast.And()`` or ``ast.Or()``.
+
+    Returns
+    -------
+    str
+        The joined source, the sole condition unchanged.
+    """
+    if len(list_text) == 1:
+        return list_text[0]
+    try:
+        list_nodes = [ast.parse(str_t, mode="eval").body for str_t in list_text]
+    except SyntaxError:
+        str_op = " and " if isinstance(cls_op, ast.And) else " or "
+        return str_op.join(f"({str_t})" for str_t in list_text)
+    return ast.unparse(ast.BoolOp(op=cls_op, values=list_nodes))
+
+
 def _skip_label(tuple_guards: tuple[str, ...], *, str_call: str) -> str:
     """Return ``<call>()`` for no guards, else ``<call>(if):`` and the guards joined by ``and``.
 
@@ -598,7 +623,7 @@ def _skip_label(tuple_guards: tuple[str, ...], *, str_call: str) -> str:
     """
     if not tuple_guards:
         return f"{str_call}()"
-    return f"{str_call}(if):" + " and ".join(tuple_guards)
+    return f"{str_call}(if):" + _join_conditions(list(tuple_guards), cls_op=ast.And())
 
 
 def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
@@ -644,11 +669,12 @@ def _guard_kind(node: ast.AST) -> str | None:
         True`` is no guard), ``match <pattern>`` for a case.
     """
     if isinstance(node, ast.ExceptHandler):
-        return "except " + (ast.unparse(node.type) if node.type else "")
+        return ("except " + ast.unparse(node.type)).strip() if node.type else "except"
     if isinstance(node, ast.For | ast.AsyncFor):
         return f"for {ast.unparse(node.iter)}"
     if isinstance(node, ast.While):
-        return None if ast.unparse(node.test) == "True" else f"while {ast.unparse(node.test)}"
+        is_always = isinstance(node.test, ast.Constant) and bool(node.test.value)
+        return None if is_always else f"while {ast.unparse(node.test)}"
     return f"match {ast.unparse(node.pattern)}" if isinstance(node, ast.match_case) else None
 
 
@@ -673,7 +699,7 @@ def _marker_label(dec: ast.expr, *, str_name: str) -> str:
     if not isinstance(dec, ast.Call):
         return "xfail:;lax" if str_name == "xfail" else str_name
     list_cond = [*dec.args, *(kw.value for kw in dec.keywords if kw.arg == "condition")]
-    str_cond = " or ".join(ast.unparse(cond) for cond in list_cond)
+    str_cond = _join_conditions([ast.unparse(cond) for cond in list_cond], cls_op=ast.Or())
     if str_name == "skipif":
         return f"skipif:{str_cond}"
     is_strict = any(kw.arg == "strict" and ast.unparse(kw.value) == "True" for kw in dec.keywords)
@@ -720,7 +746,7 @@ def _newly_marked(*, set_old: set, set_new: set) -> set:
     set_conds = {_marker_condition(str_m) for str_m in set_old} - {None}
     has_unconditional = bool(set_old & {"skip", "skip()"})
     if has_unconditional:
-        set_added -= {"skip", "skip()"}
+        set_added -= {"skip", "skip()", "importorskip()", "xfail()"}
     return {
         str_m
         for str_m in set_added

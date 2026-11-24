@@ -170,6 +170,27 @@ def _all_target(cls_node: ast.AST) -> bool:
     return isinstance(cls_node, ast.Name) and cls_node.id == "__all__"
 
 
+def _has_foreign_star(cls_value: ast.expr | None) -> bool:
+    """Return whether a list or tuple literal unpacks something other than a plain name.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``[*_a.__all__, 'x']``, the same unreadable-operand case as a ``+`` sum.
+    """
+    if not isinstance(cls_value, ast.List | ast.Tuple):
+        return False
+    return any(
+        isinstance(cls_elt, ast.Starred) and not isinstance(cls_elt.value, ast.Name)
+        for cls_elt in cls_value.elts
+    )
+
+
 def _sum_leaves(cls_value: ast.expr) -> list[ast.expr]:
     """Return the operands of a ``+`` chain, the value itself when it is not one.
 
@@ -227,6 +248,7 @@ def _extends(cls_node: ast.stmt) -> bool:
     return (
         is_self_referential
         or _is_partial_sum(cls_value)
+        or _has_foreign_star(cls_value)
         or not isinstance(cls_node, ast.Assign | ast.AnnAssign)
     )
 
@@ -271,7 +293,12 @@ def _declared_names(cls_node: ast.stmt) -> list[str] | None:
     if isinstance(cls_node, ast.Assign) and any(_all_target(cls_t) for cls_t in cls_node.targets):
         return _literal_strings(cls_node.value)
     if isinstance(cls_node, ast.AnnAssign | ast.AugAssign) and _all_target(cls_node.target):
-        return None if cls_node.value is None else _literal_strings(cls_node.value)
+        is_subtraction = isinstance(cls_node, ast.AugAssign) and not isinstance(
+            cls_node.op, ast.Add
+        )
+        return (
+            None if is_subtraction or cls_node.value is None else _literal_strings(cls_node.value)
+        )
     cls_call = cls_node.value if isinstance(cls_node, ast.Expr) else None
     if not (isinstance(cls_call, ast.Call) and isinstance(cls_call.func, ast.Attribute)):
         return None
