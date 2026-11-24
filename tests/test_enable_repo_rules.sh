@@ -120,10 +120,16 @@ cat >"$WORK_DIR/v/gh" <<'STUB'
 str_rule='{"type":"required_status_checks","ruleset_id":42,"parameters":{"strict_required_status_checks_policy":false,"required_status_checks":[{"context":"Review threads answered"}]}}'
 case "$2" in
 repos/o/r) str_json='{"default_branch":"main"}' ;;
-repos/o/r/rulesets) str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
+repos/o/r/rulesets|repos/o/r/rulesets\?*)
+	[ "${STUB_RULESETS:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }
+	[ "${STUB_RULESETS:-}" = missing ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+	[ "${STUB_RULESETS:-}" = empty ] && str_json='[]' || str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
 repos/o/r/rulesets/42) str_json="{\"rules\":[$str_rule]}" ;;
 repos/o/r/rules/branches/main*)
+	[ "${STUB_EFFECTIVE:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }
+	[ "${STUB_EFFECTIVE:-}" = strict-true ] && STUB_APPLIES=4 && str_other='{"type":"required_status_checks","ruleset_id":99,"parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"x"}]}}'
 	case "$STUB_APPLIES" in
+	4) str_json="[$str_rule,$str_other]" ;;
 	1) str_json="[$str_rule]" ;;
 	2) [[ " $* " == *" --paginate "* ]] && str_json="[] [$str_rule]" || str_json='[]' ;;
 	*) str_json='[]' ;;
@@ -151,7 +157,7 @@ chmod +x "$WORK_DIR/v/gh"
 
 run_verify() {
     mkdir -p "$WORK_DIR/norepo"
-    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/v:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT="$1" STUB_APPLIES="$2" STUB_PROTECTION="${STUB_PROTECTION:-}" bash "$SCRIPT" "$3" 2>&1)
+    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/v:$PATH" GITHUB_REPOSITORY=o/r STUB_ENFORCEMENT="$1" STUB_APPLIES="$2" STUB_PROTECTION="${STUB_PROTECTION-unprotected}" bash "$SCRIPT" "$3" 2>&1)
     echo "rc=$?"
 }
 
@@ -175,6 +181,20 @@ test_check_ruleset_flags_a_disabled_ruleset() {
     assert_has "a disabled ruleset is not present" "rc=1" "$(run_verify disabled 1 check_ruleset)"
 }
 
+test_confirm_ruleset_applied_only_when_confirmed() {
+    assert_has "an active ruleset on the default branch is confirmed" "rc=0" "$(run_verify active 1 confirm_ruleset)"
+    assert_has "a ruleset not applying to the default branch is not confirmed" "rc=1" "$(run_verify active 0 confirm_ruleset)"
+    assert_has "a disabled ruleset is not confirmed" "rc=1" "$(run_verify disabled 1 confirm_ruleset)"
+    assert_has "unreadable rulesets are not confirmed" "rc=1" "$(STUB_RULESETS=forbidden run_verify active 1 confirm_ruleset)"
+    assert_has "a 404 on rulesets is not confirmed" "rc=1" "$(STUB_RULESETS=missing run_verify active 1 confirm_ruleset)"
+    assert_has "unreadable rules on the default branch are not confirmed" "rc=1" "$(STUB_EFFECTIVE=forbidden run_verify active 1 confirm_ruleset)"
+    assert_has "unreadable rulesets stay fail-open for check_ruleset" "rc=0" "$(STUB_RULESETS=forbidden run_verify active 1 check_ruleset)"
+}
+
+test_unknown_argument_is_rejected() {
+    assert_has "an unknown argument exits 2" "rc=2" "$(run_verify active 1 confirm_rulesets)"
+}
+
 test_ruleset_only_repo_has_no_unreadable_protection_warning() {
     local str_out
     str_out="$(STUB_PROTECTION=unprotected run_verify active 1 verify)"
@@ -185,10 +205,10 @@ test_ruleset_only_repo_has_no_unreadable_protection_warning() {
 
 test_genuine_protection_read_failure_stays_unknown() {
     local str_out
-    str_out="$(STUB_PROTECTION= run_verify active 1 verify)"
+    str_out="$(STUB_PROTECTION='' run_verify active 1 verify)"
     assert_has "a 5xx stays UNKNOWN" "Could not READ classic" "$str_out"
     assert_lacks "the unreadable path is not reported as absent" "No classic branch protection" "$str_out"
-    assert_has "an UNKNOWN classic read does not fail a verified ruleset" "rc=0" "$str_out"
+    assert_has "an UNKNOWN classic read fails verification even with a verified ruleset" "rc=1" "$str_out"
 }
 
 test_not_protected_text_on_a_5xx_stays_unknown() {
@@ -196,7 +216,7 @@ test_not_protected_text_on_a_5xx_stays_unknown() {
     str_out="$(STUB_PROTECTION=unprotected-500 run_verify active 1 verify)"
     assert_has "the 404 status, not the message alone, marks ruleset-only" "Could not READ classic" "$str_out"
     assert_lacks "the unreadable path is not reported as absent" "No classic branch protection" "$str_out"
-    assert_has "the 5xx path still verifies on the ruleset" "rc=0" "$str_out"
+    assert_has "the 5xx path fails verification (unknown is not proof)" "rc=1" "$str_out"
 }
 
 test_plain_404_without_the_message_stays_unknown() {
@@ -204,7 +224,7 @@ test_plain_404_without_the_message_stays_unknown() {
     str_out="$(STUB_PROTECTION=not-found run_verify active 1 verify)"
     assert_has "a 404 without 'Branch not protected' is a read failure" "Could not READ classic" "$str_out"
     assert_lacks "the unreadable path is not reported as absent" "No classic branch protection" "$str_out"
-    assert_has "the plain-404 path still verifies on the ruleset" "rc=0" "$str_out"
+    assert_has "the plain-404 path fails verification (unknown is not proof)" "rc=1" "$str_out"
 }
 
 test_create_sends_strict_false() {
@@ -229,7 +249,7 @@ test_update_puts_strict_false_on_an_existing_ruleset() {
 [ "$1 $2" = "auth status" ] && exit 0
 [ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
 [[ " $* " == *" -X PUT "* && "$*" == *"/rulesets/42"* ]] && { cat >"$STUB_CAPTURE"; exit 0; }
-[ "$2" = "repos/o/r/rulesets" ] && { echo 42; exit 0; }
+[[ "$2" == repos/o/r/rulesets || "$2" == repos/o/r/rulesets\?* ]] && { echo 42; exit 0; }
 exit 0
 STUB
     chmod +x "$WORK_DIR/u/gh"
@@ -257,7 +277,69 @@ test_classic_strict_true_refused_false_accepted() {
     assert_has "classic strict false reads as off, not absent" "is off on o/r:main (classic" "$str_out"
 }
 
+test_verify_passes_on_definite_absence_of_both_mechanisms() {
+    local str_out
+    str_out="$(STUB_RULESETS=empty STUB_PROTECTION=unprotected run_verify active 1 verify)"
+    assert_has "no ruleset and no classic protection passes" "rc=0" "$str_out"
+    assert_has "definite absence is named as such" "definite absence" "$str_out"
+    str_out="$(STUB_RULESETS=missing STUB_PROTECTION=unprotected run_verify active 1 verify)"
+    assert_has "a 404 on rulesets is unknown, not absence" "rc=1" "$str_out"
+}
+
+test_verify_fails_when_a_mechanism_is_unreadable() {
+    local str_out
+    str_out="$(STUB_RULESETS=forbidden STUB_PROTECTION=unprotected run_verify active 1 verify)"
+    assert_has "a 403 on rulesets fails" "rc=1" "$str_out"
+    assert_lacks "a 403 is never reported as absence" "definite absence" "$str_out"
+    str_out="$(STUB_RULESETS=empty STUB_PROTECTION='' run_verify active 1 verify)"
+    assert_has "absent ruleset with unreadable classic fails" "rc=1" "$str_out"
+    assert_lacks "unreadable classic is never reported as absence" "definite absence" "$str_out"
+    str_out="$(STUB_RULESETS=forbidden STUB_PROTECTION='' run_verify active 1 verify)"
+    assert_has "both unreadable fails" "rc=1" "$str_out"
+}
+
+test_absence_fails_when_another_ruleset_enforces_strict() {
+    local str_out
+    str_out="$(STUB_RULESETS=empty STUB_PROTECTION=unprotected STUB_EFFECTIVE=strict-true run_verify active 1 verify)"
+    assert_has "a strict ruleset under another name fails" "rc=1" "$str_out"
+    assert_has "the other ruleset is named as the cause" "Another ruleset" "$str_out"
+    str_out="$(STUB_RULESETS=empty STUB_PROTECTION=unprotected STUB_EFFECTIVE=forbidden run_verify active 1 verify)"
+    assert_has "unreadable effective rules fail" "rc=1" "$str_out"
+    str_out="$(STUB_PROTECTION=classic-strict-false STUB_EFFECTIVE=strict-true run_verify active 1 verify)"
+    assert_has "a verified classic false still fails on another strict ruleset" "rc=1" "$str_out"
+    assert_has "the gate ruleset is present, so the other ruleset is the named cause" "Another ruleset" "$str_out"
+    str_out="$(STUB_RULESETS=empty STUB_PROTECTION=classic-strict-false run_verify active 1 verify)"
+    assert_has "absent ruleset with classic false passes" "rc=0" "$str_out"
+}
+
+test_classic_strict_true_names_the_remedy() {
+    assert_has "classic strict true names the PATCH remedy" "required_status_checks -F strict=false" "$(STUB_PROTECTION=classic-strict-true run_verify active 1 verify)"
+}
+
+test_rerun_flips_an_existing_strict_true_ruleset_to_false() {
+    mkdir -p "$WORK_DIR/f" "$WORK_DIR/norepo"
+    cat >"$WORK_DIR/f/gh" <<'STUB'
+#!/bin/bash
+[ "$1 $2" = "auth status" ] && exit 0
+[ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
+[[ " $* " == *" -X PUT "* && "$*" == *"/rulesets/42"* ]] && { cat >"$STUB_CAPTURE"; exit 0; }
+[[ "$2" == repos/o/r/rulesets || "$2" == repos/o/r/rulesets\?* ]] && { echo 42; exit 0; }
+[ "$2" = "repos/o/r/rulesets/42" ] && { echo '{"rules":[{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true}}]}'; exit 0; }
+exit 0
+STUB
+    chmod +x "$WORK_DIR/f/gh"
+    rm -f "$WORK_DIR/flip.json"
+    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/f:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/flip.json" bash "$SCRIPT" >/dev/null 2>&1)
+    assert_has "the PUT body carries strict false" '"strict_required_status_checks_policy":false' "$(cat "$WORK_DIR/flip.json" 2>/dev/null)"
+    assert_lacks "the PUT body never carries strict true" '"strict_required_status_checks_policy":true' "$(cat "$WORK_DIR/flip.json" 2>/dev/null)"
+}
+
 test_create_sends_strict_false
+test_verify_passes_on_definite_absence_of_both_mechanisms
+test_verify_fails_when_a_mechanism_is_unreadable
+test_absence_fails_when_another_ruleset_enforces_strict
+test_classic_strict_true_names_the_remedy
+test_rerun_flips_an_existing_strict_true_ruleset_to_false
 test_update_puts_strict_false_on_an_existing_ruleset
 test_classic_strict_true_refused_false_accepted
 test_verify_refuses_a_strict_true_ruleset
@@ -269,6 +351,8 @@ test_verify_refuses_a_disabled_ruleset
 test_verify_refuses_a_ruleset_that_skips_the_default_branch
 test_verify_accepts_an_active_ruleset_on_the_default_branch
 test_check_ruleset_flags_a_disabled_ruleset
+test_confirm_ruleset_applied_only_when_confirmed
+test_unknown_argument_is_rejected
 test_check_ruleset_flags_missing
 test_check_ruleset_passes_when_present
 test_verify_reads_a_rule_on_a_later_page
