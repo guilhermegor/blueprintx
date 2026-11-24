@@ -1,13 +1,13 @@
 Package: blueprintx
-Version: 4.11.4
+Version: 4.11.5
 Architecture: all
 Maintainer: guilhermegor <guilhermegor.m1@gmail.com>
 Depends: bash (>= 4.0), git
-Filename: pool/main/blueprintx_4.11.4_all.deb
-Size: 1169566
-MD5sum: 46fabe21f22141e3ebfcb9d0755bb742
-SHA1: 4492999647c5e0c7c2d2bad29d180475e41eef34
-SHA256: 46ad34ac038622a0f76e9c50e8d3180680d4959a648ecbcc3219661ca3c44906
+Filename: pool/main/blueprintx_4.11.5_all.deb
+Size: 1170170
+MD5sum: 62a83c2d4447e516c78e302fa3d21547
+SHA1: 454acf17ecf2e507d0f0eca18c16785b7cccb0fc
+SHA256: 22aeec18fb3236d15505298cb411ea20f4761a0d22369abbd5e45428a7c6c8e6
 Section: devel
 Priority: optional
 Homepage: https://github.com/guilhermegor/blueprintx
