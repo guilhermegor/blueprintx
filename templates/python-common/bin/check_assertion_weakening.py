@@ -546,39 +546,100 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
         target = dec.func if isinstance(dec, ast.Call) else dec
         if isinstance(target, ast.Attribute) and target.attr in _SKIP_MARKERS:
             set_out.add(_marker_label(dec, str_name=target.attr))
-    set_out.update(_body_skip_labels(node_fn.body, str_guard=None))
+    set_out.update(_body_skip_labels(node_fn.body, tuple_guards=()))
     return set_out
 
 
-def _body_skip_labels(list_body: list, *, str_guard: str | None) -> set:
+def _body_skip_labels(list_body: list, *, tuple_guards: tuple[str, ...]) -> set:
     """Return the labels of ``pytest.skip()`` calls in a body, nested defs and lambdas excluded.
 
     Parameters
     ----------
     list_body : list
         Statements (or expressions) to read.
-    str_guard : str or None
-        The source of the innermost enclosing ``if`` test, ``None`` when the call always runs.
+    tuple_guards : tuple of str
+        The enclosing guards, outermost first; empty when the call always runs.
 
     Returns
     -------
     set
-        ``skip()`` for an unguarded call, ``skip(if):<guard>`` for a guarded one. ``with`` and
-        ``try`` wrappers are not guards.
+        ``skip()`` for an unguarded call, ``skip(if):<guards joined by "and">`` otherwise.
+        ``with`` and a ``try`` body are not guards; an ``except`` handler, an ``else``, a loop
+        or ``match`` body, an ``if``/conditional-expression branch are.
     """
     set_out = set()
     for node in list_body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ClassDef):
             continue
         if _is_pytest_skip_call(node):
-            set_out.add("skip()" if str_guard is None else f"skip(if):{str_guard}")
-        if isinstance(node, ast.If):
-            str_test = ast.unparse(node.test)
-            set_out |= _body_skip_labels(node.body, str_guard=str_test)
-            set_out |= _body_skip_labels(node.orelse, str_guard=f"not ({str_test})")
-        else:
-            set_out |= _body_skip_labels(list(ast.iter_child_nodes(node)), str_guard=str_guard)
+            set_out.add(_skip_label(tuple_guards))
+        for list_child, tuple_inner in _guarded_children(node, tuple_guards=tuple_guards):
+            set_out |= _body_skip_labels(list_child, tuple_guards=tuple_inner)
     return set_out
+
+
+def _skip_label(tuple_guards: tuple[str, ...]) -> str:
+    """Return ``skip()`` for no guards, else ``skip(if):`` and the guards joined by ``and``.
+
+    Parameters
+    ----------
+    tuple_guards : tuple of str
+        The enclosing guards.
+
+    Returns
+    -------
+    str
+        The label.
+    """
+    return "skip(if):" + " and ".join(tuple_guards) if tuple_guards else "skip()"
+
+
+def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
+    """Split a node's children by the guard each one runs under.
+
+    Parameters
+    ----------
+    node : ast.AST
+        Any node.
+    tuple_guards : tuple of str
+        The guards enclosing the node.
+
+    Returns
+    -------
+    list
+        ``(children, guards)`` pairs.
+    """
+    if isinstance(node, ast.If | ast.IfExp):
+        str_test = ast.unparse(node.test)
+        list_body = node.body if isinstance(node.body, list) else [node.body]
+        list_else = node.orelse if isinstance(node.orelse, list) else [node.orelse]
+        return [
+            (list_body, (*tuple_guards, str_test)),
+            (list_else, (*tuple_guards, f"not ({str_test})")),
+        ]
+    str_kind = _guard_kind(node)
+    tuple_inner = (*tuple_guards, str_kind) if str_kind else tuple_guards
+    return [(list(ast.iter_child_nodes(node)), tuple_inner)]
+
+
+def _guard_kind(node: ast.AST) -> str | None:
+    """Return a guard name for a node whose children may not run, ``None`` otherwise.
+
+    Parameters
+    ----------
+    node : ast.AST
+        Any node.
+
+    Returns
+    -------
+    str or None
+        ``except`` for a handler, ``loop`` for ``for``/``while``, ``match`` for a case.
+    """
+    if isinstance(node, ast.ExceptHandler):
+        return "except"
+    if isinstance(node, ast.For | ast.AsyncFor | ast.While):
+        return "loop"
+    return "match" if isinstance(node, ast.match_case) else None
 
 
 def _marker_label(dec: ast.expr, *, str_name: str) -> str:

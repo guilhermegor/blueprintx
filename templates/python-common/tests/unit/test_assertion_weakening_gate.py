@@ -1049,3 +1049,28 @@ def test_an_unconditional_skip_in_the_other_spelling_is_not_flagged() -> None:
     str_old = "@pytest.mark.skip\ndef test_a():\n    assert f() == 1\n"
     str_new = "def test_a():\n    pytest.skip()\n    assert f() == 1\n"
     assert _findings(str_old, str_new=str_new) == []
+
+
+_EXCEPT_SKIP = (
+    "def test_a():\n    try:\n        import db\n    except ImportError:\n"
+    "        pytest.skip()\n    assert f() == 1\n"
+)
+
+
+def test_adding_skip_to_an_except_guarded_skip_is_flagged() -> None:
+    """A skip that only ran when an import failed is conditional, so ``@skip`` is new."""
+    str_new = "@pytest.mark.skip\n" + _EXCEPT_SKIP
+    assert "skip" in _sole_finding(_EXCEPT_SKIP, str_new=str_new)
+
+
+def test_adding_an_except_guarded_skip_is_not_unconditional() -> None:
+    """The idiomatic ``except ImportError: pytest.skip()`` is a guarded skip."""
+    found = _sole_finding("def test_a():\n    assert f() == 1\n", str_new=_EXCEPT_SKIP)
+    assert "skip(if):except" in found
+
+
+def test_nested_guards_are_all_kept() -> None:
+    """``if a: if b: skip`` moved to ``@skipif(b)`` widens the skip; ``a`` is part of the guard."""
+    str_old = "def test_a():\n    if a:\n        if b:\n            pytest.skip()\n    assert 1\n"
+    str_new = "@pytest.mark.skipif(b)\ndef test_a():\n    assert 1\n"
+    assert "skipif:b" in _sole_finding(str_old, str_new=str_new)

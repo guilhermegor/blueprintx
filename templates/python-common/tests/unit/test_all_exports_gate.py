@@ -1380,3 +1380,25 @@ def test_an_unrelated_handler_does_not_exempt_an_import(tmp_path: Path) -> None:
         ),
     )
     assert "'TIMEOUT'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_a_later_real_assignment_of_a_fallback_name_is_public(tmp_path: Path) -> None:
+    """``except ImportError: x = None`` is the dependency's, but a later ``x = build()`` is not."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="try:\n    import x\nexcept ImportError:\n    x = None\nx = build()\n",
+    )
+    assert "'x'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_a_real_fallback_implementation_is_public(tmp_path: Path) -> None:
+    """``except ImportError: parse = slow_parse`` is code the package ships, not a placeholder."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "try:\n    from fast import parse\nexcept ImportError:\n    parse = slow_parse\n"
+        ),
+    )
+    assert "'parse'" in _sole(_load_gate().check_package(path_init))

@@ -303,7 +303,7 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     list_body = _parse(path_module).body
     list_nodes = list(_module_statements(list_body, bool_runtime=True))
     set_rebound = _placeholder_names(_module_statements(list_body))
-    set_rebound -= _defs_and_classes(list_nodes)
+    set_rebound -= _defs_and_classes(list_nodes) | _definitions(list_body)
     return {
         str_name
         for str_name in _definitions(list_nodes) - set_rebound
@@ -356,7 +356,7 @@ def _placeholder_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
 
 
 def _placeholder_assigns(list_body: list[ast.stmt]) -> set[str]:
-    """Return the names a body assigns ``None`` or a bare name.
+    """Return the names a body assigns ``None``, ``Any`` or ``object``.
 
     Parameters
     ----------
@@ -366,14 +366,14 @@ def _placeholder_assigns(list_body: list[ast.stmt]) -> set[str]:
     Returns
     -------
     set of str
-        Targets of ``x = None`` and ``x = Any``.
+        Targets of ``x = None``, ``x = Any`` and ``x = object``, never ``x = slow_parse``.
     """
     return {
         cls_target.id
         for cls_stmt in list_body
         if isinstance(cls_stmt, ast.Assign)
         and (
-            isinstance(cls_stmt.value, ast.Name)
+            (isinstance(cls_stmt.value, ast.Name) and cls_stmt.value.id in {"Any", "object"})
             or (isinstance(cls_stmt.value, ast.Constant) and cls_stmt.value.value is None)
         )
         for cls_target in cls_stmt.targets

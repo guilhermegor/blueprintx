@@ -1920,3 +1920,10 @@ def test_whitespace_only_comment_is_not_a_banner(str_body: str) -> None:
 def test_punctuation_rule_is_still_a_banner() -> None:
     """Item 9 of #1258: the fix must keep real rules matching, padded or not."""
     assert gate.RE_BANNER_LINE.match(" --- ") is not None
+
+
+def test_a_trailing_noqa_is_still_exempt(tmp_path: Path) -> None:
+    """Review 6045117614: the allowlist check runs before the trailing branch."""
+    path_file = tmp_path / "a.py"
+    path_file.write_text("x = 1  # noqa: E501\ny = 2  # type: ignore\n", encoding="utf-8")
+    assert gate.comment_line_count(path_file) == 0
