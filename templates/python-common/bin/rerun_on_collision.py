@@ -112,8 +112,8 @@ def colliding_prs(
     set_merged = {str_item for str_item in set_merge_files if fn_keep(str_item)}
     return sorted(
         int_pr
-        for int_pr, list_files in dict_pr_files.items()
-        if set_merged & {str_item for str_item in list_files if fn_keep(str_item)}
+        for int_pr, set_paths in dict_pr_files.items()
+        if set_merged & {str_item for str_item in set_paths if fn_keep(str_item)}
     )
 
 
@@ -172,7 +172,7 @@ def _open_pr_files(
                 set_capped.add(dict_pr["number"])
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc_err:
             dict_pr_files[dict_pr["number"]] = set()
-            print(f"::warning::skip PR #{dict_pr['number']}: cannot read files:{exc_err}")
+            print(f"::warning::skip PR #{dict_pr['number']}: cannot read files: {exc_err}")
     return dict_pr_files, set_capped
 
 
@@ -239,7 +239,7 @@ def main() -> int:
             str_repo, str_branch=str_branch, str_token=str_token
         )
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc_err:
-        print(f"cannot read set_merge list_files or open PRs: {exc_err}", file=sys.stderr)
+        print(f"cannot read merge files or open PRs: {exc_err}", file=sys.stderr)
         return 1
 
     for int_num in _targets(

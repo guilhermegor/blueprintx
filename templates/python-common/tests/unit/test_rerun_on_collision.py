@@ -29,9 +29,9 @@ def test_no_overlap_selects_nothing() -> None:
 
 def test_hot_files_are_excluded_on_both_sides() -> None:
     """A lockfile shared by the merge and a PR does not count as a collision."""
-    list_prs = {1: {"sub/poetry.lock"}, 2: {"x/poetry.lock", "a.py"}}
+    dict_prs = {1: {"sub/poetry.lock"}, 2: {"x/poetry.lock", "a.py"}}
     list_hit = cls_module.colliding_prs(
-        {"poetry.lock", "a.py"}, dict_pr_files=list_prs, list_excludes=["poetry.lock"]
+        {"poetry.lock", "a.py"}, dict_pr_files=dict_prs, list_excludes=["poetry.lock"]
     )
     assert list_hit == [2]
 
@@ -115,9 +115,9 @@ def _capped_listing(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[int, set[str]
     """List two open PRs where PR 1 hit the (patched) file-list cap and PR 2 did not."""
     monkeypatch.setattr(cls_module, "PR_FILE_CAP", 2)
     list_prs = [{"number": int_pr, "draft": False, "user": {"type": "User"}} for int_pr in (1, 2)]
-    list_files = {1: [{"filename": "x.py"}, {"filename": "y.py"}], 2: [{"filename": "z.py"}]}
+    dict_files = {1: [{"filename": "x.py"}, {"filename": "y.py"}], 2: [{"filename": "z.py"}]}
     monkeypatch.setattr(cls_module, "PAGE_SIZE", 100)
-    monkeypatch.setattr(cls_module, "_call", _answers(list_prs, list_files[1], list_files[2]))
+    monkeypatch.setattr(cls_module, "_call", _answers(list_prs, dict_files[1], dict_files[2]))
     return cls_module._open_pr_files("o/r", str_branch="main", str_token="")
 
 
