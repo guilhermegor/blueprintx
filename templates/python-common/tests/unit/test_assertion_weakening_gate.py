@@ -14,6 +14,7 @@ from pathlib import Path
 import subprocess
 import sys
 from types import ModuleType
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -895,3 +896,297 @@ def test_the_failure_omits_the_terminal_hint_with_a_terminal(
     gate.report(["some finding"], str_base="base-sha", int_changed_count=1)
 
     assert "interactive terminal" not in capsys.readouterr().out
+
+
+def test_show_reads_blobs_from_the_root_not_the_process_cwd(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 1 of #1258: ``show`` must run git in ``PATH_ROOT`` like ``_git`` does."""
+    path_repo = tmp_path / "repo"
+    path_repo.mkdir()
+    _git_in(path_repo, "init", "-q")
+    (path_repo / "a.py").write_text("X = 1\n", encoding="utf-8")
+    _git_in(path_repo, "add", ".")
+    path_elsewhere = tmp_path / "elsewhere"
+    path_elsewhere.mkdir()
+    monkeypatch.chdir(path_elsewhere)
+    monkeypatch.setattr(gate, "PATH_ROOT", path_repo)
+    assert gate.show(gate.STR_INDEX_REF, str_path="a.py") == "X = 1\n"
+
+
+@pytest.mark.parametrize(
+    "str_marker",
+    ["@pytest.mark.skipif(True, reason='x')\n", "@pytest.mark.skipif(sys.platform == 'x')\n"],
+)
+def test_a_newly_added_skipif_marker_is_flagged(str_marker: str) -> None:
+    """Item 5 of #1258: ``skipif`` escaped the ``skip``/``xfail`` match."""
+    str_old = "def test_a():\n    assert f() == 1\n"
+    str_new = f"{str_marker}def test_a():\n    assert f() == 1\n"
+    assert "skipif" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_newly_added_pytest_skip_call_is_flagged() -> None:
+    """Item 5 of #1258: ``pytest.skip()`` inside the body turns the test off too."""
+    str_old = "def test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    pytest.skip('later')\n    assert f() == 1\n"
+    assert "skip()" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_raises_keyword_form_is_not_read_as_broadened() -> None:
+    """Item 6 of #1258: ``expected_exception=ValueError`` is the same type as positional."""
+    str_old = "def test_a():\n    with pytest.raises(ValueError):\n        f()\n"
+    str_new = str_old.replace("(ValueError)", "(expected_exception=ValueError)")
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_raises_keyword_form_broadened_to_exception_is_flagged() -> None:
+    """Item 6 of #1258: reading the keyword must not blind the broadening check."""
+    str_old = (
+        "def test_a():\n    with pytest.raises(expected_exception=ValueError):\n        f()\n"
+    )
+    str_new = str_old.replace("ValueError", "Exception")
+    assert "broadened" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize("str_path", ["tests/conftest.py", "tests/helpers/util.py"])
+def test_test_support_modules_are_not_production_code(str_path: str) -> None:
+    """Item 7 of #1258: a fixture or helper under ``tests/`` is not production code."""
+    assert not gate._touches_production_code([("M", str_path, str_path)])
+
+
+def test_narrowing_skip_to_skipif_is_not_flagged() -> None:
+    """An unconditional skip made conditional narrows the skip; it is not newly skipped."""
+    str_old = "@pytest.mark.skip\ndef test_a():\n    assert f() == 1\n"
+    str_new = "@pytest.mark.skipif(sys.platform == 'x')\ndef test_a():\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_adding_strict_to_an_xfail_is_not_flagged() -> None:
+    """``xfail`` -> ``xfail(strict=True)`` tightens the marker; it is not newly marked."""
+    str_old = "@pytest.mark.xfail\ndef test_a():\n    assert f() == 1\n"
+    str_new = "@pytest.mark.xfail(strict=True)\ndef test_a():\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_nested_guards_equal_the_same_flat_skipif_condition() -> None:
+    """``if a and b: if c: skip()`` -> ``@skipif(a and b and c)`` is the same condition moved."""
+    str_old = (
+        "def test_a():\n    if a and b:\n        if c:\n            pytest.skip()\n"
+        "    assert f()\n"
+    )
+    str_new = "@pytest.mark.skipif(a and b and c)\ndef test_a():\n    assert f()\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_show_raises_when_git_cannot_be_spawned(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A gate that cannot run ``git`` stops; it does not report a comparison it never made."""
+    monkeypatch.setattr(gate.subprocess, "run", MagicMock(side_effect=FileNotFoundError))
+    with pytest.raises(FileNotFoundError):
+        gate.show("HEAD", str_path="a.py")
+
+
+def test_an_else_branch_skip_equals_the_negated_skipif_condition() -> None:
+    """``if c: ... else: pytest.skip()`` -> ``@skipif(not c)`` is the same condition moved."""
+    str_old = (
+        "def test_a():\n    if c:\n        pass\n    else:\n        pytest.skip()\n"
+        "    assert f()\n"
+    )
+    str_new = "@pytest.mark.skipif(not c)\ndef test_a():\n    assert f()\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_try_else_skip_is_conditional_not_unconditional() -> None:
+    """A skip in ``try: ... else:`` runs only when the body raised nothing, so it is guarded."""
+    str_old = (
+        "def test_a():\n    try:\n        import db\n    except ImportError:\n        pass\n"
+        "    else:\n        pytest.skip()\n    assert f()\n"
+    )
+    str_new = "@pytest.mark.skipif(True)\n" + str_old
+    assert _sole_finding(str_old, str_new=str_new).endswith("newly marked skipif:True")
+
+
+def test_widening_a_conditional_in_body_skip_to_skipif_is_flagged() -> None:
+    """The in-body ``pytest.skip()`` is not the unconditional ``@skip`` decorator."""
+    str_old = "def test_a():\n    if not DB:\n        pytest.skip()\n    assert f() == 1\n"
+    str_new = "@pytest.mark.skipif(True)\ndef test_a():\n    assert f() == 1\n"
+    assert "skipif" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_moving_an_unconditional_skip_into_a_conditional_body_skip_is_not_flagged() -> None:
+    """``@skip`` -> ``if cond: pytest.skip()`` narrows the skip, like ``skip`` -> ``skipif``."""
+    str_old = "@pytest.mark.skip\ndef test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    if not DB:\n        pytest.skip()\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_changed_skipif_condition_is_flagged() -> None:
+    """``skipif(a)`` -> ``skipif(True)`` widens the skip; the condition is part of the label."""
+    str_old = "@pytest.mark.skipif(a)\ndef test_a():\n    assert f() == 1\n"
+    str_new = "@pytest.mark.skipif(True)\ndef test_a():\n    assert f() == 1\n"
+    assert "skipif:True" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_making_a_guarded_skip_unconditional_is_flagged() -> None:
+    """``if not DB: pytest.skip()`` -> bare ``pytest.skip()`` turns the test off outright."""
+    str_old = "def test_a():\n    if not DB:\n        pytest.skip()\n    assert f() == 1\n"
+    str_new = "def test_a():\n    pytest.skip()\n    assert f() == 1\n"
+    assert "skip()" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_skipif_to_a_guarded_body_skip_is_not_flagged() -> None:
+    """``@skipif(c)`` -> ``if c: pytest.skip()`` is the same condition moved into the body."""
+    str_old = "@pytest.mark.skipif(c)\ndef test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    if c:\n        pytest.skip()\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+_GUARDED = "def test_a():\n    if {cond}:\n        pytest.skip()\n    assert f() == 1\n"
+
+
+def test_widening_a_guarded_skip_condition_is_flagged() -> None:
+    """``if not DB: pytest.skip()`` -> ``if True: pytest.skip()`` skips everywhere."""
+    found = _sole_finding(_GUARDED.format(cond="not DB"), str_new=_GUARDED.format(cond="True"))
+    assert "skip(if):True" in found
+
+
+def test_a_second_guarded_skip_is_flagged() -> None:
+    """A new guarded skip with a new condition is a new way to turn the test off."""
+    str_new = (
+        "def test_a():\n    if not DB:\n        pytest.skip()\n"
+        "    if True:\n        pytest.skip()\n    assert f() == 1\n"
+    )
+    assert "skip(if):True" in _sole_finding(_GUARDED.format(cond="not DB"), str_new=str_new)
+
+
+def test_a_skip_wrapped_in_with_is_unconditional() -> None:
+    """``with ctx: pytest.skip()`` always runs; it is not a guard."""
+    str_new = "def test_a():\n    with ctx:\n        pytest.skip()\n    assert f() == 1\n"
+    assert "skip()" in _sole_finding(_GUARDED.format(cond="not DB"), str_new=str_new)
+
+
+def test_a_skip_in_a_nested_helper_is_not_a_skip() -> None:
+    """A ``pytest.skip()`` inside a closure that is never called does not turn the test off."""
+    str_new = "def test_a():\n    def helper():\n        pytest.skip()\n    assert f() == 1\n"
+    assert _findings("def test_a():\n    assert f() == 1\n", str_new=str_new) == []
+
+
+def test_skipif_to_a_body_skip_on_another_condition_is_flagged() -> None:
+    """Moving ``@skipif(a)`` into ``if b: pytest.skip()`` changes the condition."""
+    str_old = "@pytest.mark.skipif(a)\ndef test_a():\n    assert f() == 1\n"
+    assert "skip(if):b" in _sole_finding(str_old, str_new=_GUARDED.format(cond="b"))
+
+
+def test_a_guarded_body_skip_to_skipif_on_the_same_condition_is_not_flagged() -> None:
+    """``if c: pytest.skip()`` -> ``@skipif(c)`` is the same condition moved out."""
+    str_new = "@pytest.mark.skipif(c)\ndef test_a():\n    assert f() == 1\n"
+    assert _findings(_GUARDED.format(cond="c"), str_new=str_new) == []
+
+
+def test_an_unconditional_skip_in_the_other_spelling_is_not_flagged() -> None:
+    """``@skip`` -> bare ``pytest.skip()`` is the same unconditional skip."""
+    str_old = "@pytest.mark.skip\ndef test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    pytest.skip()\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+_EXCEPT_SKIP = (
+    "def test_a():\n    try:\n        import db\n    except ImportError:\n"
+    "        pytest.skip()\n    assert f() == 1\n"
+)
+
+
+def test_adding_skip_to_an_except_guarded_skip_is_flagged() -> None:
+    """A skip that only ran when an import failed is conditional, so ``@skip`` is new."""
+    str_new = "@pytest.mark.skip\n" + _EXCEPT_SKIP
+    assert _sole_finding(_EXCEPT_SKIP, str_new=str_new).endswith("newly marked skip")
+
+
+def test_adding_an_except_guarded_skip_is_not_unconditional() -> None:
+    """The idiomatic ``except ImportError: pytest.skip()`` is a guarded skip."""
+    found = _sole_finding("def test_a():\n    assert f() == 1\n", str_new=_EXCEPT_SKIP)
+    assert "skip(if):except" in found
+
+
+def test_nested_guards_are_all_kept() -> None:
+    """``if a: if b: skip`` moved to ``@skipif(b)`` widens the skip; ``a`` is part of the guard."""
+    str_old = "def test_a():\n    if a:\n        if b:\n            pytest.skip()\n    assert 1\n"
+    str_new = "@pytest.mark.skipif(b)\ndef test_a():\n    assert 1\n"
+    assert "skipif:b" in _sole_finding(str_old, str_new=str_new)
+
+
+_EXC = (
+    "def test_a():\n    try:\n        {body}\n    except {exc}:\n"
+    "        pytest.skip()\n    assert 1\n"
+)
+
+
+def test_changing_the_except_type_of_a_skip_is_flagged() -> None:
+    """Skipping on ``AssertionError`` turns a failing test into a green one."""
+    str_old = _EXC.format(body="import db", exc="ImportError")
+    str_new = _EXC.format(body="import db", exc="AssertionError")
+    assert "except AssertionError" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_widening_the_except_type_of_a_skip_is_flagged() -> None:
+    """``except ImportError`` -> ``except Exception`` skips on far more."""
+    str_old = _EXC.format(body="import db", exc="ImportError")
+    str_new = _EXC.format(body="import db", exc="Exception")
+    assert "except Exception" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_always_true_loop_skip_is_unconditional() -> None:
+    """``while True: pytest.skip()`` always runs; it is not a guard."""
+    str_old = "def test_a():\n    while c:\n        pytest.skip()\n    assert 1\n"
+    str_new = "def test_a():\n    while True:\n        pytest.skip()\n    assert 1\n"
+    assert "skip()" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    ("str_call", "str_label"),
+    [
+        ("pytest.importorskip('db')", "importorskip()"),
+        ("pytest.xfail('no')", "xfail()"),
+        ("skip()", "skip()"),
+    ],
+)
+def test_other_ways_to_turn_a_test_off_are_flagged(*, str_call: str, str_label: str) -> None:
+    """``importorskip``, ``xfail()`` and the ``from pytest import skip`` form are skips too."""
+    str_new = f"def test_a():\n    {str_call}\n    assert f() == 1\n"
+    assert str_label in _sole_finding("def test_a():\n    assert f() == 1\n", str_new=str_new)
+
+
+def test_dropping_xfail_strict_is_flagged() -> None:
+    """A lax ``xfail`` lets an XPASS through; ``strict=True`` -> lax is a weakening."""
+    str_old = "@pytest.mark.xfail(strict=True)\ndef test_a():\n    assert f() == 1\n"
+    str_new = "@pytest.mark.xfail\ndef test_a():\n    assert f() == 1\n"
+    assert _sole_finding(str_old, str_new=str_new).endswith("newly marked xfail:;lax")
+
+
+def test_skipif_with_two_conditions_matches_an_or_guard() -> None:
+    """``skipif(a, b)`` skips when either holds, the same as ``if a or b: pytest.skip()``."""
+    str_old = "@pytest.mark.skipif(a, b)\ndef test_a():\n    assert f() == 1\n"
+    str_new = "def test_a():\n    if a or b:\n        pytest.skip()\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_nested_or_guard_is_parenthesised() -> None:
+    """``if a or b: if c: skip`` is ``(a or b) and (c)``, not ``a or b and c``."""
+    str_old = (
+        "def test_a():\n    if a or b:\n        if c:\n            pytest.skip()\n    assert 1\n"
+    )
+    str_new = "@pytest.mark.skipif(a or b and c)\ndef test_a():\n    assert 1\n"
+    assert "skipif:a or (b and c)" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_while_one_is_unconditional() -> None:
+    """``while 1: pytest.skip()`` always runs, like ``while True``."""
+    str_old = "def test_a():\n    while c:\n        pytest.skip()\n    assert 1\n"
+    str_new = "def test_a():\n    while 1:\n        pytest.skip()\n    assert 1\n"
+    assert "skip()" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_xfail_call_after_an_unconditional_skip_is_not_flagged() -> None:
+    """A test already skipped outright gains nothing from an added ``pytest.xfail()``."""
+    str_old = "@pytest.mark.skip\ndef test_a():\n    assert 1\n"
+    str_new = "@pytest.mark.skip\ndef test_a():\n    pytest.xfail()\n    assert 1\n"
+    assert _findings(str_old, str_new=str_new) == []

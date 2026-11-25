@@ -308,6 +308,7 @@ copy_global_config() {
     fi
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_fixture_scope_gate.py" "$project_path/tests/unit/test_fixture_scope_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_import_root.py" "$project_path/tests/unit/test_import_root.py"
+    cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_rerun_on_collision.py" "$project_path/tests/unit/test_rerun_on_collision.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_quality_rules_gate.py" "$project_path/tests/unit/test_quality_rules_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_one_assert_gate.py" "$project_path/tests/unit/test_one_assert_gate.py"
     cp "$COMMON_TEMPLATE_ROOT/tests/unit/test_check_unreachable_modules.py" "$project_path/tests/unit/test_check_unreachable_modules.py"
@@ -420,6 +421,7 @@ copy_github_assets() {
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/review-retry.yml" "$project_path/.github/workflows/review-retry.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-gate.yml" "$project_path/.github/workflows/pr-gate.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/pr-reconcile.yml" "$project_path/.github/workflows/pr-reconcile.yml"
+    cp "$COMMON_TEMPLATE_ROOT/.github/workflows/rerun-on-collision.yml" "$project_path/.github/workflows/rerun-on-collision.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/docstring-urls.yml" "$project_path/.github/workflows/docstring-urls.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/contract-drift.yml" "$project_path/.github/workflows/contract-drift.yml"
     cp "$COMMON_TEMPLATE_ROOT/.github/workflows/release.yml" "$project_path/.github/workflows/release.yml"
