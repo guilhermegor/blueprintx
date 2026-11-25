@@ -41,8 +41,10 @@ retrigger_waits_for_running_gate() { retrigger_job | grep -qE 'status,conclusion
 
 check "gate re-triggers when Run Tests completes, so a slow suite cannot strand it red" \
 	has_line pr-gate.yml '^  workflow_run:$'
-check "the workflow_run trigger names the Run Tests workflow" \
-	has_line pr-gate.yml '^    workflows: \["Run Tests"\]$'
+check "the workflow_run trigger names Run Tests and the gate itself" \
+	has_line pr-gate.yml '^    workflows: \["Run Tests", "PR Quality Gate"\]$'
+check "the workflow is still named PR Quality Gate, which both re-run jobs match on" \
+	has_line pr-gate.yml '^name: PR Quality Gate$'
 check "the retrigger job re-runs the failed gate run" \
 	retrigger_reruns_failed_gate
 check "the retrigger job carries the actions: write it needs" \
@@ -57,6 +59,78 @@ check "the retrigger job waits out an in-progress gate run" \
 	retrigger_waits_for_running_gate
 check "the retrigger job never checks out code" \
 	bash -c "! sed -n '/^  retrigger:/,/^  backfill:/p' '$WORKFLOWS/pr-gate.yml' | grep -q 'actions/checkout'"
+late_rerun_job() { sed -n '/^  late_rerun:/,/^  retrigger:/p' "$WORKFLOWS/pr-gate.yml"; }
+late_rerun_count() {
+	local str_attempt="$1" str_conclusion="$2" str_dir
+	str_dir=$(mktemp -d)
+	late_rerun_job | awk '/^        run: \|/{r=1;next} r&&/^  [a-z]/{exit} r' |
+		sed 's/^          //' >"$str_dir/step.sh"
+	cat >"$str_dir/gh" <<-'EOF'
+		#!/bin/bash
+		case "$*" in
+		"api "*) echo 1 ;;
+		"run view "*) echo "$FAKE_ATTEMPT completed $FAKE_CONCLUSION" ;;
+		"run list "*) echo "${FAKE_PENDING:-0}" ;;
+		"run rerun "*)
+			if [ -n "$FAKE_RERUN_ERR" ]; then
+				echo "$FAKE_RERUN_ERR" >&2
+				exit 1
+			fi
+			echo "$*" >>"$RERUN_LOG"
+			;;
+		esac
+	EOF
+	chmod +x "$str_dir/gh"
+	PATH="$str_dir:$PATH" GH_REPO=o/r HEAD_SHA=abc RUN_ID=7 RERUN_LOG="$str_dir/log" \
+		FAKE_ATTEMPT="$str_attempt" FAKE_CONCLUSION="$str_conclusion" \
+		bash -e "$str_dir/step.sh" >/dev/null 2>&1
+	LATE_RC=$?
+	if [ "$LATE_RC" -ne 0 ]; then echo "step-exit-$LATE_RC"; else
+		{ [ -f "$str_dir/log" ] && wc -l <"$str_dir/log" || echo 0; } | tr -d ' '
+	fi
+	rm -rf "$str_dir"
+}
+tests_still_running_no_rerun() { [ "$(FAKE_PENDING=1 late_rerun_count 1 failure)" = 0 ]; }
+late_failure_rerun_once() { [ "$(late_rerun_count 1 failure)" = 1 ]; }
+passing_gate_never_rerun() { [ "$(late_rerun_count 1 success)" = 0 ]; }
+rerun_attempt_never_rerun_again() { [ "$(late_rerun_count 2 failure)" = 0 ]; }
+late_rerun_rc() {
+	local str_dir
+	str_dir=$(mktemp -d)
+	late_rerun_job | awk '/^        run: \|/{r=1;next} r&&/^  [a-z]/{exit} r' |
+		sed 's/^          //' >"$str_dir/step.sh"
+	printf '#!/bin/bash\ncase "$*" in\n"api "*) echo 1 ;;\n"run view "*) echo "1 completed failure" ;;\n"run list "*) echo 0 ;;\n"run rerun "*) echo "$FAKE_RERUN_ERR" >&2; exit 1 ;;\nesac\n' >"$str_dir/gh"
+	chmod +x "$str_dir/gh"
+	PATH="$str_dir:$PATH" GH_REPO=o/r HEAD_SHA=abc RUN_ID=7 bash -e "$str_dir/step.sh" >/dev/null 2>&1
+	local int_rc=$?
+	rm -rf "$str_dir"
+	return $int_rc
+}
+rerun_already_running_is_tolerated() { FAKE_RERUN_ERR="this workflow is already running" late_rerun_rc; }
+rerun_other_error_fails_the_job() { ! FAKE_RERUN_ERR="HTTP 403: Resource not accessible" late_rerun_rc; }
+late_rerun_runs_only_on_gate_failure() {
+	late_rerun_job | grep -qF "github.event.workflow_run.name == 'PR Quality Gate'" &&
+		late_rerun_job | grep -qF "github.event.workflow_run.conclusion == 'failure'"
+}
+retrigger_runs_only_for_run_tests() {
+	retrigger_job | grep -qF "github.event.workflow_run.name == 'Run Tests'"
+}
+late_rerun_never_waits() { ! late_rerun_job | grep -q 'sleep '; }
+late_rerun_may_write_actions() { late_rerun_job | grep -qE '^ +actions: write$'; }
+check "a re-run already in flight does not fail the job" rerun_already_running_is_tolerated
+check "a re-run refused for any other reason fails the job" rerun_other_error_fails_the_job
+check "a gate that fails after the retrigger window gets exactly one re-run" \
+	late_failure_rerun_once
+check "a gate that failed while Run Tests still runs keeps its retry for retrigger" \
+	tests_still_running_no_rerun
+check "a passing gate gets no re-run" passing_gate_never_rerun
+check "a gate already re-run once is not re-run again" rerun_attempt_never_rerun_again
+check "the late re-run job fires only on a failed PR Quality Gate run" \
+	late_rerun_runs_only_on_gate_failure
+check "the retrigger job fires only for a Run Tests completion, not the gate's own" \
+	retrigger_runs_only_for_run_tests
+check "the late re-run job holds no runner waiting for the gate" late_rerun_never_waits
+check "the late re-run job carries the actions: write it needs" late_rerun_may_write_actions
 GATE_WF="$REPO_ROOT/.github/workflows/review_threads.yml"
 gate_step() {
 	local str_files="$1" str_labels="$2" str_dir int_rc
