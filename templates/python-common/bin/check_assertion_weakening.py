@@ -961,7 +961,7 @@ def _xfail_tightens(str_new: str, *, set_old: set) -> bool:
     if not str_new.startswith("xfail:"):
         return False
     return any(
-        _xfail_core(str_old) == _xfail_core(str_new)
+        _xfail_core(str_old).replace(";run=False", "") == _xfail_core(str_new)
         and (str_old.endswith(";lax") or not str_new.endswith(";lax"))
         and _xfail_raises(str_old) in {"", _xfail_raises(str_new)}
         for str_old in set_old
@@ -1492,24 +1492,31 @@ def _marker_table(str_source: str) -> tuple[dict[str, str], dict[str, set]]:
     return _pytest_names(str_source), dict_inherited
 
 
-def _flat_stmts(list_body: list) -> list:
-    """Return a body's statements with the bodies of ``if``/``try`` blocks spliced in.
+def _flat_stmts(list_body: list, *, str_guard: str = "") -> list:
+    """Return a body's statements, each with the ``if``/``try`` guard it sits under.
 
     Parameters
     ----------
     list_body : list of ast.stmt
         A module or class body.
+    str_guard : str, optional
+        The guard text of the enclosing block, ``""`` at the top level.
 
     Returns
     -------
-    list of ast.stmt
-        Every statement that runs at import time, including those under ``if`` and ``try``.
+    list of tuple
+        ``(statement, guard)`` for every statement that runs at import time.
     """
     list_out: list = []
     for cls_stmt in list_body:
-        list_out.append(cls_stmt)
-        if isinstance(cls_stmt, ast.If | ast.Try):
-            list_out.extend(_flat_stmts([*cls_stmt.body, *cls_stmt.orelse]))
+        list_out.append((cls_stmt, str_guard))
+        if isinstance(cls_stmt, ast.If):
+            str_test = _canon(cls_stmt.test)
+            str_else = _canon(ast.UnaryOp(op=ast.Not(), operand=cls_stmt.test))
+            list_out.extend(_flat_stmts(cls_stmt.body, str_guard=str_test))
+            list_out.extend(_flat_stmts(cls_stmt.orelse, str_guard=str_else))
+        elif isinstance(cls_stmt, ast.Try):
+            list_out.extend(_flat_stmts([*cls_stmt.body, *cls_stmt.orelse], str_guard="try"))
     return list_out
 
 
@@ -1526,8 +1533,8 @@ def _pytestmark_labels(list_body: list) -> set:
     set of str
         One label per ``skip``/``skipif``/``xfail`` marker, whether assigned singly or as a list.
     """
-    list_exprs: list = []
-    for cls_stmt in _flat_stmts(list_body):
+    set_out: set = set()
+    for cls_stmt, str_guard in _flat_stmts(list_body):
         list_targets = (
             cls_stmt.targets
             if isinstance(cls_stmt, ast.Assign)
@@ -1541,8 +1548,11 @@ def _pytestmark_labels(list_body: list) -> set:
         ):
             cls_value = cls_stmt.value
             is_many = isinstance(cls_value, ast.List | ast.Tuple)
-            list_exprs.extend(cls_value.elts if is_many else [cls_value])
-    return _marker_labels(list_exprs)
+            for cls_expr in cls_value.elts if is_many else [cls_value]:
+                for str_label in _marker_labels([cls_expr]):
+                    is_outright = str_guard and str_label == "skip"
+                    set_out.add(f"skip(if):{str_guard}" if is_outright else str_label)
+    return set_out
 
 
 def _index_inherited(

@@ -1309,6 +1309,21 @@ def test_a_pytestmark_under_an_if_is_a_new_marker() -> None:
     assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new + _BODY)
 
 
+def test_an_outright_skip_is_flagged_beside_a_conditional_module_skip() -> None:
+    """Review of #1328: a platform-only ``pytestmark`` does not excuse a new outright skip."""
+    str_head = "if sys.platform == 'win32':\n    pytestmark = pytest.mark.skip\n\n\n"
+    str_old = str_head + "def test_a():\n" + _BODY
+    str_new = str_head + "@pytest.mark.skip\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_xfail_that_starts_running_is_a_tightening() -> None:
+    """Review of #1328: dropping ``run=False`` makes the test run again."""
+    str_old = "@pytest.mark.xfail(strict=True, run=False)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(strict=True)\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
 def test_a_class_marker_is_a_new_marker() -> None:
     """Item of #1316: a skip decorator on the class newly skips its methods."""
     str_old = "class TestA:\n    def test_a(self):\n    " + _BODY
