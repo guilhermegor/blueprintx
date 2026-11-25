@@ -1492,6 +1492,27 @@ def _marker_table(str_source: str) -> tuple[dict[str, str], dict[str, set]]:
     return _pytest_names(str_source), dict_inherited
 
 
+def _flat_stmts(list_body: list) -> list:
+    """Return a body's statements with the bodies of ``if``/``try`` blocks spliced in.
+
+    Parameters
+    ----------
+    list_body : list of ast.stmt
+        A module or class body.
+
+    Returns
+    -------
+    list of ast.stmt
+        Every statement that runs at import time, including those under ``if`` and ``try``.
+    """
+    list_out: list = []
+    for cls_stmt in list_body:
+        list_out.append(cls_stmt)
+        if isinstance(cls_stmt, ast.If | ast.Try):
+            list_out.extend(_flat_stmts([*cls_stmt.body, *cls_stmt.orelse]))
+    return list_out
+
+
 def _pytestmark_labels(list_body: list) -> set:
     """Return the labels of the markers a body assigns to ``pytestmark``.
 
@@ -1506,7 +1527,7 @@ def _pytestmark_labels(list_body: list) -> set:
         One label per ``skip``/``skipif``/``xfail`` marker, whether assigned singly or as a list.
     """
     list_exprs: list = []
-    for cls_stmt in list_body:
+    for cls_stmt in _flat_stmts(list_body):
         list_targets = (
             cls_stmt.targets
             if isinstance(cls_stmt, ast.Assign)

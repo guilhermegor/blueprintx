@@ -1303,6 +1303,12 @@ def test_a_string_if_test_is_not_read_as_the_expression_it_spells() -> None:
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
 
 
+def test_a_pytestmark_under_an_if_is_a_new_marker() -> None:
+    """Review of #1328: ``if sys.platform == ...: pytestmark = ...`` still skips the module."""
+    str_new = "if sys.platform == 'win32':\n    pytestmark = pytest.mark.skip\n\n\ndef test_a():\n"
+    assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new + _BODY)
+
+
 def test_a_class_marker_is_a_new_marker() -> None:
     """Item of #1316: a skip decorator on the class newly skips its methods."""
     str_old = "class TestA:\n    def test_a(self):\n    " + _BODY
