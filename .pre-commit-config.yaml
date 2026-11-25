@@ -214,7 +214,7 @@ repos:
         name: gate integrity (a PR must not weaken a check without saying why)
         entry: python templates/python-common/bin/check_gate_integrity.py --root .
         language: python
-        additional_dependencies: [pyyaml]
+        additional_dependencies: [pyyaml==6.0.3]
         pass_filenames: false
         always_run: true
 

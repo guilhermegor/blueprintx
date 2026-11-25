@@ -1807,7 +1807,7 @@ def test_workflow_that_no_longer_parses_is_a_finding() -> None:
     str_new = f"jobs:\n{_STR_KEPT_JOB}  broken: [\n"
 
     assert gate.workflow_problems(f"jobs:\n{_STR_KEPT_JOB}", str_new=str_new, str_shown="w") == [
-        "w: workflow YAML does not parse, so its jobs cannot be compared"
+        "w: workflow YAML does not parse now, so its jobs cannot be compared"
     ]
 
 
@@ -1873,8 +1873,8 @@ def test_workflow_job_moved_with_a_needs_key_nested_in_a_matrix_is_clean(
     "str_extra",
     [
         "    ? needs\n    : [build]\n",
-        "    !!seq needs: [build]\n",
-        "    env: &a.b\n      A: '1'\n",
+        "    !!str needs: [build]\n",
+        "    env: &a_b\n      A: '1'\n",
     ],
 )
 def test_workflow_job_moved_with_an_exotic_dependency_or_anchor_is_removed(
@@ -1889,7 +1889,7 @@ def test_workflow_job_moved_with_an_exotic_dependency_or_anchor_is_removed(
         list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
     )
 
-    assert len(list_findings) == 1
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
 
 
 @pytest.mark.parametrize("str_on", ["on: [workflow_call]\n", "on:\n  push:\n  workflow_call:\n"])
@@ -1907,7 +1907,7 @@ def test_workflow_job_moved_between_reusable_workflows_in_list_or_map_form_is_re
     [
         "concurrency:\n  group: [ci]\n",
         "concurrency:\n  group: {a: b}\n",
-        "concurrency:\n  group: 3\n",
+        "concurrency:\n",
     ],
 )
 def test_workflow_job_moved_into_a_non_string_group_is_removed(
@@ -1924,3 +1924,45 @@ def test_workflow_job_moved_into_a_non_string_group_is_removed(
 def test_workflow_read_restores_the_on_key_that_yaml_1_1_reads_as_a_boolean() -> None:
     """``on`` parses to ``True`` in YAML 1.1; the reader restores it so triggers compare."""
     assert gate.read_workflow("on: push\njobs:\n")[0] == {"on": "push", "jobs": None}
+
+
+@pytest.mark.parametrize("str_body", ["", " ~", " foo"])
+def test_workflow_with_a_scalar_job_body_reports_instead_of_crashing(str_body: str) -> None:
+    """A job whose value is a scalar is read, not an ``AttributeError``."""
+    str_old = f"jobs:\n  x:{str_body}\n  keep:\n    runs-on: ubuntu-latest\n"
+
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
+        "w: workflow job 'x' removed"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("str_from", "str_to"),
+    [("on", "true"), ("yes", "true"), ("1", "1.0"), ("1:20", "80")],
+)
+def test_workflow_job_moved_with_a_respelled_scalar_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_from: str, str_to: str
+) -> None:
+    """YAML 1.1 reads these as equal values; GitHub passes them through as different text."""
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB + f"    env:\n      X: {str_to}\n",
+        str_job_old=_STR_MOVED_JOB + f"    env:\n      X: {str_from}\n",
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_with_a_second_document_does_not_parse() -> None:
+    """Only one document is a workflow; a second ``---`` document is a parse failure."""
+    assert gate.read_workflow("jobs:\n---\njobs:\n") is None
+
+
+def test_workflow_job_with_a_boolean_looking_id_is_still_anchored() -> None:
+    """The id is read from the same text on both sides, so ``yes`` keys one job."""
+    str_old = "jobs:\n  yes: {runs-on: ubuntu-latest}\n"
+
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  k:\n", str_shown="w") == [
+        "w: workflow job 'yes' removed"
+    ]

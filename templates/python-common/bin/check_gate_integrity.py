@@ -161,6 +161,9 @@ RE_WORKFLOW_NAME_READ = re.compile(r"""github(?:[._]|\[\s*["']\s*)workflow(?!\w)
 STR_WORKFLOW_EXPR = "${{github.workflow}}"
 STR_FLOW_CONCURRENCY = "{flow}"
 STR_MERGE_TAG = "tag:yaml.org,2002:merge"
+_SET_COERCED_TAGS = frozenset(
+    f"tag:yaml.org,2002:{str_kind}" for str_kind in ("bool", "int", "float")
+)
 _SET_HEADER_SKIPPED = frozenset({"jobs", "name", "concurrency"})
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
@@ -594,6 +597,23 @@ def _node_children(cls_node: yaml.Node) -> list:
     return []
 
 
+class StringScalarLoader(yaml.SafeLoader):
+    """A safe loader that leaves booleans and numbers as the text the file spells.
+
+    YAML 1.1 reads ``on``/``yes`` as booleans and ``1:20`` as 80, and Python then calls ``True``
+    equal to ``1``, so two jobs that GitHub passes through as different strings would compare
+    equal. Dropping the bool, int and float implicit resolvers keeps every such scalar a string.
+    """
+
+
+StringScalarLoader.yaml_implicit_resolvers = {
+    str_char: [
+        (str_tag, re_rule) for str_tag, re_rule in list_rules if str_tag not in _SET_COERCED_TAGS
+    ]
+    for str_char, list_rules in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+
+
 def node_is_shared(cls_node: yaml.Node, *, set_anchored: frozenset) -> bool:
     """Return whether a composed subtree defines an anchor or uses a merge key.
 
@@ -649,19 +669,19 @@ def anchored_job_ids(cls_root: yaml.Node, *, set_anchored: frozenset) -> frozens
             return frozenset(
                 str(cls_id.value)
                 for cls_id, cls_job in cls_value.value
-                if cls_job.flow_style
+                if getattr(cls_job, "flow_style", False)
                 or node_is_shared(cls_id, set_anchored=set_anchored)
                 or node_is_shared(cls_job, set_anchored=set_anchored)
             )
     return frozenset()
 
 
-def _parse_workflow(cls_loader: yaml.SafeLoader) -> tuple:
+def _parse_workflow(cls_loader: StringScalarLoader) -> tuple:
     """Compose then construct one document, noting which jobs defeat a move.
 
     Parameters
     ----------
-    cls_loader : yaml.SafeLoader
+    cls_loader : StringScalarLoader
         A fresh loader over the workflow text.
 
     Returns
@@ -681,6 +701,9 @@ def _parse_workflow(cls_loader: yaml.SafeLoader) -> tuple:
     cls_root = cls_loader.compose_node(None, None)
     set_anchored = frozenset(id(cls_node) for cls_node in cls_loader.anchors.values())
     set_jobs = anchored_job_ids(cls_root, set_anchored=set_anchored)
+    cls_loader.get_event()
+    if not cls_loader.check_event(yaml.StreamEndEvent):
+        raise yaml.YAMLError("expected a single document")
     return cls_loader.construct_document(cls_root), set_jobs
 
 
@@ -695,12 +718,12 @@ def read_workflow(str_text: str) -> tuple | None:
     Returns
     -------
     tuple or None
-        ``(document, set_jobs)``: the top-level mapping, its ``on`` key restored (YAML 1.1
-        reads the bare word as ``True``), and ``anchored_job_ids``. ``None`` when the text is
-        not valid YAML or its root is not a mapping, which the callers never read as a clean
+        ``(document, set_jobs)``: the top-level mapping (scalars stay strings, see
+        ``StringScalarLoader``, so ``on`` is the key ``"on"``) and
+        ``anchored_job_ids``. ``None`` when the text is not valid YAML or its root is not a mapping, which the callers never read as a clean
         file.
     """
-    cls_loader = yaml.SafeLoader(str_text)
+    cls_loader = StringScalarLoader(str_text)
     try:
         cls_document, set_jobs = _parse_workflow(cls_loader)
     except yaml.YAMLError:
@@ -709,11 +732,7 @@ def read_workflow(str_text: str) -> tuple | None:
         cls_loader.dispose()
     if not isinstance(cls_document, dict):
         return None
-    dict_document = {
-        ("on" if cls_key is True else cls_key): cls_value
-        for cls_key, cls_value in cls_document.items()
-    }
-    return dict_document, set_jobs
+    return cls_document, set_jobs
 
 
 def workflow_jobs_of(dict_document: dict) -> dict:
@@ -727,14 +746,15 @@ def workflow_jobs_of(dict_document: dict) -> dict:
     Returns
     -------
     dict
-        Id (as a string) to the job's mapping, ``{}`` for a job whose body is not one, and an
+        Id (as a string) to the job's mapping, ``{"": body}`` for a job whose body is not one
+        (so two different bad bodies differ), and an
         empty dict when ``jobs:`` is not a mapping.
     """
     cls_jobs = dict_document.get("jobs")
     if not isinstance(cls_jobs, dict):
         return {}
     return {
-        str(cls_id): cls_job if isinstance(cls_job, dict) else {}
+        str(cls_id): cls_job if isinstance(cls_job, dict) else {"": cls_job}
         for cls_id, cls_job in cls_jobs.items()
     }
 
@@ -826,9 +846,9 @@ def workflow_concurrency(dict_document: dict) -> str:
         Only the group decides a collision, so ``cancel-in-progress:`` and comments do not
         matter.
     """
-    cls_block = dict_document.get("concurrency")
-    if cls_block is None:
+    if "concurrency" not in dict_document:
         return ""
+    cls_block = dict_document["concurrency"]
     cls_group = cls_block.get("group") if isinstance(cls_block, dict) else cls_block
     if not isinstance(cls_group, str) or not cls_group.strip():
         return STR_FLOW_CONCURRENCY
@@ -989,8 +1009,12 @@ def workflow_problems(
     """
     tuple_new = read_workflow(str_new)
     tuple_old = read_workflow(str_old)
-    if tuple_new is None or tuple_old is None:
-        return [f"{str_shown}: workflow YAML does not parse, so its jobs cannot be compared"]
+    for str_side, tuple_side in (("now", tuple_new), ("at the merge-base", tuple_old)):
+        if tuple_side is None:
+            return [
+                f"{str_shown}: workflow YAML does not parse {str_side}, "
+                "so its jobs cannot be compared"
+            ]
     dict_elsewhere = dict_elsewhere or {}
     set_removed = set(workflow_jobs_of(tuple_old[0])) - set(workflow_jobs_of(tuple_new[0]))
     return [
