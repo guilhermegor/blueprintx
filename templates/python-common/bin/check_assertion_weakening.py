@@ -11,16 +11,11 @@ That diff turns a money-truncation BUG into a green suite, and nothing in the re
 blueprintx#323 hit exactly this shape for real, and blueprintx#289's review caught a human
 doing the operator-level version by hand (`==` weakened to `in`).
 
-WHY A NEW FILE, NOT AN EXTENSION OF `check_gate_integrity.py` (the issue's stated
-preference). `check_gate_integrity.py` is held by another open PR (#330, wiring the
-Makefile-pairing gate) in the same working session — editing it here would collide. This
-file duplicates a small slice of that script's git-diffing plumbing (`_git`, `show`,
-`changed_paths`, `default_branch`, `resolve_base`, `pr_body_text`, `apply_root_flag`) rather
-than importing it, because importing a sibling gate mid-flight under another open PR is a
-brittle dependency on an interface that may still move. The two files audit different
-QUESTIONS (config weakening vs. assertion weakening) rather than being two copies of the
-same check, so this is not the drift `check_codespell_sync.sh` exists to police — but the
-duplicated plumbing is real and should collapse into one shared module once #330 lands.
+WHY A NEW FILE, NOT AN EXTENSION OF `check_gate_integrity.py`. The two files audit different
+QUESTIONS (config weakening vs. assertion weakening). This file duplicates a small slice of
+that script's git-diffing plumbing (`_git`, `show`, `changed_paths`, `default_branch`,
+`resolve_base`, `pr_body_text`, `apply_root_flag`) rather than importing a sibling gate, which
+would couple it to an interface that may move.
 
 WHAT IS DECIDABLE (measured against real history before being written — see the PR body for
 the count). Comparing an assertion's AST shape between the merge-base version of a test file
@@ -34,7 +29,8 @@ and the index (staged/HEAD) version, for a function whose name is unchanged, cat
 - a `self.assertEqual`-family call weakened to a looser call (`assertTrue`,
   `assertIsNotNone`, `assertIn`, ...)
 - `pytest.raises(<SpecificError>)` broadened to no type, `Exception`, or `BaseException`
-- a `@pytest.mark.skip` / `@pytest.mark.xfail` newly added to a test that did not carry it
+- a `@pytest.mark.skip` / `skipif` / `xfail` marker or a `pytest.skip()` call, newly added to a
+  test that did not carry it
 - an `assertEqual`/`==` EXPECTED VALUE changed on one side while a non-test file *also*
   changed in the same diff — the #323 shape. Gated on production code changing in the same
   diff on purpose: a test correction in a PR that touches no production code is legitimate
@@ -79,8 +75,12 @@ PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 RE_JUSTIFICATION = re.compile(r"^\s*test-change-ok:\s*(\S.*)$", re.I | re.M)
 RE_TEST_PATH = re.compile(r"(^|/)tests/.*test_[^/]+\.py$")
 RE_DOC_PATH = re.compile(r"\.md$|(^|/)docs/")
+RE_TEST_TREE = re.compile(r"(^|/)tests/")
 
 STR_INDEX_REF = ""
+
+_SKIP_MARKERS = frozenset({"skip", "skipif", "xfail"})
+_RUNTIME_OFF = frozenset({"skip", "importorskip", "xfail"})
 
 _INT_MIN_FIELDS = 2
 _MIN_EQ_ARGS = 2
@@ -157,14 +157,16 @@ def show(str_ref: str, *, str_path: str) -> str | None:
     Returns
     -------
     str or None
-        The blob's content; ``None`` when the path does not exist there or is not valid
-        UTF-8 (mirrors ``check_gate_integrity.py::show`` — a binary defines nothing to
-        compare, and decoding by extension is the wrong fix, see that file's own note).
+        The blob's content; ``None`` when ``git show`` exits non-zero (no such path there) or
+        the blob is not valid UTF-8 (mirrors ``check_gate_integrity.py::show``: a binary defines
+        nothing to compare). A ``git`` that cannot be spawned raises, so the gate stops instead
+        of reporting a comparison it never made.
     """
     cls_proc = subprocess.run(  # noqa: S603
         ["git", "show", f"{str_ref}:{str_path}"],  # noqa: S607
         capture_output=True,
         check=False,
+        cwd=PATH_ROOT,
     )
     if cls_proc.returncode != 0:
         return None
@@ -473,9 +475,11 @@ def _raises_exception_name(node_with: ast.With) -> str | None:
         expr = item.context_expr
         if not (isinstance(expr, ast.Call) and _raises_func_name(expr) == "raises"):
             continue
-        if not expr.args:
+        list_kw = [kw.value for kw in expr.keywords if kw.arg == "expected_exception"]
+        list_exc = expr.args or list_kw
+        if not list_exc:
             return None
-        arg0 = expr.args[0]
+        arg0 = list_exc[0]
         if isinstance(arg0, ast.Name):
             return arg0.id
         if isinstance(arg0, ast.Attribute):
@@ -533,14 +537,265 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
     Returns
     -------
     set of str
-        Subset of ``{"skip", "xfail"}`` present as ``@pytest.mark.<name>`` decorators.
+        Decorator labels (``skip``, ``xfail``, ``skipif:<condition>``), plus ``skip()`` for a
+        ``pytest.skip(...)`` call outside any ``if`` and ``skip(if):<test>`` for a guarded one.
     """
     set_out = set()
     for dec in node_fn.decorator_list:
         target = dec.func if isinstance(dec, ast.Call) else dec
-        if isinstance(target, ast.Attribute) and target.attr in {"skip", "xfail"}:
-            set_out.add(target.attr)
+        if isinstance(target, ast.Attribute) and target.attr in _SKIP_MARKERS:
+            set_out.add(_marker_label(dec, str_name=target.attr))
+    set_out.update(_body_skip_labels(node_fn.body, tuple_guards=()))
     return set_out
+
+
+def _body_skip_labels(list_body: list, *, tuple_guards: tuple[str, ...]) -> set:
+    """Return the labels of ``pytest.skip()`` calls in a body, nested defs and lambdas excluded.
+
+    Parameters
+    ----------
+    list_body : list
+        Statements (or expressions) to read.
+    tuple_guards : tuple of str
+        The enclosing guards, outermost first; empty when the call always runs.
+
+    Returns
+    -------
+    set
+        ``skip()`` (or ``importorskip()``/``xfail()``) for an unguarded call, ``skip(if):<guards>``
+        otherwise.
+        ``with`` and a ``try`` body are not guards; an ``except`` handler, an ``else``, a loop
+        or ``match`` body, a ``try`` ``else``, an ``if``/conditional-expression branch are.
+    """
+    set_out = set()
+    for node in list_body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ClassDef):
+            continue
+        str_call = _skip_call_name(node)
+        if str_call:
+            set_out.add(_skip_label(tuple_guards, str_call=str_call))
+        for list_child, tuple_inner in _guarded_children(node, tuple_guards=tuple_guards):
+            set_out |= _body_skip_labels(list_child, tuple_guards=tuple_inner)
+    return set_out
+
+
+def _join_conditions(list_text: list[str], *, cls_op: ast.boolop) -> str:
+    """Join condition sources with ``and``/``or``, parenthesising exactly where precedence needs.
+
+    Parameters
+    ----------
+    list_text : list of str
+        Condition sources; a guard that is not an expression (``except X``) is kept whole.
+    cls_op : ast.boolop
+        ``ast.And()`` or ``ast.Or()``.
+
+    Returns
+    -------
+    str
+        The joined source, the sole condition unchanged.
+    """
+    if len(list_text) == 1:
+        return list_text[0]
+    try:
+        list_nodes = [ast.parse(str_t, mode="eval").body for str_t in list_text]
+    except SyntaxError:
+        str_op = " and " if isinstance(cls_op, ast.And) else " or "
+        return str_op.join(f"({str_t})" for str_t in list_text)
+    list_flat = [
+        cls_leaf
+        for cls_node in list_nodes
+        for cls_leaf in (
+            cls_node.values
+            if isinstance(cls_node, ast.BoolOp) and isinstance(cls_node.op, type(cls_op))
+            else [cls_node]
+        )
+    ]
+    return ast.unparse(ast.BoolOp(op=cls_op, values=list_flat))
+
+
+def _skip_label(tuple_guards: tuple[str, ...], *, str_call: str) -> str:
+    """Return ``<call>()`` for no guards, else ``<call>(if):`` and the guards joined by ``and``.
+
+    Parameters
+    ----------
+    tuple_guards : tuple of str
+        The enclosing guards.
+    str_call : str
+        ``skip``, ``importorskip`` or ``xfail``.
+
+    Returns
+    -------
+    str
+        The label.
+    """
+    if not tuple_guards:
+        return f"{str_call}()"
+    return f"{str_call}(if):" + _join_conditions(list(tuple_guards), cls_op=ast.And())
+
+
+def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
+    """Split a node's children by the guard each one runs under.
+
+    Parameters
+    ----------
+    node : ast.AST
+        Any node.
+    tuple_guards : tuple of str
+        The guards enclosing the node.
+
+    Returns
+    -------
+    list
+        ``(children, guards)`` pairs.
+    """
+    if isinstance(node, ast.If | ast.IfExp):
+        str_test = ast.unparse(node.test)
+        list_body = node.body if isinstance(node.body, list) else [node.body]
+        list_else = node.orelse if isinstance(node.orelse, list) else [node.orelse]
+        return [
+            (list_body, (*tuple_guards, str_test)),
+            (
+                list_else,
+                (*tuple_guards, ast.unparse(ast.UnaryOp(op=ast.Not(), operand=node.test))),
+            ),
+        ]
+    if isinstance(node, ast.Try | ast.TryStar):
+        return [
+            ([*node.body, *node.handlers, *node.finalbody], tuple_guards),
+            (node.orelse, (*tuple_guards, "try-else")),
+        ]
+    str_kind = _guard_kind(node)
+    tuple_inner = (*tuple_guards, str_kind) if str_kind else tuple_guards
+    return [(list(ast.iter_child_nodes(node)), tuple_inner)]
+
+
+def _guard_kind(node: ast.AST) -> str | None:
+    """Return a guard text for a node whose children may not run, ``None`` otherwise.
+
+    Parameters
+    ----------
+    node : ast.AST
+        Any node.
+
+    Returns
+    -------
+    str or None
+        ``except <type>`` for a handler, ``for <iterable>`` or the ``while`` test (``while
+        True`` is no guard), ``match <pattern>`` for a case.
+    """
+    if isinstance(node, ast.ExceptHandler):
+        return ("except " + ast.unparse(node.type)).strip() if node.type else "except"
+    if isinstance(node, ast.For | ast.AsyncFor):
+        return f"for {ast.unparse(node.iter)}"
+    if isinstance(node, ast.While):
+        is_always = isinstance(node.test, ast.Constant) and bool(node.test.value)
+        return None if is_always else f"while {ast.unparse(node.test)}"
+    return f"match {ast.unparse(node.pattern)}" if isinstance(node, ast.match_case) else None
+
+
+def _marker_label(dec: ast.expr, *, str_name: str) -> str:
+    """Return the label of a marker decorator, carrying its condition where it has one.
+
+    Parameters
+    ----------
+    dec : ast.expr
+        The decorator expression.
+    str_name : str
+        The marker name after ``pytest.mark.``.
+
+    Returns
+    -------
+    str
+        ``skipif:<conditions joined by or>``; ``xfail:<conditions>`` plus ``;lax`` unless
+        ``strict=True``; otherwise the bare name.
+    """
+    if str_name == "skip":
+        return "skip"
+    if not isinstance(dec, ast.Call):
+        return "xfail:;lax" if str_name == "xfail" else str_name
+    list_cond = [*dec.args, *(kw.value for kw in dec.keywords if kw.arg == "condition")]
+    str_cond = _join_conditions([ast.unparse(cond) for cond in list_cond], cls_op=ast.Or())
+    if str_name == "skipif":
+        return f"skipif:{str_cond}"
+    is_strict = any(kw.arg == "strict" and ast.unparse(kw.value) == "True" for kw in dec.keywords)
+    return f"xfail:{str_cond}" + ("" if is_strict else ";lax")
+
+
+def _marker_condition(str_marker: str) -> str | None:
+    """Return the condition source of a conditional skip label, ``None`` for any other label.
+
+    Parameters
+    ----------
+    str_marker : str
+        A label from ``_skip_or_xfail_markers``.
+
+    Returns
+    -------
+    str or None
+        The text after ``skipif:`` or ``<call>(if):``.
+    """
+    str_head, str_sep, str_tail = str_marker.partition(":")
+    is_conditional = str_head == "skipif" or str_head.endswith("(if)")
+    return str_tail if str_sep and is_conditional else None
+
+
+def _newly_marked(*, set_old: set, set_new: set) -> set:
+    """Return the labels newly added, minus restatements of what the old test already skipped.
+
+    Parameters
+    ----------
+    set_old : set
+        Labels before the change.
+    set_new : set
+        Labels after the change.
+
+    Returns
+    -------
+    set
+        Newly added labels. Adding ``strict=True`` to an ``xfail`` is a tightening, not a new
+        marker. An unconditional ``skip``/``skip()`` is the same as the other
+        spelling; a conditional skip is exempt when the old test was unconditionally skipped, or
+        already skipped on the very same condition in the other form (``@skipif(c)`` and
+        ``if c: pytest.skip()``).
+    """
+    set_added = {
+        str_m
+        for str_m in set_new - set_old
+        if not (str_m.startswith("xfail:") and f"{str_m};lax" in set_old)
+    }
+    set_conds = {_marker_condition(str_m) for str_m in set_old} - {None}
+    has_unconditional = bool(set_old & {"skip", "skip()"})
+    if has_unconditional:
+        set_added -= {"skip", "skip()", "importorskip()", "xfail()"}
+    return {
+        str_m
+        for str_m in set_added
+        if not (
+            (cond := _marker_condition(str_m)) is not None
+            and (has_unconditional or cond in set_conds)
+        )
+    }
+
+
+def _skip_call_name(node: ast.AST) -> str | None:
+    """Return ``skip``, ``importorskip`` or ``xfail`` for a call that turns a test off at run time.
+
+    Parameters
+    ----------
+    node : ast.AST
+        Any node.
+
+    Returns
+    -------
+    str or None
+        The function name for ``pytest.<name>(...)`` or a bare ``<name>(...)`` (the
+        ``from pytest import skip`` spelling), ``None`` for anything else.
+    """
+    func = node.func if isinstance(node, ast.Call) else None
+    if isinstance(func, ast.Name) and func.id in _RUNTIME_OFF:
+        return func.id
+    is_pytest = isinstance(func, ast.Attribute) and ast.unparse(func.value) == "pytest"
+    return func.attr if is_pytest and func.attr in _RUNTIME_OFF else None
 
 
 def _is_literal_ish(node: ast.expr) -> bool:
@@ -867,7 +1122,9 @@ def _function_findings(
         Findings, in the order the underlying checks appear.
     """
     list_problems = []
-    set_new_markers = _skip_or_xfail_markers(node_new) - _skip_or_xfail_markers(node_old)
+    set_new_markers = _newly_marked(
+        set_old=_skip_or_xfail_markers(node_old), set_new=_skip_or_xfail_markers(node_new)
+    )
     if set_new_markers:
         str_markers = "/".join(sorted(set_new_markers))
         list_problems.append(f"{str_path}: {str_name}() newly marked {str_markers}")
@@ -959,7 +1216,7 @@ def _touches_production_code(list_changed: list) -> bool:
     for str_status, str_src, str_path in list_changed:
         tuple_paths = (str_src, str_path) if str_status == "R" else (str_path,)
         if any(
-            not (RE_TEST_PATH.search(str_p) or RE_DOC_PATH.search(str_p)) for str_p in tuple_paths
+            not (RE_TEST_TREE.search(str_p) or RE_DOC_PATH.search(str_p)) for str_p in tuple_paths
         ):
             return True
     return False

@@ -66,16 +66,83 @@ def _parse(path_module: pathlib.Path) -> ast.Module:
         ) from cls_exc
 
 
-def _module_statements(list_body: list[ast.stmt]) -> Iterator[ast.stmt]:
+def _is_type_checking(cls_node: ast.stmt) -> bool:
+    """Return whether a statement is an ``if TYPE_CHECKING:`` block.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``if TYPE_CHECKING:`` and ``if typing.TYPE_CHECKING:``.
+    """
+    if not isinstance(cls_node, ast.If):
+        return False
+    cls_test = cls_node.test
+    return (isinstance(cls_test, ast.Name) and cls_test.id == "TYPE_CHECKING") or (
+        isinstance(cls_test, ast.Attribute) and cls_test.attr == "TYPE_CHECKING"
+    )
+
+
+def _is_main_guard(cls_node: ast.stmt) -> bool:
+    """Return whether a statement is an ``if __name__ == "__main__":`` block.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for the script entry guard, whose body binds names only when run as a script.
+    """
+    if not (isinstance(cls_node, ast.If) and isinstance(cls_node.test, ast.Compare)):
+        return False
+    cls_test = cls_node.test
+    return (
+        isinstance(cls_test.left, ast.Name)
+        and cls_test.left.id == "__name__"
+        and [type(cls_op) for cls_op in cls_test.ops] == [ast.Eq]
+        and [ast.unparse(cls_cmp) for cls_cmp in cls_test.comparators] == ["'__main__'"]
+    )
+
+
+def _is_not_runtime_surface(cls_node: ast.stmt) -> bool:
+    """Return whether a block's body is type-only or script-only, never importable API.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``if TYPE_CHECKING:`` and ``if __name__ == "__main__":``.
+    """
+    return _is_type_checking(cls_node) or _is_main_guard(cls_node)
+
+
+def _module_statements(
+    list_body: list[ast.stmt], *, bool_runtime: bool = False
+) -> Iterator[ast.stmt]:
     """Yield the statements bound at module level, descending into ``if``/``try``/``with`` blocks.
 
-    A guarded import (``try:``, ``if TYPE_CHECKING:``, ``if sys.version_info``, ``with suppress``)
+    A guarded import (``try:``, ``if sys.version_info``, ``with suppress``, and
+    ``if TYPE_CHECKING:`` unless ``bool_runtime`` is set)
     still binds a module-level name; function and class bodies do not, so they are not entered.
 
     Parameters
     ----------
     list_body : list of ast.stmt
         A module body, or the body of a block already entered.
+    bool_runtime : bool, optional
+        Skip the body of an ``if TYPE_CHECKING:`` or ``if __name__ == "__main__":`` block, whose
+        definitions are type-only stubs or script-only and never part of the runtime surface.
 
     Yields
     ------
@@ -87,9 +154,13 @@ def _module_statements(list_body: list[ast.stmt]) -> Iterator[ast.stmt]:
         if not isinstance(cls_node, _BLOCK_STATEMENTS):
             continue
         for str_field in ("body", "orelse", "finalbody"):
-            yield from _module_statements(getattr(cls_node, str_field, []))
+            if bool_runtime and str_field == "body" and _is_not_runtime_surface(cls_node):
+                continue
+            yield from _module_statements(
+                getattr(cls_node, str_field, []), bool_runtime=bool_runtime
+            )
         for cls_handler in getattr(cls_node, "handlers", []):
-            yield from _module_statements(cls_handler.body)
+            yield from _module_statements(cls_handler.body, bool_runtime=bool_runtime)
 
 
 def declared_all(path_init: pathlib.Path) -> list[str] | None:
@@ -105,20 +176,196 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
     list of str or None
         The exported names, or ``None`` when the module has no ``__all__``.
     """
-    cls_tree = ast.parse(path_init.read_text(encoding="utf-8"))
-    for cls_node in cls_tree.body:
-        if not isinstance(cls_node, ast.Assign):
+    list_names: list[str] | None = None
+    for cls_node in _parse(path_init).body:
+        list_found = _declared_names(cls_node)
+        if list_found is None:
             continue
-        for cls_target in cls_node.targets:
-            if isinstance(cls_target, ast.Name) and cls_target.id == "__all__":
-                if not isinstance(cls_node.value, ast.List | ast.Tuple):
-                    return []
-                return [
-                    cls_elt.value
-                    for cls_elt in cls_node.value.elts
-                    if isinstance(cls_elt, ast.Constant) and isinstance(cls_elt.value, str)
-                ]
-    return None
+        if _extends(cls_node):
+            list_names = [*(list_names or []), *list_found]
+        elif (
+            list_names is not None
+            and not list_found
+            and not _is_literal(getattr(cls_node, "value", None))
+        ):
+            continue
+        else:
+            list_names = list_found
+    return list_names
+
+
+def _all_target(cls_node: ast.AST) -> bool:
+    """Return whether a node is the name ``__all__``.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        Any node.
+
+    Returns
+    -------
+    bool
+        ``True`` for a ``Name`` spelled ``__all__``.
+    """
+    return isinstance(cls_node, ast.Name) and cls_node.id == "__all__"
+
+
+def _has_foreign_star(cls_value: ast.expr | None) -> bool:
+    """Return whether a list or tuple literal unpacks a value the gate cannot read.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``[*_a.__all__, 'x']`` or ``[*_names, 'x']``, the same unreadable-operand
+        case as a ``+`` sum.
+    """
+    if not isinstance(cls_value, ast.List | ast.Tuple):
+        return False
+    return any(isinstance(cls_elt, ast.Starred) for cls_elt in cls_value.elts)
+
+
+def _sum_leaves(cls_value: ast.expr) -> list[ast.expr]:
+    """Return the operands of a ``+`` chain, the value itself when it is not one.
+
+    Parameters
+    ----------
+    cls_value : ast.expr
+        An expression.
+
+    Returns
+    -------
+    list of ast.expr
+        The non-``+`` operands, left to right.
+    """
+    if isinstance(cls_value, ast.BinOp) and isinstance(cls_value.op, ast.Add):
+        return [*_sum_leaves(cls_value.left), *_sum_leaves(cls_value.right)]
+    return [cls_value]
+
+
+def _is_literal(cls_value: ast.expr | None) -> bool:
+    """Return whether a value is a list or tuple literal, or a ``+`` chain of only those.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``['a']`` and ``[] + []``, whose value is known; ``False`` for anything
+        computed.
+    """
+    if cls_value is None:
+        return False
+    return all(isinstance(cls_leaf, ast.List | ast.Tuple) for cls_leaf in _sum_leaves(cls_value))
+
+
+def _is_partial_sum(cls_value: ast.expr | None) -> bool:
+    """Return whether a value is a ``+`` chain with an operand that is not a list or tuple literal.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``_a.__all__ + ['x']``; its readable names add to what is known.
+    """
+    if not (isinstance(cls_value, ast.BinOp) and isinstance(cls_value.op, ast.Add)):
+        return False
+    list_leaves = _sum_leaves(cls_value)
+    return any(not isinstance(cls_leaf, ast.List | ast.Tuple) for cls_leaf in list_leaves)
+
+
+def _extends(cls_node: ast.stmt) -> bool:
+    """Return whether a statement adds to ``__all__`` rather than assigning it.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement that touches ``__all__``.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``+=``, ``.extend``, ``.append`` and a reassignment reading ``__all__``.
+    """
+    cls_value = getattr(cls_node, "value", None)
+    is_self_referential = isinstance(cls_node, ast.Assign | ast.AnnAssign) and any(
+        _all_target(cls_sub) for cls_sub in ast.walk(cls_value or ast.Pass())
+    )
+    return (
+        is_self_referential
+        or _is_partial_sum(cls_value)
+        or _has_foreign_star(cls_value)
+        or not isinstance(cls_node, ast.Assign | ast.AnnAssign)
+    )
+
+
+def _literal_strings(cls_value: ast.expr | None) -> list[str]:
+    """Return the string constants of a list or tuple literal, ``[]`` for any other value.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    list of str
+        The literal's string elements.
+    """
+    if isinstance(cls_value, ast.BinOp) and isinstance(cls_value.op, ast.Add):
+        return [*_literal_strings(cls_value.left), *_literal_strings(cls_value.right)]
+    if not isinstance(cls_value, ast.List | ast.Tuple):
+        return []
+    return [
+        cls_elt.value
+        for cls_elt in cls_value.elts
+        if isinstance(cls_elt, ast.Constant) and isinstance(cls_elt.value, str)
+    ]
+
+
+def _declared_names(cls_node: ast.stmt) -> list[str] | None:
+    """Return the names one statement assigns or adds to ``__all__``, or ``None`` if unrelated.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement.
+
+    Returns
+    -------
+    list of str or None
+        The literal names, or ``None`` when the statement does not touch ``__all__``.
+    """
+    if isinstance(cls_node, ast.Assign) and any(_all_target(cls_t) for cls_t in cls_node.targets):
+        return _literal_strings(cls_node.value)
+    if isinstance(cls_node, ast.AnnAssign | ast.AugAssign) and _all_target(cls_node.target):
+        is_subtraction = isinstance(cls_node, ast.AugAssign) and not isinstance(
+            cls_node.op, ast.Add
+        )
+        return (
+            None if is_subtraction or cls_node.value is None else _literal_strings(cls_node.value)
+        )
+    cls_call = cls_node.value if isinstance(cls_node, ast.Expr) else None
+    if not (isinstance(cls_call, ast.Call) and isinstance(cls_call.func, ast.Attribute)):
+        return None
+    if not (_all_target(cls_call.func.value) and cls_call.func.attr in {"extend", "append"}):
+        return None
+    cls_arg = cls_call.args[0] if cls_call.args else None
+    if cls_call.func.attr == "extend":
+        return _literal_strings(cls_arg)
+    is_string = isinstance(cls_arg, ast.Constant) and isinstance(cls_arg.value, str)
+    return [cls_arg.value] if is_string else []
 
 
 def public_names(path_module: pathlib.Path) -> set[str]:
@@ -137,10 +384,145 @@ def public_names(path_module: pathlib.Path) -> set[str]:
     set of str
         Public names bound at module level by a def, class, or assignment.
     """
+    list_body = _parse(path_module).body
+    list_nodes = list(_module_statements(list_body, bool_runtime=True))
+    set_rebound = _placeholder_names(_module_statements(list_body))
+    set_rebound -= _defs_and_classes(list_nodes) | _definitions(list_body)
     return {
         str_name
-        for str_name in _definitions(_parse(path_module).body)
+        for str_name in _definitions(list_nodes) - set_rebound
         if not str_name.startswith("_")
+    }
+
+
+def _fallback_pairs(cls_node: ast.stmt) -> list[tuple[list[ast.stmt], list[ast.stmt]]]:
+    """Return ``(guarded import body, fallback body)`` pairs of a block.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement, possibly a block.
+
+    Returns
+    -------
+    list of tuple
+        ``(try body, handler body)`` per ``except``, or ``(if body, else body)`` for an
+        ``if TYPE_CHECKING:``.
+    """
+    if isinstance(cls_node, ast.Try):
+        return [(cls_node.body, cls_handler.body) for cls_handler in cls_node.handlers]
+    if isinstance(cls_node, ast.If) and _is_type_checking(cls_node):
+        return [(cls_node.body, cls_node.orelse)]
+    return []
+
+
+def _placeholder_names(list_nodes: Iterable[ast.stmt]) -> set[str]:
+    """Return imported names that the same block rebinds to ``None`` or a bare name.
+
+    Parameters
+    ----------
+    list_nodes : iterable of ast.stmt
+        Statements to read, blocks included.
+
+    Returns
+    -------
+    set of str
+        Names imported in a ``try`` body (or ``TYPE_CHECKING`` body) and assigned a placeholder
+        in its ``except`` handler (or ``else``). An import elsewhere, or an unrelated handler,
+        does not count.
+    """
+    set_out = set()
+    for cls_node in list_nodes:
+        for list_import_body, list_fallback in _fallback_pairs(cls_node):
+            set_imported = _imported(_module_statements(list_import_body))
+            set_out |= set_imported & _placeholder_assigns(list_fallback)
+    return set_out
+
+
+def _is_placeholder(cls_value: ast.expr | None) -> bool:
+    """Return whether a value is ``None``, ``Any``, ``typing.Any`` or ``object``.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    bool
+        ``True`` for the stand-ins a missing dependency's name is bound to.
+    """
+    if isinstance(cls_value, ast.Constant):
+        return cls_value.value is None
+    if isinstance(cls_value, ast.Attribute):
+        return cls_value.attr == "Any"
+    return isinstance(cls_value, ast.Name) and cls_value.id in {"Any", "object"}
+
+
+def _placeholder_assigns(list_body: list[ast.stmt]) -> set[str]:
+    """Return the names a body assigns ``None``, ``Any`` or ``object``.
+
+    Parameters
+    ----------
+    list_body : list of ast.stmt
+        A fallback body.
+
+    Returns
+    -------
+    set of str
+        Targets of ``x = None``, ``x: Any = None``, ``x = typing.Any`` and ``x = object``,
+        never ``x = slow_parse``.
+    """
+    set_out = set()
+    for cls_stmt in list_body:
+        if isinstance(cls_stmt, ast.Assign) and _is_placeholder(cls_stmt.value):
+            set_out.update(c.id for c in cls_stmt.targets if isinstance(c, ast.Name))
+        if isinstance(cls_stmt, ast.AnnAssign) and _is_placeholder(cls_stmt.value):
+            set_out.update(c.id for c in [cls_stmt.target] if isinstance(c, ast.Name))
+    return set_out
+
+
+def _defs_and_classes(list_nodes: Iterable[ast.stmt]) -> set[str]:
+    """Return the names bound by ``def`` or ``class``, which are real definitions.
+
+    Parameters
+    ----------
+    list_nodes : iterable of ast.stmt
+        Statements to read.
+
+    Returns
+    -------
+    set of str
+        The function and class names.
+    """
+    return {
+        cls_node.name
+        for cls_node in list_nodes
+        if isinstance(cls_node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+    }
+
+
+def _imported(list_nodes: Iterable[ast.stmt]) -> set[str]:
+    """Return the names bound by ``import`` statements.
+
+    A guarded import's ``except ImportError: name = None`` fallback re-binds the imported name;
+    the name belongs to the dependency, so the fallback must not make it a definition.
+
+    Parameters
+    ----------
+    list_nodes : iterable of ast.stmt
+        Statements to read.
+
+    Returns
+    -------
+    set of str
+        The names each ``import`` or ``from ... import`` binds.
+    """
+    return {
+        (cls_alias.asname or cls_alias.name).split(".")[0]
+        for cls_node in list_nodes
+        if isinstance(cls_node, ast.Import | ast.ImportFrom)
+        for cls_alias in cls_node.names
     }
 
 
@@ -397,9 +779,10 @@ def _all_is_opaque(cls_sub: ast.AST) -> bool:
     """
     if isinstance(cls_sub, ast.Attribute | ast.Subscript):
         return isinstance(cls_sub.value, ast.Name) and cls_sub.value.id == "__all__"
-    if not isinstance(cls_sub, ast.Assign):
+    if not isinstance(cls_sub, ast.Assign | ast.AnnAssign) or cls_sub.value is None:
         return False
-    if not any(isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_sub.targets):
+    list_targets = cls_sub.targets if isinstance(cls_sub, ast.Assign) else [cls_sub.target]
+    if not any(_all_target(cls_t) for cls_t in list_targets):
         return False
     return not isinstance(cls_sub.value, ast.List | ast.Tuple) or any(
         not (isinstance(cls_elt, ast.Constant) and isinstance(cls_elt.value, str))
@@ -1238,7 +1621,10 @@ def check_package(path_init: pathlib.Path) -> list[str]:
     list of str
         Human-readable problems; empty when the export list is complete.
     """
-    list_exported = declared_all(path_init)
+    try:
+        list_exported = declared_all(path_init)
+    except _UnparseableError as cls_exc:
+        return [str(cls_exc)]
     if list_exported is None:
         return []
     set_exported = set(list_exported)
@@ -1249,6 +1635,26 @@ def check_package(path_init: pathlib.Path) -> list[str]:
                 path_init, path_module=path_module, set_exported=set_exported
             )
     return list(dict.fromkeys(list_problems))
+
+
+def _in_scope(path_init: pathlib.Path) -> bool:
+    """Return whether a package opts in: it declares ``__all__``, or cannot be read to say.
+
+    Parameters
+    ----------
+    path_init : pathlib.Path
+        The package's ``__init__.py``.
+
+    Returns
+    -------
+    bool
+        ``True`` for a declared ``__all__`` and for an unparseable file, which ``check_package``
+        then reports instead of letting it opt out in silence.
+    """
+    try:
+        return declared_all(path_init) is not None
+    except _UnparseableError:
+        return True
 
 
 def main() -> int:
@@ -1262,7 +1668,7 @@ def main() -> int:
     list_inits = [
         path_init
         for path_init in _SRC.rglob("__init__.py")
-        if _EXCLUDED_PARTS.isdisjoint(path_init.parts) and declared_all(path_init) is not None
+        if _EXCLUDED_PARTS.isdisjoint(path_init.parts) and _in_scope(path_init)
     ]
     if not list_inits:
         print(
