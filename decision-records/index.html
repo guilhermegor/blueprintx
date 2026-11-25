@@ -4172,7 +4172,71 @@ is shaped as it is; a generated project gets the behavior, not the history.</p>
 <li><code>gate-integrity</code>: diff-scoped against <code>merge-base(HEAD, main)</code>, unlike every other hook,
   because it checks a delta: a hook, rule or exclude that was removed without a
   <code>gate-change-ok: &lt;reason&gt;</code> is a violation (#309). The same script BlueprintX runs over
-  itself.</li>
+  itself. A workflow job id that leaves one workflow file is excused only when the
+  same id is NEWLY ADDED to another top-level workflow file of the same tree (the repo's
+  own <code>.github/workflows/</code>, or one <code>templates/&lt;name&gt;/.github/workflows/</code>) with an
+  identical job block, so moving a job between files is a move, not a removal (#1311).
+  Everything in the block, blank lines inside it included (they matter in a folded
+  <code>run: &gt;</code>), must match except a one-line <code>runs-on:</code> naming a hosted image
+  (<code>ubuntu-latest</code>, or <code>ubuntu-22.04</code>/<code>ubuntu-24.04</code> each optionally <code>-arm</code>: the labels
+  GitHub serves, so a retired or invented image is compared), which may change within
+  one architecture but not vanish (an image swap can change the preinstalled
+  toolchain; a gate that skips when its tool is absent stays green unless the job sets a
+  <code>*_REQUIRED</code> variable, and that variable is part of the compared <code>env:</code>, so the risk
+  is accepted for these five hosted images only): an x86_64 job moved onto an <code>-arm</code> image is compared,
+  since an architecture-specific download in its steps would break.
+  So a changed <code>name:</code> (a required status-check context keys on the name), <code>steps:</code>,
+  <code>if:</code>, <code>continue-on-error</code>, <code>env:</code> or <code>uses:</code> makes it a removal. Any other runner
+  (Windows or macOS, which change the default shell, a self-hosted or larger-runner
+  label such as <code>ubuntu-latest-64core</code> that can leave the job queued and never
+  reporting, or a sequence) is compared too. A move is also refused while the source
+  file still names the moved id (a job left behind that <code>needs:</code> it would make the
+  whole source workflow invalid). That check is a whole-word search over the source
+  file, so an id that also appears as a word elsewhere (<code>lint</code> in <code>make lint</code>) makes the
+  move a removal too; it errs toward reporting, as does a comment between jobs, which
+  the parser keeps with the job above it. The target
+  file's top-level settings outside <code>jobs:</code> (<code>on:</code>, <code>env:</code>, <code>defaults:</code>,
+  <code>permissions:</code>, <code>run-name:</code>) must equal the source file's, bar <code>name:</code> and
+  whole-line comments (a trailing <code># x</code> on a setting is compared), so a move into a file
+  triggered only by <code>workflow_dispatch</code> is a removal. A top-level setting or a job that reads
+  the workflow name (<code>github.workflow</code>, <code>github['workflow']</code>, or <code>GITHUB_WORKFLOW</code> in a
+  script line of the job, either case) is never moved, since the move changes that name;
+  a script or action that reads it internally is invisible to this textual check. The
+  <code>concurrency:</code> block is judged apart: its evaluated <code>group:</code> (compared without case,
+  <code>${{ }}</code> bodies also without whitespace, the exact <code>${{ github.workflow }}</code> token read as the <code>name:</code>) may change. A target
+  group that equals a non-empty source group, at the merge-base or after this change, is
+  a removal, since two workflows in one group cancel or queue each other's required check.
+  A group the parser does not read as one plain line (a flow mapping, also tagged or
+  anchored, a block scalar, an alias, an unbalanced quote, a continued value, no <code>group:</code>, a
+  <code>github.workflow</code> group in an unnamed file, or any other spelling of the name read) is unparsed and never excuses a move beside a non-empty
+  source group. A job never moves out of an <code>on: workflow_call</code> file: its callers <code>uses:</code>
+  the source path, so the job would stop running. Known limits, not caught: a required-
+  workflows ruleset names a workflow by file path, so moving its job defeats it while the
+  gate sees a move; the hosted-image list ages when GitHub retires a label; a target group
+  equal to a third workflow's, <code>${{ }}</code> bodies that differ as text but evaluate equal (<code>${{ 'ci' }}-x</code>
+  against <code>ci-x</code>), a job line starting with <code>[</code> or <code>{</code> (a shell test or brace group, always
+  refused as a possible flow body), exotic YAML spellings of a <code>needs:</code> key (a tag, an explicit <code>? key</code>, an escaped quoted key), a non-word anchor name, a block-scalar or flow <code>name:</code>, an unparsed source group refusing a move into a target with no group, a new job elsewhere in the target that makes the whole file invalid (actionlint's job), first-fit candidate matching, per-workflow state such as <code>github.run_number</code> and
+  <code>run_attempt</code> that changes when a job moves, a constant target group that makes runs across PRs
+  cancel each other, and a target job whose <code>name:</code> repeats an existing check context.
+  Two more limits stay: a workflow that waits on the source through
+  <code>on: workflow_run</code> (keyed on its <code>name:</code>) is in another file the gate does not read,
+  and a column-0 comment inside <code>jobs:</code> is not compared.
+  One new job excuses one removal. It also counts as removed when the id is gone from
+  the whole tree, when it only reappears in a different tree, or when the target sits in
+  a subdirectory (GitHub runs no workflow there). A job is never excused as a move when
+  its id line carries a value (a flow-style <code>gate: {...}</code> or an aliased <code>gate: *base</code>,
+  whose body the line parser does not see), when it has <code>needs:</code> (quoted or not), or
+  when it has a YAML anchor, alias or merge key (<code>&amp;x</code>, <code>*x</code>, <code>[*x]</code>, <code>!!map &amp;x</code>,
+  <code>&lt;&lt;:</code>): the job it needs, or the anchored content, lives outside the compared block,
+  so an identical text can still be skipped (<code>if: false</code> on the needed job) or changed
+  in the target. Detection is textual and errs toward reporting: a shell <code>*word</code> in a
+  <code>run:</code> line also makes the job non-movable. Known limit: whether the target file is
+  copied into generated projects is not compared. Known limit: the line parser reads
+  only a plain <code>jobs:</code> key at column 0, so a quoted <code>"jobs":</code> hides every job from the
+  comparison (no workflow in this repo spells it so; a real YAML parser, #1315, ends
+  this class of limit). Moving a file's last job out and
+  deleting the file is still reported by the deletion check, so a workflow split or
+  rename needs <code>gate-change-ok:</code>.</li>
 <li><code>assertion-weakening</code>: wired in pre-commit (<code>language: system</code>, <code>always_run</code>, so the
   caller's environment reaches it, including the <code>TEST_CHANGE_OK</code> hatch) and as its own
   <code>assertion_weakening.yaml</code> workflow (not a step of the matrix <code>test</code> job, whose check
