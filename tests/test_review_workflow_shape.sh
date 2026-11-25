@@ -36,7 +36,7 @@ retrigger_reruns_failed_gate() { retrigger_job | grep -qE 'gh run rerun'; }
 retrigger_may_write_actions() { retrigger_job | grep -qE '^ +actions: write$'; }
 retrigger_may_read_prs() { retrigger_job | grep -qE '^ +pull-requests: read$'; }
 retrigger_may_read_contents() { retrigger_job | grep -qE '^ +contents: read$'; }
-retrigger_reruns_only_failed_jobs() { retrigger_job | grep -qE 'gh run rerun "\$str_id" --failed$'; }
+tests_workflow_is_named_run_tests() { grep -qxF 'name: Run Tests' "$WORKFLOWS/tests.yml"; }
 retrigger_waits_for_running_gate() { retrigger_job | grep -qE 'status,conclusion' && retrigger_job | grep -q 'sleep '; }
 
 check "gate re-triggers when Run Tests completes, so a slow suite cannot strand it red" \
@@ -51,8 +51,8 @@ check "the retrigger job can read the PR head on a private repo" \
 	retrigger_may_read_prs
 check "the retrigger job can list a commit's PRs on a private repo" \
 	retrigger_may_read_contents
-check "the retrigger job re-runs only the failed jobs of the gate run" \
-	retrigger_reruns_only_failed_jobs
+check "the workflow the trigger names is still called Run Tests" \
+	tests_workflow_is_named_run_tests
 check "the retrigger job waits out an in-progress gate run" \
 	retrigger_waits_for_running_gate
 check "the retrigger job never checks out code" \

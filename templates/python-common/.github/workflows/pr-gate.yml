@@ -96,7 +96,7 @@ jobs:
             esac
             exit 0
           fi
-          gh run rerun "$str_id" --failed
+          gh run rerun "$str_id"
 
   backfill:
     if: github.event_name == 'workflow_dispatch' && inputs.backfill
