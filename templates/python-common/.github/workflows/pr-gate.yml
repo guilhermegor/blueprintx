@@ -88,7 +88,14 @@ jobs:
           str_run="$(gh run view "$RUN_ID" --json attempt,status,conclusion \
             --jq '"\(.attempt) \(.status) \(.conclusion)"')"
           case "$str_run" in
-          "1 completed failure") gh run rerun "$RUN_ID" || echo "re-run already in flight" ;;
+          "1 completed failure")
+            if ! str_err="$(gh run rerun "$RUN_ID" 2>&1)"; then
+              case "$str_err" in
+              *"already running"*) echo "re-run already in flight" ;;
+              *) echo "$str_err" >&2; exit 1 ;;
+              esac
+            fi
+            ;;
           *) echo "gate run $RUN_ID is '$str_run'; nothing to re-run" ;;
           esac
 
@@ -139,7 +146,12 @@ jobs:
             esac
             exit 0
           fi
-          gh run rerun "$str_id" || echo "re-run already in flight"
+          if ! str_err="$(gh run rerun "$str_id" 2>&1)"; then
+            case "$str_err" in
+            *"already running"*) echo "re-run already in flight" ;;
+            *) echo "$str_err" >&2; exit 1 ;;
+            esac
+          fi
 
   backfill:
     if: github.event_name == 'workflow_dispatch' && inputs.backfill
