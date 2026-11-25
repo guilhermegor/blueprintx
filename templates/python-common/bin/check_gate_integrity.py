@@ -832,6 +832,32 @@ def add_typed_jobs(dict_document: dict, *, str_text: str) -> dict:
     return dict_document
 
 
+def drop_typed_jobs(dict_document: dict) -> dict:
+    """Return the document without the typed copies ``add_typed_jobs`` put on each job.
+
+    Parameters
+    ----------
+    dict_document : dict
+        A parsed workflow.
+
+    Returns
+    -------
+    dict
+        The same document with every job's ``STR_TYPED_KEY`` removed, so text a search reads
+        is the file's own and not a placeholder such as the hosted-runner one.
+    """
+    cls_jobs = dict_document.get("jobs")
+    if not isinstance(cls_jobs, dict):
+        return dict_document
+    cls_clean = {
+        str_id: {k: v for k, v in cls_job.items() if k != STR_TYPED_KEY}
+        if isinstance(cls_job, dict)
+        else cls_job
+        for str_id, cls_job in cls_jobs.items()
+    }
+    return {**dict_document, "jobs": cls_clean}
+
+
 def read_workflow(str_text: str) -> tuple | None:
     """Parse a workflow with PyYAML's safe loader.
 
@@ -1065,7 +1091,9 @@ def id_is_referenced(str_id: str, *, dict_document: dict) -> bool:
         other string that holds the id as a word. Comments are not strings and do not count.
     """
     re_word = re.compile(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])")
-    return any(re_word.search(str_text) for str_text in iter_strings(dict_document))
+    return any(
+        re_word.search(str_text) for str_text in iter_strings(drop_typed_jobs(dict_document))
+    )
 
 
 def removal_is_move(
@@ -1946,7 +1974,8 @@ def recorded_findings(str_base: str) -> set:
     count is the commit that carries it: the findings it justifies are those its OWN tree
     produces against its OWN fork point (``merge-base`` of the commit and the current base,
     so a later merge of ``main`` cannot turn main's newer gates into recorded findings), and
-    a tree with findings only exists if the interactive ``GATE_CHANGE_OK`` run let it through.
+    a tree with findings normally exists only if the interactive ``GATE_CHANGE_OK`` run let it
+    through (a commit made without the hook, such as ``--no-verify``, is the exception).
     A trailer on a commit with no findings of its own justifies nothing.
 
     Parameters

@@ -1419,9 +1419,8 @@ is shaped as it is; a generated project gets the behavior, not the history.
       against `ci-x`), a new job elsewhere in the target that makes the whole file invalid (actionlint's job), first-fit candidate matching, per-workflow state such as `github.run_number` and
       `run_attempt` that changes when a job moves, a constant target group that makes runs across PRs
       cancel each other, and a target job whose `name:` repeats an existing check context.
-      Parser-level limits: a duplicate key silently keeps its last value (GitHub rejects the
-      file), and a self-referential alias makes the file unparsed. The `jobs:` key read for
-      anchors is the last one, like the constructed mapping.
+      Parser-level limit: a self-referential alias makes the file unparsed, and so does a repeated
+      key (GitHub rejects it too).
       Two more limits stay: a workflow that waits on the source through
       `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read.
       One new job excuses one removal. It also counts as removed when the id is gone from
@@ -2649,7 +2648,7 @@ the interactive commit's message with the trailer, and the gate prints that line
 justification.
 
 **Why a typed trailer is not enough.** The trailer text alone justifies nothing. A tree that
-produces findings only exists if the interactive `GATE_CHANGE_OK` run let it through, so a
+produces findings normally exists only if the interactive `GATE_CHANGE_OK` run let it through, so a
 trailer on a commit with no findings of its own, or typed before the weakening lands, covers
 nothing, and the weakening commit itself is still refused. A new weakening is not in the set and
 is refused too.
@@ -2664,4 +2663,6 @@ a commit made without the trailer keeps today's behaviour. `--no-verify` bypasse
 entirely, as before. The record is local hardening, not a forgery-proof gate: CI still accepts a
 `gate-change-ok:` trailer from `base..HEAD`, so a `--no-verify` commit with a typed trailer clears
 CI exactly as it did before. Each trailer commit is judged against `merge-base(commit, base)`, so
-a later merge of `main` does not move the base its findings are measured from.
+a later merge of `main` does not move the base its findings are measured from. Findings are
+cumulative, so a weakening committed without the hook (`--no-verify`, or arriving in a merge)
+is also covered by any later trailer commit on the branch.

@@ -2230,7 +2230,7 @@ def test_branch_justified_after_main_adds_a_gate_does_not_record_it(
 
     int_code = gate.main([])
 
-    assert (int_code, "W" in capsys.readouterr().out) == (1, True)
+    assert (int_code, "ruff.toml" in capsys.readouterr().out) == (1, True)
 
 
 @pytest.mark.parametrize(
@@ -2265,3 +2265,10 @@ def test_workflow_job_number_and_string_matrix_values_differ() -> None:
     dict_string = gate.workflow_jobs_of(gate.read_workflow(f'{str_head}["16"]\n')[0])["a"]
 
     assert dict_number != dict_string
+
+
+def test_workflow_typed_copy_is_not_text_a_job_id_is_searched_in() -> None:
+    """A job id ``typed`` is not referenced just because each job carries a typed copy."""
+    dict_document = gate.read_workflow("jobs:\n  other:\n    runs-on: ubuntu-latest\n")[0]
+
+    assert gate.id_is_referenced("typed", dict_document=dict_document) is False
