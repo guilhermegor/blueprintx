@@ -126,6 +126,7 @@ CI must check out with ``fetch-depth: 0`` — a shallow clone has no common ance
 """
 
 import ast
+from collections.abc import Iterator
 import configparser
 import difflib
 import functools
@@ -135,14 +136,15 @@ import pathlib
 import re
 import subprocess
 import sys
-from collections.abc import Iterator
 
 import yaml
+
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from gate_env import is_ci, no_terminal_note  # noqa: E402
 from gate_rename import deleted_message, rename_pairs  # noqa: E402
+
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -654,6 +656,34 @@ def anchored_job_ids(cls_root: yaml.Node, *, set_anchored: frozenset) -> frozens
     return frozenset()
 
 
+def _parse_workflow(cls_loader: yaml.SafeLoader) -> tuple:
+    """Compose then construct one document, noting which jobs defeat a move.
+
+    Parameters
+    ----------
+    cls_loader : yaml.SafeLoader
+        A fresh loader over the workflow text.
+
+    Returns
+    -------
+    tuple
+        ``(document, set_jobs)``; the document is ``None`` for an empty stream.
+
+    Raises
+    ------
+    yaml.YAMLError
+        When the text is not valid YAML.
+    """
+    cls_loader.get_event()
+    if cls_loader.check_event(yaml.StreamEndEvent):
+        return None, frozenset()
+    cls_loader.get_event()
+    cls_root = cls_loader.compose_node(None, None)
+    set_anchored = frozenset(id(cls_node) for cls_node in cls_loader.anchors.values())
+    set_jobs = anchored_job_ids(cls_root, set_anchored=set_anchored)
+    return cls_loader.construct_document(cls_root), set_jobs
+
+
 def read_workflow(str_text: str) -> tuple | None:
     """Parse a workflow with PyYAML's safe loader.
 
@@ -672,14 +702,7 @@ def read_workflow(str_text: str) -> tuple | None:
     """
     cls_loader = yaml.SafeLoader(str_text)
     try:
-        cls_loader.get_event()
-        if cls_loader.check_event(yaml.StreamEndEvent):
-            return None
-        cls_loader.get_event()
-        cls_root = cls_loader.compose_node(None, None)
-        set_anchored = frozenset(id(cls_node) for cls_node in cls_loader.anchors.values())
-        set_jobs = anchored_job_ids(cls_root, set_anchored=set_anchored)
-        cls_document = cls_loader.construct_document(cls_root)
+        cls_document, set_jobs = _parse_workflow(cls_loader)
     except yaml.YAMLError:
         return None
     finally:
