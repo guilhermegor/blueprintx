@@ -1,5 +1,6 @@
 """Should-fail witnesses for the collision selector (blueprintx#1286)."""
 
+import functools
 import importlib.util
 from pathlib import Path
 import sys
@@ -190,7 +191,7 @@ def test_update_failures_are_logged_and_the_run_still_exits_0(
         side_effect=[*list_side, dict_pull, exc_err, dict_pull, ConnectionResetError()]
     )
     monkeypatch.setattr(cls_module, "_call", mock_call)
-    monkeypatch.setattr(cls_module, "_roster_commands", lambda: [])
+    monkeypatch.setattr(cls_module, "_roster_commands", lambda: ["x"])
     assert (cls_module.main(), mock_call.call_count) == (0, 8)
 
 
@@ -238,16 +239,45 @@ def test_an_unexpected_error_in_the_follow_up_never_escapes(
     """Any exception type from the follow-up is logged, so the loop reaches the next PR."""
     monkeypatch.setattr(cls_module, "_call", lambda *a, **k: {"head": {"sha": "old"}})
     monkeypatch.setattr(cls_module, "_follow_up", mock.Mock(side_effect=AttributeError("x")))
-    assert cls_module._update_one("o/r", int_num=1, str_token="", list_commands=["x"]) is None
+    assert (
+        cls_module._review_one("o/r", int_num=1, str_old="old", str_token="", list_commands=["x"])
+        is None
+    )
 
 
-def test_no_follow_up_runs_when_nobody_is_to_be_asked(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An empty command list skips the head wait and the fingerprint reads entirely."""
-    monkeypatch.setattr(cls_module, "_call", lambda *a, **k: {"head": {"sha": "old"}})
-    mock_follow = mock.Mock()
-    monkeypatch.setattr(cls_module, "_follow_up", mock_follow)
-    cls_module._update_one("o/r", int_num=1, str_token="", list_commands=[])
-    assert mock_follow.call_count == 0
+def test_no_head_is_read_when_nobody_is_to_be_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a review to request, the update makes only the PUT and reads no head."""
+    mock_call = mock.Mock(return_value=None)
+    monkeypatch.setattr(cls_module, "_call", mock_call)
+    cls_module._update_one("o/r", int_num=1, str_token="", bool_track_head=False)
+    assert mock_call.call_count == 1
+
+
+def _record_update(list_events: list[str], *args: object, int_num: int, **kwargs: object) -> str:
+    """Record the update and report an old head."""
+    list_events.append(f"u{int_num}")
+    return "o"
+
+
+def test_a_slow_review_never_delays_the_remaining_updates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every PUT happens before the first review wait starts."""
+    list_events: list[str] = []
+    monkeypatch.setenv("RERUN_TOKEN", "x")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("AFTER_SHA", "b")
+    monkeypatch.setattr(cls_module, "_roster_commands", lambda: ["x"])
+    monkeypatch.setattr(cls_module, "_merge_files", lambda *a, **k: {"a.py"})
+    monkeypatch.setattr(
+        cls_module, "_open_pr_files", lambda *a, **k: ({1: {"a.py"}, 2: {"a.py"}}, set())
+    )
+    monkeypatch.setattr(cls_module, "_update_one", functools.partial(_record_update, list_events))
+    monkeypatch.setattr(
+        cls_module, "_review_one", lambda *a, int_num, **k: list_events.append(f"r{int_num}")
+    )
+    cls_module.main()
+    assert list_events == ["u1", "u2", "r1", "r2"]
 
 
 def test_a_missing_review_gate_requests_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -367,7 +397,10 @@ def test_a_failed_review_request_does_not_stop_the_run(monkeypatch: pytest.Monke
     """A follow-up that raises is logged; the update stays done and the run goes on."""
     monkeypatch.setattr(cls_module, "_call", lambda *a, **k: {"head": {"sha": "old"}})
     monkeypatch.setattr(cls_module, "_follow_up", mock.Mock(side_effect=ValueError("boom")))
-    assert cls_module._update_one("o/r", int_num=1, str_token="", list_commands=["x"]) is None
+    assert (
+        cls_module._review_one("o/r", int_num=1, str_old="old", str_token="", list_commands=["x"])
+        is None
+    )
 
 
 def test_an_unusable_roster_requests_nothing(monkeypatch: pytest.MonkeyPatch) -> None:

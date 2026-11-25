@@ -21,6 +21,8 @@ jobs:
         with:
           python-version: "3.12"
 
+      - run: pip install --quiet pyyaml
+
       - name: Update colliding PRs
         env:
           RERUN_TOKEN: ${{ secrets.RERUN_TOKEN }}

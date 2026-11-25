@@ -40,17 +40,17 @@ PR when the fingerprints differ. An unchanged fingerprint posts nothing: the car
 review stands. A fingerprint that cannot be computed counts as changed, the gate's own fail-closed
 reading. Who is asked comes from ``.review-bots.yaml`` through the gate's loaders: only a
 ``posts: threads`` login with an entry in ``REVIEW_COMMANDS`` is asked, so a roster with no such
-login (or none at all) requests nothing. Requests go out in ascending PR number, which is age
-order, one comment per PR and reviewer per run, so a merge that collides with many PRs does not
-burst one reviewer's quota. Two merges in a row that both collide with a PR each post a request:
-a request already pending is not detected. The head wait is bounded (HEAD_POLLS x
-HEAD_POLL_SECONDS per PR, serial, inside the job's ``timeout-minutes``); a head that never moves
-is logged as a warning and requests nothing. The review gate is imported best-effort: when it is
-missing the branch updates still run and nothing is requested. The comment is authored by the
-``RERUN_TOKEN`` user (the same
-``pull-requests: write`` the update needs): CodeRabbit ignores bot-authored comments. The
-fingerprint reads use ``gh``, which takes its token from ``GH_TOKEN``; the workflow sets it to
-``RERUN_TOKEN``.
+login (or none at all) requests nothing. Every branch update runs first; the head waits and
+review requests follow as a second pass, so a slow wait never delays an update. Requests go out
+in ascending PR number, which is age order, one comment per PR and reviewer per run, so a merge
+that collides with many PRs does not burst one reviewer's quota. Two merges in a row that both
+collide with a PR each post a request: a request already pending is not detected. The head wait
+is bounded (HEAD_POLLS x HEAD_POLL_SECONDS per PR, serial, inside the job's
+``timeout-minutes``); a head that never moves is logged as a warning and requests nothing. The
+review gate is imported best-effort: when it is missing the branch updates still run and nothing
+is requested. The comment is authored by the ``RERUN_TOKEN`` user (the same ``pull-requests:
+write`` the update needs): CodeRabbit ignores bot-authored comments. The fingerprint reads use
+``gh``, which takes its token from ``GH_TOKEN``; the workflow sets it to ``RERUN_TOKEN``.
 """
 
 from collections.abc import Callable
@@ -67,7 +67,7 @@ import urllib.request
 
 try:
     import check_review_threads
-except ImportError:
+except Exception:  # noqa: BLE001
     check_review_threads = None  # type: ignore[assignment]
 
 
@@ -361,22 +361,38 @@ def _follow_up(
     _ask_for_review(str_repo, int_num=int_num, str_token=str_token, list_commands=list_commands)
 
 
-def _update_one(str_repo: str, *, int_num: int, str_token: str, list_commands: list[str]) -> None:
-    """Update one PR's branch, then request a review if its own patch changed."""
+def _update_one(
+    str_repo: str, *, int_num: int, str_token: str, bool_track_head: bool
+) -> str | None:
+    """Update one PR's branch; return its head before the update, or None when it was skipped.
+
+    The head is only read when ``bool_track_head`` is set (a review may be requested), so a
+    run with nobody to ask makes no extra call. The empty string stands for "updated, head
+    not read".
+    """
     try:
-        str_old = _pull(str_repo, int_num=int_num, str_token=str_token)["head"]["sha"]
+        str_old = (
+            _pull(str_repo, int_num=int_num, str_token=str_token)["head"]["sha"]
+            if bool_track_head
+            else ""
+        )
         _call(
             "PUT", str_path=f"repos/{str_repo}/pulls/{int_num}/update-branch", str_token=str_token
         )
         print(f"updated PR #{int_num}")
     except urllib.error.HTTPError as exc_err:
         print(f"skip PR #{int_num}: HTTP {exc_err.code}")
-        return
+        return None
     except (OSError, ValueError, KeyError, TypeError) as exc_err:
         print(f"skip PR #{int_num}: {exc_err}")
-        return
-    if not list_commands:
-        return
+        return None
+    return str_old
+
+
+def _review_one(
+    str_repo: str, *, int_num: int, str_old: str, str_token: str, list_commands: list[str]
+) -> None:
+    """Request a review for one updated PR; any failure is logged and never raised."""
     try:
         _follow_up(
             str_repo,
@@ -436,10 +452,23 @@ def main() -> int:
         return 1
 
     list_commands = _roster_commands()
+    dict_updated = {}
     for int_num in _targets(
         set_merge, dict_pr_files=dict_pr_files, list_excludes=list_excludes, set_capped=set_capped
     ):
-        _update_one(str_repo, int_num=int_num, str_token=str_token, list_commands=list_commands)
+        str_old = _update_one(
+            str_repo, int_num=int_num, str_token=str_token, bool_track_head=bool(list_commands)
+        )
+        if str_old is not None:
+            dict_updated[int_num] = str_old
+    for int_num, str_old in dict_updated.items() if list_commands else ():
+        _review_one(
+            str_repo,
+            int_num=int_num,
+            str_old=str_old,
+            str_token=str_token,
+            list_commands=list_commands,
+        )
     return 0
 
 
