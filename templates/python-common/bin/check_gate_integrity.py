@@ -175,6 +175,8 @@ _SET_WEAKER_THAN_EQ = frozenset({"in", "not in", ">=", "<=", "!="})
 _SET_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
 
 STR_INDEX_REF = ""
+STR_TRAILER_HINT = "gate-change-ok: <the same reason>"
+STR_TRAILER_GREP = "^[[:space:]]*gate-change-ok:[[:space:]]*[^[:space:]]"
 
 _INT_MIN_FIELDS = 2
 
@@ -272,7 +274,9 @@ def changed_paths(str_base: str) -> list:
     list of tuple
         ``(status_letter, path)``, e.g. ``("D", "bin/ci/check_actions.sh")``.
     """
-    str_out = _git(["diff", "--cached", "--name-status", "--no-renames", str_base])
+    list_args = ["diff", "--name-status", "--no-renames"]
+    list_args += [str_base, STR_INDEX_REF] if STR_INDEX_REF else ["--cached", str_base]
+    str_out = _git(list_args)
     list_rows = []
     for str_line in str_out.splitlines():
         list_parts = str_line.split("\t")
@@ -1831,12 +1835,85 @@ def justification_reason(str_base: str) -> str:
     str_env = env_reason()
     if str_env:
         return str_env
-    str_trailers = _git(["log", "--encoding=UTF-8", f"{str_base}..HEAD", "--format=%B"])
+    str_trailers = ""
+    if is_ci():
+        str_trailers = _git(["log", "--encoding=UTF-8", f"{str_base}..HEAD", "--format=%B"])
     for str_text in (pr_body_text(), str_trailers):
         cls_match = RE_JUSTIFICATION.search(str_text)
         if cls_match and cls_match.group(1).strip():
             return cls_match.group(1).strip()
     return ""
+
+
+def findings_at(str_ref: str, *, str_base: str) -> list:
+    """Return the findings ``str_base..str_ref`` produces, as if ``str_ref`` were the index.
+
+    Parameters
+    ----------
+    str_ref : str
+        A commit on the branch, read in place of the index.
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    list of str
+        The same findings the pre-commit run reported when that commit was made.
+    """
+    global STR_INDEX_REF  # noqa: PLW0603
+    str_saved = STR_INDEX_REF
+    STR_INDEX_REF = str_ref
+    try:
+        return collect_problems(changed_paths(str_base), str_base=str_base)
+    finally:
+        STR_INDEX_REF = str_saved
+
+
+def recorded_findings(str_base: str) -> set:
+    """Return the findings the owner justified in commits already on the branch.
+
+    A ``gate-change-ok:`` trailer is only a claim, and an agent can type one. What makes it
+    count is the commit that carries it: the findings it justifies are those its OWN tree
+    produces, and a tree with findings only exists if the interactive ``GATE_CHANGE_OK`` run
+    let it through. A trailer on a commit with no findings of its own justifies nothing.
+
+    Parameters
+    ----------
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    set of str
+        Findings produced by the tree of at least one trailer-carrying commit since the base.
+    """
+    str_out = _git(
+        ["log", "-E", "-i", f"--grep={STR_TRAILER_GREP}", "--format=%H", f"{str_base}..HEAD"]
+    )
+    set_recorded: set = set()
+    for str_sha in str_out.split():
+        set_recorded.update(findings_at(str_sha, str_base=str_base))
+    return set_recorded
+
+
+def branch_justified(list_problems: list, *, str_base: str) -> bool:
+    """Return whether every current finding was already justified on this branch.
+
+    Parameters
+    ----------
+    list_problems : list of str
+        Findings from ``collect_problems``.
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    bool
+        ``True`` only locally and only when no finding is new; CI keeps its own sources.
+    """
+    if is_ci():
+        return False
+    return set(list_problems) <= recorded_findings(str_base)
 
 
 def apply_root_flag(list_argv: list) -> bool:
@@ -1964,6 +2041,14 @@ def report(list_problems: list, *, str_base: str, int_changed_count: int) -> int
     str_reason = justification_reason(str_base)
     if str_reason:
         print(f"\n✅ justified: gate-change-ok: {str_reason}")
+        if not is_ci():
+            print(f"   to cover later commits, end this commit's message with: {STR_TRAILER_HINT}")
+        return 0
+    if branch_justified(list_problems, str_base=str_base):
+        print(
+            "\n✅ justified earlier on this branch (gate-change-ok trailer on a commit whose "
+            "own tree carries these findings)"
+        )
         return 0
 
     print(

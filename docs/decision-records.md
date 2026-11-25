@@ -2631,3 +2631,31 @@ the ruleset or in classic branch protection, and when a `required_status_checks`
 checks. A strict-on setting is therefore the violation, and the required checks must still exist.
 The #302 failure mode (six tier checks red because #293 had not merged) is accepted and is caught
 on main instead of at merge time.
+
+## A justified gate change is honoured on the rest of the branch (`check_gate_integrity.py`, #1323)
+
+The local gate judges the whole branch against its merge-base, so after the owner justified a
+weakening with `GATE_CHANGE_OK` every later commit (a test-only fix, the merge of `main`) was
+refused for the same finding and needed the owner at a terminal again (PR #1321, PR #1280).
+
+**Decision.** A local run passes when every current finding is in the set justified by a commit
+already on the branch. A commit counts when its message carries a `gate-change-ok: <reason>`
+trailer, and the findings it justifies are the ones that commit's own tree produces
+(`findings_at`, the same checks with that commit read in place of the index). The owner ends
+the interactive commit's message with the trailer, and the gate prints that line on an env
+justification.
+
+**Why it cannot be forged by an agent.** The trailer text alone justifies nothing. A tree that
+produces findings only exists if the interactive `GATE_CHANGE_OK` run let it through, so a
+trailer on a commit with no findings of its own, or typed before the weakening lands, covers
+nothing, and the weakening commit itself is still refused. A new weakening is not in the set and
+is refused too.
+
+**What changed with it.** A local run no longer reads a bare trailer from `base..HEAD` as a
+blanket reason: that was the same forgery (one clean commit with a trailer, then any weakening).
+CI keeps the PR body and trailer sources unchanged, since a reviewer reads those.
+
+**Known limits.** The trailer is typed by the owner, not written by the hook, because the message
+does not exist at the `pre-commit` stage and a `prepare-commit-msg` hook would widen the surface;
+a commit made without the trailer keeps today's behaviour. `--no-verify` bypasses the hook
+entirely, as before.

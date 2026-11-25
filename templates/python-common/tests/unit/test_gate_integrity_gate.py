@@ -131,8 +131,13 @@ def test_justification_reason_prefers_env_without_calling_git(
 def test_justification_reason_falls_back_when_env_is_blank(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """NEGATIVE CONTROL: an unset/blank env var must not mask a real trailer/PR-body reason."""
-    _local_shell(monkeypatch)
+    """NEGATIVE CONTROL: an unset/blank env var must not mask a real trailer/PR-body reason.
+
+    Runs as CI: locally a bare trailer is a claim anyone can type, so it justifies nothing by
+    itself (see the ``branch_justified`` tests below).
+    """
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("CI", "true")
     monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
     monkeypatch.setattr(gate, "_git", lambda _args: "gate-change-ok: from trailer")
     monkeypatch.setattr(gate, "pr_body_text", lambda: "")
@@ -2044,3 +2049,171 @@ def test_workflow_with_a_shared_alias_chain_is_read_without_blowing_up() -> None
     str_text = "a: &a [x, x]\nb: &b [*a, *a]\nc: &c [*b, *b]\nd: &d [*c, *c]\ne: [*d, *d]\n"
 
     assert len(list(gate.iter_strings(gate.read_workflow(str_text)[0]))) == 7
+
+
+_STR_RUFF_BASE = '[lint]\nselect = ["E", "F"]\nignore = []\n'
+_STR_RUFF_WEAKER = '[lint]\nselect = ["E", "F"]\nignore = ["E501"]\n'
+_STR_RUFF_WEAKEST = '[lint]\nselect = ["E", "F"]\nignore = ["E501", "E402"]\n'
+_STR_TRAILER = "feat: x\n\ngate-change-ok: owner reviewed the ignore\n"
+
+
+def _stage(path_repo: Path, *, str_name: str, str_text: str) -> None:
+    """Write a file under the repo and stage it.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        The repository.
+    str_name : str
+        Repository-relative file name.
+    str_text : str
+        File content.
+    """
+    (path_repo / str_name).parent.mkdir(parents=True, exist_ok=True)
+    (path_repo / str_name).write_text(str_text, encoding="utf-8")
+    _git_in(path_repo, "add", str_name)
+
+
+def _commit_staged(path_repo: Path, *, str_message: str) -> None:
+    """Commit the index, as the pre-commit run that already passed would let it.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        The repository.
+    str_message : str
+        Full commit message.
+    """
+    _git_in(path_repo, "commit", "-q", "-m", str_message)
+
+
+@pytest.fixture
+def path_branch(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return a repo on ``feature`` forked from a ``main`` that carries a strict ``ruff.toml``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided scratch directory.
+    monkeypatch : pytest.MonkeyPatch
+        Puts the gate in a local shell, with no ``GATE_CHANGE_OK``, inside the repo.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository, checked out on ``feature``.
+    """
+    _local_shell(monkeypatch)
+    monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
+    _git_in(tmp_path, "init", "-q", "--initial-branch=main")
+    _git_in(tmp_path, "config", "user.email", "t@example.com")
+    _git_in(tmp_path, "config", "user.name", "t")
+    _stage(tmp_path, str_name="ruff.toml", str_text=_STR_RUFF_BASE)
+    _commit_staged(tmp_path, str_message="seed")
+    _git_in(tmp_path, "checkout", "-q", "-b", "feature")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+@pytest.fixture
+def path_weakened(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return ``path_branch`` after the owner's justified, interactive weakening commit.
+
+    The commit is made with ``GATE_CHANGE_OK`` set and no trailer in its message.
+
+    Parameters
+    ----------
+    path_branch : pathlib.Path
+        The branch fixture.
+    monkeypatch : pytest.MonkeyPatch
+        Sets then clears ``GATE_CHANGE_OK``.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository after the weakening commit.
+    """
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    monkeypatch.setenv("GATE_CHANGE_OK", "owner reviewed the ignore")
+    _commit_staged(path_branch, str_message="feat: x")
+    monkeypatch.delenv("GATE_CHANGE_OK")
+    return path_branch
+
+
+@pytest.fixture
+def path_recorded(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return ``path_branch`` after the weakening commit that ALSO carries the trailer.
+
+    Parameters
+    ----------
+    path_branch : pathlib.Path
+        The branch fixture.
+    monkeypatch : pytest.MonkeyPatch
+        Sets then clears ``GATE_CHANGE_OK``.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository after the weakening commit.
+    """
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    monkeypatch.setenv("GATE_CHANGE_OK", "owner reviewed the ignore")
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    monkeypatch.delenv("GATE_CHANGE_OK")
+    return path_branch
+
+
+def test_branch_justified_without_a_trailer_still_refuses_a_later_commit(
+    path_weakened: Path,
+) -> None:
+    """The defect as measured on #1321: a later tests-only commit is refused again."""
+    _stage(path_weakened, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+
+    assert gate.main([]) == 1
+
+
+def test_branch_justified_by_recorded_trailer_passes_a_tests_only_commit(
+    path_recorded: Path,
+) -> None:
+    """SHOULD PASS: the finding was justified on this branch, so a test-only commit is clean."""
+    _stage(path_recorded, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+
+    assert gate.main([]) == 0
+
+
+def test_branch_justified_by_recorded_trailer_passes_with_nothing_new_staged(
+    path_recorded: Path,
+) -> None:
+    """SHOULD PASS: the merge-with-main shape — nothing of this branch's own changes."""
+    assert gate.main([]) == 0
+
+
+def test_branch_justified_by_recorded_trailer_refuses_a_new_weakening(
+    path_recorded: Path,
+) -> None:
+    """SHOULD FAIL: a NEW weakening on a justified branch still needs a fresh override."""
+    _stage(path_recorded, str_name="ruff.toml", str_text=_STR_RUFF_WEAKEST)
+
+    assert gate.main([]) == 1
+
+
+def test_branch_justified_forged_trailer_on_a_clean_commit_justifies_nothing(
+    path_branch: Path,
+) -> None:
+    """SHOULD FAIL: an agent-typed trailer on a commit with no findings of its own is void."""
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+
+    assert gate.main([]) == 1
+
+
+def test_local_run_ignores_a_bare_trailer_in_history(
+    path_branch: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local run reads no trailer as a blanket reason; only CI keeps that source."""
+    monkeypatch.setattr(gate, "pr_body_text", lambda: "")
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+
+    assert gate.justification_reason(_git_in(path_branch, "rev-parse", "main")) == ""
