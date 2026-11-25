@@ -1930,16 +1930,15 @@ def test_a_trailing_noqa_is_still_exempt(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("str_source", "int_comments"),
+    ("str_source", "list_sizes"),
     [
-        ("foo(\n    # full\n    a,  # trail\n)\n", 2),
-        ('x = """a\nb"""  # trail\n', 1),
+        ("foo(\n    # full\n    # full2\n    a,  # trail\n)\n", [2, 1]),
+        ('x = """a\nb"""  # trail\n# full\n', [1, 1]),
     ],
 )
 def test_trailing_and_full_line_comments_are_told_apart_across_lines(
-    tmp_path: Path, *, str_source: str, int_comments: int
+    *, str_source: str, list_sizes: list[int]
 ) -> None:
     """The ``line`` slice is the comment's own physical line, also after a multi-line string."""
-    path_file = tmp_path / "a.py"
-    path_file.write_text(str_source, encoding="utf-8")
-    assert gate.comment_line_count(path_file) == int_comments
+    list_blocks = gate.python_blocks(str_source)
+    assert [len(list_lines) for _, list_lines in list_blocks] == list_sizes

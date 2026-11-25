@@ -106,6 +106,7 @@ def _is_main_guard(cls_node: ast.stmt) -> bool:
     return (
         isinstance(cls_test.left, ast.Name)
         and cls_test.left.id == "__name__"
+        and [type(cls_op) for cls_op in cls_test.ops] == [ast.Eq]
         and [ast.unparse(cls_cmp) for cls_cmp in cls_test.comparators] == ["'__main__'"]
     )
 

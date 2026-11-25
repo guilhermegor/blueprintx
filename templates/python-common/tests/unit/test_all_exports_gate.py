@@ -1325,6 +1325,16 @@ def test_an_annotated_computed_all_in_a_private_module_may_provide_any_name(
     assert "'Doc' in __all__" in _sole(_load_gate().check_package(path_init))
 
 
+def test_a_not_main_guard_body_is_still_importable_api(tmp_path: Path) -> None:
+    """``if __name__ != "__main__":`` runs on import, so its definitions are public."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="if __name__ != '__main__':\n    def helper(): ...\n",
+    )
+    assert "'helper'" in _sole(_load_gate().check_package(path_init))
+
+
 @pytest.mark.parametrize(
     "str_member",
     [

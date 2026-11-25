@@ -565,7 +565,7 @@ def _body_skip_labels(list_body: list, *, tuple_guards: tuple[str, ...]) -> set:
         ``skip()`` (or ``importorskip()``/``xfail()``) for an unguarded call, ``skip(if):<guards>``
         otherwise.
         ``with`` and a ``try`` body are not guards; an ``except`` handler, an ``else``, a loop
-        or ``match`` body, an ``if``/conditional-expression branch are.
+        or ``match`` body, a ``try`` ``else``, an ``if``/conditional-expression branch are.
     """
     set_out = set()
     for node in list_body:
@@ -658,6 +658,11 @@ def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
                 list_else,
                 (*tuple_guards, ast.unparse(ast.UnaryOp(op=ast.Not(), operand=node.test))),
             ),
+        ]
+    if isinstance(node, ast.Try | ast.TryStar):
+        return [
+            ([*node.body, *node.handlers, *node.finalbody], tuple_guards),
+            (node.orelse, (*tuple_guards, "try-else")),
         ]
     str_kind = _guard_kind(node)
     tuple_inner = (*tuple_guards, str_kind) if str_kind else tuple_guards

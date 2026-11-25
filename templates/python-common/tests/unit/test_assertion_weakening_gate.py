@@ -995,6 +995,16 @@ def test_an_else_branch_skip_equals_the_negated_skipif_condition() -> None:
     assert _findings(str_old, str_new=str_new) == []
 
 
+def test_a_try_else_skip_is_conditional_not_unconditional() -> None:
+    """A skip in ``try: ... else:`` runs only when the body raised nothing, so it is guarded."""
+    str_old = (
+        "def test_a():\n    try:\n        import db\n    except ImportError:\n        pass\n"
+        "    else:\n        pytest.skip()\n    assert f()\n"
+    )
+    str_new = "@pytest.mark.skipif(True)\n" + str_old
+    assert _sole_finding(str_old, str_new=str_new).endswith("newly marked skipif:True")
+
+
 def test_widening_a_conditional_in_body_skip_to_skipif_is_flagged() -> None:
     """The in-body ``pytest.skip()`` is not the unconditional ``@skip`` decorator."""
     str_old = "def test_a():\n    if not DB:\n        pytest.skip()\n    assert f() == 1\n"
