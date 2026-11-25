@@ -85,7 +85,9 @@ late_rerun_count() {
 		FAKE_ATTEMPT="$str_attempt" FAKE_CONCLUSION="$str_conclusion" \
 		bash -e "$str_dir/step.sh" >/dev/null 2>&1
 	LATE_RC=$?
-	{ [ -f "$str_dir/log" ] && wc -l <"$str_dir/log" || echo 0; } | tr -d ' '
+	if [ "$LATE_RC" -ne 0 ]; then echo "step-exit-$LATE_RC"; else
+		{ [ -f "$str_dir/log" ] && wc -l <"$str_dir/log" || echo 0; } | tr -d ' '
+	fi
 	rm -rf "$str_dir"
 }
 tests_still_running_no_rerun() { [ "$(FAKE_PENDING=1 late_rerun_count 1 failure)" = 0 ]; }
