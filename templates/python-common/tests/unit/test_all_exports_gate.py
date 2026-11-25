@@ -1141,3 +1141,349 @@ def test_comprehension_target_in_the_package_does_not_provide_the_name(tmp_path:
         dict_files={"_internal/__init__.py": "", "_internal/config.py": "Priv = 1\n"},
     )
     assert "'Priv'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_annotated_all_is_read_not_opted_out(tmp_path: Path) -> None:
+    """Item 2 of #1258: ``__all__: list[str] = [...]`` is a declaration."""
+    path_init = _package(tmp_path, str_init="__all__: list[str] = []\n", str_member="")
+    assert _load_gate().declared_all(path_init) == []
+
+
+def test_annotated_all_still_enforces_completeness(tmp_path: Path) -> None:
+    """Item 2 of #1258: an annotated ``__all__`` must not silently opt the package out."""
+    path_init = _package(tmp_path, str_init="__all__: list[str] = []\n", str_member="THING = 1\n")
+    assert "'THING'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_last_plain_assignment_of_all_wins(tmp_path: Path) -> None:
+    """Python keeps the final ``__all__ = [...]``, so the gate must too."""
+    path_init = _package(tmp_path, str_init="__all__ = ['a']\n__all__ = ['b']\n", str_member="")
+    assert _load_gate().declared_all(path_init) == ["b"]
+
+
+def test_bare_annotation_does_not_declare_all(tmp_path: Path) -> None:
+    """``__all__: list[str]`` binds nothing at runtime, so the package stays out of scope."""
+    path_init = _package(tmp_path, str_init="__all__: list[str]\n", str_member="THING = 1\n")
+    assert _load_gate().declared_all(path_init) is None
+
+
+def test_guarded_import_fallback_is_not_a_public_definition(tmp_path: Path) -> None:
+    """``try: import x`` / ``except ImportError: x = None`` binds a dependency, not API."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="try:\n    import pyodbc\nexcept ImportError:\n    pyodbc = None\n",
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_syntax_error_in_init_is_a_finding_not_a_traceback(tmp_path: Path) -> None:
+    """Item 2 of #1258: an unparseable ``__init__.py`` is reported."""
+    path_init = _package(tmp_path, str_init="__all__ = [\n", str_member="")
+    assert "could not parse" in _sole(_load_gate().check_package(path_init))
+
+
+def test_main_survives_a_syntax_error_in_init(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 2 of #1258: ``main`` exits 1 on an unparseable ``__init__.py`` instead of raising."""
+    gate = _load_gate()
+    path_init = tmp_path / "src" / "pkg" / "__init__.py"
+    path_init.parent.mkdir(parents=True)
+    path_init.write_text("__all__ = [\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_SRC", tmp_path / "src")
+    assert gate.main() == 1
+
+
+@pytest.mark.parametrize(
+    "str_extension",
+    ["__all__ += ['b']\n", "__all__.extend(['b'])\n", "__all__.append('b')\n"],
+)
+def test_extended_all_names_are_read(tmp_path: Path, *, str_extension: str) -> None:
+    """Item 3 of #1258: names added by ``+=``/``.extend``/``.append`` count as exported."""
+    path_init = _package(tmp_path, str_init=f"__all__ = ['a']\n{str_extension}", str_member="")
+    assert _load_gate().declared_all(path_init) == ["a", "b"]
+
+
+def test_extended_name_is_not_reported_missing(tmp_path: Path) -> None:
+    """Item 3 of #1258: the false positive itself."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ += ['b']\n",
+        str_member="a = 1\nb = 2\n",
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_public_def_under_a_module_level_if_is_required(tmp_path: Path) -> None:
+    """Item 4 of #1258: a guarded public definition is still module-level API."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="if True:\n    def helper():\n        pass\n",
+    )
+    assert "'helper'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_public_class_under_a_module_level_try_is_required(tmp_path: Path) -> None:
+    """Item 4 of #1258: same for ``try``."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="try:\n    class Thing:\n        pass\nexcept ImportError:\n    pass\n",
+    )
+    assert "'Thing'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_type_checking_stub_is_not_a_public_definition(tmp_path: Path) -> None:
+    """Item 4 of #1258: a type-only stub under ``if TYPE_CHECKING:`` is not runtime API."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n    def helper():\n        pass\n"
+            "else:\n    from other import helper\n"
+        ),
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_type_checking_stub_alone_is_not_a_public_definition(tmp_path: Path) -> None:
+    """Non-vacuous variant: no runtime import rescues the stub, only the guard skip does."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n    def helper():\n        pass\n"
+        ),
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_computed_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
+    """A later non-literal ``__all__ = __all__ + [...]`` must not reset the list to empty."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = __all__ + ['b']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a", "b"]
+
+
+def test_starred_foreign_list_keeps_the_declared_names(tmp_path: Path) -> None:
+    """``[*_a.__all__, 'x']`` is as unreadable as ``_a.__all__ + ['x']``; both keep and add."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = [*_a.__all__, 'x']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a", "x"]
+
+
+def test_starred_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
+    """``__all__ = [*__all__, 'b']`` extends the list; it must not drop ``'a'``."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = [*__all__, 'b']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a", "b"]
+
+
+def test_an_empty_literal_sum_replaces_the_declared_names(tmp_path: Path) -> None:
+    """``__all__ = [] + []`` is a known empty value, so it must not keep the earlier ``'a'``."""
+    path_init = _package(
+        tmp_path, str_init="__all__ = ['a']\n__all__ = [] + []\n", str_member="a = 1\n"
+    )
+    assert _load_gate().declared_all(path_init) == []
+
+
+def test_a_starred_plain_name_extends_like_a_plain_name_sum(tmp_path: Path) -> None:
+    """``[*_names, 'x']`` is unreadable, so it keeps ``'a'`` as ``_names + ['x']`` does."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n_names = ['a']\n__all__ = [*_names, 'x']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a", "x"]
+
+
+def test_an_annotated_computed_all_in_a_private_module_may_provide_any_name(
+    tmp_path: Path,
+) -> None:
+    """``__all__: list[str] = EXPORTS`` is opaque, so a star import from it may provide ``Doc``."""
+    path_pkg = tmp_path / "pkg"
+    (path_pkg / "_internal").mkdir(parents=True)
+    (path_pkg / "_internal" / "__init__.py").write_text("", encoding="utf-8")
+    str_impl = "EXPORTS = ['Doc']\n__all__: list[str] = EXPORTS\nclass Doc: ...\n"
+    (path_pkg / "_internal" / "impl.py").write_text(str_impl, encoding="utf-8")
+    path_init = path_pkg / "__init__.py"
+    str_init = "from ._internal.impl import *\n__all__ = ['Doc']\n"
+    path_init.write_text(str_init, encoding="utf-8")
+    assert "'Doc' in __all__" in _sole(_load_gate().check_package(path_init))
+
+
+def test_a_not_main_guard_body_is_still_importable_api(tmp_path: Path) -> None:
+    """``if __name__ != "__main__":`` runs on import, so its definitions are public."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="if __name__ != '__main__':\n    def helper(): ...\n",
+    )
+    assert "'helper'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_member",
+    [
+        "if __name__ == '__main__':\n    app = make()\n",
+        "for str_key in range(3):\n    pass\n",
+        "with open('f') as fh:\n    pass\n",
+    ],
+)
+def test_script_guard_and_loop_or_with_targets_are_not_public_definitions(
+    tmp_path: Path, *, str_member: str
+) -> None:
+    """A ``__main__`` body binds names only as a script; loop and ``with`` targets are no API."""
+    path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
+    assert _load_gate().check_package(path_init) == []
+
+
+@pytest.mark.parametrize(
+    ("str_member", "str_name"),
+    [
+        ("try:\n    from x import f\nexcept ImportError:\n    def f():\n        pass\n", "'f'"),
+        ("from base import Thing\nclass Thing(Thing):\n    pass\n", "'Thing'"),
+    ],
+)
+def test_a_def_or_class_over_an_import_is_still_a_definition(
+    tmp_path: Path, *, str_member: str, str_name: str
+) -> None:
+    """Only an ``= None`` style fallback is the dependency's; a def or class is real API."""
+    path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
+    assert str_name in _sole(_load_gate().check_package(path_init))
+
+
+def test_a_later_literal_sum_replaces_the_declared_names(tmp_path: Path) -> None:
+    """``__all__ = ['b'] + ['c']`` after ``['a']`` is the last assignment and wins."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = ['b'] + ['c']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["b", "c"]
+
+
+@pytest.mark.parametrize(
+    "str_member",
+    [
+        "from .defaults import TIMEOUT\nTIMEOUT = 30\n",
+        "from ._impl import helper\nhelper = wrap(helper)\n",
+        "from .defaults import TIMEOUT\nTIMEOUT = DEFAULT_TIMEOUT\n",
+        "from .x import settings\nsettings = None\n",
+    ],
+)
+def test_a_real_override_of_an_imported_name_is_still_public(
+    tmp_path: Path, *, str_member: str
+) -> None:
+    """Only a fallback inside ``except``/``TYPE_CHECKING`` else is the dependency's name."""
+    path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
+    str_name = str_member.splitlines()[1].split()[0]
+    assert f"'{str_name}'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_a_type_checking_import_with_an_else_fallback_is_not_public(tmp_path: Path) -> None:
+    """``if TYPE_CHECKING: from x import N`` / ``else: N = Any`` is the dependency's name."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "from typing import TYPE_CHECKING, Any\n"
+            "if TYPE_CHECKING:\n    from numpy.typing import NDArray\n"
+            "else:\n    NDArray = Any\n"
+        ),
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_a_non_literal_sum_after_a_literal_keeps_the_declared_names(tmp_path: Path) -> None:
+    """``__all__ = _a.__all__ + _b.__all__`` is unreadable; it must not empty the list."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = _a.__all__ + _b.__all__\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]
+
+
+def test_a_partly_literal_sum_keeps_the_known_names(tmp_path: Path) -> None:
+    """``__all__ = _a.__all__ + ['x']`` adds ``'x'`` and keeps what was declared."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ = _a.__all__ + ['x']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a", "x"]
+
+
+def test_an_unrelated_handler_does_not_exempt_an_import(tmp_path: Path) -> None:
+    """The fallback must sit in the handler of the ``try`` that imported the name."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "from .defaults import TIMEOUT\n"
+            "try:\n    load()\nexcept KeyError:\n    TIMEOUT = None\n"
+        ),
+    )
+    assert "'TIMEOUT'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_a_later_real_assignment_of_a_fallback_name_is_public(tmp_path: Path) -> None:
+    """``except ImportError: x = None`` is the dependency's, but a later ``x = build()`` is not."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="try:\n    import x\nexcept ImportError:\n    x = None\nx = build()\n",
+    )
+    assert "'x'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_a_real_fallback_implementation_is_public(tmp_path: Path) -> None:
+    """``except ImportError: parse = slow_parse`` is code the package ships, not a placeholder."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "try:\n    from fast import parse\nexcept ImportError:\n    parse = slow_parse\n"
+        ),
+    )
+    assert "'parse'" in _sole(_load_gate().check_package(path_init))
+
+
+@pytest.mark.parametrize(
+    "str_fallback",
+    ["x: Any = None", "x = typing.Any"],
+)
+def test_annotated_and_attribute_placeholders_are_the_dependencys(
+    tmp_path: Path, *, str_fallback: str
+) -> None:
+    """``x: Any = None`` and ``x = typing.Any`` in the handler are placeholders too."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=f"try:\n    import x\nexcept ImportError:\n    {str_fallback}\n",
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_a_subtracting_augmented_assignment_does_not_add_names(tmp_path: Path) -> None:
+    """``__all__ -= ['x']`` is not an extension; it must not put ``'x'`` in the export set."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n__all__ -= ['x']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]

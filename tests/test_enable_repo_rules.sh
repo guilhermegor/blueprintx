@@ -123,7 +123,13 @@ repos/o/r) str_json='{"default_branch":"main"}' ;;
 repos/o/r/rulesets|repos/o/r/rulesets\?*)
 	[ "${STUB_RULESETS:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }
 	[ "${STUB_RULESETS:-}" = missing ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
-	[ "${STUB_RULESETS:-}" = empty ] && str_json='[]' || str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
+	if [ -n "${STUB_TWO:-}" ]; then
+		str_json="[{\"id\":41,\"name\":\"pr-quality-gate\",\"enforcement\":\"disabled\"},{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"active\"}]"
+	elif [ "${STUB_RULESETS:-}" = empty ]; then
+		str_json='[]'
+	else
+		str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]"
+	fi ;;
 repos/o/r/rulesets/42) str_json="{\"rules\":[$str_rule]}" ;;
 repos/o/r/rules/branches/main*)
 	[ "${STUB_EFFECTIVE:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }
@@ -179,6 +185,10 @@ test_verify_reads_a_rule_on_a_later_page() {
 
 test_check_ruleset_flags_a_disabled_ruleset() {
     assert_has "a disabled ruleset is not present" "rc=1" "$(run_verify disabled 1 check_ruleset)"
+}
+
+test_verify_picks_the_active_ruleset_not_the_first() {
+    assert_has "a disabled twin listed first must not decide" "rc=0" "$(STUB_TWO=1 run_verify active 1 verify)"
 }
 
 test_confirm_ruleset_applied_only_when_confirmed() {
@@ -240,6 +250,22 @@ STUB
     rm -f "$WORK_DIR/payload.json"
     (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/c:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/payload.json" bash "$SCRIPT" >/dev/null 2>&1)
     assert_has "the created ruleset sends strict false" '"strict_required_status_checks_policy":false' "$(cat "$WORK_DIR/payload.json" 2>/dev/null)"
+}
+
+test_apply_updates_the_active_twin() {
+    mkdir -p "$WORK_DIR/tw" "$WORK_DIR/norepo"
+    cat >"$WORK_DIR/tw/gh" <<'STUB'
+#!/bin/bash
+[ "$1 $2" = "auth status" ] && exit 0
+[ "$1 $2" = "repo view" ] && { echo "o/r"; exit 0; }
+[[ " $* " == *" -X PUT "* ]] && { cat >/dev/null; echo "$4" >"$STUB_CAPTURE"; exit 0; }
+[[ "$2" == repos/o/r/rulesets* ]] && { printf '41 disabled\n42 active\n'; exit 0; }
+exit 0
+STUB
+    chmod +x "$WORK_DIR/tw/gh"
+    rm -f "$WORK_DIR/put_tw.txt"
+    (cd "$WORK_DIR/norepo" && PATH="$WORK_DIR/tw:$PATH" GITHUB_REPOSITORY=o/r STUB_CAPTURE="$WORK_DIR/put_tw.txt" bash "$SCRIPT" >/dev/null 2>&1)
+    assert_has "the active twin is the one updated" "repos/o/r/rulesets/42" "$(cat "$WORK_DIR/put_tw.txt" 2>/dev/null)"
 }
 
 test_update_puts_strict_false_on_an_existing_ruleset() {
@@ -335,6 +361,8 @@ STUB
 }
 
 test_create_sends_strict_false
+test_apply_updates_the_active_twin
+test_verify_picks_the_active_ruleset_not_the_first
 test_verify_passes_on_definite_absence_of_both_mechanisms
 test_verify_fails_when_a_mechanism_is_unreadable
 test_absence_fails_when_another_ruleset_enforces_strict

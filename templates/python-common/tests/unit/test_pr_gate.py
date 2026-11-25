@@ -753,7 +753,11 @@ def test_main_exits_nonzero_when_the_file_list_is_unreadable(
 def test_main_disarms_auto_merge_when_do_not_merge_is_added(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An already-armed auto-merge is disabled once the opt-out label appears."""
+    """An already-armed auto-merge is disabled once the opt-out label appears.
+
+    Disarmed before the poll and re-checked after it (the label can arrive mid-poll); the
+    static stub keeps ``auto_merge`` set, so both calls reach the disarm seam.
+    """
     _set_env(monkeypatch)
     dict_pr = {
         **_DICT_MAIN_API_RESPONSES[_STR_PR_URL],
@@ -767,7 +771,32 @@ def test_main_disarms_auto_merge_when_do_not_merge_is_added(
         gate, "_disable_auto_merge", _CallRecorder(list_target=list_calls, str_label="disarm")
     )
     gate.main()
-    assert list_calls == ["disarm"]
+    assert list_calls == ["disarm", "disarm"]
+
+
+def test_main_disarms_the_opt_out_before_it_polls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``do-not-merge`` cancels an armed auto-merge BEFORE the poll budget starts.
+
+    Disarming only afterwards leaves up to the whole poll window in which the PR can merge.
+    """
+    _set_env(monkeypatch)
+    dict_pr = {
+        **_DICT_MAIN_API_RESPONSES[_STR_PR_URL],
+        "labels": [{"name": gate.BLOCK_LABEL}],
+        "auto_merge": {"merge_method": "squash"},
+    }
+    monkeypatch.setattr(gate, "_api", _RoutedApi({_STR_PR_URL: dict_pr}))
+    list_calls: list = []
+    monkeypatch.setattr(
+        gate, "poll_axes_until_terminal", _CallRecorder(list_target=list_calls, str_label="poll")
+    )
+    monkeypatch.setattr(
+        gate, "_disable_auto_merge", _CallRecorder(list_target=list_calls, str_label="disarm")
+    )
+    gate.main()
+    assert list_calls[:2] == ["disarm", "poll"]
 
 
 def test_collect_axes_keeps_a_red_axis_open_while_a_sibling_runs() -> None:
@@ -917,3 +946,23 @@ def test_declared_axis_with_no_check_run_still_polls_to_the_budget(
 ) -> None:
     """A declared axis stays ``absent`` (non-terminal): its producer may just be slow."""
     assert _count_polls(monkeypatch, str_declared="tests,lint") == 5
+
+
+def test_main_keeps_an_armed_auto_merge_without_the_opt_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR without ``do-not-merge`` keeps its armed auto-merge through the pre-poll step."""
+    _set_env(monkeypatch)
+    dict_pr = {
+        **_DICT_MAIN_API_RESPONSES[_STR_PR_URL],
+        "labels": [],
+        "auto_merge": {"merge_method": "squash"},
+    }
+    monkeypatch.setattr(gate, "_api", _RoutedApi({_STR_PR_URL: dict_pr}))
+    monkeypatch.setattr(gate, "poll_axes_until_terminal", lambda *a, **k: ({}, {}))
+    list_calls: list = []
+    monkeypatch.setattr(
+        gate, "_disable_auto_merge", _CallRecorder(list_target=list_calls, str_label="disarm")
+    )
+    gate.main()
+    assert list_calls == []

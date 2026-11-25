@@ -749,6 +749,34 @@ def _reread_same_revision(str_pr_url: str, *, dict_pr: dict, int_pr: int) -> dic
     return dict_now
 
 
+def _disarm_then_poll(str_repo: str, *, dict_pr: dict) -> tuple[dict, dict]:
+    """Cancel an opted-out auto-merge, then poll, so no merge lands inside the poll window.
+
+    Parameters
+    ----------
+    str_repo : str
+        ``owner/name``.
+    dict_pr : dict
+        The pull request payload read before polling.
+
+    Returns
+    -------
+    tuple of dict
+        ``(dict_axes, dict_failing)`` from :func:`poll_axes_until_terminal`.
+    """
+    reconcile_auto_merge(
+        dict_pr,
+        bool_eligible=False,
+        list_labels=[lbl["name"] for lbl in dict_pr.get("labels", [])],
+    )
+    return poll_axes_until_terminal(
+        str_repo,
+        str_head_sha=(dict_pr.get("head") or {}).get("sha", ""),
+        int_max_polls=int(os.environ.get("GATE_MAX_POLLS", "26")),
+        int_poll_seconds=int(os.environ.get("GATE_POLL_SECONDS", "30")),
+    )
+
+
 def main() -> int:
     """Run the gate for one PR: classify, label, comment, and arm auto-merge when eligible.
 
@@ -776,12 +804,7 @@ def main() -> int:
     str_risk = classify_risk(list_paths)
     str_size = classify_size(int(dict_pr.get("additions", 0)) + int(dict_pr.get("deletions", 0)))
 
-    dict_axes, dict_failing = poll_axes_until_terminal(
-        str_repo,
-        str_head_sha=(dict_pr.get("head") or {}).get("sha", ""),
-        int_max_polls=int(os.environ.get("GATE_MAX_POLLS", "26")),
-        int_poll_seconds=int(os.environ.get("GATE_POLL_SECONDS", "30")),
-    )
+    dict_axes, dict_failing = _disarm_then_poll(str_repo, dict_pr=dict_pr)
 
     dict_now = _reread_same_revision(str_pr_url, dict_pr=dict_pr, int_pr=int_pr)
     if dict_now is None:
