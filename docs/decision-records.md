@@ -2266,8 +2266,9 @@ This section records what is specific to the generated copies.
   `PR Quality Gate`, and a `late_rerun` job fires on a completed run with
   `conclusion == 'failure'`; the gate can also fail because its polling budget ran out with
   axes still pending, so the job skips while a `Run Tests` run for the head is unfinished and
-  leaves the retry to the `Run Tests` completion that `retrigger` handles. It re-runs that run once: the step reads
-  the run's attempt and re-runs only attempt 1, so a re-run that fails again is final and a
+  leaves the retry to the `Run Tests` completion that `retrigger` handles. It re-runs the
+  gate run once: the step reads the run's attempt and re-runs only attempt 1, and a re-run
+  that is already in flight is tolerated (no red job), so a re-run that fails again is final and a
   passing gate gets none. `retrigger` is now limited to `Run Tests` completions, or the
   gate's own completion would fire both jobs. Rejected: raising the retrigger loop to 20
   minutes, which holds a runner for the gate's whole budget on every PR. Known overlap: a

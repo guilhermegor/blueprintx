@@ -43,6 +43,8 @@ check "gate re-triggers when Run Tests completes, so a slow suite cannot strand 
 	has_line pr-gate.yml '^  workflow_run:$'
 check "the workflow_run trigger names Run Tests and the gate itself" \
 	has_line pr-gate.yml '^    workflows: \["Run Tests", "PR Quality Gate"\]$'
+check "the workflow is still named PR Quality Gate, which both re-run jobs match on" \
+	has_line pr-gate.yml '^name: PR Quality Gate$'
 check "the retrigger job re-runs the failed gate run" \
 	retrigger_reruns_failed_gate
 check "the retrigger job carries the actions: write it needs" \
