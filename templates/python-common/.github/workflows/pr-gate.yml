@@ -3,6 +3,9 @@ name: PR Quality Gate
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_run:
+    workflows: ["Run Tests"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       backfill:
@@ -48,6 +51,52 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GATE_AXES: "tests,lint,code scanning"
         run: python bin/pr_gate.py
+
+  retrigger:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request'
+    name: Re-run a gate that timed out before Run Tests finished
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Re-run the failed gate for this head commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          int_open="$(gh api "repos/$GH_REPO/commits/$HEAD_SHA/pulls" \
+            --jq "[.[] | select(.state == \"open\" and .head.sha == \"$HEAD_SHA\")] | length")"
+          if [ "${int_open:-0}" -eq 0 ]; then
+            echo "$HEAD_SHA is no open PR's head; nothing to re-run"
+            exit 0
+          fi
+          for _ in $(seq 1 18); do
+            str_run="$(gh run list --workflow pr-gate.yml --event pull_request \
+              --commit "$HEAD_SHA" --limit 1 --json databaseId,status,conclusion,attempt \
+              --jq '.[0] // empty | "\(.databaseId) \(.status) \(.conclusion) \(.attempt)"')"
+            case "$str_run" in
+            *" completed "*) break ;;
+            "") break ;;
+            esac
+            sleep 10
+          done
+          str_id=""
+          case "$str_run" in
+          *" completed failure 1" | *" completed cancelled 1" | *" completed timed_out 1") str_id="${str_run%% *}" ;;
+          esac
+          if [ -z "$str_id" ]; then
+            case "$str_run" in
+            *" completed "*) echo "gate run for $HEAD_SHA did not fail; nothing to re-run" ;;
+            "") echo "no gate run for $HEAD_SHA; nothing to re-run" ;;
+            *) echo "::warning::gate run for $HEAD_SHA still $str_run after waiting; not re-run" ;;
+            esac
+            exit 0
+          fi
+          gh run rerun "$str_id"
 
   backfill:
     if: github.event_name == 'workflow_dispatch' && inputs.backfill

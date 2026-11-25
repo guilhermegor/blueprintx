@@ -2248,12 +2248,15 @@ This section records what is specific to the generated copies.
 
 ### Other generated workflows
 
-- **`pr-gate.yml`.** It triggers on `pull_request` only, never `workflow_run`, which fires
-  only from the default branch's copy and so cannot run on the PR that introduces the gate.
-  The gate polls the checks in-run instead. `labeled` and `unlabeled` are included so
-  `do-not-merge` takes effect at once. A pull_request-driven gate never re-evaluates an
-  already-open PR after a policy change; run the `workflow_dispatch` with `backfill: true`
-  (or `@dependabot rebase`) to re-decide every open PR. A new push cancels the previous
+- **`pr-gate.yml`.** The gate job triggers on `pull_request` only, never `workflow_run`,
+  which fires only from the default branch's copy and so cannot run on the PR that
+  introduces the gate. The gate polls the checks in-run instead. A separate `retrigger` job
+  does run on `workflow_run` (Run Tests completed): it re-runs only a failed first attempt
+  of the gate for the head commit, so a slow suite cannot strand the required check red.
+  `labeled` and `unlabeled` are included so `do-not-merge` takes effect at once. A
+  pull_request-driven gate never re-evaluates an already-open PR after a policy change; run
+  the `workflow_dispatch` with `backfill: true` (or `@dependabot rebase`) to re-decide every
+  open PR. A new push cancels the previous
   polling run so two gates do not race on one sticky comment. Event data reaches the script
   through `env:` only.
 - **`release.yml`.** A service is deployed, not published, so there is no PyPI step. The

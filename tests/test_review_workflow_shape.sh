@@ -31,6 +31,32 @@ check "trigger never reads a PR-controlled head field" \
 check "backfill reads each PR once instead of sleeping on it inside one job timeout" \
 	backfill_polls_once
 
+retrigger_job() { sed -n '/^  retrigger:/,/^  backfill:/p' "$WORKFLOWS/pr-gate.yml"; }
+retrigger_reruns_failed_gate() { retrigger_job | grep -qE 'gh run rerun'; }
+retrigger_may_write_actions() { retrigger_job | grep -qE '^ +actions: write$'; }
+retrigger_may_read_prs() { retrigger_job | grep -qE '^ +pull-requests: read$'; }
+retrigger_may_read_contents() { retrigger_job | grep -qE '^ +contents: read$'; }
+tests_workflow_is_named_run_tests() { grep -qxF 'name: Run Tests' "$WORKFLOWS/tests.yml"; }
+retrigger_waits_for_running_gate() { retrigger_job | grep -qE 'status,conclusion' && retrigger_job | grep -q 'sleep '; }
+
+check "gate re-triggers when Run Tests completes, so a slow suite cannot strand it red" \
+	has_line pr-gate.yml '^  workflow_run:$'
+check "the workflow_run trigger names the Run Tests workflow" \
+	has_line pr-gate.yml '^    workflows: \["Run Tests"\]$'
+check "the retrigger job re-runs the failed gate run" \
+	retrigger_reruns_failed_gate
+check "the retrigger job carries the actions: write it needs" \
+	retrigger_may_write_actions
+check "the retrigger job can read the PR head on a private repo" \
+	retrigger_may_read_prs
+check "the retrigger job can list a commit's PRs on a private repo" \
+	retrigger_may_read_contents
+check "the workflow the trigger names is still called Run Tests" \
+	tests_workflow_is_named_run_tests
+check "the retrigger job waits out an in-progress gate run" \
+	retrigger_waits_for_running_gate
+check "the retrigger job never checks out code" \
+	bash -c "! sed -n '/^  retrigger:/,/^  backfill:/p' '$WORKFLOWS/pr-gate.yml' | grep -q 'actions/checkout'"
 GATE_WF="$REPO_ROOT/.github/workflows/review_threads.yml"
 gate_step() {
 	local str_files="$1" str_labels="$2" str_dir int_rc
