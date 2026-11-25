@@ -2633,6 +2633,9 @@ check to that App.
   gate: the thread verdict still runs. The App check's conclusion is the gate step's outcome, not the
   job's, so a failure in the stale-run clear or elsewhere does not turn a passing verdict red. The
   token asks for `checks: write` only; the publish needs nothing else.
+- **The pin lives in the environment.** `REVIEW_APP_INTEGRATION_ID` must be exported on every
+  run of `enable_repo_rules.sh`; a rerun without it rewrites the ruleset unpinned. Keep it in the
+  same place the apply is run from.
 - **Same name, two publishers.** Unpinned, the Actions job and the App both report
   `Review threads answered` on a SHA. How GitHub resolves duplicate-name required checks across
   apps is not verified, so treat the App path as coherent only when pinned.
