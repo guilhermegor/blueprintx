@@ -689,7 +689,7 @@ def workflow_concurrency(str_text: str) -> str:
         str_block,
     ).lower()
     cls_group = re.search(
-        r"""(?m)(?:^|\s)["']?group["']?[ \t]*:[ \t]*((?:[^#\n]|(?<!\s)#)+)""", str_block
+        r"""(?m)^[ \t]+["']?group["']?[ \t]*:[ \t]*((?:[^#\n]|(?<!\s)#)+)""", str_block
     ) or re.match(rf"{RE_CONCURRENCY_KEY}[ \t]*([^\s#](?:[^#\n]|(?<!\s)#)*)", str_block)
     str_group = cls_group.group(1).strip() if cls_group else ""
     bool_continued = any(

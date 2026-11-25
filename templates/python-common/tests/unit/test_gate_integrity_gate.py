@@ -1736,3 +1736,16 @@ def test_workflow_job_moved_under_groups_differing_after_a_hash_in_a_word_is_cle
     )
 
     assert list_findings == []
+
+
+def test_workflow_job_moved_under_a_group_named_in_a_trailing_comment_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``group:`` inside a trailing comment is not the group, so equal real groups collide."""
+    str_comment = "concurrency:\n  cancel-in-progress: true  # old group: zzz\n  group: ci\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_comment, str_target="concurrency:\n  group: ci\n"
+    )
+
+    assert len(list_findings) == 1

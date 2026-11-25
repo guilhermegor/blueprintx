@@ -1395,7 +1395,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
       gate sees a move; the hosted-image list ages when GitHub retires a label; a target group
       equal to a third workflow's, `${{ }}` bodies that differ as text but evaluate equal (`${{ 'ci' }}-x`
       against `ci-x`), a job line starting with `[` or `{` (a shell test or brace group, always
-      refused as a possible flow body), per-workflow state such as `github.run_number` and
+      refused as a possible flow body), exotic YAML spellings of a `needs:` key (a tag, an explicit `? key`, an escaped quoted key), a non-word anchor name, a block-scalar or flow `name:`, an unparsed source group refusing a move into a target with no group, a new job elsewhere in the target that makes the whole file invalid (actionlint's job), first-fit candidate matching, per-workflow state such as `github.run_number` and
       `run_attempt` that changes when a job moves, a constant target group that makes runs across PRs
       cancel each other, and a target job whose `name:` repeats an existing check context.
       Two more limits stay: a workflow that waits on the source through
