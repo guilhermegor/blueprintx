@@ -2833,6 +2833,7 @@ def _roster_or_verdict(
     try:
         bool_pr_opt_out = roster_opted_out(path_cwd)
         if bool_pr_opt_out and base_opted_out(str_repo_full, str_number=str_number):
+            _write_checked_head(os.environ.get("EVALUATED_HEAD", ""))
             return {}, _print_skip(
                 bool_json,
                 str_reason=f"{_ROSTER_FILE} declares `adopted: false` "
@@ -2938,6 +2939,13 @@ def main(list_argv: list[str] | None = None) -> int:
         return _print_rate_limited(bool_json, str_detail=str(err))
 
 
+def _write_checked_head(str_head: str) -> None:
+    """Write ``str_head`` to ``$CHECKED_HEAD_FILE``, when that variable is set."""
+    str_path = os.environ.get("CHECKED_HEAD_FILE", "")
+    if str_path:
+        pathlib.Path(str_path).write_text(str_head, encoding="utf-8")
+
+
 def _record_evaluated_head(dict_pr: dict) -> None:
     """Write the ``headRefOid`` this run evaluated to ``$CHECKED_HEAD_FILE``, when set.
 
@@ -2946,9 +2954,7 @@ def _record_evaluated_head(dict_pr: dict) -> None:
     dict_pr : dict
         The pull-request payload the verdict is computed from.
     """
-    str_path = os.environ.get("CHECKED_HEAD_FILE", "")
-    if str_path:
-        pathlib.Path(str_path).write_text(str(dict_pr.get("headRefOid") or ""), encoding="utf-8")
+    _write_checked_head(str(dict_pr.get("headRefOid") or ""))
 
 
 def _check_pull_request(bool_json: bool) -> int:

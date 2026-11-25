@@ -115,6 +115,21 @@ m._record_evaluated_head({'headRefOid': 'abc123'})" || rc=1
 	return $rc
 }
 check "checker writes the headRefOid it evaluated to CHECKED_HEAD_FILE" checker_records_head
+checker_records_head_on_opt_out() {
+	local str_dir rc=0
+	str_dir=$(mktemp -d)
+	CHECKED_HEAD_FILE="$str_dir/h" EVALUATED_HEAD=def456 python3 -c "
+import sys; sys.path.insert(0, 'templates/common/bin')
+import check_review_threads as m
+m.roster_opted_out = lambda p: True
+m.base_opted_out = lambda r, str_number: True
+_, int_exit = m._roster_or_verdict(False, str_repo_full='o/r', str_number='1')
+sys.exit(0 if int_exit == 0 else 1)" >/dev/null || rc=1
+	[ "$(cat "$str_dir/h" 2>/dev/null)" = def456 ] || rc=1
+	rm -rf "$str_dir"
+	return $rc
+}
+check "a base-backed opt-out still writes the head read at start to CHECKED_HEAD_FILE" checker_records_head_on_opt_out
 for gate in "${GATES[@]}"; do
 	label="${gate#"$REPO_ROOT"/}"
 	check "$label runs from the base via pull_request_target" gate_has "$gate" '^  pull_request_target:$'
@@ -130,6 +145,7 @@ for gate in "${GATES[@]}"; do
 	check "$label interpolates no author-controlled event field into a run: block" gate_run_blocks_clean "$gate"
 	check "$label uses no secret except GITHUB_TOKEN" gate_secrets_token_only "$gate"
 	check "$label posts success only when the checker's head equals the head read at start" gate_has "$gate" '"\$\(cat "\$CHECKED_HEAD_FILE"[^)]*\)" != "\$EVALUATED_HEAD"'
+	check "$label hands the head read at start to the gate step" gate_has "$gate" 'EVALUATED_HEAD: \$\{\{ steps\.head\.outputs\.sha \}\}'
 	check "$label publishes against the head read before the gate ran" gate_has "$gate" 'head_sha="\$EVALUATED_HEAD"'
 done
 retrigger_job() { sed -n '/^  retrigger:/,/^  backfill:/p' "$WORKFLOWS/pr-gate.yml"; }
