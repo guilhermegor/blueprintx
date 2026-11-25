@@ -1292,6 +1292,39 @@ def test_starred_reassignment_keeps_the_declared_names(tmp_path: Path) -> None:
     assert _load_gate().declared_all(path_init) == ["a", "b"]
 
 
+def test_an_empty_literal_sum_replaces_the_declared_names(tmp_path: Path) -> None:
+    """``__all__ = [] + []`` is a known empty value, so it must not keep the earlier ``'a'``."""
+    path_init = _package(
+        tmp_path, str_init="__all__ = ['a']\n__all__ = [] + []\n", str_member="a = 1\n"
+    )
+    assert _load_gate().declared_all(path_init) == []
+
+
+def test_a_starred_plain_name_extends_like_a_plain_name_sum(tmp_path: Path) -> None:
+    """``[*_names, 'x']`` is unreadable, so it keeps ``'a'`` as ``_names + ['x']`` does."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\n_names = ['a']\n__all__ = [*_names, 'x']\n",
+        str_member="a = 1\n",
+    )
+    assert _load_gate().declared_all(path_init) == ["a", "x"]
+
+
+def test_an_annotated_computed_all_in_a_private_module_may_provide_any_name(
+    tmp_path: Path,
+) -> None:
+    """``__all__: list[str] = EXPORTS`` is opaque, so a star import from it may provide ``Doc``."""
+    path_pkg = tmp_path / "pkg"
+    (path_pkg / "_internal").mkdir(parents=True)
+    (path_pkg / "_internal" / "__init__.py").write_text("", encoding="utf-8")
+    str_impl = "EXPORTS = ['Doc']\n__all__: list[str] = EXPORTS\nclass Doc: ...\n"
+    (path_pkg / "_internal" / "impl.py").write_text(str_impl, encoding="utf-8")
+    path_init = path_pkg / "__init__.py"
+    str_init = "from ._internal.impl import *\n__all__ = ['Doc']\n"
+    path_init.write_text(str_init, encoding="utf-8")
+    assert "'Doc' in __all__" in _sole(_load_gate().check_package(path_init))
+
+
 @pytest.mark.parametrize(
     ("str_member", "str_name"),
     [

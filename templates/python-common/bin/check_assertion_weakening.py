@@ -157,19 +157,17 @@ def show(str_ref: str, *, str_path: str) -> str | None:
     Returns
     -------
     str or None
-        The blob's content; ``None`` when the path does not exist there or is not valid
-        UTF-8 (mirrors ``check_gate_integrity.py::show`` — a binary defines nothing to
-        compare, and decoding by extension is the wrong fix, see that file's own note).
+        The blob's content; ``None`` when ``git show`` exits non-zero (no such path there) or
+        the blob is not valid UTF-8 (mirrors ``check_gate_integrity.py::show``: a binary defines
+        nothing to compare). A ``git`` that cannot be spawned raises, so the gate stops instead
+        of reporting a comparison it never made.
     """
-    try:
-        cls_proc = subprocess.run(  # noqa: S603
-            ["git", "show", f"{str_ref}:{str_path}"],  # noqa: S607
-            capture_output=True,
-            check=False,
-            cwd=PATH_ROOT,
-        )
-    except OSError:
-        return None
+    cls_proc = subprocess.run(  # noqa: S603
+        ["git", "show", f"{str_ref}:{str_path}"],  # noqa: S607
+        capture_output=True,
+        check=False,
+        cwd=PATH_ROOT,
+    )
     if cls_proc.returncode != 0:
         return None
     try:
@@ -603,7 +601,16 @@ def _join_conditions(list_text: list[str], *, cls_op: ast.boolop) -> str:
     except SyntaxError:
         str_op = " and " if isinstance(cls_op, ast.And) else " or "
         return str_op.join(f"({str_t})" for str_t in list_text)
-    return ast.unparse(ast.BoolOp(op=cls_op, values=list_nodes))
+    list_flat = [
+        cls_leaf
+        for cls_node in list_nodes
+        for cls_leaf in (
+            cls_node.values
+            if isinstance(cls_node, ast.BoolOp) and isinstance(cls_node.op, type(cls_op))
+            else [cls_node]
+        )
+    ]
+    return ast.unparse(ast.BoolOp(op=cls_op, values=list_flat))
 
 
 def _skip_label(tuple_guards: tuple[str, ...], *, str_call: str) -> str:
@@ -737,12 +744,17 @@ def _newly_marked(*, set_old: set, set_new: set) -> set:
     Returns
     -------
     set
-        Newly added labels. An unconditional ``skip``/``skip()`` is the same as the other
+        Newly added labels. Adding ``strict=True`` to an ``xfail`` is a tightening, not a new
+        marker. An unconditional ``skip``/``skip()`` is the same as the other
         spelling; a conditional skip is exempt when the old test was unconditionally skipped, or
         already skipped on the very same condition in the other form (``@skipif(c)`` and
         ``if c: pytest.skip()``).
     """
-    set_added = set_new - set_old
+    set_added = {
+        str_m
+        for str_m in set_new - set_old
+        if not (str_m.startswith("xfail:") and f"{str_m};lax" in set_old)
+    }
     set_conds = {_marker_condition(str_m) for str_m in set_old} - {None}
     has_unconditional = bool(set_old & {"skip", "skip()"})
     if has_unconditional:

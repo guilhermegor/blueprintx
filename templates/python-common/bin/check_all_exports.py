@@ -146,7 +146,7 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
         elif (
             list_names is not None
             and not list_found
-            and not isinstance(getattr(cls_node, "value", None), ast.List | ast.Tuple)
+            and not _is_literal(getattr(cls_node, "value", None))
         ):
             continue
         else:
@@ -171,7 +171,7 @@ def _all_target(cls_node: ast.AST) -> bool:
 
 
 def _has_foreign_star(cls_value: ast.expr | None) -> bool:
-    """Return whether a list or tuple literal unpacks something other than a plain name.
+    """Return whether a list or tuple literal unpacks a value the gate cannot read.
 
     Parameters
     ----------
@@ -181,14 +181,12 @@ def _has_foreign_star(cls_value: ast.expr | None) -> bool:
     Returns
     -------
     bool
-        ``True`` for ``[*_a.__all__, 'x']``, the same unreadable-operand case as a ``+`` sum.
+        ``True`` for ``[*_a.__all__, 'x']`` or ``[*_names, 'x']``, the same unreadable-operand
+        case as a ``+`` sum.
     """
     if not isinstance(cls_value, ast.List | ast.Tuple):
         return False
-    return any(
-        isinstance(cls_elt, ast.Starred) and not isinstance(cls_elt.value, ast.Name)
-        for cls_elt in cls_value.elts
-    )
+    return any(isinstance(cls_elt, ast.Starred) for cls_elt in cls_value.elts)
 
 
 def _sum_leaves(cls_value: ast.expr) -> list[ast.expr]:
@@ -207,6 +205,25 @@ def _sum_leaves(cls_value: ast.expr) -> list[ast.expr]:
     if isinstance(cls_value, ast.BinOp) and isinstance(cls_value.op, ast.Add):
         return [*_sum_leaves(cls_value.left), *_sum_leaves(cls_value.right)]
     return [cls_value]
+
+
+def _is_literal(cls_value: ast.expr | None) -> bool:
+    """Return whether a value is a list or tuple literal, or a ``+`` chain of only those.
+
+    Parameters
+    ----------
+    cls_value : ast.expr or None
+        The right-hand side.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``['a']`` and ``[] + []``, whose value is known; ``False`` for anything
+        computed.
+    """
+    if cls_value is None:
+        return False
+    return all(isinstance(cls_leaf, ast.List | ast.Tuple) for cls_leaf in _sum_leaves(cls_value))
 
 
 def _is_partial_sum(cls_value: ast.expr | None) -> bool:
@@ -722,9 +739,10 @@ def _all_is_opaque(cls_sub: ast.AST) -> bool:
     """
     if isinstance(cls_sub, ast.Attribute | ast.Subscript):
         return isinstance(cls_sub.value, ast.Name) and cls_sub.value.id == "__all__"
-    if not isinstance(cls_sub, ast.Assign):
+    if not isinstance(cls_sub, ast.Assign | ast.AnnAssign) or cls_sub.value is None:
         return False
-    if not any(isinstance(cls_t, ast.Name) and cls_t.id == "__all__" for cls_t in cls_sub.targets):
+    list_targets = cls_sub.targets if isinstance(cls_sub, ast.Assign) else [cls_sub.target]
+    if not any(_all_target(cls_t) for cls_t in list_targets):
         return False
     return not isinstance(cls_sub.value, ast.List | ast.Tuple) or any(
         not (isinstance(cls_elt, ast.Constant) and isinstance(cls_elt.value, str))

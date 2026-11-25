@@ -914,12 +914,6 @@ def test_show_reads_blobs_from_the_root_not_the_process_cwd(
     assert gate.show(gate.STR_INDEX_REF, str_path="a.py") == "X = 1\n"
 
 
-def test_show_returns_none_when_git_cannot_be_spawned(*, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Item 1 of #1258: ``show`` shares ``_git``'s ``OSError`` guard."""
-    monkeypatch.setattr(gate.subprocess, "run", MagicMock(side_effect=OSError))
-    assert gate.show("", str_path="a.py") is None
-
-
 @pytest.mark.parametrize(
     "str_marker",
     ["@pytest.mark.skipif(True, reason='x')\n", "@pytest.mark.skipif(sys.platform == 'x')\n"],
@@ -965,6 +959,30 @@ def test_narrowing_skip_to_skipif_is_not_flagged() -> None:
     str_old = "@pytest.mark.skip\ndef test_a():\n    assert f() == 1\n"
     str_new = "@pytest.mark.skipif(sys.platform == 'x')\ndef test_a():\n    assert f() == 1\n"
     assert _findings(str_old, str_new=str_new) == []
+
+
+def test_adding_strict_to_an_xfail_is_not_flagged() -> None:
+    """``xfail`` -> ``xfail(strict=True)`` tightens the marker; it is not newly marked."""
+    str_old = "@pytest.mark.xfail\ndef test_a():\n    assert f() == 1\n"
+    str_new = "@pytest.mark.xfail(strict=True)\ndef test_a():\n    assert f() == 1\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_nested_guards_equal_the_same_flat_skipif_condition() -> None:
+    """``if a and b: if c: skip()`` -> ``@skipif(a and b and c)`` is the same condition moved."""
+    str_old = (
+        "def test_a():\n    if a and b:\n        if c:\n            pytest.skip()\n"
+        "    assert f()\n"
+    )
+    str_new = "@pytest.mark.skipif(a and b and c)\ndef test_a():\n    assert f()\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_show_raises_when_git_cannot_be_spawned(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A gate that cannot run ``git`` stops; it does not report a comparison it never made."""
+    monkeypatch.setattr(gate.subprocess, "run", MagicMock(side_effect=FileNotFoundError))
+    with pytest.raises(FileNotFoundError):
+        gate.show("HEAD", str_path="a.py")
 
 
 def test_widening_a_conditional_in_body_skip_to_skipif_is_flagged() -> None:
