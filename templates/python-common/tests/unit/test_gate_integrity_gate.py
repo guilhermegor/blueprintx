@@ -1939,7 +1939,7 @@ def test_workflow_read_rejects_a_self_referential_alias() -> None:
 
 @pytest.mark.parametrize(
     ("str_from", "str_to"),
-    [("~", "null"), ("2026-1-1", "2026-01-01"), ("=", "x")],
+    [("~", "null"), ("2026-01-01T00:00:00", "2026-01-01 00:00:00"), ("=", "x")],
 )
 def test_workflow_job_moved_with_a_respelled_null_date_or_value_is_removed(
     monkeypatch: pytest.MonkeyPatch, *, str_from: str, str_to: str
@@ -1960,6 +1960,27 @@ def test_workflow_repair_of_an_unparseable_base_reports_nothing() -> None:
     assert (
         gate.workflow_problems("jobs: [\n", str_new=f"jobs:\n{_STR_KEPT_JOB}", str_shown="w") == []
     )
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        "x: &a\n  gate:\n    runs-on: u\njobs:\n  <<: *a\n  other:\n    runs-on: u\n",
+        "x: &j\n  gate:\n    runs-on: u\njobs: *j\n",
+    ],
+)
+def test_workflow_read_rejects_a_merge_key_or_alias_supplying_jobs(str_text: str) -> None:
+    """Jobs merged or aliased into ``jobs:`` have no key to flag, so the file is unparsed."""
+    assert gate.read_workflow(str_text) is None
+
+
+def test_workflow_base_with_a_merge_key_under_jobs_reports_instead_of_passing() -> None:
+    """A base that is YAML but unreadable is a finding, not a free deletion of every job."""
+    str_old = "x: &a\n  gate:\n    runs-on: u\njobs:\n  <<: *a\n"
+
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
+        "w: base workflow is YAML the gate cannot compare, so its jobs are unchecked"
+    ]
 
 
 @pytest.mark.parametrize("str_body", ["", " ~", " foo"])
