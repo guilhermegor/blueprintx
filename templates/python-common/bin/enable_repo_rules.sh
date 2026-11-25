@@ -373,7 +373,7 @@ main() {
 		return 2
 	fi
 	if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && [ $# -eq 0 ]; then
-		print_status "warning" "'$REVIEW_CHECK_NAME' is pinned to App $REVIEW_APP_INTEGRATION_ID: PRs whose run gets no secrets (forks, Dependabot) never get that check and cannot merge; keep REVIEW_APP_CLIENT_ID / REVIEW_APP_PRIVATE_KEY set (blueprintx#1318)"
+		print_status "warning" "'$REVIEW_CHECK_NAME' is pinned to App $REVIEW_APP_INTEGRATION_ID: PRs whose run gets no secrets (forks, Dependabot) get no secrets on pull_request and cannot publish that check until someone comments on the PR (issue_comment runs have them); keep REVIEW_APP_CLIENT_ID / REVIEW_APP_PRIVATE_KEY set (blueprintx#1318)"
 	fi
 	if [ "${1:-}" = "dry_run" ]; then
 		build_rules_json

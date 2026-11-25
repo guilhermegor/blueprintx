@@ -2630,7 +2630,9 @@ check to that App.
   App check. `enable_repo_rules.sh` warns about this when it applies a pin.
 - **The mint comes last.** The token is minted after the gate and the stale-run clear, so PR code
   that runs in those steps never sees a `checks: write` token, and a failed mint cannot skip the
-  gate: the thread verdict still runs, so a red check means threads, not the App.
+  gate: the thread verdict still runs. The App check's conclusion is the gate step's outcome, not the
+  job's, so a failure in the stale-run clear or elsewhere does not turn a passing verdict red. The
+  token asks for `checks: write` only; the publish needs nothing else.
 - **Same name, two publishers.** Unpinned, the Actions job and the App both report
   `Review threads answered` on a SHA. How GitHub resolves duplicate-name required checks across
   apps is not verified, so treat the App path as coherent only when pinned.

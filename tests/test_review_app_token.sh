@@ -30,8 +30,7 @@ mint_is_gated() { grep -A2 'id: app$' "$1" | grep -qF "env.REVIEW_APP_CONFIGURED
 mint_after_gate() { [ "$(grep -n 'id: gate$' "$1" | cut -d: -f1)" -lt "$(grep -n 'id: app$' "$1" | cut -d: -f1)" ]; }
 mint_is_sha_pinned() { grep -qE 'uses: actions/create-github-app-token@[0-9a-f]{40} # v' "$1"; }
 mint_scopes_are_minimal() {
-	grep -q 'permission-checks: write' "$1" && grep -q 'permission-pull-requests: read' "$1" &&
-		grep -q 'permission-contents: read' "$1" && ! grep -E 'permission-[a-z-]+: write' "$1" | grep -qv 'permission-checks: write'
+	grep -q 'permission-checks: write' "$1" && [ "$(grep -c 'permission-' "$1")" -eq 1 ]
 }
 skip_notice_logged() { grep -q '::notice::REVIEW_APP_CLIENT_ID' "$1"; }
 gate_keeps_github_token() {
@@ -52,7 +51,7 @@ publish_uses_app_token() { grep -qF 'GH_TOKEN: ${{ steps.app.outputs.token }}' "
 check "mint step runs only when the App secrets are set" each_workflow mint_is_gated
 check "the App token is minted after the gate step" each_workflow mint_after_gate
 check "mint action is pinned to a full commit SHA" each_workflow mint_is_sha_pinned
-check "minted token asks for checks write, pull-requests read, contents read only" \
+check "minted token asks for checks write only" \
 	each_workflow mint_scopes_are_minimal
 check "one ::notice:: says the App path was skipped" each_workflow skip_notice_logged
 check "the gate step still runs on GITHUB_TOKEN" each_workflow gate_keeps_github_token
@@ -74,7 +73,12 @@ rejects_non_numeric() {
 
 check "dry_run prints no integration_id when the flag is unset" unpinned_by_default
 check "dry_run pins the review check when the id is set" pinned_when_set
-leading_zero_refused() { ! REVIEW_APP_INTEGRATION_ID=0123 bash "$RULES" dry_run >/dev/null 2>&1; }
+leading_zero_refused() {
+	local str_out int_rc
+	str_out="$(REVIEW_APP_INTEGRATION_ID=0123 bash "$RULES" dry_run 2>&1)"
+	int_rc=$?
+	[ "$int_rc" -eq 2 ] && grep -qF "must be the App's numeric id" <<<"$str_out"
+}
 check "a leading-zero integration id is refused" leading_zero_refused
 check "a non-numeric integration id is refused" rejects_non_numeric
 
