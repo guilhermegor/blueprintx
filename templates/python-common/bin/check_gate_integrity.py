@@ -161,9 +161,7 @@ RE_UNMOVABLE_JOB_LINE = re.compile(
     r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]""",
     re.IGNORECASE,
 )
-RE_WORKFLOW_NAME_READ = re.compile(
-    r"""github(?:[._]|\[\s*["']\s*)workflow(?!\w)""", re.IGNORECASE
-)
+RE_WORKFLOW_NAME_READ = re.compile(r"""github(?:[._]|\[\s*["']\s*)workflow(?!\w)""", re.IGNORECASE)
 RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
 STR_FLOW_CONCURRENCY = "{flow}"
 RE_CONCURRENCY_KEY = r"""["']?concurrency["']?\s*:"""
