@@ -100,12 +100,12 @@ jobs:
         run: |
           set -euo pipefail
           str_head="$STR_HEAD"
-          [ -n "$str_head" ] || { echo "::error::empty head SHA"; exit 1; }
+          [ -n "$str_head" ] || { echo "::error::empty head SHA for PR ${PR_NUMBER}"; exit 1; }
           HEAD_SHA="$str_head" bash templates/python-common/bin/rerun_stale_gate_runs.sh
 
       - name: Mint the review-gate App token (only when the App is configured)
         id: app
-        if: always() && env.REVIEW_APP_CONFIGURED == 'true' && steps.head.outcome == 'success'
+        if: "!cancelled() && env.REVIEW_APP_CONFIGURED == 'true' && steps.head.outcome == 'success'"
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.REVIEW_APP_CLIENT_ID }}
@@ -113,7 +113,7 @@ jobs:
           permission-checks: write
 
       - name: Publish the check run from the review-gate App
-        if: always() && env.REVIEW_APP_CONFIGURED == 'true' && steps.app.outcome == 'success'
+        if: "!cancelled() && env.REVIEW_APP_CONFIGURED == 'true' && steps.app.outcome == 'success'"
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}

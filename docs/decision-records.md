@@ -2628,11 +2628,17 @@ check to that App.
   Dependabot PR's `pull_request` run gets no secrets, so it publishes nothing until someone
   comments on it: the `issue_comment` run executes in the base repo with secrets and publishes the
   App check. `enable_repo_rules.sh` warns about this when it applies a pin.
-- **The mint comes last.** The token is minted after the gate and the stale-run clear, so PR code
-  that runs in those steps never sees a `checks: write` token, and a failed mint cannot skip the
-  gate: the thread verdict still runs. The App check's conclusion is the gate step's outcome, not the
-  job's, so a failure in the stale-run clear or elsewhere does not turn a passing verdict red. The
-  token asks for `checks: write` only; the publish needs nothing else.
+- **The mint comes last.** The token is minted after the gate and the stale-run clear, so it is
+  not in the environment of those steps and a failed mint cannot skip the gate. This is not
+  isolation: steps share a runner, so first-party PR code in the gate step could still tamper with
+  `$GITHUB_PATH` or `$GITHUB_ENV`. Only same-repo PR code reaches that point (fork and Dependabot
+  `pull_request` runs have no secrets, and `issue_comment` runs check out the default branch), and
+  that author can already edit the workflow, which needs the owner's `gate-change-approved` label.
+  Mint and publish run on `!cancelled()`, so a superseded run posts nothing. The App check's
+  conclusion is the gate step's outcome, not the job's. The token asks for `checks: write` only.
+- **A failed mint looks like "waiting".** The job goes red at the mint step, but a pinned required
+  check that never posts shows as "Expected - waiting" on the PR. Read the job log before assuming
+  the check has not run.
 - **The pin lives in the environment.** `REVIEW_APP_INTEGRATION_ID` must be exported on every
   run of `enable_repo_rules.sh`; a rerun without it rewrites the ruleset unpinned. Keep it in the
   same place the apply is run from.
