@@ -1890,3 +1890,55 @@ def test_a_failing_run_names_where_the_baseline_was_taken(
         "a.py" in str_output,
         f"baselined at {str_sha}, HEAD is at {str_sha}" in str_output,
     ) == (1, True, True)
+
+
+def test_trailing_comments_on_consecutive_lines_are_not_one_run() -> None:
+    """Item 8 of #1258: only full-line comments form a run; trailing ones stand alone."""
+    list_blocks = gate.python_blocks("x = 1  # a\ny = 2  # b\nz = 3  # c\n")
+    assert [len(list_lines) for _, list_lines in list_blocks] == [1, 1, 1]
+
+
+def test_trailing_comment_does_not_extend_a_full_line_run() -> None:
+    """Item 8 of #1258: a trailing comment under a full-line run starts its own block."""
+    list_blocks = gate.python_blocks("# a\n# b\nx = 1  # c\n")
+    assert [len(list_lines) for _, list_lines in list_blocks] == [2, 1]
+
+
+def test_trailing_comments_are_still_counted_by_the_ratchet(tmp_path: Path) -> None:
+    """Item 8 of #1258: splitting runs must not drop trailing comments from the count."""
+    path_file = tmp_path / "a.py"
+    path_file.write_text("x = 1  # a\ny = 2  # b\n", encoding="utf-8")
+    assert gate.comment_line_count(path_file) == 2
+
+
+@pytest.mark.parametrize("str_body", ["   ", "\t\t\t", "    \t  "])
+def test_whitespace_only_comment_is_not_a_banner(str_body: str) -> None:
+    """Item 9 of #1258: blank comment text is not decorative punctuation."""
+    assert gate.RE_BANNER_LINE.match(str_body) is None
+
+
+def test_punctuation_rule_is_still_a_banner() -> None:
+    """Item 9 of #1258: the fix must keep real rules matching, padded or not."""
+    assert gate.RE_BANNER_LINE.match(" --- ") is not None
+
+
+def test_a_trailing_noqa_is_still_exempt(tmp_path: Path) -> None:
+    """Review 6045117614: the allowlist check runs before the trailing branch."""
+    path_file = tmp_path / "a.py"
+    path_file.write_text("x = 1  # noqa: E501\ny = 2  # type: ignore\n", encoding="utf-8")
+    assert gate.comment_line_count(path_file) == 0
+
+
+@pytest.mark.parametrize(
+    ("str_source", "list_sizes"),
+    [
+        ("foo(\n    # full\n    # full2\n    a,  # trail\n)\n", [2, 1]),
+        ('x = """a\nb"""  # trail\n# full\n', [1, 1]),
+    ],
+)
+def test_trailing_and_full_line_comments_are_told_apart_across_lines(
+    *, str_source: str, list_sizes: list[int]
+) -> None:
+    """The ``line`` slice is the comment's own physical line, also after a multi-line string."""
+    list_blocks = gate.python_blocks(str_source)
+    assert [len(list_lines) for _, list_lines in list_blocks] == list_sizes
