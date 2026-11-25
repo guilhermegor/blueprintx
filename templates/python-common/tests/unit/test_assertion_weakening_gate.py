@@ -1331,6 +1331,50 @@ def test_a_pytestmark_in_an_except_handler_is_a_new_marker() -> None:
     assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new)
 
 
+def test_making_a_run_false_xfail_strict_is_a_tightening() -> None:
+    """Review of #1328: ``strict=True`` on ``xfail(run=False)`` only tightens it."""
+    str_old = "@pytest.mark.xfail(run=False)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(strict=True, run=False)\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_adding_raises_to_a_run_false_xfail_is_a_tightening() -> None:
+    """Review of #1328: ``raises=`` on ``xfail(run=False)`` only tightens it."""
+    str_old = "@pytest.mark.xfail(run=False)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(raises=ValueError, run=False)\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_mark",
+    ["pytest.mark.xfail", "pytest.mark.skipif(c)"],
+    ids=["xfail", "skipif"],
+)
+def test_a_guarded_pytestmark_keeps_its_guard(str_mark: str) -> None:
+    """Review of #1328: an outright ``xfail`` is flagged beside a guarded ``pytestmark``."""
+    str_head = f"if sys.platform == 'win32':\n    pytestmark = {str_mark}\n\n\n"
+    str_old = str_head + "def test_a():\n" + _BODY
+    str_new = str_head + "@pytest.mark.xfail\ndef test_a():\n" + _BODY
+    assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_nested_pytestmark_guards_are_composed() -> None:
+    """Review of #1328: ``if a: if b:`` guards the marker by ``a and b``."""
+    str_head = "if a:\n    if b:\n        pytestmark = pytest.mark.skip\n\n\n"
+    str_moved = "if b:\n    if a:\n        pytestmark = pytest.mark.skip\n\n\n"
+    str_old = str_head + "def test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_moved + "def test_a():\n" + _BODY) == []
+
+
+def test_a_second_import_guarded_skip_is_not_excused_by_the_first() -> None:
+    """Review of #1328: two ``try`` blocks are two guards, not one literal ``try``."""
+    str_one = "try:\n    import foo\nexcept ImportError:\n    pytestmark = pytest.mark.skip\n"
+    str_two = "try:\n    import bar\nexcept ImportError:\n    pytestmark = pytest.mark.skip\n"
+    str_old = str_one + "\n\ndef test_a():\n" + _BODY
+    str_new = str_one + str_two + "\n\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
 def test_a_class_marker_is_a_new_marker() -> None:
     """Item of #1316: a skip decorator on the class newly skips its methods."""
     str_old = "class TestA:\n    def test_a(self):\n    " + _BODY

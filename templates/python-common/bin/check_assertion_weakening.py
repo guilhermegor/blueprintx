@@ -961,7 +961,8 @@ def _xfail_tightens(str_new: str, *, set_old: set) -> bool:
     if not str_new.startswith("xfail:"):
         return False
     return any(
-        _xfail_core(str_old).replace(";run=False", "") == _xfail_core(str_new)
+        _xfail_core(str_new)
+        in {_xfail_core(str_old), _xfail_core(str_old).removesuffix(";run=False")}
         and (str_old.endswith(";lax") or not str_new.endswith(";lax"))
         and _xfail_raises(str_old) in {"", _xfail_raises(str_new)}
         for str_old in set_old
@@ -1513,14 +1514,74 @@ def _flat_stmts(list_body: list, *, str_guard: str = "") -> list:
         if isinstance(cls_stmt, ast.If):
             str_test = _canon(cls_stmt.test)
             str_else = _canon(ast.UnaryOp(op=ast.Not(), operand=cls_stmt.test))
-            list_out.extend(_flat_stmts(cls_stmt.body, str_guard=str_test))
-            list_out.extend(_flat_stmts(cls_stmt.orelse, str_guard=str_else))
+            for list_arm, str_arm in ((cls_stmt.body, str_test), (cls_stmt.orelse, str_else)):
+                str_next = _compose(str_guard, str_inner=str_arm)
+                list_out.extend(_flat_stmts(list_arm, str_guard=str_next))
         elif isinstance(cls_stmt, ast.Try):
-            list_try = [*cls_stmt.body, *cls_stmt.orelse]
-            for cls_handler in cls_stmt.handlers:
-                list_try.extend(cls_handler.body)
-            list_out.extend(_flat_stmts(list_try, str_guard="try"))
+            str_digest = hashlib.sha256(ast.unparse(cls_stmt).encode()).hexdigest()[:8]
+            list_arms = [([*cls_stmt.body, *cls_stmt.orelse], f"try #{str_digest}")]
+            list_arms += [
+                (cls_handler.body, _except_guard(cls_stmt, cls_handler=cls_handler))
+                for cls_handler in cls_stmt.handlers
+            ]
+            for list_arm, str_arm in list_arms:
+                str_next = _compose(str_guard, str_inner=str_arm)
+                list_out.extend(_flat_stmts(list_arm, str_guard=str_next))
     return list_out
+
+
+def _compose(str_outer: str, *, str_inner: str) -> str:
+    """Return the guard of a block nested in another: both must hold.
+
+    Parameters
+    ----------
+    str_outer : str
+        The enclosing guard, ``""`` at the top level.
+    str_inner : str
+        The nested block's own guard.
+
+    Returns
+    -------
+    str
+        ``str_inner`` alone at the top level, else the two joined by ``and``.
+    """
+    if not str_outer:
+        return str_inner
+    return _join_conditions([str_outer, str_inner], cls_op=ast.And())
+
+
+_RE_XFAIL_COND = re.compile(r"^xfail:(.*?)((?:;(?:raises|run)=|;lax).*)?$")
+
+
+def _guarded_label(str_label: str, *, str_guard: str) -> str:
+    """Return a marker label with the guard of the block that assigns it folded in.
+
+    Parameters
+    ----------
+    str_label : str
+        A label from ``_marker_labels``.
+    str_guard : str
+        The ``if``/``try`` guard around the assignment, ``""`` for none.
+
+    Returns
+    -------
+    str
+        An outright ``skip`` becomes ``skip(if):<guard>``; ``skipif`` and ``xfail`` conditions
+        are joined to the guard by ``and``.
+    """
+    if not str_guard:
+        return str_label
+    if str_label == "skip":
+        return f"skip(if):{str_guard}"
+    if str_label.startswith("skipif:"):
+        str_cond = str_label.removeprefix("skipif:")
+        return "skipif:" + _compose(str_guard, str_inner=str_cond)
+    cls_match = _RE_XFAIL_COND.match(str_label)
+    if cls_match:
+        str_cond, str_rest = cls_match.group(1), cls_match.group(2) or ""
+        str_joined = _compose(str_guard, str_inner=str_cond) if str_cond else str_guard
+        return f"xfail:{str_joined}{str_rest}"
+    return str_label
 
 
 def _pytestmark_labels(list_body: list) -> set:
@@ -1553,8 +1614,7 @@ def _pytestmark_labels(list_body: list) -> set:
             is_many = isinstance(cls_value, ast.List | ast.Tuple)
             for cls_expr in cls_value.elts if is_many else [cls_value]:
                 for str_label in _marker_labels([cls_expr]):
-                    is_outright = str_guard and str_label == "skip"
-                    set_out.add(f"skip(if):{str_guard}" if is_outright else str_label)
+                    set_out.add(_guarded_label(str_label, str_guard=str_guard))
     return set_out
 
 
