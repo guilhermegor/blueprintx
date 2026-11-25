@@ -1324,6 +1324,13 @@ def test_an_xfail_that_starts_running_is_a_tightening() -> None:
     assert _findings(str_old, str_new=str_new) == []
 
 
+def test_a_pytestmark_in_an_except_handler_is_a_new_marker() -> None:
+    """Review of #1328: ``except ImportError: pytestmark = ...`` skips the module too."""
+    str_new = "try:\n    import foo\nexcept ImportError:\n    pytestmark = pytest.mark.skip\n"
+    str_new += "\n\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new)
+
+
 def test_a_class_marker_is_a_new_marker() -> None:
     """Item of #1316: a skip decorator on the class newly skips its methods."""
     str_old = "class TestA:\n    def test_a(self):\n    " + _BODY

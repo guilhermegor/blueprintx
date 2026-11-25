@@ -1516,7 +1516,10 @@ def _flat_stmts(list_body: list, *, str_guard: str = "") -> list:
             list_out.extend(_flat_stmts(cls_stmt.body, str_guard=str_test))
             list_out.extend(_flat_stmts(cls_stmt.orelse, str_guard=str_else))
         elif isinstance(cls_stmt, ast.Try):
-            list_out.extend(_flat_stmts([*cls_stmt.body, *cls_stmt.orelse], str_guard="try"))
+            list_try = [*cls_stmt.body, *cls_stmt.orelse]
+            for cls_handler in cls_stmt.handlers:
+                list_try.extend(cls_handler.body)
+            list_out.extend(_flat_stmts(list_try, str_guard="try"))
     return list_out
 
 
