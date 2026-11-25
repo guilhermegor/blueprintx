@@ -90,6 +90,24 @@ gate_checkout_rejects_second_head() {
 	return $rc
 }
 
+gate_step_gets_evaluated_head() {
+	awk '
+		/^ +id: gate$/ { ing = 1; next }
+		ing && /^      - / { ing = 0 }
+		ing && $0 ~ WANT { ok = 1 }
+		END { exit !ok }
+	' WANT='^ +EVALUATED_HEAD: \\$\\{\\{ steps\\.head\\.outputs\\.sha \\}\\}$' "$1"
+}
+gate_step_evaluated_head_rejects_misplacement() {
+	local str_dir rc=0
+	str_dir=$(mktemp -d)
+	printf '      - name: g\n        id: gate\n        env:\n          EVALUATED_HEAD: ${{ steps.head.outputs.sha }}\n        run: x\n' >"$str_dir/ok.yml"
+	printf '      - name: g\n        id: gate\n        env:\n          A: b\n        run: x\n      - name: post\n        env:\n          EVALUATED_HEAD: ${{ steps.head.outputs.sha }}\n' >"$str_dir/post_only.yml"
+	gate_step_gets_evaluated_head "$str_dir/ok.yml" || rc=1
+	gate_step_gets_evaluated_head "$str_dir/post_only.yml" && rc=1
+	rm -rf "$str_dir"
+	return $rc
+}
 gate_secrets_reject_other() {
 	local str_dir rc=0
 	str_dir=$(mktemp -d)
@@ -129,6 +147,7 @@ sys.exit(0 if int_exit == 0 else 1)" >/dev/null || rc=1
 	rm -rf "$str_dir"
 	return $rc
 }
+check "gate step EVALUATED_HEAD check rejects a head given only to the reporting step" gate_step_evaluated_head_rejects_misplacement
 check "a base-backed opt-out still writes the head read at start to CHECKED_HEAD_FILE" checker_records_head_on_opt_out
 for gate in "${GATES[@]}"; do
 	label="${gate#"$REPO_ROOT"/}"
@@ -145,7 +164,7 @@ for gate in "${GATES[@]}"; do
 	check "$label interpolates no author-controlled event field into a run: block" gate_run_blocks_clean "$gate"
 	check "$label uses no secret except GITHUB_TOKEN" gate_secrets_token_only "$gate"
 	check "$label posts success only when the checker's head equals the head read at start" gate_has "$gate" '"\$\(cat "\$CHECKED_HEAD_FILE"[^)]*\)" != "\$EVALUATED_HEAD"'
-	check "$label hands the head read at start to the gate step" gate_has "$gate" 'EVALUATED_HEAD: \$\{\{ steps\.head\.outputs\.sha \}\}'
+	check "$label hands the head read at start to the gate step" gate_step_gets_evaluated_head "$gate"
 	check "$label publishes against the head read before the gate ran" gate_has "$gate" 'head_sha="\$EVALUATED_HEAD"'
 done
 retrigger_job() { sed -n '/^  retrigger:/,/^  backfill:/p' "$WORKFLOWS/pr-gate.yml"; }
