@@ -270,6 +270,8 @@ def _apply_statement(
     list_found = _declared_names(cls_node)
     if list_found is None:
         return list_names
+    if list_names is None and not isinstance(cls_node, ast.Assign | ast.AnnAssign):
+        return None
     is_replacement = not _extends(cls_node) and not is_nested
     if is_replacement and (list_names is None or _is_literal(getattr(cls_node, "value", None))):
         return list_found

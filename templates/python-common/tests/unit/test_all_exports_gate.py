@@ -1537,6 +1537,32 @@ def test_a_later_literal_with_a_starred_literal_replaces_the_names(
     assert _load_gate().declared_all(path_init) == list_expected
 
 
+@pytest.mark.parametrize(
+    "str_mutation",
+    ["__all__.append('b')\n", "__all__.insert(0, 'b')\n", "__all__.extend(['b'])\n"],
+)
+def test_an_addition_without_a_declaration_keeps_no_all(
+    tmp_path: Path, *, str_mutation: str
+) -> None:
+    """An addition after an imported ``__all__`` must stay "no ``__all__``", not ``['b']``."""
+    path_init = _package(
+        tmp_path, str_init=f"from ._impl import __all__\n{str_mutation}", str_member=""
+    )
+    assert _load_gate().declared_all(path_init) is None
+
+
+def test_main_fails_on_an_unparseable_init(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A package whose ``__init__.py`` does not parse makes ``main`` return ``1``."""
+    gate = _load_gate()
+    path_init = tmp_path / "src" / "pkg" / "__init__.py"
+    path_init.parent.mkdir(parents=True)
+    path_init.write_text("__all__ = [\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_SRC", tmp_path / "src")
+    assert gate.main() == 1
+
+
 @pytest.mark.parametrize("str_removal", ["__all__.remove('x')\n", "__all__ -= ['x']\n"])
 def test_a_removal_without_a_declaration_keeps_no_all(tmp_path: Path, *, str_removal: str) -> None:
     """``from ._impl import __all__`` then a removal must stay "no ``__all__``", not ``[]``."""
