@@ -33,7 +33,8 @@ files a change touches — never off arbitrary source):
   group that equals no non-empty source group (a group the parser cannot read as one plain
   line counts as equal), no read of ``github.workflow``), outside a ``workflow_call`` file,
   with no ``needs:``, anchor, alias or flow-style id, and no word left in the source file that
-  names it (a move)
+  names it (a move). Known limit: a job moved into a NEW workflow file that a
+  ``bin/scaffold/python_*.sh`` copy list omits vanishes from that tier, undetected
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
   reads its diff rather than calling the GitHub API, the same "one implementation" reasoning
@@ -156,16 +157,18 @@ STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu{}>"
 RE_JOB_ID_LINE = re.compile(r"""^ {2}(["']?)([A-Za-z0-9_-]+)\1\s*:""")
 RE_UNMOVABLE_JOB_LINE = re.compile(
     r"""^ {2}(["']?)[\w-]+\1\s*:\s*[^\s#]|^ {4,}["']?needs["']?\s*:"""
-    r"""|^ {3,}[{\[]|github(?:[._]|\[\s*["']\s*)workflow"""
+    r"""|^ {3,}[{\[]|github(?:[._]|\[\s*["']\s*)workflow(?!\w)"""
     r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]""",
     re.IGNORECASE,
 )
-RE_WORKFLOW_NAME_READ = re.compile(r"""github(?:[._]|\[\s*["']\s*)workflow""", re.IGNORECASE)
+RE_WORKFLOW_NAME_READ = re.compile(
+    r"""github(?:[._]|\[\s*["']\s*)workflow(?!\w)""", re.IGNORECASE
+)
 RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
 STR_FLOW_CONCURRENCY = "{flow}"
 RE_CONCURRENCY_KEY = r"""["']?concurrency["']?\s*:"""
 RE_MAPPING_KEY_LINE = re.compile(r"""^\s+["']?[\w-]+["']?\s*:""")
-RE_SKIPPED_HEADER_KEY = r"""(jobs|name|["']?concurrency["']?)\s*:"""
+RE_SKIPPED_HEADER_KEY = r"""(jobs|["']?name["']?|["']?concurrency["']?)\s*:"""
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
@@ -792,9 +795,9 @@ def workflow_problems(
     dict_elsewhere : dict or None
         Job id to the list of ``(workflow_header, job_signature, workflow_concurrency)`` of
         jobs newly added to a workflow file of the same tree in this change. A removed job
-        whose header and signature match one, with a concurrency group that differs from a
-        non-empty source one, is a move, and the match is consumed (the list is mutated) so
-        one new job covers one removal.
+        whose header and signature match one, with a concurrency group that does not collide
+        with the source's (a source with no group collides with nothing), is a move, and the
+        match is consumed (the list is mutated) so one new job covers one removal.
 
     Returns
     -------

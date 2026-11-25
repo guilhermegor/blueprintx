@@ -1629,6 +1629,19 @@ def test_workflow_job_moved_into_the_group_the_source_takes_in_the_same_change_i
     assert len(list_findings) == 1
 
 
+def test_workflow_ref_group_is_a_plain_group_not_a_name_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``github.workflow_ref`` is not the name: a distinct group on it is a clean move."""
+    list_findings = _move_under_concurrency(
+        monkeypatch,
+        str_source="concurrency:\n  group: ci\n",
+        str_target="concurrency:\n  group: ${{ github.workflow_ref }}\n",
+    )
+
+    assert list_findings == []
+
+
 def test_workflow_job_reading_the_name_through_an_index_is_removed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1653,7 +1666,7 @@ def test_workflow_job_reading_the_name_through_an_index_is_removed(
             "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
         ),
         (
-            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            '"name": CI\nconcurrency:\n  group: ${{ github.workflow }}\n',
             '"name": CI\nconcurrency:\n  group: ${{ github.workflow }}\n',
         ),
         (
