@@ -1411,7 +1411,10 @@ is shaped as it is; a generated project gets the behavior, not the history.
       so an identical text can still be skipped (`if: false` on the needed job) or changed
       in the target. Detection is textual and errs toward reporting: a shell `*word` in a
       `run:` line also makes the job non-movable. Known limit: whether the target file is
-      copied into generated projects is not compared. Moving a file's last job out and
+      copied into generated projects is not compared. Known limit: the line parser reads
+      only a plain `jobs:` key at column 0, so a quoted `"jobs":` hides every job from the
+      comparison (no workflow in this repo spells it so; a real YAML parser, #1315, ends
+      this class of limit). Moving a file's last job out and
       deleting the file is still reported by the deletion check, so a workflow split or
       rename needs `gate-change-ok:`.
     - `assertion-weakening`: wired in pre-commit (`language: system`, `always_run`, so the
