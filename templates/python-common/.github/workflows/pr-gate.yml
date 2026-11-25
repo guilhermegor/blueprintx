@@ -81,6 +81,12 @@ jobs:
           fi
           str_run="$(gh run view "$RUN_ID" --json attempt,status,conclusion \
             --jq '"\(.attempt) \(.status) \(.conclusion)"')"
+          int_pending="$(gh run list --commit "$HEAD_SHA" --limit 100 --json name,status \
+            --jq '[.[] | select(.name == "Run Tests" and .status != "completed")] | length')"
+          if [ "${int_pending:-0}" -gt 0 ]; then
+            echo "Run Tests still running for $HEAD_SHA; its completion re-runs the gate"
+            exit 0
+          fi
           case "$str_run" in
           "1 completed failure") gh run rerun "$RUN_ID" ;;
           *) echo "gate run $RUN_ID is '$str_run'; nothing to re-run" ;;

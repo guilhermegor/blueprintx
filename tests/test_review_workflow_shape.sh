@@ -68,6 +68,7 @@ late_rerun_count() {
 		case "$*" in
 		"api "*) echo 1 ;;
 		"run view "*) echo "$FAKE_ATTEMPT completed $FAKE_CONCLUSION" ;;
+		"run list "*) echo "${FAKE_PENDING:-0}" ;;
 		"run rerun "*) echo "$*" >>"$RERUN_LOG" ;;
 		esac
 	EOF
@@ -78,6 +79,7 @@ late_rerun_count() {
 	{ [ -f "$str_dir/log" ] && wc -l <"$str_dir/log" || echo 0; } | tr -d ' '
 	rm -rf "$str_dir"
 }
+tests_still_running_no_rerun() { [ "$(FAKE_PENDING=1 late_rerun_count 1 failure)" = 0 ]; }
 late_failure_rerun_once() { [ "$(late_rerun_count 1 failure)" = 1 ]; }
 passing_gate_never_rerun() { [ "$(late_rerun_count 1 success)" = 0 ]; }
 rerun_attempt_never_rerun_again() { [ "$(late_rerun_count 2 failure)" = 0 ]; }
@@ -92,6 +94,8 @@ late_rerun_never_waits() { ! late_rerun_job | grep -q 'sleep '; }
 late_rerun_may_write_actions() { late_rerun_job | grep -qE '^ +actions: write$'; }
 check "a gate that fails after the retrigger window gets exactly one re-run" \
 	late_failure_rerun_once
+check "a gate that failed while Run Tests still runs keeps its retry for retrigger" \
+	tests_still_running_no_rerun
 check "a passing gate gets no re-run" passing_gate_never_rerun
 check "a gate already re-run once is not re-run again" rerun_attempt_never_rerun_again
 check "the late re-run job fires only on a failed PR Quality Gate run" \

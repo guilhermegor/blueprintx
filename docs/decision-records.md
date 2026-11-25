@@ -2264,8 +2264,9 @@ This section records what is specific to the generated copies.
   minutes, so a gate that fails later stayed red for that head. Decided: recover from the
   gate's own completion rather than poll longer. The `workflow_run` trigger also names
   `PR Quality Gate`, and a `late_rerun` job fires on a completed run with
-  `conclusion == 'failure'`; the gate polls until every axis is terminal before it exits, so
-  a failure completion means all axes are terminal. It re-runs that run once: the step reads
+  `conclusion == 'failure'`; the gate can also fail because its polling budget ran out with
+  axes still pending, so the job skips while a `Run Tests` run for the head is unfinished and
+  leaves the retry to the `Run Tests` completion that `retrigger` handles. It re-runs that run once: the step reads
   the run's attempt and re-runs only attempt 1, so a re-run that fails again is final and a
   passing gate gets none. `retrigger` is now limited to `Run Tests` completions, or the
   gate's own completion would fire both jobs. Rejected: raising the retrigger loop to 20
