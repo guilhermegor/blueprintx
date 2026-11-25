@@ -628,12 +628,14 @@ def _canon_node(cls_node: ast.expr) -> ast.expr:
     if isinstance(cls_node, ast.Constant) and isinstance(cls_node.value, str):
         try:
             return _canon_node(ast.parse(cls_node.value, mode="eval").body)
-        except SyntaxError:
+        except (SyntaxError, ValueError):
             return cls_node
     if isinstance(cls_node, ast.UnaryOp) and isinstance(cls_node.op, ast.Not):
         cls_inner = cls_node.operand
         is_double = isinstance(cls_inner, ast.UnaryOp) and isinstance(cls_inner.op, ast.Not)
-        return _canon_node(cls_inner.operand) if is_double else cls_node
+        if is_double:
+            return _canon_node(cls_inner.operand)
+        return ast.UnaryOp(op=ast.Not(), operand=_canon_node(cls_inner))
     if not isinstance(cls_node, ast.BoolOp):
         return cls_node
     list_flat: list[ast.expr] = []
@@ -896,6 +898,8 @@ def _xfail_scope(dec: ast.Call) -> str:
         from running at all, so both belong to the marker's identity.
     """
     dict_kw = {cls_kw.arg: ast.unparse(cls_kw.value) for cls_kw in dec.keywords}
+    if dict_kw.get("run") == "True":
+        del dict_kw["run"]
     return "".join(
         f";{str_key}={dict_kw[str_key]}" for str_key in ("raises", "run") if str_key in dict_kw
     )
@@ -1487,10 +1491,17 @@ def _pytestmark_labels(list_body: list) -> set:
     """
     list_exprs: list = []
     for cls_stmt in list_body:
-        is_mark = isinstance(cls_stmt, ast.Assign) and any(
-            isinstance(cls_t, ast.Name) and cls_t.id == "pytestmark" for cls_t in cls_stmt.targets
+        list_targets = (
+            cls_stmt.targets
+            if isinstance(cls_stmt, ast.Assign)
+            else [cls_stmt.target]
+            if isinstance(cls_stmt, ast.AnnAssign | ast.AugAssign)
+            else []
         )
-        if is_mark:
+        is_mark = cls_stmt.value is not None if list_targets else False
+        if is_mark and any(
+            isinstance(cls_t, ast.Name) and cls_t.id == "pytestmark" for cls_t in list_targets
+        ):
             cls_value = cls_stmt.value
             is_many = isinstance(cls_value, ast.List | ast.Tuple)
             list_exprs.extend(cls_value.elts if is_many else [cls_value])

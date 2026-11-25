@@ -1245,7 +1245,7 @@ def test_a_short_circuit_skip_keeps_its_guard() -> None:
     "str_skip",
     [
         "    pt.skip()\n",
-        "    raise pytest.skip.Exception('x')\n",
+        "    raise pt.skip.Exception('x')\n",
         "    request.applymarker(pytest.mark.skip)\n",
         "    request.node.add_marker(pytest.mark.xfail)\n",
     ],
@@ -1269,6 +1269,31 @@ def test_a_module_pytestmark_is_a_new_marker() -> None:
     """Item of #1316: ``pytestmark = pytest.mark.skip`` newly skips every test below it."""
     str_new = "pytestmark = pytest.mark.skip\n\n\ndef test_a():\n" + _BODY
     assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    "str_assign",
+    ["pytestmark: list = [pytest.mark.skip]", "pytestmark += [pytest.mark.skip]"],
+    ids=["annotated", "augmented"],
+)
+def test_an_annotated_or_augmented_pytestmark_is_a_new_marker(str_assign: str) -> None:
+    """Review of #1328: ``pytestmark`` set by ``AnnAssign`` or ``AugAssign`` is read too."""
+    str_new = str_assign + "\n\n\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new)
+
+
+def test_dropping_a_redundant_run_true_is_not_flagged() -> None:
+    """Review of #1328: ``run=True`` is the default, so removing it changes nothing."""
+    str_old = "@pytest.mark.xfail(strict=True, run=True)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(strict=True)\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_negated_guard_compares_equal_whatever_the_operand_order() -> None:
+    """Review of #1328: ``not (a and b)`` equals ``not (b and a)``."""
+    str_old = "def test_a():\n    if not (a and b):\n        pytest.skip()\n" + _BODY
+    str_new = "def test_a():\n    if not (b and a):\n        pytest.skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
 
 
 def test_a_class_marker_is_a_new_marker() -> None:
