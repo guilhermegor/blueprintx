@@ -1874,8 +1874,10 @@ def recorded_findings(str_base: str) -> set:
 
     A ``gate-change-ok:`` trailer is only a claim, and an agent can type one. What makes it
     count is the commit that carries it: the findings it justifies are those its OWN tree
-    produces, and a tree with findings only exists if the interactive ``GATE_CHANGE_OK`` run
-    let it through. A trailer on a commit with no findings of its own justifies nothing.
+    produces against its OWN fork point (``merge-base`` of the commit and the current base,
+    so a later merge of ``main`` cannot turn main's newer gates into recorded findings), and
+    a tree with findings only exists if the interactive ``GATE_CHANGE_OK`` run let it through.
+    A trailer on a commit with no findings of its own justifies nothing.
 
     Parameters
     ----------
@@ -1892,7 +1894,8 @@ def recorded_findings(str_base: str) -> set:
     )
     set_recorded: set = set()
     for str_sha in str_out.split():
-        set_recorded.update(findings_at(str_sha, str_base=str_base))
+        str_own_base = _git(["merge-base", str_sha, str_base]).strip() or str_base
+        set_recorded.update(findings_at(str_sha, str_base=str_own_base))
     return set_recorded
 
 

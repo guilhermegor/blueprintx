@@ -2054,6 +2054,7 @@ def test_workflow_with_a_shared_alias_chain_is_read_without_blowing_up() -> None
 _STR_RUFF_BASE = '[lint]\nselect = ["E", "F"]\nignore = []\n'
 _STR_RUFF_WEAKER = '[lint]\nselect = ["E", "F"]\nignore = ["E501"]\n'
 _STR_RUFF_WEAKEST = '[lint]\nselect = ["E", "F"]\nignore = ["E501", "E402"]\n'
+_STR_RUFF_STRICTER = '[lint]\nselect = ["E", "F", "W"]\nignore = []\n'
 _STR_TRAILER = "feat: x\n\ngate-change-ok: owner reviewed the ignore\n"
 
 
@@ -2204,6 +2205,19 @@ def test_branch_justified_forged_trailer_on_a_clean_commit_justifies_nothing(
     _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
     _commit_staged(path_branch, str_message=_STR_TRAILER)
     _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+
+    assert gate.main([]) == 1
+
+
+def test_branch_justified_after_main_adds_a_gate_does_not_record_it(
+    path_recorded: Path,
+) -> None:
+    """SHOULD FAIL: a gate main added after the trailer commit is not justified by it."""
+    _git_in(path_recorded, "checkout", "-q", "main")
+    _stage(path_recorded, str_name="ruff.toml", str_text=_STR_RUFF_STRICTER)
+    _commit_staged(path_recorded, str_message="chore: main adds rule W")
+    _git_in(path_recorded, "checkout", "-q", "feature")
+    _git_in(path_recorded, "merge", "-q", "-s", "ours", "main", "-m", "merge main")
 
     assert gate.main([]) == 1
 

@@ -2645,7 +2645,7 @@ trailer, and the findings it justifies are the ones that commit's own tree produ
 the interactive commit's message with the trailer, and the gate prints that line on an env
 justification.
 
-**Why it cannot be forged by an agent.** The trailer text alone justifies nothing. A tree that
+**Why a typed trailer is not enough.** The trailer text alone justifies nothing. A tree that
 produces findings only exists if the interactive `GATE_CHANGE_OK` run let it through, so a
 trailer on a commit with no findings of its own, or typed before the weakening lands, covers
 nothing, and the weakening commit itself is still refused. A new weakening is not in the set and
@@ -2658,4 +2658,7 @@ CI keeps the PR body and trailer sources unchanged, since a reviewer reads those
 **Known limits.** The trailer is typed by the owner, not written by the hook, because the message
 does not exist at the `pre-commit` stage and a `prepare-commit-msg` hook would widen the surface;
 a commit made without the trailer keeps today's behaviour. `--no-verify` bypasses the hook
-entirely, as before.
+entirely, as before. The record is local hardening, not a forgery-proof gate: CI still accepts a
+`gate-change-ok:` trailer from `base..HEAD`, so a `--no-verify` commit with a typed trailer clears
+CI exactly as it did before. Each trailer commit is judged against `merge-base(commit, base)`, so
+a later merge of `main` does not move the base its findings are measured from.
