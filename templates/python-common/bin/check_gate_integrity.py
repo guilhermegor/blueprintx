@@ -745,11 +745,22 @@ def anchored_job_ids(cls_root: yaml.Node, *, set_anchored: frozenset) -> frozens
         Ids of the jobs written in flow style (``gate: {...}``, which a reviewer cannot diff
         line by line) or whose subtree is ``node_is_shared``; empty when ``jobs:`` is not a
         mapping.
+
+    Raises
+    ------
+    yaml.YAMLError
+        When the ``jobs:`` mapping is itself anchored or aliased (``jobs: *x``), or holds a
+        ``<<`` merge key: either supplies jobs whose ids no key of this mapping names, so no
+        per-job flag can cover them.
     """
     if not isinstance(cls_root, yaml.MappingNode):
         return frozenset()
     for cls_key, cls_value in reversed(cls_root.value):
         if cls_key.value == "jobs" and isinstance(cls_value, yaml.MappingNode):
+            if id(cls_value) in set_anchored or any(
+                cls_id.tag == STR_MERGE_TAG for cls_id, _cls_job in cls_value.value
+            ):
+                raise yaml.YAMLError("an aliased jobs mapping or a merge key under jobs")
             return frozenset(
                 str(cls_id.value)
                 for cls_id, cls_job in cls_value.value
@@ -1138,6 +1149,39 @@ def removal_is_move(
     return bool_movable and bool(tuple_found)
 
 
+def base_unreadable_problems(str_old: str, *, str_shown: str) -> list:
+    """Return a finding for a base workflow that is valid YAML the gate refuses to compare.
+
+    Parameters
+    ----------
+    str_old : str
+        Content at the merge-base, which ``read_workflow`` returned ``None`` for.
+    str_shown : str
+        Path to show in messages.
+
+    Returns
+    -------
+    list of str
+        One message when ``yaml.compose`` reads the text as a mapping (a merge key or an
+        aliased ``jobs:`` the gate rejects, say): GitHub still runs it, so a change that
+        deletes its jobs must not pass silently. ``[]`` when the text is not YAML at all,
+        which GitHub refuses to run, so a repair has nothing to weaken.
+    """
+    try:
+        cls_root = yaml.compose(str_old, Loader=yaml.SafeLoader)
+    except yaml.YAMLError:
+        return []
+    except RecursionError:
+        return [
+            f"{str_shown}: base workflow nests too deeply for the gate, so its jobs are unchecked"
+        ]
+    if not isinstance(cls_root, yaml.MappingNode):
+        return []
+    return [
+        f"{str_shown}: base workflow is YAML the gate cannot compare, so its jobs are unchecked"
+    ]
+
+
 def workflow_problems(
     str_old: str, *, str_new: str, str_shown: str, dict_elsewhere: dict | None = None
 ) -> list:
@@ -1162,16 +1206,18 @@ def workflow_problems(
     -------
     list of str
         One message per removed job; a single message when the file as it is now is not
-        valid YAML, since its jobs cannot then be compared. A base that does not parse has no
-        comparable jobs, so a change that repairs it reports nothing. Callers pass only files
-        present at both refs; an added file never reaches this function.
+        valid YAML, since its jobs cannot then be compared. A base that is not YAML at all has no
+        comparable jobs, so a change that repairs it reports nothing; a base that is YAML but
+        outside what the gate reads (``base_unreadable_problems``) reports one message.
+        Callers pass only files present at both refs; an added file never reaches this
+        function.
     """
     tuple_new = read_workflow(str_new)
     if tuple_new is None:
         return [f"{str_shown}: workflow YAML does not parse, so its jobs cannot be compared"]
     tuple_old = read_workflow(str_old)
     if tuple_old is None:
-        return []
+        return base_unreadable_problems(str_old, str_shown=str_shown)
     dict_elsewhere = dict_elsewhere or {}
     set_removed = set(workflow_jobs_of(tuple_old[0])) - set(workflow_jobs_of(tuple_new[0]))
     return [
