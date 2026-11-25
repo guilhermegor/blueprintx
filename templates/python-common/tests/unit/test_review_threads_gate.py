@@ -5782,3 +5782,121 @@ def test_a_review_without_submitted_at_never_carries_a_later_one() -> None:
     ]
     list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
     assert len(_body_problems(list_reviews, list_notices=list_notices)) == 2
+
+
+def _partly_new_problems(str_second_body: str) -> list[str]:
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_second_body, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    return _body_problems(list_reviews, list_notices=list_notices)
+
+
+def _answered_plus_new_problem() -> str:
+    list_problems = _partly_new_problems(_answered_plus_new_body())
+    assert len(list_problems) == 1
+    return list_problems[0]
+
+
+def test_a_partly_new_body_names_the_new_finding() -> None:
+    """Should-fail witness: the problem names the unanswered finding by its title."""
+    assert "A different finding." in _answered_plus_new_problem()
+
+
+def test_a_partly_new_body_does_not_name_the_answered_finding() -> None:
+    """Should-fail witness: the already-answered finding is not named again."""
+    assert _CARRY_TITLE not in _answered_plus_new_problem()
+
+
+def _answered_plus_many_new_body(int_new: int) -> str:
+    """Build the answered finding plus ``int_new`` long, distinctly titled new ones."""
+    str_head = _outside_diff_body("src/a.py", str_line="52").replace("(1)", f"({int_new + 1})")
+    return str_head + "".join(
+        _outside_diff_body(
+            "src/a.py",
+            str_line="9",
+            str_title=f"Another long finding title number {int_i} {'x' * 30}",
+        ).split("\n", 2)[2]
+        for int_i in range(int_new)
+    )
+
+
+def test_a_partly_new_body_states_how_many_findings_are_new() -> None:
+    """Should-fail witness: the problem opens with the count of new findings."""
+    assert "1 new:" in _answered_plus_new_problem()
+
+
+def test_a_truncated_new_finding_list_is_one_problem() -> None:
+    """A list cut at 200 characters is still reported as a single problem."""
+    assert len(_partly_new_problems(_answered_plus_many_new_body(8))) == 1
+
+
+def test_a_truncated_new_finding_list_keeps_the_full_count() -> None:
+    """Should-fail witness: the cut does not shrink the stated count of new findings."""
+    assert "8 new:" in _partly_new_problems(_answered_plus_many_new_body(8))[0]
+
+
+def test_a_truncated_new_finding_list_ends_with_an_ellipsis() -> None:
+    """Should-fail witness: a list cut at 200 characters says so."""
+    assert "…" in _partly_new_problems(_answered_plus_many_new_body(8))[0]
+
+
+def test_a_truncated_new_finding_list_is_exactly_the_cap_long() -> None:
+    """Should-fail witness: the shown names, ellipsis included, are exactly the cap long."""
+    str_problem = _partly_new_problems(_answered_plus_many_new_body(8))[0]
+    str_names = str_problem.split("— ", 1)[1].split(" [review", 1)[0]
+    assert len(str_names) == _load_gate()._INT_NEW_NAMES_CAP
+
+
+def test_the_many_new_body_really_parses_nine_blocks() -> None:
+    """Guard for the truncation tests: every appended block must parse, or they prove nothing."""
+    assert len(_load_gate().body_findings(_answered_plus_many_new_body(8))) == 9
+
+
+def test_a_short_new_finding_list_has_no_ellipsis() -> None:
+    """A list under the cut is shown whole, with no marker."""
+    assert "…" not in _answered_plus_new_problem()
+
+
+def _miscounted_partly_new_body() -> str:
+    """Return a partly new body whose declared count the finding blocks do not match."""
+    return _answered_plus_new_body().replace("(2)", "(3)")
+
+
+def test_a_partly_new_body_that_does_not_parse_is_one_problem() -> None:
+    """A declared count the blocks miss still yields a single problem."""
+    assert len(_partly_new_problems(_miscounted_partly_new_body())) == 1
+
+
+def test_a_partly_new_body_that_does_not_parse_keeps_the_old_message() -> None:
+    """Fail-closed witness: a declared count the blocks miss falls back to the generic message."""
+    assert "lists findings in its body" in _partly_new_problems(_miscounted_partly_new_body())[0]
+
+
+def test_a_partly_new_body_message_keeps_the_roster_and_bot_clause() -> None:
+    """Should-fail witness: the message still says roster and bot replies do not count."""
+    assert "outside the reviewer roster (and no bot)" in _answered_plus_new_problem()
+
+
+def test_a_partly_new_body_answered_later_is_no_problem() -> None:
+    """A reply after the partly new review clears it."""
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(_answered_plus_new_body(), str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [
+        _notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z"),
+        _notice("someone", str_body=_BODY_REPLY, str_created="2026-01-05T00:00:00Z"),
+    ]
+    assert _body_problems(list_reviews, list_notices=list_notices) == []
+
+
+def test_a_repeated_key_beyond_its_answered_count_is_counted_as_new() -> None:
+    """The multiplicity rule: a key answered once and listed twice has one new finding."""
+    assert "1 new:" in _partly_new_problems(_twice_body("52"))[0]
+
+
+def test_a_partly_new_finding_name_carries_its_line() -> None:
+    """Should-fail witness: the new finding is named with its line, so twins stay apart."""
+    assert "src/a.py:90: A different finding." in _answered_plus_new_problem()
