@@ -24,6 +24,19 @@ pull_request_types() {
 	' "$1"
 }
 
+has_edited_event() {
+	local str_list="${1%%#*}" str_event
+	local -a list_events
+	[[ "$str_list" == *"["*"]"* ]] || return 1
+	str_list="${str_list#*[}"
+	str_list="${str_list%%]*}"
+	IFS=',' read -ra list_events <<<"$str_list"
+	for str_event in "${list_events[@]}"; do
+		[ "${str_event//[[:space:]]/}" = "edited" ] && return 0
+	done
+	return 1
+}
+
 check_edited_trigger() {
 	local str_file="$1" str_types
 	if [ ! -f "$REPO_ROOT/$str_file" ]; then
@@ -31,7 +44,7 @@ check_edited_trigger() {
 		return
 	fi
 	str_types="$(pull_request_types "$REPO_ROOT/$str_file")"
-	if [[ "$str_types" == *edited* ]]; then
+	if has_edited_event "$str_types"; then
 		pass "$str_file: pull_request types include edited"
 	else
 		fail "$str_file: pull_request types do not include edited (got: '${str_types:-none}')"
@@ -55,6 +68,19 @@ check_present() {
 		fail "$str_desc"
 	fi
 }
+
+check_edited_matcher_rejects() {
+	local str_types="$1"
+	if has_edited_event "$str_types"; then
+		fail "edited matcher accepted '$str_types'"
+	else
+		pass "edited matcher rejects '$str_types'"
+	fi
+}
+
+check_edited_matcher_rejects "    types: [opened, synchronize, reopened] # edited"
+check_edited_matcher_rejects "    types: [opened, synchronize, reopened, unedited]"
+check_edited_matcher_rejects "    types: edited"
 
 check_edited_trigger ".github/workflows/gate_integrity.yml"
 check_edited_trigger "templates/python-common/.github/workflows/assertion-weakening.yml"
