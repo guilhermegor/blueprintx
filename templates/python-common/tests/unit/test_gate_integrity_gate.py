@@ -985,14 +985,20 @@ def test_workflow_job_moved_with_outside_dependency_is_removed(
 ) -> None:
     """``needs:`` and YAML anchors point outside the block, so an identical text is no proof."""
     str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
+    str_defs = "x-defs:\n  shared: &shared {A: '1'}\n  gate_step: &gate_step {run: a}\n" * (
+        "&" not in str_extra
+    )
     list_findings = _collect_workflows(
         monkeypatch,
-        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
-        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        dict_old={_STR_SOURCE: f"{str_defs}jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"{str_defs}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"{str_defs}jobs:\n{str_job}",
+        },
         list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
     )
 
-    assert len(list_findings) == 1
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
 
 
 @pytest.mark.parametrize(
@@ -1807,7 +1813,7 @@ def test_workflow_that_no_longer_parses_is_a_finding() -> None:
     str_new = f"jobs:\n{_STR_KEPT_JOB}  broken: [\n"
 
     assert gate.workflow_problems(f"jobs:\n{_STR_KEPT_JOB}", str_new=str_new, str_shown="w") == [
-        "w: workflow YAML does not parse now, so its jobs cannot be compared"
+        "w: workflow YAML does not parse, so its jobs cannot be compared"
     ]
 
 
@@ -1921,9 +1927,39 @@ def test_workflow_job_moved_into_a_non_string_group_is_removed(
     assert len(list_findings) == 1
 
 
-def test_workflow_read_restores_the_on_key_that_yaml_1_1_reads_as_a_boolean() -> None:
-    """``on`` parses to ``True`` in YAML 1.1; the reader restores it so triggers compare."""
-    assert gate.read_workflow("on: push\njobs:\n")[0] == {"on": "push", "jobs": None}
+def test_workflow_read_keeps_the_on_key_and_empty_values_as_text() -> None:
+    """The loader resolves no bool or null, so ``on`` is the string key and ``jobs:`` is ``""``."""
+    assert gate.read_workflow("on: push\njobs:\n")[0] == {"on": "push", "jobs": ""}
+
+
+def test_workflow_read_rejects_a_self_referential_alias() -> None:
+    """A recursive alias cannot be walked, so it is unparsed rather than a crash."""
+    assert gate.read_workflow("a: &x [*x]\njobs:\n") is None
+
+
+@pytest.mark.parametrize(
+    ("str_from", "str_to"),
+    [("~", "null"), ("2026-1-1", "2026-01-01"), ("=", "x")],
+)
+def test_workflow_job_moved_with_a_respelled_null_date_or_value_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_from: str, str_to: str
+) -> None:
+    """The null, timestamp and ``=`` resolvers are off, so these stay different text."""
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB + f"    env:\n      X: {str_to}\n",
+        str_job_old=_STR_MOVED_JOB + f"    env:\n      X: {str_from}\n",
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_repair_of_an_unparseable_base_reports_nothing() -> None:
+    """A base that did not parse has no comparable jobs, so its repair is not a finding."""
+    assert (
+        gate.workflow_problems("jobs: [\n", str_new=f"jobs:\n{_STR_KEPT_JOB}", str_shown="w") == []
+    )
 
 
 @pytest.mark.parametrize("str_body", ["", " ~", " foo"])
@@ -1959,10 +1995,16 @@ def test_workflow_with_a_second_document_does_not_parse() -> None:
     assert gate.read_workflow("jobs:\n---\njobs:\n") is None
 
 
-def test_workflow_job_with_a_boolean_looking_id_is_still_anchored() -> None:
-    """The id is read from the same text on both sides, so ``yes`` keys one job."""
-    str_old = "jobs:\n  yes: {runs-on: ubuntu-latest}\n"
+def test_workflow_flow_style_job_with_a_boolean_looking_id_is_not_movable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The flow-style check keys ``yes`` like the job table, so an identical copy is refused."""
+    str_job = "  yes: {runs-on: ubuntu-latest}\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
 
-    assert gate.workflow_problems(str_old, str_new="jobs:\n  k:\n", str_shown="w") == [
-        "w: workflow job 'yes' removed"
-    ]
+    assert len(list_findings) == 1

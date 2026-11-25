@@ -1361,12 +1361,16 @@ is shaped as it is; a generated project gets the behavior, not the history.
       style cannot change a verdict, and a changed value inside a folded `run: >` (a blank
       line included) always does. The gate hard-fails on a missing `import yaml`; there is no
       fallback to a line parser. PyYAML is importable where the gate runs: BlueprintX's own
-      hook is `language: python` with `additional_dependencies: [pyyaml]`, its CI job pins
+      hook is `language: python` with `additional_dependencies: [pyyaml==6.0.3]`, its CI job pins
       `pyyaml==6.0.3`, and generated projects run it in the project venv, where `pyyaml` is a
       direct dependency of the five service tiers and arrives with the `yamllint` dev
-      dependency in `lib-minimal`. A workflow file that does not parse, at the merge-base or
-      now, is itself a finding: its jobs cannot be compared. A destination file that does not
-      parse excuses nothing.
+      dependency in `lib-minimal`. A changed workflow file that does not parse now is itself
+      a finding: its jobs cannot be compared. A file that did not parse at the merge-base has
+      no comparable jobs, so a change that repairs it reports nothing. A destination file that
+      does not parse excuses nothing. The loader (`StringScalarLoader`) keeps every scalar as
+      the text the file spells: no bool, int, float, null, timestamp or `=` resolver, so
+      `on`/`true`, `1`/`1.0`, `~`/`null` and `2026-1-1`/`2026-01-01` compare as different
+      values, as GitHub passes them through.
       The whole job mapping must be equal except a `runs-on` that is a string naming a hosted image
       (`ubuntu-latest`, or `ubuntu-22.04`/`ubuntu-24.04` each optionally `-arm`: the labels
       GitHub serves, so a retired or invented image is compared), which may change within
@@ -1408,9 +1412,9 @@ is shaped as it is; a generated project gets the behavior, not the history.
       against `ci-x`), a new job elsewhere in the target that makes the whole file invalid (actionlint's job), first-fit candidate matching, per-workflow state such as `github.run_number` and
       `run_attempt` that changes when a job moves, a constant target group that makes runs across PRs
       cancel each other, and a target job whose `name:` repeats an existing check context.
-      Parser-level limits: PyYAML reads YAML 1.1, so a job id spelled `yes`, `no`, `on` or
-      `off` unquoted is a boolean key (the top-level `on:` is restored; a job id is not), and a
-      duplicate key silently keeps its last value (GitHub rejects the file).
+      Parser-level limits: a duplicate key silently keeps its last value (GitHub rejects the
+      file), and a self-referential alias makes the file unparsed. The `jobs:` key read for
+      anchors is the last one, like the constructed mapping.
       Two more limits stay: a workflow that waits on the source through
       `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read.
       One new job excuses one removal. It also counts as removed when the id is gone from

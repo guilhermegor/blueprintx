@@ -750,8 +750,8 @@ Configuration files in this repository carry no comments, so the reasoning lives
   `env:` or trigger, a job gone from the tree, a move across trees (template to root) or
   into a subdirectory is still a removal (#1311), and so is a flow-style job or any job with
   `needs:` or a YAML anchor or merge key, whose meaning lives outside the compared
-  mapping, or one whose id the source file still holds as a word. A file that does not parse is
-  itself a finding. PyYAML must be importable: BlueprintX's hook installs it, CI pins it, and a
+  mapping, or one whose id the source file still holds as a word. A changed file that does not
+  parse now is itself a finding (an unparseable base reports nothing). PyYAML must be importable: BlueprintX's hook installs it, CI pins it, and a
   generated project gets it from its venv (a direct dependency of the service tiers, via
   `yamllint` in `lib-minimal`); the gate fails on a missing import and never falls back to a line
   parser. A moved job's new file must also be in every `bin/scaffold/python_*.sh` copy list, or that tier silently loses the job (not detected). `gate-integrity` reads a

@@ -34,7 +34,8 @@ files a change touches — never off arbitrary source):
   evaluated counts as equal), no read of ``github.workflow``), outside a ``workflow_call``
   file, with no ``needs:``, anchor, merge key or flow-style job, and no string left in the
   source file that holds its id as a word (a move). Workflows are read with PyYAML, so the
-  comparison is of parsed values; a file that does not parse is itself a finding. Known limit:
+  comparison is of parsed values; a changed file that does not parse now is itself a finding.
+  Known limit:
   a job moved into a NEW workflow file that a ``bin/scaffold/python_*.sh`` copy list omits
   vanishes from that tier, undetected
 - a required status-check context removed from ``enable_repo_rules.sh``'s
@@ -126,6 +127,7 @@ CI must check out with ``fetch-depth: 0`` — a shallow clone has no common ance
 """
 
 import ast
+import collections
 from collections.abc import Iterator
 import configparser
 import difflib
@@ -162,7 +164,8 @@ STR_WORKFLOW_EXPR = "${{github.workflow}}"
 STR_FLOW_CONCURRENCY = "{flow}"
 STR_MERGE_TAG = "tag:yaml.org,2002:merge"
 _SET_COERCED_TAGS = frozenset(
-    f"tag:yaml.org,2002:{str_kind}" for str_kind in ("bool", "int", "float")
+    f"tag:yaml.org,2002:{str_kind}"
+    for str_kind in ("bool", "int", "float", "timestamp", "null", "value")
 )
 _SET_HEADER_SKIPPED = frozenset({"jobs", "name", "concurrency"})
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
@@ -567,7 +570,7 @@ def iter_strings(cls_value: object) -> Iterator[str]:
         for cls_key, cls_item in cls_value.items():
             yield from iter_strings(cls_key)
             yield from iter_strings(cls_item)
-    elif isinstance(cls_value, list):
+    elif isinstance(cls_value, (list, tuple, set, frozenset)):
         for cls_item in cls_value:
             yield from iter_strings(cls_item)
 
@@ -664,7 +667,7 @@ def anchored_job_ids(cls_root: yaml.Node, *, set_anchored: frozenset) -> frozens
     """
     if not isinstance(cls_root, yaml.MappingNode):
         return frozenset()
-    for cls_key, cls_value in cls_root.value:
+    for cls_key, cls_value in reversed(cls_root.value):
         if cls_key.value == "jobs" and isinstance(cls_value, yaml.MappingNode):
             return frozenset(
                 str(cls_id.value)
@@ -720,7 +723,8 @@ def read_workflow(str_text: str) -> tuple | None:
     tuple or None
         ``(document, set_jobs)``: the top-level mapping (scalars stay strings, see
         ``StringScalarLoader``, so ``on`` is the key ``"on"``) and
-        ``anchored_job_ids``. ``None`` when the text is not valid YAML or its root is not a mapping, which the callers never read as a clean
+        ``anchored_job_ids``. ``None`` when the text is not valid YAML, its root is not a
+        mapping, or it holds a self-referential alias, which the callers never read as a clean
         file.
     """
     cls_loader = StringScalarLoader(str_text)
@@ -731,6 +735,10 @@ def read_workflow(str_text: str) -> tuple | None:
     finally:
         cls_loader.dispose()
     if not isinstance(cls_document, dict):
+        return None
+    try:
+        collections.deque(iter_strings(cls_document), maxlen=0)
+    except RecursionError:
         return None
     return cls_document, set_jobs
 
@@ -1005,16 +1013,16 @@ def workflow_problems(
     -------
     list of str
         One message per removed job; a single message when the file as it is now is not
-        valid YAML at the merge-base or now, since its jobs cannot then be compared.
+        valid YAML, since its jobs cannot then be compared. A base that does not parse has no
+        comparable jobs, so a change that repairs it reports nothing. Callers pass only files
+        present at both refs; an added file never reaches this function.
     """
     tuple_new = read_workflow(str_new)
+    if tuple_new is None:
+        return [f"{str_shown}: workflow YAML does not parse, so its jobs cannot be compared"]
     tuple_old = read_workflow(str_old)
-    for str_side, tuple_side in (("now", tuple_new), ("at the merge-base", tuple_old)):
-        if tuple_side is None:
-            return [
-                f"{str_shown}: workflow YAML does not parse {str_side}, "
-                "so its jobs cannot be compared"
-            ]
+    if tuple_old is None:
+        return []
     dict_elsewhere = dict_elsewhere or {}
     set_removed = set(workflow_jobs_of(tuple_old[0])) - set(workflow_jobs_of(tuple_new[0]))
     return [
