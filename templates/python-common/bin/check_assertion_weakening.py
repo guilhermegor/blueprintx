@@ -654,7 +654,10 @@ def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
         list_else = node.orelse if isinstance(node.orelse, list) else [node.orelse]
         return [
             (list_body, (*tuple_guards, str_test)),
-            (list_else, (*tuple_guards, f"not ({str_test})")),
+            (
+                list_else,
+                (*tuple_guards, ast.unparse(ast.UnaryOp(op=ast.Not(), operand=node.test))),
+            ),
         ]
     str_kind = _guard_kind(node)
     tuple_inner = (*tuple_guards, str_kind) if str_kind else tuple_guards

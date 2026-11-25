@@ -985,6 +985,16 @@ def test_show_raises_when_git_cannot_be_spawned(monkeypatch: pytest.MonkeyPatch)
         gate.show("HEAD", str_path="a.py")
 
 
+def test_an_else_branch_skip_equals_the_negated_skipif_condition() -> None:
+    """``if c: ... else: pytest.skip()`` -> ``@skipif(not c)`` is the same condition moved."""
+    str_old = (
+        "def test_a():\n    if c:\n        pass\n    else:\n        pytest.skip()\n"
+        "    assert f()\n"
+    )
+    str_new = "@pytest.mark.skipif(not c)\ndef test_a():\n    assert f()\n"
+    assert _findings(str_old, str_new=str_new) == []
+
+
 def test_widening_a_conditional_in_body_skip_to_skipif_is_flagged() -> None:
     """The in-body ``pytest.skip()`` is not the unconditional ``@skip`` decorator."""
     str_old = "def test_a():\n    if not DB:\n        pytest.skip()\n    assert f() == 1\n"
@@ -1078,7 +1088,7 @@ _EXCEPT_SKIP = (
 def test_adding_skip_to_an_except_guarded_skip_is_flagged() -> None:
     """A skip that only ran when an import failed is conditional, so ``@skip`` is new."""
     str_new = "@pytest.mark.skip\n" + _EXCEPT_SKIP
-    assert "skip" in _sole_finding(_EXCEPT_SKIP, str_new=str_new)
+    assert _sole_finding(_EXCEPT_SKIP, str_new=str_new).endswith("newly marked skip")
 
 
 def test_adding_an_except_guarded_skip_is_not_unconditional() -> None:
@@ -1139,7 +1149,7 @@ def test_dropping_xfail_strict_is_flagged() -> None:
     """A lax ``xfail`` lets an XPASS through; ``strict=True`` -> lax is a weakening."""
     str_old = "@pytest.mark.xfail(strict=True)\ndef test_a():\n    assert f() == 1\n"
     str_new = "@pytest.mark.xfail\ndef test_a():\n    assert f() == 1\n"
-    assert "xfail" in _sole_finding(str_old, str_new=str_new)
+    assert _sole_finding(str_old, str_new=str_new).endswith("newly marked xfail:;lax")
 
 
 def test_skipif_with_two_conditions_matches_an_or_guard() -> None:

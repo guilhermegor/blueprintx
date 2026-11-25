@@ -1326,6 +1326,22 @@ def test_an_annotated_computed_all_in_a_private_module_may_provide_any_name(
 
 
 @pytest.mark.parametrize(
+    "str_member",
+    [
+        "if __name__ == '__main__':\n    app = make()\n",
+        "for str_key in range(3):\n    pass\n",
+        "with open('f') as fh:\n    pass\n",
+    ],
+)
+def test_script_guard_and_loop_or_with_targets_are_not_public_definitions(
+    tmp_path: Path, *, str_member: str
+) -> None:
+    """A ``__main__`` body binds names only as a script; loop and ``with`` targets are no API."""
+    path_init = _package(tmp_path, str_init="__all__ = []\n", str_member=str_member)
+    assert _load_gate().check_package(path_init) == []
+
+
+@pytest.mark.parametrize(
     ("str_member", "str_name"),
     [
         ("try:\n    from x import f\nexcept ImportError:\n    def f():\n        pass\n", "'f'"),

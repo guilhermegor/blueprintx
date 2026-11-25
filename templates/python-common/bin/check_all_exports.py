@@ -87,6 +87,45 @@ def _is_type_checking(cls_node: ast.stmt) -> bool:
     )
 
 
+def _is_main_guard(cls_node: ast.stmt) -> bool:
+    """Return whether a statement is an ``if __name__ == "__main__":`` block.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for the script entry guard, whose body binds names only when run as a script.
+    """
+    if not (isinstance(cls_node, ast.If) and isinstance(cls_node.test, ast.Compare)):
+        return False
+    cls_test = cls_node.test
+    return (
+        isinstance(cls_test.left, ast.Name)
+        and cls_test.left.id == "__name__"
+        and [ast.unparse(cls_cmp) for cls_cmp in cls_test.comparators] == ["'__main__'"]
+    )
+
+
+def _is_not_runtime_surface(cls_node: ast.stmt) -> bool:
+    """Return whether a block's body is type-only or script-only, never importable API.
+
+    Parameters
+    ----------
+    cls_node : ast.stmt
+        A module-level statement.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``if TYPE_CHECKING:`` and ``if __name__ == "__main__":``.
+    """
+    return _is_type_checking(cls_node) or _is_main_guard(cls_node)
+
+
 def _module_statements(
     list_body: list[ast.stmt], *, bool_runtime: bool = False
 ) -> Iterator[ast.stmt]:
@@ -101,8 +140,8 @@ def _module_statements(
     list_body : list of ast.stmt
         A module body, or the body of a block already entered.
     bool_runtime : bool, optional
-        Skip the body of an ``if TYPE_CHECKING:`` block, whose definitions are type-only
-        stubs and never part of the runtime surface.
+        Skip the body of an ``if TYPE_CHECKING:`` or ``if __name__ == "__main__":`` block, whose
+        definitions are type-only stubs or script-only and never part of the runtime surface.
 
     Yields
     ------
@@ -114,7 +153,7 @@ def _module_statements(
         if not isinstance(cls_node, _BLOCK_STATEMENTS):
             continue
         for str_field in ("body", "orelse", "finalbody"):
-            if bool_runtime and str_field == "body" and _is_type_checking(cls_node):
+            if bool_runtime and str_field == "body" and _is_not_runtime_surface(cls_node):
                 continue
             yield from _module_statements(
                 getattr(cls_node, str_field, []), bool_runtime=bool_runtime
