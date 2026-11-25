@@ -139,3 +139,16 @@ def test_empty_exclude_variable_uses_the_default(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(_MOD, "_call", _answers(None))
     _MOD.main()
     assert seen.call_args.args == (_MOD.DEFAULT_EXCLUDES,)
+
+
+def test_empty_base_branch_defaults_to_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty BASE_BRANCH lists PRs against main, never against an empty base."""
+    fake_call = mock.Mock(side_effect=[{"files": [{"filename": "a.py"}]}, []])
+    monkeypatch.setenv("RERUN_TOKEN", "x")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("AFTER_SHA", "b")
+    monkeypatch.setenv("BASE_BRANCH", "")
+    monkeypatch.delenv("BEFORE_SHA", raising=False)
+    monkeypatch.setattr(_MOD, "_call", fake_call)
+    _MOD.main()
+    assert "base=main" in fake_call.call_args_list[1].kwargs["str_path"]

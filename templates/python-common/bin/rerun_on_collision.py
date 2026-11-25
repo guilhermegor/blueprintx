@@ -178,7 +178,7 @@ def main() -> int:
         return 0
     repo = os.environ["GITHUB_REPOSITORY"]
     before, after = os.environ.get("BEFORE_SHA") or ZERO_SHA, os.environ["AFTER_SHA"]
-    branch = os.environ.get("BASE_BRANCH", "main")
+    branch = os.environ.get("BASE_BRANCH") or "main"
     excludes = parse_excludes(os.environ.get("RERUN_EXCLUDE_FILES") or DEFAULT_EXCLUDES)
 
     try:
