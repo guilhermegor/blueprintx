@@ -31,13 +31,12 @@ deliberate rename) through ``report()``.
 """
 
 import importlib.util
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 from types import ModuleType
 
 import pytest
-
 
 _BIN = Path(__file__).resolve().parents[2] / "bin"
 
@@ -978,10 +977,10 @@ def test_workflow_job_moved_with_a_softening_key_is_removed(
         "    env: &shared\n      A: '1'\n",
         "    env: *shared\n",
         "    env:\n      <<: *shared\n",
-        "    steps:\n      - *gate_step\n",
+        "    outputs:\n      out: *gate_step\n",
         '    "needs": [build]\n',
         "    'needs': [build]\n",
-        "    steps: [*gate_step]\n",
+        "    outputs: {out: *gate_step}\n",
         "    env: !!map &shared\n      A: '1'\n",
     ],
 )
@@ -2191,26 +2190,36 @@ def test_branch_justified_by_recorded_trailer_passes_with_nothing_new_staged(
 
 def test_branch_justified_by_recorded_trailer_refuses_a_new_weakening(
     path_recorded: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """SHOULD FAIL: a NEW weakening on a justified branch still needs a fresh override."""
     _stage(path_recorded, str_name="ruff.toml", str_text=_STR_RUFF_WEAKEST)
 
-    assert gate.main([]) == 1
+    int_code = gate.main([])
+
+    assert (int_code, "E402" in capsys.readouterr().out) == (1, True)
 
 
 def test_branch_justified_forged_trailer_on_a_clean_commit_justifies_nothing(
     path_branch: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """SHOULD FAIL: an agent-typed trailer on a commit with no findings of its own is void."""
     _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
     _commit_staged(path_branch, str_message=_STR_TRAILER)
     _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
 
-    assert gate.main([]) == 1
+    int_code = gate.main([])
+
+    assert (int_code, "E501" in capsys.readouterr().out) == (1, True)
 
 
 def test_branch_justified_after_main_adds_a_gate_does_not_record_it(
     path_recorded: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """SHOULD FAIL: a gate main added after the trailer commit is not justified by it."""
     _git_in(path_recorded, "checkout", "-q", "main")
@@ -2219,7 +2228,23 @@ def test_branch_justified_after_main_adds_a_gate_does_not_record_it(
     _git_in(path_recorded, "checkout", "-q", "feature")
     _git_in(path_recorded, "merge", "-q", "-s", "ours", "main", "-m", "merge main")
 
-    assert gate.main([]) == 1
+    int_code = gate.main([])
+
+    assert (int_code, "W" in capsys.readouterr().out) == (1, True)
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        "jobs:\n  a:\n    steps: [1]\n    steps: [2]\n",
+        "jobs:\n  a:\n    steps: [1]\n  a:\n    steps: [1]\n",
+        "a: 1\x0b\njobs:\n",
+    ],
+    ids=["duplicate-steps", "duplicate-job", "control-character"],
+)
+def test_read_workflow_invalid_yaml_is_unparsed_not_a_crash(str_text: str) -> None:
+    """A repeated key or a control character is a workflow that does not parse."""
+    assert gate.read_workflow(str_text) is None
 
 
 def test_local_run_ignores_a_bare_trailer_in_history(

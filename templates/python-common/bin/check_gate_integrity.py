@@ -127,7 +127,6 @@ CI must check out with ``fetch-depth: 0`` — a shallow clone has no common ance
 """
 
 import ast
-from collections.abc import Iterator
 import configparser
 import difflib
 import functools
@@ -137,15 +136,14 @@ import pathlib
 import re
 import subprocess
 import sys
+from collections.abc import Iterator
 
 import yaml
-
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from gate_env import is_ci, no_terminal_note  # noqa: E402
 from gate_rename import deleted_message, rename_pairs  # noqa: E402
-
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -697,6 +695,39 @@ def node_has_cycle(
     )
 
 
+def node_has_duplicate_key(cls_node: yaml.Node, *, set_done: set | None = None) -> bool:
+    """Return whether a mapping in the tree repeats a scalar key.
+
+    Parameters
+    ----------
+    cls_node : yaml.Node
+        The node to walk; the tree must already be known to hold no cycle.
+    set_done : set or None
+        ``id()`` of the nodes already walked, so a node shared by many aliases is walked once.
+
+    Returns
+    -------
+    bool
+        True when some mapping holds the same scalar key twice. PyYAML keeps the last value
+        silently, and YAML requires keys to be unique, so such a file is not a valid workflow.
+    """
+    set_done = set() if set_done is None else set_done
+    if id(cls_node) in set_done:
+        return False
+    set_done.add(id(cls_node))
+    list_keys = [
+        cls_key.value
+        for cls_key in _node_children(cls_node)[
+            :: 2 if isinstance(cls_node, yaml.MappingNode) else 1
+        ]
+        if isinstance(cls_node, yaml.MappingNode) and isinstance(cls_key, yaml.ScalarNode)
+    ]
+    return len(list_keys) != len(set(list_keys)) or any(
+        node_has_duplicate_key(cls_child, set_done=set_done)
+        for cls_child in _node_children(cls_node)
+    )
+
+
 def anchored_job_ids(cls_root: yaml.Node, *, set_anchored: frozenset) -> frozenset:
     """Return the ids of the jobs a faithful copy cannot be proven for from their own text.
 
@@ -755,6 +786,8 @@ def _parse_workflow(cls_loader: StringScalarLoader) -> tuple:
     set_jobs = anchored_job_ids(cls_root, set_anchored=set_anchored)
     if node_has_cycle(cls_root):
         raise yaml.YAMLError("a self-referential alias cannot be compared")
+    if node_has_duplicate_key(cls_root):
+        raise yaml.YAMLError("a mapping repeats a key")
     if isinstance(cls_root, yaml.MappingNode) and any(
         cls_key.tag == STR_MERGE_TAG for cls_key, _cls_value in cls_root.value
     ):
@@ -782,7 +815,10 @@ def read_workflow(str_text: str) -> tuple | None:
         mapping, or it holds a self-referential alias, which the callers never read as a clean
         file.
     """
-    cls_loader = StringScalarLoader(str_text)
+    try:
+        cls_loader = StringScalarLoader(str_text)
+    except yaml.YAMLError:
+        return None
     try:
         cls_document, set_jobs = _parse_workflow(cls_loader)
     except (yaml.YAMLError, ValueError, KeyError, TypeError, RecursionError):
