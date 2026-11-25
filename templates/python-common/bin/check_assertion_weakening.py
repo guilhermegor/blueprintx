@@ -55,6 +55,7 @@ CI must check out with `fetch-depth: 0` — a shallow clone has no common ancest
 """
 
 import ast
+import hashlib
 import json
 import os
 import pathlib
@@ -81,6 +82,8 @@ STR_INDEX_REF = ""
 
 _SKIP_MARKERS = frozenset({"skip", "skipif", "xfail"})
 _RUNTIME_OFF = frozenset({"skip", "importorskip", "xfail"})
+_APPLY_MARKER_METHODS = frozenset({"applymarker", "add_marker"})
+_DEFAULT_NAMES = {"pytest": "pytest", **{str_n: str_n for str_n in _RUNTIME_OFF}}
 
 _INT_MIN_FIELDS = 2
 _MIN_EQ_ARGS = 2
@@ -526,13 +529,17 @@ def _function_checks(node_fn: ast.FunctionDef) -> list:
     return list_checks
 
 
-def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
+def _skip_or_xfail_markers(
+    node_fn: ast.FunctionDef, *, dict_names: dict[str, str] | None = None
+) -> set:
     """Return the ``skip``/``xfail`` marker names decorating a test function.
 
     Parameters
     ----------
     node_fn : ast.FunctionDef
         The test function.
+    dict_names : dict of str to str, optional
+        The module's pytest name table; the unaliased names when omitted.
 
     Returns
     -------
@@ -540,16 +547,36 @@ def _skip_or_xfail_markers(node_fn: ast.FunctionDef) -> set:
         Decorator labels (``skip``, ``xfail``, ``skipif:<condition>``), plus ``skip()`` for a
         ``pytest.skip(...)`` call outside any ``if`` and ``skip(if):<test>`` for a guarded one.
     """
-    set_out = set()
-    for dec in node_fn.decorator_list:
-        target = dec.func if isinstance(dec, ast.Call) else dec
-        if isinstance(target, ast.Attribute) and target.attr in _SKIP_MARKERS:
-            set_out.add(_marker_label(dec, str_name=target.attr))
-    set_out.update(_body_skip_labels(node_fn.body, tuple_guards=()))
+    dict_known = _DEFAULT_NAMES if dict_names is None else dict_names
+    set_out = _marker_labels(node_fn.decorator_list)
+    set_out.update(_body_skip_labels(node_fn.body, tuple_guards=(), dict_names=dict_known))
     return set_out
 
 
-def _body_skip_labels(list_body: list, *, tuple_guards: tuple[str, ...]) -> set:
+def _marker_labels(list_exprs: list) -> set:
+    """Return the labels of the ``skip``/``skipif``/``xfail`` markers among some expressions.
+
+    Parameters
+    ----------
+    list_exprs : list of ast.expr
+        Decorators, or the value of a ``pytestmark`` assignment.
+
+    Returns
+    -------
+    set of str
+        One label per marker; anything that is not such a marker adds none.
+    """
+    set_out = set()
+    for dec in list_exprs:
+        target = dec.func if isinstance(dec, ast.Call) else dec
+        if isinstance(target, ast.Attribute) and target.attr in _SKIP_MARKERS:
+            set_out.add(_marker_label(dec, str_name=target.attr))
+    return set_out
+
+
+def _body_skip_labels(
+    list_body: list, *, tuple_guards: tuple[str, ...], dict_names: dict[str, str]
+) -> set:
     """Return the labels of ``pytest.skip()`` calls in a body, nested defs and lambdas excluded.
 
     Parameters
@@ -558,6 +585,8 @@ def _body_skip_labels(list_body: list, *, tuple_guards: tuple[str, ...]) -> set:
         Statements (or expressions) to read.
     tuple_guards : tuple of str
         The enclosing guards, outermost first; empty when the call always runs.
+    dict_names : dict of str to str
+        The module's pytest name table, from ``_pytest_names``.
 
     Returns
     -------
@@ -571,12 +600,65 @@ def _body_skip_labels(list_body: list, *, tuple_guards: tuple[str, ...]) -> set:
     for node in list_body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ClassDef):
             continue
-        str_call = _skip_call_name(node)
+        str_call = _skip_call_name(node, dict_names=dict_names)
         if str_call:
             set_out.add(_skip_label(tuple_guards, str_call=str_call))
         for list_child, tuple_inner in _guarded_children(node, tuple_guards=tuple_guards):
-            set_out |= _body_skip_labels(list_child, tuple_guards=tuple_inner)
+            set_out |= _body_skip_labels(
+                list_child, tuple_guards=tuple_inner, dict_names=dict_names
+            )
     return set_out
+
+
+def _canon_node(cls_node: ast.expr) -> ast.expr:
+    """Return a condition in a form two spellings of the same guard share.
+
+    Parameters
+    ----------
+    cls_node : ast.expr
+        A guard or marker condition.
+
+    Returns
+    -------
+    ast.expr
+        A string condition (``skipif("sys.platform == 'win32'")``) parsed to the expression it
+        evaluates, ``not not c`` reduced to ``c``, and the operands of ``and``/``or`` sorted, so
+        ``a and b`` equals ``b and a``.
+    """
+    if isinstance(cls_node, ast.Constant) and isinstance(cls_node.value, str):
+        try:
+            return _canon_node(ast.parse(cls_node.value, mode="eval").body)
+        except SyntaxError:
+            return cls_node
+    if isinstance(cls_node, ast.UnaryOp) and isinstance(cls_node.op, ast.Not):
+        cls_inner = cls_node.operand
+        is_double = isinstance(cls_inner, ast.UnaryOp) and isinstance(cls_inner.op, ast.Not)
+        return _canon_node(cls_inner.operand) if is_double else cls_node
+    if not isinstance(cls_node, ast.BoolOp):
+        return cls_node
+    list_flat: list[ast.expr] = []
+    for cls_value in map(_canon_node, cls_node.values):
+        is_same_op = isinstance(cls_value, ast.BoolOp) and isinstance(
+            cls_value.op, type(cls_node.op)
+        )
+        list_flat.extend(cls_value.values if is_same_op else [cls_value])
+    return ast.BoolOp(op=cls_node.op, values=sorted(list_flat, key=ast.unparse))
+
+
+def _canon(cls_node: ast.expr) -> str:
+    """Return the source text of a condition after ``_canon_node``.
+
+    Parameters
+    ----------
+    cls_node : ast.expr
+        A guard or marker condition.
+
+    Returns
+    -------
+    str
+        The canonical source.
+    """
+    return ast.unparse(_canon_node(cls_node))
 
 
 def _join_conditions(list_text: list[str], *, cls_op: ast.boolop) -> str:
@@ -610,7 +692,7 @@ def _join_conditions(list_text: list[str], *, cls_op: ast.boolop) -> str:
             else [cls_node]
         )
     ]
-    return ast.unparse(ast.BoolOp(op=cls_op, values=list_flat))
+    return _canon(ast.BoolOp(op=cls_op, values=list_flat))
 
 
 def _skip_label(tuple_guards: tuple[str, ...], *, str_call: str) -> str:
@@ -649,24 +731,104 @@ def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
         ``(children, guards)`` pairs.
     """
     if isinstance(node, ast.If | ast.IfExp):
-        str_test = ast.unparse(node.test)
+        str_test = _canon(node.test)
         list_body = node.body if isinstance(node.body, list) else [node.body]
         list_else = node.orelse if isinstance(node.orelse, list) else [node.orelse]
         return [
+            ([node.test], tuple_guards),
             (list_body, (*tuple_guards, str_test)),
-            (
-                list_else,
-                (*tuple_guards, ast.unparse(ast.UnaryOp(op=ast.Not(), operand=node.test))),
-            ),
+            (list_else, (*tuple_guards, _canon(ast.UnaryOp(op=ast.Not(), operand=node.test)))),
         ]
     if isinstance(node, ast.Try | ast.TryStar):
         return [
-            ([*node.body, *node.handlers, *node.finalbody], tuple_guards),
+            ([*node.body, *node.finalbody], tuple_guards),
+            *[
+                (cls_handler.body, (*tuple_guards, _except_guard(node, cls_handler=cls_handler)))
+                for cls_handler in node.handlers
+            ],
             (node.orelse, (*tuple_guards, "try-else")),
+        ]
+    if isinstance(node, ast.Match):
+        return [
+            ([node.subject], tuple_guards),
+            *[
+                (cls_case.body, (*tuple_guards, _case_guard(node, cls_case=cls_case)))
+                for cls_case in node.cases
+            ],
+        ]
+    if isinstance(node, ast.BoolOp):
+        return [
+            ([cls_value], (*tuple_guards, *_short_circuit_guards(node, int_index=int_index)))
+            for int_index, cls_value in enumerate(node.values)
         ]
     str_kind = _guard_kind(node)
     tuple_inner = (*tuple_guards, str_kind) if str_kind else tuple_guards
     return [(list(ast.iter_child_nodes(node)), tuple_inner)]
+
+
+def _except_guard(cls_try: ast.Try | ast.TryStar, *, cls_handler: ast.ExceptHandler) -> str:
+    """Return the guard of an ``except`` body: its type and a digest of the ``try`` body.
+
+    Two handlers for the same type guard different failures when the ``try`` bodies differ, so
+    the type alone would let one stand in for the other.
+
+    Parameters
+    ----------
+    cls_try : ast.Try or ast.TryStar
+        The statement that owns the handler.
+    cls_handler : ast.ExceptHandler
+        One of its handlers.
+
+    Returns
+    -------
+    str
+        ``except <type> after #<digest>``.
+    """
+    str_caught = ast.unparse(cls_handler.type) if cls_handler.type else ""
+    str_type = f"except {str_caught}".strip()
+    str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
+    return f"{str_type} after #{hashlib.sha256(str_body.encode()).hexdigest()[:8]}"
+
+
+def _case_guard(cls_match: ast.Match, *, cls_case: ast.match_case) -> str:
+    """Return the guard of a ``case`` body: the subject, the pattern and the ``if`` guard.
+
+    Parameters
+    ----------
+    cls_match : ast.Match
+        The ``match`` statement.
+    cls_case : ast.match_case
+        One of its cases.
+
+    Returns
+    -------
+    str
+        ``match <subject>: <pattern>``, plus `` if <guard>`` when the case has one.
+    """
+    str_guard = f" if {_canon(cls_case.guard)}" if cls_case.guard else ""
+    return f"match {ast.unparse(cls_match.subject)}: {ast.unparse(cls_case.pattern)}{str_guard}"
+
+
+def _short_circuit_guards(cls_bool: ast.BoolOp, *, int_index: int) -> tuple[str, ...]:
+    """Return what must hold for operand ``int_index`` of ``a and b`` / ``a or b`` to be evaluated.
+
+    Parameters
+    ----------
+    cls_bool : ast.BoolOp
+        The expression.
+    int_index : int
+        Position of the operand.
+
+    Returns
+    -------
+    tuple of str
+        Every earlier operand for ``and``, every earlier operand negated for ``or``; empty for
+        the first operand, which always runs.
+    """
+    list_before = cls_bool.values[:int_index]
+    if isinstance(cls_bool.op, ast.And):
+        return tuple(_canon(cls_value) for cls_value in list_before)
+    return tuple(_canon(ast.UnaryOp(op=ast.Not(), operand=cls_value)) for cls_value in list_before)
 
 
 def _guard_kind(node: ast.AST) -> str | None:
@@ -680,17 +842,14 @@ def _guard_kind(node: ast.AST) -> str | None:
     Returns
     -------
     str or None
-        ``except <type>`` for a handler, ``for <iterable>`` or the ``while`` test (``while
-        True`` is no guard), ``match <pattern>`` for a case.
+        ``for <iterable>`` or the ``while`` test (``while True`` is no guard).
     """
-    if isinstance(node, ast.ExceptHandler):
-        return ("except " + ast.unparse(node.type)).strip() if node.type else "except"
     if isinstance(node, ast.For | ast.AsyncFor):
         return f"for {ast.unparse(node.iter)}"
     if isinstance(node, ast.While):
         is_always = isinstance(node.test, ast.Constant) and bool(node.test.value)
         return None if is_always else f"while {ast.unparse(node.test)}"
-    return f"match {ast.unparse(node.pattern)}" if isinstance(node, ast.match_case) else None
+    return None
 
 
 def _marker_label(dec: ast.expr, *, str_name: str) -> str:
@@ -714,11 +873,32 @@ def _marker_label(dec: ast.expr, *, str_name: str) -> str:
     if not isinstance(dec, ast.Call):
         return "xfail:;lax" if str_name == "xfail" else str_name
     list_cond = [*dec.args, *(kw.value for kw in dec.keywords if kw.arg == "condition")]
-    str_cond = _join_conditions([ast.unparse(cond) for cond in list_cond], cls_op=ast.Or())
+    str_cond = _join_conditions([_canon(cond) for cond in list_cond], cls_op=ast.Or())
     if str_name == "skipif":
         return f"skipif:{str_cond}"
     is_strict = any(kw.arg == "strict" and ast.unparse(kw.value) == "True" for kw in dec.keywords)
-    return f"xfail:{str_cond}" + ("" if is_strict else ";lax")
+    return f"xfail:{str_cond}{_xfail_scope(dec)}" + ("" if is_strict else ";lax")
+
+
+def _xfail_scope(dec: ast.Call) -> str:
+    """Return the ``raises=`` and ``run=`` arguments of an ``xfail`` as label text.
+
+    Parameters
+    ----------
+    dec : ast.Call
+        The ``xfail(...)`` decorator.
+
+    Returns
+    -------
+    str
+        ``;raises=<types>`` and ``;run=<value>`` for the ones present, ``""`` for neither. A
+        dropped ``raises`` lets any failure count as expected, and ``run=False`` stops the test
+        from running at all, so both belong to the marker's identity.
+    """
+    dict_kw = {cls_kw.arg: ast.unparse(cls_kw.value) for cls_kw in dec.keywords}
+    return "".join(
+        f";{str_key}={dict_kw[str_key]}" for str_key in ("raises", "run") if str_key in dict_kw
+    )
 
 
 def _marker_condition(str_marker: str) -> str | None:
@@ -737,6 +917,69 @@ def _marker_condition(str_marker: str) -> str | None:
     str_head, str_sep, str_tail = str_marker.partition(":")
     is_conditional = str_head == "skipif" or str_head.endswith("(if)")
     return str_tail if str_sep and is_conditional else None
+
+
+_RE_XFAIL_RAISES = re.compile(r";raises=([^;]*)")
+
+
+def _xfail_tightens(str_new: str, *, set_old: set) -> bool:
+    """Return whether an ``xfail`` label only tightens one the old test already carried.
+
+    Parameters
+    ----------
+    str_new : str
+        A label from the new version.
+    set_old : set
+        The labels before the change.
+
+    Returns
+    -------
+    bool
+        ``True`` when an old ``xfail`` on the same condition and ``run`` becomes ``strict`` or
+        gains ``raises=``, and does not lose a ``raises=`` or become lax.
+    """
+    if not str_new.startswith("xfail:"):
+        return False
+    return any(
+        _xfail_core(str_old) == _xfail_core(str_new)
+        and (str_old.endswith(";lax") or not str_new.endswith(";lax"))
+        and _xfail_raises(str_old) in {"", _xfail_raises(str_new)}
+        for str_old in set_old
+        if str_old.startswith("xfail:")
+    )
+
+
+def _xfail_core(str_label: str) -> str:
+    """Return an ``xfail`` label without its ``;lax`` suffix and ``;raises=`` part.
+
+    Parameters
+    ----------
+    str_label : str
+        An ``xfail:`` label.
+
+    Returns
+    -------
+    str
+        The condition and ``run`` argument that identify the marker.
+    """
+    return _RE_XFAIL_RAISES.sub("", str_label.removesuffix(";lax"))
+
+
+def _xfail_raises(str_label: str) -> str:
+    """Return the ``raises=`` types of an ``xfail`` label, ``""`` when it names none.
+
+    Parameters
+    ----------
+    str_label : str
+        An ``xfail:`` label.
+
+    Returns
+    -------
+    str
+        The source text of the ``raises`` argument.
+    """
+    cls_match = _RE_XFAIL_RAISES.search(str_label)
+    return cls_match.group(1) if cls_match else ""
 
 
 def _newly_marked(*, set_old: set, set_new: set) -> set:
@@ -759,14 +1002,13 @@ def _newly_marked(*, set_old: set, set_new: set) -> set:
         ``if c: pytest.skip()``).
     """
     set_added = {
-        str_m
-        for str_m in set_new - set_old
-        if not (str_m.startswith("xfail:") and f"{str_m};lax" in set_old)
+        str_m for str_m in set_new - set_old if not _xfail_tightens(str_m, set_old=set_old)
     }
     set_conds = {_marker_condition(str_m) for str_m in set_old} - {None}
     has_unconditional = bool(set_old & {"skip", "skip()"})
     if has_unconditional:
         set_added -= {"skip", "skip()", "importorskip()", "xfail()"}
+        set_added = {str_m for str_m in set_added if not str_m.startswith("xfail:")}
     return {
         str_m
         for str_m in set_added
@@ -777,25 +1019,134 @@ def _newly_marked(*, set_old: set, set_new: set) -> set:
     }
 
 
-def _skip_call_name(node: ast.AST) -> str | None:
-    """Return ``skip``, ``importorskip`` or ``xfail`` for a call that turns a test off at run time.
+def _pytest_names(str_source: str) -> dict[str, str]:
+    """Return the local names a module binds to pytest and to its run-time outcome functions.
+
+    Parameters
+    ----------
+    str_source : str
+        Full file content.
+
+    Returns
+    -------
+    dict of str to str
+        ``{local name: "pytest"}`` for ``import pytest [as x]`` and ``{local name: function}``
+        for ``from pytest import skip [as y]``. ``pytest`` and the bare ``skip``/``xfail``/
+        ``importorskip`` stay recognised unless the module defines or imports that name from
+        somewhere else, which makes it a helper and not pytest's.
+    """
+    try:
+        cls_tree = ast.parse(str_source)
+    except SyntaxError:
+        return dict(_DEFAULT_NAMES)
+    dict_names = dict(_DEFAULT_NAMES)
+    for cls_stmt in ast.iter_child_nodes(cls_tree):
+        _bind_names(cls_stmt, dict_names=dict_names)
+    return dict_names
+
+
+def _bind_names(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
+    """Update the pytest name table for one module-level statement.
+
+    Parameters
+    ----------
+    cls_stmt : ast.AST
+        A module-level statement.
+    dict_names : dict of str to str
+        The table, changed in place.
+    """
+    if isinstance(cls_stmt, ast.Import):
+        for cls_alias in cls_stmt.names:
+            if cls_alias.name == "pytest":
+                dict_names[cls_alias.asname or "pytest"] = "pytest"
+    elif isinstance(cls_stmt, ast.ImportFrom):
+        for cls_alias in cls_stmt.names:
+            str_local = cls_alias.asname or cls_alias.name
+            is_pytest = cls_stmt.module == "pytest" and cls_alias.name in _RUNTIME_OFF
+            dict_names.pop(str_local, None)
+            if is_pytest:
+                dict_names[str_local] = cls_alias.name
+    elif isinstance(cls_stmt, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        dict_names.pop(cls_stmt.name, None)
+
+
+def _outcome_of(cls_func: ast.expr | None, *, dict_names: dict[str, str]) -> str | None:
+    """Return the run-time outcome function an expression names, ``None`` for anything else.
+
+    Parameters
+    ----------
+    cls_func : ast.expr or None
+        The callee of a call, or the base of ``<outcome>.Exception``.
+    dict_names : dict of str to str
+        The module's pytest name table.
+
+    Returns
+    -------
+    str or None
+        ``skip``, ``importorskip`` or ``xfail`` for ``<pytest alias>.<name>`` or a bare imported
+        name.
+    """
+    if isinstance(cls_func, ast.Name):
+        str_kind = dict_names.get(cls_func.id, "")
+        return str_kind if str_kind in _RUNTIME_OFF else None
+    if isinstance(cls_func, ast.Attribute) and cls_func.attr in _RUNTIME_OFF:
+        is_pytest = isinstance(cls_func.value, ast.Name) and (
+            dict_names.get(cls_func.value.id) == "pytest"
+        )
+        return cls_func.attr if is_pytest else None
+    return None
+
+
+def _applied_marker(cls_call: ast.Call) -> str | None:
+    """Return ``skip`` or ``xfail`` for ``request.applymarker(pytest.mark.<name>(...))``.
+
+    Parameters
+    ----------
+    cls_call : ast.Call
+        Any call.
+
+    Returns
+    -------
+    str or None
+        ``xfail`` for an ``xfail`` marker, ``skip`` for ``skip`` or ``skipif``; ``None`` when
+        the call applies no such marker.
+    """
+    cls_func = cls_call.func
+    if not (isinstance(cls_func, ast.Attribute) and cls_func.attr in _APPLY_MARKER_METHODS):
+        return None
+    cls_arg = cls_call.args[0] if cls_call.args else None
+    cls_mark = cls_arg.func if isinstance(cls_arg, ast.Call) else cls_arg
+    if not (isinstance(cls_mark, ast.Attribute) and cls_mark.attr in _SKIP_MARKERS):
+        return None
+    return "xfail" if cls_mark.attr == "xfail" else "skip"
+
+
+def _skip_call_name(node: ast.AST, *, dict_names: dict[str, str] | None = None) -> str | None:
+    """Return ``skip``, ``importorskip`` or ``xfail`` for code that turns a test off at run time.
 
     Parameters
     ----------
     node : ast.AST
         Any node.
+    dict_names : dict of str to str, optional
+        The module's pytest name table; the unaliased names when omitted.
 
     Returns
     -------
     str or None
-        The function name for ``pytest.<name>(...)`` or a bare ``<name>(...)`` (the
-        ``from pytest import skip`` spelling), ``None`` for anything else.
+        The function name for ``pytest.<name>(...)``, a bare ``<name>(...)`` (the
+        ``from pytest import skip`` spelling), either through an import alias, a
+        ``raise pytest.skip.Exception(...)``, or ``request.applymarker(pytest.mark.skip)``;
+        ``None`` for anything else.
     """
-    func = node.func if isinstance(node, ast.Call) else None
-    if isinstance(func, ast.Name) and func.id in _RUNTIME_OFF:
-        return func.id
-    is_pytest = isinstance(func, ast.Attribute) and ast.unparse(func.value) == "pytest"
-    return func.attr if is_pytest and func.attr in _RUNTIME_OFF else None
+    dict_known = _DEFAULT_NAMES if dict_names is None else dict_names
+    if isinstance(node, ast.Raise):
+        cls_exc = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
+        is_outcome = isinstance(cls_exc, ast.Attribute) and cls_exc.attr == "Exception"
+        return _outcome_of(cls_exc.value, dict_names=dict_known) if is_outcome else None
+    if not isinstance(node, ast.Call):
+        return None
+    return _outcome_of(node.func, dict_names=dict_known) or _applied_marker(node)
 
 
 def _is_literal_ish(node: ast.expr) -> bool:
@@ -1093,6 +1444,117 @@ def _index_tests(node_parent: ast.AST, *, str_prefix: str, dict_funcs: dict) -> 
             dict_funcs[f"{str_prefix}{node.name}"] = node
 
 
+def _marker_table(str_source: str) -> tuple[dict[str, str], dict[str, set]]:
+    """Return what one file says about markers outside any test body.
+
+    Parameters
+    ----------
+    str_source : str
+        Full file content.
+
+    Returns
+    -------
+    tuple of (dict, dict)
+        The pytest name table, and the labels each test inherits from a module ``pytestmark``
+        and from class decorators or a class ``pytestmark``, by qualified test name.
+    """
+    dict_inherited: dict[str, set] = {}
+    try:
+        cls_tree = ast.parse(str_source)
+    except SyntaxError:
+        return dict(_DEFAULT_NAMES), dict_inherited
+    _index_inherited(
+        cls_tree,
+        str_prefix="",
+        set_inherited=_pytestmark_labels(cls_tree.body),
+        dict_out=dict_inherited,
+    )
+    return _pytest_names(str_source), dict_inherited
+
+
+def _pytestmark_labels(list_body: list) -> set:
+    """Return the labels of the markers a body assigns to ``pytestmark``.
+
+    Parameters
+    ----------
+    list_body : list of ast.stmt
+        A module or class body.
+
+    Returns
+    -------
+    set of str
+        One label per ``skip``/``skipif``/``xfail`` marker, whether assigned singly or as a list.
+    """
+    list_exprs: list = []
+    for cls_stmt in list_body:
+        is_mark = isinstance(cls_stmt, ast.Assign) and any(
+            isinstance(cls_t, ast.Name) and cls_t.id == "pytestmark" for cls_t in cls_stmt.targets
+        )
+        if is_mark:
+            cls_value = cls_stmt.value
+            is_many = isinstance(cls_value, ast.List | ast.Tuple)
+            list_exprs.extend(cls_value.elts if is_many else [cls_value])
+    return _marker_labels(list_exprs)
+
+
+def _index_inherited(
+    node_parent: ast.AST, *, str_prefix: str, set_inherited: set, dict_out: dict[str, set]
+) -> None:
+    """Record, for every test under ``node_parent``, the marker labels it inherits.
+
+    Parameters
+    ----------
+    node_parent : ast.AST
+        Module or class to walk.
+    str_prefix : str
+        Dotted prefix of the enclosing classes.
+    set_inherited : set of str
+        Labels already inherited from outside ``node_parent``.
+    dict_out : dict
+        Accumulator, changed in place: qualified test name to labels.
+    """
+    for node in ast.iter_child_nodes(node_parent):
+        if isinstance(node, ast.ClassDef):
+            set_class = (
+                set_inherited | _marker_labels(node.decorator_list) | _pytestmark_labels(node.body)
+            )
+            _index_inherited(
+                node,
+                str_prefix=f"{str_prefix}{node.name}.",
+                set_inherited=set_class,
+                dict_out=dict_out,
+            )
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith(
+            "test_"
+        ):
+            dict_out[f"{str_prefix}{node.name}"] = set_inherited
+
+
+def _labels_of(
+    node_fn: ast.FunctionDef, *, tuple_table: tuple[dict[str, str], dict[str, set]], str_name: str
+) -> set:
+    """Return a test's own skip/xfail labels plus those it inherits.
+
+    Parameters
+    ----------
+    node_fn : ast.FunctionDef
+        The test.
+    tuple_table : tuple of (dict, dict)
+        From ``_marker_table``.
+    str_name : str
+        The test's qualified name.
+
+    Returns
+    -------
+    set of str
+        Decorator, body, class and module labels together.
+    """
+    dict_names, dict_inherited = tuple_table
+    return _skip_or_xfail_markers(node_fn, dict_names=dict_names) | dict_inherited.get(
+        str_name, set()
+    )
+
+
 def _function_findings(
     str_path: str,
     *,
@@ -1100,6 +1562,8 @@ def _function_findings(
     node_old: ast.FunctionDef,
     node_new: ast.FunctionDef,
     bool_prod_changed: bool,
+    set_old_marks: set,
+    set_new_marks: set,
 ) -> list:
     """Return every weakening finding for one test function present in both versions.
 
@@ -1115,6 +1579,10 @@ def _function_findings(
         The function in this change.
     bool_prod_changed : bool
         Whether a non-test file also changed in this diff.
+    set_old_marks : set
+        Skip/xfail labels of the old test, inherited class and module markers included.
+    set_new_marks : set
+        The same for the new test.
 
     Returns
     -------
@@ -1122,9 +1590,7 @@ def _function_findings(
         Findings, in the order the underlying checks appear.
     """
     list_problems = []
-    set_new_markers = _newly_marked(
-        set_old=_skip_or_xfail_markers(node_old), set_new=_skip_or_xfail_markers(node_new)
-    )
+    set_new_markers = _newly_marked(set_old=set_old_marks, set_new=set_new_marks)
     if set_new_markers:
         str_markers = "/".join(sorted(set_new_markers))
         list_problems.append(f"{str_path}: {str_name}() newly marked {str_markers}")
@@ -1179,6 +1645,8 @@ def _file_findings(
         dict_added={str_n: dict_new_funcs[str_n] for str_n in list_free},
     )
     list_free = [str_n for str_n in list_free if str_n not in dict_renames.values()]
+    tuple_old_table = _marker_table(str_old_text)
+    tuple_new_table = _marker_table(str_new_text)
     for str_name, node_old in dict_old_funcs.items():
         str_now = dict_renames.get(str_name, str_name)
         node_new = dict_new_funcs.get(str_now)
@@ -1194,6 +1662,8 @@ def _file_findings(
                 node_old=node_old,
                 node_new=node_new,
                 bool_prod_changed=bool_prod_changed,
+                set_old_marks=_labels_of(node_old, tuple_table=tuple_old_table, str_name=str_name),
+                set_new_marks=_labels_of(node_new, tuple_table=tuple_new_table, str_name=str_now),
             )
         )
     return list_problems
