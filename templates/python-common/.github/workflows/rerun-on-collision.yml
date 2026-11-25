@@ -24,6 +24,7 @@ jobs:
       - name: Update colliding PRs
         env:
           RERUN_TOKEN: ${{ secrets.RERUN_TOKEN }}
+          GH_TOKEN: ${{ secrets.RERUN_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
