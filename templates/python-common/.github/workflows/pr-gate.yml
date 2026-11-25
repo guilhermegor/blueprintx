@@ -59,6 +59,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: write
+      contents: read
       pull-requests: read
     steps:
       - name: Re-run the failed gate for this head commit
@@ -95,7 +96,7 @@ jobs:
             esac
             exit 0
           fi
-          gh run rerun "$str_id"
+          gh run rerun "$str_id" --failed
 
   backfill:
     if: github.event_name == 'workflow_dispatch' && inputs.backfill
