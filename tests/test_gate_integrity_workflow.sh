@@ -53,7 +53,9 @@ check_edited_trigger() {
 
 check_absent() {
 	local str_file="$1" str_pattern="$2" str_desc="$3"
-	if grep -qF -- "$str_pattern" "$REPO_ROOT/$str_file"; then
+	if [ ! -f "$REPO_ROOT/$str_file" ]; then
+		fail "$str_file is missing"
+	elif grep -qF -- "$str_pattern" "$REPO_ROOT/$str_file"; then
 		fail "$str_desc"
 	else
 		pass "$str_desc"
@@ -62,7 +64,9 @@ check_absent() {
 
 check_present() {
 	local str_file="$1" str_pattern="$2" str_desc="$3"
-	if grep -qF -- "$str_pattern" "$REPO_ROOT/$str_file"; then
+	if [ ! -f "$REPO_ROOT/$str_file" ]; then
+		fail "$str_file is missing"
+	elif grep -qF -- "$str_pattern" "$REPO_ROOT/$str_file"; then
 		pass "$str_desc"
 	else
 		fail "$str_desc"
@@ -97,8 +101,11 @@ check_absent ".github/workflows/scaffold_checks.yml" "check_gate_integrity.py" \
 	"scaffold_checks.yml no longer runs check_gate_integrity.py"
 check_absent "templates/python-common/.github/workflows/tests.yml" "check_gate_integrity.py" \
 	"template tests.yml no longer runs check_gate_integrity.py"
-check_absent ".github/workflows/scaffold_checks.yml" "edited" \
-	"scaffold_checks.yml does not re-run the matrix on edited"
+if has_edited_event "$(pull_request_types "$REPO_ROOT/.github/workflows/scaffold_checks.yml")"; then
+	fail "scaffold_checks.yml re-runs the matrix on edited"
+else
+	pass "scaffold_checks.yml does not re-run the matrix on edited"
+fi
 
 if [ "$int_failures" -gt 0 ]; then
 	printf '%d check(s) failed\n' "$int_failures" >&2
