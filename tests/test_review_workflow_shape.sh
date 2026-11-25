@@ -41,7 +41,7 @@ retrigger_waits_for_running_gate() { retrigger_job | grep -qE 'status,conclusion
 
 check "gate re-triggers when Run Tests completes, so a slow suite cannot strand it red" \
 	has_line pr-gate.yml '^  workflow_run:$'
-check "the workflow_run trigger names the Run Tests workflow" \
+check "the workflow_run trigger names Run Tests and the gate itself" \
 	has_line pr-gate.yml '^    workflows: \["Run Tests", "PR Quality Gate"\]$'
 check "the retrigger job re-runs the failed gate run" \
 	retrigger_reruns_failed_gate

@@ -2272,7 +2272,12 @@ This section records what is specific to the generated copies.
   gate's own completion would fire both jobs. Rejected: raising the retrigger loop to 20
   minutes, which holds a runner for the gate's whole budget on every PR. Known overlap: a
   gate that failed before Run Tests finished is re-run by whichever job reaches it first;
-  the attempt check keeps that to one re-run. Known limit: the skip looks only at `Run Tests`.
+  the attempt check keeps that to one re-run. The skip counts only `pull_request`-event
+  `Run Tests` runs, since a `push` run cannot trigger `retrigger`. Only `failure` is retried:
+  `cancelled` also covers the concurrency cancel on a new push. A genuine failure costs one
+  extra gate run (red, pending, red). The gate now triggers on its own completion, so
+  each gate run adds a few skipped `workflow_run` runs; the concurrency key falls back to
+  `run_id` for them, so they cancel nothing. Known limit: the skip looks only at `Run Tests`.
   If the axis still pending when the gate gave up is code scanning, no `Run Tests` completion
   follows, so nothing re-triggers the gate and it stays red until the next `pull_request`
   event or `workflow_dispatch` backfill. Accepted: the two recoveries available are polling
