@@ -8,6 +8,9 @@ source "$SCRIPT_DIR/lib/repo_slug.sh"
 
 RULESET_NAME="pr-quality-gate"
 
+REVIEW_APP_INTEGRATION_ID="${REVIEW_APP_INTEGRATION_ID:-}"
+REVIEW_CHECK_NAME="Review threads answered"
+
 REQUIRED_CHECKS_FILE="$SCRIPT_DIR/required-checks.txt"
 REQUIRED_CHECKS=()
 REQUIRED_CHECKS_FILE_MISSING=0
@@ -42,7 +45,11 @@ build_rules_json() {
 		local str_contexts=""
 		local str_check
 		for str_check in "${REQUIRED_CHECKS[@]}"; do
-			str_contexts+="$(printf '{"context":"%s"},' "$str_check")"
+			if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && [ "$str_check" = "$REVIEW_CHECK_NAME" ]; then
+				str_contexts+="$(printf '{"context":"%s","integration_id":%s},' "$str_check" "$REVIEW_APP_INTEGRATION_ID")"
+			else
+				str_contexts+="$(printf '{"context":"%s"},' "$str_check")"
+			fi
 		done
 		str_contexts="${str_contexts%,}"
 		str_checks_rule=$(printf ',{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":false,"required_status_checks":[%s]}}' "$str_contexts")
@@ -361,6 +368,14 @@ report_stranded_prs() {
 }
 
 main() {
+	if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && ! [[ "$REVIEW_APP_INTEGRATION_ID" =~ ^[0-9]+$ ]]; then
+		print_status "error" "REVIEW_APP_INTEGRATION_ID must be the App's numeric id, got '$REVIEW_APP_INTEGRATION_ID'"
+		return 2
+	fi
+	if [ "${1:-}" = "dry_run" ]; then
+		build_rules_json
+		return 0
+	fi
 	if [ "${1:-}" = "verify" ]; then
 		verify_strict_required_checks
 		return $?
@@ -379,7 +394,7 @@ main() {
 		return 0
 	fi
 	if [ $# -gt 0 ]; then
-		print_status "error" "Unknown argument '$1' (expected: verify, check_ruleset, confirm_ruleset, stranded, or none)"
+		print_status "error" "Unknown argument '$1' (expected: verify, check_ruleset, confirm_ruleset, stranded, dry_run, or none)"
 		return 2
 	fi
 

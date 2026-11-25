@@ -400,6 +400,13 @@ repos:
         pass_filenames: false
         files: ^(templates/python-common/bin/enable_repo_rules\.sh|tests/test_enable_repo_rules\.sh)$
 
+      - id: review-app-token-tests
+        name: review-gate App token is optional and the ruleset pin is opt-in (blueprintx#1318)
+        entry: bash tests/test_review_app_token.sh
+        language: system
+        pass_filenames: false
+        files: ^(\.github/workflows/review_threads\.yml|templates/python-common/(\.github/workflows/review-threads\.yml|bin/enable_repo_rules\.sh)|tests/test_review_app_token\.sh)$
+
       - id: ts-lib-pack-smoke-shape-tests
         name: ts-lib verdaccio rehearsal publishes a prerelease and pins the install (blueprintx#934)
         entry: bash tests/test_ts_lib_pack_smoke_shape.sh
