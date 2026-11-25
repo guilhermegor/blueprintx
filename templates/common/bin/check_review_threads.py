@@ -2938,6 +2938,19 @@ def main(list_argv: list[str] | None = None) -> int:
         return _print_rate_limited(bool_json, str_detail=str(err))
 
 
+def _record_evaluated_head(dict_pr: dict) -> None:
+    """Write the ``headRefOid`` this run evaluated to ``$CHECKED_HEAD_FILE``, when set.
+
+    Parameters
+    ----------
+    dict_pr : dict
+        The pull-request payload the verdict is computed from.
+    """
+    str_path = os.environ.get("CHECKED_HEAD_FILE", "")
+    if str_path:
+        pathlib.Path(str_path).write_text(str(dict_pr.get("headRefOid") or ""), encoding="utf-8")
+
+
 def _check_pull_request(bool_json: bool) -> int:
     """Run the gate for the current PR.
 
@@ -2972,6 +2985,7 @@ def _check_pull_request(bool_json: bool) -> int:
     set_reviewers = reviewer_logins(dict_roster)
 
     dict_pr = _fetch_current_pr(str_repo_full, str_number=str_number, dict_roster=dict_roster)
+    _record_evaluated_head(dict_pr)
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 

@@ -68,6 +68,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
+          CHECKED_HEAD_FILE: ${{ runner.temp }}/checked_head
         run: python bin/check_review_threads.py
 
       - name: Post the required result as a check-run on the PR head
@@ -78,6 +79,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           GATE_OUTCOME: ${{ steps.gate.outcome }}
           EVALUATED_HEAD: ${{ steps.head.outputs.sha }}
+          CHECKED_HEAD_FILE: ${{ runner.temp }}/checked_head
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -86,6 +88,10 @@ jobs:
           if [ "$GATE_OUTCOME" = "success" ]; then
             str_conclusion=success
             str_title="Every review thread is answered and resolved"
+          fi
+          if [ "$str_conclusion" = success ] && [ "$(cat "$CHECKED_HEAD_FILE" 2>/dev/null)" != "$EVALUATED_HEAD" ]; then
+            str_conclusion=failure
+            str_title="Gate evaluated a different head than the one read at start"
           fi
           gh api "repos/${GITHUB_REPOSITORY}/check-runs" -X POST \
             -f name="Review threads answered" \

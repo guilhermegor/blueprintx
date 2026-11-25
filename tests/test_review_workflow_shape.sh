@@ -43,25 +43,33 @@ gate_job_name_differs() { ! grep -qE '^    name: Review threads answered$' "$1";
 gate_posts_unless_cancelled() { grep -qE '^        if: \$\{\{ !cancelled\(\) \}\}$' "$1" && grep -q 'check-runs' "$1" && grep -q 'conclusion="\$str_conclusion"' "$1"; }
 gate_serialized_per_pr() { grep -qE '^  cancel-in-progress: true$' "$1" && grep -qE '^  group: review-gate-' "$1"; }
 gate_checkout_is_base() {
-	local int_all int_base
-	int_all=$(grep -cE 'uses: actions/checkout@' "$1")
-	int_base=$(grep -cE '^ +ref: \$\{\{ github\.event\.repository\.default_branch \}\}$' "$1")
-	[ "$int_all" -ge 1 ] && [ "$int_all" -eq "$int_base" ]
+	awk '
+		function flush() { if (co) { n++; if (!ok) bad = 1 } co = 0; ok = 0 }
+		/^ +- / { flush() }
+		/uses: actions\/checkout@/ { co = 1 }
+		co && /^ +ref: / { if ($0 ~ BASE) ok = 1; else bad = 1 }
+		END { flush(); exit (bad || n < 1) }
+	' BASE='^ +ref: \\$\\{\\{ github\\.event\\.repository\\.default_branch \\}\\}$' "$1"
 }
 gate_run_blocks_clean() {
 	awk '
-		/^ +run: [|>]/ { inrun = 1; match($0, /^ +/); ind = RLENGTH; next }
-		/^ +run: / { if ($0 ~ BAD) bad = 1; inrun = 0; next }
-		inrun { match($0, /^ */); if (RLENGTH <= ind && $0 !~ /^ *$/) inrun = 0; else if ($0 ~ BAD) bad = 1 }
+		/^ +(- )?run: [|>]/ { inrun = 1; match($0, /^ +(- )?/); ind = RLENGTH; next }
+		/^ +(- )?run: / { if ($0 ~ BAD) bad = 1; inrun = 0; next }
+		inrun { match($0, /^ */); if (RLENGTH < ind && $0 !~ /^ *$/) inrun = 0; else if ($0 ~ BAD) bad = 1 }
 		END { exit bad }
-	' BAD='\$\{\{[^}]*(comment\.body|issue\.(title|body)|pull_request\.(title|body)|review\.body|head_ref|head\.ref|label\.name)' "$1"
+	' BAD='\\$\\{\\{[^}]*(comment\\.body|issue\\.(title|body)|pull_request\\.(title|body)|review\\.body|head_ref|head\\.ref|label\\.name)' "$1"
 }
+gate_secrets_token_only() { ! grep -E 'secrets\.' "$1" | grep -qvE 'secrets\.GITHUB_TOKEN( |$)'; }
 gate_run_blocks_reject_injection() {
 	local str_dir rc=0
 	str_dir=$(mktemp -d)
 	printf 'jobs:\n  j:\n    steps:\n      - name: x\n        run: |\n          echo "${{ github.event.comment.body }}"\n' >"$str_dir/bad.yml"
 	printf 'jobs:\n  j:\n    steps:\n      - name: x\n        env:\n          B: ${{ github.event.comment.body }}\n        run: echo "$B"\n' >"$str_dir/ok.yml"
+	printf 'jobs:\n  j:\n    steps:\n      - run: echo "${{ github.event.issue.title }}"\n' >"$str_dir/dash1.yml"
+	printf 'jobs:\n  j:\n    steps:\n      - run: |\n          echo "${{ github.event.review.body }}"\n' >"$str_dir/dash2.yml"
 	gate_run_blocks_clean "$str_dir/bad.yml" && rc=1
+	gate_run_blocks_clean "$str_dir/dash1.yml" && rc=1
+	gate_run_blocks_clean "$str_dir/dash2.yml" && rc=1
 	gate_run_blocks_clean "$str_dir/ok.yml" || rc=1
 	rm -rf "$str_dir"
 	return $rc
@@ -74,10 +82,39 @@ gate_checkout_rejects_second_head() {
 		printf "      - uses: actions/checkout@x\n        with:\n          ref: \${{ github.event.pull_request['head']['sha'] }}\n"
 	} >"$str_dir/two.yml"
 	gate_checkout_is_base "$str_dir/two.yml" && rc=1
+	printf "      - uses: actions/checkout@x\n        with:\n          ref: \${{ github.event['pull_request']['head']['sha'] }}\n      - run: echo ok\n        env:\n          ref: \${{ github.event.repository.default_branch }}\n" >"$str_dir/stray.yml"
+	gate_checkout_is_base "$str_dir/stray.yml" && rc=1
+	printf '      - uses: actions/checkout@x\n' >"$str_dir/noref.yml"
+	gate_checkout_is_base "$str_dir/noref.yml" && rc=1
 	rm -rf "$str_dir"
 	return $rc
 }
 
+gate_secrets_reject_other() {
+	local str_dir rc=0
+	str_dir=$(mktemp -d)
+	printf '        env:\n          T: ${{ secrets.GITHUB_TOKEN }}\n' >"$str_dir/ok.yml"
+	printf '        env:\n          T: ${{ secrets.PAT_TOKEN }}\n' >"$str_dir/bad.yml"
+	gate_secrets_token_only "$str_dir/ok.yml" || rc=1
+	gate_secrets_token_only "$str_dir/bad.yml" && rc=1
+	rm -rf "$str_dir"
+	return $rc
+}
+check "run: injection check rejects bad fixtures and passes the env: fixture" gate_run_blocks_reject_injection
+check "checkout check rejects a second PR-head checkout and a stray base ref" gate_checkout_rejects_second_head
+check "secrets check rejects any secret other than GITHUB_TOKEN" gate_secrets_reject_other
+checker_records_head() {
+	local str_dir rc=0
+	str_dir=$(mktemp -d)
+	CHECKED_HEAD_FILE="$str_dir/h" python3 -c "
+import sys; sys.path.insert(0, 'templates/common/bin')
+import check_review_threads as m
+m._record_evaluated_head({'headRefOid': 'abc123'})" || rc=1
+	[ "$(cat "$str_dir/h" 2>/dev/null)" = abc123 ] || rc=1
+	rm -rf "$str_dir"
+	return $rc
+}
+check "checker writes the headRefOid it evaluated to CHECKED_HEAD_FILE" checker_records_head
 for gate in "${GATES[@]}"; do
 	label="${gate#"$REPO_ROOT"/}"
 	check "$label runs from the base via pull_request_target" gate_has "$gate" '^  pull_request_target:$'
@@ -91,6 +128,8 @@ for gate in "${GATES[@]}"; do
 	check "$label posts the result as a check-run even after a failure, not after a cancel" gate_posts_unless_cancelled "$gate"
 	check "$label serializes runs per PR" gate_serialized_per_pr "$gate"
 	check "$label interpolates no author-controlled event field into a run: block" gate_run_blocks_clean "$gate"
+	check "$label uses no secret except GITHUB_TOKEN" gate_secrets_token_only "$gate"
+	check "$label posts success only when the checker's head equals the head read at start" gate_has "$gate" '"\$\(cat "\$CHECKED_HEAD_FILE"[^)]*\)" != "\$EVALUATED_HEAD"'
 	check "$label publishes against the head read before the gate ran" gate_has "$gate" 'head_sha="\$EVALUATED_HEAD"'
 done
 GATE_WF="$REPO_ROOT/.github/workflows/review_threads.yml"
