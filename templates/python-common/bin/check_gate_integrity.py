@@ -133,13 +133,14 @@ import pathlib
 import re
 import subprocess
 import sys
+from collections.abc import Iterator
 
+import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from gate_env import is_ci, no_terminal_note  # noqa: E402
 from gate_rename import deleted_message, rename_pairs  # noqa: E402
-
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -150,23 +151,13 @@ RE_CI_SCRIPT = re.compile(r"(^|/)bin/ci/[^/]+$")
 RE_GATE_SCRIPT = re.compile(r"(^|/)bin/(check|lint)_[^/]+\.(py|sh)$")
 RE_WORKFLOW_PATH = re.compile(r"\.github/workflows/.*\.ya?ml$")
 RE_TOP_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
-RE_MOVABLE_RUNNER = re.compile(
-    r"""^ {4}runs-on:\s+(["']?)ubuntu-(latest|(?:22|24)\.04(-arm)?)\1(?:\s+#.*)?\s*$"""
-)
-STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu{}>"
-RE_JOB_ID_LINE = re.compile(r"""^ {2}(["']?)([A-Za-z0-9_-]+)\1\s*:""")
-RE_UNMOVABLE_JOB_LINE = re.compile(
-    r"""^ {2}(["']?)[\w-]+\1\s*:\s*[^\s#]|^ {4,}["']?needs["']?\s*:"""
-    r"""|^ {3,}[{\[]|github(?:[._]|\[\s*["']\s*)workflow(?!\w)"""
-    r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]""",
-    re.IGNORECASE,
-)
+RE_MOVABLE_RUNNER = re.compile(r"ubuntu-(?:latest|(?:22|24)\.04(-arm)?)")
+STR_HOSTED_RUNNER = "<github-hosted ubuntu{}>"
 RE_WORKFLOW_NAME_READ = re.compile(r"""github(?:[._]|\[\s*["']\s*)workflow(?!\w)""", re.IGNORECASE)
-RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
+STR_WORKFLOW_EXPR = "${{github.workflow}}"
 STR_FLOW_CONCURRENCY = "{flow}"
-RE_CONCURRENCY_KEY = r"""["']?concurrency["']?\s*:"""
-RE_MAPPING_KEY_LINE = re.compile(r"""^\s+["']?[\w-]+["']?\s*:""")
-RE_SKIPPED_HEADER_KEY = r"""(jobs|["']?name["']?|["']?concurrency["']?)\s*:"""
+STR_MERGE_TAG = "tag:yaml.org,2002:merge"
+_SET_HEADER_SKIPPED = frozenset({"jobs", "name", "concurrency"})
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
@@ -525,189 +516,311 @@ def precommit_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     return [f"{str_shown}: pre-commit hook {str_id!r} removed" for str_id in sorted(set_removed)]
 
 
-def job_signature(list_lines: list) -> tuple:
-    """Return a job block's comparable lines, with a GitHub-hosted Ubuntu runner normalised.
+def job_signature(dict_job: dict) -> dict:
+    """Return a job's comparable mapping, with a GitHub-hosted Ubuntu runner normalised.
 
     Parameters
     ----------
-    list_lines : list of str
-        The lines of one job block, its ``  <id>:`` line first.
-
-    Returns
-    -------
-    tuple
-        The block's lines, trailing blank lines dropped, with a one-line ``runs-on:`` naming a
-        hosted image (``ubuntu-latest``, or ``ubuntu-22.04``/``ubuntu-24.04`` each optionally
-        ``-arm``) replaced by
-        one placeholder per architecture, so a move may swap those images within x86_64 or
-        within arm64 but not change architecture or drop ``runs-on``. Any other
-        runner (Windows, macOS, a self-hosted or larger-runner label, a sequence) stays
-        compared, since it can change the shell or leave the job queued forever.
-    """
-    list_kept = [
-        STR_HOSTED_RUNNER.format(cls_match.group(3) or "")
-        if (cls_match := RE_MOVABLE_RUNNER.match(str_line))
-        else str_line
-        for str_line in list_lines
-    ]
-    while list_kept and not list_kept[-1].strip():
-        list_kept.pop()
-    return tuple(list_kept)
-
-
-def job_is_movable(tuple_sig: tuple) -> bool:
-    """Return whether a job block can be judged by its own text alone.
-
-    Parameters
-    ----------
-    tuple_sig : tuple of str
-        A ``job_signature``.
-
-    Returns
-    -------
-    bool
-        False when the id line carries a value (a flow-style or aliased job), or the block
-        has a ``needs:`` key, quoted or not, or reads ``github.workflow`` (the workflow ``name:``
-        a move may change), or a YAML anchor, alias or merge key: what it
-        depends on lives outside the block, so an identical text in another file can still
-        skip or change the job there.
-    """
-    return not any(RE_UNMOVABLE_JOB_LINE.search(str_line) for str_line in tuple_sig)
-
-
-def workflow_job_details(str_text: str) -> dict:
-    """Return each top-level job id of a workflow with its ``job_signature``.
-
-    Parameters
-    ----------
-    str_text : str
-        Full workflow YAML content.
+    dict_job : dict
+        One job's parsed mapping.
 
     Returns
     -------
     dict
-        Job id to ``job_signature``, read as 2-space-indented keys directly under ``jobs:``
-        — the indentation this repo's workflows consistently use (avoids a YAML dependency
-        these scripts otherwise have no reason to carry; see the module docstring).
+        The mapping with a string ``runs-on`` naming a hosted image (``ubuntu-latest``, or
+        ``ubuntu-22.04``/``ubuntu-24.04`` each optionally ``-arm``) replaced by one
+        placeholder per architecture, so a move may swap those images within x86_64 or within
+        arm64 but not change architecture or drop ``runs-on``. Any other runner (Windows,
+        macOS, a self-hosted or larger-runner label, a sequence) stays compared, since it can
+        change the shell or leave the job queued forever.
     """
-    cls_match = re.search(r"(?m)^jobs:\s*$", str_text)
-    if not cls_match:
-        return {}
-    dict_lines: dict = {}
-    str_id = ""
-    for str_line in str_text[cls_match.end() :].splitlines():
-        if str_line.startswith("#"):
-            continue
-        if str_line.strip() and not str_line.startswith(" "):
-            break
-        cls_job = RE_JOB_ID_LINE.match(str_line)
-        if cls_job:
-            str_id = cls_job.group(2)
-            dict_lines[str_id] = [str_line]
-        elif str_id:
-            dict_lines[str_id].append(str_line)
-    return {str_id: job_signature(list_lines) for str_id, list_lines in dict_lines.items()}
+    cls_runner = dict_job.get("runs-on")
+    cls_match = RE_MOVABLE_RUNNER.fullmatch(cls_runner) if isinstance(cls_runner, str) else None
+    if cls_match is None:
+        return dict_job
+    return {**dict_job, "runs-on": STR_HOSTED_RUNNER.format(cls_match.group(1) or "")}
 
 
-def workflow_header(str_text: str) -> tuple:
-    """Return a workflow's top-level settings outside ``jobs:``, bar ``name:`` and comments.
+def iter_strings(cls_value: object) -> Iterator[str]:
+    """Yield every string in a parsed YAML value, mapping keys included.
 
     Parameters
     ----------
-    str_text : str
-        Full workflow YAML content.
+    cls_value : object
+        A scalar, list or mapping from ``yaml.safe_load``.
 
-    Returns
-    -------
-    tuple of str
-        The non-blank lines of every top-level key other than ``jobs:``, ``name:`` and
-        ``concurrency:`` (see ``workflow_concurrency``), so a
-        job moved under a different ``on:``, ``env:``, ``defaults:`` or ``permissions:``
-        does not compare equal.
-    """
-    list_kept = []
-    bool_skip = False
-    for str_line in str_text.splitlines():
-        if RE_TOP_LEVEL_KEY.match(str_line):
-            bool_skip = bool(re.match(RE_SKIPPED_HEADER_KEY, str_line))
-        if not bool_skip and str_line.strip() and not str_line.lstrip().startswith("#"):
-            list_kept.append(str_line)
-    return tuple(list_kept)
-
-
-def concurrency_block(str_text: str) -> str:
-    """Return the non-blank, non-comment lines of the top-level ``concurrency:`` key.
-
-    Parameters
-    ----------
-    str_text : str
-        Full workflow YAML content.
-
-    Returns
-    -------
+    Yields
+    ------
     str
-        The lines joined by newlines, ``""`` when there is none. The key may be quoted.
+        Each string leaf and each string key, depth first.
     """
-    list_kept = []
-    bool_in = False
-    for str_line in str_text.splitlines():
-        if RE_TOP_LEVEL_KEY.match(str_line):
-            bool_in = bool(re.match(RE_CONCURRENCY_KEY, str_line))
-        if bool_in and str_line.strip() and not str_line.lstrip().startswith("#"):
-            list_kept.append(str_line)
-    return "\n".join(list_kept)
+    if isinstance(cls_value, str):
+        yield cls_value
+    elif isinstance(cls_value, dict):
+        for cls_key, cls_item in cls_value.items():
+            yield from iter_strings(cls_key)
+            yield from iter_strings(cls_item)
+    elif isinstance(cls_value, list):
+        for cls_item in cls_value:
+            yield from iter_strings(cls_item)
 
 
-def workflow_concurrency(str_text: str) -> str:
+def reads_workflow_name(cls_value: object) -> bool:
+    """Return whether any string in a parsed value reads the workflow ``name:``.
+
+    Parameters
+    ----------
+    cls_value : object
+        A parsed YAML value.
+
+    Returns
+    -------
+    bool
+        True for ``github.workflow`` in any spelling ``RE_WORKFLOW_NAME_READ`` knows.
+    """
+    return any(RE_WORKFLOW_NAME_READ.search(str_text) for str_text in iter_strings(cls_value))
+
+
+def _node_children(cls_node: yaml.Node) -> list:
+    """Return the child nodes of a composed YAML node, mapping keys included."""
+    if isinstance(cls_node, yaml.MappingNode):
+        return [cls_child for tuple_pair in cls_node.value for cls_child in tuple_pair]
+    if isinstance(cls_node, yaml.SequenceNode):
+        return list(cls_node.value)
+    return []
+
+
+def node_is_shared(cls_node: yaml.Node, *, set_anchored: frozenset) -> bool:
+    """Return whether a composed subtree defines an anchor or uses a merge key.
+
+    Parameters
+    ----------
+    cls_node : yaml.Node
+        The root of the subtree, read before construction (constructing a mapping rewrites
+        its merge keys away).
+    set_anchored : frozenset of int
+        ``id()`` of every node the document anchored (PyYAML keeps the names only while it
+        composes, and an alias is the anchored node itself).
+
+    Returns
+    -------
+    bool
+        True when any node is an anchored one, which every alias resolves to, or is a ``<<``
+        merge key: what the job means then depends on a node that may live outside it.
+    """
+    list_stack = [cls_node]
+    set_seen: set = set()
+    while list_stack:
+        cls_current = list_stack.pop()
+        if id(cls_current) in set_seen:
+            continue
+        set_seen.add(id(cls_current))
+        if id(cls_current) in set_anchored or cls_current.tag == STR_MERGE_TAG:
+            return True
+        list_stack.extend(_node_children(cls_current))
+    return False
+
+
+def anchored_job_ids(cls_root: yaml.Node, *, set_anchored: frozenset) -> frozenset:
+    """Return the ids of the jobs a faithful copy cannot be proven for from their own text.
+
+    Parameters
+    ----------
+    cls_root : yaml.Node
+        The composed root node of a workflow.
+    set_anchored : frozenset of int
+        See ``node_is_shared``.
+
+    Returns
+    -------
+    frozenset of str
+        Ids of the jobs written in flow style (``gate: {...}``, which a reviewer cannot diff
+        line by line) or whose subtree is ``node_is_shared``; empty when ``jobs:`` is not a
+        mapping.
+    """
+    if not isinstance(cls_root, yaml.MappingNode):
+        return frozenset()
+    for cls_key, cls_value in cls_root.value:
+        if cls_key.value == "jobs" and isinstance(cls_value, yaml.MappingNode):
+            return frozenset(
+                str(cls_id.value)
+                for cls_id, cls_job in cls_value.value
+                if cls_job.flow_style
+                or node_is_shared(cls_id, set_anchored=set_anchored)
+                or node_is_shared(cls_job, set_anchored=set_anchored)
+            )
+    return frozenset()
+
+
+def read_workflow(str_text: str) -> tuple | None:
+    """Parse a workflow with PyYAML's safe loader.
+
+    Parameters
+    ----------
+    str_text : str
+        Full workflow YAML content.
+
+    Returns
+    -------
+    tuple or None
+        ``(document, set_jobs)``: the top-level mapping, its ``on`` key restored (YAML 1.1
+        reads the bare word as ``True``), and ``anchored_job_ids``. ``None`` when the text is
+        not valid YAML or its root is not a mapping, which the callers never read as a clean
+        file.
+    """
+    cls_loader = yaml.SafeLoader(str_text)
+    try:
+        cls_loader.get_event()
+        if cls_loader.check_event(yaml.StreamEndEvent):
+            return None
+        cls_loader.get_event()
+        cls_root = cls_loader.compose_node(None, None)
+        set_anchored = frozenset(id(cls_node) for cls_node in cls_loader.anchors.values())
+        set_jobs = anchored_job_ids(cls_root, set_anchored=set_anchored)
+        cls_document = cls_loader.construct_document(cls_root)
+    except yaml.YAMLError:
+        return None
+    finally:
+        cls_loader.dispose()
+    if not isinstance(cls_document, dict):
+        return None
+    dict_document = {
+        ("on" if cls_key is True else cls_key): cls_value
+        for cls_key, cls_value in cls_document.items()
+    }
+    return dict_document, set_jobs
+
+
+def workflow_jobs_of(dict_document: dict) -> dict:
+    """Return a workflow's job id to parsed job mapping.
+
+    Parameters
+    ----------
+    dict_document : dict
+        The parsed workflow.
+
+    Returns
+    -------
+    dict
+        Id (as a string) to the job's mapping, ``{}`` for a job whose body is not one, and an
+        empty dict when ``jobs:`` is not a mapping.
+    """
+    cls_jobs = dict_document.get("jobs")
+    if not isinstance(cls_jobs, dict):
+        return {}
+    return {
+        str(cls_id): cls_job if isinstance(cls_job, dict) else {}
+        for cls_id, cls_job in cls_jobs.items()
+    }
+
+
+def job_is_movable(dict_sig: dict, *, bool_anchored: bool) -> bool:
+    """Return whether a job can be judged by its own parsed content alone.
+
+    Parameters
+    ----------
+    dict_sig : dict
+        A ``job_signature``.
+    bool_anchored : bool
+        Whether the job is flow-style or its subtree defines an anchor or merge key
+        (``anchored_job_ids``).
+
+    Returns
+    -------
+    bool
+        False when the job has a ``needs`` key, reads ``github.workflow`` (the workflow
+        ``name:`` a move may change), or is anchored or flow-style: what it depends on lives
+        outside the job, so an identical mapping in another file can still skip or change it
+        there.
+    """
+    return not bool_anchored and "needs" not in dict_sig and not reads_workflow_name(dict_sig)
+
+
+def workflow_header(dict_document: dict) -> dict:
+    """Return a workflow's top-level settings outside ``jobs:``, bar ``name:``.
+
+    Parameters
+    ----------
+    dict_document : dict
+        The parsed workflow.
+
+    Returns
+    -------
+    dict
+        Every top-level key other than ``jobs``, ``name`` and ``concurrency`` (see
+        ``workflow_concurrency``), so a job moved under a different ``on:``, ``env:``,
+        ``defaults:`` or ``permissions:`` does not compare equal. Comments and spelling are
+        gone: the comparison is of values.
+    """
+    return {
+        cls_key: cls_value
+        for cls_key, cls_value in dict_document.items()
+        if cls_key not in _SET_HEADER_SKIPPED
+    }
+
+
+def header_is_context_bound(dict_header: dict) -> bool:
+    """Return whether a workflow header ties its jobs to the file they live in.
+
+    Parameters
+    ----------
+    dict_header : dict
+        A ``workflow_header``.
+
+    Returns
+    -------
+    bool
+        True for a ``workflow_call`` trigger (callers still ``uses:`` the source file) or any
+        read of ``github.workflow`` in the header.
+    """
+    cls_on = dict_header.get("on")
+    bool_called = cls_on == "workflow_call" or (
+        isinstance(cls_on, (list, dict)) and "workflow_call" in cls_on
+    )
+    return bool_called or reads_workflow_name(dict_header)
+
+
+def workflow_concurrency(dict_document: dict) -> str:
     """Return the group a workflow's top-level ``concurrency:`` evaluates to, or ``""``.
 
     Parameters
     ----------
-    str_text : str
-        Full workflow YAML content.
+    dict_document : dict
+        The parsed workflow.
 
     Returns
     -------
     str
-        The ``group:`` value (or the one-line ``concurrency: <group>`` form) with quotes
-        stripped and ``github.workflow`` replaced by the workflow's ``name:``; ``""`` when
-        there is no block, and ``STR_FLOW_CONCURRENCY`` for a flow-style ``{...}`` mapping, which
-        is not parsed and so never excuses a move; a block-scalar group is treated alike.
-        ``${{ }}`` bodies are compared without whitespace, and the whole group without case
-        (GitHub treats group names as case-insensitive). A block whose group is not a one-line
-        plain value (none; a continued, unbalanced-quote, block-scalar, alias or tagged value; a
-        tagged or anchored flow mapping) is unparsed like a flow mapping, and so is a group that
-        reads ``github.workflow`` in any spelling but the exact ``${{ github.workflow }}`` token,
-        or that token in an unnamed file, whose evaluated name is its path. Only the group
-        decides a collision, so ``cancel-in-progress:`` and comments do not matter.
+        The ``group:`` value (or the plain ``concurrency: <group>`` string) with
+        ``github.workflow`` replaced by the workflow's ``name:``; ``""`` when there is no
+        ``concurrency:``. ``STR_FLOW_CONCURRENCY`` when the group cannot be evaluated here:
+        absent from a mapping, not a string, or reading ``github.workflow`` in any spelling
+        but the exact ``${{ github.workflow }}`` token, or that token in an unnamed file,
+        whose evaluated name is its path. ``${{ }}`` bodies are compared without whitespace,
+        and the whole group without case (GitHub treats group names as case-insensitive).
+        Only the group decides a collision, so ``cancel-in-progress:`` and comments do not
+        matter.
     """
-    str_block = concurrency_block(str_text)
-    if re.match(rf"{RE_CONCURRENCY_KEY}\s*(?:[!&]\S*\s+)*\{{", str_block):
+    cls_block = dict_document.get("concurrency")
+    if cls_block is None:
+        return ""
+    cls_group = cls_block.get("group") if isinstance(cls_block, dict) else cls_block
+    if not isinstance(cls_group, str) or not cls_group.strip():
         return STR_FLOW_CONCURRENCY
-    str_block = re.sub(
+    str_group = re.sub(
         r"\$\{\{(.*?)\}\}",
         lambda cls_m: "${{" + re.sub(r"\s+", "", cls_m.group(1)) + "}}",
-        str_block,
-    ).lower()
-    cls_group = re.search(
-        r"""(?m)^[ \t]+["']?group["']?[ \t]*:[ \t]*((?:[^#\n]|(?<!\s)#)+)""", str_block
-    ) or re.match(rf"{RE_CONCURRENCY_KEY}[ \t]*([^\s#](?:[^#\n]|(?<!\s)#)*)", str_block)
-    str_group = cls_group.group(1).strip() if cls_group else ""
-    bool_continued = any(
-        not RE_MAPPING_KEY_LINE.match(str_line) for str_line in str_block.splitlines()[1:]
+        cls_group,
     )
-    cls_name = re.search(r"""(?m)^["']?name["']?[ \t]*:[ \t]*((?:[^#\n]|(?<!\s)#)*)""", str_text)
-    str_name = cls_name.group(1).strip().strip("\"'").lower() if cls_name else ""
-    str_rest = str_group.replace("${{github.workflow}}", "")
+    str_group = str_group.strip().lower()
+    str_name = str(dict_document.get("name") or "").strip().lower()
+    str_rest = str_group.replace(STR_WORKFLOW_EXPR, "")
     bool_unread = bool(RE_WORKFLOW_NAME_READ.search(str_rest)) or (
-        "${{github.workflow}}" in str_group and not str_name
+        STR_WORKFLOW_EXPR in str_group and not str_name
     )
-    bool_opaque = str_group[:1] in {"|", ">", "*", "!", "&"} or (
-        str_group[:1] in {"'", '"'} and str_group[-1:] != str_group[:1]
-    )
-    if str_block and (not str_group or bool_opaque or bool_continued or bool_unread):
+    if bool_unread:
         return STR_FLOW_CONCURRENCY
-    return str_group.replace("${{github.workflow}}", str_name).strip().strip("\"'")
+    return str_group.replace(STR_WORKFLOW_EXPR, str_name)
 
 
 def groups_collide(str_source: str, *, str_target: str) -> bool:
@@ -761,20 +874,66 @@ def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tu
     )
 
 
-def workflow_jobs(str_text: str) -> set:
-    """Return the top-level job ids under a workflow's ``jobs:`` block.
+def id_is_referenced(str_id: str, *, dict_document: dict) -> bool:
+    """Return whether a job id is still a whole word in any string of a parsed workflow.
 
     Parameters
     ----------
-    str_text : str
-        Full workflow YAML content.
+    str_id : str
+        The removed job's id.
+    dict_document : dict
+        The source workflow as it is now.
 
     Returns
     -------
-    set of str
-        Job ids; see ``workflow_job_details``.
+    bool
+        True for a ``needs:`` entry, a ``${{ needs.<id> }}`` read, a command naming it or any
+        other string that holds the id as a word. Comments are not strings and do not count.
     """
-    return set(workflow_job_details(str_text))
+    re_word = re.compile(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])")
+    return any(re_word.search(str_text) for str_text in iter_strings(dict_document))
+
+
+def removal_is_move(
+    str_id: str, *, tuple_old: tuple, dict_new: dict, dict_elsewhere: dict
+) -> bool:
+    """Return whether a removed job is excused by a faithful copy in another workflow file.
+
+    Parameters
+    ----------
+    str_id : str
+        The removed job's id.
+    tuple_old : tuple
+        ``read_workflow`` of the source at the merge-base.
+    dict_new : dict
+        The source's parsed document in this change.
+    dict_elsewhere : dict
+        Job id to the ``(header, signature, group)`` candidates newly added in this tree. The
+        matching candidate is consumed (the list is mutated) so one new job covers one removal.
+
+    Returns
+    -------
+    bool
+        True when the job is movable, unreferenced by the source, outside a context-bound
+        source, and a candidate matches its header and signature without a group collision.
+    """
+    dict_document, set_anchored = tuple_old
+    dict_job = job_signature(workflow_jobs_of(dict_document)[str_id])
+    dict_header = workflow_header(dict_document)
+    bool_movable = (
+        job_is_movable(dict_job, bool_anchored=str_id in set_anchored)
+        and not id_is_referenced(str_id, dict_document=dict_new)
+        and not header_is_context_bound(dict_header)
+    )
+    list_candidates = dict_elsewhere.get(str_id, [])
+    tuple_found = find_move(
+        list_candidates,
+        tuple_pair=(dict_header, dict_job),
+        tuple_concurrency=(workflow_concurrency(dict_document), workflow_concurrency(dict_new)),
+    )
+    if bool_movable and tuple_found:
+        list_candidates.remove(tuple_found)
+    return bool_movable and bool(tuple_found)
 
 
 def workflow_problems(
@@ -800,32 +959,22 @@ def workflow_problems(
     Returns
     -------
     list of str
-        One message per removed job.
+        One message per removed job; a single message when the file as it is now is not
+        valid YAML at the merge-base or now, since its jobs cannot then be compared.
     """
-    dict_old = workflow_job_details(str_old)
-    tuple_header = workflow_header(str_old)
-    tuple_concurrency = (workflow_concurrency(str_old), workflow_concurrency(str_new))
-    dict_moved = dict_elsewhere or {}
-    list_problems = []
-    for str_id in sorted(set(dict_old) - workflow_jobs(str_new)):
-        list_candidates = dict_moved.get(str_id, [])
-        tuple_pair = (tuple_header, dict_old[str_id])
-        bool_referenced = bool(re.search(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])", str_new))
-        bool_context_bound = any(
-            "workflow_call" in str_line or RE_WORKFLOW_NAME_READ.search(str_line)
-            for str_line in tuple_header
+    tuple_new = read_workflow(str_new)
+    tuple_old = read_workflow(str_old)
+    if tuple_new is None or tuple_old is None:
+        return [f"{str_shown}: workflow YAML does not parse, so its jobs cannot be compared"]
+    dict_elsewhere = dict_elsewhere or {}
+    set_removed = set(workflow_jobs_of(tuple_old[0])) - set(workflow_jobs_of(tuple_new[0]))
+    return [
+        f"{str_shown}: workflow job {str_id!r} removed"
+        for str_id in sorted(set_removed)
+        if not removal_is_move(
+            str_id, tuple_old=tuple_old, dict_new=tuple_new[0], dict_elsewhere=dict_elsewhere
         )
-        bool_movable = (
-            job_is_movable(dict_old[str_id]) and not bool_referenced and not bool_context_bound
-        )
-        tuple_found = find_move(
-            list_candidates, tuple_pair=tuple_pair, tuple_concurrency=tuple_concurrency
-        )
-        if bool_movable and tuple_found:
-            list_candidates.remove(tuple_found)
-            continue
-        list_problems.append(f"{str_shown}: workflow job {str_id!r} removed")
-    return list_problems
+    ]
 
 
 def workflow_tree(str_path: str) -> str:
@@ -844,6 +993,29 @@ def workflow_tree(str_path: str) -> str:
     return str_path.partition(".github/workflows/")[0]
 
 
+def known_job_ids(str_base: str, *, str_path: str) -> set | None:
+    """Return the job ids a workflow file held at the base.
+
+    Parameters
+    ----------
+    str_base : str
+        The merge-base commit.
+    str_path : str
+        Repository-relative workflow path.
+
+    Returns
+    -------
+    set of str or None
+        ``set()`` when the file did not exist, ``None`` when it did but does not parse (what
+        was new then cannot be told).
+    """
+    str_old = show(str_base, str_path=str_path)
+    if str_old is None:
+        return set()
+    tuple_old = read_workflow(str_old)
+    return None if tuple_old is None else set(workflow_jobs_of(tuple_old[0]))
+
+
 def added_jobs(str_path: str, *, str_base: str) -> dict:
     """Return the jobs a changed workflow file gained: ids absent from it at the base.
 
@@ -858,16 +1030,19 @@ def added_jobs(str_path: str, *, str_base: str) -> dict:
     -------
     dict
         Job id to ``(workflow_header, job_signature, workflow_concurrency)`` for each job id
-        new to this file.
+        new to this file and free of anchors. ``{}`` when the file, now or at the base, does
+        not parse: a destination that cannot be read excuses nothing.
     """
-    str_text = show(STR_INDEX_REF, str_path=str_path) or ""
-    set_known = workflow_jobs(show(str_base, str_path=str_path) or "")
-    tuple_header = workflow_header(str_text)
-    str_concurrency = workflow_concurrency(str_text)
+    tuple_new = read_workflow(show(STR_INDEX_REF, str_path=str_path) or "")
+    set_known = known_job_ids(str_base, str_path=str_path)
+    if tuple_new is None or set_known is None:
+        return {}
+    dict_document, set_anchored = tuple_new
+    tuple_context = (workflow_header(dict_document), workflow_concurrency(dict_document))
     return {
-        str_id: (tuple_header, tuple_sig, str_concurrency)
-        for str_id, tuple_sig in workflow_job_details(str_text).items()
-        if str_id not in set_known
+        str_id: (tuple_context[0], job_signature(dict_job), tuple_context[1])
+        for str_id, dict_job in workflow_jobs_of(dict_document).items()
+        if str_id not in set_known and str_id not in set_anchored
     }
 
 

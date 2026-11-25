@@ -1307,7 +1307,6 @@ def test_workflow_one_new_job_covers_one_removal_only(monkeypatch: pytest.Monkey
 @pytest.mark.parametrize(
     "str_extra",
     [
-        "      needs: [x]\n",
         "    if: github.workflow == 'Scaffold checks'\n",
         "    env:\n      N: $GITHUB_WORKFLOW\n",
     ],
