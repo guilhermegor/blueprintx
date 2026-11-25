@@ -26,7 +26,8 @@ each_workflow() {
 	done
 }
 
-mint_is_gated() { grep -A2 'id: app$' "$1" | grep -qF "if: env.REVIEW_APP_CONFIGURED == 'true'"; }
+mint_is_gated() { grep -A2 'id: app$' "$1" | grep -qF "env.REVIEW_APP_CONFIGURED == 'true' && steps.head.outcome == 'success'"; }
+mint_after_gate() { [ "$(grep -n 'id: gate$' "$1" | cut -d: -f1)" -lt "$(grep -n 'id: app$' "$1" | cut -d: -f1)" ]; }
 mint_is_sha_pinned() { grep -qE 'uses: actions/create-github-app-token@[0-9a-f]{40} # v' "$1"; }
 mint_scopes_are_minimal() {
 	grep -q 'permission-checks: write' "$1" && grep -q 'permission-pull-requests: read' "$1" &&
@@ -43,11 +44,13 @@ publish_needs_mint() {
 	grep -A1 'name: Publish the check run' "$1" | grep -qF "steps.app.outcome == 'success'"
 }
 publish_uses_resolved_head() {
-	grep -qF 'STR_HEAD: ${{ steps.head.outputs.sha }}' "$1" && [ "$(grep -c 'STR_HEAD: ${{ steps.head.outputs.sha }}' "$1")" -eq 2 ]
+	awk '/name: Publish the check run/{f=1} f' "$1" | grep -qF 'STR_HEAD: ${{ steps.head.outputs.sha }}' &&
+		awk '/name: Clear stale/{f=1} /name: Mint/{f=0} f' "$1" | grep -qF 'STR_HEAD: ${{ steps.head.outputs.sha }}'
 }
 publish_uses_app_token() { grep -qF 'GH_TOKEN: ${{ steps.app.outputs.token }}' "$1"; }
 
 check "mint step runs only when the App secrets are set" each_workflow mint_is_gated
+check "the App token is minted after the gate step" each_workflow mint_after_gate
 check "mint action is pinned to a full commit SHA" each_workflow mint_is_sha_pinned
 check "minted token asks for checks write, pull-requests read, contents read only" \
 	each_workflow mint_scopes_are_minimal
@@ -71,6 +74,8 @@ rejects_non_numeric() {
 
 check "dry_run prints no integration_id when the flag is unset" unpinned_by_default
 check "dry_run pins the review check when the id is set" pinned_when_set
+leading_zero_refused() { ! REVIEW_APP_INTEGRATION_ID=0123 bash "$RULES" dry_run >/dev/null 2>&1; }
+check "a leading-zero integration id is refused" leading_zero_refused
 check "a non-numeric integration id is refused" rejects_non_numeric
 
 [ "$int_failures" -eq 0 ] && echo "all passed" || {

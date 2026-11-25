@@ -2624,9 +2624,13 @@ check to that App.
   publish use that SHA, so a push landing mid-run cannot get a `success` it was never checked for.
 - **No mint, no publish.** A failed mint (rotated key, App not installed) fails the job loudly at
   the mint step and posts nothing, rather than posting a check with an empty token.
-- **Pinning has a cost.** Once pinned, only the App's check run satisfies the rule. Runs that
-  receive no secrets (fork PRs, Dependabot PRs unless Dependabot secrets are set) never publish
-  it, so those PRs cannot merge. `enable_repo_rules.sh` warns about this when it applies a pin.
+- **Pinning has a cost.** Once pinned, only the App's check run satisfies the rule. A fork or
+  Dependabot PR's `pull_request` run gets no secrets, so it publishes nothing until someone
+  comments on it: the `issue_comment` run executes in the base repo with secrets and publishes the
+  App check. `enable_repo_rules.sh` warns about this when it applies a pin.
+- **The mint comes last.** The token is minted after the gate and the stale-run clear, so PR code
+  that runs in those steps never sees a `checks: write` token, and a failed mint cannot skip the
+  gate: the thread verdict still runs, so a red check means threads, not the App.
 - **Same name, two publishers.** Unpinned, the Actions job and the App both report
   `Review threads answered` on a SHA. How GitHub resolves duplicate-name required checks across
   apps is not verified, so treat the App path as coherent only when pinned.

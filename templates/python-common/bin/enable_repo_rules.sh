@@ -368,11 +368,11 @@ report_stranded_prs() {
 }
 
 main() {
-	if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && ! [[ "$REVIEW_APP_INTEGRATION_ID" =~ ^[0-9]+$ ]]; then
+	if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && ! [[ "$REVIEW_APP_INTEGRATION_ID" =~ ^[1-9][0-9]*$ ]]; then
 		print_status "error" "REVIEW_APP_INTEGRATION_ID must be the App's numeric id, got '$REVIEW_APP_INTEGRATION_ID'"
 		return 2
 	fi
-	if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && [ "${1:-}" != "dry_run" ]; then
+	if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && [ $# -eq 0 ]; then
 		print_status "warning" "'$REVIEW_CHECK_NAME' is pinned to App $REVIEW_APP_INTEGRATION_ID: PRs whose run gets no secrets (forks, Dependabot) never get that check and cannot merge; keep REVIEW_APP_CLIENT_ID / REVIEW_APP_PRIVATE_KEY set (blueprintx#1318)"
 	fi
 	if [ "${1:-}" = "dry_run" ]; then
