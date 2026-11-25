@@ -27,14 +27,16 @@ files a change touches — never off arbitrary source):
 - any watched config (``.pre-commit-config.yaml``, ``ruff.toml``, ``mypy.ini``, ``pytest.ini``)
   or workflow file DELETED outright — the most complete form of every weakening above
 - a job key removed from a changed workflow's ``jobs:`` block, unless the same id reappears
-  in a workflow file of the same tree, newly added there, with an identical job block bar a
+  in a workflow file of the same tree, newly added there, with an equal job mapping bar a
   hosted ``ubuntu-latest``, or ``ubuntu-22.04``/``ubuntu-24.04`` each optionally ``-arm``,
-  ``runs-on`` of the same architecture, under the same top-level settings (a ``concurrency:``
-  group that equals no non-empty source group (a group the parser cannot read as one plain
-  line counts as equal), no read of ``github.workflow``), outside a ``workflow_call`` file,
-  with no ``needs:``, anchor, alias or flow-style id, and no word left in the source file that
-  names it (a move). Known limit: a job moved into a NEW workflow file that a
-  ``bin/scaffold/python_*.sh`` copy list omits vanishes from that tier, undetected
+  ``runs-on`` string of the same architecture, under the same top-level settings (a
+  ``concurrency:`` group that equals no non-empty source group (a group that cannot be
+  evaluated counts as equal), no read of ``github.workflow``), outside a ``workflow_call``
+  file, with no ``needs:``, anchor, merge key or flow-style job, and no string left in the
+  source file that holds its id as a word (a move). Workflows are read with PyYAML, so the
+  comparison is of parsed values; a file that does not parse is itself a finding. Known limit:
+  a job moved into a NEW workflow file that a ``bin/scaffold/python_*.sh`` copy list omits
+  vanishes from that tier, undetected
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
   reads its diff rather than calling the GitHub API, the same "one implementation" reasoning

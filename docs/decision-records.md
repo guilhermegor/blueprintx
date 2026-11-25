@@ -1355,9 +1355,19 @@ is shaped as it is; a generated project gets the behavior, not the history.
       itself. A workflow job id that leaves one workflow file is excused only when the
       same id is NEWLY ADDED to another top-level workflow file of the same tree (the repo's
       own `.github/workflows/`, or one `templates/<name>/.github/workflows/`) with an
-      identical job block, so moving a job between files is a move, not a removal (#1311).
-      Everything in the block, blank lines inside it included (they matter in a folded
-      `run: >`), must match except a one-line `runs-on:` naming a hosted image
+      identical job, so moving a job between files is a move, not a removal (#1311).
+      Workflows are read with PyYAML's `yaml.safe_load` (#1315) and compared as parsed
+      values, never as text: whitespace, quoting, key spelling, comments and flow-versus-block
+      style cannot change a verdict, and a changed value inside a folded `run: >` (a blank
+      line included) always does. The gate hard-fails on a missing `import yaml`; there is no
+      fallback to a line parser. PyYAML is importable where the gate runs: BlueprintX's own
+      hook is `language: python` with `additional_dependencies: [pyyaml]`, its CI job pins
+      `pyyaml==6.0.3`, and generated projects run it in the project venv, where `pyyaml` is a
+      direct dependency of the five service tiers and arrives with the `yamllint` dev
+      dependency in `lib-minimal`. A workflow file that does not parse, at the merge-base or
+      now, is itself a finding: its jobs cannot be compared. A destination file that does not
+      parse excuses nothing.
+      The whole job mapping must be equal except a `runs-on` that is a string naming a hosted image
       (`ubuntu-latest`, or `ubuntu-22.04`/`ubuntu-24.04` each optionally `-arm`: the labels
       GitHub serves, so a retired or invented image is compared), which may change within
       one architecture but not vanish (an image swap can change the preinstalled
@@ -1370,51 +1380,52 @@ is shaped as it is; a generated project gets the behavior, not the history.
       (Windows or macOS, which change the default shell, a self-hosted or larger-runner
       label such as `ubuntu-latest-64core` that can leave the job queued and never
       reporting, or a sequence) is compared too. A move is also refused while the source
-      file still names the moved id (a job left behind that `needs:` it would make the
-      whole source workflow invalid). That check is a whole-word search over the source
-      file, so an id that also appears as a word elsewhere (`lint` in `make lint`) makes the
-      move a removal too; it errs toward reporting, as does a comment between jobs, which
-      the parser keeps with the job above it. The target
+      file still holds the moved id as a word in any parsed string, key or `needs:` entry (a
+      job left behind that `needs:` it would make the whole source workflow invalid). That is
+      a whole-word search over the parsed values, so an id that also appears as a word in a
+      step (`lint` in `make lint`) makes the move a removal too; it errs toward reporting. A
+      comment is not a value and no longer counts. The target
       file's top-level settings outside `jobs:` (`on:`, `env:`, `defaults:`,
-      `permissions:`, `run-name:`) must equal the source file's, bar `name:` and
-      whole-line comments (a trailing `# x` on a setting is compared), so a move into a file
+      `permissions:`, `run-name:`) must be equal values to the source file's, bar `name:`
+      and `concurrency:`, so a move into a file
       triggered only by `workflow_dispatch` is a removal. A top-level setting or a job that reads
-      the workflow name (`github.workflow`, `github['workflow']`, or `GITHUB_WORKFLOW` in a
-      script line of the job, either case) is never moved, since the move changes that name;
-      a script or action that reads it internally is invisible to this textual check. The
-      `concurrency:` block is judged apart: its evaluated `group:` (compared without case,
+      the workflow name (`github.workflow`, `github['workflow']`, or `GITHUB_WORKFLOW` in any
+      string of it, either case) is never moved, since the move changes that name;
+      a script or action that reads it internally is invisible to this check. The
+      `concurrency:` value is judged apart: its evaluated `group:` (compared without case,
       `${{ }}` bodies also without whitespace, the exact `${{ github.workflow }}` token read as the `name:`) may change. A target
       group that equals a non-empty source group, at the merge-base or after this change, is
       a removal, since two workflows in one group cancel or queue each other's required check.
-      A group the parser does not read as one plain line (a flow mapping, also tagged or
-      anchored, a block scalar, an alias, an unbalanced quote, a continued value, no `group:`, a
-      `github.workflow` group in an unnamed file, or any other spelling of the name read) is unparsed and never excuses a move beside a non-empty
-      source group. A job never moves out of an `on: workflow_call` file: its callers `uses:`
-      the source path, so the job would stop running. Known limits, not caught: a required-
+      A group that is not a string, or has no `group:` key, or reads the workflow name in any
+      spelling but the exact token, or that token in an unnamed file, cannot be evaluated here
+      and never excuses a move beside a non-empty source group. A job never moves out of an
+      `on: workflow_call` file (the `on` value is a string, list or mapping holding that
+      trigger): its callers `uses:` the source path, so the job would stop running. Known
+      limits, not caught: a required-
       workflows ruleset names a workflow by file path, so moving its job defeats it while the
       gate sees a move; the hosted-image list ages when GitHub retires a label; a target group
       equal to a third workflow's, `${{ }}` bodies that differ as text but evaluate equal (`${{ 'ci' }}-x`
-      against `ci-x`), a job line starting with `[` or `{` (a shell test or brace group, always
-      refused as a possible flow body), exotic YAML spellings of a `needs:` key (a tag, an explicit `? key`, an escaped quoted key), a non-word anchor name, a block-scalar or flow `name:`, an unparsed source group refusing a move into a target with no group, a new job elsewhere in the target that makes the whole file invalid (actionlint's job), first-fit candidate matching, per-workflow state such as `github.run_number` and
+      against `ci-x`), a new job elsewhere in the target that makes the whole file invalid (actionlint's job), first-fit candidate matching, per-workflow state such as `github.run_number` and
       `run_attempt` that changes when a job moves, a constant target group that makes runs across PRs
       cancel each other, and a target job whose `name:` repeats an existing check context.
+      Parser-level limits: PyYAML reads YAML 1.1, so a job id spelled `yes`, `no`, `on` or
+      `off` unquoted is a boolean key (the top-level `on:` is restored; a job id is not), and a
+      duplicate key silently keeps its last value (GitHub rejects the file).
       Two more limits stay: a workflow that waits on the source through
-      `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read,
-      and a column-0 comment inside `jobs:` is not compared.
+      `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read.
       One new job excuses one removal. It also counts as removed when the id is gone from
       the whole tree, when it only reappears in a different tree, or when the target sits in
       a subdirectory (GitHub runs no workflow there). A job is never excused as a move when
-      its id line carries a value (a flow-style `gate: {...}` or an aliased `gate: *base`,
-      whose body the line parser does not see), when it has `needs:` (quoted or not), or
-      when it has a YAML anchor, alias or merge key (`&x`, `*x`, `[*x]`, `!!map &x`,
-      `<<:`): the job it needs, or the anchored content, lives outside the compared block,
-      so an identical text can still be skipped (`if: false` on the needed job) or changed
-      in the target. Detection is textual and errs toward reporting: a shell `*word` in a
-      `run:` line also makes the job non-movable. Known limit: whether the target file is
-      copied into generated projects is not compared. Known limit: the line parser reads
-      only a plain `jobs:` key at column 0, so a quoted `"jobs":` hides every job from the
-      comparison (no workflow in this repo spells it so; a real YAML parser, #1315, ends
-      this class of limit). Moving a file's last job out and
+      it is written in flow style (`gate: {...}`, which a reviewer cannot diff line by line),
+      when it has a `needs:` key (a quoted or spaced key is the same key), or
+      when its subtree defines an anchor or uses a merge key (`&x`, `!!map &x`,
+      `<<:`; an alias is the anchored node, so it is found through the anchor): the job it needs,
+      or the anchored content, lives outside the compared mapping,
+      so an identical value can still be skipped (`if: false` on the needed job) or changed
+      in the target. A shell `*word` in a `run:` string is just text and does not count.
+      Known limit: whether the target file is
+      copied into generated projects is not compared (it needs its own check against the
+      `bin/scaffold/python_*.sh` copy lists). Moving a file's last job out and
       deleting the file is still reported by the deletion check, so a workflow split or
       rename needs `gate-change-ok:`.
     - `assertion-weakening`: wired in pre-commit (`language: system`, `always_run`, so the

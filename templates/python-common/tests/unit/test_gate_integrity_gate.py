@@ -1761,3 +1761,166 @@ def test_workflow_job_moved_under_a_group_named_in_a_trailing_comment_is_removed
     )
 
     assert len(list_findings) == 1
+
+
+def _move_with_headers(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> list[str]:
+    """Move the job between two workflows whose text outside ``jobs:`` is given.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub ``gate.show``.
+    str_source : str
+        The source workflow's text before ``jobs:``.
+    str_target : str
+        The target workflow's text before ``jobs:``.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
+    return _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"{str_source}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"{str_source}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"{str_target}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+
+def test_workflow_with_a_quoted_jobs_key_still_reports_a_removed_job() -> None:
+    """A quoted ``"jobs":`` key is the same key, so a job dropped under it is reported."""
+    str_old = f'"jobs":\n{_STR_KEPT_JOB}{_STR_MOVED_JOB}'
+
+    assert gate.workflow_problems(str_old, str_new='"jobs":\n' + _STR_KEPT_JOB, str_shown="w") == [
+        "w: workflow job 'gate-integrity' removed"
+    ]
+
+
+def test_workflow_that_no_longer_parses_is_a_finding() -> None:
+    """A file whose jobs cannot be read is reported, never read as having none to lose."""
+    str_new = f"jobs:\n{_STR_KEPT_JOB}  broken: [\n"
+
+    assert gate.workflow_problems(f"jobs:\n{_STR_KEPT_JOB}", str_new=str_new, str_shown="w") == [
+        "w: workflow YAML does not parse, so its jobs cannot be compared"
+    ]
+
+
+def test_workflow_job_moved_beside_a_comment_between_jobs_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A comment is not a value, so the one left between jobs does not block a move."""
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}# gate-integrity moved\n{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_under_a_setting_with_another_trailing_comment_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Comments on a top-level setting are not part of its value."""
+    list_findings = _move_with_headers(
+        monkeypatch, str_source="on: push\n", str_target="on: push  # moved\n"
+    )
+
+    assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    "str_run",
+    ["echo *.py", "|\n          { echo hi; }", "|\n          [ -f x ] && echo hi"],
+)
+def test_workflow_job_whose_script_holds_a_star_or_bracket_is_a_clean_move(
+    monkeypatch: pytest.MonkeyPatch, *, str_run: str
+) -> None:
+    """A ``*word`` or a leading ``[``/``{`` in a script is text, not an alias or flow body."""
+    str_job = _STR_MOVED_JOB + f"      - run: {str_run}\n"
+
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_with_a_needs_key_nested_in_a_matrix_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a top-level ``needs`` is a dependency; one inside ``strategy.matrix`` is data."""
+    str_job = _STR_MOVED_JOB + "    strategy:\n      matrix:\n        needs: [x]\n"
+
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    "str_extra",
+    [
+        "    ? needs\n    : [build]\n",
+        "    !!seq needs: [build]\n",
+        "    env: &a.b\n      A: '1'\n",
+    ],
+)
+def test_workflow_job_moved_with_an_exotic_dependency_or_anchor_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
+) -> None:
+    """An explicit ``? needs`` key or a non-word anchor name is still a parsed key or anchor."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize("str_on", ["on: [workflow_call]\n", "on:\n  push:\n  workflow_call:\n"])
+def test_workflow_job_moved_between_reusable_workflows_in_list_or_map_form_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_on: str
+) -> None:
+    """``workflow_call`` among several triggers still makes the source a reusable workflow."""
+    list_findings = _move_with_headers(monkeypatch, str_source=str_on, str_target=str_on)
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    "str_target",
+    [
+        "concurrency:\n  group: [ci]\n",
+        "concurrency:\n  group: {a: b}\n",
+        "concurrency:\n  group: 3\n",
+    ],
+)
+def test_workflow_job_moved_into_a_non_string_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_target: str
+) -> None:
+    """A group that is not a string cannot be evaluated here, so it never excuses a move."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source="concurrency:\n  group: ci\n", str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_read_restores_the_on_key_that_yaml_1_1_reads_as_a_boolean() -> None:
+    """``on`` parses to ``True`` in YAML 1.1; the reader restores it so triggers compare."""
+    assert gate.read_workflow("on: push\njobs:\n")[0] == {"on": "push", "jobs": None}
