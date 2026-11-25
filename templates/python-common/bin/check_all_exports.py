@@ -232,7 +232,7 @@ def declared_all(path_init: pathlib.Path) -> list[str] | None:
     """
     list_names: list[str] | None = None
     for cls_top in _parse(path_init).body:
-        for cls_node in _module_statements([cls_top]):
+        for cls_node in _module_statements([cls_top], bool_runtime=True):
             list_names = _apply_statement(
                 list_names, cls_node=cls_node, is_nested=cls_node is not cls_top
             )
@@ -264,7 +264,9 @@ def _apply_statement(
     """
     list_removed = _removed_names(cls_node)
     if list_removed is not None:
-        return [str_name for str_name in list_names or [] if str_name not in list_removed]
+        if is_nested:
+            return list_names
+        return _without_first(list_names or [], list_removed=list_removed)
     list_found = _declared_names(cls_node)
     if list_found is None:
         return list_names
@@ -470,6 +472,28 @@ def _declared_names(cls_node: ast.stmt) -> list[str] | None:
     return [cls_arg.value] if _is_string(cls_arg) else []
 
 
+def _without_first(list_names: list[str], *, list_removed: list[str]) -> list[str]:
+    """Return the names with the first occurrence of each removed name taken out.
+
+    Parameters
+    ----------
+    list_names : list of str
+        The names known so far.
+    list_removed : list of str
+        The names a removal statement names.
+
+    Returns
+    -------
+    list of str
+        The names afterwards; a name listed twice keeps its second entry.
+    """
+    list_out = list(list_names)
+    for str_name in list_removed:
+        if str_name in list_out:
+            list_out.remove(str_name)
+    return list_out
+
+
 def _all_method_call(cls_node: ast.stmt) -> tuple[str | None, list[ast.expr]]:
     """Return the method and arguments of a statement that is ``__all__.<method>(...)``.
 
@@ -645,7 +669,9 @@ def _real_assigns(list_nodes: Iterable[ast.stmt]) -> set[str]:
     return _definitions(
         cls_node
         for cls_node in list_nodes
-        if isinstance(cls_node, ast.Assign | ast.AnnAssign) and not _is_placeholder(cls_node.value)
+        if isinstance(cls_node, ast.Assign | ast.AnnAssign)
+        and cls_node.value is not None
+        and not _is_placeholder(cls_node.value)
     )
 
 

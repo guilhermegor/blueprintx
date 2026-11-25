@@ -1532,6 +1532,52 @@ def test_removal_drops_the_removed_name(tmp_path: Path, *, str_removal: str) -> 
     assert _load_gate().declared_all(path_init) == ["a"]
 
 
+def test_remove_takes_out_only_the_first_occurrence(tmp_path: Path) -> None:
+    """``__all__.remove('a')`` on a list holding ``'a'`` twice leaves one."""
+    path_init = _package(
+        tmp_path, str_init="__all__ = ['a', 'a']\n__all__.remove('a')\n", str_member=""
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]
+
+
+def test_a_conditional_removal_keeps_the_name_exported(tmp_path: Path) -> None:
+    """``if enabled: __all__.remove('a')`` may not run, so ``'a'`` stays exported."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\nif ENABLED:\n    __all__.remove('a')\n",
+        str_member="",
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]
+
+
+@pytest.mark.parametrize(
+    "str_guard",
+    [
+        "if TYPE_CHECKING:\n    __all__ = ['real']\n",
+        "if __name__ == '__main__':\n    __all__ = ['real']\n",
+    ],
+)
+def test_an_all_declared_in_a_non_runtime_block_is_ignored(
+    tmp_path: Path, *, str_guard: str
+) -> None:
+    """A type-only or script-only ``__all__`` assignment does not change the runtime list."""
+    path_init = _package(tmp_path, str_init=f"__all__ = []\n{str_guard}", str_member="")
+    assert _load_gate().declared_all(path_init) == []
+
+
+def test_a_valueless_annotation_does_not_cancel_a_placeholder(tmp_path: Path) -> None:
+    """``parse: object`` binds nothing, so the import's ``None`` fallback stays exempt."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "try:\n    from fast import parse\nexcept ImportError:\n    parse = None\n"
+            "if COND:\n    parse: object\n"
+        ),
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
 def test_a_starred_literal_on_the_first_declaration_is_expanded(tmp_path: Path) -> None:
     """``[*('a', 'b'), 'c']`` exports all three names, not only ``'c'``."""
     path_init = _package(tmp_path, str_init="__all__ = [*('a', 'b'), 'c']\n", str_member="")
