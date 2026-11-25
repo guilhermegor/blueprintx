@@ -2256,3 +2256,12 @@ def test_local_run_ignores_a_bare_trailer_in_history(
     _commit_staged(path_branch, str_message=_STR_TRAILER)
 
     assert gate.justification_reason(_git_in(path_branch, "rev-parse", "main")) == ""
+
+
+def test_workflow_job_number_and_string_matrix_values_differ() -> None:
+    """``[16]`` and ``["16"]`` are a number and a string to ``toJSON``, so the jobs differ."""
+    str_head = "jobs:\n  a:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        n: "
+    dict_number = gate.workflow_jobs_of(gate.read_workflow(f"{str_head}[16]\n")[0])["a"]
+    dict_string = gate.workflow_jobs_of(gate.read_workflow(f'{str_head}["16"]\n')[0])["a"]
+
+    assert dict_number != dict_string

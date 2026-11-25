@@ -159,6 +159,7 @@ STR_HOSTED_RUNNER = "<github-hosted ubuntu{}>"
 RE_WORKFLOW_NAME_READ = re.compile(r"""github(?:[._]|\[\s*["']\s*)workflow(?!\w)""", re.IGNORECASE)
 STR_WORKFLOW_EXPR = "${{github.workflow}}"
 STR_FLOW_CONCURRENCY = "{flow}"
+STR_TYPED_KEY = "\x00typed"
 STR_MERGE_TAG = "tag:yaml.org,2002:merge"
 _SET_COERCED_TAGS = frozenset(
     f"tag:yaml.org,2002:{str_kind}"
@@ -798,6 +799,39 @@ def _parse_workflow(cls_loader: StringScalarLoader) -> tuple:
     return cls_loader.construct_document(cls_root), set_jobs
 
 
+def add_typed_jobs(dict_document: dict, *, str_text: str) -> dict:
+    """Return the document with each job also carrying the job as the standard loader types it.
+
+    Parameters
+    ----------
+    dict_document : dict
+        The parsed workflow, scalars as text.
+    str_text : str
+        The same workflow text.
+
+    Returns
+    -------
+    dict
+        The document, its job mappings extended with ``STR_TYPED_KEY``: the same job read by
+        ``yaml.safe_load``, so ``[16]`` and ``["16"]`` (a number and a string to GitHub's
+        ``toJSON``) differ while a quoted-only respelling of a plain string still compares equal.
+    """
+    cls_jobs = dict_document.get("jobs")
+    try:
+        cls_typed = yaml.safe_load(str_text).get("jobs")
+    except (yaml.YAMLError, ValueError, KeyError, TypeError, AttributeError, RecursionError):
+        return dict_document
+    if not (isinstance(cls_jobs, dict) and isinstance(cls_typed, dict)):
+        return dict_document
+    for str_id, cls_job in cls_jobs.items():
+        if isinstance(cls_job, dict):
+            cls_typed_job = cls_typed.get(str_id)
+            cls_job[STR_TYPED_KEY] = (
+                job_signature(cls_typed_job) if isinstance(cls_typed_job, dict) else cls_typed_job
+            )
+    return dict_document
+
+
 def read_workflow(str_text: str) -> tuple | None:
     """Parse a workflow with PyYAML's safe loader.
 
@@ -827,7 +861,7 @@ def read_workflow(str_text: str) -> tuple | None:
         cls_loader.dispose()
     if not isinstance(cls_document, dict):
         return None
-    return cls_document, set_jobs
+    return add_typed_jobs(cls_document, str_text=str_text), set_jobs
 
 
 def workflow_jobs_of(dict_document: dict) -> dict:

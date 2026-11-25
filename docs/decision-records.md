@@ -1357,8 +1357,11 @@ is shaped as it is; a generated project gets the behavior, not the history.
       own `.github/workflows/`, or one `templates/<name>/.github/workflows/`) with an
       identical job, so moving a job between files is a move, not a removal (#1311).
       Workflows are read with PyYAML's `yaml.safe_load` (#1315) and compared as parsed
-      values, never as text: whitespace, quoting, key spelling and comments cannot change a verdict, and
-      neither can flow-versus-block style, except that a flow-style job is never moved (above), and a changed value inside a folded `run: >` (a blank
+      values, never as text: whitespace, key spelling, comments and quoting a string cannot
+      change a verdict. Quoting a number or boolean can (`[16]` against `["16"]`, which
+      `toJSON` tells apart; each job also carries the standard loader's typed read), flow-versus-block
+      style cannot except that a flow-style job is never moved (above), and a changed value
+      inside a folded `run: >` (a blank
       line included) always does. The gate hard-fails on a missing `import yaml`; there is no
       fallback to a line parser. PyYAML is importable where the gate runs: BlueprintX's own
       hook is `language: python` with `additional_dependencies: [pyyaml==6.0.3]`, its CI job pins
