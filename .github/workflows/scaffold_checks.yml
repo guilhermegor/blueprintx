@@ -539,6 +539,9 @@ jobs:
       - name: Run the review-workflow shape suite (blueprintx#1219)
         run: bash tests/test_review_workflow_shape.sh
 
+      - name: Run the gate-integrity workflow shape suite (blueprintx#1308)
+        run: bash tests/test_gate_integrity_workflow.sh
+
       - name: Run the ts-lib pack-smoke shape suite (blueprintx#934)
         run: bash tests/test_ts_lib_pack_smoke_shape.sh
 
