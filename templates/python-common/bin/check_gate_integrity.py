@@ -26,7 +26,15 @@ files a change touches — never off arbitrary source):
 - a ``bin/ci/*`` file, or a ``bin/check_*``/``bin/lint_*`` gate script, DELETED
 - any watched config (``.pre-commit-config.yaml``, ``ruff.toml``, ``mypy.ini``, ``pytest.ini``)
   or workflow file DELETED outright — the most complete form of every weakening above
-- a job key removed from a changed workflow's ``jobs:`` block
+- a job key removed from a changed workflow's ``jobs:`` block, unless the same id reappears
+  in a workflow file of the same tree, newly added there, with an identical job block bar a
+  hosted ``ubuntu-latest``, or ``ubuntu-22.04``/``ubuntu-24.04`` each optionally ``-arm``,
+  ``runs-on`` of the same architecture, under the same top-level settings (a ``concurrency:``
+  group that equals no non-empty source group (a group the parser cannot read as one plain
+  line counts as equal), no read of ``github.workflow``), outside a ``workflow_call`` file,
+  with no ``needs:``, anchor, alias or flow-style id, and no word left in the source file that
+  names it (a move). Known limit: a job moved into a NEW workflow file that a
+  ``bin/scaffold/python_*.sh`` copy list omits vanishes from that tier, undetected
 - a required status-check context removed from ``enable_repo_rules.sh``'s
   ``REQUIRED_CHECKS`` array (the single reviewable source that WRITES the ruleset — this gate
   reads its diff rather than calling the GitHub API, the same "one implementation" reasoning
@@ -118,6 +126,7 @@ CI must check out with ``fetch-depth: 0`` — a shallow clone has no common ance
 import ast
 import configparser
 import difflib
+import functools
 import json
 import os
 import pathlib
@@ -140,6 +149,24 @@ RE_REQUIRED_CHECKS = re.compile(r"REQUIRED_CHECKS=\((.*?)\)", re.S)
 RE_CI_SCRIPT = re.compile(r"(^|/)bin/ci/[^/]+$")
 RE_GATE_SCRIPT = re.compile(r"(^|/)bin/(check|lint)_[^/]+\.(py|sh)$")
 RE_WORKFLOW_PATH = re.compile(r"\.github/workflows/.*\.ya?ml$")
+RE_TOP_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
+RE_MOVABLE_RUNNER = re.compile(
+    r"""^ {4}runs-on:\s+(["']?)ubuntu-(latest|(?:22|24)\.04(-arm)?)\1(?:\s+#.*)?\s*$"""
+)
+STR_HOSTED_RUNNER = "    runs-on: <github-hosted ubuntu{}>"
+RE_JOB_ID_LINE = re.compile(r"""^ {2}(["']?)([A-Za-z0-9_-]+)\1\s*:""")
+RE_UNMOVABLE_JOB_LINE = re.compile(
+    r"""^ {2}(["']?)[\w-]+\1\s*:\s*[^\s#]|^ {4,}["']?needs["']?\s*:"""
+    r"""|^ {3,}[{\[]|github(?:[._]|\[\s*["']\s*)workflow(?!\w)"""
+    r"""|<<\s*:|(?:^|[\s\[{,])[&*][\w-]""",
+    re.IGNORECASE,
+)
+RE_WORKFLOW_NAME_READ = re.compile(r"""github(?:[._]|\[\s*["']\s*)workflow(?!\w)""", re.IGNORECASE)
+RE_TOP_LEVEL_KEY = re.compile(r"^[^\s#]")
+STR_FLOW_CONCURRENCY = "{flow}"
+RE_CONCURRENCY_KEY = r"""["']?concurrency["']?\s*:"""
+RE_MAPPING_KEY_LINE = re.compile(r"""^\s+["']?[\w-]+["']?\s*:""")
+RE_SKIPPED_HEADER_KEY = r"""(jobs|["']?name["']?|["']?concurrency["']?)\s*:"""
 RE_TEST_PATH = re.compile(r"(^|/)tests/(unit|integration)/test_[A-Za-z0-9_]+\.py$")
 RE_ASSERT_CMP = re.compile(r"^(\s*assert\s+)(.+?)\s(==|!=|>=|<=|<|>|not in|in)\s(.+?)\s*$")
 RE_ASSERT_METHOD = re.compile(r"\bself\.(assertEqual|assertTrue)\(")
@@ -245,7 +272,7 @@ def changed_paths(str_base: str) -> list:
     list of tuple
         ``(status_letter, path)``, e.g. ``("D", "bin/ci/check_actions.sh")``.
     """
-    str_out = _git(["diff", "--cached", "--name-status", str_base])
+    str_out = _git(["diff", "--cached", "--name-status", "--no-renames", str_base])
     list_rows = []
     for str_line in str_out.splitlines():
         list_parts = str_line.split("\t")
@@ -498,6 +525,242 @@ def precommit_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
     return [f"{str_shown}: pre-commit hook {str_id!r} removed" for str_id in sorted(set_removed)]
 
 
+def job_signature(list_lines: list) -> tuple:
+    """Return a job block's comparable lines, with a GitHub-hosted Ubuntu runner normalised.
+
+    Parameters
+    ----------
+    list_lines : list of str
+        The lines of one job block, its ``  <id>:`` line first.
+
+    Returns
+    -------
+    tuple
+        The block's lines, trailing blank lines dropped, with a one-line ``runs-on:`` naming a
+        hosted image (``ubuntu-latest``, or ``ubuntu-22.04``/``ubuntu-24.04`` each optionally
+        ``-arm``) replaced by
+        one placeholder per architecture, so a move may swap those images within x86_64 or
+        within arm64 but not change architecture or drop ``runs-on``. Any other
+        runner (Windows, macOS, a self-hosted or larger-runner label, a sequence) stays
+        compared, since it can change the shell or leave the job queued forever.
+    """
+    list_kept = [
+        STR_HOSTED_RUNNER.format(cls_match.group(3) or "")
+        if (cls_match := RE_MOVABLE_RUNNER.match(str_line))
+        else str_line
+        for str_line in list_lines
+    ]
+    while list_kept and not list_kept[-1].strip():
+        list_kept.pop()
+    return tuple(list_kept)
+
+
+def job_is_movable(tuple_sig: tuple) -> bool:
+    """Return whether a job block can be judged by its own text alone.
+
+    Parameters
+    ----------
+    tuple_sig : tuple of str
+        A ``job_signature``.
+
+    Returns
+    -------
+    bool
+        False when the id line carries a value (a flow-style or aliased job), or the block
+        has a ``needs:`` key, quoted or not, or reads ``github.workflow`` (the workflow ``name:``
+        a move may change), or a YAML anchor, alias or merge key: what it
+        depends on lives outside the block, so an identical text in another file can still
+        skip or change the job there.
+    """
+    return not any(RE_UNMOVABLE_JOB_LINE.search(str_line) for str_line in tuple_sig)
+
+
+def workflow_job_details(str_text: str) -> dict:
+    """Return each top-level job id of a workflow with its ``job_signature``.
+
+    Parameters
+    ----------
+    str_text : str
+        Full workflow YAML content.
+
+    Returns
+    -------
+    dict
+        Job id to ``job_signature``, read as 2-space-indented keys directly under ``jobs:``
+        — the indentation this repo's workflows consistently use (avoids a YAML dependency
+        these scripts otherwise have no reason to carry; see the module docstring).
+    """
+    cls_match = re.search(r"(?m)^jobs:\s*$", str_text)
+    if not cls_match:
+        return {}
+    dict_lines: dict = {}
+    str_id = ""
+    for str_line in str_text[cls_match.end() :].splitlines():
+        if str_line.startswith("#"):
+            continue
+        if str_line.strip() and not str_line.startswith(" "):
+            break
+        cls_job = RE_JOB_ID_LINE.match(str_line)
+        if cls_job:
+            str_id = cls_job.group(2)
+            dict_lines[str_id] = [str_line]
+        elif str_id:
+            dict_lines[str_id].append(str_line)
+    return {str_id: job_signature(list_lines) for str_id, list_lines in dict_lines.items()}
+
+
+def workflow_header(str_text: str) -> tuple:
+    """Return a workflow's top-level settings outside ``jobs:``, bar ``name:`` and comments.
+
+    Parameters
+    ----------
+    str_text : str
+        Full workflow YAML content.
+
+    Returns
+    -------
+    tuple of str
+        The non-blank lines of every top-level key other than ``jobs:``, ``name:`` and
+        ``concurrency:`` (see ``workflow_concurrency``), so a
+        job moved under a different ``on:``, ``env:``, ``defaults:`` or ``permissions:``
+        does not compare equal.
+    """
+    list_kept = []
+    bool_skip = False
+    for str_line in str_text.splitlines():
+        if RE_TOP_LEVEL_KEY.match(str_line):
+            bool_skip = bool(re.match(RE_SKIPPED_HEADER_KEY, str_line))
+        if not bool_skip and str_line.strip() and not str_line.lstrip().startswith("#"):
+            list_kept.append(str_line)
+    return tuple(list_kept)
+
+
+def concurrency_block(str_text: str) -> str:
+    """Return the non-blank, non-comment lines of the top-level ``concurrency:`` key.
+
+    Parameters
+    ----------
+    str_text : str
+        Full workflow YAML content.
+
+    Returns
+    -------
+    str
+        The lines joined by newlines, ``""`` when there is none. The key may be quoted.
+    """
+    list_kept = []
+    bool_in = False
+    for str_line in str_text.splitlines():
+        if RE_TOP_LEVEL_KEY.match(str_line):
+            bool_in = bool(re.match(RE_CONCURRENCY_KEY, str_line))
+        if bool_in and str_line.strip() and not str_line.lstrip().startswith("#"):
+            list_kept.append(str_line)
+    return "\n".join(list_kept)
+
+
+def workflow_concurrency(str_text: str) -> str:
+    """Return the group a workflow's top-level ``concurrency:`` evaluates to, or ``""``.
+
+    Parameters
+    ----------
+    str_text : str
+        Full workflow YAML content.
+
+    Returns
+    -------
+    str
+        The ``group:`` value (or the one-line ``concurrency: <group>`` form) with quotes
+        stripped and ``github.workflow`` replaced by the workflow's ``name:``; ``""`` when
+        there is no block, and ``STR_FLOW_CONCURRENCY`` for a flow-style ``{...}`` mapping, which
+        is not parsed and so never excuses a move; a block-scalar group is treated alike.
+        ``${{ }}`` bodies are compared without whitespace, and the whole group without case
+        (GitHub treats group names as case-insensitive). A block whose group is not a one-line
+        plain value (none; a continued, unbalanced-quote, block-scalar, alias or tagged value; a
+        tagged or anchored flow mapping) is unparsed like a flow mapping, and so is a group that
+        reads ``github.workflow`` in any spelling but the exact ``${{ github.workflow }}`` token,
+        or that token in an unnamed file, whose evaluated name is its path. Only the group
+        decides a collision, so ``cancel-in-progress:`` and comments do not matter.
+    """
+    str_block = concurrency_block(str_text)
+    if re.match(rf"{RE_CONCURRENCY_KEY}\s*(?:[!&]\S*\s+)*\{{", str_block):
+        return STR_FLOW_CONCURRENCY
+    str_block = re.sub(
+        r"\$\{\{(.*?)\}\}",
+        lambda cls_m: "${{" + re.sub(r"\s+", "", cls_m.group(1)) + "}}",
+        str_block,
+    ).lower()
+    cls_group = re.search(
+        r"""(?m)^[ \t]+["']?group["']?[ \t]*:[ \t]*((?:[^#\n]|(?<!\s)#)+)""", str_block
+    ) or re.match(rf"{RE_CONCURRENCY_KEY}[ \t]*([^\s#](?:[^#\n]|(?<!\s)#)*)", str_block)
+    str_group = cls_group.group(1).strip() if cls_group else ""
+    bool_continued = any(
+        not RE_MAPPING_KEY_LINE.match(str_line) for str_line in str_block.splitlines()[1:]
+    )
+    cls_name = re.search(r"""(?m)^["']?name["']?[ \t]*:[ \t]*((?:[^#\n]|(?<!\s)#)*)""", str_text)
+    str_name = cls_name.group(1).strip().strip("\"'").lower() if cls_name else ""
+    str_rest = str_group.replace("${{github.workflow}}", "")
+    bool_unread = bool(RE_WORKFLOW_NAME_READ.search(str_rest)) or (
+        "${{github.workflow}}" in str_group and not str_name
+    )
+    bool_opaque = str_group[:1] in {"|", ">", "*", "!", "&"} or (
+        str_group[:1] in {"'", '"'} and str_group[-1:] != str_group[:1]
+    )
+    if str_block and (not str_group or bool_opaque or bool_continued or bool_unread):
+        return STR_FLOW_CONCURRENCY
+    return str_group.replace("${{github.workflow}}", str_name).strip().strip("\"'")
+
+
+def groups_collide(str_source: str, *, str_target: str) -> bool:
+    """Return whether two ``workflow_concurrency`` values can share a group.
+
+    Parameters
+    ----------
+    str_source : str
+        The source workflow's group; ``""`` when it has none.
+    str_target : str
+        The target workflow's group.
+
+    Returns
+    -------
+    bool
+        ``True`` when the source has a group and the two are equal or either is unparsed.
+    """
+    return bool(str_source) and (
+        str_source == str_target or STR_FLOW_CONCURRENCY in {str_source, str_target}
+    )
+
+
+def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tuple) -> tuple:
+    """Return the first candidate that is a faithful destination, or ``()``.
+
+    Parameters
+    ----------
+    list_candidates : list of tuple
+        ``(workflow_header, job_signature, workflow_concurrency)`` of the new jobs.
+    tuple_pair : tuple
+        The removed job's ``(workflow_header, job_signature)``.
+    tuple_concurrency : tuple of str
+        The source workflow's ``workflow_concurrency`` at the merge-base and in this change.
+
+    Returns
+    -------
+    tuple
+        The matching candidate; ``()`` when none matches or its concurrency group collides
+        with either source group (see ``groups_collide``).
+    """
+    return next(
+        (
+            tuple_cand
+            for tuple_cand in list_candidates
+            if tuple_cand[:2] == tuple_pair
+            and not any(
+                groups_collide(str_src, str_target=tuple_cand[2]) for str_src in tuple_concurrency
+            )
+        ),
+        (),
+    )
+
+
 def workflow_jobs(str_text: str) -> set:
     """Return the top-level job ids under a workflow's ``jobs:`` block.
 
@@ -509,27 +772,15 @@ def workflow_jobs(str_text: str) -> set:
     Returns
     -------
     set of str
-        Job ids, read as 2-space-indented ``name:`` keys directly under ``jobs:`` — the
-        indentation this repo's workflows consistently use (avoids a YAML dependency these
-        scripts otherwise have no reason to carry; see the module docstring).
+        Job ids; see ``workflow_job_details``.
     """
-    cls_match = re.search(r"(?m)^jobs:\s*$", str_text)
-    if not cls_match:
-        return set()
-    set_jobs = set()
-    for str_line in str_text[cls_match.end() :].splitlines():
-        if not str_line.strip():
-            continue
-        if not str_line.startswith(" "):
-            break
-        cls_job = re.match(r"^ {2}([A-Za-z0-9_-]+):", str_line)
-        if cls_job:
-            set_jobs.add(cls_job.group(1))
-    return set_jobs
+    return set(workflow_job_details(str_text))
 
 
-def workflow_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
-    """Return job ids present at the merge-base and missing now.
+def workflow_problems(
+    str_old: str, *, str_new: str, str_shown: str, dict_elsewhere: dict | None = None
+) -> list:
+    """Return job ids present at the merge-base and missing now, bar a faithful move.
 
     Parameters
     ----------
@@ -539,14 +790,111 @@ def workflow_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
         Content in this change.
     str_shown : str
         Path to show in messages.
+    dict_elsewhere : dict or None
+        Job id to the list of ``(workflow_header, job_signature, workflow_concurrency)`` of
+        jobs newly added to a workflow file of the same tree in this change. A removed job
+        whose header and signature match one, with a concurrency group that does not collide
+        with the source's (a source with no group collides with nothing), is a move, and the
+        match is consumed (the list is mutated) so one new job covers one removal.
 
     Returns
     -------
     list of str
         One message per removed job.
     """
-    set_removed = workflow_jobs(str_old) - workflow_jobs(str_new)
-    return [f"{str_shown}: workflow job {str_id!r} removed" for str_id in sorted(set_removed)]
+    dict_old = workflow_job_details(str_old)
+    tuple_header = workflow_header(str_old)
+    tuple_concurrency = (workflow_concurrency(str_old), workflow_concurrency(str_new))
+    dict_moved = dict_elsewhere or {}
+    list_problems = []
+    for str_id in sorted(set(dict_old) - workflow_jobs(str_new)):
+        list_candidates = dict_moved.get(str_id, [])
+        tuple_pair = (tuple_header, dict_old[str_id])
+        bool_referenced = bool(re.search(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])", str_new))
+        bool_context_bound = any(
+            "workflow_call" in str_line or RE_WORKFLOW_NAME_READ.search(str_line)
+            for str_line in tuple_header
+        )
+        bool_movable = (
+            job_is_movable(dict_old[str_id]) and not bool_referenced and not bool_context_bound
+        )
+        tuple_found = find_move(
+            list_candidates, tuple_pair=tuple_pair, tuple_concurrency=tuple_concurrency
+        )
+        if bool_movable and tuple_found:
+            list_candidates.remove(tuple_found)
+            continue
+        list_problems.append(f"{str_shown}: workflow job {str_id!r} removed")
+    return list_problems
+
+
+def workflow_tree(str_path: str) -> str:
+    """Return the tree a workflow path belongs to: the prefix before ``.github/workflows/``.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative workflow path.
+
+    Returns
+    -------
+    str
+        ``""`` for the repo's own workflows, ``templates/<name>/`` for a template's.
+    """
+    return str_path.partition(".github/workflows/")[0]
+
+
+def added_jobs(str_path: str, *, str_base: str) -> dict:
+    """Return the jobs a changed workflow file gained: ids absent from it at the base.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative workflow path.
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    dict
+        Job id to ``(workflow_header, job_signature, workflow_concurrency)`` for each job id
+        new to this file.
+    """
+    str_text = show(STR_INDEX_REF, str_path=str_path) or ""
+    set_known = workflow_jobs(show(str_base, str_path=str_path) or "")
+    tuple_header = workflow_header(str_text)
+    str_concurrency = workflow_concurrency(str_text)
+    return {
+        str_id: (tuple_header, tuple_sig, str_concurrency)
+        for str_id, tuple_sig in workflow_job_details(str_text).items()
+        if str_id not in set_known
+    }
+
+
+def jobs_by_tree(list_changed: list, *, str_base: str) -> dict:
+    """Return, per tree, the jobs newly added to a changed top-level workflow file.
+
+    Parameters
+    ----------
+    list_changed : list of tuple
+        ``(status_letter, path)`` rows from ``changed_paths``.
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    dict
+        Tree prefix to ``{job id: [(header, signature, group), ...]}``. Only files directly under
+        ``.github/workflows/`` count, since GitHub runs no workflow in a subdirectory.
+    """
+    dict_trees: dict = {}
+    for str_status, str_path in list_changed:
+        if str_status == "D" or not RE_TOP_WORKFLOW_PATH.search(str_path):
+            continue
+        dict_tree = dict_trees.setdefault(workflow_tree(str_path), {})
+        for str_id, tuple_pair in added_jobs(str_path, str_base=str_base).items():
+            dict_tree.setdefault(str_id, []).append(tuple_pair)
+    return dict_trees
 
 
 def required_checks_problems(str_old: str, *, str_new: str, str_shown: str) -> list:
@@ -1066,7 +1414,11 @@ _DICT_DISPATCH = {
 
 
 def file_problems(
-    str_path: str, *, str_base: str, set_touched_stems: frozenset = frozenset()
+    str_path: str,
+    *,
+    str_base: str,
+    set_touched_stems: frozenset = frozenset(),
+    dict_trees: dict | None = None,
 ) -> list:
     """Return weakening findings for one changed, still-existing path.
 
@@ -1079,6 +1431,9 @@ def file_problems(
     set_touched_stems : frozenset of str
         Module stems the branch also touches (``touched_code_stems``) — gates the assertion
         checks on blueprintx#324's correlation signal.
+    dict_trees : dict or None
+        ``jobs_by_tree`` of the change — lets a workflow job moved to another file of the
+        same tree pass as a move.
 
     Returns
     -------
@@ -1093,7 +1448,9 @@ def file_problems(
 
     fn_analyzer = _DICT_DISPATCH.get(pathlib.Path(str_path).name)
     if fn_analyzer is None and RE_WORKFLOW_PATH.search(str_path):
-        fn_analyzer = workflow_problems
+        fn_analyzer = functools.partial(
+            workflow_problems, dict_elsewhere=(dict_trees or {}).get(workflow_tree(str_path))
+        )
     list_problems = (
         fn_analyzer(str_old, str_new=str_new, str_shown=str_path) if fn_analyzer else []
     )
@@ -1287,10 +1644,16 @@ def collect_problems(list_changed: list, *, str_base: str) -> list:
     """
     set_touched_stems = touched_code_stems(list_changed)
     list_problems = deletion_problems(list_changed, set_touched_stems=set_touched_stems)
+    dict_trees = jobs_by_tree(list_changed, str_base=str_base)
     for str_status, str_path in list_changed:
         if str_status != "D":
             list_problems.extend(
-                file_problems(str_path, str_base=str_base, set_touched_stems=set_touched_stems)
+                file_problems(
+                    str_path,
+                    str_base=str_base,
+                    set_touched_stems=set_touched_stems,
+                    dict_trees=dict_trees,
+                )
             )
     return list_problems
 

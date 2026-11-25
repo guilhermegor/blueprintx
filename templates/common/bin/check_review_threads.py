@@ -63,6 +63,7 @@ reviewed".
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from collections.abc import Callable
 import datetime
 import hashlib
@@ -1958,6 +1959,112 @@ def _count_authority(dict_review: dict, *, tuple_markers: tuple[str, ...]) -> st
     return (dict_review.get("author") or {}).get("login") or ""
 
 
+_RE_BODY_FINDING_BLOCK = re.compile(
+    r"^>\s*`(?P<path>[^`\n]+?)(?::(?P<line>\d+(?:-\d+)?))?`\s*\n"
+    r">(?P<severity>[^\n]*)\n>\s*\n>\s*\*\*(?P<title>[^\n]+?)\*\*\s*$",
+    re.MULTILINE,
+)
+_STR_KEY_VERSION = "v3:"
+_INT_NEW_NAMES_CAP = 200
+
+
+def body_finding_key(str_path: str, *, str_title: str, str_severity: str = "") -> str:
+    """Return the carry key of one review-body finding: path, severity and normalised title.
+
+    The line number is deliberately not part of the key: lines shift on every merge from main,
+    so keying by (path, line) would demand a second reply for an unchanged finding. Severity is
+    part of it, so a finding re-reported at a higher severity demands a fresh reply.
+    """
+
+    def _norm(str_text: str) -> str:
+        return " ".join(str_text.replace("*", " ").split()).casefold()
+
+    str_material = f"{str_path.strip()}\0{_norm(str_severity)}\0{_norm(str_title)}"
+    str_digest = hashlib.sha256(str_material.encode()).hexdigest()
+    return f"{_STR_KEY_VERSION}{str_digest}"
+
+
+def body_findings(str_body: str | None) -> list[dict[str, str]]:
+    """Return ``key``, ``path``, ``line`` and ``title`` for every finding block in a body.
+
+    ``line`` and ``title`` are stored for the report only; ``line`` is ``""`` when the block
+    names no line.
+    """
+    return [
+        {
+            "key": body_finding_key(
+                cls_match.group("path"),
+                str_title=cls_match.group("title"),
+                str_severity=cls_match.group("severity"),
+            ),
+            "path": cls_match.group("path"),
+            "line": cls_match.group("line") or "",
+            "title": " ".join(cls_match.group("title").replace("*", " ").split()),
+        }
+        for cls_match in _RE_BODY_FINDING_BLOCK.finditer(str_body or "")
+    ]
+
+
+_RE_DECLARED_COUNT = re.compile(r"\((\d+)\)\s*$")
+
+
+def _parses_completely(list_lines: list[str], *, int_parsed: int) -> bool:
+    """Return whether the body's declared finding counts equal the blocks that parsed.
+
+    Every finding line must end in ``(N)`` and the counts must sum to the parsed blocks, so a
+    body with a block the regex missed is never carried (it fails closed).
+    """
+    list_counts = [_RE_DECLARED_COUNT.search(str_line) for str_line in list_lines]
+    return all(list_counts) and sum(int(m.group(1)) for m in list_counts if m) == int_parsed
+
+
+def _new_finding_names(list_found: list[dict[str, str]], *, cnt_new: Counter[str]) -> str:
+    """Return a count, then ``path[:line]: title`` per unanswered finding, ``; `` joined."""
+    cnt_left = Counter(cnt_new)
+    list_names = []
+    for dict_found in list_found:
+        if cnt_left[dict_found["key"]] > 0:
+            cnt_left[dict_found["key"]] -= 1
+            str_where = dict_found["path"] + (
+                f":{dict_found['line']}" if dict_found["line"] else ""
+            )
+            list_names.append(f"{str_where}: {dict_found['title']}")
+    return f"{len(list_names)} new: " + "; ".join(list_names)
+
+
+def _carried_reviews(
+    list_hits: list[tuple[dict, list[str]]], *, fn_answered: Callable[[dict], bool]
+) -> tuple[set[int], dict[int, str]]:
+    """Return the carried reviews' ``id()`` and the new findings of each partly-answered one.
+
+    A review is carried only when its blocks parse completely and every one, counted with
+    multiplicity, was answered earlier. A review with no parsable block is never carried.
+    A completely parsed review that is not carried but repeats an answered finding maps to
+    the findings no earlier reply answered, so the problem can name those alone.
+    """
+    cnt_answered: Counter[str] = Counter()
+    set_carried: set[int] = set()
+    dict_new: dict[int, str] = {}
+    for dict_review, list_lines in sorted(
+        list_hits, key=lambda tuple_hit: tuple_hit[0].get("submittedAt") or ""
+    ):
+        list_found = body_findings(dict_review.get("body"))
+        cnt_keys = Counter(d["key"] for d in list_found)
+        bool_parsed = bool(list_lines and cnt_keys) and _parses_completely(
+            list_lines, int_parsed=sum(cnt_keys.values())
+        )
+        if bool_parsed and not cnt_keys - cnt_answered:
+            set_carried.add(id(dict_review))
+            continue
+        if bool_parsed and cnt_keys & cnt_answered:
+            dict_new[id(dict_review)] = _new_finding_names(
+                list_found, cnt_new=cnt_keys - cnt_answered
+            )
+        if list_lines and fn_answered(dict_review):
+            cnt_answered |= cnt_keys
+    return set_carried, dict_new
+
+
 def find_review_body_problems(
     list_reviews: list[dict],
     *,
@@ -2037,21 +2144,43 @@ def find_review_body_problems(
         if _is_human_answer(d, set_roster=set_roster, int_min_chars=int_min_chars)
         and not _is_marker_comment(d, tuple_markers=tuple_markers)
     ]
-    return [
-        _unanswered_message(dict_review, list_lines=list_lines)
-        for dict_review, list_lines in list_hits
-        if list_lines
-        and not any(
+
+    def is_answered(dict_review: dict) -> bool:
+        return any(
             _answers_review(d, dict_review=dict_review, tuple_scope=(list_all, list_findings))
             for d in list_answers
         )
+
+    set_carried, dict_new = _carried_reviews(list_hits, fn_answered=is_answered)
+    return [
+        _unanswered_message(dict_review, list_lines=list_lines, dict_new=dict_new)
+        for dict_review, list_lines in list_hits
+        if list_lines and id(dict_review) not in set_carried and not is_answered(dict_review)
     ]
 
 
-def _unanswered_message(dict_review: dict, *, list_lines: list[str]) -> str:
-    """Return the problem for one findings review nobody answered, naming its id."""
+def _unanswered_message(
+    dict_review: dict, *, list_lines: list[str], dict_new: dict[int, str] | None = None
+) -> str:
+    """Return the problem for one findings review nobody answered, naming its id.
+
+    ``dict_new`` maps a partly-answered review's ``id()`` to the findings no earlier reply
+    answered; when it holds this review, the problem names those alone.
+    """
+    str_new = (dict_new or {}).get(id(dict_review), "")
     str_id = _review_id(dict_review)
     str_ref = f" [review {str_id}]" if str_id else ""
+    if str_new:
+        str_new = (
+            str_new
+            if len(str_new) <= _INT_NEW_NAMES_CAP
+            else f"{str_new[: _INT_NEW_NAMES_CAP - 1]}…"
+        )
+        return (
+            f"{(dict_review.get('author') or {}).get('login')}'s review repeats answered "
+            f"findings and adds new ones nobody outside the reviewer roster (and no bot) "
+            f"answered — {str_new}{str_ref}"
+        )
     return (
         f"{(dict_review.get('author') or {}).get('login')}'s review lists findings in its body "
         f"and nobody outside the reviewer roster (and no bot) replied after it — "

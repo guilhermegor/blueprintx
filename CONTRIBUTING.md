@@ -738,7 +738,21 @@ Configuration files in this repository carry no comments, so the reasoning lives
   check admits workflow `!reference` tags. Layers: generic hygiene, then Conventional Commits
   at `commit-msg`, then the shared gates. Gates that run over this repo with `--root .`
   follow the one-implementation rule; diff-scoped gates (`gate-integrity`, the PR file-count
-  ceiling) compare against `merge-base(HEAD, main)` because they check a delta. The
+  ceiling) compare against `merge-base(HEAD, main)` because they check a delta. `gate-integrity`
+  treats a workflow job as moved when the same id is newly added to another top-level workflow
+  file of the same tree with an identical job block bar a one-line hosted `runs-on`
+  (`ubuntu-latest`, or `ubuntu-22.04`/`ubuntu-24.04` each optionally `-arm`, the same architecture
+  on both sides), outside an `on: workflow_call` file, under
+  the same top-level settings (`on:`, `env:`, `defaults:`, `permissions:`, `run-name:`, with
+  `name:` free), a `concurrency:` group that equals no non-empty source group, before or after this change (`github.workflow` read as the `name:`, an unparsed group never excused), and no read of
+  `github.workflow`/`GITHUB_WORKFLOW`; a changed name, steps, `if:`,
+  `env:` or trigger, a job gone from the tree, a move across trees (template to root) or
+  into a subdirectory is still a removal (#1311), and so is a flow-style job or any job with
+  `needs:` or a YAML anchor, alias or merge key, whose meaning lives outside the compared
+  block, or one whose id the source file still names as a word. A moved job's new file must also be in every `bin/scaffold/python_*.sh` copy list, or that tier silently loses the job (not detected). `gate-integrity` reads a
+  renamed file as a deletion plus an addition, so a `git mv` of a gate script, a watched
+  config or a workflow needs `gate-change-ok:` like a deletion does, and a test file renamed
+  while its code under test changes reports as a deleted test. The
   complexity gate runs twice, the second time scoped to `templates/python-common`, which
   catches a template defect in about 3 seconds instead of in a five-tier CI matrix (measured on
   the two issues 270 and 271). Function length is not duplicated, since its discovery already walks the whole root.
@@ -2152,9 +2166,12 @@ grouped by what they guard.
   `secret-scan.yml`, so nothing of those comes back. An offline project commits on `main` by
   design, which is why only `no-commit-to-branch` is skipped for the promotion commit.
   The ruleset step runs the project's own `bin/enable_repo_rules.sh` (the `pr-quality-gate`
-  ruleset), then `enable_repo_rules.sh verify`. It never aborts the promotion, since the
-  assets are already pushed; if the script is missing it warns, and when `verify` fails the
-  final summary says branch protection on `main` is NOT in place.
+  ruleset), then `enable_repo_rules.sh verify` and `enable_repo_rules.sh confirm_ruleset`.
+  It never aborts the promotion, since the assets are already pushed. If the script is
+  missing, or predates `confirm_ruleset`, it warns and leaves protection unconfirmed; when
+  `verify` or `confirm_ruleset` fails, the final summary says branch protection on `main`
+  is NOT in place. `confirm_ruleset` proves that a rule of the `pr-quality-gate` ruleset
+  applies to the default branch, not that every expected rule is present.
 
   The online state is carried by `HAS_ORIGIN` and
   `HAS_GITHUB_ASSETS`, both set by one detection step and both consumed by the witnesses in

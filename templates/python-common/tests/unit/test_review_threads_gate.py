@@ -5609,3 +5609,294 @@ def test_a_completion_notice_counts_only_after_the_latest_retarget(
         set_reviewers={"coderabbitai[bot]"},
     )
     assert (str_problem is not None) is bool_expected_problem
+
+
+_CARRY_TITLE = "Reject non-GitHub origins before attempting the lookup."
+_CARRY_FIRST = "2026-01-02T00:00:00Z"
+_CARRY_SECOND = "2026-01-04T00:00:00Z"
+
+
+def _outside_diff_body(str_path: str, *, str_line: str, str_title: str = _CARRY_TITLE) -> str:
+    """Build a CodeRabbit body with one outside-diff finding, in the measured block shape."""
+    return (
+        "> **⚠️ Outside diff range comments (1)**\n"
+        ">\n"
+        f"> `{str_path}:{str_line}`\n"
+        "> **Minor** · **Functional Correctness**\n"
+        ">\n"
+        f"> **{str_title}**\n"
+    )
+
+
+def _carry_review(str_body: str, *, str_submitted: str) -> dict:
+    return {**_body_review(str_body), "submittedAt": str_submitted}
+
+
+def _carry_problems(str_second_path: str, *, str_second_line: str) -> list[str]:
+    """Problems when the first body was answered and a second, shifted body is then posted."""
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(
+            _outside_diff_body(str_second_path, str_line=str_second_line),
+            str_submitted=_CARRY_SECOND,
+        ),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    return _body_problems(list_reviews, list_notices=list_notices)
+
+
+def test_body_finding_key_ignores_the_line_number_and_carries_the_reply() -> None:
+    """The same text on src/a.py moved from line 40 to 52 needs no second reply."""
+    assert _carry_problems("src/a.py", str_second_line="52") == []
+
+
+def test_body_finding_key_differs_for_the_same_text_on_another_path() -> None:
+    """The same text on src/b.py is a different finding and still demands its own reply."""
+    assert len(_carry_problems("src/b.py", str_second_line="52")) == 1
+
+
+def test_body_finding_with_no_reply_still_fails() -> None:
+    """Should-fail witness: a body finding nobody answered fails, however often it repeats."""
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(_outside_diff_body("src/a.py", str_line="52"), str_submitted=_CARRY_SECOND),
+    ]
+    assert len(_body_problems(list_reviews, list_notices=[])) == 2
+
+
+def _first_finding(str_line: str) -> dict[str, str]:
+    return _load_gate().body_findings(_outside_diff_body("src/a.py", str_line=str_line))[0]
+
+
+def test_body_finding_key_is_versioned() -> None:
+    """The key carries the v3 prefix (v3 added the severity line)."""
+    assert _first_finding("40")["key"].startswith("v3:")
+
+
+def test_body_finding_key_is_line_free() -> None:
+    """The key is identical whatever line the block names."""
+    assert _first_finding("40")["key"] == _first_finding("52")["key"]
+
+
+def test_body_finding_keeps_the_line_for_the_report() -> None:
+    """The line is stored beside the key, for the report only."""
+    assert _first_finding("52")["line"] == "52"
+
+
+def test_body_with_an_unparsed_block_is_not_carried() -> None:
+    """Fail-closed witness: the heading declares 2 findings, one block parses, so no carry."""
+    str_body = _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)")
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_body, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
+
+
+def test_two_findings_sharing_one_key_are_not_carried_by_one_answer() -> None:
+    """Fail-closed witness: one answered key does not cover two same-titled findings."""
+    str_block = _outside_diff_body("src/a.py", str_line="90").split("\n", 2)[2]
+    str_body = _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)") + str_block
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_body, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
+
+
+def test_the_duplicate_key_body_really_parses_two_blocks() -> None:
+    """Guard for the multiplicity test: the appended block must parse, or it proves nothing."""
+    str_block = _outside_diff_body("src/a.py", str_line="90").split("\n", 2)[2]
+    str_body = _outside_diff_body("src/a.py", str_line="52") + str_block
+    assert len(_load_gate().body_findings(str_body)) == 2
+
+
+def test_an_escalated_severity_is_not_carried() -> None:
+    """Fail-closed witness: the same title re-reported as Major needs its own reply."""
+    str_major = _outside_diff_body("src/a.py", str_line="52").replace("**Minor**", "**Major**")
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_major, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
+
+
+def _answered_plus_new_body() -> str:
+    str_new = _outside_diff_body("src/a.py", str_line="90", str_title="A different finding.")
+    return (
+        _outside_diff_body("src/a.py", str_line="52").replace("(1)", "(2)")
+        + str_new.split("\n", 2)[2]
+    )
+
+
+def test_the_answered_plus_new_body_really_parses_two_blocks() -> None:
+    """Guard for the test below: the appended block must parse, or it proves nothing."""
+    assert len(_load_gate().body_findings(_answered_plus_new_body())) == 2
+
+
+def test_an_answered_finding_plus_a_new_one_is_not_carried() -> None:
+    """Fail-closed witness: one carried key plus one new key still demands a reply."""
+    str_body = _answered_plus_new_body()
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_body, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 1
+
+
+def test_the_escalated_body_really_parses_one_block() -> None:
+    """Guard for the escalation test: the Major body must parse, or it proves nothing."""
+    str_major = _outside_diff_body("src/a.py", str_line="52").replace("**Minor**", "**Major**")
+    assert len(_load_gate().body_findings(str_major)) == 1
+
+
+def test_the_other_path_body_really_parses_one_block() -> None:
+    """Guard for the other-path test: the src/b.py body must parse, or it proves nothing."""
+    assert len(_load_gate().body_findings(_outside_diff_body("src/b.py", str_line="52"))) == 1
+
+
+def _twice_body(str_line: str) -> str:
+    str_block = _outside_diff_body("src/a.py", str_line=str_line).split("\n", 2)[2]
+    return _outside_diff_body("src/a.py", str_line=str_line).replace("(1)", "(2)") + str_block
+
+
+def test_a_twice_answered_key_carries_a_later_body_with_it_twice() -> None:
+    """Positive witness for multiplicity: a body with a key twice, answered, carries its twin."""
+    list_reviews = [
+        _carry_review(_twice_body("40"), str_submitted=_CARRY_FIRST),
+        _carry_review(_twice_body("52"), str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert _body_problems(list_reviews, list_notices=list_notices) == []
+
+
+def test_a_review_without_submitted_at_never_carries_a_later_one() -> None:
+    """Fail-closed witness: no timestamp means the first body is unanswered, so nothing carries."""
+    list_reviews = [
+        {**_body_review(_outside_diff_body("src/a.py", str_line="40")), "submittedAt": None},
+        _carry_review(_outside_diff_body("src/a.py", str_line="52"), str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    assert len(_body_problems(list_reviews, list_notices=list_notices)) == 2
+
+
+def _partly_new_problems(str_second_body: str) -> list[str]:
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(str_second_body, str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [_notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z")]
+    return _body_problems(list_reviews, list_notices=list_notices)
+
+
+def _answered_plus_new_problem() -> str:
+    list_problems = _partly_new_problems(_answered_plus_new_body())
+    assert len(list_problems) == 1
+    return list_problems[0]
+
+
+def test_a_partly_new_body_names_the_new_finding() -> None:
+    """Should-fail witness: the problem names the unanswered finding by its title."""
+    assert "A different finding." in _answered_plus_new_problem()
+
+
+def test_a_partly_new_body_does_not_name_the_answered_finding() -> None:
+    """Should-fail witness: the already-answered finding is not named again."""
+    assert _CARRY_TITLE not in _answered_plus_new_problem()
+
+
+def _answered_plus_many_new_body(int_new: int) -> str:
+    """Build the answered finding plus ``int_new`` long, distinctly titled new ones."""
+    str_head = _outside_diff_body("src/a.py", str_line="52").replace("(1)", f"({int_new + 1})")
+    return str_head + "".join(
+        _outside_diff_body(
+            "src/a.py",
+            str_line="9",
+            str_title=f"Another long finding title number {int_i} {'x' * 30}",
+        ).split("\n", 2)[2]
+        for int_i in range(int_new)
+    )
+
+
+def test_a_partly_new_body_states_how_many_findings_are_new() -> None:
+    """Should-fail witness: the problem opens with the count of new findings."""
+    assert "1 new:" in _answered_plus_new_problem()
+
+
+def test_a_truncated_new_finding_list_is_one_problem() -> None:
+    """A list cut at 200 characters is still reported as a single problem."""
+    assert len(_partly_new_problems(_answered_plus_many_new_body(8))) == 1
+
+
+def test_a_truncated_new_finding_list_keeps_the_full_count() -> None:
+    """Should-fail witness: the cut does not shrink the stated count of new findings."""
+    assert "8 new:" in _partly_new_problems(_answered_plus_many_new_body(8))[0]
+
+
+def test_a_truncated_new_finding_list_ends_with_an_ellipsis() -> None:
+    """Should-fail witness: a list cut at 200 characters says so."""
+    assert "…" in _partly_new_problems(_answered_plus_many_new_body(8))[0]
+
+
+def test_a_truncated_new_finding_list_is_exactly_the_cap_long() -> None:
+    """Should-fail witness: the shown names, ellipsis included, are exactly the cap long."""
+    str_problem = _partly_new_problems(_answered_plus_many_new_body(8))[0]
+    str_names = str_problem.split("— ", 1)[1].split(" [review", 1)[0]
+    assert len(str_names) == _load_gate()._INT_NEW_NAMES_CAP
+
+
+def test_the_many_new_body_really_parses_nine_blocks() -> None:
+    """Guard for the truncation tests: every appended block must parse, or they prove nothing."""
+    assert len(_load_gate().body_findings(_answered_plus_many_new_body(8))) == 9
+
+
+def test_a_short_new_finding_list_has_no_ellipsis() -> None:
+    """A list under the cut is shown whole, with no marker."""
+    assert "…" not in _answered_plus_new_problem()
+
+
+def _miscounted_partly_new_body() -> str:
+    """Return a partly new body whose declared count the finding blocks do not match."""
+    return _answered_plus_new_body().replace("(2)", "(3)")
+
+
+def test_a_partly_new_body_that_does_not_parse_is_one_problem() -> None:
+    """A declared count the blocks miss still yields a single problem."""
+    assert len(_partly_new_problems(_miscounted_partly_new_body())) == 1
+
+
+def test_a_partly_new_body_that_does_not_parse_keeps_the_old_message() -> None:
+    """Fail-closed witness: a declared count the blocks miss falls back to the generic message."""
+    assert "lists findings in its body" in _partly_new_problems(_miscounted_partly_new_body())[0]
+
+
+def test_a_partly_new_body_message_keeps_the_roster_and_bot_clause() -> None:
+    """Should-fail witness: the message still says roster and bot replies do not count."""
+    assert "outside the reviewer roster (and no bot)" in _answered_plus_new_problem()
+
+
+def test_a_partly_new_body_answered_later_is_no_problem() -> None:
+    """A reply after the partly new review clears it."""
+    list_reviews = [
+        _carry_review(_outside_diff_body("src/a.py", str_line="40"), str_submitted=_CARRY_FIRST),
+        _carry_review(_answered_plus_new_body(), str_submitted=_CARRY_SECOND),
+    ]
+    list_notices = [
+        _notice("someone", str_body=_BODY_REPLY, str_created="2026-01-03T00:00:00Z"),
+        _notice("someone", str_body=_BODY_REPLY, str_created="2026-01-05T00:00:00Z"),
+    ]
+    assert _body_problems(list_reviews, list_notices=list_notices) == []
+
+
+def test_a_repeated_key_beyond_its_answered_count_is_counted_as_new() -> None:
+    """The multiplicity rule: a key answered once and listed twice has one new finding."""
+    assert "1 new:" in _partly_new_problems(_twice_body("52"))[0]
+
+
+def test_a_partly_new_finding_name_carries_its_line() -> None:
+    """Should-fail witness: the new finding is named with its line, so twins stay apart."""
+    assert "src/a.py:90: A different finding." in _answered_plus_new_problem()

@@ -818,3 +818,947 @@ def test_report_omits_the_terminal_hint_with_a_terminal(
     gate.report(["some finding"], str_base="base", int_changed_count=1)
 
     assert "interactive terminal" not in capsys.readouterr().out
+
+
+_STR_MOVED_JOB = (
+    "  gate-integrity:\n"
+    "    name: Gate integrity\n"
+    "    runs-on: ubuntu-latest\n"
+    "    steps:\n"
+    "      - run: python3 bin/check_gate_integrity.py\n"
+)
+_STR_KEPT_JOB = "  other:\n    name: Other\n    steps:\n      - run: echo hi\n"
+_STR_SOURCE = "templates/python-common/.github/workflows/scaffold_checks.yml"
+_STR_SIBLING = "templates/python-common/.github/workflows/gate_integrity.yml"
+_STR_ROOT_SIBLING = ".github/workflows/gate_integrity.yml"
+
+
+def _collect_workflows(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    dict_old: dict[str, str],
+    dict_new: dict[str, str],
+    list_changed: list[tuple[str, str]],
+) -> list[str]:
+    """Run ``collect_problems`` over in-memory workflow blobs.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub ``gate.show``.
+    dict_old : dict[str, str]
+        Path to content at the merge-base.
+    dict_new : dict[str, str]
+        Path to content in the index.
+    list_changed : list[tuple[str, str]]
+        ``(status_letter, path)`` rows.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
+    dict_blobs = {("base", str_k): str_v for str_k, str_v in dict_old.items()}
+    dict_blobs.update({(gate.STR_INDEX_REF, str_k): str_v for str_k, str_v in dict_new.items()})
+    monkeypatch.setattr(
+        gate, "show", lambda str_ref, *, str_path: dict_blobs.get((str_ref, str_path))
+    )
+    return gate.collect_problems(list_changed, str_base="base")
+
+
+def _move_findings(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    str_target: str,
+    str_job_new: str,
+    str_target_old: str = "",
+    str_job_old: str = _STR_MOVED_JOB,
+) -> list[str]:
+    """Move a job out of the template's ``scaffold_checks.yml`` into ``str_target``.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub ``gate.show``.
+    str_target : str
+        Path of the workflow file that receives the job.
+    str_job_new : str
+        The job block as it appears in the target.
+    str_target_old : str
+        The target's ``jobs:`` body at the merge-base; empty when the file is new.
+    str_job_old : str
+        The job block as it appeared in the source.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
+    return _collect_workflows(
+        monkeypatch,
+        dict_old={
+            _STR_SOURCE: f"jobs:\n{str_job_old}{_STR_KEPT_JOB}",
+            str_target: f"jobs:\n{str_target_old}",
+        },
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            str_target: f"jobs:\n{str_job_new}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("M", str_target)],
+    )
+
+
+def test_workflow_job_moved_within_the_tree_is_clean(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Same id, name and steps in another workflow of the same tree is a move."""
+    assert _move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=_STR_MOVED_JOB) == []
+
+
+def test_workflow_job_moved_within_the_root_tree_is_clean(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The root tree is judged like a template tree."""
+    dict_old = {".github/workflows/a.yml": f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"}
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old=dict_old,
+        dict_new={
+            ".github/workflows/a.yml": f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_ROOT_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", ".github/workflows/a.yml"), ("A", _STR_ROOT_SIBLING)],
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_with_a_renamed_name_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A changed ``name:`` breaks the required status-check context, so it is a removal."""
+    str_job = _STR_MOVED_JOB.replace("Gate integrity", "Gate integrity check")
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_moved_with_changed_steps_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Changed steps would hide a weakened command behind a move."""
+    str_job = _STR_MOVED_JOB.replace("check_gate_integrity.py", "check_gate_integrity.py || true")
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+@pytest.mark.parametrize(
+    "str_extra",
+    [
+        "    if: false\n",
+        "    continue-on-error: true\n",
+        "    env:\n      LINT_REQUIRED: '0'\n",
+        "    timeout-minutes: 1\n",
+        "    needs: [noop]\n",
+        '    "continue-on-error": true\n',
+        "    if : false\n",
+    ],
+)
+def test_workflow_job_moved_with_a_softening_key_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
+) -> None:
+    """A key that skips or softens the job is not a faithful move."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+@pytest.mark.parametrize(
+    "str_extra",
+    [
+        "    needs: [build]\n",
+        "    env: &shared\n      A: '1'\n",
+        "    env: *shared\n",
+        "    env:\n      <<: *shared\n",
+        "    steps:\n      - *gate_step\n",
+        '    "needs": [build]\n',
+        "    'needs': [build]\n",
+        "    steps: [*gate_step]\n",
+        "    env: !!map &shared\n      A: '1'\n",
+    ],
+)
+def test_workflow_job_moved_with_outside_dependency_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
+) -> None:
+    """``needs:`` and YAML anchors point outside the block, so an identical text is no proof."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    "str_id_line",
+    ["  gate: {name: G, steps: [{run: real}]}\n", '  "gate": {name: G, steps: [{run: real}]}\n'],
+)
+def test_workflow_flow_style_job_moved_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_id_line: str
+) -> None:
+    """A value on the id line, quoted id or not, makes the job unmovable even when unchanged.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Used to stub the base and working-tree reads.
+    str_id_line : str
+        The flow-style job line, identical in the source and the target.
+    """
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_id_line}"},
+        dict_new={_STR_SOURCE: "jobs:\n", _STR_SIBLING: f"jobs:\n{str_id_line}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_the_same_settings_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only ``name:`` and comments may differ in the target's top-level settings."""
+    str_on = "on:\n  pull_request:\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"name: A\n{str_on}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"name: A\n{str_on}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"# moved\nname: B\n{str_on}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    "str_header", ["on: workflow_dispatch\n", "permissions: {}\n", "env:\n  STRICT: '0'\n"]
+)
+def test_workflow_job_moved_under_other_settings_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_header: str
+) -> None:
+    """A target whose ``on:`` or other top-level settings differ may never run the job."""
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"name: Other\n{str_header}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    "str_runner",
+    [
+        "windows-latest",
+        "self-hosted",
+        "[self-hosted, gpu]",
+        "\n      - self-hosted",
+        "ubuntu-latest-64core",
+        "ubuntu-nonexistent",
+        "ubuntu-latest-arm",
+        "ubuntu-20.04",
+        "ubuntu-99.99",
+        "ubuntu-latest#x",
+    ],
+)
+def test_workflow_job_moved_to_a_non_ubuntu_runner_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_runner: str
+) -> None:
+    """Only a one-line ``ubuntu-*`` runner may change: another can change the shell or hang."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest", str_runner)
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_moved_between_reusable_workflows_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Callers still ``uses:`` the source file, so a job moved out of it stops running."""
+    str_on = "on:\n  workflow_call:\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"{str_on}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"{str_on}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"{str_on}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_removed_after_a_column_zero_comment_is_reported() -> None:
+    """A comment at column 0 inside ``jobs:`` must not end the parse and hide later jobs."""
+    str_old = f"jobs:\n{_STR_KEPT_JOB}# section\n{_STR_MOVED_JOB}"
+
+    assert gate.workflow_problems(str_old, str_new=f"jobs:\n{_STR_KEPT_JOB}", str_shown="w") == [
+        "w: workflow job 'gate-integrity' removed"
+    ]
+
+
+def test_workflow_job_moved_while_its_id_is_still_a_word_in_the_source_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reference search is whole-word over the source file and errs toward reporting."""
+    str_kept = _STR_KEPT_JOB.replace("echo hi", "make gate-integrity")
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{str_kept}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{str_kept}", _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_without_runs_on_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hosted runner may change, never vanish."""
+    str_job = _STR_MOVED_JOB.replace("    runs-on: ubuntu-latest\n", "")
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_workflow_job_moved_away_from_its_dependents_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A job left behind that still ``needs:`` the moved one breaks the source workflow."""
+    str_dependent = "  report:\n    needs: [gate-integrity]\n    runs-on: ubuntu-latest\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{str_dependent}"},
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{str_dependent}",
+            _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_without_a_folded_blank_line_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A blank line inside a folded scalar changes what runs, so it is compared."""
+    str_job = f"{_STR_MOVED_JOB}      - run: >\n          check\n\n          --strict\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"jobs:\n{str_job.replace(chr(10) * 2, chr(10))}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_quoted_job_id_removal_is_reported() -> None:
+    """A quoted id is a job of its own, so dropping it is a removal."""
+    str_old = f'jobs:\n{_STR_KEPT_JOB}  "gate":\n    runs-on: ubuntu-latest\n'
+
+    assert (
+        len(gate.workflow_problems(str_old, str_new=f"jobs:\n{_STR_KEPT_JOB}", str_shown="w")) == 1
+    )
+
+
+def test_workflow_job_moved_with_a_different_runner_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``runs-on`` is the one key a move may change."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest", "ubuntu-24.04")
+
+    assert _move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job) == []
+
+
+def test_workflow_job_moved_to_another_architecture_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An x86_64 job moved onto an arm64 image is compared, not excused as a runner swap."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest", "ubuntu-24.04-arm")
+
+    assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
+
+
+def test_changed_paths_reports_a_rename_as_a_delete_and_an_add(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A staged ``git mv`` must surface its old path, or its removed jobs go unreported.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided scratch directory.
+    monkeypatch : pytest.MonkeyPatch
+        Used to run the gate's git helper inside the repo.
+    """
+    _git_in(tmp_path, "init", "-q", "--initial-branch=main")
+    _git_in(tmp_path, "config", "user.email", "t@example.com")
+    _git_in(tmp_path, "config", "user.name", "t")
+    _commit_file(tmp_path, str_name="checks.yml")
+    str_base = _git_in(tmp_path, "rev-parse", "HEAD")
+    _git_in(tmp_path, "mv", "checks.yml", "renamed.yml")
+    monkeypatch.chdir(tmp_path)
+
+    assert sorted(gate.changed_paths(str_base)) == [("A", "renamed.yml"), ("D", "checks.yml")]
+
+
+def test_workflow_job_moved_with_unindented_changed_steps_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The non-indented sequence style must not collapse the steps out of the comparison."""
+    str_old = "  gate-integrity:\n    name: G\n    steps:\n    - run: a\n"
+    str_new = "  gate-integrity:\n    name: G\n    steps:\n    - run: b\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_old}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_new}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_dropped_everywhere_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An id absent from every workflow of the tree is still a removal."""
+    list_findings = _move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=_STR_KEPT_JOB)
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_from_template_to_root_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each tree is judged on its own: a template job cannot move into the repo's own CI."""
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_ROOT_SIBLING, str_job_new=_STR_MOVED_JOB
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_into_a_subdirectory_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GitHub runs no workflow below ``.github/workflows/``, so that is not a move."""
+    str_target = "templates/python-common/.github/workflows/archive/gate_integrity.yml"
+
+    assert len(_move_findings(monkeypatch, str_target=str_target, str_job_new=_STR_MOVED_JOB)) == 1
+
+
+def test_workflow_job_matching_a_preexisting_target_job_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The target's own older job of that id is not a destination: only a new id is."""
+    str_old_target = _STR_MOVED_JOB.replace("Gate integrity", "Other meaning")
+
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB,
+        str_target_old=str_old_target,
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_removal_names_the_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The finding names the removed job and its source file."""
+    list_findings = _move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=_STR_KEPT_JOB)
+
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
+
+
+def test_workflow_one_new_job_covers_one_removal_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two removed copies of a job cannot both be excused by one new copy."""
+    str_other = "templates/python-common/.github/workflows/other.yml"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={
+            _STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}",
+            str_other: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            str_other: "jobs:\n  keep:\n    name: k\n",
+            _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("M", str_other), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    "str_extra",
+    [
+        "      needs: [x]\n",
+        "    if: github.workflow == 'Scaffold checks'\n",
+        "    env:\n      N: $GITHUB_WORKFLOW\n",
+    ],
+)
+def test_workflow_job_moved_with_a_hidden_dependency_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
+) -> None:
+    """A deeper-indented ``needs:`` or a ``github.workflow`` read is judged unmovable."""
+    str_job = _STR_MOVED_JOB + str_extra
+
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_from_a_file_deriving_env_from_the_workflow_name_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A header ``env:`` built from ``github.workflow`` changes value when the name does."""
+    str_header = "env:\n  WF: ${{ github.workflow }}\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"name: A\n{str_header}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"name: A\n{str_header}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"name: B\n{str_header}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_deletion_of_a_renamed_test_file_reports_when_its_code_changed() -> None:
+    """A renamed test file reads as delete plus add, so renaming it can not hide a gutting."""
+    list_changed = [
+        ("D", "tests/unit/test_a.py"),
+        ("A", "tests/unit/test_b.py"),
+        ("M", "src/a.py"),
+    ]
+
+    list_findings = gate.deletion_problems(
+        list_changed, set_touched_stems=gate.touched_code_stems(list_changed)
+    )
+
+    assert list_findings == [
+        "tests/unit/test_a.py: test file deleted while its code under test changed"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("str_from", "str_to"),
+    [
+        ("ubuntu-latest", "ubuntu-24.04"),
+        ("ubuntu-22.04-arm", "ubuntu-24.04-arm"),
+        ("ubuntu-latest", '"ubuntu-latest"'),
+        ("ubuntu-latest", "ubuntu-latest  # pinned"),
+    ],
+)
+def test_workflow_job_moved_between_hosted_runners_is_clean(
+    monkeypatch: pytest.MonkeyPatch, *, str_from: str, str_to: str
+) -> None:
+    """Hosted images of one architecture, quoted or commented, are the same runner."""
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB.replace("ubuntu-latest", str_to),
+        str_job_old=_STR_MOVED_JOB.replace("ubuntu-latest", str_from),
+    )
+
+    assert list_findings == []
+
+
+def _move_under_concurrency(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> list[str]:
+    """Move a job between workflows whose ``concurrency:`` blocks are given.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub ``gate.show``.
+    str_source : str
+        The source workflow's ``concurrency:`` block, or empty.
+    str_target : str
+        The target workflow's ``concurrency:`` block, or empty.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
+    return _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"{str_source}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"{str_source}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"{str_target}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+
+def test_workflow_job_moved_under_an_identical_concurrency_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two workflows sharing one group cancel or queue each other's required check."""
+    str_block = "concurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: true\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_block, str_target=str_block
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_a_different_concurrency_group_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A group of its own is the intended shape of a moved job's workflow."""
+    str_source = "concurrency:\n  group: ci-${{ github.ref }}\n"
+    str_target = "concurrency:\n  group: gate-${{ github.ref }}\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    "str_target",
+    [
+        "concurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: false\n",
+        "concurrency: ci-${{ github.ref }}\n",
+        "concurrency:\n  group: 'ci-${{ github.ref }}'  # same group\n",
+    ],
+)
+def test_workflow_job_moved_into_the_same_group_in_another_form_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_target: str
+) -> None:
+    """The group decides the collision, not the block's text."""
+    str_source = "concurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: true\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_a_workflow_keyed_group_is_clean_when_names_differ(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``github.workflow`` evaluates per workflow, so a verbatim copy is a group of its own."""
+    str_block = "concurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch,
+        str_source=f"name: CI\n{str_block}",
+        str_target=f"name: Gate\n{str_block}",
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_under_a_workflow_keyed_group_is_removed_when_names_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Equal names make the evaluated groups equal."""
+    str_block = "name: CI\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_block, str_target=str_block
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_from_a_concurrency_group_into_none_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target with no group cannot collide with the source's."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source="concurrency:\n  group: ci-${{ github.ref }}\n", str_target=""
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_with_identical_unindented_steps_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Witness that the non-indented sequence style compares equal when truly identical."""
+    str_job = "  gate-integrity:\n    name: G\n    steps:\n    - run: a\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        (
+            "concurrency:\n  group: ci-${{ github.ref }}\n",
+            "concurrency: {group: ci-${{ github.ref }}, cancel-in-progress: true}\n",
+        ),
+        (
+            "concurrency: {group: ci}\n",
+            "concurrency:\n  group: ci\n",
+        ),
+        (
+            "concurrency:\n  group: ci-${{ github.ref }}\n",
+            "concurrency:\n  group: ci-${{github.ref}}\n",
+        ),
+        (
+            "concurrency:\n  group: ci-${{ github.ref }}\n",
+            "concurrency:\n  group: ci-${{ GitHub.Ref }}\n",
+        ),
+        (
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            "name: CI\nconcurrency:\n  group: ${{GitHub.Workflow}}\n",
+        ),
+    ],
+)
+def test_workflow_job_moved_into_an_unparsed_or_respelled_same_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """A flow mapping is never excused, and expression spelling does not change the group."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        ("concurrency:\n  group: CI-x\n", "concurrency:\n  group: ci-x\n"),
+        (
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            "name: ci\nconcurrency:\n  group: ${{ github.workflow }}\n",
+        ),
+        ('"concurrency":\n  group: ci\n', '"concurrency":\n  group: ci\n'),
+        ("concurrency:\n  group: ci\n", "'concurrency':\n  \"group\": ci\n"),
+        ("concurrency:\n  group: ci\n", "concurrency : { group: ci }\n"),
+        ("concurrency:\n  group: ci\n", "concurrency:\n  group: |\n    ci\n"),
+        (
+            "concurrency:\n  cancel-in-progress: true\n",
+            "concurrency:\n  cancel-in-progress: true\n",
+        ),
+    ],
+)
+def test_workflow_job_moved_into_a_group_the_parser_must_not_excuse_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """Case, quoted keys, a spaced flow key, block scalars and group-less blocks stay reported."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_into_flow_concurrency_from_none_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no source group there is nothing to collide with, flow style or not."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source="", str_target="concurrency: {group: ci}\n"
+    )
+
+    assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        ("concurrency:\n  group : ci\n", "concurrency:\n  group: ci\n"),
+        ("concurrency:\n  group:\n    ci-x\n", "concurrency:\n  group: ci-x\n"),
+        ("concurrency:\n  group: ci-x\n", "concurrency:\n  group:\n    ci-x\n"),
+    ],
+)
+def test_workflow_job_moved_into_a_spaced_or_multiline_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """A spaced key parses to an equal group; a multi-line value is unparsed. Both are reported."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_into_the_group_the_source_takes_in_the_same_change_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Judging the source by its base group alone misses a group both files share afterwards."""
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={
+            _STR_SOURCE: f"concurrency:\n  group: ci\njobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"
+        },
+        dict_new={
+            _STR_SOURCE: f"concurrency:\n  group: gate\njobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"concurrency:\n  group: gate\njobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_ref_group_is_a_plain_group_not_a_name_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``github.workflow_ref`` is not the name: a distinct group on it is a clean move."""
+    list_findings = _move_under_concurrency(
+        monkeypatch,
+        str_source="concurrency:\n  group: ci\n",
+        str_target="concurrency:\n  group: ${{ github.workflow_ref }}\n",
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_reading_the_name_through_an_index_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``github['workflow']`` reads the workflow name like ``github.workflow``."""
+    str_job = _STR_MOVED_JOB + "      - run: echo ${{ github['workflow'] }}\n"
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        ("concurrency:\n  group: ci- x\n", "concurrency:\n  group: ci-\n    x\n"),
+        ("concurrency:\n  group: ci- x\n", 'concurrency:\n  group: "ci-\n    x"\n'),
+        ("concurrency:\n  group: ci\n", "concurrency: !!map { group: ci }\n"),
+        ("concurrency:\n  group: ci\n", "concurrency: &c { group: ci }\n"),
+        (
+            '"name": CI\nconcurrency:\n  group: ${{ github.workflow }}\n',
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+        ),
+        (
+            '"name": CI\nconcurrency:\n  group: ${{ github.workflow }}\n',
+            '"name": CI\nconcurrency:\n  group: ${{ github.workflow }}\n',
+        ),
+        (
+            "concurrency:\n  group: ${{ github.workflow }}\n",
+            "concurrency:\n  group: ${{ github.workflow }}\n",
+        ),
+    ],
+)
+def test_workflow_job_moved_into_a_continued_tagged_or_unnamed_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """A continued value, a tagged flow mapping or an unread name never excuses a move."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_with_a_flow_body_on_the_line_after_its_id_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A job whose body is a flow mapping can hide ``needs:`` and is never excused."""
+    str_job = "  gate-integrity:\n    {needs: [other], runs-on: ubuntu-latest}\n"
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize(
+    ("str_source", "str_target"),
+    [
+        ("concurrency:\n  group: ci\n", "concurrency: *c\n"),
+        ("concurrency:\n  group: ci\n", "concurrency:\n  group: !!str ci\n"),
+        ("concurrency:\n  group: ci- abc:\n", 'concurrency:\n  group: "ci-\n    abc:"\n'),
+        (
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            "name: CI\nconcurrency:\n  group: ${{ github['workflow'] }}\n",
+        ),
+        (
+            "name: CI\nconcurrency:\n  group: ${{ github.workflow }}\n",
+            "name: CI\nconcurrency:\n  group: ${{ format('{0}', github.workflow) }}\n",
+        ),
+    ],
+)
+def test_workflow_job_moved_into_an_alias_or_respelled_name_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> None:
+    """An alias, a tag, an unbalanced quote or another spelling of the name read is unparsed."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_source, str_target=str_target
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_a_group_with_a_hash_inside_a_word_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a space-preceded ``#`` starts a comment, so ``pr#x`` is the whole group."""
+    list_findings = _move_under_concurrency(
+        monkeypatch,
+        str_source="concurrency:\n  group: pr#x\n",
+        str_target="concurrency:\n  group: pr#x\n",
+    )
+
+    assert len(list_findings) == 1
+
+
+def test_workflow_job_moved_under_groups_differing_after_a_hash_in_a_word_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The text after an in-word ``#`` is part of the group, so these two differ."""
+    list_findings = _move_under_concurrency(
+        monkeypatch,
+        str_source="concurrency:\n  group: pr#x\n",
+        str_target="concurrency:\n  group: pr#y\n",
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_under_a_group_named_in_a_trailing_comment_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``group:`` inside a trailing comment is not the group, so equal real groups collide."""
+    str_comment = "concurrency:\n  cancel-in-progress: true  # old group: zzz\n  group: ci\n"
+
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source=str_comment, str_target="concurrency:\n  group: ci\n"
+    )
+
+    assert len(list_findings) == 1
