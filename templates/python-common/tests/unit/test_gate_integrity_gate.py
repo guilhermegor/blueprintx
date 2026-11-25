@@ -2067,10 +2067,17 @@ def test_workflow_with_a_shared_alias_chain_is_read_without_blowing_up() -> None
     assert len(list(gate.iter_strings(gate.read_workflow(str_text)[0]))) == 7
 
 
-def test_workflow_base_nested_past_the_recursion_limit_reports_instead_of_crashing() -> None:
-    """A deeply nested base is a finding, not a ``RecursionError`` out of the gate."""
-    str_old = "jobs: " + "[" * 3000 + "]" * 3000 + "\n"
+def _raise_recursion(*_tuple_args: object, **_dict_kwargs: object) -> None:
+    """Stand in for ``yaml.compose`` on a document nested past the recursion limit."""
+    raise RecursionError
 
-    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
+
+def test_workflow_base_that_exhausts_the_recursion_limit_reports_instead_of_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A base the composer cannot walk is a finding, not a ``RecursionError`` out of the gate."""
+    monkeypatch.setattr(gate.yaml, "compose", _raise_recursion)
+
+    assert gate.base_unreadable_problems("jobs:\n", str_shown="w") == [
         "w: base workflow nests too deeply for the gate, so its jobs are unchecked"
     ]
