@@ -264,9 +264,9 @@ def _apply_statement(
     """
     list_removed = _removed_names(cls_node)
     if list_removed is not None:
-        if is_nested:
+        if is_nested or list_names is None:
             return list_names
-        return _without_first(list_names or [], list_removed=list_removed)
+        return _without_first(list_names, list_removed=list_removed)
     list_found = _declared_names(cls_node)
     if list_found is None:
         return list_names
@@ -308,7 +308,10 @@ def _has_foreign_star(cls_value: ast.expr | None) -> bool:
     """
     if not isinstance(cls_value, ast.List | ast.Tuple):
         return False
-    return any(isinstance(cls_elt, ast.Starred) for cls_elt in cls_value.elts)
+    return any(
+        isinstance(cls_elt, ast.Starred) and not _is_literal(cls_elt.value)
+        for cls_elt in cls_value.elts
+    )
 
 
 def _sum_leaves(cls_value: ast.expr) -> list[ast.expr]:
@@ -346,9 +349,27 @@ def _is_literal(cls_value: ast.expr | None) -> bool:
     if cls_value is None:
         return False
     return all(
-        isinstance(cls_leaf, ast.List | ast.Tuple) and all(map(_is_string, cls_leaf.elts))
+        isinstance(cls_leaf, ast.List | ast.Tuple) and all(map(_is_literal_element, cls_leaf.elts))
         for cls_leaf in _sum_leaves(cls_value)
     )
+
+
+def _is_literal_element(cls_elt: ast.expr) -> bool:
+    """Return whether a list element is a string or a ``*`` of a literal the gate can read.
+
+    Parameters
+    ----------
+    cls_elt : ast.expr
+        One element of a list or tuple literal.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``'a'`` and ``*('a', 'b')``, the shapes ``_literal_strings`` expands.
+    """
+    if isinstance(cls_elt, ast.Starred):
+        return _is_literal(cls_elt.value)
+    return _is_string(cls_elt)
 
 
 def _is_string(cls_value: ast.expr | None) -> TypeGuard[ast.Constant]:

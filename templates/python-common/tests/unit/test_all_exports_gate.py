@@ -1492,7 +1492,7 @@ def test_a_subtracting_augmented_assignment_does_not_add_names(tmp_path: Path) -
 def test_main_reports_the_parse_error_finding(
     tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """``main`` names the unparseable ``__init__.py``; an empty ``src/`` also exits 1 silently."""
+    """``main`` names the unparseable ``__init__.py`` on stderr."""
     gate = _load_gate()
     path_init = tmp_path / "src" / "pkg" / "__init__.py"
     path_init.parent.mkdir(parents=True)
@@ -1519,7 +1519,31 @@ def test_insert_adds_the_inserted_name(tmp_path: Path) -> None:
     path_init = _package(
         tmp_path, str_init="__all__ = ['a']\n__all__.insert(0, 'b')\n", str_member=""
     )
-    assert _load_gate().declared_all(path_init) == ["a", "b"]
+    assert sorted(_load_gate().declared_all(path_init) or []) == ["a", "b"]
+
+
+@pytest.mark.parametrize(
+    "str_later, list_expected",
+    [
+        ("__all__ = [*('x',), 'y']\n", ["x", "y"]),
+        ("__all__ = ['y', *('x',)]\n", ["y", "x"]),
+    ],
+)
+def test_a_later_literal_with_a_starred_literal_replaces_the_names(
+    tmp_path: Path, *, str_later: str, list_expected: list[str]
+) -> None:
+    """``[*('x',), 'y']`` is a literal, so it replaces ``['old']`` instead of adding to it."""
+    path_init = _package(tmp_path, str_init=f"__all__ = ['old']\n{str_later}", str_member="")
+    assert _load_gate().declared_all(path_init) == list_expected
+
+
+@pytest.mark.parametrize("str_removal", ["__all__.remove('x')\n", "__all__ -= ['x']\n"])
+def test_a_removal_without_a_declaration_keeps_no_all(tmp_path: Path, *, str_removal: str) -> None:
+    """``from ._impl import __all__`` then a removal must stay "no ``__all__``", not ``[]``."""
+    path_init = _package(
+        tmp_path, str_init=f"from ._impl import __all__\n{str_removal}", str_member=""
+    )
+    assert _load_gate().declared_all(path_init) is None
 
 
 @pytest.mark.parametrize(
