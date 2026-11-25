@@ -31,12 +31,13 @@ deliberate rename) through ``report()``.
 """
 
 import importlib.util
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 from types import ModuleType
 
 import pytest
+
 
 _BIN = Path(__file__).resolve().parents[2] / "bin"
 

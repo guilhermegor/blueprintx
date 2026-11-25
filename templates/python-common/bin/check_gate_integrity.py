@@ -127,6 +127,7 @@ CI must check out with ``fetch-depth: 0`` — a shallow clone has no common ance
 """
 
 import ast
+from collections.abc import Iterator
 import configparser
 import difflib
 import functools
@@ -136,14 +137,15 @@ import pathlib
 import re
 import subprocess
 import sys
-from collections.abc import Iterator
 
 import yaml
+
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from gate_env import is_ci, no_terminal_note  # noqa: E402
 from gate_rename import deleted_message, rename_pairs  # noqa: E402
+
 
 PATH_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
