@@ -97,17 +97,27 @@ def test_draft_bot_and_ghost_prs_are_handled(monkeypatch: pytest.MonkeyPatch) ->
     assert _MOD._open_pr_files("o/r", branch="main", str_token="") == ({3: {"a.py"}}, set())
 
 
-def test_capped_pr_file_list_is_updated_despite_no_overlap(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A PR whose file list hit GitHub's 3000 cap may overlap via an omitted file."""
+def _capped_listing(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[int, set[str]], set[int]]:
+    """List two open PRs where PR 1 hit the (patched) file-list cap and PR 2 did not."""
     monkeypatch.setattr(_MOD, "PR_FILE_CAP", 2)
     prs = [{"number": n, "draft": False, "user": {"type": "User"}} for n in (1, 2)]
     files = {1: [{"filename": "x.py"}, {"filename": "y.py"}], 2: [{"filename": "z.py"}]}
     monkeypatch.setattr(_MOD, "PAGE_SIZE", 100)
     monkeypatch.setattr(_MOD, "_call", _answers(prs, files[1], files[2]))
-    pr_files, capped = _MOD._open_pr_files("o/r", branch="main", str_token="")
+    return _MOD._open_pr_files("o/r", branch="main", str_token="")
+
+
+def test_pr_at_file_cap_is_reported_as_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the PR whose file list reached the cap is flagged as capped."""
+    _, capped = _capped_listing(monkeypatch)
     assert capped == {1}
+
+
+def test_capped_pr_file_list_is_updated_despite_no_overlap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR whose file list hit GitHub's 3000 cap may overlap via an omitted file."""
+    pr_files, capped = _capped_listing(monkeypatch)
     assert _MOD._targets({"a.py"}, pr_files=pr_files, excludes=[], capped=capped) == [1]
 
 
