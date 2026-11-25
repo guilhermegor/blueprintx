@@ -1523,7 +1523,7 @@ def test_insert_adds_the_inserted_name(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "str_later, list_expected",
+    ("str_later", "list_expected"),
     [
         ("__all__ = [*('x',), 'y']\n", ["x", "y"]),
         ("__all__ = ['y', *('x',)]\n", ["y", "x"]),
