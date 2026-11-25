@@ -1069,6 +1069,10 @@ def base_unreadable_problems(str_old: str, *, str_shown: str) -> list:
         cls_root = yaml.compose(str_old, Loader=yaml.SafeLoader)
     except yaml.YAMLError:
         return []
+    except RecursionError:
+        return [
+            f"{str_shown}: base workflow nests too deeply for the gate, so its jobs are unchecked"
+        ]
     if not isinstance(cls_root, yaml.MappingNode):
         return []
     return [

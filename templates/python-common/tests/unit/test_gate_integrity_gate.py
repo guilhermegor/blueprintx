@@ -2065,3 +2065,12 @@ def test_workflow_with_a_shared_alias_chain_is_read_without_blowing_up() -> None
     str_text = "a: &a [x, x]\nb: &b [*a, *a]\nc: &c [*b, *b]\nd: &d [*c, *c]\ne: [*d, *d]\n"
 
     assert len(list(gate.iter_strings(gate.read_workflow(str_text)[0]))) == 7
+
+
+def test_workflow_base_nested_past_the_recursion_limit_reports_instead_of_crashing() -> None:
+    """A deeply nested base is a finding, not a ``RecursionError`` out of the gate."""
+    str_old = "jobs: " + "[" * 3000 + "]" * 3000 + "\n"
+
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
+        "w: base workflow nests too deeply for the gate, so its jobs are unchecked"
+    ]
