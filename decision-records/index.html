@@ -5070,12 +5070,15 @@ This section records what is specific to the generated copies.</p>
 </ul>
 <h3 id="other-generated-workflows">Other generated workflows<a class="headerlink" href="#other-generated-workflows" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>pr-gate.yml</code>.</strong> It triggers on <code>pull_request</code> only, never <code>workflow_run</code>, which fires
-  only from the default branch's copy and so cannot run on the PR that introduces the gate.
-  The gate polls the checks in-run instead. <code>labeled</code> and <code>unlabeled</code> are included so
-  <code>do-not-merge</code> takes effect at once. A pull_request-driven gate never re-evaluates an
-  already-open PR after a policy change; run the <code>workflow_dispatch</code> with <code>backfill: true</code>
-  (or <code>@dependabot rebase</code>) to re-decide every open PR. A new push cancels the previous
+<li><strong><code>pr-gate.yml</code>.</strong> The gate job triggers on <code>pull_request</code> only, never <code>workflow_run</code>,
+  which fires only from the default branch's copy and so cannot run on the PR that
+  introduces the gate. The gate polls the checks in-run instead. A separate <code>retrigger</code> job
+  does run on <code>workflow_run</code> (Run Tests completed): it re-runs only a failed first attempt
+  of the gate for the head commit, so a slow suite cannot strand the required check red.
+  <code>labeled</code> and <code>unlabeled</code> are included so <code>do-not-merge</code> takes effect at once. A
+  pull_request-driven gate never re-evaluates an already-open PR after a policy change; run
+  the <code>workflow_dispatch</code> with <code>backfill: true</code> (or <code>@dependabot rebase</code>) to re-decide every
+  open PR. A new push cancels the previous
   polling run so two gates do not race on one sticky comment. Event data reaches the script
   through <code>env:</code> only.</li>
 <li><strong><code>release.yml</code>.</strong> A service is deployed, not published, so there is no PyPI step. The
