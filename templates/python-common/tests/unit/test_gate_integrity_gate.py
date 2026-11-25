@@ -2081,3 +2081,12 @@ def test_workflow_base_that_exhausts_the_recursion_limit_reports_instead_of_cras
     assert gate.base_unreadable_problems("jobs:\n", str_shown="w") == [
         "w: base workflow nests too deeply for the gate, so its jobs are unchecked"
     ]
+
+
+def test_workflow_new_side_merge_key_under_jobs_says_the_gate_refuses_it() -> None:
+    """Valid YAML the gate refuses is named as such, not reported as a parse failure."""
+    str_new = "x: &a\n  gate:\n    runs-on: u\njobs:\n  <<: *a\n"
+
+    assert gate.workflow_problems("jobs:\n  keep:\n", str_new=str_new, str_shown="w") == [
+        "w: workflow YAML is YAML the gate refuses to read, so its jobs cannot be compared"
+    ]

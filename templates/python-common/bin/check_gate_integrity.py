@@ -1112,7 +1112,12 @@ def workflow_problems(
     """
     tuple_new = read_workflow(str_new)
     if tuple_new is None:
-        return [f"{str_shown}: workflow YAML does not parse, so its jobs cannot be compared"]
+        str_why = (
+            "is YAML the gate refuses to read"
+            if base_unreadable_problems(str_new, str_shown=str_shown)
+            else "does not parse"
+        )
+        return [f"{str_shown}: workflow YAML {str_why}, so its jobs cannot be compared"]
     tuple_old = read_workflow(str_old)
     if tuple_old is None:
         return base_unreadable_problems(str_old, str_shown=str_shown)
