@@ -253,6 +253,22 @@ def test_no_head_is_read_when_nobody_is_to_be_asked(monkeypatch: pytest.MonkeyPa
     assert mock_call.call_count == 1
 
 
+def test_a_failed_head_read_still_attempts_the_update(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The review's head read failing never suppresses the branch update."""
+    monkeypatch.setattr(cls_module, "_pull", mock.Mock(side_effect=ConnectionResetError("x")))
+    mock_call = mock.Mock(return_value=None)
+    monkeypatch.setattr(cls_module, "_call", mock_call)
+    cls_module._update_one("o/r", int_num=1, str_token="", bool_track_head=True)
+    assert mock_call.call_count == 1
+
+
+def test_a_failed_head_read_yields_no_review_head(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a valid old head the update reports the empty head, so no review is queued."""
+    monkeypatch.setattr(cls_module, "_pull", mock.Mock(side_effect=ConnectionResetError("x")))
+    monkeypatch.setattr(cls_module, "_call", mock.Mock(return_value=None))
+    assert cls_module._update_one("o/r", int_num=1, str_token="", bool_track_head=True) == ""
+
+
 def _record_update(list_events: list[str], *args: object, int_num: int, **kwargs: object) -> str:
     """Record the update and report an old head."""
     list_events.append(f"u{int_num}")
@@ -267,6 +283,7 @@ def test_a_slow_review_never_delays_the_remaining_updates(
     monkeypatch.setenv("RERUN_TOKEN", "x")
     monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
     monkeypatch.setenv("AFTER_SHA", "b")
+    monkeypatch.delenv("RERUN_EXCLUDE_FILES", raising=False)
     monkeypatch.setattr(cls_module, "_roster_commands", lambda: ["x"])
     monkeypatch.setattr(cls_module, "_merge_files", lambda *a, **k: {"a.py"})
     monkeypatch.setattr(

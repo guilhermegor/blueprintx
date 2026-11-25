@@ -370,12 +370,13 @@ def _update_one(
     run with nobody to ask makes no extra call. The empty string stands for "updated, head
     not read".
     """
+    str_old = ""
+    if bool_track_head:
+        try:
+            str_old = _pull(str_repo, int_num=int_num, str_token=str_token)["head"]["sha"]
+        except (OSError, ValueError, KeyError, TypeError) as exc_err:
+            print(f"::warning::PR #{int_num}: head not read, no review requested: {exc_err}")
     try:
-        str_old = (
-            _pull(str_repo, int_num=int_num, str_token=str_token)["head"]["sha"]
-            if bool_track_head
-            else ""
-        )
         _call(
             "PUT", str_path=f"repos/{str_repo}/pulls/{int_num}/update-branch", str_token=str_token
         )
@@ -462,6 +463,8 @@ def main() -> int:
         if str_old is not None:
             dict_updated[int_num] = str_old
     for int_num, str_old in dict_updated.items() if list_commands else ():
+        if not str_old:
+            continue
         _review_one(
             str_repo,
             int_num=int_num,
