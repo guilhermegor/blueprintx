@@ -625,11 +625,6 @@ def _canon_node(cls_node: ast.expr) -> ast.expr:
         evaluates, ``not not c`` reduced to ``c``, and the operands of ``and``/``or`` sorted, so
         ``a and b`` equals ``b and a``.
     """
-    if isinstance(cls_node, ast.Constant) and isinstance(cls_node.value, str):
-        try:
-            return _canon_node(ast.parse(cls_node.value, mode="eval").body)
-        except (SyntaxError, ValueError):
-            return cls_node
     if isinstance(cls_node, ast.UnaryOp) and isinstance(cls_node.op, ast.Not):
         cls_inner = cls_node.operand
         is_double = isinstance(cls_inner, ast.UnaryOp) and isinstance(cls_inner.op, ast.Not)
@@ -661,6 +656,27 @@ def _canon(cls_node: ast.expr) -> str:
         The canonical source.
     """
     return ast.unparse(_canon_node(cls_node))
+
+
+def _marker_canon(cls_node: ast.expr) -> str:
+    """Return ``_canon`` of a marker condition, parsing a top-level string as pytest evaluates it.
+
+    Parameters
+    ----------
+    cls_node : ast.expr
+        An argument of ``skipif``/``xfail``.
+
+    Returns
+    -------
+    str
+        The canonical source; a string is only an expression here, a truthy constant in a guard.
+    """
+    if isinstance(cls_node, ast.Constant) and isinstance(cls_node.value, str):
+        try:
+            return _canon(ast.parse(cls_node.value, mode="eval").body)
+        except (SyntaxError, ValueError):
+            pass
+    return _canon(cls_node)
 
 
 def _join_conditions(list_text: list[str], *, cls_op: ast.boolop) -> str:
@@ -875,7 +891,7 @@ def _marker_label(dec: ast.expr, *, str_name: str) -> str:
     if not isinstance(dec, ast.Call):
         return "xfail:;lax" if str_name == "xfail" else str_name
     list_cond = [*dec.args, *(kw.value for kw in dec.keywords if kw.arg == "condition")]
-    str_cond = _join_conditions([_canon(cond) for cond in list_cond], cls_op=ast.Or())
+    str_cond = _join_conditions([_marker_canon(cond) for cond in list_cond], cls_op=ast.Or())
     if str_name == "skipif":
         return f"skipif:{str_cond}"
     is_strict = any(kw.arg == "strict" and ast.unparse(kw.value) == "True" for kw in dec.keywords)

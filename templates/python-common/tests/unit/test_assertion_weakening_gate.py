@@ -1296,6 +1296,13 @@ def test_a_negated_guard_compares_equal_whatever_the_operand_order() -> None:
     assert _findings(str_old, str_new=str_new) == []
 
 
+def test_a_string_if_test_is_not_read_as_the_expression_it_spells() -> None:
+    """Review of #1328: ``if "x"`` is always true, so it is not the guard ``if x``."""
+    str_old = "def test_a():\n    if x:\n        pytest.skip()\n" + _BODY
+    str_new = "def test_a():\n    if 'x':\n        pytest.skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
 def test_a_class_marker_is_a_new_marker() -> None:
     """Item of #1316: a skip decorator on the class newly skips its methods."""
     str_old = "class TestA:\n    def test_a(self):\n    " + _BODY
