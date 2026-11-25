@@ -30,7 +30,7 @@ mint_is_gated() { grep -A2 'id: app$' "$1" | grep -qF "if: env.REVIEW_APP_CONFIG
 mint_is_sha_pinned() { grep -qE 'uses: actions/create-github-app-token@[0-9a-f]{40} # v' "$1"; }
 mint_scopes_are_minimal() {
 	grep -q 'permission-checks: write' "$1" && grep -q 'permission-pull-requests: read' "$1" &&
-		grep -q 'permission-contents: read' "$1" && ! grep -qE 'permission-(contents|pull-requests): write' "$1"
+		grep -q 'permission-contents: read' "$1" && ! grep -E 'permission-[a-z-]+: write' "$1" | grep -qv 'permission-checks: write'
 }
 skip_notice_logged() { grep -q '::notice::REVIEW_APP_CLIENT_ID' "$1"; }
 gate_keeps_github_token() {
@@ -38,6 +38,12 @@ gate_keeps_github_token() {
 }
 publish_is_gated() {
 	grep -A1 'name: Publish the check run' "$1" | grep -qF "env.REVIEW_APP_CONFIGURED == 'true'"
+}
+publish_needs_mint() {
+	grep -A1 'name: Publish the check run' "$1" | grep -qF "steps.app.outcome == 'success'"
+}
+publish_uses_resolved_head() {
+	grep -qF 'STR_HEAD: ${{ steps.head.outputs.sha }}' "$1" && [ "$(grep -c 'STR_HEAD: ${{ steps.head.outputs.sha }}' "$1")" -eq 2 ]
 }
 publish_uses_app_token() { grep -qF 'GH_TOKEN: ${{ steps.app.outputs.token }}' "$1"; }
 
@@ -48,12 +54,20 @@ check "minted token asks for checks write, pull-requests read, contents read onl
 check "one ::notice:: says the App path was skipped" each_workflow skip_notice_logged
 check "the gate step still runs on GITHUB_TOKEN" each_workflow gate_keeps_github_token
 check "check publishing runs only when the App is configured" each_workflow publish_is_gated
+check "check publishing is skipped when minting failed" each_workflow publish_needs_mint
+check "stale-run clearing and publishing share the head resolved before the gate" \
+	each_workflow publish_uses_resolved_head
 check "check publishing uses the App token" each_workflow publish_uses_app_token
 
 dry() { env -u REVIEW_APP_INTEGRATION_ID "$@" bash "$RULES" dry_run; }
-unpinned_by_default() { ! dry | grep -q integration_id; }
+unpinned_by_default() { dry | grep -qF '"context":"Review threads answered"}' && ! dry | grep -q integration_id; }
 pinned_when_set() { dry REVIEW_APP_INTEGRATION_ID=12345 | grep -q '"context":"Review threads answered","integration_id":12345'; }
-rejects_non_numeric() { ! REVIEW_APP_INTEGRATION_ID='1;x' bash "$RULES" dry_run >/dev/null 2>&1; }
+rejects_non_numeric() {
+	local str_out int_rc
+	str_out="$(REVIEW_APP_INTEGRATION_ID='1;x' bash "$RULES" dry_run 2>&1)"
+	int_rc=$?
+	[ "$int_rc" -eq 2 ] && grep -qF "must be the App's numeric id" <<<"$str_out"
+}
 
 check "dry_run prints no integration_id when the flag is unset" unpinned_by_default
 check "dry_run pins the review check when the id is set" pinned_when_set

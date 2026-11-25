@@ -2612,3 +2612,23 @@ the ruleset or in classic branch protection, and when a `required_status_checks`
 checks. A strict-on setting is therefore the violation, and the required checks must still exist.
 The #302 failure mode (six tier checks red because #293 had not merged) is accepted and is caught
 on main instead of at merge time.
+
+## Review gate published by a GitHub App (blueprintx#1318)
+
+The `Review threads answered` check can optionally be published by a GitHub App instead of the
+Actions job. It is opt-in: with no `REVIEW_APP_CLIENT_ID` / `REVIEW_APP_PRIVATE_KEY` secrets the
+workflow is unchanged. `REVIEW_APP_INTEGRATION_ID` makes `enable_repo_rules.sh` pin the required
+check to that App.
+
+- **The head is resolved once**, before the gate runs, and both the stale-run clearing and the App
+  publish use that SHA, so a push landing mid-run cannot get a `success` it was never checked for.
+- **No mint, no publish.** A failed mint (rotated key, App not installed) fails the job loudly at
+  the mint step and posts nothing, rather than posting a check with an empty token.
+- **Pinning has a cost.** Once pinned, only the App's check run satisfies the rule. Runs that
+  receive no secrets (fork PRs, Dependabot PRs unless Dependabot secrets are set) never publish
+  it, so those PRs cannot merge. `enable_repo_rules.sh` warns about this when it applies a pin.
+- **Same name, two publishers.** Unpinned, the Actions job and the App both report
+  `Review threads answered` on a SHA. How GitHub resolves duplicate-name required checks across
+  apps is not verified, so treat the App path as coherent only when pinned.
+- **Python scaffolds only for now.** The TypeScript skeleton's `review-threads.yml` keeps the
+  Actions-only check until a TS repo asks for the App path.

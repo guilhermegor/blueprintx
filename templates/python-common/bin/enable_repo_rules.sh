@@ -372,6 +372,9 @@ main() {
 		print_status "error" "REVIEW_APP_INTEGRATION_ID must be the App's numeric id, got '$REVIEW_APP_INTEGRATION_ID'"
 		return 2
 	fi
+	if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && [ "${1:-}" != "dry_run" ]; then
+		print_status "warning" "'$REVIEW_CHECK_NAME' is pinned to App $REVIEW_APP_INTEGRATION_ID: PRs whose run gets no secrets (forks, Dependabot) never get that check and cannot merge; keep REVIEW_APP_CLIENT_ID / REVIEW_APP_PRIVATE_KEY set (blueprintx#1318)"
+	fi
 	if [ "${1:-}" = "dry_run" ]; then
 		build_rules_json
 		return 0

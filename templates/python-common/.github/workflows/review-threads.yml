@@ -35,6 +35,22 @@ jobs:
 
       - run: pip install --quiet pyyaml
 
+      - name: Resolve the head SHA once, before the gate runs
+        id: head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          str_head="$EVENT_HEAD_SHA"
+          if [ -z "$str_head" ]; then
+            str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          fi
+          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
+          echo "sha=$str_head" >> "$GITHUB_OUTPUT"
+
       - name: Mint the review-gate App token (only when the App is configured)
         id: app
         if: env.REVIEW_APP_CONFIGURED == 'true'
@@ -64,32 +80,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          STR_HEAD: ${{ steps.head.outputs.sha }}
         run: |
           set -euo pipefail
-          str_head="$EVENT_HEAD_SHA"
-          if [ -z "$str_head" ]; then
-            str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
-          fi
-          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
+          str_head="$STR_HEAD"
           HEAD_SHA="$str_head" bash bin/rerun_stale_gate_runs.sh
 
       - name: Publish the check run from the review-gate App
-        if: always() && env.REVIEW_APP_CONFIGURED == 'true'
+        if: always() && env.REVIEW_APP_CONFIGURED == 'true' && steps.app.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          STR_HEAD: ${{ steps.head.outputs.sha }}
           JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          str_head="$EVENT_HEAD_SHA"
-          if [ -z "$str_head" ]; then
-            str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
-          fi
-          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
+          str_head="$STR_HEAD"
           case "$JOB_STATUS" in
             success) str_conclusion=success ;;
             cancelled) str_conclusion=cancelled ;;
