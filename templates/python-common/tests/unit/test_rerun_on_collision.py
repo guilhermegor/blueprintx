@@ -226,6 +226,36 @@ def test_review_commands_asks_coderabbit_when_it_is_a_threads_reviewer() -> None
     assert cls_module.review_commands({"coderabbitai": "threads"}) == ["@coderabbitai full review"]
 
 
+def test_review_commands_matches_the_login_as_the_shipped_roster_spells_it() -> None:
+    """The roster spells coderabbitai[bot]; the gate's loader normalises it to the bare key."""
+    str_login = cls_gate.normalise_login("coderabbitai[bot]")
+    assert cls_module.review_commands({str_login: "threads"}) == ["@coderabbitai full review"]
+
+
+def test_an_unexpected_error_in_the_follow_up_never_escapes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Any exception type from the follow-up is logged, so the loop reaches the next PR."""
+    monkeypatch.setattr(cls_module, "_call", lambda *a, **k: {"head": {"sha": "old"}})
+    monkeypatch.setattr(cls_module, "_follow_up", mock.Mock(side_effect=AttributeError("x")))
+    assert cls_module._update_one("o/r", int_num=1, str_token="", list_commands=["x"]) is None
+
+
+def test_no_follow_up_runs_when_nobody_is_to_be_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty command list skips the head wait and the fingerprint reads entirely."""
+    monkeypatch.setattr(cls_module, "_call", lambda *a, **k: {"head": {"sha": "old"}})
+    mock_follow = mock.Mock()
+    monkeypatch.setattr(cls_module, "_follow_up", mock_follow)
+    cls_module._update_one("o/r", int_num=1, str_token="", list_commands=[])
+    assert mock_follow.call_count == 0
+
+
+def test_a_missing_review_gate_requests_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the gate cannot be imported the roster step reads as nobody to ask."""
+    monkeypatch.setattr(cls_module, "check_review_threads", None)
+    assert cls_module._roster_commands() == []
+
+
 def test_review_commands_skips_a_reviewer_with_no_known_command() -> None:
     """A threads reviewer this script has no request for is never asked."""
     assert cls_module.review_commands({"greptile-apps": "threads"}) == []
