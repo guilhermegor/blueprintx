@@ -85,13 +85,19 @@ build_ruleset_json() {
 EOF
 }
 
+RULESET_READ_ERR="$(mktemp)"
+trap 'rm -f "$RULESET_READ_ERR"' EXIT
+read_ruleset_lines() {
+	gh api "repos/$1/rulesets?per_page=100&includes_parents=false" --paginate --jq \
+		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>"$RULESET_READ_ERR"
+}
+
 apply_ruleset() {
 	local str_repo="$1"
 	local str_id
 	local str_all
-	if ! str_all=$(gh api "repos/$str_repo/rulesets?per_page=100&includes_parents=false" --paginate --jq \
-		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1); then
-		print_status "warning" "Could not READ rulesets from $str_repo (so none is created or updated): ${str_all:-no output from gh}"
+	if ! str_all=$(read_ruleset_lines "$str_repo"); then
+		print_status "warning" "Could not READ rulesets from $str_repo (so none is created or updated): $(cat "$RULESET_READ_ERR" 2>/dev/null)"
 		return 0
 	fi
 	str_id=$(printf '%s\n' "$str_all" | { grep -m1 ' active$' || printf '%s\n' "$str_all" | head -1; } | cut -d' ' -f1)
@@ -123,9 +129,8 @@ apply_ruleset() {
 report_blocking_checks() {
 	local str_repo="$1" str_branch="$2"
 	local str_id str_enforcement str_live str_strict str_rules
-	if ! str_id="$(gh api "repos/$str_repo/rulesets?per_page=100&includes_parents=false" --paginate --jq \
-		".[] | select(.name == \"$RULESET_NAME\") | \"\\(.id) \\(.enforcement)\"" 2>&1)"; then
-		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): ${str_id:-no output from gh}"
+	if ! str_id="$(read_ruleset_lines "$str_repo")"; then
+		print_status "warning" "Could not READ rulesets from $str_repo (so the blocking set is UNKNOWN, not empty): $(cat "$RULESET_READ_ERR" 2>/dev/null)"
 		return 2
 	fi
 	read -r str_id str_enforcement <<<"$(printf '%s\n' "$str_id" | grep -m1 ' active$' || printf '%s\n' "$str_id" | head -1)"

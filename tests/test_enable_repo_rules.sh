@@ -123,7 +123,13 @@ repos/o/r) str_json='{"default_branch":"main"}' ;;
 repos/o/r/rulesets|repos/o/r/rulesets\?*)
 	[ "${STUB_RULESETS:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }
 	[ "${STUB_RULESETS:-}" = missing ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
-	[ -n "${STUB_TWO:-}" ] && str_json="[{\"id\":41,\"name\":\"pr-quality-gate\",\"enforcement\":\"disabled\"},{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"active\"}]" || [ "${STUB_RULESETS:-}" = empty ] && str_json='[]' || str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]" ;;
+	if [ -n "${STUB_TWO:-}" ]; then
+		str_json="[{\"id\":41,\"name\":\"pr-quality-gate\",\"enforcement\":\"disabled\"},{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"active\"}]"
+	elif [ "${STUB_RULESETS:-}" = empty ]; then
+		str_json='[]'
+	else
+		str_json="[{\"id\":42,\"name\":\"pr-quality-gate\",\"enforcement\":\"$STUB_ENFORCEMENT\"}]"
+	fi ;;
 repos/o/r/rulesets/42) str_json="{\"rules\":[$str_rule]}" ;;
 repos/o/r/rules/branches/main*)
 	[ "${STUB_EFFECTIVE:-}" = forbidden ] && { echo "gh: Forbidden (HTTP 403)" >&2; exit 1; }

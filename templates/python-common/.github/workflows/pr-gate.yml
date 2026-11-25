@@ -66,19 +66,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
-          if [ -n "$PR_NUMBER" ]; then
-            str_head="$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq .head.sha)"
-            if [ "$str_head" != "$HEAD_SHA" ]; then
-              echo "PR #$PR_NUMBER head moved to $str_head; $HEAD_SHA is stale, nothing to re-run"
-              exit 0
-            fi
+          int_open="$(gh api "repos/$GH_REPO/commits/$HEAD_SHA/pulls" \
+            --jq "[.[] | select(.state == \"open\" and .head.sha == \"$HEAD_SHA\")] | length")"
+          if [ "${int_open:-0}" -eq 0 ]; then
+            echo "$HEAD_SHA is no open PR's head; nothing to re-run"
+            exit 0
           fi
           for _ in $(seq 1 18); do
             str_run="$(gh run list --workflow pr-gate.yml --event pull_request \
-              --commit "$HEAD_SHA" --limit 1 --json databaseId,status,conclusion \
-              --jq '.[0] // empty | "\(.databaseId) \(.status) \(.conclusion)"')"
+              --commit "$HEAD_SHA" --limit 1 --json databaseId,status,conclusion,attempt \
+              --jq '.[0] // empty | "\(.databaseId) \(.status) \(.conclusion) \(.attempt)"')"
             case "$str_run" in
             *" completed "*) break ;;
             "") break ;;
@@ -87,7 +85,7 @@ jobs:
           done
           str_id=""
           case "$str_run" in
-          *" completed failure" | *" completed cancelled" | *" completed timed_out") str_id="${str_run%% *}" ;;
+          *" completed failure 1" | *" completed cancelled 1" | *" completed timed_out 1") str_id="${str_run%% *}" ;;
           esac
           if [ -z "$str_id" ]; then
             case "$str_run" in
