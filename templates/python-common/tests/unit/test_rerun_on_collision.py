@@ -94,7 +94,21 @@ def test_draft_bot_and_ghost_prs_are_handled(monkeypatch: pytest.MonkeyPatch) ->
         {"number": 3, "draft": False, "user": None},
     ]
     monkeypatch.setattr(_MOD, "_call", _answers(prs, [{"filename": "a.py"}]))
-    assert _MOD._open_pr_files("o/r", branch="main", str_token="") == {3: {"a.py"}}
+    assert _MOD._open_pr_files("o/r", branch="main", str_token="") == ({3: {"a.py"}}, set())
+
+
+def test_capped_pr_file_list_is_updated_despite_no_overlap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR whose file list hit GitHub's 3000 cap may overlap via an omitted file."""
+    monkeypatch.setattr(_MOD, "PR_FILE_CAP", 2)
+    prs = [{"number": n, "draft": False, "user": {"type": "User"}} for n in (1, 2)]
+    files = {1: [{"filename": "x.py"}, {"filename": "y.py"}], 2: [{"filename": "z.py"}]}
+    monkeypatch.setattr(_MOD, "PAGE_SIZE", 100)
+    monkeypatch.setattr(_MOD, "_call", _answers(prs, files[1], files[2]))
+    pr_files, capped = _MOD._open_pr_files("o/r", branch="main", str_token="")
+    assert capped == {1}
+    assert _MOD._targets({"a.py"}, pr_files=pr_files, excludes=[], capped=capped) == [1]
 
 
 def test_main_exits_1_when_the_merge_cannot_be_read(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -41,6 +41,7 @@ DEFAULT_EXCLUDES = "poetry.lock,CHANGELOG.md"
 ZERO_SHA = "0" * 40
 PAGE_SIZE = 100
 FILE_CAP = 300
+PR_FILE_CAP = 3000
 
 
 def paths_of(files: list[dict]) -> set[str]:
@@ -124,9 +125,16 @@ def _paged(str_path: str, *, str_token: str) -> list:
         page += 1
 
 
-def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[str]]:
-    """Map each open non-draft PR to its paths, skipping PRs whose files cannot be read."""
+def _open_pr_files(
+    repo: str, *, branch: str, str_token: str
+) -> tuple[dict[int, set[str]], set[int]]:
+    """Map each open non-draft PR to its paths, plus the PRs whose file list GitHub capped.
+
+    A PR file list stops at PR_FILE_CAP files, so a capped PR may overlap through a file the
+    API omitted; the caller updates it unconditionally. Unreadable PRs are logged and skipped.
+    """
     pr_files: dict[int, set[str]] = {}
+    capped: set[int] = set()
     for pr in _paged(
         f"repos/{repo}/pulls?state=open&base={urllib.parse.quote(branch)}", str_token=str_token
     ):
@@ -134,11 +142,14 @@ def _open_pr_files(repo: str, *, branch: str, str_token: str) -> dict[int, set[s
             continue
         str_files = f"repos/{repo}/pulls/{pr['number']}/files"
         try:
-            pr_files[pr["number"]] = paths_of(_paged(str_files, str_token=str_token))
+            files = _paged(str_files, str_token=str_token)
+            pr_files[pr["number"]] = paths_of(files)
+            if len(files) >= PR_FILE_CAP:
+                capped.add(pr["number"])
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as err:
             pr_files[pr["number"]] = set()
             print(f"::warning::skip PR #{pr['number']}: cannot read files: {err}")
-    return pr_files
+    return pr_files, capped
 
 
 def _merge_files(repo: str, *, before: str, after: str, str_token: str) -> set[str] | None:
@@ -154,13 +165,19 @@ def _merge_files(repo: str, *, before: str, after: str, str_token: str) -> set[s
 
 
 def _targets(
-    merge: set[str] | None, *, pr_files: dict[int, set[str]], excludes: list[str]
+    merge: set[str] | None,
+    *,
+    pr_files: dict[int, set[str]],
+    excludes: list[str],
+    capped: set[int] = frozenset(),
 ) -> list[int]:
-    """Pick the PRs to update; a truncated merge file list updates every open PR."""
+    """Pick the PRs to update; a truncated merge or PR file list updates conservatively."""
     if merge is None:
         print(f"merge file list reached {FILE_CAP} (GitHub's cap): updating every open PR")
         return sorted(pr_files)
-    return colliding_prs(merge, pr_files=pr_files, excludes=excludes)
+    if capped:
+        print(f"PR file list reached {PR_FILE_CAP} (GitHub's cap), updating: {sorted(capped)}")
+    return sorted(set(colliding_prs(merge, pr_files=pr_files, excludes=excludes)) | capped)
 
 
 def main() -> int:
@@ -183,12 +200,12 @@ def main() -> int:
 
     try:
         merge = _merge_files(repo, before=before, after=after, str_token=token)
-        pr_files = _open_pr_files(repo, branch=branch, str_token=token)
+        pr_files, capped = _open_pr_files(repo, branch=branch, str_token=token)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as err:
         print(f"cannot read merge files or open PRs: {err}", file=sys.stderr)
         return 1
 
-    for num in _targets(merge, pr_files=pr_files, excludes=excludes):
+    for num in _targets(merge, pr_files=pr_files, excludes=excludes, capped=capped):
         try:
             _call("PUT", str_path=f"repos/{repo}/pulls/{num}/update-branch", str_token=token)
             print(f"updated PR #{num}")
