@@ -1368,8 +1368,12 @@ is shaped as it is; a generated project gets the behavior, not the history.
       a finding: its jobs cannot be compared. A file that did not parse at the merge-base has
       no comparable jobs, so a change that repairs it reports nothing. A destination file that
       does not parse excuses nothing. The loader (`StringScalarLoader`) keeps every scalar as
-      the text the file spells: no bool, int, float, null, timestamp or `=` resolver, so
-      `on`/`true`, `1`/`1.0`, `~`/`null` and `2026-1-1`/`2026-01-01` compare as different
+      the text the file spells: no bool, int, float, null, timestamp or `=` resolver, and the
+      same explicit tags (`!!int`, `!!bool`, ...) construct strings, so a tagged value neither
+      crashes a constructor nor compares equal to another spelling. A constructor error, a
+      recursion error, a root-level merge key (which could supply `jobs` unseen) or a
+      self-referential alias makes the file unparsed. So `on`/`true`, `1`/`1.0`, `~`/`null` and
+      `2026-1-1`/`2026-01-01` compare as different
       values, as GitHub passes them through.
       The whole job mapping must be equal except a `runs-on` that is a string naming a hosted image
       (`ubuntu-latest`, or `ubuntu-22.04`/`ubuntu-24.04` each optionally `-arm`: the labels

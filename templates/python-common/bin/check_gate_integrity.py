@@ -127,7 +127,6 @@ CI must check out with ``fetch-depth: 0`` — a shallow clone has no common ance
 """
 
 import ast
-import collections
 from collections.abc import Iterator
 import configparser
 import difflib
@@ -551,28 +550,36 @@ def job_signature(dict_job: dict) -> dict:
     return {**dict_job, "runs-on": STR_HOSTED_RUNNER.format(cls_match.group(1) or "")}
 
 
-def iter_strings(cls_value: object) -> Iterator[str]:
+def iter_strings(cls_value: object, *, set_seen: set | None = None) -> Iterator[str]:
     """Yield every string in a parsed YAML value, mapping keys included.
 
     Parameters
     ----------
     cls_value : object
         A scalar, list or mapping from ``yaml.safe_load``.
+    set_seen : set or None
+        ``id()`` of the containers already walked, so an alias that shares a container many
+        times is read once instead of once per reference.
 
     Yields
     ------
     str
         Each string leaf and each string key, depth first.
     """
+    set_seen = set() if set_seen is None else set_seen
     if isinstance(cls_value, str):
         yield cls_value
+    elif id(cls_value) in set_seen:
+        return
     elif isinstance(cls_value, dict):
+        set_seen.add(id(cls_value))
         for cls_key, cls_item in cls_value.items():
-            yield from iter_strings(cls_key)
-            yield from iter_strings(cls_item)
+            yield from iter_strings(cls_key, set_seen=set_seen)
+            yield from iter_strings(cls_item, set_seen=set_seen)
     elif isinstance(cls_value, (list, tuple, set, frozenset)):
+        set_seen.add(id(cls_value))
         for cls_item in cls_value:
-            yield from iter_strings(cls_item)
+            yield from iter_strings(cls_item, set_seen=set_seen)
 
 
 def reads_workflow_name(cls_value: object) -> bool:
@@ -605,9 +612,14 @@ class StringScalarLoader(yaml.SafeLoader):
 
     YAML 1.1 reads ``on``/``yes`` as booleans and ``1:20`` as 80, and Python then calls ``True``
     equal to ``1``, so two jobs that GitHub passes through as different strings would compare
-    equal. Dropping the bool, int and float implicit resolvers keeps every such scalar a string.
+    equal. Dropping the implicit resolvers keeps every plain scalar a string, and the explicit
+    ``!!int``/``!!bool``/``!!float``/``!!timestamp``/``!!null``/``!!value`` tags construct
+    strings too, so a tagged value cannot crash a constructor or compare equal to another.
     """
 
+
+for _str_tag in _SET_COERCED_TAGS:
+    StringScalarLoader.add_constructor(_str_tag, yaml.SafeLoader.construct_yaml_str)
 
 StringScalarLoader.yaml_implicit_resolvers = {
     str_char: [
@@ -646,6 +658,39 @@ def node_is_shared(cls_node: yaml.Node, *, set_anchored: frozenset) -> bool:
             return True
         list_stack.extend(_node_children(cls_current))
     return False
+
+
+def node_has_cycle(
+    cls_node: yaml.Node, *, set_path: frozenset = frozenset(), set_done: set | None = None
+) -> bool:
+    """Return whether a composed node contains itself through an alias.
+
+    Parameters
+    ----------
+    cls_node : yaml.Node
+        The node to walk.
+    set_path : frozenset of int
+        ``id()`` of the nodes on the path from the root to this one.
+    set_done : set or None
+        ``id()`` of the nodes already walked without finding a cycle, so a node shared by many
+        aliases is walked once.
+
+    Returns
+    -------
+    bool
+        True when a descendant is an ancestor, as in ``a: &x [*x]``.
+    """
+    set_done = set() if set_done is None else set_done
+    if id(cls_node) in set_path:
+        return True
+    if id(cls_node) in set_done:
+        return False
+    set_done.add(id(cls_node))
+    set_path |= {id(cls_node)}
+    return any(
+        node_has_cycle(cls_child, set_path=set_path, set_done=set_done)
+        for cls_child in _node_children(cls_node)
+    )
 
 
 def anchored_job_ids(cls_root: yaml.Node, *, set_anchored: frozenset) -> frozenset:
@@ -704,6 +749,12 @@ def _parse_workflow(cls_loader: StringScalarLoader) -> tuple:
     cls_root = cls_loader.compose_node(None, None)
     set_anchored = frozenset(id(cls_node) for cls_node in cls_loader.anchors.values())
     set_jobs = anchored_job_ids(cls_root, set_anchored=set_anchored)
+    if node_has_cycle(cls_root):
+        raise yaml.YAMLError("a self-referential alias cannot be compared")
+    if isinstance(cls_root, yaml.MappingNode) and any(
+        cls_key.tag == STR_MERGE_TAG for cls_key, _cls_value in cls_root.value
+    ):
+        raise yaml.YAMLError("a root-level merge key can supply jobs unseen")
     cls_loader.get_event()
     if not cls_loader.check_event(yaml.StreamEndEvent):
         raise yaml.YAMLError("expected a single document")
@@ -730,15 +781,11 @@ def read_workflow(str_text: str) -> tuple | None:
     cls_loader = StringScalarLoader(str_text)
     try:
         cls_document, set_jobs = _parse_workflow(cls_loader)
-    except yaml.YAMLError:
+    except (yaml.YAMLError, ValueError, KeyError, TypeError, RecursionError):
         return None
     finally:
         cls_loader.dispose()
     if not isinstance(cls_document, dict):
-        return None
-    try:
-        collections.deque(iter_strings(cls_document), maxlen=0)
-    except RecursionError:
         return None
     return cls_document, set_jobs
 

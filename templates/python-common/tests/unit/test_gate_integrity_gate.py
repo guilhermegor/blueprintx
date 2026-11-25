@@ -1905,7 +1905,7 @@ def test_workflow_job_moved_between_reusable_workflows_in_list_or_map_form_is_re
     """``workflow_call`` among several triggers still makes the source a reusable workflow."""
     list_findings = _move_with_headers(monkeypatch, str_source=str_on, str_target=str_on)
 
-    assert len(list_findings) == 1
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
 
 
 @pytest.mark.parametrize(
@@ -1924,7 +1924,7 @@ def test_workflow_job_moved_into_a_non_string_group_is_removed(
         monkeypatch, str_source="concurrency:\n  group: ci\n", str_target=str_target
     )
 
-    assert len(list_findings) == 1
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
 
 
 def test_workflow_read_keeps_the_on_key_and_empty_values_as_text() -> None:
@@ -1952,7 +1952,7 @@ def test_workflow_job_moved_with_a_respelled_null_date_or_value_is_removed(
         str_job_old=_STR_MOVED_JOB + f"    env:\n      X: {str_from}\n",
     )
 
-    assert len(list_findings) == 1
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
 
 
 def test_workflow_repair_of_an_unparseable_base_reports_nothing() -> None:
@@ -1987,7 +1987,7 @@ def test_workflow_job_moved_with_a_respelled_scalar_is_removed(
         str_job_old=_STR_MOVED_JOB + f"    env:\n      X: {str_from}\n",
     )
 
-    assert len(list_findings) == 1
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
 
 
 def test_workflow_with_a_second_document_does_not_parse() -> None:
@@ -2008,3 +2008,39 @@ def test_workflow_flow_style_job_with_a_boolean_looking_id_is_not_movable(
     )
 
     assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize("str_value", ["!!int x", "!!float x", "!!bool x", "!!timestamp x"])
+def test_workflow_with_a_bad_explicit_tag_is_read_as_text(str_value: str) -> None:
+    """An explicit core tag constructs text, so a bad value cannot crash a constructor."""
+    assert gate.read_workflow(f"X: {str_value}\njobs:\n")[0]["X"] == "x"
+
+
+@pytest.mark.parametrize(
+    ("str_from", "str_to"),
+    [("!!int 1", "!!float 1.0"), ("!!bool true", "!!int 1")],
+)
+def test_workflow_job_moved_with_a_retagged_scalar_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_from: str, str_to: str
+) -> None:
+    """Tags do not make ``1``, ``1.0`` and ``true`` equal: each is the text it spells."""
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB + f"    env:\n      X: {str_to}\n",
+        str_job_old=_STR_MOVED_JOB + f"    env:\n      X: {str_from}\n",
+    )
+
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
+
+
+def test_workflow_with_a_root_level_merge_key_does_not_parse() -> None:
+    """A root merge key can supply ``jobs`` unseen, so the file is unparsed, not trusted."""
+    assert gate.read_workflow("<<: {jobs: {}}\n") is None
+
+
+def test_workflow_with_a_shared_alias_chain_is_read_without_blowing_up() -> None:
+    """A node shared by many aliases is walked once, so the strings walk stays linear."""
+    str_text = "a: &a [x, x]\nb: &b [*a, *a]\nc: &c [*b, *b]\nd: &d [*c, *c]\ne: [*d, *d]\n"
+
+    assert len(list(gate.iter_strings(gate.read_workflow(str_text)[0]))) == 7
