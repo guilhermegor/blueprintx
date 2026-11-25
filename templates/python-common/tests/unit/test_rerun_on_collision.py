@@ -1,12 +1,31 @@
 """Should-fail witnesses for the collision selector (blueprintx#1286)."""
 
+import functools
 import importlib.util
 from pathlib import Path
+import sys
 from unittest import mock
 import urllib.error
 
 import pytest
 
+
+path_here = Path(__file__).resolve()
+path_gate = next(
+    (
+        path_candidate
+        for path_candidate in (
+            path_here.parents[2] / "bin" / "check_review_threads.py",
+            path_here.parents[3] / "common" / "bin" / "check_review_threads.py",
+        )
+        if path_candidate.is_file()
+    ),
+    path_here.parents[2] / "bin" / "check_review_threads.py",
+)
+cls_gate_spec = importlib.util.spec_from_file_location("check_review_threads", path_gate)
+cls_gate = importlib.util.module_from_spec(cls_gate_spec)
+sys.modules["check_review_threads"] = cls_gate
+cls_gate_spec.loader.exec_module(cls_gate)
 
 cls_spec = importlib.util.spec_from_file_location(
     "rerun_on_collision", Path(__file__).resolve().parents[2] / "bin" / "rerun_on_collision.py"
@@ -161,15 +180,19 @@ def test_update_failures_are_logged_and_the_run_still_exits_0(
     monkeypatch.delenv("RERUN_EXCLUDE_FILES", raising=False)
     list_prs = [{"number": int_pr, "draft": False, "user": {"type": "User"}} for int_pr in (1, 2)]
     exc_err = urllib.error.HTTPError("u", 422, "m", None, None)
+    dict_pull = {"head": {"sha": "old"}}
     list_side = [
         {"files": [{"filename": "a.py"}]},
         list_prs,
         [{"filename": "a.py"}],
         [{"filename": "a.py"}],
     ]
-    mock_call = mock.Mock(side_effect=[*list_side, exc_err, ConnectionResetError()])
+    mock_call = mock.Mock(
+        side_effect=[*list_side, dict_pull, exc_err, dict_pull, ConnectionResetError()]
+    )
     monkeypatch.setattr(cls_module, "_call", mock_call)
-    assert (cls_module.main(), mock_call.call_count) == (0, 6)
+    monkeypatch.setattr(cls_module, "_roster_commands", lambda: ["x"])
+    assert (cls_module.main(), mock_call.call_count) == (0, 8)
 
 
 def test_empty_exclude_variable_uses_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -197,3 +220,209 @@ def test_empty_base_branch_defaults_to_main(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(cls_module, "_call", mock_call)
     cls_module.main()
     assert "base=main" in mock_call.call_args_list[1].kwargs["str_path"]
+
+
+def test_review_commands_asks_coderabbit_when_it_is_a_threads_reviewer() -> None:
+    """A roster naming coderabbitai as a threads reviewer yields its full-review request."""
+    assert cls_module.review_commands({"coderabbitai": "threads"}) == ["@coderabbitai full review"]
+
+
+def test_review_commands_matches_the_login_as_the_shipped_roster_spells_it() -> None:
+    """The roster spells coderabbitai[bot]; the gate's loader normalises it to the bare key."""
+    str_login = cls_gate.normalise_login("coderabbitai[bot]")
+    assert cls_module.review_commands({str_login: "threads"}) == ["@coderabbitai full review"]
+
+
+def test_an_unexpected_error_in_the_follow_up_never_escapes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Any exception type from the follow-up is logged, so the loop reaches the next PR."""
+    monkeypatch.setattr(cls_module, "_call", lambda *a, **k: {"head": {"sha": "old"}})
+    monkeypatch.setattr(cls_module, "_follow_up", mock.Mock(side_effect=AttributeError("x")))
+    assert (
+        cls_module._review_one("o/r", int_num=1, str_old="old", str_token="", list_commands=["x"])
+        is None
+    )
+
+
+def test_no_head_is_read_when_nobody_is_to_be_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a review to request, the update makes only the PUT and reads no head."""
+    mock_call = mock.Mock(return_value=None)
+    monkeypatch.setattr(cls_module, "_call", mock_call)
+    cls_module._update_one("o/r", int_num=1, str_token="", bool_track_head=False)
+    assert mock_call.call_count == 1
+
+
+def test_a_failed_head_read_still_attempts_the_update(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The review's head read failing never suppresses the branch update."""
+    monkeypatch.setattr(cls_module, "_pull", mock.Mock(side_effect=ConnectionResetError("x")))
+    mock_call = mock.Mock(return_value=None)
+    monkeypatch.setattr(cls_module, "_call", mock_call)
+    cls_module._update_one("o/r", int_num=1, str_token="", bool_track_head=True)
+    assert mock_call.call_count == 1
+
+
+def test_a_failed_head_read_yields_no_review_head(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a valid old head the update reports the empty head, so no review is queued."""
+    monkeypatch.setattr(cls_module, "_pull", mock.Mock(side_effect=ConnectionResetError("x")))
+    monkeypatch.setattr(cls_module, "_call", mock.Mock(return_value=None))
+    assert cls_module._update_one("o/r", int_num=1, str_token="", bool_track_head=True) == ""
+
+
+def _record_update(list_events: list[str], *args: object, int_num: int, **kwargs: object) -> str:
+    """Record the update and report an old head."""
+    list_events.append(f"u{int_num}")
+    return "o"
+
+
+def test_a_slow_review_never_delays_the_remaining_updates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every PUT happens before the first review wait starts."""
+    list_events: list[str] = []
+    monkeypatch.setenv("RERUN_TOKEN", "x")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("AFTER_SHA", "b")
+    monkeypatch.delenv("RERUN_EXCLUDE_FILES", raising=False)
+    monkeypatch.setattr(cls_module, "_roster_commands", lambda: ["x"])
+    monkeypatch.setattr(cls_module, "_merge_files", lambda *a, **k: {"a.py"})
+    monkeypatch.setattr(
+        cls_module, "_open_pr_files", lambda *a, **k: ({1: {"a.py"}, 2: {"a.py"}}, set())
+    )
+    monkeypatch.setattr(cls_module, "_update_one", functools.partial(_record_update, list_events))
+    monkeypatch.setattr(
+        cls_module, "_review_one", lambda *a, int_num, **k: list_events.append(f"r{int_num}")
+    )
+    cls_module.main()
+    assert list_events == ["u1", "u2", "r1", "r2"]
+
+
+def test_a_missing_review_gate_requests_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the gate cannot be imported the roster step reads as nobody to ask."""
+    monkeypatch.setattr(cls_module, "check_review_threads", None)
+    assert cls_module._roster_commands() == []
+
+
+def test_review_commands_skips_a_reviewer_with_no_known_command() -> None:
+    """A threads reviewer this script has no request for is never asked."""
+    assert cls_module.review_commands({"greptile-apps": "threads"}) == []
+
+
+def test_review_commands_skips_a_status_only_member() -> None:
+    """A status-only member cannot review, so it is never asked even with a known command."""
+    dict_roster = {"coderabbitai": "status", "greptile-apps": "threads"}
+    assert cls_module.review_commands(dict_roster) == []
+
+
+def test_patch_unchanged_is_true_for_equal_fingerprints() -> None:
+    """Equal fingerprints at both heads mean the carried-forward review stands."""
+    assert cls_module.patch_unchanged(lambda str_oid: "same", str_old="a", str_new="b")
+
+
+def test_patch_unchanged_is_false_for_different_fingerprints() -> None:
+    """Different fingerprints mean the review no longer covers the head."""
+    dict_digests = {"a": "x", "b": "y"}
+    assert not cls_module.patch_unchanged(dict_digests.__getitem__, str_old="a", str_new="b")
+
+
+def _raise_runtime(str_oid: str) -> str:
+    """Stand in for a fingerprint that cannot be computed."""
+    raise RuntimeError(str_oid)
+
+
+def test_patch_unchanged_fails_closed_when_the_fingerprint_is_unavailable() -> None:
+    """A fingerprint that cannot be computed counts as changed, as in the review gate."""
+    assert not cls_module.patch_unchanged(_raise_runtime, str_old="a", str_new="b")
+
+
+def _follow_up_posts(monkeypatch: pytest.MonkeyPatch, *, fn_fingerprint: object) -> mock.Mock:
+    """Run one follow-up for a PR whose head moved old to new; return the POST mock."""
+    dict_pull = {"head": {"sha": "new"}, "base": {"sha": "base"}}
+    mock_post = mock.Mock(return_value={})
+    dict_routes = {"GET": lambda **kwargs: dict_pull, "POST": mock_post}
+    monkeypatch.setattr(
+        cls_module, "_call", lambda str_method, **kwargs: dict_routes[str_method](**kwargs)
+    )
+    monkeypatch.setattr(
+        cls_module.check_review_threads,
+        "fetch_patch_fingerprint",
+        lambda str_owner, *, str_repo, str_base, str_oid: fn_fingerprint(str_oid),
+    )
+    cls_module._follow_up(
+        "o/r",
+        int_num=7,
+        str_old="old",
+        str_token="",
+        list_commands=["@coderabbitai full review"],
+    )
+    return mock_post
+
+
+def test_follow_up_requests_exactly_one_review_when_the_patch_changed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Should-fail witness: a changed fingerprint posts the review request once."""
+    dict_digests = {"old": "x", "new": "y"}
+    mock_post = _follow_up_posts(monkeypatch, fn_fingerprint=dict_digests.__getitem__)
+    assert mock_post.call_count == 1
+
+
+def test_follow_up_posts_the_roster_command_as_the_comment_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The comment carries the exact command a user would type."""
+    dict_digests = {"old": "x", "new": "y"}
+    mock_post = _follow_up_posts(monkeypatch, fn_fingerprint=dict_digests.__getitem__)
+    assert mock_post.call_args.kwargs["dict_body"] == {"body": "@coderabbitai full review"}
+
+
+def test_follow_up_requests_nothing_when_the_patch_is_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Should-fail witness: an unchanged fingerprint keeps the review and posts nothing."""
+    mock_post = _follow_up_posts(monkeypatch, fn_fingerprint=lambda str_oid: "same")
+    assert mock_post.call_count == 0
+
+
+def test_follow_up_requests_a_review_when_the_fingerprint_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An uncomputable fingerprint is read as changed, so the red gate gets its request."""
+    mock_post = _follow_up_posts(monkeypatch, fn_fingerprint=_raise_runtime)
+    assert mock_post.call_count == 1
+
+
+def test_await_new_head_gives_up_when_the_head_never_moves() -> None:
+    """A PR whose head stays put after every poll yields None, so no review is requested."""
+    dict_pull = {"head": {"sha": "old"}}
+    assert (
+        cls_module._await_new_head(lambda: dict_pull, str_old="old", fn_sleep=lambda s: None)
+        is None
+    )
+
+
+def test_await_new_head_returns_the_pull_once_the_head_moves() -> None:
+    """The first poll showing a different head sha is returned."""
+    dict_pull = {"head": {"sha": "new"}}
+    assert (
+        cls_module._await_new_head(lambda: dict_pull, str_old="old", fn_sleep=lambda s: None)
+        == dict_pull
+    )
+
+
+def test_a_failed_review_request_does_not_stop_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A follow-up that raises is logged; the update stays done and the run goes on."""
+    monkeypatch.setattr(cls_module, "_call", lambda *a, **k: {"head": {"sha": "old"}})
+    monkeypatch.setattr(cls_module, "_follow_up", mock.Mock(side_effect=ValueError("boom")))
+    assert (
+        cls_module._review_one("o/r", int_num=1, str_old="old", str_token="", list_commands=["x"])
+        is None
+    )
+
+
+def test_an_unusable_roster_requests_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A roster that cannot be loaded reads as nobody to ask, never as a crash."""
+    monkeypatch.setattr(
+        cls_module.check_review_threads, "load_roster", mock.Mock(side_effect=RuntimeError("x"))
+    )
+    assert cls_module._roster_commands() == []
