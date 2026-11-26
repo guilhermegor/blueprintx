@@ -590,14 +590,14 @@ def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dic
     for cls_stmt, _ in _flat_stmts(node_fn.body):
         dict_added: dict[str, str] = {}
         _bind_names(cls_stmt, dict_names=dict_added)
-        dict_local.update(dict_added)
+        dict_local.update({k: v for k, v in dict_added.items() if k not in dict_local})
     for str_name in _sole_local_names(node_fn):
         dict_local.pop(str_name, None)
     return dict_local
 
 
 def _assigned_names(cls_node: ast.AST) -> set[str]:
-    """Return every name a node assigns, deletes or takes as a parameter, anywhere inside it.
+    """Return every name a node binds anywhere inside it, by any statement or pattern.
 
     Parameters
     ----------
@@ -611,10 +611,7 @@ def _assigned_names(cls_node: ast.AST) -> set[str]:
     """
     set_names: set[str] = set()
     for cls_sub in ast.walk(cls_node):
-        if isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Store | ast.Del):
-            set_names.add(cls_sub.id)
-        elif isinstance(cls_sub, ast.arg):
-            set_names.add(cls_sub.arg)
+        set_names.update(_binding_names(cls_sub))
     return set_names
 
 
@@ -640,8 +637,9 @@ def _binding_names(cls_sub: ast.AST) -> list[str]:
         return [a.asname or a.name.split(".")[0] for a in cls_sub.names]
     if isinstance(cls_sub, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
         return [cls_sub.name]
-    if isinstance(cls_sub, ast.ExceptHandler | ast.MatchAs | ast.MatchStar):
-        return [cls_sub.name] if cls_sub.name else []
+    if isinstance(cls_sub, ast.ExceptHandler | ast.MatchAs | ast.MatchStar | ast.MatchMapping):
+        str_bound = getattr(cls_sub, "name", None) or getattr(cls_sub, "rest", None)
+        return [str_bound] if str_bound else []
     return []
 
 

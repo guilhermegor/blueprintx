@@ -1933,3 +1933,19 @@ def test_a_marker_receiver_is_accepted_as_on_main_except_the_listed_shape(str_ca
     dict_names = gate._pytest_names(ast.parse(str_source))
     cls_expr = ast.parse(str_receiver, mode="eval").body
     assert gate._is_pytest_mark(cls_expr, dict_names=dict_names) is not is_listed
+
+
+def test_a_later_local_import_of_another_name_does_not_erase_an_earlier_skip() -> None:
+    """Review of #1340: a later ``import mark as skip`` leaves the earlier ``skip()`` pytest's."""
+    str_old = "def test_a():\n" + _BODY
+    str_head = "def test_a():\n    from pytest import skip\n    skip()\n"
+    str_new = str_head + "    from pytest import mark as skip\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_match_capture_bound_to_pytest_mark_keeps_the_receiver_check() -> None:
+    """Review of #1340: ``case m:`` on ``pytest.mark`` binds ``m``, so ``m.skip`` is a mark."""
+    str_old = "def test_a():\n" + _BODY
+    str_head = "import pytest\n\nmatch pytest.mark:\n    case m:\n        pass\n\n"
+    str_new = str_head + "def test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
