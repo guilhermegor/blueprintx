@@ -2679,8 +2679,9 @@ check to that App.
   Dependabot PR's `pull_request` run gets no secrets, so it publishes nothing until someone
   comments on it: the `issue_comment` run executes in the base repo with secrets and publishes the
   App check. `enable_repo_rules.sh` warns about this when it applies a pin.
-- **The App token lives in its own job.** The gate job checks out and runs PR code and holds no
-  App secret. A second job, `publish-app-check`, needs the gate job, receives only the head SHA and
+- **The App token lives in its own job.** The gate job checks out and runs PR code and does not
+  even reference the App secrets (a job's secret context reaches its runner), so the "not
+  configured" notice lives in the publisher. A second job, `publish-app-check`, needs the gate job, receives only the head SHA and
   the gate outcome through job outputs, does no checkout and runs no repo code, so nothing that
   tampers with `$GITHUB_PATH` or `$GITHUB_ENV` in the gate job can reach the token. This isolates
   the token, not the verdict: same-repo PR code in the gate step can still make the gate succeed,
@@ -2691,7 +2692,7 @@ check to that App.
   outcome, not the job's. The token asks for `checks: write` only.
 - **Only the publisher is serialized.** The required gate job has no `concurrency:` group, so
   nothing can cancel it or leave its check `cancelled`, and `rerun_stale_gate_runs.sh` re-runs
-  join no queue. `publish-app-check` has one group per PR with `cancel-in-progress: false`: one
+  join no queue. `publish-app-check` has one group per PR and head SHA with `cancel-in-progress: false`: one
   publish runs at a time, and a waiting publish superseded by a newer one is cancelled, which is
   harmless because it is not a required check. This puts publishes from both event families in
   one order. The order is still the order in which gate jobs finish, so a gate job that read older

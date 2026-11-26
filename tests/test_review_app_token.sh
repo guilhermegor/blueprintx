@@ -51,10 +51,10 @@ stale_step_defines_pr_number() {
 runs_are_serialized_per_pr() {
 	! grep -q '^concurrency:' "$1" &&
 		awk '/^  publish-app-check:/{f=1} f' "$1" | grep -A2 '^    concurrency:' |
-		grep -qF 'group: review-app-check-${{ github.event.pull_request.number || github.event.issue.number }}' &&
+		grep -qF 'group: review-app-check-${{ github.event.pull_request.number || github.event.issue.number }}-${{ needs.review-threads.outputs.head_sha }}' &&
 		awk '/^  publish-app-check:/{f=1} f' "$1" | grep -A3 '^    concurrency:' | grep -qF 'cancel-in-progress: false'
 }
-gate_job_holds_no_app_token() { ! awk '/^  publish-app-check:/{f=1} !f' "$1" | grep -qF 'create-github-app-token'; }
+gate_job_holds_no_app_token() { ! awk '/^  publish-app-check:/{f=1} !f' "$1" | grep -qE 'create-github-app-token|REVIEW_APP_'; }
 only_a_passing_gate_publishes_success() {
 	grep -qF 'if [ "$GATE_OUTCOME" = success ] && [ "$HEAD_STABLE" = true ]; then str_conclusion=success; fi' "$1" &&
 		! grep -qF 'cancelled) str_conclusion' "$1"
@@ -85,7 +85,7 @@ check "stale-run clearing and publishing share the head resolved before the gate
 	each_workflow publish_uses_resolved_head
 check "the stale-run step defines the PR number its error message prints" \
 	each_workflow stale_step_defines_pr_number
-check "only the publisher is serialized per PR, the required gate job is never cancelled" each_workflow runs_are_serialized_per_pr
+check "only the publisher is serialized, per PR and head SHA; the required gate job is never cancelled" each_workflow runs_are_serialized_per_pr
 check "the job that runs PR code holds no App token" each_workflow gate_job_holds_no_app_token
 check "the head SHA is resolved before the protected-file guard" each_workflow head_resolved_before_the_guard
 check "success needs the head to be unchanged since the gate started" each_workflow publish_checks_the_head_did_not_move
