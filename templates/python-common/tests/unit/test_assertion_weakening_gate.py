@@ -1876,7 +1876,7 @@ def _main_names(cls_tree: ast.Module) -> dict[str, str]:
 
     Returns
     -------
-    dict of str to str
+    dict[str, str]
         Every statement nested in ``try``/``if``/``with`` was ignored, and so was every name
         a function bound.
     """
@@ -1890,9 +1890,9 @@ def _kept(dict_main: dict[str, str], *, dict_branch: dict[str, str]) -> bool:
 
     Parameters
     ----------
-    dict_main : dict of str to str
+    dict_main : dict[str, str]
         What main recognised.
-    dict_branch : dict of str to str
+    dict_branch : dict[str, str]
         What this branch recognises.
 
     Returns
