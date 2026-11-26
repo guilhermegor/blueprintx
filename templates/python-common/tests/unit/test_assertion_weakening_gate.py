@@ -1769,3 +1769,11 @@ def test_a_pytest_mark_bound_to_a_name_keeps_the_receiver_agnostic_check() -> No
         "m = pytest.mark\n\ndef test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
     )
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_rebound_inside_a_loop_is_still_reported() -> None:
+    """Review of #1340: in a loop the rebind of one pass precedes the call of the next."""
+    str_old = "def test_a():\n" + _BODY
+    str_loop = "    for _ in range(2):\n        skip = helper\n        skip()\n"
+    str_new = "def test_a():\n    from pytest import skip\n" + str_loop + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)

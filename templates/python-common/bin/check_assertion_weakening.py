@@ -591,6 +591,52 @@ def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dic
     return dict_after
 
 
+def _first_call_lines(node_fn: ast.FunctionDef) -> dict[str, int]:
+    """Return the line of the first call each name takes part in, in a test function.
+
+    Parameters
+    ----------
+    node_fn : ast.FunctionDef
+        The test function.
+
+    Returns
+    -------
+    dict of str to int
+        ``{name: line}`` for every name inside a call's callee, ``pytest`` of ``pytest.skip()``
+        included.
+    """
+    dict_first_call: dict[str, int] = {}
+    for cls_node in ast.walk(node_fn):
+        if isinstance(cls_node, ast.Call):
+            for cls_name in ast.walk(cls_node.func):
+                if isinstance(cls_name, ast.Name):
+                    dict_first_call[cls_name.id] = min(
+                        dict_first_call.get(cls_name.id, cls_node.lineno), cls_node.lineno
+                    )
+    return dict_first_call
+
+
+def _loop_node_ids(node_fn: ast.FunctionDef) -> set[int]:
+    """Return the ``id`` of every node under a ``for``, ``while`` or ``async for`` body.
+
+    Parameters
+    ----------
+    node_fn : ast.FunctionDef
+        The test function.
+
+    Returns
+    -------
+    set of int
+        Node identities, so a statement's membership says whether a loop repeats it.
+    """
+    return {
+        id(cls_inner)
+        for cls_loop in ast.walk(node_fn)
+        if isinstance(cls_loop, ast.For | ast.While | ast.AsyncFor)
+        for cls_inner in ast.walk(cls_loop)
+    }
+
+
 def _used_before_rebind(
     node_fn: ast.FunctionDef, *, dict_start: dict[str, str], dict_after: dict[str, str]
 ) -> dict[str, str]:
@@ -608,24 +654,21 @@ def _used_before_rebind(
     Returns
     -------
     dict of str to str
-        The starting binding of each name that is called before the first statement removing
-        it, so ``skip(); skip = helper`` still reports the call, as the module-level table did.
+        The starting binding of each name that is called before a statement removing it, or
+        removed inside a loop body, so ``skip(); skip = helper`` and a rebind that a later
+        iteration runs before the call still report it, as the module-level table did.
     """
-    dict_first_call: dict[str, int] = {}
-    for cls_node in ast.walk(node_fn):
-        if isinstance(cls_node, ast.Call):
-            for cls_name in ast.walk(cls_node.func):
-                if isinstance(cls_name, ast.Name):
-                    dict_first_call[cls_name.id] = min(
-                        dict_first_call.get(cls_name.id, cls_node.lineno), cls_node.lineno
-                    )
+    dict_first_call = _first_call_lines(node_fn)
+    set_in_loop = _loop_node_ids(node_fn)
     dict_keep: dict[str, str] = {}
     for cls_stmt, _ in _flat_stmts(node_fn.body):
         dict_probe = dict(dict_start)
         _bind_names(cls_stmt, dict_names=dict_probe)
         for str_name, str_value in dict_start.items():
             is_used_first = dict_first_call.get(str_name, cls_stmt.lineno) < cls_stmt.lineno
-            if str_name not in dict_probe and str_name not in dict_after and is_used_first:
+            is_repeated = id(cls_stmt) in set_in_loop
+            is_removed = str_name not in dict_probe and str_name not in dict_after
+            if is_removed and (is_used_first or is_repeated):
                 dict_keep[str_name] = str_value
     return dict_keep
 
