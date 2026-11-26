@@ -450,6 +450,38 @@ def test_report_no_findings_passes() -> None:
     assert gate.report([], str_base="base", int_changed_count=3) == 0
 
 
+_SET_SCRUBBED_ENV = frozenset(
+    {
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITHUB_BASE_REF",
+        "GITHUB_EVENT_PATH",
+        "GITHUB_REPOSITORY",
+        "PR_NUMBER",
+        "GATE_CHANGE_OK",
+    }
+)
+
+
+def _hermetic_env() -> dict:
+    """Return a copy of ``os.environ`` that cannot steer git or the gate.
+
+    Returns
+    -------
+    dict
+        The environment minus CI markers, PR context, the local escape hatch and every
+        ``GIT_*`` key, with the operator's global and system git config disabled.
+    """
+    dict_env = {
+        str_key: str_val
+        for str_key, str_val in os.environ.items()
+        if str_key not in _SET_SCRUBBED_ENV and not str_key.startswith("GIT_")
+    }
+    dict_env["GIT_CONFIG_GLOBAL"] = os.devnull
+    dict_env["GIT_CONFIG_NOSYSTEM"] = "1"
+    return dict_env
+
+
 def _git_in(path_repo: Path, *args: str) -> str:
     """Run ``git`` inside a throwaway repo and return its stripped stdout.
 
@@ -470,6 +502,7 @@ def _git_in(path_repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_hermetic_env(),
         check=True,
     )
     return cls_proc.stdout.strip()
@@ -2371,11 +2404,10 @@ def _run_gate(path_repo: Path, *, dict_env: dict) -> subprocess.CompletedProcess
     subprocess.CompletedProcess
         The finished run, stdout and stderr captured.
     """
-    dict_base = {k: v for k, v in os.environ.items() if k not in {"CI", "GITHUB_ACTIONS"}}
     return subprocess.run(  # noqa: S603
         [sys.executable, str(_BIN / "check_gate_integrity.py"), "--root", "."],
         cwd=path_repo,
-        env={**dict_base, **dict_env},
+        env={**_hermetic_env(), **dict_env},
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -2390,7 +2422,9 @@ def test_first_commit_on_a_branch_that_weakens_a_gate_fails(path_first_commit: P
 
     cls_run = _run_gate(path_first_commit, dict_env={})
 
-    assert (cls_run.returncode, "rule 'S' removed" in cls_run.stdout + cls_run.stderr) == (1, True)
+    str_out = cls_run.stdout + cls_run.stderr
+
+    assert (cls_run.returncode, "rule 'S' removed" in str_out) == (1, True), str_out
 
 
 @pytest.mark.parametrize("dict_env", [{}, {"CI": "true", "GITHUB_ACTIONS": "true"}])
