@@ -1050,6 +1050,27 @@ def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tu
     )
 
 
+def consume_candidate(list_candidates: list, *, tuple_found: tuple) -> None:
+    """Remove the matched candidate from the list, by identity.
+
+    Parameters
+    ----------
+    list_candidates : list of tuple
+        The candidates ``find_move`` chose from; mutated in place.
+    tuple_found : tuple
+        The candidate it returned.
+
+    Returns
+    -------
+    None
+        ``list.remove`` compares by equality, which would walk every earlier candidate's
+        header against the match, the exponential cost ``values_equal`` exists to avoid.
+    """
+    list_candidates[:] = [
+        tuple_cand for tuple_cand in list_candidates if tuple_cand is not tuple_found
+    ]
+
+
 def id_is_referenced(str_id: str, *, dict_document: dict) -> bool:
     """Return whether a job id is still a whole word in any string of a parsed workflow.
 
@@ -1108,7 +1129,7 @@ def removal_is_move(
         tuple_concurrency=(workflow_concurrency(dict_document), workflow_concurrency(dict_new)),
     )
     if bool_movable and tuple_found:
-        list_candidates.remove(tuple_found)
+        consume_candidate(list_candidates, tuple_found=tuple_found)
     return bool_movable and bool(tuple_found)
 
 

@@ -2143,6 +2143,27 @@ def test_values_equal_compares_each_shared_node_pair_once() -> None:
     assert len(_LIST_LEAF_COMPARISONS) < 50
 
 
+def test_consume_candidate_does_not_compare_earlier_candidates() -> None:
+    """Removing the match by equality would test the earlier candidate's chain 4096 times."""
+    tuple_first = (_shared_chain(12), {"runs-on": "a"}, "")
+    tuple_match = (_shared_chain(12), {"runs-on": "b"}, "")
+    list_candidates = [tuple_first, tuple_match]
+    _LIST_LEAF_COMPARISONS.clear()
+    gate.consume_candidate(list_candidates, tuple_found=tuple_match)
+
+    assert len(_LIST_LEAF_COMPARISONS) < 50
+
+
+def test_consume_candidate_removes_only_the_match() -> None:
+    """An equal but distinct candidate stays, so one new job still covers one removal."""
+    tuple_first = ({"a": "1"}, {}, "")
+    tuple_match = ({"a": "1"}, {}, "")
+    list_candidates = [tuple_first, tuple_match]
+    gate.consume_candidate(list_candidates, tuple_found=tuple_match)
+
+    assert [id(tuple_cand) for tuple_cand in list_candidates] == [id(tuple_first)]
+
+
 def test_find_move_matches_headers_that_share_nodes() -> None:
     """The move comparison goes through ``values_equal``, so a long chain still matches."""
     tuple_candidate = ({"x-a": _shared_chain(60)}, {}, "")
