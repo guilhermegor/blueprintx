@@ -1369,7 +1369,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
       `pyyaml==6.0.3`, and generated projects run it in the project venv, where `pyyaml` is a
       direct dependency of the five service tiers and arrives with the `yamllint` dev
       dependency in `lib-minimal`. A modified workflow file that does not parse now is itself
-      a finding: its jobs cannot be compared. A newly added file is not checked for parsing: it
+      a finding: its jobs cannot be compared. So is a modified workflow whose blob is not valid UTF-8 at either ref, even when the change repairs a non-UTF-8 base: GitHub may run encodings such as UTF-16 with a BOM, so the unreadable base can hold jobs and failing closed is the safe side. A newly added file is not checked for parsing: it
       has no base blob, so a malformed one simply supplies no move candidates. A file that is not YAML at the merge-base has
       no comparable jobs, so a change that repairs it reports nothing; one that is YAML the
       gate refuses to read (a merge key, a repeated anchor, a second document) is a finding when

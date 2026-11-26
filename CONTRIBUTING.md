@@ -752,7 +752,7 @@ Configuration files in this repository carry no comments, so the reasoning lives
   `needs:` or a YAML anchor or merge key, whose meaning lives outside the compared
   mapping, or one whose id the source file still holds as a word. A modified file that does not
   parse now is itself a finding, and so is one that repeats a mapping key or holds a control
-  character; a newly added file that does not parse reports nothing of its own but can never
+  character, or is not valid UTF-8 at either ref (the blob exists at both, so its jobs cannot be read and a deletion would pass unseen, even when the change repairs a non-UTF-8 base); a newly added file that does not parse reports nothing of its own but can never
   excuse a move (a base that is not YAML at all reports nothing; a base that is valid YAML the
   gate refuses to read, such as a merge key under `jobs:`, a repeated anchor or a second document, is a finding even when the change
   repairs it; an undefined alias is not, since GitHub rejects it too). PyYAML must be importable: BlueprintX's hook installs it, CI pins it, and a
