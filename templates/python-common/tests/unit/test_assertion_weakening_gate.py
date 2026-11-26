@@ -1765,15 +1765,45 @@ def test_a_skip_called_before_a_local_rebind_is_still_reported() -> None:
 def test_a_pytest_mark_bound_to_a_name_keeps_the_receiver_agnostic_check() -> None:
     """Review of #1340: ``m = pytest.mark`` then ``applymarker(m.skip)`` is reported."""
     str_old = "def test_a():\n" + _BODY
-    str_new = (
-        "m = pytest.mark\n\ndef test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
-    )
+    str_new = "m = pytest.mark\n\ndef test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
 
 
 def test_a_skip_rebound_inside_a_loop_is_still_reported() -> None:
-    """Review of #1340: in a loop the rebind of one pass precedes the call of the next."""
+    """Review of #1340: a rebind that only some passes of a loop run leaves the call pytest's."""
     str_old = "def test_a():\n" + _BODY
-    str_loop = "    for _ in range(2):\n        skip = helper\n        skip()\n"
+    str_loop = "    for _ in range(2):\n        if c:\n            skip = helper\n        skip()\n"
     str_new = "def test_a():\n    from pytest import skip\n" + str_loop + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    "str_code",
+    [
+        "from pytest import skip\n    skip(); skip = helper\n",
+        "from pytest import skip as s\n    s()\n    s = helper\n",
+        "from pytest import skip\n    if c:\n        skip = helper\n    skip()\n",
+    ],
+    ids=["same-line", "local-alias", "conditional"],
+)
+def test_a_skip_that_a_local_rebind_may_not_reach_is_still_reported(str_code: str) -> None:
+    """Review of #1340: main reported each of these, so the scoping must not hide them."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a():\n    " + str_code + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_from_pytest_mark_alias_keeps_the_receiver_agnostic_check() -> None:
+    """Review of #1340: ``m = mark`` after ``from pytest import mark`` is an alias of the mark."""
+    str_old = "def test_a():\n" + _BODY
+    str_head = "from pytest import mark\nm = mark\n\n"
+    str_new = str_head + "def test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_try_body_without_calls_keeps_the_digest_key() -> None:
+    """Review of #1340: ``try: x = d[a]`` becoming ``d[b]`` re-reports its ``except``."""
+    str_tail = "    except KeyError:\n        pytest.skip()\n"
+    str_old = "def test_a():\n    try:\n        x = d[a]\n" + str_tail + _BODY
+    str_new = "def test_a():\n    try:\n        x = d[b]\n" + str_tail + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)

@@ -591,7 +591,7 @@ def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dic
     return dict_after
 
 
-def _first_call_lines(node_fn: ast.FunctionDef) -> dict[str, int]:
+def _first_call_lines(node_fn: ast.FunctionDef) -> dict[str, tuple[int, int]]:
     """Return the line of the first call each name takes part in, in a test function.
 
     Parameters
@@ -601,17 +601,18 @@ def _first_call_lines(node_fn: ast.FunctionDef) -> dict[str, int]:
 
     Returns
     -------
-    dict of str to int
-        ``{name: line}`` for every name inside a call's callee, ``pytest`` of ``pytest.skip()``
-        included.
+    dict of str to tuple of int
+        ``{name: (line, column)}`` for every name inside a call's callee, ``pytest`` of
+        ``pytest.skip()`` included.
     """
-    dict_first_call: dict[str, int] = {}
+    dict_first_call: dict[str, tuple[int, int]] = {}
     for cls_node in ast.walk(node_fn):
         if isinstance(cls_node, ast.Call):
             for cls_name in ast.walk(cls_node.func):
                 if isinstance(cls_name, ast.Name):
+                    tuple_at = (cls_node.lineno, cls_node.col_offset)
                     dict_first_call[cls_name.id] = min(
-                        dict_first_call.get(cls_name.id, cls_node.lineno), cls_node.lineno
+                        dict_first_call.get(cls_name.id, tuple_at), tuple_at
                     )
     return dict_first_call
 
@@ -660,13 +661,19 @@ def _used_before_rebind(
     """
     dict_first_call = _first_call_lines(node_fn)
     set_in_loop = _loop_node_ids(node_fn)
-    dict_keep: dict[str, str] = {}
+    dict_pool = dict(dict_start)
     for cls_stmt, _ in _flat_stmts(node_fn.body):
-        dict_probe = dict(dict_start)
+        dict_added: dict[str, str] = {}
+        _bind_names(cls_stmt, dict_names=dict_added)
+        dict_pool.update(dict_added)
+    dict_keep: dict[str, str] = {}
+    for cls_stmt, str_guard in _flat_stmts(node_fn.body):
+        dict_probe = dict(dict_pool)
         _bind_names(cls_stmt, dict_names=dict_probe)
-        for str_name, str_value in dict_start.items():
-            is_used_first = dict_first_call.get(str_name, cls_stmt.lineno) < cls_stmt.lineno
-            is_repeated = id(cls_stmt) in set_in_loop
+        tuple_at = (cls_stmt.lineno, cls_stmt.col_offset)
+        is_repeated = id(cls_stmt) in set_in_loop or bool(str_guard)
+        for str_name, str_value in dict_pool.items():
+            is_used_first = dict_first_call.get(str_name, tuple_at) < tuple_at
             is_removed = str_name not in dict_probe and str_name not in dict_after
             if is_removed and (is_used_first or is_repeated):
                 dict_keep[str_name] = str_value
@@ -962,8 +969,8 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     -------
     str
         ``f(), g()`` for the distinct callees, ``raise``/``assert`` when the body has one, and
-        the module, level and names of each import; ``nothing`` for a body with none.
-        Editing an argument leaves the key alone, so an
+        the module, level and names of each import; a digest of the body when it has no call or
+        import, as before the callee key. Editing an argument leaves the key alone, so an
         unchanged ``except E: pytest.skip()`` is not reported again; adding or removing a callee
         or import changes it. Known limit, accepted for that trade: a second ``try`` that calls
         the same callees and catches the same type shares the first one's label, so a skip added
@@ -983,7 +990,11 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
                 set_names.add(
                     f"from {str_from} import " + ",".join(cls_a.name for cls_a in cls_node.names)
                 )
-    return ", ".join(sorted(set_names)) or "nothing"
+    has_source = any(not cls_n.startswith(("raise", "assert")) for cls_n in set_names)
+    if has_source:
+        return ", ".join(sorted(set_names))
+    str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
+    return "body #" + hashlib.sha256(str_body.encode()).hexdigest()[:8]
 
 
 def _case_guard(cls_match: ast.Match, *, cls_case: ast.match_case) -> str:
@@ -1364,8 +1375,11 @@ def _under_pytest_mark(cls_expr: ast.expr | None, *, dict_names: dict[str, str])
     while isinstance(cls_expr, ast.Attribute):
         str_attr = cls_expr.attr
         cls_expr = cls_expr.value
-    is_pytest = isinstance(cls_expr, ast.Name) and dict_names.get(cls_expr.id) == "pytest"
-    return is_pytest and str_attr == "mark"
+    if not isinstance(cls_expr, ast.Name):
+        return False
+    str_bound = dict_names.get(cls_expr.id)
+    is_mark = str_bound == "pytest" and str_attr == "mark"
+    return is_mark or (str_bound == "mark" and not str_attr) or str_bound == "mark-alias"
 
 
 def _outcome_of(cls_func: ast.expr | None, *, dict_names: dict[str, str]) -> str | None:
