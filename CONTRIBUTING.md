@@ -754,7 +754,7 @@ Configuration files in this repository carry no comments, so the reasoning lives
   parse now is itself a finding, and so is one that repeats a mapping key or holds a control
   character; a newly added file that does not parse reports nothing of its own but can never
   excuse a move (a base that is not YAML at all reports nothing; a base that is valid YAML the
-  gate refuses to read, such as a merge key under `jobs:`, is a finding even when the change
+  gate refuses to read, such as a merge key under `jobs:`, a repeated anchor or a second document, is a finding even when the change
   repairs it). PyYAML must be importable: BlueprintX's hook installs it, CI pins it, and a
   generated project gets it from its venv (a direct dependency of the service tiers, via
   `yamllint` in `lib-minimal`); the gate fails on a missing import and never falls back to a line

@@ -163,6 +163,7 @@ STR_WORKFLOW_EXPR = "${{github.workflow}}"
 STR_FLOW_CONCURRENCY = "{flow}"
 STR_TYPED_KEY = "\x00typed"
 STR_MERGE_TAG = "tag:yaml.org,2002:merge"
+STR_REFUSED = "uses YAML the gate refuses to read"
 _SET_COERCED_TAGS = frozenset(
     f"tag:yaml.org,2002:{str_kind}"
     for str_kind in ("bool", "int", "float", "timestamp", "null", "value")
@@ -1254,6 +1255,8 @@ def base_unreadable_problems(str_old: str, *, str_shown: str) -> list:
     """
     try:
         cls_root = yaml.compose(str_old, Loader=yaml.SafeLoader)
+    except yaml.composer.ComposerError:
+        return [f"{str_shown}: base workflow {STR_REFUSED}, so its jobs are unchecked"]
     except yaml.YAMLError:
         return []
     except RecursionError:
@@ -1262,9 +1265,7 @@ def base_unreadable_problems(str_old: str, *, str_shown: str) -> list:
         ]
     if not isinstance(cls_root, yaml.MappingNode):
         return []
-    return [
-        f"{str_shown}: base workflow is YAML the gate cannot compare, so its jobs are unchecked"
-    ]
+    return [f"{str_shown}: base workflow {STR_REFUSED}, so its jobs are unchecked"]
 
 
 def workflow_problems(
@@ -1300,11 +1301,11 @@ def workflow_problems(
     tuple_new = read_workflow(str_new)
     if tuple_new is None:
         str_why = (
-            "is YAML the gate refuses to read"
+            STR_REFUSED
             if base_unreadable_problems(str_new, str_shown=str_shown)
-            else "does not parse"
+            else "YAML does not parse"
         )
-        return [f"{str_shown}: workflow YAML {str_why}, so its jobs cannot be compared"]
+        return [f"{str_shown}: workflow {str_why}, so its jobs cannot be compared"]
     tuple_old = read_workflow(str_old)
     if tuple_old is None:
         return base_unreadable_problems(str_old, str_shown=str_shown)

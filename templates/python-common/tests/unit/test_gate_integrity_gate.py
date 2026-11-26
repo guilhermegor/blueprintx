@@ -1986,7 +1986,7 @@ def test_workflow_base_with_a_merge_key_under_jobs_reports_instead_of_passing() 
     str_old = "x: &a\n  gate:\n    runs-on: u\njobs:\n  <<: *a\n"
 
     assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
-        "w: base workflow is YAML the gate cannot compare, so its jobs are unchecked"
+        "w: base workflow uses YAML the gate refuses to read, so its jobs are unchecked"
     ]
 
 
@@ -2336,7 +2336,7 @@ def test_workflow_new_side_merge_key_under_jobs_says_the_gate_refuses_it() -> No
     str_new = "x: &a\n  gate:\n    runs-on: u\njobs:\n  <<: *a\n"
 
     assert gate.workflow_problems("jobs:\n  keep:\n", str_new=str_new, str_shown="w") == [
-        "w: workflow YAML is YAML the gate refuses to read, so its jobs cannot be compared"
+        "w: workflow uses YAML the gate refuses to read, so its jobs cannot be compared"
     ]
 
 
@@ -2422,3 +2422,17 @@ def test_find_move_matches_headers_that_share_nodes() -> None:
 def test_values_equal_tells_apart_values_that_differ_only_deep_inside() -> None:
     """The pair memo must not make unequal values equal."""
     assert not gate.values_equal({"a": [{"b": "1"}]}, cls_right={"a": [{"b": "2"}]})
+
+
+@pytest.mark.parametrize(
+    "str_old",
+    [
+        "x: &a [1]\ny: &a [2]\njobs:\n  gate:\n    runs-on: u\n",
+        "jobs:\n  gate:\n    runs-on: u\n---\njobs: {}\n",
+    ],
+)
+def test_workflow_base_with_a_composer_error_reports_instead_of_passing(str_old: str) -> None:
+    """Other YAML tools accept a repeated anchor or a second document, so no free deletion."""
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
+        "w: base workflow uses YAML the gate refuses to read, so its jobs are unchecked"
+    ]
