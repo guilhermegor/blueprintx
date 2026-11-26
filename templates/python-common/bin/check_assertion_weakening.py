@@ -937,7 +937,8 @@ def _marker_condition(str_marker: str) -> str | None:
         The text after ``skipif:`` or ``<call>(if):``.
     """
     str_head, str_sep, str_tail = str_marker.partition(":")
-    is_conditional = str_head == "skipif" or str_head.endswith("(if)")
+    is_late = str_head.startswith("applymarker-")
+    is_conditional = not is_late and (str_head == "skipif" or str_head.endswith("(if)"))
     return str_tail if str_sep and is_conditional else None
 
 

@@ -1410,6 +1410,15 @@ def test_a_late_skip_marker_does_not_excuse_a_new_skip_decorator() -> None:
     assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
 
 
+def test_a_guarded_late_marker_does_not_excuse_a_skipif_decorator() -> None:
+    """Review of #1328: ``if c: request.node.add_marker(...)`` never stops the body running."""
+    str_old = (
+        "def test_a(request):\n    if c:\n        request.node.add_marker(pytest.mark.skip)\n"
+    )
+    str_new = "@pytest.mark.skipif(c, reason='r')\n" + str_old
+    assert "newly marked skipif:c" in _sole_finding(str_old + _BODY, str_new=str_new + _BODY)
+
+
 def test_a_class_marker_is_a_new_marker() -> None:
     """Item of #1316: a skip decorator on the class newly skips its methods."""
     str_old = "class TestA:\n    def test_a(self):\n    " + _BODY
