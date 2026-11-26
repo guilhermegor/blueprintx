@@ -2349,9 +2349,7 @@ def path_first_commit(tmp_path: Path) -> Path:
     _git_in(path_src, "init", "-q", "-b", "main")
     (path_src / "ruff.toml").write_text('[lint]\nselect = ["E", "F", "S"]\n', encoding="utf-8")
     _git_in(path_src, "add", ".")
-    _git_in(
-        path_src, "-c", "user.email=a@b.c", "-c", "user.name=t", "commit", "-qm", "init"
-    )
+    _git_in(path_src, "-c", "user.email=a@b.c", "-c", "user.name=t", "commit", "-qm", "init")
     path_work = tmp_path / "work"
     _git_in(tmp_path, "clone", "-q", str(path_src), str(path_work))
     _git_in(path_work, "checkout", "-q", "-b", "feat/x")
@@ -2392,13 +2390,12 @@ def test_first_commit_on_a_branch_that_weakens_a_gate_fails(path_first_commit: P
 
     cls_run = _run_gate(path_first_commit, dict_env={})
 
-    assert cls_run.returncode == 1
-    assert "rule 'S' removed" in cls_run.stdout + cls_run.stderr
+    assert (cls_run.returncode, "rule 'S' removed" in cls_run.stdout + cls_run.stderr) == (1, True)
 
 
 @pytest.mark.parametrize("dict_env", [{}, {"CI": "true", "GITHUB_ACTIONS": "true"}])
 def test_clean_checkout_of_the_default_branch_passes(
-    path_first_commit: Path, dict_env: dict
+    path_first_commit: Path, *, dict_env: dict
 ) -> None:
     """A clean checkout whose HEAD is the merge-base exits 0, locally and under CI."""
     assert _run_gate(path_first_commit, dict_env=dict_env).returncode == 0
