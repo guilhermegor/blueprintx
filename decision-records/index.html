@@ -5567,10 +5567,10 @@ weakening with <code>GATE_CHANGE_OK</code> every later commit (a test-only fix, 
 refused for the same finding and needed the owner at a terminal again (PR #1321, PR #1280).</p>
 <p><strong>Decision.</strong> A local run passes when every current finding is in the set justified by a commit
 already on the branch. A commit counts when its message carries a <code>gate-change-ok: &lt;reason&gt;</code>
-trailer, and the findings it justifies are the ones that commit's own tree produces
-(<code>findings_at</code>, the same checks with that commit read in place of the index). The owner ends
-the interactive commit's message with the trailer, and the gate prints that line on an env
-justification.</p>
+trailer, and the findings it justifies are the ones its approval record froze
+(see the #1333 entry below; #1323 first computed them by re-running the checks over that
+commit's tree). The owner ends the interactive commit's message with the trailer, and the gate
+prints that line on an env justification.</p>
 <p><strong>Why a typed trailer is not enough.</strong> The trailer text alone justifies nothing. A tree that
 produces findings normally exists only if the interactive <code>GATE_CHANGE_OK</code> run let it through, so a
 trailer on a commit with no findings of its own, or typed before the weakening lands, covers
@@ -5589,6 +5589,44 @@ a later merge of <code>main</code> does not move the base its findings are measu
 cumulative, so a weakening committed without the hook (<code>--no-verify</code>, or arriving in a merge)
 is also covered by any later trailer commit on the branch. A merge commit is never a trailer
 commit, because <code>git merge</code> runs no <code>pre-commit</code> hook, so its trailer would be untested text.</p>
+<h2 id="approvals-are-recorded-bound-to-findings-and-shown-in-ci-check_gate_integritypy-1333">Approvals are recorded, bound to findings, and shown in CI (<code>check_gate_integrity.py</code>, #1333)<a class="headerlink" href="#approvals-are-recorded-bound-to-findings-and-shown-in-ci-check_gate_integritypy-1333" title="Permanent link">&para;</a></h2>
+<p>Two gaps remained after #1323. The <code>gate-change-ok:</code> line is typed text, and the findings it
+covered were recomputed from the old commit with today's checks, so a check added later widened
+what an old approval justified (the finding deferred from #1330). And a typed line clears CI
+unseen unless a reviewer reads the commit messages.</p>
+<p><strong>Decision, three parts.</strong></p>
+<ol>
+<li><strong>Block the shortcut at the agent layer.</strong> A Claude Code <code>PreToolUse</code> hook that refuses a
+   command containing <code>gate-change-ok:</code>, <code>GATE_CHANGE_OK=</code> or <code>--no-verify</code>. It lives in
+   dotfiles-linux-dev, not here; a dotfiles issue tracks it.</li>
+<li><strong>Every approval is visible in CI.</strong> When CI accepts a <code>gate-change-ok:</code> line (PR body or
+   commit message), the gate writes a job summary and a PR comment listing each approved
+   finding, the reason, and where the line came from (the PR body or the commit sha). The
+   workflow upserts one comment, found by a hidden marker, so a re-run edits it. A fork PR has a
+   read-only token, so the comment step is <code>continue-on-error</code>; the job summary is always written.</li>
+<li><strong>Local approvals are bound to findings.</strong> The interactive <code>GATE_CHANGE_OK</code> run writes a
+   record when it accepts a reason: a file named by the index tree hash (<code>git write-tree</code>, the
+   tree the commit will have) under <code>&lt;git-common-dir&gt;/gate-approvals/</code>, holding the reason and
+   the exact findings approved. A trailer commit now justifies only what its tree's record
+   froze. No record means no justification: a commit made with <code>--no-verify</code>, a typed trailer,
+   a merge, and a rebase or cherry-pick that changes the tree all find none, so each needs the
+   owner again. This replaces the re-run of the checks over the old tree.</li>
+</ol>
+<p><strong>Threat model, stated plainly.</strong> The record lives in a file any process running as the owner
+can write, exactly as the trailer line can be typed. Anyone with the owner's shell can forge an
+approval, by writing a record and typing a trailer, or by running with <code>GATE_CHANGE_OK</code> set. This
+design does not stop that, and no design inside this repository can: an agent that shares the
+owner's user, filesystem, git and <code>gh</code> token can reproduce anything the owner's own run produces,
+and only a factor outside that process (a hardware-touch key) would differ; the owner declined
+one. What it does give: a bound approval cannot silently widen with later checks, a replay or a
+merge cannot launder one, a typed line with no interactive run behind it is void locally, and
+every approval CI accepts is listed at merge time whoever typed it. Parts 1 and 2 are what catch
+a forged one; part 3 limits what a real one can cover.</p>
+<p><strong>Known limits.</strong> CI cannot see a local record (it is not in the clone), so CI still accepts the
+PR-body and commit-message lines as before and relies on part 2 plus review. The record is
+local to the machine and the repository: the same approval made on another machine is not
+found, and the owner repeats the interactive run. Records are not pruned. A first commit on a
+branch is checked since #1339, so its approval takes the same path.</p>
 
 
 
