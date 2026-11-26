@@ -1242,20 +1242,19 @@ def test_a_short_circuit_skip_keeps_its_guard() -> None:
 
 
 @pytest.mark.parametrize(
-    "str_skip",
+    ("str_skip", "str_label"),
     [
-        "    pt.skip()\n",
-        "    raise pt.skip.Exception('x')\n",
-        "    request.applymarker(pytest.mark.skip)\n",
-        "    request.node.add_marker(pytest.mark.xfail)\n",
+        ("    pt.skip()\n", "newly marked skip()"),
+        ("    raise pt.skip.Exception('x')\n", "newly marked skip()"),
+        ("    request.applymarker(pytest.mark.skip)\n", "newly marked applymarker-skip()"),
+        ("    request.node.add_marker(pytest.mark.xfail)\n", "newly marked applymarker-xfail()"),
     ],
     ids=["alias", "raise-exception", "applymarker", "add-marker"],
 )
-def test_an_unlisted_spelling_of_skip_is_detected(str_skip: str) -> None:
+def test_an_unlisted_spelling_of_skip_is_detected(*, str_skip: str, str_label: str) -> None:
     """Item of #1316: ``import pytest as pt``, ``raise``, ``applymarker`` and ``add_marker``."""
-    str_old = "import pytest as pt\n\n\ndef test_a(request):\n" + _BODY
-    str_new = "import pytest as pt\n\n\ndef test_a(request):\n" + str_skip + _BODY
-    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+    str_head = "import pytest\nimport pytest as pt\n\n\ndef test_a(request):\n"
+    assert str_label in _sole_finding(str_head + _BODY, str_new=str_head + str_skip + _BODY)
 
 
 def test_a_local_helper_named_skip_is_not_pytests() -> None:
@@ -1278,8 +1277,9 @@ def test_a_module_pytestmark_is_a_new_marker() -> None:
 )
 def test_an_annotated_or_augmented_pytestmark_is_a_new_marker(str_assign: str) -> None:
     """Review of #1328: ``pytestmark`` set by ``AnnAssign`` or ``AugAssign`` is read too."""
-    str_new = str_assign + "\n\n\ndef test_a():\n" + _BODY
-    assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new)
+    str_head = "import pytest\npytestmark = []\n\n\ndef test_a():\n"
+    str_new = "import pytest\npytestmark = []\n" + str_assign + "\n\n\ndef test_a():\n"
+    assert "newly marked skip" in _sole_finding(str_head + _BODY, str_new=str_new + _BODY)
 
 
 def test_dropping_a_redundant_run_true_is_not_flagged() -> None:
@@ -1372,6 +1372,41 @@ def test_a_second_import_guarded_skip_is_not_excused_by_the_first() -> None:
     str_two = "try:\n    import bar\nexcept ImportError:\n    pytestmark = pytest.mark.skip\n"
     str_old = str_one + "\n\ndef test_a():\n" + _BODY
     str_new = str_one + str_two + "\n\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_walrus_guard_keeps_its_operand_order() -> None:
+    """Review of #1328: ``a and (a := True)`` is not ``(a := True) and a``."""
+    str_old = "def test_a():\n    if a and (a := True):\n        pytest.skip()\n" + _BODY
+    str_new = "def test_a():\n    if (a := True) and a:\n        pytest.skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_plain_import_unbinds_a_pytest_alias() -> None:
+    """Review of #1328: ``import unittest as pt`` after ``import pytest as pt`` rebinds it."""
+    str_head = "import pytest as pt\nimport unittest as pt\n\n\n"
+    str_old = str_head + "def test_a():\n    pt.skip()\n" + _BODY
+    str_new = str_head + "@pytest.mark.skip\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_pytestmark_in_a_finally_block_is_a_new_marker() -> None:
+    """Review of #1328: ``finally: pytestmark = ...`` runs on import."""
+    str_new = "try:\n    pass\nfinally:\n    pytestmark = pytest.mark.skip\n\n\ndef test_a():\n"
+    assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new + _BODY)
+
+
+def test_a_runtime_skip_does_not_excuse_a_new_xfail() -> None:
+    """Review of #1328: an assertion that failed before ``pytest.skip()`` now xfails."""
+    str_old = "def test_a():\n    pytest.skip()\n" + _BODY
+    str_new = "@pytest.mark.xfail\ndef test_a():\n    pytest.skip()\n" + _BODY
+    assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_late_skip_marker_does_not_excuse_a_new_skip_decorator() -> None:
+    """Review of #1328: a mark added during the test is not evaluated, so the body still runs."""
+    str_old = "def test_a(request):\n    request.applymarker(pytest.mark.skip)\n" + _BODY
+    str_new = "@pytest.mark.skip\n" + str_old
     assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
 
 

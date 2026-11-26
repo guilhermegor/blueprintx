@@ -639,6 +639,8 @@ def _canon_node(cls_node: ast.expr) -> ast.expr:
             cls_value.op, type(cls_node.op)
         )
         list_flat.extend(cls_value.values if is_same_op else [cls_value])
+    if any(isinstance(cls_sub, ast.NamedExpr) for cls_sub in ast.walk(cls_node)):
+        return ast.BoolOp(op=cls_node.op, values=list_flat)
     return ast.BoolOp(op=cls_node.op, values=sorted(list_flat, key=ast.unparse))
 
 
@@ -1029,6 +1031,7 @@ def _newly_marked(*, set_old: set, set_new: set) -> set:
     has_unconditional = bool(set_old & {"skip", "skip()"})
     if has_unconditional:
         set_added -= {"skip", "skip()", "importorskip()", "xfail()"}
+    if "skip" in set_old:
         set_added = {str_m for str_m in set_added if not str_m.startswith("xfail:")}
     return {
         str_m
@@ -1078,8 +1081,10 @@ def _bind_names(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
     """
     if isinstance(cls_stmt, ast.Import):
         for cls_alias in cls_stmt.names:
+            str_local = cls_alias.asname or cls_alias.name.split(".")[0]
+            dict_names.pop(str_local, None)
             if cls_alias.name == "pytest":
-                dict_names[cls_alias.asname or "pytest"] = "pytest"
+                dict_names[str_local] = "pytest"
     elif isinstance(cls_stmt, ast.ImportFrom):
         for cls_alias in cls_stmt.names:
             str_local = cls_alias.asname or cls_alias.name
@@ -1139,7 +1144,7 @@ def _applied_marker(cls_call: ast.Call) -> str | None:
     cls_mark = cls_arg.func if isinstance(cls_arg, ast.Call) else cls_arg
     if not (isinstance(cls_mark, ast.Attribute) and cls_mark.attr in _SKIP_MARKERS):
         return None
-    return "xfail" if cls_mark.attr == "xfail" else "skip"
+    return "applymarker-xfail" if cls_mark.attr == "xfail" else "applymarker-skip"
 
 
 def _skip_call_name(node: ast.AST, *, dict_names: dict[str, str] | None = None) -> str | None:
@@ -1524,6 +1529,7 @@ def _flat_stmts(list_body: list, *, str_guard: str = "") -> list:
                 (cls_handler.body, _except_guard(cls_stmt, cls_handler=cls_handler))
                 for cls_handler in cls_stmt.handlers
             ]
+            list_arms.append((cls_stmt.finalbody, ""))
             for list_arm, str_arm in list_arms:
                 str_next = _compose(str_guard, str_inner=str_arm)
                 list_out.extend(_flat_stmts(list_arm, str_guard=str_next))
@@ -1545,8 +1551,8 @@ def _compose(str_outer: str, *, str_inner: str) -> str:
     str
         ``str_inner`` alone at the top level, else the two joined by ``and``.
     """
-    if not str_outer:
-        return str_inner
+    if not str_outer or not str_inner:
+        return str_outer or str_inner
     return _join_conditions([str_outer, str_inner], cls_op=ast.And())
 
 
