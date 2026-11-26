@@ -414,6 +414,13 @@ repos:
         pass_filenames: false
         files: ^(templates/ts-lib/\.github/workflows/pack-smoke\.yml|tests/test_ts_lib_pack_smoke_shape\.sh)$
 
+      - id: gate-integrity-workflow-tests
+        name: body-reading gates re-run when the PR body is edited (blueprintx#1308)
+        entry: bash tests/test_gate_integrity_workflow.sh
+        language: system
+        pass_filenames: false
+        files: ^(\.github/workflows/(gate_integrity|scaffold_checks)\.yml|templates/python-common/\.github/workflows/(assertion-weakening|tests)\.yml|tests/test_gate_integrity_workflow\.sh)$
+
       - id: prune-merged-branches-tests
         name: scaffold deletes merged branches and prunes on fetch (blueprintx#923)
         entry: bash tests/test_prune_merged_branches.sh
