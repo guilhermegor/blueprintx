@@ -31,6 +31,7 @@ deliberate rename) through ``report()``.
 """
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -2327,3 +2328,77 @@ def test_workflow_base_that_exhausts_the_recursion_limit_reports_instead_of_cras
     assert gate.base_unreadable_problems("jobs:\n", str_shown="w") == [
         "w: base workflow nests too deeply for the gate, so its jobs are unchecked"
     ]
+
+
+@pytest.fixture
+def path_first_commit(tmp_path: Path) -> Path:
+    """Build a clone on a fresh branch whose HEAD still equals the default branch tip.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest's per-test directory.
+
+    Returns
+    -------
+    pathlib.Path
+        The clone, checked out on ``feat/x``.
+    """
+    path_src = tmp_path / "src"
+    path_src.mkdir()
+    _git_in(path_src, "init", "-q", "-b", "main")
+    (path_src / "ruff.toml").write_text('[lint]\nselect = ["E", "F", "S"]\n', encoding="utf-8")
+    _git_in(path_src, "add", ".")
+    _git_in(
+        path_src, "-c", "user.email=a@b.c", "-c", "user.name=t", "commit", "-qm", "init"
+    )
+    path_work = tmp_path / "work"
+    _git_in(tmp_path, "clone", "-q", str(path_src), str(path_work))
+    _git_in(path_work, "checkout", "-q", "-b", "feat/x")
+    return path_work
+
+
+def _run_gate(path_repo: Path, *, dict_env: dict) -> subprocess.CompletedProcess:
+    """Run the gate script as a subprocess in ``path_repo`` with CI markers scrubbed.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        Working directory of the run.
+    dict_env : dict
+        Extra environment entries layered over a copy of ``os.environ`` minus the CI markers.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The finished run, stdout and stderr captured.
+    """
+    dict_base = {k: v for k, v in os.environ.items() if k not in {"CI", "GITHUB_ACTIONS"}}
+    return subprocess.run(  # noqa: S603
+        [sys.executable, str(_BIN / "check_gate_integrity.py"), "--root", "."],
+        cwd=path_repo,
+        env={**dict_base, **dict_env},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+
+def test_first_commit_on_a_branch_that_weakens_a_gate_fails(path_first_commit: Path) -> None:
+    """HEAD equal to the merge-base must still diff the staged change (blueprintx#1333)."""
+    (path_first_commit / "ruff.toml").write_text('[lint]\nselect = ["E", "F"]\n', encoding="utf-8")
+    _git_in(path_first_commit, "add", "ruff.toml")
+
+    cls_run = _run_gate(path_first_commit, dict_env={})
+
+    assert cls_run.returncode == 1
+    assert "rule 'S' removed" in cls_run.stdout + cls_run.stderr
+
+
+@pytest.mark.parametrize("dict_env", [{}, {"CI": "true", "GITHUB_ACTIONS": "true"}])
+def test_clean_checkout_of_the_default_branch_passes(
+    path_first_commit: Path, dict_env: dict
+) -> None:
+    """A clean checkout whose HEAD is the merge-base exits 0, locally and under CI."""
+    assert _run_gate(path_first_commit, dict_env=dict_env).returncode == 0
