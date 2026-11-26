@@ -2273,27 +2273,22 @@ def merge_heads() -> list:
     return pathlib.Path(str_path).read_text(encoding="utf-8").split()
 
 
-def resolve_base() -> str | None:
+def resolve_base() -> str:
     """Resolve the merge-base to diff against.
 
     Returns
     -------
-    str or None
-        The merge-base commit to diff against. ``None`` means a real skip: a ref resolved
-        and HEAD already IS that commit, so there is genuinely nothing to diff. An empty
-        string means the OPPOSITE — no ref could be resolved at all — and is deliberately
-        never treated as a skip: an absent baseline is not proof of no weakening
-        (blueprintx#313); ``main()`` fails the run on it instead of passing it silently.
+    str
+        The merge-base commit to diff against; HEAD itself when it IS the merge-base, so a
+        branch's first commit is still diffed index-vs-HEAD (blueprintx#1333). An empty
+        string means no ref could be resolved at all — an absent baseline is not proof of no
+        weakening (blueprintx#313); ``main()`` fails the run on it instead of passing it.
     """
     str_ref = default_branch()
     str_base = _git(["merge-base", str_ref, "HEAD", *merge_heads()]).strip()
     if not str_base:
         print(f"❌ could not resolve a merge-base against {str_ref!r} — refusing to pass blind.")
         return ""
-    str_head = _git(["rev-parse", "HEAD"]).strip()
-    if str_base == str_head:
-        print("✅ gate-integrity check skipped — on the default branch (nothing to diff).")
-        return None
     return str_base
 
 
@@ -2396,8 +2391,6 @@ def main(list_argv: list) -> int:
         return 1
 
     str_base = resolve_base()
-    if str_base is None:
-        return 0
     if not str_base:
         return 1
 

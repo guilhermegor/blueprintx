@@ -32,6 +32,7 @@ deliberate rename) through ``report()``.
 
 import functools
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -450,6 +451,38 @@ def test_report_no_findings_passes() -> None:
     assert gate.report([], str_base="base", int_changed_count=3) == 0
 
 
+_SET_SCRUBBED_ENV = frozenset(
+    {
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITHUB_BASE_REF",
+        "GITHUB_EVENT_PATH",
+        "GITHUB_REPOSITORY",
+        "PR_NUMBER",
+        "GATE_CHANGE_OK",
+    }
+)
+
+
+def _hermetic_env() -> dict:
+    """Return a copy of ``os.environ`` that cannot steer git or the gate.
+
+    Returns
+    -------
+    dict
+        The environment minus CI markers, PR context, the local escape hatch and every
+        ``GIT_*`` key, with the operator's global and system git config disabled.
+    """
+    dict_env = {
+        str_key: str_val
+        for str_key, str_val in os.environ.items()
+        if str_key not in _SET_SCRUBBED_ENV and not str_key.startswith("GIT_")
+    }
+    dict_env["GIT_CONFIG_GLOBAL"] = os.devnull
+    dict_env["GIT_CONFIG_NOSYSTEM"] = "1"
+    return dict_env
+
+
 def _git_in(path_repo: Path, *args: str) -> str:
     """Run ``git`` inside a throwaway repo and return its stripped stdout.
 
@@ -470,6 +503,7 @@ def _git_in(path_repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_hermetic_env(),
         check=True,
     )
     return cls_proc.stdout.strip()
@@ -2329,6 +2363,86 @@ def test_workflow_base_that_exhausts_the_recursion_limit_reports_instead_of_cras
     assert gate.base_unreadable_problems("jobs:\n", str_shown="w") == [
         "w: base workflow nests too deeply for the gate, so its jobs are unchecked"
     ]
+
+
+@pytest.fixture
+def path_first_commit(tmp_path: Path) -> Path:
+    """Build a clone on a fresh branch whose HEAD still equals the default branch tip.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest's per-test directory.
+
+    Returns
+    -------
+    pathlib.Path
+        The clone, checked out on ``feat/x``.
+    """
+    path_src = tmp_path / "src"
+    path_src.mkdir()
+    _git_in(path_src, "init", "-q", "-b", "main")
+    (path_src / "ruff.toml").write_text('[lint]\nselect = ["E", "F", "S"]\n', encoding="utf-8")
+    _git_in(path_src, "add", ".")
+    _git_in(path_src, "-c", "user.email=a@b.c", "-c", "user.name=t", "commit", "-qm", "init")
+    path_work = tmp_path / "work"
+    _git_in(tmp_path, "clone", "-q", str(path_src), str(path_work))
+    _git_in(path_work, "checkout", "-q", "-b", "feat/x")
+    return path_work
+
+
+def _run_gate(path_repo: Path, *, dict_env: dict) -> subprocess.CompletedProcess:
+    """Run the gate script as a subprocess in ``path_repo`` with CI markers scrubbed.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        Working directory of the run.
+    dict_env : dict
+        Extra environment entries layered over a copy of ``os.environ`` minus the CI markers.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The finished run, stdout and stderr captured.
+    """
+    return subprocess.run(  # noqa: S603
+        [sys.executable, str(_BIN / "check_gate_integrity.py"), "--root", "."],
+        cwd=path_repo,
+        env={**_hermetic_env(), **dict_env},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+
+def test_first_commit_on_a_branch_that_weakens_a_gate_fails(path_first_commit: Path) -> None:
+    """HEAD equal to the merge-base must still diff the staged change (blueprintx#1333)."""
+    (path_first_commit / "ruff.toml").write_text('[lint]\nselect = ["E", "F"]\n', encoding="utf-8")
+    _git_in(path_first_commit, "add", "ruff.toml")
+
+    cls_run = _run_gate(path_first_commit, dict_env={})
+
+    str_out = cls_run.stdout + cls_run.stderr
+
+    assert (cls_run.returncode, "rule 'S' removed" in str_out) == (1, True), str_out
+
+
+@pytest.mark.parametrize("dict_env", [{}, {"CI": "true", "GITHUB_ACTIONS": "true"}])
+def test_clean_first_commit_branch_passes(path_first_commit: Path, *, dict_env: dict) -> None:
+    """A clean branch whose HEAD is the merge-base exits 0, locally and under CI."""
+    assert _run_gate(path_first_commit, dict_env=dict_env).returncode == 0
+
+
+@pytest.mark.parametrize("dict_env", [{}, {"CI": "true", "GITHUB_ACTIONS": "true"}])
+def test_clean_checkout_of_the_default_branch_passes(
+    path_first_commit: Path, *, dict_env: dict
+) -> None:
+    """A clean checkout of the default branch itself exits 0, locally and under CI."""
+    _git_in(path_first_commit, "checkout", "-q", "main")
+
+    assert _run_gate(path_first_commit, dict_env=dict_env).returncode == 0
 
 
 def test_workflow_new_side_merge_key_under_jobs_says_the_gate_refuses_it() -> None:
