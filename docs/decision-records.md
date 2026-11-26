@@ -1356,22 +1356,25 @@ is shaped as it is; a generated project gets the behavior, not the history.
       same id is NEWLY ADDED to another top-level workflow file of the same tree (the repo's
       own `.github/workflows/`, or one `templates/<name>/.github/workflows/`) with an
       identical job, so moving a job between files is a move, not a removal (#1311).
-      Workflows are read with PyYAML's `yaml.safe_load` (#1315) and compared as parsed
-      values, never as text: whitespace, key spelling, comments and quoting a string cannot
-      change a verdict. Quoting a number or boolean can (`[16]` against `["16"]`, which
-      `toJSON` tells apart; each job also carries the standard loader's typed read), flow-versus-block
-      style cannot except that a flow-style job is never moved (above), and a changed value
+      Workflows are read with PyYAML through `StringScalarLoader` (#1315) and compared as parsed
+      values, never as text, subject to the move exclusions later in this entry (a flow-style destination job
+      is excluded even when its parsed value equals the block-style one): whitespace, key
+      spelling, comments and quoting a string cannot change a verdict. Quoting a number or
+      boolean can (`[16]` against `["16"]`, which `toJSON` tells apart; each job also carries
+      the standard loader's typed read), and a changed value
       inside a folded `run: >` (a blank
       line included) always does. The gate hard-fails on a missing `import yaml`; there is no
       fallback to a line parser. PyYAML is importable where the gate runs: BlueprintX's own
       hook is `language: python` with `additional_dependencies: [pyyaml==6.0.3]`, its CI job pins
       `pyyaml==6.0.3`, and generated projects run it in the project venv, where `pyyaml` is a
       direct dependency of the five service tiers and arrives with the `yamllint` dev
-      dependency in `lib-minimal`. A changed workflow file that does not parse now is itself
-      a finding: its jobs cannot be compared. A file that is not YAML at the merge-base has
+      dependency in `lib-minimal`. A modified workflow file that does not parse now is itself
+      a finding: its jobs cannot be compared. So is a modified workflow whose blob is not valid UTF-8 at either ref, even when the change repairs a non-UTF-8 base: GitHub may run encodings such as UTF-16 with a BOM, so the unreadable base can hold jobs and failing closed is the safe side. A newly added file is not checked for parsing: it
+      has no base blob, so a malformed one simply supplies no move candidates. A file that is not YAML at the merge-base has
       no comparable jobs, so a change that repairs it reports nothing; one that is YAML the
-      gate refuses to read (the cases below) is a finding when its change is reviewed, so
-      deleting its jobs cannot pass unseen. A destination file that
+      gate refuses to read (a merge key, a repeated anchor, a second document) is a finding when
+      its change is reviewed, so deleting its jobs cannot pass unseen; an undefined alias is
+      not, since GitHub rejects it too. A destination file that
       does not parse excuses nothing. The loader (`StringScalarLoader`) keeps every scalar as
       the text the file spells: no bool, int, float, null, timestamp or `=` resolver, and the
       same explicit tags (`!!int`, `!!bool`, ...) construct strings, so a tagged value neither
@@ -2664,6 +2667,62 @@ checks. A strict-on setting is therefore the violation, and the required checks 
 The #302 failure mode (six tier checks red because #293 had not merged) is accepted and is caught
 on main instead of at merge time.
 
+## Review gate published by a GitHub App (blueprintx#1318)
+
+The `Review threads answered` check can optionally be published by a GitHub App instead of the
+Actions job. It is opt-in: with no `REVIEW_APP_CLIENT_ID` / `REVIEW_APP_PRIVATE_KEY` secrets the
+workflow is unchanged. `REVIEW_APP_INTEGRATION_ID` makes `enable_repo_rules.sh` pin the required
+check to that App.
+
+- **The head is resolved once**, before the gate runs, and both the stale-run clearing and the App
+  publish use that SHA, so a push landing mid-run cannot get a `success` it was never checked for.
+- **No mint, no publish.** A failed mint (rotated key, App not installed) fails the job loudly at
+  the mint step and posts nothing, rather than posting a check with an empty token.
+- **Pinning has a cost.** Once pinned, only the App's check run satisfies the rule. A fork or
+  Dependabot PR's `pull_request` run gets no secrets, so it publishes nothing until someone
+  comments on it: the `issue_comment` run executes in the base repo with secrets and publishes the
+  App check. `enable_repo_rules.sh` warns about this when it applies a pin.
+- **The App token lives in its own job.** The gate job checks out and runs PR code and does not
+  even reference the App secrets (a job's secret context reaches its runner), so the "not
+  configured" notice lives in the publisher. A second job, `publish-app-check`, needs the gate job, receives only the head SHA and
+  the gate outcome through job outputs, does no checkout and runs no repo code, so nothing that
+  tampers with `$GITHUB_PATH` or `$GITHUB_ENV` in the gate job can reach the token. This isolates
+  the token, not the verdict: same-repo PR code in the gate step can still make the gate succeed,
+  and a same-repo PR edits its own copy of `publish-app-check` on `pull_request`, so pinning
+  keeps other apps and jobs from posting the name; it adds no integrity against contributors with
+  write access. It runs on
+  `!cancelled()`, so a cancelled run posts nothing. The App check's conclusion is the gate step's
+  outcome, not the job's. The token asks for `checks: write` only.
+- **Only the publisher is serialized.** The required gate job has no `concurrency:` group, so
+  nothing can cancel it or leave its check `cancelled`, and `rerun_stale_gate_runs.sh` re-runs
+  join no queue. `publish-app-check` has one group per PR and head SHA with `cancel-in-progress: false`: one
+  publish runs at a time, and a waiting publish superseded by a newer one is cancelled, which is
+  harmless because it is not a required check. This puts publishes from both event families in
+  one order. The order is still the order in which gate jobs finish, so a gate job that read older
+  thread state and finished last can publish last; closing that needs the publisher to re-read the
+  state, tracked in #1335. The `issue_comment` run is the publish path for fork and Dependabot PRs.
+- **A failed mint looks like "waiting", or leaves the old result.** The publisher job goes red at
+  the mint step. On a SHA with no App check yet, the pinned required check then shows as "Expected -
+  waiting". On a SHA the App already published for, a failed refresh leaves the previous result
+  visible, which can be a green one, so read the publisher job as well as the check.
+- **The published verdict is bound to the head the gate started on.** The head is resolved before
+  the protected-file guard, so a blocked run still publishes `failure` for its SHA, and a step
+  after the gate re-reads the PR head: if it moved, the publisher posts `failure` for the saved
+  SHA instead of a verdict that may belong to the new head. The new head's own run publishes its
+  check.
+- **Cancelled "Publish" entries are expected.** A publish superseded while waiting ends
+  `cancelled` (5 near-simultaneous review events on 14c68c49 left 3 such entries and one running
+  publish that succeeded). That job is not a required check, and the required gate job, which has
+  no group, was never cancelled.
+- **The pin lives in the environment.** `REVIEW_APP_INTEGRATION_ID` must be exported on every
+  run of `enable_repo_rules.sh`; a rerun without it rewrites the ruleset unpinned. Keep it in the
+  same place the apply is run from.
+- **Same name, two publishers.** Unpinned, the Actions job and the App both report
+  `Review threads answered` on a SHA. How GitHub resolves duplicate-name required checks across
+  apps is not verified, so treat the App path as coherent only when pinned.
+- **Python scaffolds only for now.** The TypeScript skeleton's `review-threads.yml` keeps the
+  Actions-only check until a TS repo asks for the App path.
+
 ## A justified gate change is honoured on the rest of the branch (`check_gate_integrity.py`, #1323)
 
 The local gate judges the whole branch against its merge-base, so after the owner justified a
@@ -2672,10 +2731,10 @@ refused for the same finding and needed the owner at a terminal again (PR #1321,
 
 **Decision.** A local run passes when every current finding is in the set justified by a commit
 already on the branch. A commit counts when its message carries a `gate-change-ok: <reason>`
-trailer, and the findings it justifies are the ones that commit's own tree produces
-(`findings_at`, the same checks with that commit read in place of the index). The owner ends
-the interactive commit's message with the trailer, and the gate prints that line on an env
-justification.
+trailer, and the findings it justifies are the ones its approval record froze
+(see the #1333 entry below; #1323 first computed them by re-running the checks over that
+commit's tree). The owner ends the interactive commit's message with the trailer, and the gate
+prints that line on an env justification.
 
 **Why a typed trailer is not enough.** The trailer text alone justifies nothing. A tree that
 produces findings normally exists only if the interactive `GATE_CHANGE_OK` run let it through, so a
@@ -2697,3 +2756,45 @@ a later merge of `main` does not move the base its findings are measured from. F
 cumulative, so a weakening committed without the hook (`--no-verify`, or arriving in a merge)
 is also covered by any later trailer commit on the branch. A merge commit is never a trailer
 commit, because `git merge` runs no `pre-commit` hook, so its trailer would be untested text.
+
+## Approvals are recorded, bound to findings, and shown in CI (`check_gate_integrity.py`, #1333)
+
+Two gaps remained after #1323. The `gate-change-ok:` line is typed text, and the findings it
+covered were recomputed from the old commit with today's checks, so a check added later widened
+what an old approval justified (the finding deferred from #1330). And a typed line clears CI
+unseen unless a reviewer reads the commit messages.
+
+**Decision, three parts.**
+
+1. **Block the shortcut at the agent layer.** A Claude Code `PreToolUse` hook that refuses a
+   command containing `gate-change-ok:`, `GATE_CHANGE_OK=` or `--no-verify`. It lives in
+   dotfiles-linux-dev, not here; a dotfiles issue tracks it.
+2. **Every approval is visible in CI.** When CI accepts a `gate-change-ok:` line (PR body or
+   commit message), the gate writes a job summary and a PR comment listing each approved
+   finding, the reason, and where the line came from (the PR body or the commit sha). The
+   workflow upserts one comment, found by a hidden marker, so a re-run edits it. A fork PR has a
+   read-only token, so the comment step is `continue-on-error`; the job summary is always written.
+3. **Local approvals are bound to findings.** The interactive `GATE_CHANGE_OK` run writes a
+   record when it accepts a reason: a file named by the index tree hash (`git write-tree`, the
+   tree the commit will have) under `<git-common-dir>/gate-approvals/`, holding the reason and
+   the exact findings approved. A trailer commit now justifies only what its tree's record
+   froze. No record means no justification: a commit made with `--no-verify`, a typed trailer,
+   a merge, and a rebase or cherry-pick that changes the tree all find none, so each needs the
+   owner again. This replaces the re-run of the checks over the old tree.
+
+**Threat model, stated plainly.** The record lives in a file any process running as the owner
+can write, exactly as the trailer line can be typed. Anyone with the owner's shell can forge an
+approval, by writing a record and typing a trailer, or by running with `GATE_CHANGE_OK` set. This
+design does not stop that, and no design inside this repository can: an agent that shares the
+owner's user, filesystem, git and `gh` token can reproduce anything the owner's own run produces,
+and only a factor outside that process (a hardware-touch key) would differ; the owner declined
+one. What it does give: a bound approval cannot silently widen with later checks, a replay or a
+merge cannot launder one, a typed line with no interactive run behind it is void locally, and
+every approval CI accepts is listed at merge time whoever typed it. Parts 1 and 2 are what catch
+a forged one; part 3 limits what a real one can cover.
+
+**Known limits.** CI cannot see a local record (it is not in the clone), so CI still accepts the
+PR-body and commit-message lines as before and relies on part 2 plus review. The record is
+local to the machine and the repository: the same approval made on another machine is not
+found, and the owner repeats the interactive run. Records are not pruned. A first commit on a
+branch is checked since #1339, so its approval takes the same path.

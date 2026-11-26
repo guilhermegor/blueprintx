@@ -533,6 +533,9 @@ jobs:
       - name: Run the enable_repo_rules suite (blueprintx#944)
         run: bash tests/test_enable_repo_rules.sh
 
+      - name: Run the review-gate App token suite (blueprintx#1318)
+        run: bash tests/test_review_app_token.sh
+
       - name: Run the pr_reconcile suite (blueprintx#1219)
         run: bash tests/test_pr_reconcile.sh
 

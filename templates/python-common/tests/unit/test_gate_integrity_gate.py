@@ -30,7 +30,9 @@ confirming the ``gate-change-ok:`` escape hatch still lets a genuinely justified
 deliberate rename) through ``report()``.
 """
 
+import functools
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -449,6 +451,38 @@ def test_report_no_findings_passes() -> None:
     assert gate.report([], str_base="base", int_changed_count=3) == 0
 
 
+_SET_SCRUBBED_ENV = frozenset(
+    {
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITHUB_BASE_REF",
+        "GITHUB_EVENT_PATH",
+        "GITHUB_REPOSITORY",
+        "PR_NUMBER",
+        "GATE_CHANGE_OK",
+    }
+)
+
+
+def _hermetic_env() -> dict:
+    """Return a copy of ``os.environ`` that cannot steer git or the gate.
+
+    Returns
+    -------
+    dict
+        The environment minus CI markers, PR context, the local escape hatch and every
+        ``GIT_*`` key, with the operator's global and system git config disabled.
+    """
+    dict_env = {
+        str_key: str_val
+        for str_key, str_val in os.environ.items()
+        if str_key not in _SET_SCRUBBED_ENV and not str_key.startswith("GIT_")
+    }
+    dict_env["GIT_CONFIG_GLOBAL"] = os.devnull
+    dict_env["GIT_CONFIG_NOSYSTEM"] = "1"
+    return dict_env
+
+
 def _git_in(path_repo: Path, *args: str) -> str:
     """Run ``git`` inside a throwaway repo and return its stripped stdout.
 
@@ -469,6 +503,7 @@ def _git_in(path_repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_hermetic_env(),
         check=True,
     )
     return cls_proc.stdout.strip()
@@ -833,6 +868,7 @@ _STR_MOVED_JOB = (
     "      - run: python3 bin/check_gate_integrity.py\n"
 )
 _STR_KEPT_JOB = "  other:\n    name: Other\n    steps:\n      - run: echo hi\n"
+_STR_THIRD_JOB = "  third:\n    name: Third\n    steps:\n      - run: echo there\n"
 _STR_SOURCE = "templates/python-common/.github/workflows/scaffold_checks.yml"
 _STR_SIBLING = "templates/python-common/.github/workflows/gate_integrity.yml"
 _STR_ROOT_SIBLING = ".github/workflows/gate_integrity.yml"
@@ -1828,9 +1864,9 @@ def test_workflow_job_moved_beside_a_comment_between_jobs_is_clean(
     """A comment is not a value, so the one left between jobs does not block a move."""
     list_findings = _collect_workflows(
         monkeypatch,
-        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}# gate-integrity moved\n{_STR_KEPT_JOB}"},
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}{_STR_THIRD_JOB}"},
         dict_new={
-            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}# gate-integrity moved\n{_STR_THIRD_JOB}",
             _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
         },
         list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
@@ -1984,7 +2020,7 @@ def test_workflow_base_with_a_merge_key_under_jobs_reports_instead_of_passing() 
     str_old = "x: &a\n  gate:\n    runs-on: u\njobs:\n  <<: *a\n"
 
     assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
-        "w: base workflow is YAML the gate cannot compare, so its jobs are unchecked"
+        "w: base workflow uses YAML the gate refuses to read, so its jobs are unchecked"
     ]
 
 
@@ -2164,7 +2200,7 @@ def path_weakened(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path
 
 @pytest.fixture
 def path_recorded(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Return ``path_branch`` after the weakening commit that ALSO carries the trailer.
+    """Return ``path_branch`` after an interactive approval and its commit.
 
     Parameters
     ----------
@@ -2180,6 +2216,7 @@ def path_recorded(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path
     """
     _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
     monkeypatch.setenv("GATE_CHANGE_OK", "owner reviewed the ignore")
+    gate.main([])
     _commit_staged(path_branch, str_message=_STR_TRAILER)
     monkeypatch.delenv("GATE_CHANGE_OK")
     return path_branch
@@ -2236,6 +2273,83 @@ def test_branch_justified_forged_trailer_on_a_clean_commit_justifies_nothing(
     int_code = gate.main([])
 
     assert (int_code, "E501" in capsys.readouterr().out) == (1, True)
+
+
+def test_branch_justified_trailer_without_an_approval_record_justifies_nothing(
+    path_branch: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a weakening committed with a typed trailer but no interactive run is void."""
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+
+    int_code = gate.main([])
+
+    assert (int_code, "E501" in capsys.readouterr().out) == (1, True)
+
+
+def test_branch_justified_recorded_findings_do_not_widen_with_the_checker(
+    path_recorded: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SHOULD FAIL: a check added after the approval is not covered by the frozen record."""
+    str_base = _git_in(path_recorded, "rev-parse", "main").strip()
+    set_before = gate.recorded_findings(str_base)
+    monkeypatch.setattr(gate, "collect_problems", lambda *_, **__: ["a newer check fired"])
+
+    assert (gate.recorded_findings(str_base), bool(set_before)) == (set_before, True)
+
+
+def test_branch_justified_cherry_pick_onto_a_new_tree_loses_the_approval(
+    path_recorded: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a replay that changes the tree finds no record, so it needs the owner."""
+    str_sha = _git_in(path_recorded, "rev-parse", "HEAD").strip()
+    _git_in(path_recorded, "checkout", "-q", "main")
+    _stage(path_recorded, str_name="other.txt", str_text="x\n")
+    _commit_staged(path_recorded, str_message="chore: main moves on")
+    _git_in(path_recorded, "checkout", "-q", "-b", "replayed")
+    _git_in(path_recorded, "cherry-pick", str_sha)
+
+    int_code = gate.main([])
+
+    assert (int_code, "E501" in capsys.readouterr().out) == (1, True)
+
+
+def test_ci_approval_is_published_with_finding_reason_and_pr_body(
+    path_branch: Path, *, monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A PR-body approval accepted in CI lands in the job summary naming the finding."""
+    path_summary = tmp_path_factory.mktemp("summary") / "summary.md"
+    monkeypatch.setattr(gate, "is_ci", lambda: True)
+    monkeypatch.setattr(gate, "pr_body_text", lambda: "gate-change-ok: reviewed by owner")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(path_summary))
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+
+    gate.main([])
+
+    str_text = path_summary.read_text(encoding="utf-8")
+    assert all(str_part in str_text for str_part in ("E501", "reviewed by owner", "PR body"))
+
+
+def test_ci_approval_comment_names_the_commit_carrying_the_line(
+    path_branch: Path, *, monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A trailer approval accepted in CI is written to the comment file with its commit."""
+    path_comment = tmp_path_factory.mktemp("comment") / "comment.md"
+    monkeypatch.setattr(gate, "is_ci", lambda: True)
+    monkeypatch.setattr(gate, "pr_body_text", lambda: "")
+    monkeypatch.setenv("GATE_APPROVAL_COMMENT", str(path_comment))
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    str_sha = _git_in(path_branch, "rev-parse", "HEAD").strip()
+
+    gate.main([])
+
+    assert f"commit {str_sha[:12]}" in path_comment.read_text(encoding="utf-8")
 
 
 def test_branch_justified_after_main_adds_a_gate_does_not_record_it(
@@ -2327,3 +2441,239 @@ def test_workflow_base_that_exhausts_the_recursion_limit_reports_instead_of_cras
     assert gate.base_unreadable_problems("jobs:\n", str_shown="w") == [
         "w: base workflow nests too deeply for the gate, so its jobs are unchecked"
     ]
+
+
+@pytest.fixture
+def path_first_commit(tmp_path: Path) -> Path:
+    """Build a clone on a fresh branch whose HEAD still equals the default branch tip.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest's per-test directory.
+
+    Returns
+    -------
+    pathlib.Path
+        The clone, checked out on ``feat/x``.
+    """
+    path_src = tmp_path / "src"
+    path_src.mkdir()
+    _git_in(path_src, "init", "-q", "-b", "main")
+    (path_src / "ruff.toml").write_text('[lint]\nselect = ["E", "F", "S"]\n', encoding="utf-8")
+    _git_in(path_src, "add", ".")
+    _git_in(path_src, "-c", "user.email=a@b.c", "-c", "user.name=t", "commit", "-qm", "init")
+    path_work = tmp_path / "work"
+    _git_in(tmp_path, "clone", "-q", str(path_src), str(path_work))
+    _git_in(path_work, "checkout", "-q", "-b", "feat/x")
+    return path_work
+
+
+def _run_gate(path_repo: Path, *, dict_env: dict) -> subprocess.CompletedProcess:
+    """Run the gate script as a subprocess in ``path_repo`` with CI markers scrubbed.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        Working directory of the run.
+    dict_env : dict
+        Extra environment entries layered over a copy of ``os.environ`` minus the CI markers.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The finished run, stdout and stderr captured.
+    """
+    return subprocess.run(  # noqa: S603
+        [sys.executable, str(_BIN / "check_gate_integrity.py"), "--root", "."],
+        cwd=path_repo,
+        env={**_hermetic_env(), **dict_env},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+
+def test_first_commit_on_a_branch_that_weakens_a_gate_fails(path_first_commit: Path) -> None:
+    """HEAD equal to the merge-base must still diff the staged change (blueprintx#1333)."""
+    (path_first_commit / "ruff.toml").write_text('[lint]\nselect = ["E", "F"]\n', encoding="utf-8")
+    _git_in(path_first_commit, "add", "ruff.toml")
+
+    cls_run = _run_gate(path_first_commit, dict_env={})
+
+    str_out = cls_run.stdout + cls_run.stderr
+
+    assert (cls_run.returncode, "rule 'S' removed" in str_out) == (1, True), str_out
+
+
+@pytest.mark.parametrize("dict_env", [{}, {"CI": "true", "GITHUB_ACTIONS": "true"}])
+def test_clean_first_commit_branch_passes(path_first_commit: Path, *, dict_env: dict) -> None:
+    """A clean branch whose HEAD is the merge-base exits 0, locally and under CI."""
+    assert _run_gate(path_first_commit, dict_env=dict_env).returncode == 0
+
+
+@pytest.mark.parametrize("dict_env", [{}, {"CI": "true", "GITHUB_ACTIONS": "true"}])
+def test_clean_checkout_of_the_default_branch_passes(
+    path_first_commit: Path, *, dict_env: dict
+) -> None:
+    """A clean checkout of the default branch itself exits 0, locally and under CI."""
+    _git_in(path_first_commit, "checkout", "-q", "main")
+
+    assert _run_gate(path_first_commit, dict_env=dict_env).returncode == 0
+
+
+def test_workflow_new_side_merge_key_under_jobs_says_the_gate_refuses_it() -> None:
+    """Valid YAML the gate refuses is named as such, not reported as a parse failure."""
+    str_new = "x: &a\n  gate:\n    runs-on: u\njobs:\n  <<: *a\n"
+
+    assert gate.workflow_problems("jobs:\n  keep:\n", str_new=str_new, str_shown="w") == [
+        "w: workflow uses YAML the gate refuses to read, so its jobs cannot be compared"
+    ]
+
+
+def test_workflow_read_reports_a_nul_character_instead_of_crashing() -> None:
+    """PyYAML's reader rejects U+0000 before parsing, which must read as an unparsed file."""
+    assert gate.read_workflow("# a\x00b\njobs:\n  k:\n    runs-on: u\n") is None
+
+
+def test_workflow_concurrency_group_with_a_multiline_expression_matches_the_inline_one() -> None:
+    """GitHub ignores newlines between expression tokens, so both spellings name one group."""
+    dict_inline = {"name": "w", "concurrency": {"group": "ci-${{ github.ref }}"}}
+    dict_split = {"name": "w", "concurrency": {"group": "ci-${{ github.\n   ref }}"}}
+
+    assert gate.workflow_concurrency(dict_split) == gate.workflow_concurrency(dict_inline)
+
+
+_LIST_LEAF_COMPARISONS: list = []
+
+
+class _CountedLeaf(str):
+    """A string that records each equality test made against it."""
+
+    def __eq__(self, cls_other: object) -> bool:
+        _LIST_LEAF_COMPARISONS.append(1)
+        return str.__eq__(self, cls_other)
+
+    def __hash__(self) -> int:
+        return str.__hash__(self)
+
+
+def _shared_chain(int_levels: int) -> list:
+    """Build a value whose every level holds the previous one twice, as aliases do."""
+    return functools.reduce(
+        lambda list_node, _int_level: [list_node, list_node],
+        range(int_levels),
+        [_CountedLeaf("x")],
+    )
+
+
+def test_values_equal_compares_each_shared_node_pair_once() -> None:
+    """Plain ``==`` on two separate 12-level chains tests the leaf 4096 times."""
+    _LIST_LEAF_COMPARISONS.clear()
+    gate.values_equal(_shared_chain(12), cls_right=_shared_chain(12))
+
+    assert 0 < len(_LIST_LEAF_COMPARISONS) < 50
+
+
+def test_consume_candidate_does_not_compare_earlier_candidates() -> None:
+    """Removing the match by equality would test the earlier candidate's chain 4096 times."""
+    tuple_first = (_shared_chain(12), {"runs-on": "a"}, "")
+    tuple_match = (_shared_chain(12), {"runs-on": "b"}, "")
+    list_candidates = [tuple_first, tuple_match]
+    _LIST_LEAF_COMPARISONS.clear()
+    gate.consume_candidate(list_candidates, tuple_found=tuple_match)
+
+    assert not _LIST_LEAF_COMPARISONS
+
+
+def test_consume_candidate_removes_only_the_match() -> None:
+    """An equal but distinct candidate stays, so one new job still covers one removal."""
+    tuple_first = ({"a": "1"}, {}, "")
+    tuple_match = ({"a": "1"}, {}, "")
+    list_candidates = [tuple_first, tuple_match]
+    gate.consume_candidate(list_candidates, tuple_found=tuple_match)
+
+    assert [id(tuple_cand) for tuple_cand in list_candidates] == [id(tuple_first)]
+
+
+def test_find_move_matches_headers_that_share_nodes() -> None:
+    """The move comparison goes through ``values_equal``, so a long chain still matches."""
+    tuple_candidate = ({"x-a": _shared_chain(60)}, {}, "")
+
+    assert (
+        gate.find_move(
+            [tuple_candidate],
+            tuple_pair=({"x-a": _shared_chain(60)}, {}),
+            tuple_concurrency=("", ""),
+        )
+        == tuple_candidate
+    )
+
+
+def test_values_equal_tells_apart_values_that_differ_only_deep_inside() -> None:
+    """The pair memo must not make unequal values equal."""
+    assert not gate.values_equal({"a": [{"b": "1"}]}, cls_right={"a": [{"b": "2"}]})
+
+
+@pytest.mark.parametrize(
+    "str_old",
+    [
+        "x: &a [1]\ny: &a [2]\njobs:\n  gate:\n    runs-on: u\n",
+        "jobs:\n  gate:\n    runs-on: u\n---\njobs: {}\n",
+    ],
+)
+def test_workflow_base_with_a_composer_error_reports_instead_of_passing(str_old: str) -> None:
+    """Other YAML tools accept a repeated anchor or a second document, so no free deletion."""
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
+        "w: base workflow uses YAML the gate refuses to read, so its jobs are unchecked"
+    ]
+
+
+def test_workflow_new_side_too_deep_to_compose_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A file the composer cannot walk is not called unparseable or refused YAML."""
+    monkeypatch.setattr(gate, "read_workflow", lambda _str_text: None)
+    monkeypatch.setattr(gate.yaml, "compose", _raise_recursion)
+
+    assert gate.workflow_problems("jobs:\n", str_new="jobs:\n", str_shown="w") == [
+        "w: workflow nests too deeply for the gate, so its jobs cannot be compared"
+    ]
+
+
+def test_workflow_base_with_an_undefined_alias_reports_nothing() -> None:
+    """GitHub refuses an undefined alias too, so repairing such a base weakens nothing."""
+    str_old = "jobs:\n  gate:\n    steps: *missing\n"
+
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == []
+
+
+@pytest.mark.parametrize(("cls_left", "cls_right"), [(1, True), (1, 1.0)])
+def test_values_equal_tells_apart_equal_values_of_different_types(
+    *, cls_left: object, cls_right: object
+) -> None:
+    """Python equates ``1``, ``1.0`` and ``True``; a typed read must not."""
+    assert not gate.values_equal([cls_left], cls_right=[cls_right])
+
+
+def test_workflow_blob_that_is_not_utf8_is_a_finding_not_a_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``show`` returns ``None`` for an undecodable blob, which must not read as absent."""
+    monkeypatch.setattr(gate, "show", lambda _str_ref, *, str_path: None)
+    monkeypatch.setattr(gate, "blob_exists", lambda _str_ref, *, str_path: True)
+
+    assert gate.collect_problems([("M", _STR_SOURCE)], str_base="base") == [
+        f"{_STR_SOURCE}: workflow is not valid UTF-8, so its jobs cannot be compared"
+    ]
+
+
+def test_workflow_added_without_a_base_blob_is_not_a_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A path with no blob at the base is an addition, which has no jobs to lose."""
+    monkeypatch.setattr(gate, "show", lambda _str_ref, *, str_path: None)
+    monkeypatch.setattr(
+        gate, "blob_exists", lambda str_ref, *, str_path: str_ref == gate.STR_INDEX_REF
+    )
+
+    assert gate.collect_problems([("A", _STR_SOURCE)], str_base="base") == []
