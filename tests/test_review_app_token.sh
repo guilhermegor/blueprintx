@@ -26,7 +26,7 @@ each_workflow() {
 	done
 }
 
-mint_is_gated() { grep -A2 'id: app$' "$1" | grep -qF "env.REVIEW_APP_CONFIGURED == 'true' && steps.head.outcome == 'success'"; }
+mint_is_gated() { grep -A2 'id: app$' "$1" | grep -qF "env.REVIEW_APP_CONFIGURED == 'true' && needs.review-threads.outputs.head_sha != ''"; }
 mint_after_gate() { [ "$(grep -n 'id: gate$' "$1" | cut -d: -f1)" -lt "$(grep -n 'id: app$' "$1" | cut -d: -f1)" ]; }
 mint_is_sha_pinned() { grep -qE 'uses: actions/create-github-app-token@[0-9a-f]{40} # v' "$1"; }
 mint_scopes_are_minimal() {
@@ -43,15 +43,19 @@ publish_needs_mint() {
 	grep -A1 'name: Publish the check run' "$1" | grep -qF "steps.app.outcome == 'success'"
 }
 publish_uses_resolved_head() {
-	awk '/name: Publish the check run/{f=1} f' "$1" | grep -qF 'STR_HEAD: ${{ steps.head.outputs.sha }}' &&
-		awk '/name: Clear stale/{f=1} /name: Mint/{f=0} f' "$1" | grep -qF 'STR_HEAD: ${{ steps.head.outputs.sha }}'
+	awk '/name: Publish the check run/{f=1} f' "$1" | grep -qF 'STR_HEAD: ${{ needs.review-threads.outputs.head_sha }}' &&
+		awk '/name: Clear stale/{f=1} /publish-app-check:/{f=0} f' "$1" | grep -qF 'STR_HEAD: ${{ steps.head.outputs.sha }}'
 }
 stale_step_defines_pr_number() {
 	awk '/name: Clear stale/{f=1} /name: Mint/{f=0} f' "$1" | grep -qF 'PR_NUMBER: ${{ github.event.pull_request.number'
 }
 runs_are_serialized_per_pr() {
-	grep -A2 '^concurrency:' "$1" | grep -qF 'group: review-threads-${{ github.event.pull_request.number' &&
-		grep -A3 '^concurrency:' "$1" | grep -qF 'cancel-in-progress: true'
+	grep -A2 '^concurrency:' "$1" | grep -qF "group: review-threads-\${{ github.event.pull_request.number || github.event.issue.number }}-\${{ github.event_name == 'issue_comment'" &&
+		grep -A3 '^concurrency:' "$1" | grep -qF 'cancel-in-progress: false'
+}
+publish_job_runs_no_pr_code() {
+	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -qE 'actions/checkout|setup-python|python3? |bin/' && return 1
+	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -qF 'needs: review-threads'
 }
 publish_uses_app_token() { grep -qF 'GH_TOKEN: ${{ steps.app.outputs.token }}' "$1"; }
 
@@ -68,7 +72,8 @@ check "stale-run clearing and publishing share the head resolved before the gate
 	each_workflow publish_uses_resolved_head
 check "the stale-run step defines the PR number its error message prints" \
 	each_workflow stale_step_defines_pr_number
-check "runs are serialized per PR and a newer run cancels the older" each_workflow runs_are_serialized_per_pr
+check "runs are queued per PR and event family, never cancelled mid-run" each_workflow runs_are_serialized_per_pr
+check "the publish job checks out and runs no PR code" each_workflow publish_job_runs_no_pr_code
 check "check publishing uses the App token" each_workflow publish_uses_app_token
 
 dry() { env -u REVIEW_APP_INTEGRATION_ID "$@" bash "$RULES" dry_run; }

@@ -2655,14 +2655,19 @@ check to that App.
   Dependabot PR's `pull_request` run gets no secrets, so it publishes nothing until someone
   comments on it: the `issue_comment` run executes in the base repo with secrets and publishes the
   App check. `enable_repo_rules.sh` warns about this when it applies a pin.
-- **The mint comes last.** The token is minted after the gate and the stale-run clear, so it is
-  not in the environment of those steps and a failed mint cannot skip the gate. This is not
-  isolation: steps share a runner, so first-party PR code in the gate step could still tamper with
-  `$GITHUB_PATH` or `$GITHUB_ENV`. Only same-repo PR code reaches that point (fork and Dependabot
-  `pull_request` runs have no secrets, and `issue_comment` runs check out the default branch), and
-  that author can already edit the workflow, which needs the owner's `gate-change-approved` label.
-  Mint and publish run on `!cancelled()`, so a superseded run posts nothing. The App check's
-  conclusion is the gate step's outcome, not the job's. The token asks for `checks: write` only.
+- **The App token lives in its own job.** The gate job checks out and runs PR code and holds no
+  App secret. A second job, `publish-app-check`, needs the gate job, receives only the head SHA and
+  the gate outcome through job outputs, does no checkout and runs no repo code, so nothing that
+  tampers with `$GITHUB_PATH` or `$GITHUB_ENV` in the gate job can reach the token. It runs on
+  `!cancelled()`, so a cancelled run posts nothing. The App check's conclusion is the gate step's
+  outcome, not the job's. The token asks for `checks: write` only.
+- **Runs queue, they are not cancelled.** The group is per PR and per event family
+  (`issue_comment` runs separate from the rest), with `cancel-in-progress: false`. A run in
+  progress is never killed, so the required check is never left `cancelled`, and runs of one
+  family finish in start order, so the last verdict published is the newest. The `issue_comment`
+  run is the publish path for fork and Dependabot PRs and must not be cancelled by a head event.
+  The two families can still publish on the same head SHA in either order when the App is
+  configured; serialising the publisher across families is tracked in #1335.
 - **A failed mint looks like "waiting".** The job goes red at the mint step, but a pinned required
   check that never posts shows as "Expected - waiting" on the PR. Read the job log before assuming
   the check has not run.
