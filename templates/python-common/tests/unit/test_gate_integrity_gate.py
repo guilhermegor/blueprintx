@@ -131,8 +131,13 @@ def test_justification_reason_prefers_env_without_calling_git(
 def test_justification_reason_falls_back_when_env_is_blank(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """NEGATIVE CONTROL: an unset/blank env var must not mask a real trailer/PR-body reason."""
-    _local_shell(monkeypatch)
+    """NEGATIVE CONTROL: an unset/blank env var must not mask a real trailer/PR-body reason.
+
+    Runs as CI: locally a bare trailer is a claim anyone can type, so it justifies nothing by
+    itself (see the ``branch_justified`` tests below).
+    """
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("CI", "true")
     monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
     monkeypatch.setattr(gate, "_git", lambda _args: "gate-change-ok: from trailer")
     monkeypatch.setattr(gate, "pr_body_text", lambda: "")
@@ -973,10 +978,10 @@ def test_workflow_job_moved_with_a_softening_key_is_removed(
         "    env: &shared\n      A: '1'\n",
         "    env: *shared\n",
         "    env:\n      <<: *shared\n",
-        "    steps:\n      - *gate_step\n",
+        "    outputs:\n      out: *gate_step\n",
         '    "needs": [build]\n',
         "    'needs': [build]\n",
-        "    steps: [*gate_step]\n",
+        "    outputs: {out: *gate_step}\n",
         "    env: !!map &shared\n      A: '1'\n",
     ],
 )
@@ -985,14 +990,20 @@ def test_workflow_job_moved_with_outside_dependency_is_removed(
 ) -> None:
     """``needs:`` and YAML anchors point outside the block, so an identical text is no proof."""
     str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
+    str_defs = "x-defs:\n  shared: &shared {A: '1'}\n  gate_step: &gate_step {run: a}\n" * (
+        "&" not in str_extra
+    )
     list_findings = _collect_workflows(
         monkeypatch,
-        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
-        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        dict_old={_STR_SOURCE: f"{str_defs}jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"{str_defs}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"{str_defs}jobs:\n{str_job}",
+        },
         list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
     )
 
-    assert len(list_findings) == 1
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
 
 
 @pytest.mark.parametrize(
@@ -1307,7 +1318,6 @@ def test_workflow_one_new_job_covers_one_removal_only(monkeypatch: pytest.Monkey
 @pytest.mark.parametrize(
     "str_extra",
     [
-        "      needs: [x]\n",
         "    if: github.workflow == 'Scaffold checks'\n",
         "    env:\n      N: $GITHUB_WORKFLOW\n",
     ],
@@ -1762,3 +1772,558 @@ def test_workflow_job_moved_under_a_group_named_in_a_trailing_comment_is_removed
     )
 
     assert len(list_findings) == 1
+
+
+def _move_with_headers(
+    monkeypatch: pytest.MonkeyPatch, *, str_source: str, str_target: str
+) -> list[str]:
+    """Move the job between two workflows whose text outside ``jobs:`` is given.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to stub ``gate.show``.
+    str_source : str
+        The source workflow's text before ``jobs:``.
+    str_target : str
+        The target workflow's text before ``jobs:``.
+
+    Returns
+    -------
+    list[str]
+        The gate's findings.
+    """
+    return _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"{str_source}jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"{str_source}jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"{str_target}jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+
+def test_workflow_with_a_quoted_jobs_key_still_reports_a_removed_job() -> None:
+    """A quoted ``"jobs":`` key is the same key, so a job dropped under it is reported."""
+    str_old = f'"jobs":\n{_STR_KEPT_JOB}{_STR_MOVED_JOB}'
+
+    assert gate.workflow_problems(str_old, str_new='"jobs":\n' + _STR_KEPT_JOB, str_shown="w") == [
+        "w: workflow job 'gate-integrity' removed"
+    ]
+
+
+def test_workflow_that_no_longer_parses_is_a_finding() -> None:
+    """A file whose jobs cannot be read is reported, never read as having none to lose."""
+    str_new = f"jobs:\n{_STR_KEPT_JOB}  broken: [\n"
+
+    assert gate.workflow_problems(f"jobs:\n{_STR_KEPT_JOB}", str_new=str_new, str_shown="w") == [
+        "w: workflow YAML does not parse, so its jobs cannot be compared"
+    ]
+
+
+def test_workflow_job_moved_beside_a_comment_between_jobs_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A comment is not a value, so the one left between jobs does not block a move."""
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}# gate-integrity moved\n{_STR_KEPT_JOB}"},
+        dict_new={
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
+        },
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_under_a_setting_with_another_trailing_comment_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Comments on a top-level setting are not part of its value."""
+    list_findings = _move_with_headers(
+        monkeypatch, str_source="on: push\n", str_target="on: push  # moved\n"
+    )
+
+    assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    "str_run",
+    ["echo *.py", "|\n          { echo hi; }", "|\n          [ -f x ] && echo hi"],
+)
+def test_workflow_job_whose_script_holds_a_star_or_bracket_is_a_clean_move(
+    monkeypatch: pytest.MonkeyPatch, *, str_run: str
+) -> None:
+    """A ``*word`` or a leading ``[``/``{`` in a script is text, not an alias or flow body."""
+    str_job = _STR_MOVED_JOB + f"      - run: {str_run}\n"
+
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert list_findings == []
+
+
+def test_workflow_job_moved_with_a_needs_key_nested_in_a_matrix_is_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a top-level ``needs`` is a dependency; one inside ``strategy.matrix`` is data."""
+    str_job = _STR_MOVED_JOB + "    strategy:\n      matrix:\n        needs: [x]\n"
+
+    list_findings = _move_findings(
+        monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job, str_job_old=str_job
+    )
+
+    assert list_findings == []
+
+
+@pytest.mark.parametrize(
+    "str_extra",
+    [
+        "    ? needs\n    : [build]\n",
+        "    !!str needs: [build]\n",
+        "    env: &a_b\n      A: '1'\n",
+    ],
+)
+def test_workflow_job_moved_with_an_exotic_dependency_or_anchor_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
+) -> None:
+    """An explicit ``? needs`` key or a non-word anchor name is still a parsed key or anchor."""
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
+
+
+@pytest.mark.parametrize("str_on", ["on: [workflow_call]\n", "on:\n  push:\n  workflow_call:\n"])
+def test_workflow_job_moved_between_reusable_workflows_in_list_or_map_form_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_on: str
+) -> None:
+    """``workflow_call`` among several triggers still makes the source a reusable workflow."""
+    list_findings = _move_with_headers(monkeypatch, str_source=str_on, str_target=str_on)
+
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
+
+
+@pytest.mark.parametrize(
+    "str_target",
+    [
+        "concurrency:\n  group: [ci]\n",
+        "concurrency:\n  group: {a: b}\n",
+        "concurrency:\n",
+    ],
+)
+def test_workflow_job_moved_into_a_non_string_group_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_target: str
+) -> None:
+    """A group that is not a string cannot be evaluated here, so it never excuses a move."""
+    list_findings = _move_under_concurrency(
+        monkeypatch, str_source="concurrency:\n  group: ci\n", str_target=str_target
+    )
+
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
+
+
+def test_workflow_read_keeps_the_on_key_and_empty_values_as_text() -> None:
+    """The loader resolves no bool or null, so ``on`` is the string key and ``jobs:`` is ``""``."""
+    assert gate.read_workflow("on: push\njobs:\n")[0] == {"on": "push", "jobs": ""}
+
+
+def test_workflow_read_rejects_a_self_referential_alias() -> None:
+    """A recursive alias cannot be walked, so it is unparsed rather than a crash."""
+    assert gate.read_workflow("a: &x [*x]\njobs:\n") is None
+
+
+@pytest.mark.parametrize(
+    ("str_from", "str_to"),
+    [("~", "null"), ("2026-01-01T00:00:00", "2026-01-01 00:00:00"), ("=", "x")],
+)
+def test_workflow_job_moved_with_a_respelled_null_date_or_value_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_from: str, str_to: str
+) -> None:
+    """The null, timestamp and ``=`` resolvers are off, so these stay different text."""
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB + f"    env:\n      X: {str_to}\n",
+        str_job_old=_STR_MOVED_JOB + f"    env:\n      X: {str_from}\n",
+    )
+
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
+
+
+def test_workflow_repair_of_an_unparseable_base_reports_nothing() -> None:
+    """A base that did not parse has no comparable jobs, so its repair is not a finding."""
+    assert (
+        gate.workflow_problems("jobs: [\n", str_new=f"jobs:\n{_STR_KEPT_JOB}", str_shown="w") == []
+    )
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        "x: &a\n  gate:\n    runs-on: u\njobs:\n  <<: *a\n  other:\n    runs-on: u\n",
+        "x: &j\n  gate:\n    runs-on: u\njobs: *j\n",
+    ],
+)
+def test_workflow_read_rejects_a_merge_key_or_alias_supplying_jobs(str_text: str) -> None:
+    """Jobs merged or aliased into ``jobs:`` have no key to flag, so the file is unparsed."""
+    assert gate.read_workflow(str_text) is None
+
+
+def test_workflow_base_with_a_merge_key_under_jobs_reports_instead_of_passing() -> None:
+    """A base that is YAML but unreadable is a finding, not a free deletion of every job."""
+    str_old = "x: &a\n  gate:\n    runs-on: u\njobs:\n  <<: *a\n"
+
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
+        "w: base workflow is YAML the gate cannot compare, so its jobs are unchecked"
+    ]
+
+
+@pytest.mark.parametrize("str_body", ["", " ~", " foo"])
+def test_workflow_with_a_scalar_job_body_reports_instead_of_crashing(str_body: str) -> None:
+    """A job whose value is a scalar is read, not an ``AttributeError``."""
+    str_old = f"jobs:\n  x:{str_body}\n  keep:\n    runs-on: ubuntu-latest\n"
+
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
+        "w: workflow job 'x' removed"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("str_from", "str_to"),
+    [("on", "true"), ("yes", "true"), ("1", "1.0"), ("1:20", "80")],
+)
+def test_workflow_job_moved_with_a_respelled_scalar_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_from: str, str_to: str
+) -> None:
+    """YAML 1.1 reads these as equal values; GitHub passes them through as different text."""
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB + f"    env:\n      X: {str_to}\n",
+        str_job_old=_STR_MOVED_JOB + f"    env:\n      X: {str_from}\n",
+    )
+
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
+
+
+def test_workflow_with_a_second_document_does_not_parse() -> None:
+    """Only one document is a workflow; a second ``---`` document is a parse failure."""
+    assert gate.read_workflow("jobs:\n---\njobs:\n") is None
+
+
+def test_workflow_flow_style_job_with_a_boolean_looking_id_is_not_movable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The flow-style check keys ``yes`` like the job table, so an identical copy is refused."""
+    str_job = "  yes: {runs-on: ubuntu-latest}\n"
+    list_findings = _collect_workflows(
+        monkeypatch,
+        dict_old={_STR_SOURCE: f"jobs:\n{str_job}{_STR_KEPT_JOB}"},
+        dict_new={_STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}", _STR_SIBLING: f"jobs:\n{str_job}"},
+        list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
+    )
+
+    assert len(list_findings) == 1
+
+
+@pytest.mark.parametrize("str_value", ["!!int x", "!!float x", "!!bool x", "!!timestamp x"])
+def test_workflow_with_a_bad_explicit_tag_is_read_as_text(str_value: str) -> None:
+    """An explicit core tag constructs text, so a bad value cannot crash a constructor."""
+    assert gate.read_workflow(f"X: {str_value}\njobs:\n")[0]["X"] == "x"
+
+
+@pytest.mark.parametrize(
+    ("str_from", "str_to"),
+    [("!!int 1", "!!float 1.0"), ("!!bool true", "!!int 1")],
+)
+def test_workflow_job_moved_with_a_retagged_scalar_is_removed(
+    monkeypatch: pytest.MonkeyPatch, *, str_from: str, str_to: str
+) -> None:
+    """Tags do not make ``1``, ``1.0`` and ``true`` equal: each is the text it spells."""
+    list_findings = _move_findings(
+        monkeypatch,
+        str_target=_STR_SIBLING,
+        str_job_new=_STR_MOVED_JOB + f"    env:\n      X: {str_to}\n",
+        str_job_old=_STR_MOVED_JOB + f"    env:\n      X: {str_from}\n",
+    )
+
+    assert list_findings == [f"{_STR_SOURCE}: workflow job 'gate-integrity' removed"]
+
+
+def test_workflow_with_a_root_level_merge_key_does_not_parse() -> None:
+    """A root merge key can supply ``jobs`` unseen, so the file is unparsed, not trusted."""
+    assert gate.read_workflow("<<: {jobs: {}}\n") is None
+
+
+def test_workflow_with_a_shared_alias_chain_is_read_without_blowing_up() -> None:
+    """A node shared by many aliases is walked once, so the strings walk stays linear."""
+    str_text = "a: &a [x, x]\nb: &b [*a, *a]\nc: &c [*b, *b]\nd: &d [*c, *c]\ne: [*d, *d]\n"
+
+    assert len(list(gate.iter_strings(gate.read_workflow(str_text)[0]))) == 7
+
+
+_STR_RUFF_BASE = '[lint]\nselect = ["E", "F"]\nignore = []\n'
+_STR_RUFF_WEAKER = '[lint]\nselect = ["E", "F"]\nignore = ["E501"]\n'
+_STR_RUFF_WEAKEST = '[lint]\nselect = ["E", "F"]\nignore = ["E501", "E402"]\n'
+_STR_RUFF_STRICTER = '[lint]\nselect = ["E", "F", "W"]\nignore = []\n'
+_STR_TRAILER = "feat: x\n\ngate-change-ok: owner reviewed the ignore\n"
+
+
+def _stage(path_repo: Path, *, str_name: str, str_text: str) -> None:
+    """Write a file under the repo and stage it.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        The repository.
+    str_name : str
+        Repository-relative file name.
+    str_text : str
+        File content.
+    """
+    (path_repo / str_name).parent.mkdir(parents=True, exist_ok=True)
+    (path_repo / str_name).write_text(str_text, encoding="utf-8")
+    _git_in(path_repo, "add", str_name)
+
+
+def _commit_staged(path_repo: Path, *, str_message: str) -> None:
+    """Commit the index, as the pre-commit run that already passed would let it.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        The repository.
+    str_message : str
+        Full commit message.
+    """
+    _git_in(path_repo, "commit", "-q", "-m", str_message)
+
+
+@pytest.fixture
+def path_branch(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return a repo on ``feature`` forked from a ``main`` that carries a strict ``ruff.toml``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided scratch directory.
+    monkeypatch : pytest.MonkeyPatch
+        Puts the gate in a local shell, with no ``GATE_CHANGE_OK``, inside the repo.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository, checked out on ``feature``.
+    """
+    _local_shell(monkeypatch)
+    monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
+    _git_in(tmp_path, "init", "-q", "--initial-branch=main")
+    _git_in(tmp_path, "config", "user.email", "t@example.com")
+    _git_in(tmp_path, "config", "user.name", "t")
+    _stage(tmp_path, str_name="ruff.toml", str_text=_STR_RUFF_BASE)
+    _commit_staged(tmp_path, str_message="seed")
+    _git_in(tmp_path, "checkout", "-q", "-b", "feature")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+@pytest.fixture
+def path_weakened(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return ``path_branch`` after the owner's justified, interactive weakening commit.
+
+    The commit is made with ``GATE_CHANGE_OK`` set and no trailer in its message.
+
+    Parameters
+    ----------
+    path_branch : pathlib.Path
+        The branch fixture.
+    monkeypatch : pytest.MonkeyPatch
+        Sets then clears ``GATE_CHANGE_OK``.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository after the weakening commit.
+    """
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    monkeypatch.setenv("GATE_CHANGE_OK", "owner reviewed the ignore")
+    _commit_staged(path_branch, str_message="feat: x")
+    monkeypatch.delenv("GATE_CHANGE_OK")
+    return path_branch
+
+
+@pytest.fixture
+def path_recorded(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return ``path_branch`` after the weakening commit that ALSO carries the trailer.
+
+    Parameters
+    ----------
+    path_branch : pathlib.Path
+        The branch fixture.
+    monkeypatch : pytest.MonkeyPatch
+        Sets then clears ``GATE_CHANGE_OK``.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository after the weakening commit.
+    """
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    monkeypatch.setenv("GATE_CHANGE_OK", "owner reviewed the ignore")
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    monkeypatch.delenv("GATE_CHANGE_OK")
+    return path_branch
+
+
+def test_branch_justified_without_a_trailer_still_refuses_a_later_commit(
+    path_weakened: Path,
+) -> None:
+    """The defect as measured on #1321: a later tests-only commit is refused again."""
+    _stage(path_weakened, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+
+    assert gate.main([]) == 1
+
+
+def test_branch_justified_by_recorded_trailer_passes_a_tests_only_commit(
+    path_recorded: Path,
+) -> None:
+    """SHOULD PASS: the finding was justified on this branch, so a test-only commit is clean."""
+    _stage(path_recorded, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+
+    assert gate.main([]) == 0
+
+
+def test_branch_justified_by_recorded_trailer_passes_with_nothing_new_staged(
+    path_recorded: Path,
+) -> None:
+    """SHOULD PASS: the merge-with-main shape — nothing of this branch's own changes."""
+    assert gate.main([]) == 0
+
+
+def test_branch_justified_by_recorded_trailer_refuses_a_new_weakening(
+    path_recorded: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a NEW weakening on a justified branch still needs a fresh override."""
+    _stage(path_recorded, str_name="ruff.toml", str_text=_STR_RUFF_WEAKEST)
+
+    int_code = gate.main([])
+
+    assert (int_code, "E402" in capsys.readouterr().out) == (1, True)
+
+
+def test_branch_justified_forged_trailer_on_a_clean_commit_justifies_nothing(
+    path_branch: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: an agent-typed trailer on a commit with no findings of its own is void."""
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+
+    int_code = gate.main([])
+
+    assert (int_code, "E501" in capsys.readouterr().out) == (1, True)
+
+
+def test_branch_justified_after_main_adds_a_gate_does_not_record_it(
+    path_recorded: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a gate main added after the trailer commit is not justified by it."""
+    _git_in(path_recorded, "checkout", "-q", "main")
+    _stage(path_recorded, str_name="ruff.toml", str_text=_STR_RUFF_STRICTER)
+    _commit_staged(path_recorded, str_message="chore: main adds rule W")
+    _git_in(path_recorded, "checkout", "-q", "feature")
+    _git_in(path_recorded, "merge", "-q", "-s", "ours", "main", "-m", "merge main")
+
+    int_code = gate.main([])
+
+    assert (int_code, "ruff.toml" in capsys.readouterr().out) == (1, True)
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        "jobs:\n  a:\n    steps: [1]\n    steps: [2]\n",
+        "jobs:\n  a:\n    steps: [1]\n  a:\n    steps: [1]\n",
+        "a: 1\x0b\njobs:\n",
+    ],
+    ids=["duplicate-steps", "duplicate-job", "control-character"],
+)
+def test_read_workflow_invalid_yaml_is_unparsed_not_a_crash(str_text: str) -> None:
+    """A repeated key or a control character is a workflow that does not parse."""
+    assert gate.read_workflow(str_text) is None
+
+
+def test_branch_justified_trailer_on_a_merge_commit_justifies_nothing(
+    path_branch: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a merge skips pre-commit, so a trailer on it is not a recorded approval."""
+    _git_in(path_branch, "checkout", "-q", "-b", "side", "main")
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    _commit_staged(path_branch, str_message="feat: side")
+    _git_in(path_branch, "checkout", "-q", "feature")
+    _git_in(path_branch, "merge", "-q", "--no-ff", "side", "-m", _STR_TRAILER)
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+    int_code = gate.main([])
+
+    assert (int_code, "ruff.toml" in capsys.readouterr().out) == (1, True)
+
+
+def test_local_run_ignores_a_bare_trailer_in_history(
+    path_branch: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local run reads no trailer as a blanket reason; only CI keeps that source."""
+    monkeypatch.setattr(gate, "pr_body_text", lambda: "")
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+
+    assert gate.justification_reason(_git_in(path_branch, "rev-parse", "main")) == ""
+
+
+def test_workflow_job_number_and_string_matrix_values_differ() -> None:
+    """``[16]`` and ``["16"]`` are a number and a string to ``toJSON``, so the jobs differ."""
+    str_head = "jobs:\n  a:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        n: "
+    dict_number = gate.workflow_jobs_of(gate.read_workflow(f"{str_head}[16]\n")[0])["a"]
+    dict_string = gate.workflow_jobs_of(gate.read_workflow(f'{str_head}["16"]\n')[0])["a"]
+
+    assert dict_number != dict_string
+
+
+def test_workflow_typed_copy_is_not_text_a_job_id_is_searched_in() -> None:
+    """A job id ``typed`` is not referenced just because each job carries a typed copy."""
+    dict_document = gate.read_workflow("jobs:\n  other:\n    runs-on: ubuntu-latest\n")[0]
+
+    assert gate.id_is_referenced("typed", dict_document=dict_document) is False
+
+
+def _raise_recursion(*_tuple_args: object, **_dict_kwargs: object) -> None:
+    """Stand in for ``yaml.compose`` on a document nested past the recursion limit."""
+    raise RecursionError
+
+
+def test_workflow_base_that_exhausts_the_recursion_limit_reports_instead_of_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A base the composer cannot walk is a finding, not a ``RecursionError`` out of the gate."""
+    monkeypatch.setattr(gate.yaml, "compose", _raise_recursion)
+
+    assert gate.base_unreadable_problems("jobs:\n", str_shown="w") == [
+        "w: base workflow nests too deeply for the gate, so its jobs are unchecked"
+    ]

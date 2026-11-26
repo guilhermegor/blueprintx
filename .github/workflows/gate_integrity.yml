@@ -26,5 +26,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Install PyYAML for the workflow parser
+        run: python3 -m pip install pyyaml==6.0.3
+
       - name: Check for an unjustified gate weakening since main
         run: python3 templates/python-common/bin/check_gate_integrity.py --root .
