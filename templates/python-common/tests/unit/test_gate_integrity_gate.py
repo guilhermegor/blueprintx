@@ -2394,8 +2394,16 @@ def test_first_commit_on_a_branch_that_weakens_a_gate_fails(path_first_commit: P
 
 
 @pytest.mark.parametrize("dict_env", [{}, {"CI": "true", "GITHUB_ACTIONS": "true"}])
+def test_clean_first_commit_branch_passes(path_first_commit: Path, *, dict_env: dict) -> None:
+    """A clean branch whose HEAD is the merge-base exits 0, locally and under CI."""
+    assert _run_gate(path_first_commit, dict_env=dict_env).returncode == 0
+
+
+@pytest.mark.parametrize("dict_env", [{}, {"CI": "true", "GITHUB_ACTIONS": "true"}])
 def test_clean_checkout_of_the_default_branch_passes(
     path_first_commit: Path, *, dict_env: dict
 ) -> None:
-    """A clean checkout whose HEAD is the merge-base exits 0, locally and under CI."""
+    """A clean checkout of the default branch itself exits 0, locally and under CI."""
+    _git_in(path_first_commit, "checkout", "-q", "main")
+
     assert _run_gate(path_first_commit, dict_env=dict_env).returncode == 0
