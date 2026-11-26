@@ -2824,36 +2824,45 @@ def _missing_review(
     )
 
 
+def _roster_error_verdict(bool_json: bool, *, err: Exception) -> int:
+    """Print the missing or malformed roster verdict for ``err`` and return its exit code."""
+    str_code = "missing_roster"
+    if isinstance(err, (yaml.YAMLError, ValueError)):
+        str_code = "malformed_roster"
+    return _print_missing_roster(bool_json, str_detail=str(err), str_code=str_code)
+
+
 def _roster_or_verdict(
     bool_json: bool, *, str_repo_full: str, str_number: str
 ) -> tuple[dict[str, str], int | None]:
     """Return the roster, or the exit code of the skip/failure that ends the run early."""
     path_cwd = pathlib.Path.cwd()
-    bool_pr_opt_out = False
     try:
         bool_pr_opt_out = roster_opted_out(path_cwd)
-        if bool_pr_opt_out and base_opted_out(str_repo_full, str_number=str_number):
-            _write_checked_head(os.environ.get("EVALUATED_HEAD", ""))
-            return {}, _print_skip(
-                bool_json,
-                str_reason=f"{_ROSTER_FILE} declares `adopted: false` "
-                "— review-thread gate opted out",
-            )
-        if bool_pr_opt_out:
-            return {}, _print_missing_roster(
-                bool_json,
-                str_detail=f"{_ROSTER_FILE} opts out with `adopted: false`, but the base "
-                "branch's roster does not (or could not be read), so the opt-out is "
-                "refused. Land the opt-out on the base branch first.",
-                str_code="opt_out_refused",
-            )
+        bool_base_opt_out = bool_pr_opt_out and base_opted_out(
+            str_repo_full, str_number=str_number
+        )
+    except (RuntimeError, ValueError, OSError, yaml.YAMLError) as err:
+        return {}, _roster_error_verdict(bool_json, err=err)
+    if bool_base_opt_out:
+        _write_checked_head(os.environ.get("EVALUATED_HEAD", ""))
+        return {}, _print_skip(
+            bool_json,
+            str_reason=f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out",
+        )
+    if bool_pr_opt_out:
+        return {}, _print_missing_roster(
+            bool_json,
+            str_detail=f"{_ROSTER_FILE} opts out with `adopted: false`, but the base "
+            "branch's roster does not (or could not be read), so the opt-out is "
+            "refused. Land the opt-out on the base branch first.",
+            str_code="opt_out_refused",
+        )
+    try:
         dict_roster = load_roster(path_cwd)
         reviewer_logins(dict_roster)
     except (RuntimeError, ValueError, OSError, yaml.YAMLError) as err:
-        str_code = "missing_roster"
-        if isinstance(err, (yaml.YAMLError, ValueError)):
-            str_code = "malformed_roster"
-        return {}, _print_missing_roster(bool_json, str_detail=str(err), str_code=str_code)
+        return {}, _roster_error_verdict(bool_json, err=err)
     if not dict_roster:
         return {}, _print_missing_roster(bool_json)
     return dict_roster, None
