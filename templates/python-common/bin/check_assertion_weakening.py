@@ -586,7 +586,48 @@ def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dic
         dict_local.pop(cls_arg.arg, None)
     for cls_extra in (cls_args.vararg, cls_args.kwarg):
         dict_local.pop(cls_extra.arg if cls_extra else "", None)
-    return _scoped_names(node_fn.body, dict_start=dict_local)
+    dict_after = _scoped_names(node_fn.body, dict_start=dict_local)
+    dict_after.update(_used_before_rebind(node_fn, dict_start=dict_local, dict_after=dict_after))
+    return dict_after
+
+
+def _used_before_rebind(
+    node_fn: ast.FunctionDef, *, dict_start: dict[str, str], dict_after: dict[str, str]
+) -> dict[str, str]:
+    """Return the bindings a rebind inside a test removes although a call used them first.
+
+    Parameters
+    ----------
+    node_fn : ast.FunctionDef
+        The test function.
+    dict_start : dict of str to str
+        The table before the body.
+    dict_after : dict of str to str
+        The table after the body.
+
+    Returns
+    -------
+    dict of str to str
+        The starting binding of each name that is called before the first statement removing
+        it, so ``skip(); skip = helper`` still reports the call, as the module-level table did.
+    """
+    dict_first_call: dict[str, int] = {}
+    for cls_node in ast.walk(node_fn):
+        if isinstance(cls_node, ast.Call):
+            for cls_name in ast.walk(cls_node.func):
+                if isinstance(cls_name, ast.Name):
+                    dict_first_call[cls_name.id] = min(
+                        dict_first_call.get(cls_name.id, cls_node.lineno), cls_node.lineno
+                    )
+    dict_keep: dict[str, str] = {}
+    for cls_stmt, _ in _flat_stmts(node_fn.body):
+        dict_probe = dict(dict_start)
+        _bind_names(cls_stmt, dict_names=dict_probe)
+        for str_name, str_value in dict_start.items():
+            is_used_first = dict_first_call.get(str_name, cls_stmt.lineno) < cls_stmt.lineno
+            if str_name not in dict_probe and str_name not in dict_after and is_used_first:
+                dict_keep[str_name] = str_value
+    return dict_keep
 
 
 def _marker_labels(list_exprs: list) -> set:
@@ -1252,10 +1293,36 @@ def _unbind_assigned(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
     if not isinstance(cls_stmt, ast.Assign | ast.AnnAssign | ast.AugAssign):
         return
     list_targets = cls_stmt.targets if isinstance(cls_stmt, ast.Assign) else [cls_stmt.target]
+    is_alias = _under_pytest_mark(getattr(cls_stmt, "value", None), dict_names=dict_names)
     for cls_target in list_targets:
         for cls_name in ast.walk(cls_target):
             if isinstance(cls_name, ast.Name):
                 dict_names.pop(cls_name.id, None)
+                if is_alias:
+                    dict_names[cls_name.id] = "mark-alias"
+
+
+def _under_pytest_mark(cls_expr: ast.expr | None, *, dict_names: dict[str, str]) -> bool:
+    """Return whether an expression is ``pytest.mark`` or an attribute chain under it.
+
+    Parameters
+    ----------
+    cls_expr : ast.expr or None
+        The assigned value.
+    dict_names : dict of str to str
+        The pytest name table.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``pytest.mark``, ``pytest.mark.skip`` and the like.
+    """
+    str_attr = ""
+    while isinstance(cls_expr, ast.Attribute):
+        str_attr = cls_expr.attr
+        cls_expr = cls_expr.value
+    is_pytest = isinstance(cls_expr, ast.Name) and dict_names.get(cls_expr.id) == "pytest"
+    return is_pytest and str_attr == "mark"
 
 
 def _outcome_of(cls_func: ast.expr | None, *, dict_names: dict[str, str]) -> str | None:
@@ -1299,8 +1366,11 @@ def _is_pytest_mark(cls_expr: ast.expr, *, dict_names: dict[str, str]) -> bool:
     -------
     bool
         ``True`` for ``pytest.mark`` through any alias the table knows, or a name imported with
-        ``from pytest import mark``.
+        ``from pytest import mark``. Once the module binds a name to ``pytest.mark`` or an
+        attribute under it, any receiver counts, as before the receiver check existed.
     """
+    if "mark-alias" in dict_names.values():
+        return True
     if isinstance(cls_expr, ast.Name):
         return dict_names.get(cls_expr.id) == "mark"
     return (

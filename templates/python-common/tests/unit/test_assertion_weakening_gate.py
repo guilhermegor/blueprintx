@@ -1753,3 +1753,19 @@ def test_a_raise_added_to_a_try_body_re_reports_the_except_skip() -> None:
     str_old = "def test_a():\n    try:\n        f(1)\n" + str_tail + _BODY
     str_new = "def test_a():\n    try:\n        f(1)\n        raise E\n" + str_tail + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_called_before_a_local_rebind_is_still_reported() -> None:
+    """Review of #1340: ``skip(); skip = helper`` skips for real, as main reported."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a():\n    from pytest import skip\n    skip()\n    skip = helper\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_pytest_mark_bound_to_a_name_keeps_the_receiver_agnostic_check() -> None:
+    """Review of #1340: ``m = pytest.mark`` then ``applymarker(m.skip)`` is reported."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = (
+        "m = pytest.mark\n\ndef test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
+    )
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
