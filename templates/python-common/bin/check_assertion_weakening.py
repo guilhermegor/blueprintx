@@ -805,7 +805,13 @@ def _except_guard(cls_try: ast.Try | ast.TryStar, *, cls_handler: ast.ExceptHand
         ``except <type> after #<digest>``.
     """
     str_caught = ast.unparse(cls_handler.type) if cls_handler.type else ""
+    list_before = [
+        ast.unparse(cls_prior.type) if cls_prior.type else ""
+        for cls_prior in cls_try.handlers[: cls_try.handlers.index(cls_handler)]
+    ]
     str_type = f"except {str_caught}".strip()
+    if list_before:
+        str_type += " not after " + ",".join(list_before)
     str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
     return f"{str_type} after #{hashlib.sha256(str_body.encode()).hexdigest()[:8]}"
 
@@ -892,7 +898,8 @@ def _marker_label(dec: ast.expr, *, str_name: str) -> str:
         return "skip"
     if not isinstance(dec, ast.Call):
         return "xfail:;lax" if str_name == "xfail" else str_name
-    list_cond = [*dec.args, *(kw.value for kw in dec.keywords if kw.arg == "condition")]
+    list_kw = [kw.value for kw in dec.keywords if kw.arg == "condition"]
+    list_cond = list_kw or list(dec.args)
     str_cond = _join_conditions([_marker_canon(cond) for cond in list_cond], cls_op=ast.Or())
     if str_name == "skipif":
         return f"skipif:{str_cond}"
@@ -1095,6 +1102,27 @@ def _bind_names(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
                 dict_names[str_local] = cls_alias.name
     elif isinstance(cls_stmt, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
         dict_names.pop(cls_stmt.name, None)
+    else:
+        _unbind_assigned(cls_stmt, dict_names=dict_names)
+
+
+def _unbind_assigned(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
+    """Remove from the pytest name table every name an assignment rebinds.
+
+    Parameters
+    ----------
+    cls_stmt : ast.AST
+        A module-level statement; anything but an assignment changes nothing.
+    dict_names : dict of str to str
+        The table, changed in place.
+    """
+    if not isinstance(cls_stmt, ast.Assign | ast.AnnAssign | ast.AugAssign):
+        return
+    list_targets = cls_stmt.targets if isinstance(cls_stmt, ast.Assign) else [cls_stmt.target]
+    for cls_target in list_targets:
+        for cls_name in ast.walk(cls_target):
+            if isinstance(cls_name, ast.Name):
+                dict_names.pop(cls_name.id, None)
 
 
 def _outcome_of(cls_func: ast.expr | None, *, dict_names: dict[str, str]) -> str | None:
@@ -1145,7 +1173,9 @@ def _applied_marker(cls_call: ast.Call) -> str | None:
     cls_mark = cls_arg.func if isinstance(cls_arg, ast.Call) else cls_arg
     if not (isinstance(cls_mark, ast.Attribute) and cls_mark.attr in _SKIP_MARKERS):
         return None
-    return "applymarker-xfail" if cls_mark.attr == "xfail" else "applymarker-skip"
+    if cls_mark.attr != "xfail":
+        return "applymarker-skip"
+    return "applymarker-" + _marker_label(cls_arg, str_name="xfail")
 
 
 def _skip_call_name(node: ast.AST, *, dict_names: dict[str, str] | None = None) -> str | None:

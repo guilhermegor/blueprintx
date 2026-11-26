@@ -1247,7 +1247,10 @@ def test_a_short_circuit_skip_keeps_its_guard() -> None:
         ("    pt.skip()\n", "newly marked skip()"),
         ("    raise pt.skip.Exception('x')\n", "newly marked skip()"),
         ("    request.applymarker(pytest.mark.skip)\n", "newly marked applymarker-skip()"),
-        ("    request.node.add_marker(pytest.mark.xfail)\n", "newly marked applymarker-xfail()"),
+        (
+            "    request.node.add_marker(pytest.mark.xfail)\n",
+            "newly marked applymarker-xfail:;lax()",
+        ),
     ],
     ids=["alias", "raise-exception", "applymarker", "add-marker"],
 )
@@ -1417,6 +1420,39 @@ def test_a_guarded_late_marker_does_not_excuse_a_skipif_decorator() -> None:
     )
     str_new = "@pytest.mark.skipif(c, reason='r')\n" + str_old
     assert "newly marked skipif:c" in _sole_finding(str_old + _BODY, str_new=str_new + _BODY)
+
+
+def test_a_keyword_condition_replaces_the_positional_ones() -> None:
+    """Review of #1328: pytest reads ``condition=`` and ignores the positional conditions."""
+    str_old = "@pytest.mark.xfail(True, condition=False, strict=True)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(False, condition=True, strict=True)\ndef test_a():\n" + _BODY
+    assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_assignment_unbinds_an_imported_skip() -> None:
+    """Review of #1328: ``skip = lambda ...`` after ``from pytest import skip`` is not pytest's."""
+    str_head = "from pytest import skip\nskip = lambda reason: None\n\n\n"
+    str_old = str_head + "def test_a():\n    skip('r')\n" + _BODY
+    str_new = str_head + "@pytest.mark.skip\ndef test_a():\n    skip('r')\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_late_xfail_keeps_its_settings() -> None:
+    """Review of #1328: dropping ``raises=`` from a late xfail widens what it excuses."""
+    str_head = "def test_a(request):\n    request.applymarker(pytest.mark.xfail("
+    str_old = str_head + "raises=ValueError, strict=True))\n" + _BODY
+    str_new = str_head + "strict=True))\n" + _BODY
+    assert "newly marked applymarker-xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_handler_is_guarded_by_the_handlers_before_it() -> None:
+    """Review of #1328: removing the first handler lets the second one run and skip."""
+    str_try = "try:\n    import foo\n"
+    str_first = "except ValueError:\n    pass\n"
+    str_second = "except Exception:\n    pytestmark = pytest.mark.skip\n"
+    str_tail = "\n\ndef test_a():\n" + _BODY
+    str_old = str_try + str_first + str_second + str_tail
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_try + str_second + str_tail)
 
 
 def test_a_class_marker_is_a_new_marker() -> None:
