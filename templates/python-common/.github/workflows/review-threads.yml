@@ -13,10 +13,6 @@ permissions:
   pull-requests: read
   actions: write
 
-concurrency:
-  group: review-threads-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event_name == 'issue_comment' && 'comment' || 'head' }}
-  cancel-in-progress: false
-
 jobs:
 
   review-threads:
@@ -91,6 +87,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
+    concurrency:
+      group: review-app-check-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: false
     env:
       REVIEW_APP_CONFIGURED: ${{ secrets.REVIEW_APP_CLIENT_ID != '' && secrets.REVIEW_APP_PRIVATE_KEY != '' }}
     steps:

@@ -2684,18 +2684,19 @@ check to that App.
   the gate outcome through job outputs, does no checkout and runs no repo code, so nothing that
   tampers with `$GITHUB_PATH` or `$GITHUB_ENV` in the gate job can reach the token. This isolates
   the token, not the verdict: same-repo PR code in the gate step can still make the gate succeed,
-  as it could before this PR. It runs on
+  and a same-repo PR edits its own copy of `publish-app-check` on `pull_request`, so pinning
+  keeps other apps and jobs from posting the name; it adds no integrity against contributors with
+  write access. It runs on
   `!cancelled()`, so a cancelled run posts nothing. The App check's conclusion is the gate step's
   outcome, not the job's. The token asks for `checks: write` only.
-- **Runs wait instead of being cancelled mid-run.** The group is per PR and per event family
-  (`issue_comment` runs separate from the rest), with `cancel-in-progress: false`. A run in
-  progress is never killed, so it cannot be left `cancelled` half-way. A group holds one running
-  and one pending run, though: a third run cancels the pending one, so a run that was only waiting
-  can still end `cancelled` when a newer run supersedes it. The newer run evaluates the live thread
-  state when it starts, so the verdict it publishes is current. The `issue_comment` run is the
-  publish path for fork and Dependabot PRs and is not cancelled by a head event. The two families
-  can still publish on the same head SHA in either order when the App is configured; serialising
-  the publisher across families is tracked in #1335.
+- **Only the publisher is serialized.** The required gate job has no `concurrency:` group, so
+  nothing can cancel it or leave its check `cancelled`, and `rerun_stale_gate_runs.sh` re-runs
+  join no queue. `publish-app-check` has one group per PR with `cancel-in-progress: false`: one
+  publish runs at a time, and a waiting publish superseded by a newer one is cancelled, which is
+  harmless because it is not a required check. This puts publishes from both event families in
+  one order. The order is still the order in which gate jobs finish, so a gate job that read older
+  thread state and finished last can publish last; closing that needs the publisher to re-read the
+  state, tracked in #1335. The `issue_comment` run is the publish path for fork and Dependabot PRs.
 - **A failed mint looks like "waiting".** The job goes red at the mint step, but a pinned required
   check that never posts shows as "Expected - waiting" on the PR. Read the job log before assuming
   the check has not run.
