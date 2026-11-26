@@ -2667,6 +2667,62 @@ checks. A strict-on setting is therefore the violation, and the required checks 
 The #302 failure mode (six tier checks red because #293 had not merged) is accepted and is caught
 on main instead of at merge time.
 
+## Review gate published by a GitHub App (blueprintx#1318)
+
+The `Review threads answered` check can optionally be published by a GitHub App instead of the
+Actions job. It is opt-in: with no `REVIEW_APP_CLIENT_ID` / `REVIEW_APP_PRIVATE_KEY` secrets the
+workflow is unchanged. `REVIEW_APP_INTEGRATION_ID` makes `enable_repo_rules.sh` pin the required
+check to that App.
+
+- **The head is resolved once**, before the gate runs, and both the stale-run clearing and the App
+  publish use that SHA, so a push landing mid-run cannot get a `success` it was never checked for.
+- **No mint, no publish.** A failed mint (rotated key, App not installed) fails the job loudly at
+  the mint step and posts nothing, rather than posting a check with an empty token.
+- **Pinning has a cost.** Once pinned, only the App's check run satisfies the rule. A fork or
+  Dependabot PR's `pull_request` run gets no secrets, so it publishes nothing until someone
+  comments on it: the `issue_comment` run executes in the base repo with secrets and publishes the
+  App check. `enable_repo_rules.sh` warns about this when it applies a pin.
+- **The App token lives in its own job.** The gate job checks out and runs PR code and does not
+  even reference the App secrets (a job's secret context reaches its runner), so the "not
+  configured" notice lives in the publisher. A second job, `publish-app-check`, needs the gate job, receives only the head SHA and
+  the gate outcome through job outputs, does no checkout and runs no repo code, so nothing that
+  tampers with `$GITHUB_PATH` or `$GITHUB_ENV` in the gate job can reach the token. This isolates
+  the token, not the verdict: same-repo PR code in the gate step can still make the gate succeed,
+  and a same-repo PR edits its own copy of `publish-app-check` on `pull_request`, so pinning
+  keeps other apps and jobs from posting the name; it adds no integrity against contributors with
+  write access. It runs on
+  `!cancelled()`, so a cancelled run posts nothing. The App check's conclusion is the gate step's
+  outcome, not the job's. The token asks for `checks: write` only.
+- **Only the publisher is serialized.** The required gate job has no `concurrency:` group, so
+  nothing can cancel it or leave its check `cancelled`, and `rerun_stale_gate_runs.sh` re-runs
+  join no queue. `publish-app-check` has one group per PR and head SHA with `cancel-in-progress: false`: one
+  publish runs at a time, and a waiting publish superseded by a newer one is cancelled, which is
+  harmless because it is not a required check. This puts publishes from both event families in
+  one order. The order is still the order in which gate jobs finish, so a gate job that read older
+  thread state and finished last can publish last; closing that needs the publisher to re-read the
+  state, tracked in #1335. The `issue_comment` run is the publish path for fork and Dependabot PRs.
+- **A failed mint looks like "waiting", or leaves the old result.** The publisher job goes red at
+  the mint step. On a SHA with no App check yet, the pinned required check then shows as "Expected -
+  waiting". On a SHA the App already published for, a failed refresh leaves the previous result
+  visible, which can be a green one, so read the publisher job as well as the check.
+- **The published verdict is bound to the head the gate started on.** The head is resolved before
+  the protected-file guard, so a blocked run still publishes `failure` for its SHA, and a step
+  after the gate re-reads the PR head: if it moved, the publisher posts `failure` for the saved
+  SHA instead of a verdict that may belong to the new head. The new head's own run publishes its
+  check.
+- **Cancelled "Publish" entries are expected.** A publish superseded while waiting ends
+  `cancelled` (5 near-simultaneous review events on 14c68c49 left 3 such entries and one running
+  publish that succeeded). That job is not a required check, and the required gate job, which has
+  no group, was never cancelled.
+- **The pin lives in the environment.** `REVIEW_APP_INTEGRATION_ID` must be exported on every
+  run of `enable_repo_rules.sh`; a rerun without it rewrites the ruleset unpinned. Keep it in the
+  same place the apply is run from.
+- **Same name, two publishers.** Unpinned, the Actions job and the App both report
+  `Review threads answered` on a SHA. How GitHub resolves duplicate-name required checks across
+  apps is not verified, so treat the App path as coherent only when pinned.
+- **Python scaffolds only for now.** The TypeScript skeleton's `review-threads.yml` keeps the
+  Actions-only check until a TS repo asks for the App path.
+
 ## A justified gate change is honoured on the rest of the branch (`check_gate_integrity.py`, #1323)
 
 The local gate judges the whole branch against its merge-base, so after the owner justified a
