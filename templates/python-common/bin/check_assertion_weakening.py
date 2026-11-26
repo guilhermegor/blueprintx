@@ -44,6 +44,14 @@ appearance ORDER, old vs new. A reordering that leaves the same set of checks in
 misreport — noted as the one deliberate simplification measurement did not need to narrow
 further (ponytail: escape hatch below covers the rare false positive).
 
+OUT OF SCOPE, deliberately: a skip applied from a fixture or from ``conftest.py`` (an autouse
+fixture that calls ``pytest.skip()``, ``pytest_collection_modifyitems`` adding a marker). The
+gate compares one test file against its merge-base version and never reads a second file, so
+such a skip is invisible to it. The same holds for a guard whose evaluation time differs from
+its spelling (a module-level ``skipif(flag)`` and a run-time ``if flag: pytest.skip()`` share
+the label ``skip(if):flag``) and for ``and``/``or`` operands, which are compared sorted and so
+ignore short-circuit order.
+
 THE ESCAPE HATCH mirrors `check_gate_integrity.py`'s convention: a `test-change-ok: <reason>`
 line, with a non-empty reason, in the PR body (`GITHUB_EVENT_PATH`) or as a trailer on any
 commit since the merge-base. The PR body is CI-only, and the commit being created cannot
@@ -547,10 +555,39 @@ def _skip_or_xfail_markers(
         Decorator labels (``skip``, ``xfail``, ``skipif:<condition>``), plus ``skip()`` for a
         ``pytest.skip(...)`` call outside any ``if`` and ``skip(if):<test>`` for a guarded one.
     """
-    dict_known = _DEFAULT_NAMES if dict_names is None else dict_names
+    dict_known = _local_names(
+        node_fn, dict_names=_DEFAULT_NAMES if dict_names is None else dict_names
+    )
     set_out = _marker_labels(node_fn.decorator_list)
     set_out.update(_body_skip_labels(node_fn.body, tuple_guards=(), dict_names=dict_known))
     return set_out
+
+
+def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dict[str, str]:
+    """Return the pytest name table as the body of a function sees it.
+
+    Parameters
+    ----------
+    node_fn : ast.FunctionDef
+        The test function.
+    dict_names : dict of str to str
+        The module's pytest name table.
+
+    Returns
+    -------
+    dict of str to str
+        A copy where a parameter (a fixture named ``skip``) shadows the module name and the
+        function's own imports and assignments rebind it, as at module level.
+    """
+    dict_local = dict(dict_names)
+    cls_args = node_fn.args
+    for cls_arg in [*cls_args.posonlyargs, *cls_args.args, *cls_args.kwonlyargs]:
+        dict_local.pop(cls_arg.arg, None)
+    for cls_extra in (cls_args.vararg, cls_args.kwarg):
+        dict_local.pop(cls_extra.arg if cls_extra else "", None)
+    for cls_stmt, _ in _flat_stmts(node_fn.body):
+        _bind_names(cls_stmt, dict_names=dict_local)
+    return dict_local
 
 
 def _marker_labels(list_exprs: list) -> set:
@@ -763,7 +800,13 @@ def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
         return [
             ([*node.body, *node.finalbody], tuple_guards),
             *[
-                (cls_handler.body, (*tuple_guards, _except_guard(node, cls_handler=cls_handler)))
+                (
+                    cls_handler.body,
+                    (
+                        *tuple_guards,
+                        _except_guard(node, cls_handler=cls_handler, str_after=_try_calls(node)),
+                    ),
+                )
                 for cls_handler in node.handlers
             ],
             (node.orelse, (*tuple_guards, "try-else")),
@@ -772,7 +815,10 @@ def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
         return [
             ([node.subject], tuple_guards),
             *[
-                (cls_case.body, (*tuple_guards, _case_guard(node, cls_case=cls_case)))
+                (
+                    [*([cls_case.guard] if cls_case.guard else []), *cls_case.body],
+                    (*tuple_guards, _case_guard(node, cls_case=cls_case)),
+                )
                 for cls_case in node.cases
             ],
         ]
@@ -786,8 +832,10 @@ def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
     return [(list(ast.iter_child_nodes(node)), tuple_inner)]
 
 
-def _except_guard(cls_try: ast.Try | ast.TryStar, *, cls_handler: ast.ExceptHandler) -> str:
-    """Return the guard of an ``except`` body: its type and a digest of the ``try`` body.
+def _except_guard(
+    cls_try: ast.Try | ast.TryStar, *, cls_handler: ast.ExceptHandler, str_after: str
+) -> str:
+    """Return the guard of an ``except`` body: its type and a key of its ``try`` body.
 
     Two handlers for the same type guard different failures when the ``try`` bodies differ, so
     the type alone would let one stand in for the other.
@@ -798,11 +846,15 @@ def _except_guard(cls_try: ast.Try | ast.TryStar, *, cls_handler: ast.ExceptHand
         The statement that owns the handler.
     cls_handler : ast.ExceptHandler
         One of its handlers.
+    str_after : str
+        The key of the ``try`` body: its callees (``_try_calls``) for a test body, where an edited
+        argument must not re-report an unchanged handler, a digest of the whole statement for a
+        module-level ``pytestmark``, where two ``try`` blocks with no call must stay distinct.
 
     Returns
     -------
     str
-        ``except <type> after #<digest>``.
+        ``except <type> after <key>``.
     """
     str_caught = ast.unparse(cls_handler.type) if cls_handler.type else ""
     list_before = [
@@ -812,8 +864,31 @@ def _except_guard(cls_try: ast.Try | ast.TryStar, *, cls_handler: ast.ExceptHand
     str_type = f"except {str_caught}".strip()
     if list_before:
         str_type += " not after " + ",".join(list_before)
-    str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
-    return f"{str_type} after #{hashlib.sha256(str_body.encode()).hexdigest()[:8]}"
+    return f"{str_type} after {str_after}"
+
+
+def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
+    """Return the sorted callee names a ``try`` body calls, the key of its ``except`` guards.
+
+    Parameters
+    ----------
+    cls_try : ast.Try or ast.TryStar
+        The statement that owns the handlers.
+
+    Returns
+    -------
+    str
+        ``f(), g()`` for the distinct callees, ``nothing`` for a body that calls none. Editing an
+        argument or a statement that adds no call leaves the key alone, so an unchanged
+        ``except E: pytest.skip()`` is not reported again; adding or removing a callee changes it.
+    """
+    set_names = {
+        ast.unparse(cls_node.func)
+        for cls_stmt in cls_try.body
+        for cls_node in ast.walk(cls_stmt)
+        if isinstance(cls_node, ast.Call)
+    }
+    return ", ".join(f"{str_n}()" for str_n in sorted(set_names)) or "nothing"
 
 
 def _case_guard(cls_match: ast.Match, *, cls_case: ast.match_case) -> str:
@@ -918,11 +993,17 @@ def _xfail_scope(dec: ast.Call) -> str:
     Returns
     -------
     str
-        ``;raises=<types>`` and ``;run=<value>`` for the ones present, ``""`` for neither. A
+        ``;raises=<types>`` (a tuple sorted, so its order does not matter) and ``;run=<value>``
+        for the ones present, ``""`` for neither. A
         dropped ``raises`` lets any failure count as expected, and ``run=False`` stops the test
         from running at all, so both belong to the marker's identity.
     """
     dict_kw = {cls_kw.arg: ast.unparse(cls_kw.value) for cls_kw in dec.keywords}
+    cls_raises = next((cls_kw.value for cls_kw in dec.keywords if cls_kw.arg == "raises"), None)
+    if isinstance(cls_raises, ast.Tuple):
+        dict_kw["raises"] = (
+            "(" + ", ".join(sorted(ast.unparse(cls_t) for cls_t in cls_raises.elts)) + ")"
+        )
     if dict_kw.get("run") == "True":
         del dict_kw["run"]
     return "".join(
@@ -943,6 +1024,9 @@ def _marker_condition(str_marker: str) -> str | None:
     str or None
         The text after ``skipif:`` or ``<call>(if):``.
     """
+    cls_late = _RE_LATE_SKIPIF.match(str_marker)
+    if cls_late:
+        return cls_late.group(1)
     str_head, str_sep, str_tail = str_marker.partition(":")
     is_late = str_head.startswith("applymarker-")
     is_conditional = not is_late and (str_head == "skipif" or str_head.endswith("(if)"))
@@ -950,6 +1034,9 @@ def _marker_condition(str_marker: str) -> str | None:
 
 
 _RE_XFAIL_RAISES = re.compile(r";raises=([^;]*)")
+
+
+_RE_LATE_SKIPIF = re.compile(r"^applymarker-skipif:(.*)\(\)$")
 
 
 _RE_LATE_XFAIL = re.compile(r"^applymarker-(xfail:.*?)(\(\)|\(if\):.*)$")
@@ -1062,39 +1149,36 @@ def _newly_marked(*, set_old: set, set_new: set) -> set:
     }
 
 
-def _pytest_names(str_source: str) -> dict[str, str]:
+def _pytest_names(cls_tree: ast.Module) -> dict[str, str]:
     """Return the local names a module binds to pytest and to its run-time outcome functions.
 
     Parameters
     ----------
-    str_source : str
-        Full file content.
+    cls_tree : ast.Module
+        The parsed file.
 
     Returns
     -------
     dict of str to str
         ``{local name: "pytest"}`` for ``import pytest [as x]`` and ``{local name: function}``
-        for ``from pytest import skip [as y]``. ``pytest`` and the bare ``skip``/``xfail``/
-        ``importorskip`` stay recognised unless the module defines or imports that name from
-        somewhere else, which makes it a helper and not pytest's.
+        for ``from pytest import skip [as y]``, read from every statement that runs at import
+        time, ``try``/``if`` and ``for``/``with``/``match`` bodies included. ``pytest`` and the
+        bare ``skip``/``xfail``/``importorskip`` stay recognised unless the module defines or
+        imports that name from somewhere else, which makes it a helper and not pytest's.
     """
-    try:
-        cls_tree = ast.parse(str_source)
-    except SyntaxError:
-        return dict(_DEFAULT_NAMES)
     dict_names = dict(_DEFAULT_NAMES)
-    for cls_stmt in ast.iter_child_nodes(cls_tree):
+    for cls_stmt, _ in _flat_stmts(cls_tree.body):
         _bind_names(cls_stmt, dict_names=dict_names)
     return dict_names
 
 
 def _bind_names(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
-    """Update the pytest name table for one module-level statement.
+    """Update the pytest name table for one statement.
 
     Parameters
     ----------
     cls_stmt : ast.AST
-        A module-level statement.
+        A statement; compound ones are read by the caller through their bodies.
     dict_names : dict of str to str
         The table, changed in place.
     """
@@ -1163,19 +1247,46 @@ def _outcome_of(cls_func: ast.expr | None, *, dict_names: dict[str, str]) -> str
     return None
 
 
-def _applied_marker(cls_call: ast.Call) -> str | None:
-    """Return ``skip`` or ``xfail`` for ``request.applymarker(pytest.mark.<name>(...))``.
+def _is_pytest_mark(cls_expr: ast.expr, *, dict_names: dict[str, str]) -> bool:
+    """Return whether an expression is ``<pytest alias>.mark``.
+
+    Parameters
+    ----------
+    cls_expr : ast.expr
+        The receiver of a marker attribute.
+    dict_names : dict of str to str
+        The module's pytest name table.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``pytest.mark`` through any alias the table knows.
+    """
+    return (
+        isinstance(cls_expr, ast.Attribute)
+        and cls_expr.attr == "mark"
+        and isinstance(cls_expr.value, ast.Name)
+        and dict_names.get(cls_expr.value.id) == "pytest"
+    )
+
+
+def _applied_marker(cls_call: ast.Call, *, dict_names: dict[str, str]) -> str | None:
+    """Return a label for ``request.applymarker(pytest.mark.<name>(...))``.
 
     Parameters
     ----------
     cls_call : ast.Call
         Any call.
+    dict_names : dict of str to str
+        The module's pytest name table.
 
     Returns
     -------
     str or None
-        ``xfail`` for an ``xfail`` marker, ``skip`` for ``skip`` or ``skipif``; ``None`` when
-        the call applies no such marker.
+        ``applymarker-xfail:...`` for an ``xfail`` marker, ``applymarker-skipif:<condition>``
+        for ``skipif`` (so moving ``@skipif(c)`` into the call stays the same condition),
+        ``applymarker-skip`` for ``skip``; ``None`` when the call applies no such marker on
+        ``pytest.mark``.
     """
     cls_func = cls_call.func
     if not (isinstance(cls_func, ast.Attribute) and cls_func.attr in _APPLY_MARKER_METHODS):
@@ -1184,9 +1295,11 @@ def _applied_marker(cls_call: ast.Call) -> str | None:
     cls_mark = cls_arg.func if isinstance(cls_arg, ast.Call) else cls_arg
     if not (isinstance(cls_mark, ast.Attribute) and cls_mark.attr in _SKIP_MARKERS):
         return None
-    if cls_mark.attr != "xfail":
+    if not _is_pytest_mark(cls_mark.value, dict_names=dict_names):
+        return None
+    if cls_mark.attr == "skip":
         return "applymarker-skip"
-    return "applymarker-" + _marker_label(cls_arg, str_name="xfail")
+    return "applymarker-" + _marker_label(cls_arg, str_name=cls_mark.attr)
 
 
 def _skip_call_name(node: ast.AST, *, dict_names: dict[str, str] | None = None) -> str | None:
@@ -1214,7 +1327,9 @@ def _skip_call_name(node: ast.AST, *, dict_names: dict[str, str] | None = None) 
         return _outcome_of(cls_exc.value, dict_names=dict_known) if is_outcome else None
     if not isinstance(node, ast.Call):
         return None
-    return _outcome_of(node.func, dict_names=dict_known) or _applied_marker(node)
+    return _outcome_of(node.func, dict_names=dict_known) or _applied_marker(
+        node, dict_names=dict_known
+    )
 
 
 def _is_literal_ish(node: ast.expr) -> bool:
@@ -1537,11 +1652,11 @@ def _marker_table(str_source: str) -> tuple[dict[str, str], dict[str, set]]:
         set_inherited=_pytestmark_labels(cls_tree.body),
         dict_out=dict_inherited,
     )
-    return _pytest_names(str_source), dict_inherited
+    return _pytest_names(cls_tree), dict_inherited
 
 
 def _flat_stmts(list_body: list, *, str_guard: str = "") -> list:
-    """Return a body's statements, each with the ``if``/``try`` guard it sits under.
+    """Return a body's statements, each with the guard of the block it sits under.
 
     Parameters
     ----------
@@ -1558,24 +1673,50 @@ def _flat_stmts(list_body: list, *, str_guard: str = "") -> list:
     list_out: list = []
     for cls_stmt in list_body:
         list_out.append((cls_stmt, str_guard))
-        if isinstance(cls_stmt, ast.If):
-            str_test = _canon(cls_stmt.test)
-            str_else = _canon(ast.UnaryOp(op=ast.Not(), operand=cls_stmt.test))
-            for list_arm, str_arm in ((cls_stmt.body, str_test), (cls_stmt.orelse, str_else)):
-                str_next = _compose(str_guard, str_inner=str_arm)
-                list_out.extend(_flat_stmts(list_arm, str_guard=str_next))
-        elif isinstance(cls_stmt, ast.Try):
-            str_digest = hashlib.sha256(ast.unparse(cls_stmt).encode()).hexdigest()[:8]
-            list_arms = [([*cls_stmt.body, *cls_stmt.orelse], f"try #{str_digest}")]
-            list_arms += [
-                (cls_handler.body, _except_guard(cls_stmt, cls_handler=cls_handler))
-                for cls_handler in cls_stmt.handlers
-            ]
-            list_arms.append((cls_stmt.finalbody, ""))
-            for list_arm, str_arm in list_arms:
-                str_next = _compose(str_guard, str_inner=str_arm)
-                list_out.extend(_flat_stmts(list_arm, str_guard=str_next))
+        for list_arm, str_arm in _stmt_arms(cls_stmt):
+            str_next = _compose(str_guard, str_inner=str_arm)
+            list_out.extend(_flat_stmts(list_arm, str_guard=str_next))
     return list_out
+
+
+def _stmt_arms(cls_stmt: ast.stmt) -> list:
+    """Return the nested bodies of a compound statement, each with the guard it runs under.
+
+    Parameters
+    ----------
+    cls_stmt : ast.stmt
+        A module or class level statement.
+
+    Returns
+    -------
+    list of tuple
+        ``(body, guard)`` for an ``if``, ``try``/``try*``, ``for``/``while``, ``with`` or
+        ``match`` (a ``with`` adds no guard); empty for any other statement.
+    """
+    if isinstance(cls_stmt, ast.If):
+        str_else = _canon(ast.UnaryOp(op=ast.Not(), operand=cls_stmt.test))
+        return [(cls_stmt.body, _canon(cls_stmt.test)), (cls_stmt.orelse, str_else)]
+    if isinstance(cls_stmt, ast.Try | ast.TryStar):
+        str_digest = hashlib.sha256(ast.unparse(cls_stmt).encode()).hexdigest()[:8]
+        list_arms = [([*cls_stmt.body, *cls_stmt.orelse], f"try #{str_digest}")]
+        list_arms += [
+            (
+                cls_handler.body,
+                _except_guard(cls_stmt, cls_handler=cls_handler, str_after=str_digest),
+            )
+            for cls_handler in cls_stmt.handlers
+        ]
+        return [*list_arms, (cls_stmt.finalbody, "")]
+    if isinstance(cls_stmt, ast.For | ast.AsyncFor | ast.While):
+        return [([*cls_stmt.body, *cls_stmt.orelse], _guard_kind(cls_stmt) or "")]
+    if isinstance(cls_stmt, ast.With | ast.AsyncWith):
+        return [(cls_stmt.body, "")]
+    if isinstance(cls_stmt, ast.Match):
+        return [
+            (cls_case.body, _case_guard(cls_stmt, cls_case=cls_case))
+            for cls_case in cls_stmt.cases
+        ]
+    return []
 
 
 def _compose(str_outer: str, *, str_inner: str) -> str:

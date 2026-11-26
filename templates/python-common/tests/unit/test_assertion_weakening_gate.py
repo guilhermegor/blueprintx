@@ -1560,3 +1560,88 @@ def test_a_guard_that_names_something_else_is_a_new_skip(
     str_old = "def test_a(v):\n    " + str_old_head + str_tail
     str_new = "def test_a(v):\n    " + str_new_head + str_tail
     assert "newly marked skip(if)" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skipif_moved_into_applymarker_keeps_its_condition() -> None:
+    """Review of #1328 (#1334): ``@skipif(c)`` moved into ``applymarker`` adds nothing."""
+    str_old = "@pytest.mark.skipif(c)\ndef test_a(request):\n" + _BODY
+    str_new = "def test_a(request):\n    request.applymarker(pytest.mark.skipif(c))\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_applymarker_of_something_that_is_not_pytest_mark_is_not_a_skip() -> None:
+    """Review of #1328 (#1334): the receiver must be ``pytest.mark``, not any ``.skip``."""
+    str_old = "def test_a(request):\n" + _BODY
+    str_new = "def test_a(request):\n    request.applymarker(other.skip)\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_an_edited_try_argument_does_not_reflag_an_unchanged_except_skip() -> None:
+    """Review of #1328 (#1334): the ``except`` guard keys on the calls, not the body text."""
+    str_tail = "    except E:\n        pytest.skip()\n" + _BODY
+    str_old = "def test_a():\n    try:\n        f(1)\n" + str_tail
+    str_new = "def test_a():\n    try:\n        f(2)\n" + str_tail
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_an_xfail_raises_tuple_reordered_is_not_a_new_marker() -> None:
+    """Review of #1328 (#1334): ``raises=(A, B)`` and ``raises=(B, A)`` name the same types."""
+    str_old = "@pytest.mark.xfail(raises=(A, B))\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(raises=(B, A))\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_head",
+    [
+        "try:\n    from helpers import skip\nexcept ImportError:\n    pass\n",
+        "if TYPE_CHECKING:\n    from helpers import skip\n",
+    ],
+    ids=["try", "if"],
+)
+def test_a_skip_imported_from_elsewhere_inside_try_or_if_is_a_helper(str_head: str) -> None:
+    """Review of #1328 (#1334): a module-level ``skip`` bound under ``try``/``if`` is no pytest."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = str_head + "\n\ndef test_a():\n    skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_parameter_named_skip_is_not_pytest_skip() -> None:
+    """Review of #1328 (#1334): a fixture or parameter named ``skip`` shadows the bare name."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a(skip):\n    skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_function_local_import_of_skip_is_not_pytest_skip() -> None:
+    """Review of #1328 (#1334): ``from helpers import skip`` inside the test shadows pytest's."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a():\n    from helpers import skip\n\n    skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_head",
+    [
+        "for x in y:\n    pytestmark = pytest.mark.skip\n",
+        "with ctx:\n    pytestmark = pytest.mark.skip\n",
+        "match v:\n    case _:\n        pytestmark = pytest.mark.skip\n",
+        "try:\n    pass\nexcept* E:\n    pytestmark = pytest.mark.skip\n",
+    ],
+    ids=["for", "with", "match", "trystar"],
+)
+def test_a_pytestmark_under_for_with_match_or_trystar_is_a_new_marker(str_head: str) -> None:
+    """Review of #1328 (#1334): ``pytestmark`` set inside these blocks still marks the module."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = str_head + "\n\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_in_a_match_case_guard_is_a_new_skip() -> None:
+    """Review of #1328 (#1334): the ``case ... if <guard>`` expression is read like an ``if``."""
+    str_old = "def test_a(v):\n" + _BODY
+    str_new = (
+        "def test_a(v):\n    match v:\n        case 1 if pytest.skip():\n            pass\n"
+        + _BODY
+    )
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
