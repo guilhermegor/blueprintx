@@ -30,6 +30,7 @@ confirming the ``gate-change-ok:`` escape hatch still lets a genuinely justified
 deliberate rename) through ``report()``.
 """
 
+import functools
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -828,6 +829,7 @@ _STR_MOVED_JOB = (
     "      - run: python3 bin/check_gate_integrity.py\n"
 )
 _STR_KEPT_JOB = "  other:\n    name: Other\n    steps:\n      - run: echo hi\n"
+_STR_THIRD_JOB = "  third:\n    name: Third\n    steps:\n      - run: echo there\n"
 _STR_SOURCE = "templates/python-common/.github/workflows/scaffold_checks.yml"
 _STR_SIBLING = "templates/python-common/.github/workflows/gate_integrity.yml"
 _STR_ROOT_SIBLING = ".github/workflows/gate_integrity.yml"
@@ -966,25 +968,30 @@ def test_workflow_job_moved_with_a_softening_key_is_removed(
     assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
 
 
+_STR_MOVED_STEPS = "    steps:\n      - run: python3 bin/check_gate_integrity.py\n"
+
+
 @pytest.mark.parametrize(
-    "str_extra",
+    ("str_extra", "str_dropped"),
     [
-        "    needs: [build]\n",
-        "    env: &shared\n      A: '1'\n",
-        "    env: *shared\n",
-        "    env:\n      <<: *shared\n",
-        "    steps:\n      - *gate_step\n",
-        '    "needs": [build]\n',
-        "    'needs': [build]\n",
-        "    steps: [*gate_step]\n",
-        "    env: !!map &shared\n      A: '1'\n",
+        ("    needs: [build]\n", ""),
+        ("    env: &shared\n      A: '1'\n", ""),
+        ("    env: *shared\n", ""),
+        ("    env:\n      <<: *shared\n", ""),
+        ("    steps:\n      - *gate_step\n", _STR_MOVED_STEPS),
+        ('    "needs": [build]\n', ""),
+        ("    'needs': [build]\n", ""),
+        ("    steps: [*gate_step]\n", _STR_MOVED_STEPS),
+        ("    env: !!map &shared\n      A: '1'\n", ""),
     ],
 )
 def test_workflow_job_moved_with_outside_dependency_is_removed(
-    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str, str_dropped: str
 ) -> None:
     """``needs:`` and YAML anchors point outside the block, so an identical text is no proof."""
-    str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
+    str_job = _STR_MOVED_JOB.replace(str_dropped, "").replace(
+        "ubuntu-latest\n", f"ubuntu-latest\n{str_extra}"
+    )
     str_defs = "x-defs:\n  shared: &shared {A: '1'}\n  gate_step: &gate_step {run: a}\n" * (
         "&" not in str_extra
     )
@@ -1823,9 +1830,9 @@ def test_workflow_job_moved_beside_a_comment_between_jobs_is_clean(
     """A comment is not a value, so the one left between jobs does not block a move."""
     list_findings = _collect_workflows(
         monkeypatch,
-        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}# gate-integrity moved\n{_STR_KEPT_JOB}"},
+        dict_old={_STR_SOURCE: f"jobs:\n{_STR_MOVED_JOB}{_STR_KEPT_JOB}{_STR_THIRD_JOB}"},
         dict_new={
-            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}",
+            _STR_SOURCE: f"jobs:\n{_STR_KEPT_JOB}# gate-integrity moved\n{_STR_THIRD_JOB}",
             _STR_SIBLING: f"jobs:\n{_STR_MOVED_JOB}",
         },
         list_changed=[("M", _STR_SOURCE), ("A", _STR_SIBLING)],
@@ -2090,3 +2097,66 @@ def test_workflow_new_side_merge_key_under_jobs_says_the_gate_refuses_it() -> No
     assert gate.workflow_problems("jobs:\n  keep:\n", str_new=str_new, str_shown="w") == [
         "w: workflow YAML is YAML the gate refuses to read, so its jobs cannot be compared"
     ]
+
+
+def test_workflow_read_reports_a_nul_character_instead_of_crashing() -> None:
+    """PyYAML's reader rejects U+0000 before parsing, which must read as an unparsed file."""
+    assert gate.read_workflow("# a\x00b\njobs:\n  k:\n    runs-on: u\n") is None
+
+
+def test_workflow_concurrency_group_with_a_multiline_expression_matches_the_inline_one() -> None:
+    """GitHub ignores newlines between expression tokens, so both spellings name one group."""
+    dict_inline = {"name": "w", "concurrency": {"group": "ci-${{ github.ref }}"}}
+    dict_split = {"name": "w", "concurrency": {"group": "ci-${{ github.\n   ref }}"}}
+
+    assert gate.workflow_concurrency(dict_split) == gate.workflow_concurrency(dict_inline)
+
+
+_LIST_LEAF_COMPARISONS: list = []
+
+
+class _CountedLeaf(str):
+    """A string that records each equality test made against it."""
+
+    def __eq__(self, cls_other: object) -> bool:
+        _LIST_LEAF_COMPARISONS.append(1)
+        return str.__eq__(self, cls_other)
+
+    def __hash__(self) -> int:
+        return str.__hash__(self)
+
+
+def _shared_chain(int_levels: int) -> list:
+    """Build a value whose every level holds the previous one twice, as aliases do."""
+    return functools.reduce(
+        lambda list_node, _int_level: [list_node, list_node],
+        range(int_levels),
+        [_CountedLeaf("x")],
+    )
+
+
+def test_values_equal_compares_each_shared_node_pair_once() -> None:
+    """Plain ``==`` on two separate 12-level chains tests the leaf 4096 times."""
+    _LIST_LEAF_COMPARISONS.clear()
+    gate.values_equal(_shared_chain(12), cls_right=_shared_chain(12))
+
+    assert len(_LIST_LEAF_COMPARISONS) < 50
+
+
+def test_find_move_matches_headers_that_share_nodes() -> None:
+    """The move comparison goes through ``values_equal``, so a long chain still matches."""
+    tuple_candidate = ({"x-a": _shared_chain(60)}, {}, "")
+
+    assert (
+        gate.find_move(
+            [tuple_candidate],
+            tuple_pair=({"x-a": _shared_chain(60)}, {}),
+            tuple_concurrency=("", ""),
+        )
+        == tuple_candidate
+    )
+
+
+def test_values_equal_tells_apart_values_that_differ_only_deep_inside() -> None:
+    """The pair memo must not make unequal values equal."""
+    assert not gate.values_equal({"a": [{"b": "1"}]}, cls_right={"a": [{"b": "2"}]})

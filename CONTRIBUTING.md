@@ -745,13 +745,15 @@ Configuration files in this repository carry no comments, so the reasoning lives
   (`ubuntu-latest`, or `ubuntu-22.04`/`ubuntu-24.04` each optionally `-arm`, the same architecture
   on both sides), outside an `on: workflow_call` file, under
   the same top-level settings (`on:`, `env:`, `defaults:`, `permissions:`, `run-name:`, with
-  `name:` free), a `concurrency:` group that equals no non-empty source group, before or after this change (`github.workflow` read as the `name:`, a group that cannot be evaluated never excused), and no read of
+  `name:` free), a `concurrency:` group that equals no non-empty source group, before or after this change (`github.workflow` read as the `name:`, a group that cannot be evaluated blocks the move whenever the source has a non-empty group, before or after this change), and no read of
   `github.workflow`/`GITHUB_WORKFLOW`; a changed name, steps, `if:`,
   `env:` or trigger, a job gone from the tree, a move across trees (template to root) or
   into a subdirectory is still a removal (#1311), and so is a flow-style job or any job with
   `needs:` or a YAML anchor or merge key, whose meaning lives outside the compared
-  mapping, or one whose id the source file still holds as a word. A changed file that does not
-  parse now is itself a finding (an unparseable base reports nothing). PyYAML must be importable: BlueprintX's hook installs it, CI pins it, and a
+  mapping, or one whose id the source file still holds as a word. A modified file that does not
+  parse now is itself a finding (a base that is not YAML at all reports nothing; a base that is
+  valid YAML the gate refuses to read, such as a merge key under `jobs:`, is a finding even when
+  the change repairs it; a newly added malformed file only supplies no move candidates). PyYAML must be importable: BlueprintX's hook installs it, CI pins it, and a
   generated project gets it from its venv (a direct dependency of the service tiers, via
   `yamllint` in `lib-minimal`); the gate fails on a missing import and never falls back to a line
   parser. A moved job's new file must also be in every `bin/scaffold/python_*.sh` copy list, or that tier silently loses the job (not detected). `gate-integrity` reads a

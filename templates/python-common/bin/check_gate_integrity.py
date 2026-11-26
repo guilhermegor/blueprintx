@@ -789,13 +789,15 @@ def read_workflow(str_text: str) -> tuple | None:
         mapping, or it holds a self-referential alias, which the callers never read as a clean
         file.
     """
-    cls_loader = StringScalarLoader(str_text)
+    cls_loader = None
     try:
+        cls_loader = StringScalarLoader(str_text)
         cls_document, set_jobs = _parse_workflow(cls_loader)
     except (yaml.YAMLError, ValueError, KeyError, TypeError, RecursionError):
         return None
     finally:
-        cls_loader.dispose()
+        if cls_loader is not None:
+            cls_loader.dispose()
     if not isinstance(cls_document, dict):
         return None
     return cls_document, set_jobs
@@ -922,6 +924,7 @@ def workflow_concurrency(dict_document: dict) -> str:
         r"\$\{\{(.*?)\}\}",
         lambda cls_m: "${{" + re.sub(r"\s+", "", cls_m.group(1)) + "}}",
         cls_group,
+        flags=re.DOTALL,
     )
     str_group = str_group.strip().lower()
     str_name = str(dict_document.get("name") or "").strip().lower()
@@ -954,6 +957,68 @@ def groups_collide(str_source: str, *, str_target: str) -> bool:
     )
 
 
+def child_pairs(cls_left: object, *, cls_right: object) -> list | None:
+    """Return the child pairs two parsed values must match, or ``None`` when they differ.
+
+    Parameters
+    ----------
+    cls_left : object
+        A parsed YAML value.
+    cls_right : object
+        The value it is compared with.
+
+    Returns
+    -------
+    list of tuple or None
+        Key-wise or index-wise child pairs for two mappings or two lists of the same shape,
+        ``[]`` for two equal scalars, ``None`` otherwise.
+    """
+    if isinstance(cls_left, dict) and isinstance(cls_right, dict):
+        return (
+            [(cls_left[str_key], cls_right[str_key]) for str_key in cls_left]
+            if (cls_left.keys() == cls_right.keys())
+            else None
+        )
+    if isinstance(cls_left, list) and isinstance(cls_right, list):
+        return (
+            list(zip(cls_left, cls_right, strict=True))
+            if len(cls_left) == len(cls_right)
+            else None
+        )
+    return [] if cls_left == cls_right else None
+
+
+def values_equal(cls_left: object, *, cls_right: object) -> bool:
+    """Return whether two parsed values are equal, visiting each node pair once.
+
+    Parameters
+    ----------
+    cls_left : object
+        A parsed YAML value.
+    cls_right : object
+        The value it is compared with.
+
+    Returns
+    -------
+    bool
+        ``cls_left == cls_right`` without the exponential cost of ``==`` on two graphs that
+        share nodes through aliases: a pair of nodes already visited is not compared again, and
+        the walk is iterative, so a deep value cannot exhaust the stack.
+    """
+    list_stack = [(cls_left, cls_right)]
+    set_seen: set = set()
+    while list_stack:
+        cls_a, cls_b = list_stack.pop()
+        if (id(cls_a), id(cls_b)) in set_seen:
+            continue
+        set_seen.add((id(cls_a), id(cls_b)))
+        list_pairs = child_pairs(cls_a, cls_right=cls_b)
+        if list_pairs is None:
+            return False
+        list_stack.extend(list_pairs)
+    return True
+
+
 def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tuple) -> tuple:
     """Return the first candidate that is a faithful destination, or ``()``.
 
@@ -976,7 +1041,7 @@ def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tu
         (
             tuple_cand
             for tuple_cand in list_candidates
-            if tuple_cand[:2] == tuple_pair
+            if values_equal(list(tuple_cand[:2]), cls_right=list(tuple_pair))
             and not any(
                 groups_collide(str_src, str_target=tuple_cand[2]) for str_src in tuple_concurrency
             )

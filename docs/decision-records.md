@@ -1356,16 +1356,18 @@ is shaped as it is; a generated project gets the behavior, not the history.
       same id is NEWLY ADDED to another top-level workflow file of the same tree (the repo's
       own `.github/workflows/`, or one `templates/<name>/.github/workflows/`) with an
       identical job, so moving a job between files is a move, not a removal (#1311).
-      Workflows are read with PyYAML's `yaml.safe_load` (#1315) and compared as parsed
-      values, never as text: whitespace, quoting, key spelling, comments and flow-versus-block
-      style cannot change a verdict, and a changed value inside a folded `run: >` (a blank
+      Workflows are read with PyYAML through `StringScalarLoader` (#1315) and compared as parsed
+      values, never as text, subject to the move exclusions below (a flow-style destination job
+      is excluded even when its parsed value equals the block-style one): whitespace, quoting,
+      key spelling and comments cannot change a verdict, and a changed value inside a folded `run: >` (a blank
       line included) always does. The gate hard-fails on a missing `import yaml`; there is no
       fallback to a line parser. PyYAML is importable where the gate runs: BlueprintX's own
       hook is `language: python` with `additional_dependencies: [pyyaml==6.0.3]`, its CI job pins
       `pyyaml==6.0.3`, and generated projects run it in the project venv, where `pyyaml` is a
       direct dependency of the five service tiers and arrives with the `yamllint` dev
-      dependency in `lib-minimal`. A changed workflow file that does not parse now is itself
-      a finding: its jobs cannot be compared. A file that is not YAML at the merge-base has
+      dependency in `lib-minimal`. A modified workflow file that does not parse now is itself
+      a finding: its jobs cannot be compared. A newly added file is not checked for parsing: it
+      has no base blob, so it only supplies no move candidates when it is malformed. A file that is not YAML at the merge-base has
       no comparable jobs, so a change that repairs it reports nothing; one that is YAML the
       gate refuses to read (the cases below) is a finding when its change is reviewed, so
       deleting its jobs cannot pass unseen. A destination file that
