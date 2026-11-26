@@ -564,6 +564,9 @@ def _skip_or_xfail_markers(
     return set_out
 
 
+_KEY_ASSIGNED = "<assigned>"
+
+
 def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dict[str, str]:
     """Return the pytest name table as the body of a function sees it.
 
@@ -577,107 +580,99 @@ def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dic
     Returns
     -------
     dict of str to str
-        A copy where a parameter (a fixture named ``skip``) shadows the module name and the
-        function's own imports and assignments rebind it, as at module level.
+        The module table, plus every pytest name the function imports, minus the names the
+        function provably makes local: see ``_sole_local_names``. Anything else keeps the
+        module table's verdict.
     """
     dict_local = dict(dict_names)
-    cls_args = node_fn.args
-    for cls_arg in [*cls_args.posonlyargs, *cls_args.args, *cls_args.kwonlyargs]:
-        dict_local.pop(cls_arg.arg, None)
-    for cls_extra in (cls_args.vararg, cls_args.kwarg):
-        dict_local.pop(cls_extra.arg if cls_extra else "", None)
-    dict_after = _scoped_names(node_fn.body, dict_start=dict_local)
-    dict_after.update(_used_before_rebind(node_fn, dict_start=dict_local, dict_after=dict_after))
-    return dict_after
-
-
-def _first_call_lines(node_fn: ast.FunctionDef) -> dict[str, tuple[int, int]]:
-    """Return the line of the first call each name takes part in, in a test function.
-
-    Parameters
-    ----------
-    node_fn : ast.FunctionDef
-        The test function.
-
-    Returns
-    -------
-    dict of str to tuple of int
-        ``{name: (line, column)}`` for every name inside a call's callee, ``pytest`` of
-        ``pytest.skip()`` included.
-    """
-    dict_first_call: dict[str, tuple[int, int]] = {}
-    for cls_node in ast.walk(node_fn):
-        if isinstance(cls_node, ast.Call):
-            for cls_name in ast.walk(cls_node.func):
-                if isinstance(cls_name, ast.Name):
-                    tuple_at = (cls_node.lineno, cls_node.col_offset)
-                    dict_first_call[cls_name.id] = min(
-                        dict_first_call.get(cls_name.id, tuple_at), tuple_at
-                    )
-    return dict_first_call
-
-
-def _loop_node_ids(node_fn: ast.FunctionDef) -> set[int]:
-    """Return the ``id`` of every node under a ``for``, ``while`` or ``async for`` body.
-
-    Parameters
-    ----------
-    node_fn : ast.FunctionDef
-        The test function.
-
-    Returns
-    -------
-    set of int
-        Node identities, so a statement's membership says whether a loop repeats it.
-    """
-    return {
-        id(cls_inner)
-        for cls_loop in ast.walk(node_fn)
-        if isinstance(cls_loop, ast.For | ast.While | ast.AsyncFor)
-        for cls_inner in ast.walk(cls_loop)
-    }
-
-
-def _used_before_rebind(
-    node_fn: ast.FunctionDef, *, dict_start: dict[str, str], dict_after: dict[str, str]
-) -> dict[str, str]:
-    """Return the bindings a rebind inside a test removes although a call used them first.
-
-    Parameters
-    ----------
-    node_fn : ast.FunctionDef
-        The test function.
-    dict_start : dict of str to str
-        The table before the body.
-    dict_after : dict of str to str
-        The table after the body.
-
-    Returns
-    -------
-    dict of str to str
-        The starting binding of each name that is called before a statement removing it, or
-        removed inside a loop body, so ``skip(); skip = helper`` and a rebind that a later
-        iteration runs before the call still report it, as the module-level table did.
-    """
-    dict_first_call = _first_call_lines(node_fn)
-    set_in_loop = _loop_node_ids(node_fn)
-    dict_pool = dict(dict_start)
+    set_assigned = {*dict_names.get(_KEY_ASSIGNED, "").split(","), *_assigned_names(node_fn)}
+    dict_local[_KEY_ASSIGNED] = ",".join(sorted(set_assigned))
     for cls_stmt, _ in _flat_stmts(node_fn.body):
         dict_added: dict[str, str] = {}
         _bind_names(cls_stmt, dict_names=dict_added)
-        dict_pool.update(dict_added)
-    dict_keep: dict[str, str] = {}
-    for cls_stmt, str_guard in _flat_stmts(node_fn.body):
-        dict_probe = dict(dict_pool)
-        _bind_names(cls_stmt, dict_names=dict_probe)
-        tuple_at = (cls_stmt.lineno, cls_stmt.col_offset)
-        is_repeated = id(cls_stmt) in set_in_loop or bool(str_guard)
-        for str_name, str_value in dict_pool.items():
-            is_used_first = dict_first_call.get(str_name, tuple_at) < tuple_at
-            is_removed = str_name not in dict_probe and str_name not in dict_after
-            if is_removed and (is_used_first or is_repeated):
-                dict_keep[str_name] = str_value
-    return dict_keep
+        dict_local.update(dict_added)
+    for str_name in _sole_local_names(node_fn):
+        dict_local.pop(str_name, None)
+    return dict_local
+
+
+def _assigned_names(cls_node: ast.AST) -> set[str]:
+    """Return every name a node assigns, deletes or takes as a parameter, anywhere inside it.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        A module or a function.
+
+    Returns
+    -------
+    set of str
+        The names a receiver check cannot assume to be foreign.
+    """
+    set_names: set[str] = set()
+    for cls_sub in ast.walk(cls_node):
+        if isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Store | ast.Del):
+            set_names.add(cls_sub.id)
+        elif isinstance(cls_sub, ast.arg):
+            set_names.add(cls_sub.arg)
+    return set_names
+
+
+def _binding_names(cls_sub: ast.AST) -> list[str]:
+    """Return the names one node binds, for counting how often a function binds a name.
+
+    Parameters
+    ----------
+    cls_sub : ast.AST
+        Any node of a function.
+
+    Returns
+    -------
+    list of str
+        The names bound by an argument, a stored name, an import, a ``def``/``class``, an
+        ``except ... as`` or a ``match`` capture.
+    """
+    if isinstance(cls_sub, ast.arg):
+        return [cls_sub.arg]
+    if isinstance(cls_sub, ast.Name) and isinstance(cls_sub.ctx, ast.Store | ast.Del):
+        return [cls_sub.id]
+    if isinstance(cls_sub, ast.Import | ast.ImportFrom):
+        return [a.asname or a.name.split(".")[0] for a in cls_sub.names]
+    if isinstance(cls_sub, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return [cls_sub.name]
+    if isinstance(cls_sub, ast.ExceptHandler | ast.MatchAs | ast.MatchStar):
+        return [cls_sub.name] if cls_sub.name else []
+    return []
+
+
+def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
+    """Return the names a test function binds exactly once, in a way that makes them local.
+
+    Parameters
+    ----------
+    node_fn : ast.FunctionDef
+        The test function.
+
+    Returns
+    -------
+    set of str
+        A parameter, or a name that a direct statement of the body defines or imports from
+        somewhere other than pytest, when nothing else in the function binds it. Python makes
+        such a name local for the whole function, so no call of it reaches pytest's. A name
+        bound twice, conditionally, in a loop or by any other statement is not here, and
+        keeps the module table's verdict.
+    """
+    dict_count: dict[str, int] = {}
+    for cls_sub in ast.walk(node_fn):
+        for str_name in _binding_names(cls_sub):
+            dict_count[str_name] = dict_count.get(str_name, 0) + 1
+    set_candidates = {cls_a.arg for cls_a in ast.walk(node_fn.args) if isinstance(cls_a, ast.arg)}
+    for cls_stmt in node_fn.body:
+        if isinstance(cls_stmt, ast.Import | ast.ImportFrom | ast.FunctionDef | ast.ClassDef):
+            dict_pytest: dict[str, str] = {}
+            _bind_names(cls_stmt, dict_names=dict_pytest)
+            set_candidates |= {n for n in _binding_names(cls_stmt) if n not in dict_pytest}
+    return {str_name for str_name in set_candidates if dict_count.get(str_name) == 1}
 
 
 def _marker_labels(list_exprs: list) -> set:
@@ -1275,34 +1270,67 @@ def _pytest_names(cls_tree: ast.Module) -> dict[str, str]:
         whatever the other arms bind: arms are alternatives, not a sequence, and the gate errs
         toward reporting.
     """
-    return _scoped_names(cls_tree.body, dict_start=_DEFAULT_NAMES)
+    dict_names = _scoped_names(cls_tree.body, dict_start=_DEFAULT_NAMES)
+    dict_names[_KEY_ASSIGNED] = ",".join(sorted(_assigned_names(cls_tree)))
+    return dict_names
 
 
 def _scoped_names(list_body: list, *, dict_start: dict[str, str]) -> dict[str, str]:
-    """Return the name table after a body, with a name any guarded arm binds to pytest kept.
+    """Return the name table after a module body, with a name any guarded arm binds to pytest kept.
 
     Parameters
     ----------
     list_body : list of ast.stmt
-        The statements of a module or function body.
+        The module's statements.
     dict_start : dict of str to str
         The table before the body.
 
     Returns
     -------
     dict of str to str
-        A new table. Statements rebind in sequence, then every binding a ``try``/``if`` arm
-        made wins: arms are alternatives, and the gate errs toward reporting.
+        A new table. A direct statement of the body rebinds in sequence, as it always did. A
+        statement nested in a ``try``/``if``/``for``/``with`` only adds pytest bindings, and
+        removes a name only through an import of it from elsewhere, and only if the module did
+        not import that name from pytest itself: that is the one nested shape the gate is
+        meant to read as a helper. Every other nested statement keeps the earlier verdict.
     """
     dict_names = dict(dict_start)
-    dict_guarded: dict[str, str] = {}
-    for cls_stmt, str_guard in _flat_stmts(list_body):
-        _bind_names(cls_stmt, dict_names=dict_names)
-        if str_guard:
-            dict_arm: dict[str, str] = {}
-            _bind_names(cls_stmt, dict_names=dict_arm)
-            dict_guarded.update(dict_arm)
-    return {**dict_names, **dict_guarded}
+    dict_nested: dict[str, str] = {}
+    set_top = {id(cls_stmt) for cls_stmt in list_body}
+    set_explicit: set[str] = set()
+    for cls_stmt, _ in _flat_stmts(list_body):
+        dict_arm: dict[str, str] = {}
+        _bind_names(cls_stmt, dict_names=dict_arm)
+        if id(cls_stmt) in set_top:
+            _bind_names(cls_stmt, dict_names=dict_names)
+            set_explicit &= set(dict_names)
+        else:
+            _drop_foreign_import(cls_stmt, dict_names=dict_names, set_explicit=set_explicit)
+            dict_nested.update(dict_arm)
+        set_explicit |= set(dict_arm)
+    return {**dict_names, **dict_nested}
+
+
+def _drop_foreign_import(
+    cls_stmt: ast.AST, *, dict_names: dict[str, str], set_explicit: set[str]
+) -> None:
+    """Remove from a name table what a nested import of a name from elsewhere shadows.
+
+    Parameters
+    ----------
+    cls_stmt : ast.AST
+        A statement nested in a compound one.
+    dict_names : dict of str to str
+        The table, changed in place.
+    set_explicit : set of str
+        The names the module imported from pytest by name; those stay.
+    """
+    if not isinstance(cls_stmt, ast.Import | ast.ImportFrom):
+        return
+    dict_probe = dict(dict_names)
+    _bind_names(cls_stmt, dict_names=dict_probe)
+    for str_name in set(dict_names) - set(dict_probe) - set_explicit:
+        dict_names.pop(str_name)
 
 
 def _bind_names(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
@@ -1347,39 +1375,10 @@ def _unbind_assigned(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
     if not isinstance(cls_stmt, ast.Assign | ast.AnnAssign | ast.AugAssign):
         return
     list_targets = cls_stmt.targets if isinstance(cls_stmt, ast.Assign) else [cls_stmt.target]
-    is_alias = _under_pytest_mark(getattr(cls_stmt, "value", None), dict_names=dict_names)
     for cls_target in list_targets:
         for cls_name in ast.walk(cls_target):
             if isinstance(cls_name, ast.Name):
                 dict_names.pop(cls_name.id, None)
-                if is_alias:
-                    dict_names[cls_name.id] = "mark-alias"
-
-
-def _under_pytest_mark(cls_expr: ast.expr | None, *, dict_names: dict[str, str]) -> bool:
-    """Return whether an expression is ``pytest.mark`` or an attribute chain under it.
-
-    Parameters
-    ----------
-    cls_expr : ast.expr or None
-        The assigned value.
-    dict_names : dict of str to str
-        The pytest name table.
-
-    Returns
-    -------
-    bool
-        ``True`` for ``pytest.mark``, ``pytest.mark.skip`` and the like.
-    """
-    str_attr = ""
-    while isinstance(cls_expr, ast.Attribute):
-        str_attr = cls_expr.attr
-        cls_expr = cls_expr.value
-    if not isinstance(cls_expr, ast.Name):
-        return False
-    str_bound = dict_names.get(cls_expr.id)
-    is_mark = str_bound == "pytest" and str_attr == "mark"
-    return is_mark or (str_bound == "mark" and not str_attr) or str_bound == "mark-alias"
 
 
 def _outcome_of(cls_func: ast.expr | None, *, dict_names: dict[str, str]) -> str | None:
@@ -1410,32 +1409,29 @@ def _outcome_of(cls_func: ast.expr | None, *, dict_names: dict[str, str]) -> str
 
 
 def _is_pytest_mark(cls_expr: ast.expr, *, dict_names: dict[str, str]) -> bool:
-    """Return whether an expression is ``<pytest alias>.mark``.
+    """Return whether the receiver of a marker attribute may be ``pytest.mark``.
 
     Parameters
     ----------
     cls_expr : ast.expr
         The receiver of a marker attribute.
     dict_names : dict of str to str
-        The module's pytest name table.
+        The pytest name table, with the names the file assigns.
 
     Returns
     -------
     bool
-        ``True`` for ``pytest.mark`` through any alias the table knows, or a name imported with
-        ``from pytest import mark``. Once the module binds a name to ``pytest.mark`` or an
-        attribute under it, any receiver counts, as before the receiver check existed.
+        ``False`` only for a plain name or attribute chain rooted at a name that nothing in
+        the file assigns, takes as a parameter or binds to pytest, such as an undefined
+        ``other.skip``: the one shape the gate reads as no skip. Every other receiver counts, as it
+        did before the check.
     """
-    if "mark-alias" in dict_names.values():
+    cls_root = cls_expr
+    while isinstance(cls_root, ast.Attribute):
+        cls_root = cls_root.value
+    if not isinstance(cls_root, ast.Name) or cls_root.id in dict_names:
         return True
-    if isinstance(cls_expr, ast.Name):
-        return dict_names.get(cls_expr.id) == "mark"
-    return (
-        isinstance(cls_expr, ast.Attribute)
-        and cls_expr.attr == "mark"
-        and isinstance(cls_expr.value, ast.Name)
-        and dict_names.get(cls_expr.value.id) == "pytest"
-    )
+    return cls_root.id in dict_names.get(_KEY_ASSIGNED, "").split(",")
 
 
 def _applied_marker(cls_call: ast.Call, *, dict_names: dict[str, str]) -> str | None:

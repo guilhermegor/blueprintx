@@ -9,6 +9,8 @@ issue body, plus the literal-ish narrowing that measurement against real history
 unchanged RHS constant must not be read as an edited expected value).
 """
 
+import ast
+from functools import partial
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -1807,3 +1809,127 @@ def test_a_try_body_without_calls_keeps_the_digest_key() -> None:
     str_old = "def test_a():\n    try:\n        x = d[a]\n" + str_tail + _BODY
     str_new = "def test_a():\n    try:\n        x = d[b]\n" + str_tail + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+_MODULE_CASES = {
+    "default": ("", False),
+    "import-pytest-alias": ("import pytest as pt\n", False),
+    "from-pytest-skip": ("from pytest import skip as s\n", False),
+    "from-pytest-mark": ("from pytest import mark\n", False),
+    "top-level-helper": ("from helpers import skip\n", False),
+    "top-level-def": ("def skip():\n    pass\n", False),
+    "top-level-assign": ("skip = helper\n", False),
+    "explicit-then-nested-helper": (
+        "from pytest import skip\nif X:\n    from helpers import skip\n",
+        False,
+    ),
+    "explicit-then-nested-def": (
+        "from pytest import skip\nif X:\n    def skip():\n        pass\n",
+        False,
+    ),
+    "nested-assign": ("if X:\n    skip = helper\n", False),
+    "with-def": ("with ctx():\n    def skip():\n        pass\n", False),
+    "try-helper": ("try:\n    from helpers import skip\nexcept ImportError:\n    pass\n", True),
+    "if-helper": ("if X:\n    from helpers import skip\n", True),
+}
+
+_FUNCTION_CASES = {
+    "plain": ("def test_a():\n    skip()\n", False),
+    "param": ("def test_a(skip):\n    skip()\n", True),
+    "vararg": ("def test_a(*skip):\n    skip()\n", True),
+    "sole-nested-def": ("def test_a():\n    def skip():\n        pass\n    skip()\n", True),
+    "sole-local-import": ("def test_a():\n    from helpers import skip\n    skip()\n", True),
+    "call-then-rebind": ("def test_a():\n    skip()\n    skip = helper\n", False),
+    "same-line-rebind": ("def test_a():\n    skip(); skip = helper\n", False),
+    "conditional-rebind": ("def test_a():\n    if c:\n        skip = helper\n    skip()\n", False),
+    "loop-rebind": ("def test_a():\n    for _ in r:\n        skip = helper\n    skip()\n", False),
+    "import-then-def": (
+        "def test_a():\n    from helpers import skip\n    def skip():\n        pass\n",
+        False,
+    ),
+    "try-local-import": (
+        "def test_a():\n    try:\n        from helpers import skip\n"
+        "    except ImportError:\n        pass\n    skip()\n",
+        False,
+    ),
+    "local-pytest-import": ("def test_a():\n    from pytest import skip as s\n    s()\n", False),
+}
+
+_RECEIVER_CASES = {
+    "pytest-mark": ("import pytest\nx = pytest.mark\n", "pytest.mark", False),
+    "assigned-alias": ("import pytest\nm = pytest.mark\n", "m", False),
+    "from-pytest-mark": ("from pytest import mark\nm = mark\n", "m", False),
+    "imported-mark": ("from pytest import mark\n", "mark", False),
+    "parameter": ("def f(m):\n    pass\n", "m", False),
+    "call-result": ("", "get()", False),
+    "foreign-name": ("", "other", True),
+}
+
+
+def _main_names(cls_tree: ast.Module) -> dict[str, str]:
+    """Return the name table the checker read on main: direct module statements only.
+
+    Parameters
+    ----------
+    cls_tree : ast.Module
+        The parsed file.
+
+    Returns
+    -------
+    dict of str to str
+        Every statement nested in ``try``/``if``/``with`` was ignored, and so was every name
+        a function bound.
+    """
+    dict_names = dict(gate._DEFAULT_NAMES)
+    list(map(partial(gate._bind_names, dict_names=dict_names), ast.iter_child_nodes(cls_tree)))
+    return dict_names
+
+
+def _kept(dict_main: dict[str, str], *, dict_branch: dict[str, str]) -> bool:
+    """Return whether the branch table keeps every binding the main table has.
+
+    Parameters
+    ----------
+    dict_main : dict of str to str
+        What main recognised.
+    dict_branch : dict of str to str
+        What this branch recognises.
+
+    Returns
+    -------
+    bool
+        ``True`` when each pytest name main reports is still reported with the same function.
+    """
+    return all(dict_branch.get(str_k) == str_v for str_k, str_v in dict_main.items())
+
+
+@pytest.mark.parametrize("str_case", sorted(_MODULE_CASES))
+def test_the_module_name_table_never_loses_a_binding_main_had_except_the_listed_shapes(
+    str_case: str,
+) -> None:
+    """Differential, #1340: the branch may drop a pytest name main kept only for a listed shape."""
+    str_source, is_listed = _MODULE_CASES[str_case]
+    cls_tree = ast.parse(str_source)
+    is_kept = _kept(_main_names(cls_tree), dict_branch=gate._pytest_names(cls_tree))
+    assert is_kept is not is_listed
+
+
+@pytest.mark.parametrize("str_case", sorted(_FUNCTION_CASES))
+def test_the_local_name_table_never_loses_a_binding_the_module_had_except_the_listed_shapes(
+    str_case: str,
+) -> None:
+    """Differential, #1340: inside a test, only a parameter or a sole definition may shadow."""
+    str_source, is_listed = _FUNCTION_CASES[str_case]
+    cls_tree = ast.parse(str_source)
+    dict_module = gate._pytest_names(ast.parse(""))
+    dict_local = gate._local_names(cls_tree.body[0], dict_names=dict_module)
+    assert _kept(_main_names(ast.parse("")), dict_branch=dict_local) is not is_listed
+
+
+@pytest.mark.parametrize("str_case", sorted(_RECEIVER_CASES))
+def test_a_marker_receiver_is_accepted_as_on_main_except_the_listed_shape(str_case: str) -> None:
+    """Differential, #1340: only a receiver rooted at a name nothing assigns is not a mark."""
+    str_source, str_receiver, is_listed = _RECEIVER_CASES[str_case]
+    dict_names = gate._pytest_names(ast.parse(str_source))
+    cls_expr = ast.parse(str_receiver, mode="eval").body
+    assert gate._is_pytest_mark(cls_expr, dict_names=dict_names) is not is_listed
