@@ -46,7 +46,7 @@ jobs:
         run: |
           [ -s "$GATE_APPROVAL_COMMENT" ] || exit 0
           str_id=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
-            --jq '.[] | select(.body | contains("<!-- gate-integrity-approvals -->")) | .id' | head -n 1)
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- gate-integrity-approvals -->"))) | .id' | head -n 1)
           if [ -n "$str_id" ]; then
             gh api --method PATCH "repos/$GH_REPO/issues/comments/$str_id" -F body=@"$GATE_APPROVAL_COMMENT"
           else
