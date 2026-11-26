@@ -1683,7 +1683,7 @@ def test_a_guarded_applymarker_skipif_is_not_the_unguarded_decorator() -> None:
 
 
 @pytest.mark.parametrize(
-    ("str_signature", "str_call"),
+    "tup_case",
     [
         ("def test_a(*skip):", "skip()"),
         ("def test_a(**skip):", "skip()"),
@@ -1691,10 +1691,9 @@ def test_a_guarded_applymarker_skipif_is_not_the_unguarded_decorator() -> None:
     ],
     ids=["vararg", "kwarg", "pytest-param"],
 )
-def test_a_star_or_pytest_named_parameter_shadows_the_name(
-    str_signature: str, str_call: str
-) -> None:
+def test_a_star_or_pytest_named_parameter_shadows_the_name(tup_case: tuple[str, str]) -> None:
     """Review of #1340: ``*skip``, ``**skip`` and a parameter named ``pytest`` shadow the table."""
+    str_signature, str_call = tup_case
     str_old = "def test_a():\n" + _BODY
     str_new = str_signature + f"\n    {str_call}\n" + _BODY
     assert _findings(str_old, str_new=str_new) == []

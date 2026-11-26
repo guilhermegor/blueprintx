@@ -1000,9 +1000,10 @@ def _xfail_scope(dec: ast.Call) -> str:
     Returns
     -------
     str
-        ``;raises=<types>`` (a tuple sorted, so its order does not matter) and ``;run=<value>``
-        for the ones present, ``""`` for neither. A dropped ``raises`` lets any failure count as expected, and ``run=False`` stops the test
-        from running at all, so both belong to the marker's identity.
+        ``;raises=<types>`` (a tuple sorted, so its order does not matter) and
+        ``;run=<value>`` for the ones present, ``""`` for neither. A dropped
+        ``raises`` lets any failure count as expected, and ``run=False`` stops
+        the test from running at all, so both belong to the marker's identity.
     """
     dict_kw = {cls_kw.arg: ast.unparse(cls_kw.value) for cls_kw in dec.keywords}
     cls_raises = next((cls_kw.value for cls_kw in dec.keywords if cls_kw.arg == "raises"), None)
