@@ -2381,7 +2381,7 @@ def test_values_equal_compares_each_shared_node_pair_once() -> None:
     _LIST_LEAF_COMPARISONS.clear()
     gate.values_equal(_shared_chain(12), cls_right=_shared_chain(12))
 
-    assert len(_LIST_LEAF_COMPARISONS) < 50
+    assert 0 < len(_LIST_LEAF_COMPARISONS) < 50
 
 
 def test_consume_candidate_does_not_compare_earlier_candidates() -> None:
@@ -2392,7 +2392,7 @@ def test_consume_candidate_does_not_compare_earlier_candidates() -> None:
     _LIST_LEAF_COMPARISONS.clear()
     gate.consume_candidate(list_candidates, tuple_found=tuple_match)
 
-    assert len(_LIST_LEAF_COMPARISONS) < 50
+    assert not _LIST_LEAF_COMPARISONS
 
 
 def test_consume_candidate_removes_only_the_match() -> None:
@@ -2436,3 +2436,28 @@ def test_workflow_base_with_a_composer_error_reports_instead_of_passing(str_old:
     assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == [
         "w: base workflow uses YAML the gate refuses to read, so its jobs are unchecked"
     ]
+
+
+def test_workflow_new_side_too_deep_to_compose_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A file the composer cannot walk is not called unparseable or refused YAML."""
+    monkeypatch.setattr(gate, "read_workflow", lambda _str_text: None)
+    monkeypatch.setattr(gate.yaml, "compose", _raise_recursion)
+
+    assert gate.workflow_problems("jobs:\n", str_new="jobs:\n", str_shown="w") == [
+        "w: workflow nests too deeply for the gate, so its jobs cannot be compared"
+    ]
+
+
+def test_workflow_base_with_an_undefined_alias_reports_nothing() -> None:
+    """GitHub refuses an undefined alias too, so repairing such a base weakens nothing."""
+    str_old = "jobs:\n  gate:\n    steps: *missing\n"
+
+    assert gate.workflow_problems(str_old, str_new="jobs:\n  keep:\n", str_shown="w") == []
+
+
+@pytest.mark.parametrize(("cls_left", "cls_right"), [(1, True), (1, 1.0)])
+def test_values_equal_tells_apart_equal_values_of_different_types(
+    *, cls_left: object, cls_right: object
+) -> None:
+    """Python equates ``1``, ``1.0`` and ``True``; a typed read must not."""
+    assert not gate.values_equal([cls_left], cls_right=[cls_right])

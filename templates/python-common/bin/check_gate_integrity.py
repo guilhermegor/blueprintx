@@ -164,6 +164,7 @@ STR_FLOW_CONCURRENCY = "{flow}"
 STR_TYPED_KEY = "\x00typed"
 STR_MERGE_TAG = "tag:yaml.org,2002:merge"
 STR_REFUSED = "uses YAML the gate refuses to read"
+STR_TOO_DEEP = "nests too deeply for the gate"
 _SET_COERCED_TAGS = frozenset(
     f"tag:yaml.org,2002:{str_kind}"
     for str_kind in ("bool", "int", "float", "timestamp", "null", "value")
@@ -1085,7 +1086,7 @@ def child_pairs(cls_left: object, *, cls_right: object) -> list | None:
             if len(cls_left) == len(cls_right)
             else None
         )
-    return [] if cls_left == cls_right else None
+    return [] if type(cls_left) is type(cls_right) and cls_left == cls_right else None
 
 
 def values_equal(cls_left: object, *, cls_right: object) -> bool:
@@ -1235,8 +1236,36 @@ def removal_is_move(
     return bool_movable and bool(tuple_found)
 
 
+def refusal_reason(str_text: str) -> str | None:
+    """Return why the gate refuses a text that is still YAML, or ``None`` when it is not.
+
+    Parameters
+    ----------
+    str_text : str
+        Workflow content ``read_workflow`` returned ``None`` for.
+
+    Returns
+    -------
+    str or None
+        ``STR_REFUSED`` when ``yaml.compose`` reads the text as a mapping (a merge key, an
+        aliased ``jobs:``) or fails with a repeated anchor or a second document, which other
+        YAML tools accept; ``STR_TOO_DEEP`` when composing exhausts the stack. ``None`` when
+        GitHub refuses the text too (a syntax error, an undefined alias) or its root is not a
+        mapping, so a repair has nothing to weaken.
+    """
+    try:
+        cls_root = yaml.compose(str_text, Loader=yaml.SafeLoader)
+    except yaml.composer.ComposerError as cls_error:
+        return None if "undefined alias" in str(cls_error.problem) else STR_REFUSED
+    except yaml.YAMLError:
+        return None
+    except RecursionError:
+        return STR_TOO_DEEP
+    return STR_REFUSED if isinstance(cls_root, yaml.MappingNode) else None
+
+
 def base_unreadable_problems(str_old: str, *, str_shown: str) -> list:
-    """Return a finding for a base workflow that is valid YAML the gate refuses to compare.
+    """Return a finding for a base workflow the gate refuses to compare but GitHub may run.
 
     Parameters
     ----------
@@ -1248,24 +1277,15 @@ def base_unreadable_problems(str_old: str, *, str_shown: str) -> list:
     Returns
     -------
     list of str
-        One message when ``yaml.compose`` reads the text as a mapping (a merge key or an
-        aliased ``jobs:`` the gate rejects, say): GitHub still runs it, so a change that
-        deletes its jobs must not pass silently. ``[]`` when the text is not YAML at all,
-        which GitHub refuses to run, so a repair has nothing to weaken.
+        One message when ``refusal_reason`` names a reason: GitHub may still run the file, so
+        a change that deletes its jobs must not pass silently. ``[]`` otherwise.
     """
-    try:
-        cls_root = yaml.compose(str_old, Loader=yaml.SafeLoader)
-    except yaml.composer.ComposerError:
-        return [f"{str_shown}: base workflow {STR_REFUSED}, so its jobs are unchecked"]
-    except yaml.YAMLError:
-        return []
-    except RecursionError:
-        return [
-            f"{str_shown}: base workflow nests too deeply for the gate, so its jobs are unchecked"
-        ]
-    if not isinstance(cls_root, yaml.MappingNode):
-        return []
-    return [f"{str_shown}: base workflow {STR_REFUSED}, so its jobs are unchecked"]
+    str_reason = refusal_reason(str_old)
+    return (
+        [f"{str_shown}: base workflow {str_reason}, so its jobs are unchecked"]
+        if str_reason
+        else []
+    )
 
 
 def workflow_problems(
@@ -1300,11 +1320,7 @@ def workflow_problems(
     """
     tuple_new = read_workflow(str_new)
     if tuple_new is None:
-        str_why = (
-            STR_REFUSED
-            if base_unreadable_problems(str_new, str_shown=str_shown)
-            else "YAML does not parse"
-        )
+        str_why = refusal_reason(str_new) or "YAML does not parse"
         return [f"{str_shown}: workflow {str_why}, so its jobs cannot be compared"]
     tuple_old = read_workflow(str_old)
     if tuple_old is None:

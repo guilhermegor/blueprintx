@@ -1370,7 +1370,7 @@ is shaped as it is; a generated project gets the behavior, not the history.
       direct dependency of the five service tiers and arrives with the `yamllint` dev
       dependency in `lib-minimal`. A modified workflow file that does not parse now is itself
       a finding: its jobs cannot be compared. A newly added file is not checked for parsing: it
-      has no base blob, so it only supplies no move candidates when it is malformed. A file that is not YAML at the merge-base has
+      has no base blob, so a malformed one simply supplies no move candidates. A file that is not YAML at the merge-base has
       no comparable jobs, so a change that repairs it reports nothing; one that is YAML the
       gate refuses to read (the cases below, a repeated anchor and a second document) is a finding when its change is reviewed, so
       deleting its jobs cannot pass unseen. A destination file that
