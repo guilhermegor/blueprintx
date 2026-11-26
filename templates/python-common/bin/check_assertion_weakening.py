@@ -586,9 +586,7 @@ def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dic
         dict_local.pop(cls_arg.arg, None)
     for cls_extra in (cls_args.vararg, cls_args.kwarg):
         dict_local.pop(cls_extra.arg if cls_extra else "", None)
-    for cls_stmt, _ in _flat_stmts(node_fn.body):
-        _bind_names(cls_stmt, dict_names=dict_local)
-    return dict_local
+    return _scoped_names(node_fn.body, dict_start=dict_local)
 
 
 def _marker_labels(list_exprs: list) -> set:
@@ -1176,9 +1174,28 @@ def _pytest_names(cls_tree: ast.Module) -> dict[str, str]:
         whatever the other arms bind: arms are alternatives, not a sequence, and the gate errs
         toward reporting.
     """
-    dict_names = dict(_DEFAULT_NAMES)
+    return _scoped_names(cls_tree.body, dict_start=_DEFAULT_NAMES)
+
+
+def _scoped_names(list_body: list, *, dict_start: dict[str, str]) -> dict[str, str]:
+    """Return the name table after a body, with a name any guarded arm binds to pytest kept.
+
+    Parameters
+    ----------
+    list_body : list of ast.stmt
+        The statements of a module or function body.
+    dict_start : dict of str to str
+        The table before the body.
+
+    Returns
+    -------
+    dict of str to str
+        A new table. Statements rebind in sequence, then every binding a ``try``/``if`` arm
+        made wins: arms are alternatives, and the gate errs toward reporting.
+    """
+    dict_names = dict(dict_start)
     dict_guarded: dict[str, str] = {}
-    for cls_stmt, str_guard in _flat_stmts(cls_tree.body):
+    for cls_stmt, str_guard in _flat_stmts(list_body):
         _bind_names(cls_stmt, dict_names=dict_names)
         if str_guard:
             dict_arm: dict[str, str] = {}

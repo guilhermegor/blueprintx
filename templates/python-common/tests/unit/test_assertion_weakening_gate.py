@@ -1726,3 +1726,14 @@ def test_an_xfail_raises_tuple_that_gains_a_type_is_not_a_reorder() -> None:
     str_old = "@pytest.mark.xfail(raises=(A, B))\ndef test_a():\n" + _BODY
     str_new = "@pytest.mark.xfail(raises=(A,))\ndef test_a():\n" + _BODY
     assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_try_import_of_pytest_skip_inside_a_test_stays_pytest() -> None:
+    """Review of #1340: an arm that imports pytest's ``skip`` outlives the later arm."""
+    str_old = "def test_a():\n" + _BODY
+    str_head = (
+        "    try:\n        from pytest import skip\n"
+        "    except ImportError:\n        from helpers import skip\n"
+    )
+    str_new = "def test_a():\n" + str_head + "    skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
