@@ -13,6 +13,10 @@ permissions:
   pull-requests: read
   actions: write
 
+concurrency:
+  group: review-threads-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
 jobs:
 
   review-threads:
@@ -97,6 +101,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           STR_HEAD: ${{ steps.head.outputs.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
         run: |
           set -euo pipefail
           str_head="$STR_HEAD"

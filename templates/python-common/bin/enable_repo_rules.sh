@@ -372,7 +372,8 @@ main() {
 		print_status "error" "REVIEW_APP_INTEGRATION_ID must be the App's numeric id, got '$REVIEW_APP_INTEGRATION_ID'"
 		return 2
 	fi
-	if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && [ $# -eq 0 ]; then
+	if [ -n "$REVIEW_APP_INTEGRATION_ID" ] && [ $# -eq 0 ] &&
+		printf '%s\n' "${REQUIRED_CHECKS[@]}" | grep -qFx "$REVIEW_CHECK_NAME"; then
 		print_status "warning" "'$REVIEW_CHECK_NAME' is pinned to App $REVIEW_APP_INTEGRATION_ID: fork and Dependabot PRs get no secrets on pull_request and cannot publish that check until someone comments on the PR (issue_comment runs have them); keep REVIEW_APP_CLIENT_ID / REVIEW_APP_PRIVATE_KEY set (blueprintx#1318)"
 	fi
 	if [ "${1:-}" = "dry_run" ]; then
