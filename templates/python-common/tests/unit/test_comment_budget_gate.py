@@ -1904,6 +1904,13 @@ def test_trailing_comment_does_not_extend_a_full_line_run() -> None:
     assert [len(list_lines) for _, list_lines in list_blocks] == [2, 1]
 
 
+def test_a_wall_of_trailing_comments_trips_no_run_check(tmp_path: Path) -> None:
+    """Item of #1316: trailing comments form no run, so any number of them passes check 2."""
+    path_file = tmp_path / "wall.py"
+    path_file.write_text("x = 1  # c\n" * (gate.INT_MAX_RUN * 2), encoding="utf-8")
+    assert gate.file_problems(path_file) == []
+
+
 def test_trailing_comments_are_still_counted_by_the_ratchet(tmp_path: Path) -> None:
     """Item 8 of #1258: splitting runs must not drop trailing comments from the count."""
     path_file = tmp_path / "a.py"

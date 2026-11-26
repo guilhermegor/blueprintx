@@ -1356,22 +1356,25 @@ is shaped as it is; a generated project gets the behavior, not the history.
       same id is NEWLY ADDED to another top-level workflow file of the same tree (the repo's
       own `.github/workflows/`, or one `templates/<name>/.github/workflows/`) with an
       identical job, so moving a job between files is a move, not a removal (#1311).
-      Workflows are read with PyYAML's `yaml.safe_load` (#1315) and compared as parsed
-      values, never as text: whitespace, key spelling, comments and quoting a string cannot
-      change a verdict. Quoting a number or boolean can (`[16]` against `["16"]`, which
-      `toJSON` tells apart; each job also carries the standard loader's typed read), flow-versus-block
-      style cannot except that a flow-style job is never moved (above), and a changed value
+      Workflows are read with PyYAML through `StringScalarLoader` (#1315) and compared as parsed
+      values, never as text, subject to the move exclusions later in this entry (a flow-style destination job
+      is excluded even when its parsed value equals the block-style one): whitespace, key
+      spelling, comments and quoting a string cannot change a verdict. Quoting a number or
+      boolean can (`[16]` against `["16"]`, which `toJSON` tells apart; each job also carries
+      the standard loader's typed read), and a changed value
       inside a folded `run: >` (a blank
       line included) always does. The gate hard-fails on a missing `import yaml`; there is no
       fallback to a line parser. PyYAML is importable where the gate runs: BlueprintX's own
       hook is `language: python` with `additional_dependencies: [pyyaml==6.0.3]`, its CI job pins
       `pyyaml==6.0.3`, and generated projects run it in the project venv, where `pyyaml` is a
       direct dependency of the five service tiers and arrives with the `yamllint` dev
-      dependency in `lib-minimal`. A changed workflow file that does not parse now is itself
-      a finding: its jobs cannot be compared. A file that is not YAML at the merge-base has
+      dependency in `lib-minimal`. A modified workflow file that does not parse now is itself
+      a finding: its jobs cannot be compared. So is a modified workflow whose blob is not valid UTF-8 at either ref, even when the change repairs a non-UTF-8 base: GitHub may run encodings such as UTF-16 with a BOM, so the unreadable base can hold jobs and failing closed is the safe side. A newly added file is not checked for parsing: it
+      has no base blob, so a malformed one simply supplies no move candidates. A file that is not YAML at the merge-base has
       no comparable jobs, so a change that repairs it reports nothing; one that is YAML the
-      gate refuses to read (the cases below) is a finding when its change is reviewed, so
-      deleting its jobs cannot pass unseen. A destination file that
+      gate refuses to read (a merge key, a repeated anchor, a second document) is a finding when
+      its change is reviewed, so deleting its jobs cannot pass unseen; an undefined alias is
+      not, since GitHub rejects it too. A destination file that
       does not parse excuses nothing. The loader (`StringScalarLoader`) keeps every scalar as
       the text the file spells: no bool, int, float, null, timestamp or `=` resolver, and the
       same explicit tags (`!!int`, `!!bool`, ...) construct strings, so a tagged value neither
