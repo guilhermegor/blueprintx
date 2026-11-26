@@ -72,7 +72,12 @@ check "stale-run clearing and publishing share the head resolved before the gate
 	each_workflow publish_uses_resolved_head
 check "the stale-run step defines the PR number its error message prints" \
 	each_workflow stale_step_defines_pr_number
-check "runs are queued per PR and event family, never cancelled mid-run" each_workflow runs_are_serialized_per_pr
+check "a running run is never cancelled; one run per PR and event family waits" each_workflow runs_are_serialized_per_pr
+publish_job_fails_on_empty_head() {
+	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -A1 'name: Fail when the gate job produced no head SHA' |
+		grep -qF "needs.review-threads.outputs.head_sha == ''"
+}
+check "the publish job fails loud when no head SHA came from the gate job" each_workflow publish_job_fails_on_empty_head
 check "the publish job checks out and runs no PR code" each_workflow publish_job_runs_no_pr_code
 check "check publishing uses the App token" each_workflow publish_uses_app_token
 

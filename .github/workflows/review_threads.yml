@@ -121,6 +121,10 @@ jobs:
     env:
       REVIEW_APP_CONFIGURED: ${{ secrets.REVIEW_APP_CLIENT_ID != '' && secrets.REVIEW_APP_PRIVATE_KEY != '' }}
     steps:
+      - name: Fail when the gate job produced no head SHA
+        if: "env.REVIEW_APP_CONFIGURED == 'true' && needs.review-threads.outputs.head_sha == ''"
+        run: echo "::error::the gate job resolved no head SHA, so no App check was published" && exit 1
+
       - name: Mint the review-gate App token (only when the App is configured)
         id: app
         if: "env.REVIEW_APP_CONFIGURED == 'true' && needs.review-threads.outputs.head_sha != ''"
