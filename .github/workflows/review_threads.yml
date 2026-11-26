@@ -22,6 +22,7 @@ jobs:
     outputs:
       head_sha: ${{ steps.head.outputs.sha }}
       gate_outcome: ${{ steps.gate.outcome }}
+      head_stable: ${{ steps.stable.outputs.stable }}
     env:
       REVIEW_APP_CONFIGURED: ${{ secrets.REVIEW_APP_CLIENT_ID != '' && secrets.REVIEW_APP_PRIVATE_KEY != '' }}
     if: >-
@@ -31,6 +32,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Resolve the head SHA once, before the gate runs
+        id: head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          str_head="$EVENT_HEAD_SHA"
+          if [ -z "$str_head" ]; then
+            str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          fi
+          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
+          echo "sha=$str_head" >> "$GITHUB_OUTPUT"
 
       - name: Gate files unchanged, or the owner approved the change
         env:
@@ -65,22 +82,6 @@ jobs:
 
       - run: pip install --quiet pyyaml
 
-      - name: Resolve the head SHA once, before the gate runs
-        id: head
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-        run: |
-          set -euo pipefail
-          str_head="$EVENT_HEAD_SHA"
-          if [ -z "$str_head" ]; then
-            str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
-          fi
-          [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
-          echo "sha=$str_head" >> "$GITHUB_OUTPUT"
-
       - name: Review-gate App not configured, check stays on GITHUB_TOKEN
         if: env.REVIEW_APP_CONFIGURED != 'true'
         run: echo "::notice::REVIEW_APP_CLIENT_ID / REVIEW_APP_PRIVATE_KEY not set or not available to this run (fork and Dependabot pull_request runs get no secrets), skipping the GitHub App check publisher (blueprintx#1318)"
@@ -93,6 +94,18 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python3 templates/common/bin/check_review_threads.py
+
+      - name: Confirm the head did not move while the gate ran
+        id: stable
+        if: "!cancelled() && steps.head.outcome == 'success'"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          STR_HEAD: ${{ steps.head.outputs.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          str_now=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null) || str_now=""
+          if [ "$str_now" = "$STR_HEAD" ]; then echo "stable=true" >> "$GITHUB_OUTPUT"; else echo "stable=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Clear stale failed runs of this gate at the same head
         if: success()
@@ -140,15 +153,14 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           STR_HEAD: ${{ needs.review-threads.outputs.head_sha }}
           GATE_OUTCOME: ${{ needs.review-threads.outputs.gate_outcome }}
+          HEAD_STABLE: ${{ needs.review-threads.outputs.head_stable }}
         run: |
           set -euo pipefail
-          case "$GATE_OUTCOME" in
-            success) str_conclusion=success ;;
-            *) str_conclusion=failure ;;
-          esac
+          str_conclusion=failure
+          if [ "$GATE_OUTCOME" = success ] && [ "$HEAD_STABLE" = true ]; then str_conclusion=success; fi
           gh api -X POST "repos/${GITHUB_REPOSITORY}/check-runs" \
             -f name="Review threads answered" -f head_sha="$STR_HEAD" \
             -f details_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             -f status=completed -f conclusion="$str_conclusion" \
             -f "output[title]=Review threads answered" \
-            -f "output[summary]=Published by the review-gate GitHub App (gate step: ${GATE_OUTCOME})"
+            -f "output[summary]=Published by the review-gate GitHub App (gate step: ${GATE_OUTCOME}, head unchanged: ${HEAD_STABLE:-unknown})"

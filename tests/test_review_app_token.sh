@@ -56,8 +56,16 @@ runs_are_serialized_per_pr() {
 }
 gate_job_holds_no_app_token() { ! awk '/^  publish-app-check:/{f=1} !f' "$1" | grep -qF 'create-github-app-token'; }
 only_a_passing_gate_publishes_success() {
-	grep -qF 'success) str_conclusion=success ;;' "$1" && grep -qF '*) str_conclusion=failure ;;' "$1" &&
+	grep -qF 'if [ "$GATE_OUTCOME" = success ] && [ "$HEAD_STABLE" = true ]; then str_conclusion=success; fi' "$1" &&
 		! grep -qF 'cancelled) str_conclusion' "$1"
+}
+head_resolved_before_the_guard() {
+	grep -q 'name: Gate files unchanged' "$1" || return 0
+	[ "$(grep -n 'id: head$' "$1" | cut -d: -f1)" -lt "$(grep -n 'name: Gate files unchanged' "$1" | cut -d: -f1)" ]
+}
+publish_checks_the_head_did_not_move() {
+	grep -qF 'head_stable: ${{ steps.stable.outputs.stable }}' "$1" &&
+		awk '/id: stable$/{f=1} /name: Clear stale/{f=0} f' "$1" | grep -qF "[ \"\$str_now\" = \"\$STR_HEAD\" ]"
 }
 publish_job_runs_no_pr_code() {
 	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -qE 'actions/checkout|setup-python|python3? |bin/' && return 1
@@ -79,6 +87,8 @@ check "the stale-run step defines the PR number its error message prints" \
 	each_workflow stale_step_defines_pr_number
 check "only the publisher is serialized per PR, the required gate job is never cancelled" each_workflow runs_are_serialized_per_pr
 check "the job that runs PR code holds no App token" each_workflow gate_job_holds_no_app_token
+check "the head SHA is resolved before the protected-file guard" each_workflow head_resolved_before_the_guard
+check "success needs the head to be unchanged since the gate started" each_workflow publish_checks_the_head_did_not_move
 check "only a passing gate publishes success" each_workflow only_a_passing_gate_publishes_success
 publish_job_fails_on_empty_head() {
 	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -A1 'name: Fail when the gate job produced no head SHA' |

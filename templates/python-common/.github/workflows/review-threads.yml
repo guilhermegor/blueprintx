@@ -22,6 +22,7 @@ jobs:
     outputs:
       head_sha: ${{ steps.head.outputs.sha }}
       gate_outcome: ${{ steps.gate.outcome }}
+      head_stable: ${{ steps.stable.outputs.stable }}
     env:
       REVIEW_APP_CONFIGURED: ${{ secrets.REVIEW_APP_CLIENT_ID != '' && secrets.REVIEW_APP_PRIVATE_KEY != '' }}
     if: >-
@@ -66,6 +67,18 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
         run: python bin/check_review_threads.py
+
+      - name: Confirm the head did not move while the gate ran
+        id: stable
+        if: "!cancelled() && steps.head.outcome == 'success'"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          STR_HEAD: ${{ steps.head.outputs.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          str_now=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null) || str_now=""
+          if [ "$str_now" = "$STR_HEAD" ]; then echo "stable=true" >> "$GITHUB_OUTPUT"; else echo "stable=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Clear stale failed runs of this gate at the same head
         if: success()
@@ -113,15 +126,14 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           STR_HEAD: ${{ needs.review-threads.outputs.head_sha }}
           GATE_OUTCOME: ${{ needs.review-threads.outputs.gate_outcome }}
+          HEAD_STABLE: ${{ needs.review-threads.outputs.head_stable }}
         run: |
           set -euo pipefail
-          case "$GATE_OUTCOME" in
-            success) str_conclusion=success ;;
-            *) str_conclusion=failure ;;
-          esac
+          str_conclusion=failure
+          if [ "$GATE_OUTCOME" = success ] && [ "$HEAD_STABLE" = true ]; then str_conclusion=success; fi
           gh api -X POST "repos/${GITHUB_REPOSITORY}/check-runs" \
             -f name="Review threads answered" -f head_sha="$STR_HEAD" \
             -f details_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             -f status=completed -f conclusion="$str_conclusion" \
             -f "output[title]=Review threads answered" \
-            -f "output[summary]=Published by the review-gate GitHub App (gate step: ${GATE_OUTCOME})"
+            -f "output[summary]=Published by the review-gate GitHub App (gate step: ${GATE_OUTCOME}, head unchanged: ${HEAD_STABLE:-unknown})"

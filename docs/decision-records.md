@@ -2697,9 +2697,19 @@ check to that App.
   one order. The order is still the order in which gate jobs finish, so a gate job that read older
   thread state and finished last can publish last; closing that needs the publisher to re-read the
   state, tracked in #1335. The `issue_comment` run is the publish path for fork and Dependabot PRs.
-- **A failed mint looks like "waiting".** The job goes red at the mint step, but a pinned required
-  check that never posts shows as "Expected - waiting" on the PR. Read the job log before assuming
-  the check has not run.
+- **A failed mint looks like "waiting", or leaves the old result.** The publisher job goes red at
+  the mint step. On a SHA with no App check yet, the pinned required check then shows as "Expected -
+  waiting". On a SHA the App already published for, a failed refresh leaves the previous result
+  visible, which can be a green one, so read the publisher job as well as the check.
+- **The published verdict is bound to the head the gate started on.** The head is resolved before
+  the protected-file guard, so a blocked run still publishes `failure` for its SHA, and a step
+  after the gate re-reads the PR head: if it moved, the publisher posts `failure` for the saved
+  SHA instead of a verdict that may belong to the new head. The new head's own run publishes its
+  check.
+- **Cancelled "Publish" entries are expected.** A publish superseded while waiting ends
+  `cancelled` (5 near-simultaneous review events on 14c68c49 left 3 such entries and one running
+  publish that succeeded). That job is not a required check, and the required gate job, which has
+  no group, was never cancelled.
 - **The pin lives in the environment.** `REVIEW_APP_INTEGRATION_ID` must be exported on every
   run of `enable_repo_rules.sh`; a rerun without it rewrites the ruleset unpinned. Keep it in the
   same place the apply is run from.
