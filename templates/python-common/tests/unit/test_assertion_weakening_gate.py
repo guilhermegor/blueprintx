@@ -1723,8 +1723,8 @@ def test_a_skip_bound_to_pytest_in_any_arm_stays_pytests(str_head: str) -> None:
 
 def test_an_xfail_raises_tuple_that_gains_a_type_is_not_a_reorder() -> None:
     """Review of #1340: sorting the tuple must not hide a changed set of types."""
-    str_old = "@pytest.mark.xfail(raises=(A, B))\ndef test_a():\n" + _BODY
-    str_new = "@pytest.mark.xfail(raises=(A,))\ndef test_a():\n" + _BODY
+    str_old = "@pytest.mark.xfail(raises=(A,))\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(raises=(A, B))\ndef test_a():\n" + _BODY
     assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
 
 
@@ -1736,4 +1736,12 @@ def test_a_try_import_of_pytest_skip_inside_a_test_stays_pytest() -> None:
         "    except ImportError:\n        from helpers import skip\n"
     )
     str_new = "def test_a():\n" + str_head + "    skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_try_that_imports_a_different_name_re_reports_the_except_skip() -> None:
+    """Review of #1340: ``from foo import a`` becoming ``from foo import b`` changes the guard."""
+    str_tail = "except ImportError:\n        pytest.skip()\n"
+    str_old = "def test_a():\n    try:\n        from foo import a\n    " + str_tail + _BODY
+    str_new = "def test_a():\n    try:\n        from foo import b\n    " + str_tail + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
