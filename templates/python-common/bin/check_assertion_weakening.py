@@ -90,6 +90,7 @@ STR_INDEX_REF = ""
 
 _SKIP_MARKERS = frozenset({"skip", "skipif", "xfail"})
 _RUNTIME_OFF = frozenset({"skip", "importorskip", "xfail"})
+_BOUND_FROM_PYTEST = frozenset({"mark", *_RUNTIME_OFF})
 _APPLY_MARKER_METHODS = frozenset({"applymarker", "add_marker"})
 _DEFAULT_NAMES = {"pytest": "pytest", **{str_n: str_n for str_n in _RUNTIME_OFF}}
 
@@ -878,17 +879,23 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     Returns
     -------
     str
-        ``f(), g()`` for the distinct callees, ``nothing`` for a body that calls none. Editing an
-        argument or a statement that adds no call leaves the key alone, so an unchanged
-        ``except E: pytest.skip()`` is not reported again; adding or removing a callee changes it.
+        ``f(), g()`` for the distinct callees plus ``import <module>`` for each import,
+        ``nothing`` for a body with neither. Editing an argument leaves the key alone, so an
+        unchanged ``except E: pytest.skip()`` is not reported again; adding or removing a callee
+        or import changes it. Known limit, accepted for that trade: a second ``try`` that calls
+        the same callees and catches the same type shares the first one's label, so a skip added
+        there is not reported while the first one stays.
     """
-    set_names = {
-        ast.unparse(cls_node.func)
-        for cls_stmt in cls_try.body
-        for cls_node in ast.walk(cls_stmt)
-        if isinstance(cls_node, ast.Call)
-    }
-    return ", ".join(f"{str_n}()" for str_n in sorted(set_names)) or "nothing"
+    set_names: set[str] = set()
+    for cls_stmt in cls_try.body:
+        for cls_node in ast.walk(cls_stmt):
+            if isinstance(cls_node, ast.Call):
+                set_names.add(f"{ast.unparse(cls_node.func)}()")
+            elif isinstance(cls_node, ast.Import):
+                set_names.add("import " + ",".join(cls_a.name for cls_a in cls_node.names))
+            elif isinstance(cls_node, ast.ImportFrom):
+                set_names.add(f"import {cls_node.module}")
+    return ", ".join(sorted(set_names)) or "nothing"
 
 
 def _case_guard(cls_match: ast.Match, *, cls_case: ast.match_case) -> str:
@@ -994,8 +1001,7 @@ def _xfail_scope(dec: ast.Call) -> str:
     -------
     str
         ``;raises=<types>`` (a tuple sorted, so its order does not matter) and ``;run=<value>``
-        for the ones present, ``""`` for neither. A
-        dropped ``raises`` lets any failure count as expected, and ``run=False`` stops the test
+        for the ones present, ``""`` for neither. A dropped ``raises`` lets any failure count as expected, and ``run=False`` stops the test
         from running at all, so both belong to the marker's identity.
     """
     dict_kw = {cls_kw.arg: ast.unparse(cls_kw.value) for cls_kw in dec.keywords}
@@ -1164,12 +1170,20 @@ def _pytest_names(cls_tree: ast.Module) -> dict[str, str]:
         for ``from pytest import skip [as y]``, read from every statement that runs at import
         time, ``try``/``if`` and ``for``/``with``/``match`` bodies included. ``pytest`` and the
         bare ``skip``/``xfail``/``importorskip`` stay recognised unless the module defines or
-        imports that name from somewhere else, which makes it a helper and not pytest's.
+        imports that name from somewhere else, which makes it a helper and not pytest's. A name
+        that any guarded arm (``try``/``except``, ``if``/``else``) binds to pytest stays pytest's,
+        whatever the other arms bind: arms are alternatives, not a sequence, and the gate errs
+        toward reporting.
     """
     dict_names = dict(_DEFAULT_NAMES)
-    for cls_stmt, _ in _flat_stmts(cls_tree.body):
+    dict_guarded: dict[str, str] = {}
+    for cls_stmt, str_guard in _flat_stmts(cls_tree.body):
         _bind_names(cls_stmt, dict_names=dict_names)
-    return dict_names
+        if str_guard:
+            dict_arm: dict[str, str] = {}
+            _bind_names(cls_stmt, dict_names=dict_arm)
+            dict_guarded.update(dict_arm)
+    return {**dict_names, **dict_guarded}
 
 
 def _bind_names(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
@@ -1191,7 +1205,7 @@ def _bind_names(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
     elif isinstance(cls_stmt, ast.ImportFrom):
         for cls_alias in cls_stmt.names:
             str_local = cls_alias.asname or cls_alias.name
-            is_pytest = cls_stmt.module == "pytest" and cls_alias.name in _RUNTIME_OFF
+            is_pytest = cls_stmt.module == "pytest" and cls_alias.name in _BOUND_FROM_PYTEST
             dict_names.pop(str_local, None)
             if is_pytest:
                 dict_names[str_local] = cls_alias.name
@@ -1260,8 +1274,11 @@ def _is_pytest_mark(cls_expr: ast.expr, *, dict_names: dict[str, str]) -> bool:
     Returns
     -------
     bool
-        ``True`` for ``pytest.mark`` through any alias the table knows.
+        ``True`` for ``pytest.mark`` through any alias the table knows, or a name imported with
+        ``from pytest import mark``.
     """
+    if isinstance(cls_expr, ast.Name):
+        return dict_names.get(cls_expr.id) == "mark"
     return (
         isinstance(cls_expr, ast.Attribute)
         and cls_expr.attr == "mark"

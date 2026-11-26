@@ -1645,3 +1645,85 @@ def test_a_skip_in_a_match_case_guard_is_a_new_skip() -> None:
         + _BODY
     )
     assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_adding_a_callee_to_the_try_body_reports_the_except_skip_again() -> None:
+    """Review of #1340: a new call in the ``try`` body is a different guard."""
+    str_tail = "    except E:\n        pytest.skip()\n" + _BODY
+    str_old = "def test_a():\n    try:\n        f(1)\n" + str_tail
+    str_new = "def test_a():\n    try:\n        f(1)\n        g()\n" + str_tail
+    assert "newly marked skip(if)" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_call_free_try_importing_something_else_is_a_new_except_skip() -> None:
+    """Review of #1340: two call-free ``try`` bodies keep distinct keys through their imports."""
+    str_tail = "    except ImportError:\n        pytest.skip()\n" + _BODY
+    str_old = "def test_a():\n    try:\n        import foo\n" + str_tail
+    str_new = "def test_a():\n    try:\n        import bar\n" + str_tail
+    assert "newly marked skip(if)" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize("str_call", ["mark.skip", "mark.skip()"])
+def test_applymarker_through_from_pytest_import_mark_is_a_new_skip(str_call: str) -> None:
+    """Review of #1340: ``from pytest import mark`` is still ``pytest.mark``."""
+    str_head = "from pytest import mark\n\n\n"
+    str_old = str_head + "def test_a(request):\n" + _BODY
+    str_new = str_head + f"def test_a(request):\n    request.applymarker({str_call})\n" + _BODY
+    assert "newly marked applymarker-skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_guarded_applymarker_skipif_is_not_the_unguarded_decorator() -> None:
+    """Review of #1340: ``if flag: applymarker(skipif(c))`` skips on ``c and flag``, a new skip."""
+    str_old = "@pytest.mark.skipif(c)\ndef test_a(request):\n" + _BODY
+    str_new = (
+        "def test_a(request, flag):\n    if flag:\n"
+        "        request.applymarker(pytest.mark.skipif(c))\n" + _BODY
+    )
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    ("str_signature", "str_call"),
+    [
+        ("def test_a(*skip):", "skip()"),
+        ("def test_a(**skip):", "skip()"),
+        ("def test_a(pytest):", "pytest.skip()"),
+    ],
+    ids=["vararg", "kwarg", "pytest-param"],
+)
+def test_a_star_or_pytest_named_parameter_shadows_the_name(
+    str_signature: str, str_call: str
+) -> None:
+    """Review of #1340: ``*skip``, ``**skip`` and a parameter named ``pytest`` shadow the table."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = str_signature + f"\n    {str_call}\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_nested_def_named_skip_shadows_pytest_skip() -> None:
+    """Review of #1340: a ``def skip()`` inside the test is a helper."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a():\n    def skip():\n        pass\n\n    skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_head",
+    [
+        "try:\n    from pytest import skip\nexcept ImportError:\n    from helpers import skip\n",
+        "try:\n    from helpers import skip\nexcept ImportError:\n    from pytest import skip\n",
+    ],
+    ids=["pytest-first", "pytest-last"],
+)
+def test_a_skip_bound_to_pytest_in_any_arm_stays_pytests(str_head: str) -> None:
+    """Review of #1340: arms are alternatives; a pytest binding in one is not erased by another."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = str_head + "\n\ndef test_a():\n    skip()\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_xfail_raises_tuple_that_gains_a_type_is_not_a_reorder() -> None:
+    """Review of #1340: sorting the tuple must not hide a changed set of types."""
+    str_old = "@pytest.mark.xfail(raises=(A, B))\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(raises=(A,))\ndef test_a():\n" + _BODY
+    assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
