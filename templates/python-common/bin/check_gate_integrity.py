@@ -180,6 +180,8 @@ _SET_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
 STR_INDEX_REF = ""
 STR_TRAILER_HINT = "gate-change-ok: <the same reason>"
 STR_TRAILER_GREP = "^[[:space:]]*gate-change-ok:[[:space:]]*[^[:space:]]"
+STR_APPROVAL_DIR = "gate-approvals"
+STR_APPROVAL_MARKER = "<!-- gate-integrity-approvals -->"
 
 _INT_MIN_FIELDS = 2
 
@@ -2147,40 +2149,78 @@ def justification_reason(str_base: str) -> str:
     return ""
 
 
-def findings_at(str_ref: str, *, str_base: str) -> list:
-    """Return the findings ``str_base..str_ref`` produces, as if ``str_ref`` were the index.
-
-    Parameters
-    ----------
-    str_ref : str
-        A commit on the branch, read in place of the index.
-    str_base : str
-        The merge-base commit.
+def approval_dir() -> pathlib.Path:
+    """Return the directory holding the approval records (the git common directory).
 
     Returns
     -------
-    list of str
-        The same findings the pre-commit run reported when that commit was made.
+    pathlib.Path
+        ``<git-common-dir>/gate-approvals``, shared by every worktree of the repository.
     """
-    global STR_INDEX_REF  # noqa: PLW0603
-    str_saved = STR_INDEX_REF
-    STR_INDEX_REF = str_ref
+    str_common = _git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).strip()
+    return pathlib.Path(str_common) / STR_APPROVAL_DIR
+
+
+def record_approval(list_problems: list, *, str_reason: str) -> None:
+    """Record the findings an interactive ``GATE_CHANGE_OK`` run approved, keyed by index tree.
+
+    The commit this run guards gets exactly the tree ``git write-tree`` returns now, so the
+    record is found again from the commit alone. The findings are frozen here: a later change
+    to the checks cannot widen what was approved.
+
+    Parameters
+    ----------
+    list_problems : list of str
+        The findings the approval covers.
+    str_reason : str
+        The reason given in ``GATE_CHANGE_OK``.
+    """
+    str_tree = _git(["write-tree"]).strip()
+    if not str_tree:
+        return
+    path_record = approval_dir() / str_tree
     try:
-        return collect_problems(changed_paths(str_base), str_base=str_base)
-    finally:
-        STR_INDEX_REF = str_saved
+        path_record.parent.mkdir(parents=True, exist_ok=True)
+        path_record.write_text(
+            json.dumps({"reason": str_reason, "findings": sorted(set(list_problems))}),
+            encoding="utf-8",
+        )
+    except OSError as cls_error:
+        print(f"⚠️  could not record the approval ({cls_error}); later commits will need it again")
+
+
+def approved_findings(str_tree: str) -> set:
+    """Return the findings recorded for a tree, or an empty set when none were.
+
+    Parameters
+    ----------
+    str_tree : str
+        A tree hash.
+
+    Returns
+    -------
+    set of str
+        The findings frozen when the interactive run approved that tree; empty for an unknown
+        tree or an unreadable or malformed record.
+    """
+    try:
+        dict_record = json.loads((approval_dir() / str_tree).read_text(encoding="utf-8"))
+        list_findings = dict_record["findings"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
+    if not isinstance(list_findings, list):
+        return set()
+    return {str_finding for str_finding in list_findings if isinstance(str_finding, str)}
 
 
 def recorded_findings(str_base: str) -> set:
-    """Return the findings the owner justified in commits already on the branch.
+    """Return the findings the owner approved in commits already on the branch.
 
-    A ``gate-change-ok:`` trailer is only a claim, and an agent can type one. What makes it
-    count is the commit that carries it: the findings it justifies are those its OWN tree
-    produces against its OWN fork point (``merge-base`` of the commit and the current base,
-    so a later merge of ``main`` cannot turn main's newer gates into recorded findings), and
-    a tree with findings normally exists only if the interactive ``GATE_CHANGE_OK`` run let it
-    through (a commit made without the hook, such as ``--no-verify``, is the exception).
-    A trailer on a commit with no findings of its own justifies nothing.
+    A ``gate-change-ok:`` trailer is only a claim, and an agent can type one. It counts only
+    on a non-merge commit whose tree has an approval record written by the interactive
+    ``GATE_CHANGE_OK`` run, and what it covers is what that record froze, never a re-run of
+    today's checks over the old tree. A rebase or cherry-pick that changes the tree finds no
+    record, so it covers nothing and needs the owner again.
 
     Parameters
     ----------
@@ -2190,7 +2230,7 @@ def recorded_findings(str_base: str) -> set:
     Returns
     -------
     set of str
-        Findings produced by the tree of at least one trailer-carrying commit since the base.
+        The union of the recorded findings of every trailer-carrying commit since the base.
     """
     str_out = _git(
         [
@@ -2199,15 +2239,123 @@ def recorded_findings(str_base: str) -> set:
             "-E",
             "-i",
             f"--grep={STR_TRAILER_GREP}",
-            "--format=%H",
+            "--format=%T",
             f"{str_base}..HEAD",
         ]
     )
     set_recorded: set = set()
-    for str_sha in str_out.split():
-        str_own_base = _git(["merge-base", str_sha, str_base]).strip() or str_base
-        set_recorded.update(findings_at(str_sha, str_base=str_own_base))
+    for str_tree in str_out.split():
+        set_recorded.update(approved_findings(str_tree))
     return set_recorded
+
+
+def approval_sources(str_base: str) -> list:
+    """Return every ``gate-change-ok`` line a reviewer can read: the PR body and each commit.
+
+    Parameters
+    ----------
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    list of tuple
+        ``(where, reason)`` rows, ``where`` being ``PR body`` or ``commit <sha12>``.
+    """
+    list_sources = []
+    cls_body = RE_JUSTIFICATION.search(pr_body_text())
+    if cls_body:
+        list_sources.append(("PR body", cls_body.group(1).strip()))
+    str_log = _git(["log", "--encoding=UTF-8", "--format=%H%x00%B%x01", f"{str_base}..HEAD"])
+    for str_chunk in str_log.split("\x01"):
+        str_sha, _, str_message = str_chunk.strip().partition("\x00")
+        cls_match = RE_JUSTIFICATION.search(str_message)
+        if str_sha and cls_match:
+            list_sources.append((f"commit {str_sha[:12]}", cls_match.group(1).strip()))
+    return list_sources
+
+
+def approval_markdown(list_problems: list, *, list_sources: list) -> str:
+    """Render the approvals CI accepted as a Markdown block for the summary and PR comment.
+
+    Parameters
+    ----------
+    list_problems : list of str
+        The findings the approval let through.
+    list_sources : list of tuple
+        ``(where, reason)`` rows from ``approval_sources``.
+
+    Returns
+    -------
+    str
+        Markdown starting with ``STR_APPROVAL_MARKER``.
+    """
+    list_lines = [STR_APPROVAL_MARKER, "### Gate-weakening approvals accepted", ""]
+    list_lines += ["Findings approved:", ""]
+    list_lines += [_markdown_code(str_problem, str_prefix="- ") for str_problem in list_problems]
+    list_lines += ["", "Approved by:", ""]
+    list_lines += [
+        f"- {str_where}: {_markdown_code(str_reason)}" for str_where, str_reason in list_sources
+    ]
+    return "\n".join(list_lines) + "\n"
+
+
+def _markdown_code(str_text: str, *, str_prefix: str = "") -> str:
+    """Return ``str_text`` as one inline code span, safe to embed in a Markdown list.
+
+    Parameters
+    ----------
+    str_text : str
+        Text that may hold backticks or line breaks.
+    str_prefix : str
+        Text placed before the span.
+
+    Returns
+    -------
+    str
+        The prefix followed by the text in a single-line code span.
+    """
+    str_clean = " ".join(str_text.replace("`", "'").split())
+    return f"{str_prefix}`{str_clean}`"
+
+
+def publish_approval(str_markdown: str) -> None:
+    """Write the approval block to the job summary and to the PR-comment file, when set.
+
+    Parameters
+    ----------
+    str_markdown : str
+        The block from ``approval_markdown``.
+    """
+    str_summary = os.environ.get("GITHUB_STEP_SUMMARY", "")
+    str_comment = os.environ.get("GATE_APPROVAL_COMMENT", "")
+    try:
+        if str_summary:
+            with pathlib.Path(str_summary).open("a", encoding="utf-8") as cls_file:
+                cls_file.write(str_markdown)
+        if str_comment:
+            pathlib.Path(str_comment).write_text(str_markdown, encoding="utf-8")
+    except OSError as cls_error:
+        print(f"⚠️  could not publish the approval summary: {cls_error}")
+
+
+def announce_justification(list_problems: list, *, str_base: str, str_reason: str) -> None:
+    """Make an accepted justification durable: a record locally, a summary and comment in CI.
+
+    Parameters
+    ----------
+    list_problems : list of str
+        The findings the justification covers.
+    str_base : str
+        The merge-base commit.
+    str_reason : str
+        The accepted reason.
+    """
+    if is_ci():
+        publish_approval(approval_markdown(list_problems, list_sources=approval_sources(str_base)))
+        return
+    record_approval(list_problems, str_reason=str_reason)
+    print(f"   to cover later commits, end this commit's message with: {STR_TRAILER_HINT}")
 
 
 def branch_justified(list_problems: list, *, str_base: str) -> bool:
@@ -2350,13 +2498,12 @@ def report(list_problems: list, *, str_base: str, int_changed_count: int) -> int
     str_reason = justification_reason(str_base)
     if str_reason:
         print(f"\n✅ justified: gate-change-ok: {str_reason}")
-        if not is_ci():
-            print(f"   to cover later commits, end this commit's message with: {STR_TRAILER_HINT}")
+        announce_justification(list_problems, str_base=str_base, str_reason=str_reason)
         return 0
     if branch_justified(list_problems, str_base=str_base):
         print(
             "\n✅ justified earlier on this branch (gate-change-ok trailer on a commit whose "
-            "own tree carries these findings)"
+            "tree has an approval record covering these findings)"
         )
         return 0
 
