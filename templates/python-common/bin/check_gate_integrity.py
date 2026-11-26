@@ -163,6 +163,8 @@ STR_WORKFLOW_EXPR = "${{github.workflow}}"
 STR_FLOW_CONCURRENCY = "{flow}"
 STR_TYPED_KEY = "\x00typed"
 STR_MERGE_TAG = "tag:yaml.org,2002:merge"
+STR_REFUSED = "uses YAML the gate refuses to read"
+STR_TOO_DEEP = "nests too deeply for the gate"
 _SET_COERCED_TAGS = frozenset(
     f"tag:yaml.org,2002:{str_kind}"
     for str_kind in ("bool", "int", "float", "timestamp", "null", "value")
@@ -260,6 +262,57 @@ def show(str_ref: str, *, str_path: str) -> str | None:
         return cls_proc.stdout.decode("utf-8")
     except UnicodeDecodeError:
         return None
+
+
+def blob_exists(str_ref: str, *, str_path: str) -> bool:
+    """Return whether a path exists at a git ref, whatever its encoding.
+
+    Parameters
+    ----------
+    str_ref : str
+        A commit-ish, or ``""`` for the index (``STR_INDEX_REF``).
+    str_path : str
+        Repository-relative path.
+
+    Returns
+    -------
+    bool
+        ``True`` when the blob exists, so a ``show`` that returned ``None`` for it meant
+        "not valid UTF-8" and not "absent".
+    """
+    return (
+        subprocess.run(  # noqa: S603
+            ["git", "cat-file", "-e", f"{str_ref}:{str_path}"],  # noqa: S607
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+def undecodable_problems(str_path: str, *, str_base: str) -> list:
+    """Return a finding for a modified workflow whose blob at either ref is not UTF-8.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative path whose ``show`` returned ``None`` at a ref.
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    list of str
+        One message when the path is a workflow present at both refs: its jobs cannot be
+        compared, so a deletion would pass unseen. ``[]`` for an added or removed file and for
+        any other path.
+    """
+    bool_modified = blob_exists(STR_INDEX_REF, str_path=str_path) and blob_exists(
+        str_base, str_path=str_path
+    )
+    if RE_WORKFLOW_PATH.search(str_path) and bool_modified:
+        return [f"{str_path}: workflow is not valid UTF-8, so its jobs cannot be compared"]
+    return []
 
 
 def changed_paths(str_base: str) -> list:
@@ -888,16 +941,15 @@ def read_workflow(str_text: str) -> tuple | None:
         mapping, or it holds a self-referential alias, which the callers never read as a clean
         file.
     """
+    cls_loader = None
     try:
         cls_loader = StringScalarLoader(str_text)
-    except yaml.YAMLError:
-        return None
-    try:
         cls_document, set_jobs = _parse_workflow(cls_loader)
     except (yaml.YAMLError, ValueError, KeyError, TypeError, RecursionError):
         return None
     finally:
-        cls_loader.dispose()
+        if cls_loader is not None:
+            cls_loader.dispose()
     if not isinstance(cls_document, dict):
         return None
     return add_typed_jobs(cls_document, str_text=str_text), set_jobs
@@ -1024,6 +1076,7 @@ def workflow_concurrency(dict_document: dict) -> str:
         r"\$\{\{(.*?)\}\}",
         lambda cls_m: "${{" + re.sub(r"\s+", "", cls_m.group(1)) + "}}",
         cls_group,
+        flags=re.DOTALL,
     )
     str_group = str_group.strip().lower()
     str_name = str(dict_document.get("name") or "").strip().lower()
@@ -1056,6 +1109,68 @@ def groups_collide(str_source: str, *, str_target: str) -> bool:
     )
 
 
+def child_pairs(cls_left: object, *, cls_right: object) -> list | None:
+    """Return the child pairs two parsed values must match, or ``None`` when they differ.
+
+    Parameters
+    ----------
+    cls_left : object
+        A parsed YAML value.
+    cls_right : object
+        The value it is compared with.
+
+    Returns
+    -------
+    list of tuple or None
+        Key-wise or index-wise child pairs for two mappings or two lists of the same shape,
+        ``[]`` for two equal scalars, ``None`` otherwise.
+    """
+    if isinstance(cls_left, dict) and isinstance(cls_right, dict):
+        return (
+            [(cls_left[str_key], cls_right[str_key]) for str_key in cls_left]
+            if (cls_left.keys() == cls_right.keys())
+            else None
+        )
+    if isinstance(cls_left, list) and isinstance(cls_right, list):
+        return (
+            list(zip(cls_left, cls_right, strict=True))
+            if len(cls_left) == len(cls_right)
+            else None
+        )
+    return [] if type(cls_left) is type(cls_right) and cls_left == cls_right else None
+
+
+def values_equal(cls_left: object, *, cls_right: object) -> bool:
+    """Return whether two parsed values are equal, visiting each node pair once.
+
+    Parameters
+    ----------
+    cls_left : object
+        A parsed YAML value.
+    cls_right : object
+        The value it is compared with.
+
+    Returns
+    -------
+    bool
+        ``cls_left == cls_right`` without the exponential cost of ``==`` on two graphs that
+        share nodes through aliases: a pair of nodes already visited is not compared again, and
+        the walk is iterative, so a deep value cannot exhaust the stack.
+    """
+    list_stack = [(cls_left, cls_right)]
+    set_seen: set = set()
+    while list_stack:
+        cls_a, cls_b = list_stack.pop()
+        if (id(cls_a), id(cls_b)) in set_seen:
+            continue
+        set_seen.add((id(cls_a), id(cls_b)))
+        list_pairs = child_pairs(cls_a, cls_right=cls_b)
+        if list_pairs is None:
+            return False
+        list_stack.extend(list_pairs)
+    return True
+
+
 def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tuple) -> tuple:
     """Return the first candidate that is a faithful destination, or ``()``.
 
@@ -1078,13 +1193,34 @@ def find_move(list_candidates: list, *, tuple_pair: tuple, tuple_concurrency: tu
         (
             tuple_cand
             for tuple_cand in list_candidates
-            if tuple_cand[:2] == tuple_pair
+            if values_equal(list(tuple_cand[:2]), cls_right=list(tuple_pair))
             and not any(
                 groups_collide(str_src, str_target=tuple_cand[2]) for str_src in tuple_concurrency
             )
         ),
         (),
     )
+
+
+def consume_candidate(list_candidates: list, *, tuple_found: tuple) -> None:
+    """Remove the matched candidate from the list, by identity.
+
+    Parameters
+    ----------
+    list_candidates : list of tuple
+        The candidates ``find_move`` chose from; mutated in place.
+    tuple_found : tuple
+        The candidate it returned.
+
+    Returns
+    -------
+    None
+        ``list.remove`` compares by equality, which would walk every earlier candidate's
+        header against the match, the exponential cost ``values_equal`` exists to avoid.
+    """
+    list_candidates[:] = [
+        tuple_cand for tuple_cand in list_candidates if tuple_cand is not tuple_found
+    ]
 
 
 def id_is_referenced(str_id: str, *, dict_document: dict) -> bool:
@@ -1147,12 +1283,40 @@ def removal_is_move(
         tuple_concurrency=(workflow_concurrency(dict_document), workflow_concurrency(dict_new)),
     )
     if bool_movable and tuple_found:
-        list_candidates.remove(tuple_found)
+        consume_candidate(list_candidates, tuple_found=tuple_found)
     return bool_movable and bool(tuple_found)
 
 
+def refusal_reason(str_text: str) -> str | None:
+    """Return why the gate refuses a text that is still YAML, or ``None`` when it is not.
+
+    Parameters
+    ----------
+    str_text : str
+        Workflow content ``read_workflow`` returned ``None`` for.
+
+    Returns
+    -------
+    str or None
+        ``STR_REFUSED`` when ``yaml.compose`` reads the text as a mapping (a merge key, an
+        aliased ``jobs:``) or fails with a repeated anchor or a second document, which other
+        YAML tools accept; ``STR_TOO_DEEP`` when composing exhausts the stack. ``None`` when
+        GitHub refuses the text too (a syntax error, an undefined alias) or its root is not a
+        mapping, so a repair has nothing to weaken.
+    """
+    try:
+        cls_root = yaml.compose(str_text, Loader=yaml.SafeLoader)
+    except yaml.composer.ComposerError as cls_error:
+        return None if "undefined alias" in str(cls_error.problem) else STR_REFUSED
+    except yaml.YAMLError:
+        return None
+    except RecursionError:
+        return STR_TOO_DEEP
+    return STR_REFUSED if isinstance(cls_root, yaml.MappingNode) else None
+
+
 def base_unreadable_problems(str_old: str, *, str_shown: str) -> list:
-    """Return a finding for a base workflow that is valid YAML the gate refuses to compare.
+    """Return a finding for a base workflow the gate refuses to compare but GitHub may run.
 
     Parameters
     ----------
@@ -1164,24 +1328,15 @@ def base_unreadable_problems(str_old: str, *, str_shown: str) -> list:
     Returns
     -------
     list of str
-        One message when ``yaml.compose`` reads the text as a mapping (a merge key or an
-        aliased ``jobs:`` the gate rejects, say): GitHub still runs it, so a change that
-        deletes its jobs must not pass silently. ``[]`` when the text is not YAML at all,
-        which GitHub refuses to run, so a repair has nothing to weaken.
+        One message when ``refusal_reason`` names a reason: GitHub may still run the file, so
+        a change that deletes its jobs must not pass silently. ``[]`` otherwise.
     """
-    try:
-        cls_root = yaml.compose(str_old, Loader=yaml.SafeLoader)
-    except yaml.YAMLError:
-        return []
-    except RecursionError:
-        return [
-            f"{str_shown}: base workflow nests too deeply for the gate, so its jobs are unchecked"
-        ]
-    if not isinstance(cls_root, yaml.MappingNode):
-        return []
-    return [
-        f"{str_shown}: base workflow is YAML the gate cannot compare, so its jobs are unchecked"
-    ]
+    str_reason = refusal_reason(str_old)
+    return (
+        [f"{str_shown}: base workflow {str_reason}, so its jobs are unchecked"]
+        if str_reason
+        else []
+    )
 
 
 def workflow_problems(
@@ -1216,7 +1371,8 @@ def workflow_problems(
     """
     tuple_new = read_workflow(str_new)
     if tuple_new is None:
-        return [f"{str_shown}: workflow YAML does not parse, so its jobs cannot be compared"]
+        str_why = refusal_reason(str_new) or "YAML does not parse"
+        return [f"{str_shown}: workflow {str_why}, so its jobs cannot be compared"]
     tuple_old = read_workflow(str_old)
     if tuple_old is None:
         return base_unreadable_problems(str_old, str_shown=str_shown)
@@ -1873,7 +2029,7 @@ def file_problems(
     str_new = show(STR_INDEX_REF, str_path=str_path)
     str_old = show(str_base, str_path=str_path)
     if str_new is None or str_old is None:
-        return []
+        return undecodable_problems(str_path, str_base=str_base)
 
     fn_analyzer = _DICT_DISPATCH.get(pathlib.Path(str_path).name)
     if fn_analyzer is None and RE_WORKFLOW_PATH.search(str_path):
