@@ -2731,10 +2731,10 @@ refused for the same finding and needed the owner at a terminal again (PR #1321,
 
 **Decision.** A local run passes when every current finding is in the set justified by a commit
 already on the branch. A commit counts when its message carries a `gate-change-ok: <reason>`
-trailer, and the findings it justifies are the ones that commit's own tree produces
-(`findings_at`, the same checks with that commit read in place of the index). The owner ends
-the interactive commit's message with the trailer, and the gate prints that line on an env
-justification.
+trailer, and the findings it justifies are the ones its approval record froze
+(see the #1333 entry below; #1323 first computed them by re-running the checks over that
+commit's tree). The owner ends the interactive commit's message with the trailer, and the gate
+prints that line on an env justification.
 
 **Why a typed trailer is not enough.** The trailer text alone justifies nothing. A tree that
 produces findings normally exists only if the interactive `GATE_CHANGE_OK` run let it through, so a
@@ -2756,3 +2756,45 @@ a later merge of `main` does not move the base its findings are measured from. F
 cumulative, so a weakening committed without the hook (`--no-verify`, or arriving in a merge)
 is also covered by any later trailer commit on the branch. A merge commit is never a trailer
 commit, because `git merge` runs no `pre-commit` hook, so its trailer would be untested text.
+
+## Approvals are recorded, bound to findings, and shown in CI (`check_gate_integrity.py`, #1333)
+
+Two gaps remained after #1323. The `gate-change-ok:` line is typed text, and the findings it
+covered were recomputed from the old commit with today's checks, so a check added later widened
+what an old approval justified (the finding deferred from #1330). And a typed line clears CI
+unseen unless a reviewer reads the commit messages.
+
+**Decision, three parts.**
+
+1. **Block the shortcut at the agent layer.** A Claude Code `PreToolUse` hook that refuses a
+   command containing `gate-change-ok:`, `GATE_CHANGE_OK=` or `--no-verify`. It lives in
+   dotfiles-linux-dev, not here; a dotfiles issue tracks it.
+2. **Every approval is visible in CI.** When CI accepts a `gate-change-ok:` line (PR body or
+   commit message), the gate writes a job summary and a PR comment listing each approved
+   finding, the reason, and where the line came from (the PR body or the commit sha). The
+   workflow upserts one comment, found by a hidden marker, so a re-run edits it. A fork PR has a
+   read-only token, so the comment step is `continue-on-error`; the job summary is always written.
+3. **Local approvals are bound to findings.** The interactive `GATE_CHANGE_OK` run writes a
+   record when it accepts a reason: a file named by the index tree hash (`git write-tree`, the
+   tree the commit will have) under `<git-common-dir>/gate-approvals/`, holding the reason and
+   the exact findings approved. A trailer commit now justifies only what its tree's record
+   froze. No record means no justification: a commit made with `--no-verify`, a typed trailer,
+   a merge, and a rebase or cherry-pick that changes the tree all find none, so each needs the
+   owner again. This replaces the re-run of the checks over the old tree.
+
+**Threat model, stated plainly.** The record lives in a file any process running as the owner
+can write, exactly as the trailer line can be typed. Anyone with the owner's shell can forge an
+approval, by writing a record and typing a trailer, or by running with `GATE_CHANGE_OK` set. This
+design does not stop that, and no design inside this repository can: an agent that shares the
+owner's user, filesystem, git and `gh` token can reproduce anything the owner's own run produces,
+and only a factor outside that process (a hardware-touch key) would differ; the owner declined
+one. What it does give: a bound approval cannot silently widen with later checks, a replay or a
+merge cannot launder one, a typed line with no interactive run behind it is void locally, and
+every approval CI accepts is listed at merge time whoever typed it. Parts 1 and 2 are what catch
+a forged one; part 3 limits what a real one can cover.
+
+**Known limits.** CI cannot see a local record (it is not in the clone), so CI still accepts the
+PR-body and commit-message lines as before and relies on part 2 plus review. The record is
+local to the machine and the repository: the same approval made on another machine is not
+found, and the owner repeats the interactive run. Records are not pruned. A first commit on a
+branch is checked since #1339, so its approval takes the same path.

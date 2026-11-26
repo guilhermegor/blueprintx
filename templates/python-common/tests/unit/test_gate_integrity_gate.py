@@ -2200,7 +2200,7 @@ def path_weakened(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path
 
 @pytest.fixture
 def path_recorded(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Return ``path_branch`` after the weakening commit that ALSO carries the trailer.
+    """Return ``path_branch`` after an interactive approval and its commit.
 
     Parameters
     ----------
@@ -2216,6 +2216,7 @@ def path_recorded(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path
     """
     _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
     monkeypatch.setenv("GATE_CHANGE_OK", "owner reviewed the ignore")
+    gate.main([])
     _commit_staged(path_branch, str_message=_STR_TRAILER)
     monkeypatch.delenv("GATE_CHANGE_OK")
     return path_branch
@@ -2272,6 +2273,83 @@ def test_branch_justified_forged_trailer_on_a_clean_commit_justifies_nothing(
     int_code = gate.main([])
 
     assert (int_code, "E501" in capsys.readouterr().out) == (1, True)
+
+
+def test_branch_justified_trailer_without_an_approval_record_justifies_nothing(
+    path_branch: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a weakening committed with a typed trailer but no interactive run is void."""
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+
+    int_code = gate.main([])
+
+    assert (int_code, "E501" in capsys.readouterr().out) == (1, True)
+
+
+def test_branch_justified_recorded_findings_do_not_widen_with_the_checker(
+    path_recorded: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SHOULD FAIL: a check added after the approval is not covered by the frozen record."""
+    str_base = _git_in(path_recorded, "rev-parse", "main").strip()
+    set_before = gate.recorded_findings(str_base)
+    monkeypatch.setattr(gate, "collect_problems", lambda *_, **__: ["a newer check fired"])
+
+    assert (gate.recorded_findings(str_base), bool(set_before)) == (set_before, True)
+
+
+def test_branch_justified_cherry_pick_onto_a_new_tree_loses_the_approval(
+    path_recorded: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a replay that changes the tree finds no record, so it needs the owner."""
+    str_sha = _git_in(path_recorded, "rev-parse", "HEAD").strip()
+    _git_in(path_recorded, "checkout", "-q", "main")
+    _stage(path_recorded, str_name="other.txt", str_text="x\n")
+    _commit_staged(path_recorded, str_message="chore: main moves on")
+    _git_in(path_recorded, "checkout", "-q", "-b", "replayed")
+    _git_in(path_recorded, "cherry-pick", str_sha)
+
+    int_code = gate.main([])
+
+    assert (int_code, "E501" in capsys.readouterr().out) == (1, True)
+
+
+def test_ci_approval_is_published_with_finding_reason_and_pr_body(
+    path_branch: Path, *, monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A PR-body approval accepted in CI lands in the job summary naming the finding."""
+    path_summary = tmp_path_factory.mktemp("summary") / "summary.md"
+    monkeypatch.setattr(gate, "is_ci", lambda: True)
+    monkeypatch.setattr(gate, "pr_body_text", lambda: "gate-change-ok: reviewed by owner")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(path_summary))
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+
+    gate.main([])
+
+    str_text = path_summary.read_text(encoding="utf-8")
+    assert all(str_part in str_text for str_part in ("E501", "reviewed by owner", "PR body"))
+
+
+def test_ci_approval_comment_names_the_commit_carrying_the_line(
+    path_branch: Path, *, monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A trailer approval accepted in CI is written to the comment file with its commit."""
+    path_comment = tmp_path_factory.mktemp("comment") / "comment.md"
+    monkeypatch.setattr(gate, "is_ci", lambda: True)
+    monkeypatch.setattr(gate, "pr_body_text", lambda: "")
+    monkeypatch.setenv("GATE_APPROVAL_COMMENT", str(path_comment))
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    str_sha = _git_in(path_branch, "rev-parse", "HEAD").strip()
+
+    gate.main([])
+
+    assert f"commit {str_sha[:12]}" in path_comment.read_text(encoding="utf-8")
 
 
 def test_branch_justified_after_main_adds_a_gate_does_not_record_it(

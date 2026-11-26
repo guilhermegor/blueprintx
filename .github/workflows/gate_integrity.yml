@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: gate_integrity-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
@@ -31,3 +32,23 @@ jobs:
 
       - name: Check for an unjustified gate weakening since main
         run: python3 templates/python-common/bin/check_gate_integrity.py --root .
+        env:
+          GATE_APPROVAL_COMMENT: ${{ runner.temp }}/gate_approvals.md
+
+      - name: Show every accepted approval on the PR
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GATE_APPROVAL_COMMENT: ${{ runner.temp }}/gate_approvals.md
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          [ -s "$GATE_APPROVAL_COMMENT" ] || exit 0
+          str_id=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.body | contains("<!-- gate-integrity-approvals -->")) | .id' | head -n 1)
+          if [ -n "$str_id" ]; then
+            gh api --method PATCH "repos/$GH_REPO/issues/comments/$str_id" -F body=@"$GATE_APPROVAL_COMMENT"
+          else
+            gh api --method POST "repos/$GH_REPO/issues/$PR_NUMBER/comments" -F body=@"$GATE_APPROVAL_COMMENT"
+          fi
