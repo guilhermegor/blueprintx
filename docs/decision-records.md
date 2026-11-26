@@ -2259,6 +2259,33 @@ This section records what is specific to the generated copies.
   open PR. A new push cancels the previous
   polling run so two gates do not race on one sticky comment. Event data reaches the script
   through `env:` only.
+- **`pr-gate.yml`, a gate that fails after the retrigger window (#1320).** `retrigger` waits
+  about 180 s for the gate run and then exits with a warning, but the gate may run for 20
+  minutes, so a gate that fails later stayed red for that head. Decided: recover from the
+  gate's own completion rather than poll longer. The `workflow_run` trigger also names
+  `PR Quality Gate`, and a `late_rerun` job fires on a completed run with
+  `conclusion == 'failure'`; the gate can also fail because its polling budget ran out with
+  axes still pending, so the job skips while a `Run Tests` run for the head is unfinished and
+  leaves the retry to the `Run Tests` completion that `retrigger` handles. It re-runs the
+  gate run once: the step reads the run's attempt and re-runs only attempt 1, so a re-run
+  that fails again is final and a passing gate gets none. When both jobs race, the loser's
+  `gh run rerun` is tolerated only if its error says the run is "already running"; any
+  other failure (403, 404, rate limit) fails the job rather than reporting a red gate green. `retrigger` is now limited to `Run Tests` completions, or the
+  gate's own completion would fire both jobs. Rejected: raising the retrigger loop to 20
+  minutes, which holds a runner for the gate's whole budget on every PR. Known overlap: a
+  gate that failed before Run Tests finished is re-run by whichever job reaches it first;
+  the attempt check keeps that to one re-run. The skip counts only `pull_request`-event
+  `Run Tests` runs, since a `push` run cannot trigger `retrigger`. Only `failure` is retried:
+  `cancelled` also covers the concurrency cancel on a new push. A genuine failure costs one
+  extra gate run (red, pending, red). The gate now triggers on its own completion, so
+  each gate run adds a few skipped `workflow_run` runs; the concurrency key falls back to
+  `run_id` for them, so they cancel nothing. Known limit: the skip looks only at `Run Tests`.
+  If the axis still pending when the gate gave up is code scanning, no `Run Tests` completion
+  follows, so nothing re-triggers the gate and it stays red until the next `pull_request`
+  event or `workflow_dispatch` backfill. Accepted: the two recoveries available are polling
+  for code scanning (holds a runner, the thing rejected above) or a `workflow_run` on the
+  CodeQL workflow, whose name varies per project and is not guaranteed to exist. Reopen if a
+  stranded gate is measured. Should-fail witness: `tests/test_review_workflow_shape.sh`.
 - **`release.yml`.** A service is deployed, not published, so there is no PyPI step. The
   version input is free text and is validated before `git tag`, the irreversible half. The
   versioned-docs job runs only after the tag is cut, so the site never advertises a version

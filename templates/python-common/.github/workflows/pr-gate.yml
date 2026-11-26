@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_run:
-    workflows: ["Run Tests"]
+    workflows: ["Run Tests", "PR Quality Gate"]
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -52,8 +52,58 @@ jobs:
           GATE_AXES: "tests,lint,code scanning"
         run: python bin/pr_gate.py
 
+  late_rerun:
+    if: >-
+      github.event_name == 'workflow_run'
+      && github.event.workflow_run.name == 'PR Quality Gate'
+      && github.event.workflow_run.event == 'pull_request'
+      && github.event.workflow_run.conclusion == 'failure'
+    name: Re-run a gate that failed after the retrigger gave up
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Re-run the failed gate once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          int_open="$(gh api "repos/$GH_REPO/commits/$HEAD_SHA/pulls" \
+            --jq "[.[] | select(.state == \"open\" and .head.sha == \"$HEAD_SHA\")] | length")"
+          if [ "${int_open:-0}" -eq 0 ]; then
+            echo "$HEAD_SHA is no open PR's head; nothing to re-run"
+            exit 0
+          fi
+          int_pending="$(gh run list --commit "$HEAD_SHA" --limit 100 --json name,status,event \
+            --jq '[.[] | select(.name == "Run Tests" and .event == "pull_request" and .status != "completed")] | length')"
+          if [ "${int_pending:-0}" -gt 0 ]; then
+            echo "Run Tests still running for $HEAD_SHA; its completion re-runs the gate"
+            exit 0
+          fi
+          str_run="$(gh run view "$RUN_ID" --json attempt,status,conclusion \
+            --jq '"\(.attempt) \(.status) \(.conclusion)"')"
+          case "$str_run" in
+          "1 completed failure")
+            if ! str_err="$(gh run rerun "$RUN_ID" 2>&1)"; then
+              case "$str_err" in
+              *"already running"*) echo "re-run already in flight" ;;
+              *) echo "$str_err" >&2; exit 1 ;;
+              esac
+            fi
+            ;;
+          *) echo "gate run $RUN_ID is '$str_run'; nothing to re-run" ;;
+          esac
+
   retrigger:
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request'
+    if: >-
+      github.event_name == 'workflow_run'
+      && github.event.workflow_run.name == 'Run Tests'
+      && github.event.workflow_run.event == 'pull_request'
     name: Re-run a gate that timed out before Run Tests finished
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -96,7 +146,12 @@ jobs:
             esac
             exit 0
           fi
-          gh run rerun "$str_id"
+          if ! str_err="$(gh run rerun "$str_id" 2>&1)"; then
+            case "$str_err" in
+            *"already running"*) echo "re-run already in flight" ;;
+            *) echo "$str_err" >&2; exit 1 ;;
+            esac
+          fi
 
   backfill:
     if: github.event_name == 'workflow_dispatch' && inputs.backfill
