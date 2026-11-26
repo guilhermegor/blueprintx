@@ -2037,7 +2037,15 @@ def recorded_findings(str_base: str) -> set:
         Findings produced by the tree of at least one trailer-carrying commit since the base.
     """
     str_out = _git(
-        ["log", "-E", "-i", f"--grep={STR_TRAILER_GREP}", "--format=%H", f"{str_base}..HEAD"]
+        [
+            "log",
+            "--no-merges",
+            "-E",
+            "-i",
+            f"--grep={STR_TRAILER_GREP}",
+            "--format=%H",
+            f"{str_base}..HEAD",
+        ]
     )
     set_recorded: set = set()
     for str_sha in str_out.split():

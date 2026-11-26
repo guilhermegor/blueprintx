@@ -2269,6 +2269,23 @@ def test_read_workflow_invalid_yaml_is_unparsed_not_a_crash(str_text: str) -> No
     assert gate.read_workflow(str_text) is None
 
 
+def test_branch_justified_trailer_on_a_merge_commit_justifies_nothing(
+    path_branch: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a merge skips pre-commit, so a trailer on it is not a recorded approval."""
+    _git_in(path_branch, "checkout", "-q", "-b", "side", "main")
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    _commit_staged(path_branch, str_message="feat: side")
+    _git_in(path_branch, "checkout", "-q", "feature")
+    _git_in(path_branch, "merge", "-q", "--no-ff", "side", "-m", _STR_TRAILER)
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+    int_code = gate.main([])
+
+    assert (int_code, "ruff.toml" in capsys.readouterr().out) == (1, True)
+
+
 def test_local_run_ignores_a_bare_trailer_in_history(
     path_branch: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:

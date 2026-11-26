@@ -2668,4 +2668,5 @@ entirely, as before. The record is local hardening, not a forgery-proof gate: CI
 CI exactly as it did before. Each trailer commit is judged against `merge-base(commit, base)`, so
 a later merge of `main` does not move the base its findings are measured from. Findings are
 cumulative, so a weakening committed without the hook (`--no-verify`, or arriving in a merge)
-is also covered by any later trailer commit on the branch.
+is also covered by any later trailer commit on the branch. A merge commit is never a trailer
+commit, because `git merge` runs no `pre-commit` hook, so its trailer would be untested text.
