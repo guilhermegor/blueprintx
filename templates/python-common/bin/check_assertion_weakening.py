@@ -952,6 +952,9 @@ def _marker_condition(str_marker: str) -> str | None:
 _RE_XFAIL_RAISES = re.compile(r";raises=([^;]*)")
 
 
+_RE_LATE_XFAIL = re.compile(r"^applymarker-(xfail:.*?)(\(\)|\(if\):.*)$")
+
+
 def _xfail_tightens(str_new: str, *, set_old: set) -> bool:
     """Return whether an ``xfail`` label only tightens one the old test already carried.
 
@@ -968,6 +971,14 @@ def _xfail_tightens(str_new: str, *, set_old: set) -> bool:
         ``True`` when an old ``xfail`` on the same condition and ``run`` becomes ``strict`` or
         gains ``raises=``, and does not lose a ``raises=`` or become lax.
     """
+    cls_late = _RE_LATE_XFAIL.match(str_new)
+    if cls_late:
+        set_same = {
+            f"{cls_old.group(1)}"
+            for str_old in set_old
+            if (cls_old := _RE_LATE_XFAIL.match(str_old)) and cls_old.group(2) == cls_late.group(2)
+        }
+        return _xfail_tightens(cls_late.group(1), set_old=set_same)
     if not str_new.startswith("xfail:"):
         return False
     return any(

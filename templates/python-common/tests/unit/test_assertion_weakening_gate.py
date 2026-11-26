@@ -1455,6 +1455,46 @@ def test_a_handler_is_guarded_by_the_handlers_before_it() -> None:
     assert "newly marked skip" in _sole_finding(str_old, str_new=str_try + str_second + str_tail)
 
 
+@pytest.mark.parametrize(
+    "str_stmt",
+    [
+        "request.applymarker(pytest.mark.xfail({}))",
+        "if c:\n        request.node.add_marker(pytest.mark.xfail({}))",
+    ],
+    ids=["plain", "guarded"],
+)
+class TestLateXfailTightening:
+    """Review of #1328: a late xfail is compared with late xfails under the same guard."""
+
+    _HEAD = "def test_a(request):\n    "
+
+    def _findings(self, str_stmt: str, *, str_old_args: str, str_new_args: str) -> list:
+        return _findings(
+            self._HEAD + str_stmt.format(str_old_args) + "\n" + _BODY,
+            str_new=self._HEAD + str_stmt.format(str_new_args) + "\n" + _BODY,
+        )
+
+    def test_strict_is_a_tightening(self, str_stmt: str) -> None:
+        """Adding ``strict=True`` is a tightening."""
+        assert self._findings(str_stmt, str_old_args="", str_new_args="strict=True") == []
+
+    def test_adding_raises_is_a_tightening(self, str_stmt: str) -> None:
+        """Adding ``raises=`` is a tightening."""
+        str_new = "strict=True, raises=ValueError"
+        assert self._findings(str_stmt, str_old_args="strict=True", str_new_args=str_new) == []
+
+    def test_dropping_strict_is_flagged(self, str_stmt: str) -> None:
+        """Dropping ``strict=True`` is flagged."""
+        str_found = self._findings(str_stmt, str_old_args="strict=True", str_new_args="")
+        assert "newly marked applymarker-xfail" in str_found[0]
+
+    def test_dropping_raises_is_flagged(self, str_stmt: str) -> None:
+        """Dropping ``raises=`` is flagged."""
+        str_old = "strict=True, raises=ValueError"
+        str_found = self._findings(str_stmt, str_old_args=str_old, str_new_args="strict=True")
+        assert "newly marked applymarker-xfail" in str_found[0]
+
+
 def test_a_class_marker_is_a_new_marker() -> None:
     """Item of #1316: a skip decorator on the class newly skips its methods."""
     str_old = "class TestA:\n    def test_a(self):\n    " + _BODY
