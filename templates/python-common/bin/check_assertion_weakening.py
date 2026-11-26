@@ -877,8 +877,9 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     Returns
     -------
     str
-        ``f(), g()`` for the distinct callees plus the module, level and names of each import,
-        ``nothing`` for a body with neither. Editing an argument leaves the key alone, so an
+        ``f(), g()`` for the distinct callees, ``raise``/``assert`` when the body has one, and
+        the module, level and names of each import; ``nothing`` for a body with none.
+        Editing an argument leaves the key alone, so an
         unchanged ``except E: pytest.skip()`` is not reported again; adding or removing a callee
         or import changes it. Known limit, accepted for that trade: a second ``try`` that calls
         the same callees and catches the same type shares the first one's label, so a skip added
@@ -889,6 +890,8 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
         for cls_node in ast.walk(cls_stmt):
             if isinstance(cls_node, ast.Call):
                 set_names.add(f"{ast.unparse(cls_node.func)}()")
+            elif isinstance(cls_node, ast.Raise | ast.Assert):
+                set_names.add(type(cls_node).__name__.lower())
             elif isinstance(cls_node, ast.Import):
                 set_names.add("import " + ",".join(cls_a.name for cls_a in cls_node.names))
             elif isinstance(cls_node, ast.ImportFrom):

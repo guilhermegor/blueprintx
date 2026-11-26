@@ -1745,3 +1745,11 @@ def test_a_try_that_imports_a_different_name_re_reports_the_except_skip() -> Non
     str_old = "def test_a():\n    try:\n        from foo import a\n    " + str_tail + _BODY
     str_new = "def test_a():\n    try:\n        from foo import b\n    " + str_tail + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_raise_added_to_a_try_body_re_reports_the_except_skip() -> None:
+    """Review of #1340: ``try: f(1)`` gaining ``raise E`` makes the handler fire every run."""
+    str_tail = "    except E:\n        pytest.skip()\n"
+    str_old = "def test_a():\n    try:\n        f(1)\n" + str_tail + _BODY
+    str_new = "def test_a():\n    try:\n        f(1)\n        raise E\n" + str_tail + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
