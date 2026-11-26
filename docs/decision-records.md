@@ -1358,8 +1358,11 @@ is shaped as it is; a generated project gets the behavior, not the history.
       identical job, so moving a job between files is a move, not a removal (#1311).
       Workflows are read with PyYAML through `StringScalarLoader` (#1315) and compared as parsed
       values, never as text, subject to the move exclusions below (a flow-style destination job
-      is excluded even when its parsed value equals the block-style one): whitespace, quoting,
-      key spelling and comments cannot change a verdict, and a changed value inside a folded `run: >` (a blank
+      is excluded even when its parsed value equals the block-style one): whitespace, key
+      spelling, comments and quoting a string cannot change a verdict. Quoting a number or
+      boolean can (`[16]` against `["16"]`, which `toJSON` tells apart; each job also carries
+      the standard loader's typed read), and a changed value
+      inside a folded `run: >` (a blank
       line included) always does. The gate hard-fails on a missing `import yaml`; there is no
       fallback to a line parser. PyYAML is importable where the gate runs: BlueprintX's own
       hook is `language: python` with `additional_dependencies: [pyyaml==6.0.3]`, its CI job pins
@@ -1421,9 +1424,8 @@ is shaped as it is; a generated project gets the behavior, not the history.
       against `ci-x`), a new job elsewhere in the target that makes the whole file invalid (actionlint's job), first-fit candidate matching, per-workflow state such as `github.run_number` and
       `run_attempt` that changes when a job moves, a constant target group that makes runs across PRs
       cancel each other, and a target job whose `name:` repeats an existing check context.
-      Parser-level limits: a duplicate key silently keeps its last value (GitHub rejects the
-      file), and a self-referential alias makes the file unparsed. The `jobs:` key read for
-      anchors is the last one, like the constructed mapping.
+      Parser-level limit: a self-referential alias makes the file unparsed, and so does a repeated
+      key (GitHub rejects it too).
       Two more limits stay: a workflow that waits on the source through
       `on: workflow_run` (keyed on its `name:`) is in another file the gate does not read.
       One new job excuses one removal. It also counts as removed when the id is gone from
@@ -2283,6 +2285,33 @@ This section records what is specific to the generated copies.
   open PR. A new push cancels the previous
   polling run so two gates do not race on one sticky comment. Event data reaches the script
   through `env:` only.
+- **`pr-gate.yml`, a gate that fails after the retrigger window (#1320).** `retrigger` waits
+  about 180 s for the gate run and then exits with a warning, but the gate may run for 20
+  minutes, so a gate that fails later stayed red for that head. Decided: recover from the
+  gate's own completion rather than poll longer. The `workflow_run` trigger also names
+  `PR Quality Gate`, and a `late_rerun` job fires on a completed run with
+  `conclusion == 'failure'`; the gate can also fail because its polling budget ran out with
+  axes still pending, so the job skips while a `Run Tests` run for the head is unfinished and
+  leaves the retry to the `Run Tests` completion that `retrigger` handles. It re-runs the
+  gate run once: the step reads the run's attempt and re-runs only attempt 1, so a re-run
+  that fails again is final and a passing gate gets none. When both jobs race, the loser's
+  `gh run rerun` is tolerated only if its error says the run is "already running"; any
+  other failure (403, 404, rate limit) fails the job rather than reporting a red gate green. `retrigger` is now limited to `Run Tests` completions, or the
+  gate's own completion would fire both jobs. Rejected: raising the retrigger loop to 20
+  minutes, which holds a runner for the gate's whole budget on every PR. Known overlap: a
+  gate that failed before Run Tests finished is re-run by whichever job reaches it first;
+  the attempt check keeps that to one re-run. The skip counts only `pull_request`-event
+  `Run Tests` runs, since a `push` run cannot trigger `retrigger`. Only `failure` is retried:
+  `cancelled` also covers the concurrency cancel on a new push. A genuine failure costs one
+  extra gate run (red, pending, red). The gate now triggers on its own completion, so
+  each gate run adds a few skipped `workflow_run` runs; the concurrency key falls back to
+  `run_id` for them, so they cancel nothing. Known limit: the skip looks only at `Run Tests`.
+  If the axis still pending when the gate gave up is code scanning, no `Run Tests` completion
+  follows, so nothing re-triggers the gate and it stays red until the next `pull_request`
+  event or `workflow_dispatch` backfill. Accepted: the two recoveries available are polling
+  for code scanning (holds a runner, the thing rejected above) or a `workflow_run` on the
+  CodeQL workflow, whose name varies per project and is not guaranteed to exist. Reopen if a
+  stranded gate is measured. Should-fail witness: `tests/test_review_workflow_shape.sh`.
 - **`release.yml`.** A service is deployed, not published, so there is no PyPI step. The
   version input is free text and is validated before `git tag`, the irreversible half. The
   versioned-docs job runs only after the tag is cut, so the site never advertises a version
@@ -2636,3 +2665,37 @@ the ruleset or in classic branch protection, and when a `required_status_checks`
 checks. A strict-on setting is therefore the violation, and the required checks must still exist.
 The #302 failure mode (six tier checks red because #293 had not merged) is accepted and is caught
 on main instead of at merge time.
+
+## A justified gate change is honoured on the rest of the branch (`check_gate_integrity.py`, #1323)
+
+The local gate judges the whole branch against its merge-base, so after the owner justified a
+weakening with `GATE_CHANGE_OK` every later commit (a test-only fix, the merge of `main`) was
+refused for the same finding and needed the owner at a terminal again (PR #1321, PR #1280).
+
+**Decision.** A local run passes when every current finding is in the set justified by a commit
+already on the branch. A commit counts when its message carries a `gate-change-ok: <reason>`
+trailer, and the findings it justifies are the ones that commit's own tree produces
+(`findings_at`, the same checks with that commit read in place of the index). The owner ends
+the interactive commit's message with the trailer, and the gate prints that line on an env
+justification.
+
+**Why a typed trailer is not enough.** The trailer text alone justifies nothing. A tree that
+produces findings normally exists only if the interactive `GATE_CHANGE_OK` run let it through, so a
+trailer on a commit with no findings of its own, or typed before the weakening lands, covers
+nothing, and the weakening commit itself is still refused. A new weakening is not in the set and
+is refused too.
+
+**What changed with it.** A local run no longer reads a bare trailer from `base..HEAD` as a
+blanket reason: that was the same forgery (one clean commit with a trailer, then any weakening).
+CI keeps the PR body and trailer sources unchanged, since a reviewer reads those.
+
+**Known limits.** The trailer is typed by the owner, not written by the hook, because the message
+does not exist at the `pre-commit` stage and a `prepare-commit-msg` hook would widen the surface;
+a commit made without the trailer keeps today's behaviour. `--no-verify` bypasses the hook
+entirely, as before. The record is local hardening, not a forgery-proof gate: CI still accepts a
+`gate-change-ok:` trailer from `base..HEAD`, so a `--no-verify` commit with a typed trailer clears
+CI exactly as it did before. Each trailer commit is judged against `merge-base(commit, base)`, so
+a later merge of `main` does not move the base its findings are measured from. Findings are
+cumulative, so a weakening committed without the hook (`--no-verify`, or arriving in a merge)
+is also covered by any later trailer commit on the branch. A merge commit is never a trailer
+commit, because `git merge` runs no `pre-commit` hook, so its trailer would be untested text.

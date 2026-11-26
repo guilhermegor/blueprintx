@@ -31,15 +31,44 @@ branch has another name must change ``branches:`` in ``rerun-on-collision.yml``.
 Draft and bot-authored PRs (Dependabot, Renovate) are never updated: a push to a bot branch makes
 the bot stop maintaining it. A PR whose files cannot be read is logged and skipped (it is still
 updated when the merge file list was truncated).
+
+RE-REVIEW. The review gate (``check_review_threads.py``) carries a review forward only while the
+PR's own patch fingerprint is unchanged, and turns red ("review superseded") otherwise. After a
+successful update this script waits for the PR head to move, fingerprints the old and the new
+head with that gate's own ``fetch_patch_fingerprint``, and posts ONE review request comment per
+PR when the fingerprints differ. An unchanged fingerprint posts nothing: the carried-forward
+review stands. A fingerprint that cannot be computed counts as changed, the gate's own fail-closed
+reading. Who is asked comes from ``.review-bots.yaml`` through the gate's loaders: only a
+``posts: threads`` login with an entry in ``REVIEW_COMMANDS`` is asked, so a roster with no such
+login (or none at all) requests nothing. Every branch update runs first; the head waits and
+review requests follow as a second pass, so a slow wait never delays an update. Requests go out
+in ascending PR number, which is age order, one comment per PR and reviewer per run, so a merge
+that collides with many PRs does not burst one reviewer's quota. Two merges in a row that both
+collide with a PR each post a request: a request already pending is not detected. The head wait
+is bounded (HEAD_POLLS x HEAD_POLL_SECONDS per PR, serial, inside the job's
+``timeout-minutes``); a head that never moves is logged as a warning and requests nothing. The
+review gate is imported best-effort: when it is missing the branch updates still run and nothing
+is requested. The comment is authored by the ``RERUN_TOKEN`` user (the same ``pull-requests:
+write`` the update needs): CodeRabbit ignores bot-authored comments. The fingerprint reads use
+``gh``, which takes its token from ``GH_TOKEN``; the workflow sets it to ``RERUN_TOKEN``.
 """
 
+from collections.abc import Callable
 import fnmatch
 import json
 import os
+import pathlib
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+
+try:
+    import check_review_threads
+except Exception:  # noqa: BLE001
+    check_review_threads = None  # type: ignore[assignment]
 
 
 API = "https://api.github.com"
@@ -48,6 +77,9 @@ ZERO_SHA = "0" * 40
 PAGE_SIZE = 100
 FILE_CAP = 300
 PR_FILE_CAP = 3000
+HEAD_POLLS = 20
+HEAD_POLL_SECONDS = 3
+REVIEW_COMMANDS = {"coderabbitai": "@coderabbitai full review"}
 
 
 def paths_of(list_files: list[dict]) -> set[str]:
@@ -117,15 +149,19 @@ def colliding_prs(
     )
 
 
-def _call(str_method: str, *, str_path: str, str_token: str) -> object:
+def _call(
+    str_method: str, *, str_path: str, str_token: str, dict_body: dict | None = None
+) -> object:
     """Make one GitHub REST call and return the decoded JSON body."""
     cls_request = urllib.request.Request(  # noqa: S310 - fixed https API host
         f"{API}/{str_path}",
         method=str_method,
+        data=None if dict_body is None else json.dumps(dict_body).encode(),
         headers={
             "Authorization": f"Bearer {str_token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
+            **({} if dict_body is None else {"Content-Type": "application/json"}),
         },
     )
     with urllib.request.urlopen(cls_request, timeout=30) as cls_resp:  # noqa: S310
@@ -213,6 +249,180 @@ def _targets(
     )
 
 
+def review_commands(dict_roster: dict[str, str]) -> list[str]:
+    """Return the review requests the roster's reviewers can be asked with.
+
+    Parameters
+    ----------
+    dict_roster : dict[str, str]
+        Roster as returned by ``check_review_threads.load_roster``.
+
+    Returns
+    -------
+    list[str]
+        One comment body per ``posts: threads`` login that has an entry in ``REVIEW_COMMANDS``,
+        in login order. Empty for an empty roster.
+    """
+    set_reviewers = check_review_threads.reviewer_logins(dict_roster)
+    for str_login in sorted(set_reviewers - set(REVIEW_COMMANDS)):
+        print(f"::warning::reviewer {str_login} has no entry in REVIEW_COMMANDS: it is not asked")
+    set_asked = set_reviewers & set(REVIEW_COMMANDS)
+    return [REVIEW_COMMANDS[str_login] for str_login in sorted(set_asked)]
+
+
+def patch_unchanged(fn_fingerprint: Callable[[str], str], *, str_old: str, str_new: str) -> bool:
+    """Return whether the PR's own patch is the same at the old and the new head.
+
+    Parameters
+    ----------
+    fn_fingerprint : Callable[[str], str]
+        Maps a commit oid to its patch fingerprint; raises when the patch is unavailable.
+    str_old : str
+        The head before the branch update.
+    str_new : str
+        The head after it.
+
+    Returns
+    -------
+    bool
+        ``True`` only when both fingerprints were computed and are equal, the review gate's
+        own fail-closed rule (``check_review_threads.review_covers_head``).
+    """
+    try:
+        return check_review_threads.review_covers_head(
+            fn_fingerprint,
+            str_review_oid=str_old,
+            str_head_oid=str_new,
+            str_head_digest=fn_fingerprint(str_new),
+        )
+    except Exception as exc_err:  # noqa: BLE001
+        print(f"patch fingerprint of {str_new[:7]} unavailable: {exc_err}")
+        return False
+
+
+def _pull(str_repo: str, *, int_num: int, str_token: str) -> dict:
+    """Read one PR and return it as a dict."""
+    obj_data = _call("GET", str_path=f"repos/{str_repo}/pulls/{int_num}", str_token=str_token)
+    if not isinstance(obj_data, dict):
+        raise ValueError(f"PR #{int_num}: expected an object, got {type(obj_data).__name__}")
+    return obj_data
+
+
+def _await_new_head(
+    fn_pull: Callable[[], dict], *, str_old: str, fn_sleep: Callable[[float], None] = time.sleep
+) -> dict | None:
+    """Poll until the PR head differs from ``str_old``; None if it never moves.
+
+    ``update-branch`` answers 202 before the merge commit exists, so the new head has to be
+    waited for.
+    """
+    for _ in range(HEAD_POLLS):
+        dict_pull = fn_pull()
+        if dict_pull["head"]["sha"] != str_old:
+            return dict_pull
+        fn_sleep(HEAD_POLL_SECONDS)
+    return None
+
+
+def _ask_for_review(
+    str_repo: str, *, int_num: int, str_token: str, list_commands: list[str]
+) -> None:
+    """Post one comment per review command on the PR."""
+    for str_command in list_commands:
+        _call(
+            "POST",
+            str_path=f"repos/{str_repo}/issues/{int_num}/comments",
+            str_token=str_token,
+            dict_body={"body": str_command},
+        )
+        print(f"requested review on PR #{int_num}: {str_command}")
+
+
+def _follow_up(
+    str_repo: str, *, int_num: int, str_old: str, str_token: str, list_commands: list[str]
+) -> None:
+    """Request a new review when the update changed the PR's own patch."""
+    dict_pull = _await_new_head(
+        lambda: _pull(str_repo, int_num=int_num, str_token=str_token), str_old=str_old
+    )
+    if dict_pull is None:
+        print(f"::warning::PR #{int_num}: head did not move, no review requested")
+        return
+    str_owner, _, str_name = str_repo.partition("/")
+    str_base = dict_pull["base"]["sha"]
+    if patch_unchanged(
+        lambda str_oid: check_review_threads.fetch_patch_fingerprint(
+            str_owner, str_repo=str_name, str_base=str_base, str_oid=str_oid
+        ),
+        str_old=str_old,
+        str_new=dict_pull["head"]["sha"],
+    ):
+        return
+    _ask_for_review(str_repo, int_num=int_num, str_token=str_token, list_commands=list_commands)
+
+
+def _update_one(
+    str_repo: str, *, int_num: int, str_token: str, bool_track_head: bool
+) -> str | None:
+    """Update one PR's branch; return its head before the update, or None when it was skipped.
+
+    The head is only read when ``bool_track_head`` is set (a review may be requested), so a
+    run with nobody to ask makes no extra call. The empty string stands for "updated, head
+    not read".
+    """
+    str_old = ""
+    if bool_track_head:
+        try:
+            str_old = _pull(str_repo, int_num=int_num, str_token=str_token)["head"]["sha"]
+        except (OSError, ValueError, KeyError, TypeError) as exc_err:
+            print(f"::warning::PR #{int_num}: head not read, no review requested: {exc_err}")
+    try:
+        _call(
+            "PUT", str_path=f"repos/{str_repo}/pulls/{int_num}/update-branch", str_token=str_token
+        )
+        print(f"updated PR #{int_num}")
+    except urllib.error.HTTPError as exc_err:
+        print(f"skip PR #{int_num}: HTTP {exc_err.code}")
+        return None
+    except (OSError, ValueError, KeyError, TypeError) as exc_err:
+        print(f"skip PR #{int_num}: {exc_err}")
+        return None
+    return str_old
+
+
+def _review_one(
+    str_repo: str, *, int_num: int, str_old: str, str_token: str, list_commands: list[str]
+) -> None:
+    """Request a review for one updated PR; any failure is logged and never raised."""
+    try:
+        _follow_up(
+            str_repo,
+            int_num=int_num,
+            str_old=str_old,
+            str_token=str_token,
+            list_commands=list_commands,
+        )
+    except Exception as exc_err:  # noqa: BLE001
+        print(f"::warning::PR #{int_num}: review request failed: {exc_err}")
+
+
+def _roster_commands() -> list[str]:
+    """Return the review requests for this checkout's roster; empty when it cannot be read.
+
+    A roster that is missing, malformed or without a reviewer must never stop the branch
+    updates, so every failure is logged and read as "nobody to ask". That includes the review
+    gate not being importable next to this script.
+    """
+    if check_review_threads is None:
+        print("::warning::check_review_threads.py is not importable: no review will be requested")
+        return []
+    try:
+        return review_commands(check_review_threads.load_roster(pathlib.Path.cwd()))
+    except Exception as exc_err:  # noqa: BLE001
+        print(f"::warning::no review will be requested, roster unusable: {exc_err}")
+        return []
+
+
 def main() -> int:
     """Update every open PR that collides with the push that triggered this run.
 
@@ -242,20 +452,26 @@ def main() -> int:
         print(f"cannot read merge files or open PRs: {exc_err}", file=sys.stderr)
         return 1
 
+    list_commands = _roster_commands()
+    dict_updated = {}
     for int_num in _targets(
         set_merge, dict_pr_files=dict_pr_files, list_excludes=list_excludes, set_capped=set_capped
     ):
-        try:
-            _call(
-                "PUT",
-                str_path=f"repos/{str_repo}/pulls/{int_num}/update-branch",
-                str_token=str_token,
-            )
-            print(f"updated PR #{int_num}")
-        except urllib.error.HTTPError as exc_err:
-            print(f"skip PR #{int_num}: HTTP {exc_err.code}")
-        except (OSError, ValueError) as exc_err:
-            print(f"skip PR #{int_num}: {exc_err}")
+        str_old = _update_one(
+            str_repo, int_num=int_num, str_token=str_token, bool_track_head=bool(list_commands)
+        )
+        if str_old is not None:
+            dict_updated[int_num] = str_old
+    for int_num, str_old in dict_updated.items() if list_commands else ():
+        if not str_old:
+            continue
+        _review_one(
+            str_repo,
+            int_num=int_num,
+            str_old=str_old,
+            str_token=str_token,
+            list_commands=list_commands,
+        )
     return 0
 
 

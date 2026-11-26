@@ -161,6 +161,7 @@ STR_HOSTED_RUNNER = "<github-hosted ubuntu{}>"
 RE_WORKFLOW_NAME_READ = re.compile(r"""github(?:[._]|\[\s*["']\s*)workflow(?!\w)""", re.IGNORECASE)
 STR_WORKFLOW_EXPR = "${{github.workflow}}"
 STR_FLOW_CONCURRENCY = "{flow}"
+STR_TYPED_KEY = "\x00typed"
 STR_MERGE_TAG = "tag:yaml.org,2002:merge"
 _SET_COERCED_TAGS = frozenset(
     f"tag:yaml.org,2002:{str_kind}"
@@ -175,6 +176,8 @@ _SET_WEAKER_THAN_EQ = frozenset({"in", "not in", ">=", "<=", "!="})
 _SET_BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
 
 STR_INDEX_REF = ""
+STR_TRAILER_HINT = "gate-change-ok: <the same reason>"
+STR_TRAILER_GREP = "^[[:space:]]*gate-change-ok:[[:space:]]*[^[:space:]]"
 
 _INT_MIN_FIELDS = 2
 
@@ -272,7 +275,9 @@ def changed_paths(str_base: str) -> list:
     list of tuple
         ``(status_letter, path)``, e.g. ``("D", "bin/ci/check_actions.sh")``.
     """
-    str_out = _git(["diff", "--cached", "--name-status", "--no-renames", str_base])
+    list_args = ["diff", "--name-status", "--no-renames"]
+    list_args += [str_base, STR_INDEX_REF] if STR_INDEX_REF else ["--cached", str_base]
+    str_out = _git(list_args)
     list_rows = []
     for str_line in str_out.splitlines():
         list_parts = str_line.split("\t")
@@ -693,6 +698,39 @@ def node_has_cycle(
     )
 
 
+def node_has_duplicate_key(cls_node: yaml.Node, *, set_done: set | None = None) -> bool:
+    """Return whether a mapping in the tree repeats a scalar key.
+
+    Parameters
+    ----------
+    cls_node : yaml.Node
+        The node to walk; the tree must already be known to hold no cycle.
+    set_done : set or None
+        ``id()`` of the nodes already walked, so a node shared by many aliases is walked once.
+
+    Returns
+    -------
+    bool
+        True when some mapping holds the same scalar key twice. PyYAML keeps the last value
+        silently, and YAML requires keys to be unique, so such a file is not a valid workflow.
+    """
+    set_done = set() if set_done is None else set_done
+    if id(cls_node) in set_done:
+        return False
+    set_done.add(id(cls_node))
+    list_keys = [
+        cls_key.value
+        for cls_key in _node_children(cls_node)[
+            :: 2 if isinstance(cls_node, yaml.MappingNode) else 1
+        ]
+        if isinstance(cls_node, yaml.MappingNode) and isinstance(cls_key, yaml.ScalarNode)
+    ]
+    return len(list_keys) != len(set(list_keys)) or any(
+        node_has_duplicate_key(cls_child, set_done=set_done)
+        for cls_child in _node_children(cls_node)
+    )
+
+
 def anchored_job_ids(cls_root: yaml.Node, *, set_anchored: frozenset) -> frozenset:
     """Return the ids of the jobs a faithful copy cannot be proven for from their own text.
 
@@ -762,6 +800,8 @@ def _parse_workflow(cls_loader: StringScalarLoader) -> tuple:
     set_jobs = anchored_job_ids(cls_root, set_anchored=set_anchored)
     if node_has_cycle(cls_root):
         raise yaml.YAMLError("a self-referential alias cannot be compared")
+    if node_has_duplicate_key(cls_root):
+        raise yaml.YAMLError("a mapping repeats a key")
     if isinstance(cls_root, yaml.MappingNode) and any(
         cls_key.tag == STR_MERGE_TAG for cls_key, _cls_value in cls_root.value
     ):
@@ -770,6 +810,65 @@ def _parse_workflow(cls_loader: StringScalarLoader) -> tuple:
     if not cls_loader.check_event(yaml.StreamEndEvent):
         raise yaml.YAMLError("expected a single document")
     return cls_loader.construct_document(cls_root), set_jobs
+
+
+def add_typed_jobs(dict_document: dict, *, str_text: str) -> dict:
+    """Return the document with each job also carrying the job as the standard loader types it.
+
+    Parameters
+    ----------
+    dict_document : dict
+        The parsed workflow, scalars as text.
+    str_text : str
+        The same workflow text.
+
+    Returns
+    -------
+    dict
+        The document, its job mappings extended with ``STR_TYPED_KEY``: the same job read by
+        ``yaml.safe_load``, so ``[16]`` and ``["16"]`` (a number and a string to GitHub's
+        ``toJSON``) differ while a quoted-only respelling of a plain string still compares equal.
+    """
+    cls_jobs = dict_document.get("jobs")
+    try:
+        cls_typed = yaml.safe_load(str_text).get("jobs")
+    except (yaml.YAMLError, ValueError, KeyError, TypeError, AttributeError, RecursionError):
+        return dict_document
+    if not (isinstance(cls_jobs, dict) and isinstance(cls_typed, dict)):
+        return dict_document
+    for str_id, cls_job in cls_jobs.items():
+        if isinstance(cls_job, dict):
+            cls_typed_job = cls_typed.get(str_id)
+            cls_job[STR_TYPED_KEY] = (
+                job_signature(cls_typed_job) if isinstance(cls_typed_job, dict) else cls_typed_job
+            )
+    return dict_document
+
+
+def drop_typed_jobs(dict_document: dict) -> dict:
+    """Return the document without the typed copies ``add_typed_jobs`` put on each job.
+
+    Parameters
+    ----------
+    dict_document : dict
+        A parsed workflow.
+
+    Returns
+    -------
+    dict
+        The same document with every job's ``STR_TYPED_KEY`` removed, so text a search reads
+        is the file's own and not a placeholder such as the hosted-runner one.
+    """
+    cls_jobs = dict_document.get("jobs")
+    if not isinstance(cls_jobs, dict):
+        return dict_document
+    cls_clean = {
+        str_id: {k: v for k, v in cls_job.items() if k != STR_TYPED_KEY}
+        if isinstance(cls_job, dict)
+        else cls_job
+        for str_id, cls_job in cls_jobs.items()
+    }
+    return {**dict_document, "jobs": cls_clean}
 
 
 def read_workflow(str_text: str) -> tuple | None:
@@ -800,7 +899,7 @@ def read_workflow(str_text: str) -> tuple | None:
             cls_loader.dispose()
     if not isinstance(cls_document, dict):
         return None
-    return cls_document, set_jobs
+    return add_typed_jobs(cls_document, str_text=str_text), set_jobs
 
 
 def workflow_jobs_of(dict_document: dict) -> dict:
@@ -1088,7 +1187,9 @@ def id_is_referenced(str_id: str, *, dict_document: dict) -> bool:
         other string that holds the id as a word. Comments are not strings and do not count.
     """
     re_word = re.compile(rf"(?<![\w-]){re.escape(str_id)}(?![\w-])")
-    return any(re_word.search(str_text) for str_text in iter_strings(dict_document))
+    return any(
+        re_word.search(str_text) for str_text in iter_strings(drop_typed_jobs(dict_document))
+    )
 
 
 def removal_is_move(
@@ -1968,12 +2069,97 @@ def justification_reason(str_base: str) -> str:
     str_env = env_reason()
     if str_env:
         return str_env
-    str_trailers = _git(["log", "--encoding=UTF-8", f"{str_base}..HEAD", "--format=%B"])
+    str_trailers = ""
+    if is_ci():
+        str_trailers = _git(["log", "--encoding=UTF-8", f"{str_base}..HEAD", "--format=%B"])
     for str_text in (pr_body_text(), str_trailers):
         cls_match = RE_JUSTIFICATION.search(str_text)
         if cls_match and cls_match.group(1).strip():
             return cls_match.group(1).strip()
     return ""
+
+
+def findings_at(str_ref: str, *, str_base: str) -> list:
+    """Return the findings ``str_base..str_ref`` produces, as if ``str_ref`` were the index.
+
+    Parameters
+    ----------
+    str_ref : str
+        A commit on the branch, read in place of the index.
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    list of str
+        The same findings the pre-commit run reported when that commit was made.
+    """
+    global STR_INDEX_REF  # noqa: PLW0603
+    str_saved = STR_INDEX_REF
+    STR_INDEX_REF = str_ref
+    try:
+        return collect_problems(changed_paths(str_base), str_base=str_base)
+    finally:
+        STR_INDEX_REF = str_saved
+
+
+def recorded_findings(str_base: str) -> set:
+    """Return the findings the owner justified in commits already on the branch.
+
+    A ``gate-change-ok:`` trailer is only a claim, and an agent can type one. What makes it
+    count is the commit that carries it: the findings it justifies are those its OWN tree
+    produces against its OWN fork point (``merge-base`` of the commit and the current base,
+    so a later merge of ``main`` cannot turn main's newer gates into recorded findings), and
+    a tree with findings normally exists only if the interactive ``GATE_CHANGE_OK`` run let it
+    through (a commit made without the hook, such as ``--no-verify``, is the exception).
+    A trailer on a commit with no findings of its own justifies nothing.
+
+    Parameters
+    ----------
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    set of str
+        Findings produced by the tree of at least one trailer-carrying commit since the base.
+    """
+    str_out = _git(
+        [
+            "log",
+            "--no-merges",
+            "-E",
+            "-i",
+            f"--grep={STR_TRAILER_GREP}",
+            "--format=%H",
+            f"{str_base}..HEAD",
+        ]
+    )
+    set_recorded: set = set()
+    for str_sha in str_out.split():
+        str_own_base = _git(["merge-base", str_sha, str_base]).strip() or str_base
+        set_recorded.update(findings_at(str_sha, str_base=str_own_base))
+    return set_recorded
+
+
+def branch_justified(list_problems: list, *, str_base: str) -> bool:
+    """Return whether every current finding was already justified on this branch.
+
+    Parameters
+    ----------
+    list_problems : list of str
+        Findings from ``collect_problems``.
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    bool
+        ``True`` only locally and only when no finding is new; CI keeps its own sources.
+    """
+    if is_ci():
+        return False
+    return set(list_problems) <= recorded_findings(str_base)
 
 
 def apply_root_flag(list_argv: list) -> bool:
@@ -2101,6 +2287,14 @@ def report(list_problems: list, *, str_base: str, int_changed_count: int) -> int
     str_reason = justification_reason(str_base)
     if str_reason:
         print(f"\n✅ justified: gate-change-ok: {str_reason}")
+        if not is_ci():
+            print(f"   to cover later commits, end this commit's message with: {STR_TRAILER_HINT}")
+        return 0
+    if branch_justified(list_problems, str_base=str_base):
+        print(
+            "\n✅ justified earlier on this branch (gate-change-ok trailer on a commit whose "
+            "own tree carries these findings)"
+        )
         return 0
 
     print(

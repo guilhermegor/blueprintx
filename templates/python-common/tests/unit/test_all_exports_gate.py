@@ -1487,3 +1487,201 @@ def test_a_subtracting_augmented_assignment_does_not_add_names(tmp_path: Path) -
         str_member="a = 1\n",
     )
     assert _load_gate().declared_all(path_init) == ["a"]
+
+
+def test_main_reports_the_parse_error_finding(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``main`` names the unparseable ``__init__.py`` on stderr."""
+    gate = _load_gate()
+    path_init = tmp_path / "src" / "pkg" / "__init__.py"
+    path_init.parent.mkdir(parents=True)
+    path_init.write_text("__all__ = [\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_SRC", tmp_path / "src")
+    gate.main()
+    assert "could not parse" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "str_later",
+    ["__all__ = [NAME_A, NAME_B]\n", "__all__ = ['b', NAME_B]\n", "__all__ = NAMES\n"],
+)
+def test_a_later_unreadable_assignment_keeps_the_declared_names(
+    tmp_path: Path, *, str_later: str
+) -> None:
+    """A later ``__all__`` the gate cannot read must not reset the literal list to ``[]``."""
+    path_init = _package(tmp_path, str_init=f"__all__ = ['a']\n{str_later}", str_member="")
+    assert "a" in (_load_gate().declared_all(path_init) or [])
+
+
+def test_insert_adds_the_inserted_name(tmp_path: Path) -> None:
+    """``__all__.insert(0, 'b')`` exports ``'b'``."""
+    path_init = _package(
+        tmp_path, str_init="__all__ = ['a']\n__all__.insert(0, 'b')\n", str_member=""
+    )
+    assert sorted(_load_gate().declared_all(path_init) or []) == ["a", "b"]
+
+
+@pytest.mark.parametrize(
+    ("str_later", "list_expected"),
+    [
+        ("__all__ = [*('x',), 'y']\n", ["x", "y"]),
+        ("__all__ = ['y', *('x',)]\n", ["y", "x"]),
+    ],
+)
+def test_a_later_literal_with_a_starred_literal_replaces_the_names(
+    tmp_path: Path, *, str_later: str, list_expected: list[str]
+) -> None:
+    """``[*('x',), 'y']`` is a literal, so it replaces ``['old']`` instead of adding to it."""
+    path_init = _package(tmp_path, str_init=f"__all__ = ['old']\n{str_later}", str_member="")
+    assert _load_gate().declared_all(path_init) == list_expected
+
+
+@pytest.mark.parametrize(
+    "str_mutation",
+    ["__all__.append('b')\n", "__all__.insert(0, 'b')\n", "__all__.extend(['b'])\n"],
+)
+def test_an_addition_without_a_declaration_keeps_no_all(
+    tmp_path: Path, *, str_mutation: str
+) -> None:
+    """An addition after an imported ``__all__`` must stay "no ``__all__``", not ``['b']``."""
+    path_init = _package(
+        tmp_path, str_init=f"from ._impl import __all__\n{str_mutation}", str_member=""
+    )
+    assert _load_gate().declared_all(path_init) is None
+
+
+def test_main_fails_on_an_unparseable_init(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A package whose ``__init__.py`` does not parse makes ``main`` return ``1``."""
+    gate = _load_gate()
+    path_init = tmp_path / "src" / "pkg" / "__init__.py"
+    path_init.parent.mkdir(parents=True)
+    path_init.write_text("__all__ = [\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_SRC", tmp_path / "src")
+    assert gate.main() == 1
+
+
+@pytest.mark.parametrize("str_removal", ["__all__.remove('x')\n", "__all__ -= ['x']\n"])
+def test_a_removal_without_a_declaration_keeps_no_all(tmp_path: Path, *, str_removal: str) -> None:
+    """``from ._impl import __all__`` then a removal must stay "no ``__all__``", not ``[]``."""
+    path_init = _package(
+        tmp_path, str_init=f"from ._impl import __all__\n{str_removal}", str_member=""
+    )
+    assert _load_gate().declared_all(path_init) is None
+
+
+@pytest.mark.parametrize(
+    "str_removal",
+    ["__all__.remove('b')\n", "__all__ -= ['b']\n"],
+)
+def test_removal_drops_the_removed_name(tmp_path: Path, *, str_removal: str) -> None:
+    """``.remove('b')`` and ``-= ['b']`` take ``'b'`` out of the export set."""
+    path_init = _package(tmp_path, str_init=f"__all__ = ['a', 'b']\n{str_removal}", str_member="")
+    assert _load_gate().declared_all(path_init) == ["a"]
+
+
+def test_remove_takes_out_only_the_first_occurrence(tmp_path: Path) -> None:
+    """``__all__.remove('a')`` on a list holding ``'a'`` twice leaves one."""
+    path_init = _package(
+        tmp_path, str_init="__all__ = ['a', 'a']\n__all__.remove('a')\n", str_member=""
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]
+
+
+def test_a_conditional_removal_keeps_the_name_exported(tmp_path: Path) -> None:
+    """``if enabled: __all__.remove('a')`` may not run, so ``'a'`` stays exported."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = ['a']\nif ENABLED:\n    __all__.remove('a')\n",
+        str_member="",
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]
+
+
+@pytest.mark.parametrize(
+    "str_guard",
+    [
+        "if TYPE_CHECKING:\n    __all__ = ['real']\n",
+        "if __name__ == '__main__':\n    __all__ = ['real']\n",
+    ],
+)
+def test_an_all_declared_in_a_non_runtime_block_is_ignored(
+    tmp_path: Path, *, str_guard: str
+) -> None:
+    """A type-only or script-only ``__all__`` assignment does not change the runtime list."""
+    path_init = _package(tmp_path, str_init=f"__all__ = []\n{str_guard}", str_member="")
+    assert _load_gate().declared_all(path_init) == []
+
+
+def test_a_valueless_annotation_does_not_cancel_a_placeholder(tmp_path: Path) -> None:
+    """``parse: object`` binds nothing, so the import's ``None`` fallback stays exempt."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "try:\n    from fast import parse\nexcept ImportError:\n    parse = None\n"
+            "if COND:\n    parse: object\n"
+        ),
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_a_starred_literal_on_the_first_declaration_is_expanded(tmp_path: Path) -> None:
+    """``[*('a', 'b'), 'c']`` exports all three names, not only ``'c'``."""
+    path_init = _package(tmp_path, str_init="__all__ = [*('a', 'b'), 'c']\n", str_member="")
+    assert _load_gate().declared_all(path_init) == ["a", "b", "c"]
+
+
+def test_all_declared_inside_try_is_read(tmp_path: Path) -> None:
+    """A package whose ``__all__`` sits under ``try:`` is in scope."""
+    path_init = _package(
+        tmp_path,
+        str_init="try:\n    __all__ = ['a']\nexcept ImportError:\n    pass\n",
+        str_member="",
+    )
+    assert _load_gate().declared_all(path_init) == ["a"]
+
+
+def test_a_reversed_main_guard_is_script_only(tmp_path: Path) -> None:
+    """``if '__main__' == __name__:`` hides its body like the usual spelling does."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="if '__main__' == __name__:\n    def tool():\n        pass\n",
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_the_else_of_a_negated_type_checking_block_is_stubs(tmp_path: Path) -> None:
+    """The ``else`` of ``if not TYPE_CHECKING:`` is type-only, so its stubs are not API."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="if not TYPE_CHECKING:\n    pass\nelse:\n    def stub():\n        pass\n",
+    )
+    assert _load_gate().check_package(path_init) == []
+
+
+def test_the_body_of_a_negated_type_checking_block_is_runtime(tmp_path: Path) -> None:
+    """The body of ``if not TYPE_CHECKING:`` runs at import, so what it defines is API."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member="if not TYPE_CHECKING:\n    def real():\n        pass\n",
+    )
+    assert "'real'" in _sole(_load_gate().check_package(path_init))
+
+
+def test_a_placeholder_rebound_inside_a_later_block_is_a_definition(tmp_path: Path) -> None:
+    """``if cond: x = build()`` after the guarded import makes ``x`` the module's own name."""
+    path_init = _package(
+        tmp_path,
+        str_init="__all__ = []\n",
+        str_member=(
+            "try:\n    from fast import parse\nexcept ImportError:\n    parse = None\n"
+            "if COND:\n    parse = build()\n"
+        ),
+    )
+    assert "'parse'" in _sole(_load_gate().check_package(path_init))

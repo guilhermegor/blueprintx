@@ -132,8 +132,13 @@ def test_justification_reason_prefers_env_without_calling_git(
 def test_justification_reason_falls_back_when_env_is_blank(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """NEGATIVE CONTROL: an unset/blank env var must not mask a real trailer/PR-body reason."""
-    _local_shell(monkeypatch)
+    """NEGATIVE CONTROL: an unset/blank env var must not mask a real trailer/PR-body reason.
+
+    Runs as CI: locally a bare trailer is a claim anyone can type, so it justifies nothing by
+    itself (see the ``branch_justified`` tests below).
+    """
+    _bare_shell(monkeypatch)
+    monkeypatch.setenv("CI", "true")
     monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
     monkeypatch.setattr(gate, "_git", lambda _args: "gate-change-ok: from trailer")
     monkeypatch.setattr(gate, "pr_body_text", lambda: "")
@@ -968,30 +973,25 @@ def test_workflow_job_moved_with_a_softening_key_is_removed(
     assert len(_move_findings(monkeypatch, str_target=_STR_SIBLING, str_job_new=str_job)) == 1
 
 
-_STR_MOVED_STEPS = "    steps:\n      - run: python3 bin/check_gate_integrity.py\n"
-
-
 @pytest.mark.parametrize(
-    ("str_extra", "str_dropped"),
+    "str_extra",
     [
-        ("    needs: [build]\n", ""),
-        ("    env: &shared\n      A: '1'\n", ""),
-        ("    env: *shared\n", ""),
-        ("    env:\n      <<: *shared\n", ""),
-        ("    steps:\n      - *gate_step\n", _STR_MOVED_STEPS),
-        ('    "needs": [build]\n', ""),
-        ("    'needs': [build]\n", ""),
-        ("    steps: [*gate_step]\n", _STR_MOVED_STEPS),
-        ("    env: !!map &shared\n      A: '1'\n", ""),
+        "    needs: [build]\n",
+        "    env: &shared\n      A: '1'\n",
+        "    env: *shared\n",
+        "    env:\n      <<: *shared\n",
+        "    outputs:\n      out: *gate_step\n",
+        '    "needs": [build]\n',
+        "    'needs': [build]\n",
+        "    outputs: {out: *gate_step}\n",
+        "    env: !!map &shared\n      A: '1'\n",
     ],
 )
 def test_workflow_job_moved_with_outside_dependency_is_removed(
-    monkeypatch: pytest.MonkeyPatch, *, str_extra: str, str_dropped: str
+    monkeypatch: pytest.MonkeyPatch, *, str_extra: str
 ) -> None:
     """``needs:`` and YAML anchors point outside the block, so an identical text is no proof."""
-    str_job = _STR_MOVED_JOB.replace(str_dropped, "").replace(
-        "ubuntu-latest\n", f"ubuntu-latest\n{str_extra}"
-    )
+    str_job = _STR_MOVED_JOB.replace("ubuntu-latest\n", f"ubuntu-latest\n{str_extra}")
     str_defs = "x-defs:\n  shared: &shared {A: '1'}\n  gate_step: &gate_step {run: a}\n" * (
         "&" not in str_extra
     )
@@ -2072,6 +2072,247 @@ def test_workflow_with_a_shared_alias_chain_is_read_without_blowing_up() -> None
     str_text = "a: &a [x, x]\nb: &b [*a, *a]\nc: &c [*b, *b]\nd: &d [*c, *c]\ne: [*d, *d]\n"
 
     assert len(list(gate.iter_strings(gate.read_workflow(str_text)[0]))) == 7
+
+
+_STR_RUFF_BASE = '[lint]\nselect = ["E", "F"]\nignore = []\n'
+_STR_RUFF_WEAKER = '[lint]\nselect = ["E", "F"]\nignore = ["E501"]\n'
+_STR_RUFF_WEAKEST = '[lint]\nselect = ["E", "F"]\nignore = ["E501", "E402"]\n'
+_STR_RUFF_STRICTER = '[lint]\nselect = ["E", "F", "W"]\nignore = []\n'
+_STR_TRAILER = "feat: x\n\ngate-change-ok: owner reviewed the ignore\n"
+
+
+def _stage(path_repo: Path, *, str_name: str, str_text: str) -> None:
+    """Write a file under the repo and stage it.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        The repository.
+    str_name : str
+        Repository-relative file name.
+    str_text : str
+        File content.
+    """
+    (path_repo / str_name).parent.mkdir(parents=True, exist_ok=True)
+    (path_repo / str_name).write_text(str_text, encoding="utf-8")
+    _git_in(path_repo, "add", str_name)
+
+
+def _commit_staged(path_repo: Path, *, str_message: str) -> None:
+    """Commit the index, as the pre-commit run that already passed would let it.
+
+    Parameters
+    ----------
+    path_repo : pathlib.Path
+        The repository.
+    str_message : str
+        Full commit message.
+    """
+    _git_in(path_repo, "commit", "-q", "-m", str_message)
+
+
+@pytest.fixture
+def path_branch(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return a repo on ``feature`` forked from a ``main`` that carries a strict ``ruff.toml``.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest-provided scratch directory.
+    monkeypatch : pytest.MonkeyPatch
+        Puts the gate in a local shell, with no ``GATE_CHANGE_OK``, inside the repo.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository, checked out on ``feature``.
+    """
+    _local_shell(monkeypatch)
+    monkeypatch.delenv("GATE_CHANGE_OK", raising=False)
+    _git_in(tmp_path, "init", "-q", "--initial-branch=main")
+    _git_in(tmp_path, "config", "user.email", "t@example.com")
+    _git_in(tmp_path, "config", "user.name", "t")
+    _stage(tmp_path, str_name="ruff.toml", str_text=_STR_RUFF_BASE)
+    _commit_staged(tmp_path, str_message="seed")
+    _git_in(tmp_path, "checkout", "-q", "-b", "feature")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+@pytest.fixture
+def path_weakened(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return ``path_branch`` after the owner's justified, interactive weakening commit.
+
+    The commit is made with ``GATE_CHANGE_OK`` set and no trailer in its message.
+
+    Parameters
+    ----------
+    path_branch : pathlib.Path
+        The branch fixture.
+    monkeypatch : pytest.MonkeyPatch
+        Sets then clears ``GATE_CHANGE_OK``.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository after the weakening commit.
+    """
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    monkeypatch.setenv("GATE_CHANGE_OK", "owner reviewed the ignore")
+    _commit_staged(path_branch, str_message="feat: x")
+    monkeypatch.delenv("GATE_CHANGE_OK")
+    return path_branch
+
+
+@pytest.fixture
+def path_recorded(path_branch: Path, *, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return ``path_branch`` after the weakening commit that ALSO carries the trailer.
+
+    Parameters
+    ----------
+    path_branch : pathlib.Path
+        The branch fixture.
+    monkeypatch : pytest.MonkeyPatch
+        Sets then clears ``GATE_CHANGE_OK``.
+
+    Returns
+    -------
+    pathlib.Path
+        The repository after the weakening commit.
+    """
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    monkeypatch.setenv("GATE_CHANGE_OK", "owner reviewed the ignore")
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    monkeypatch.delenv("GATE_CHANGE_OK")
+    return path_branch
+
+
+def test_branch_justified_without_a_trailer_still_refuses_a_later_commit(
+    path_weakened: Path,
+) -> None:
+    """The defect as measured on #1321: a later tests-only commit is refused again."""
+    _stage(path_weakened, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+
+    assert gate.main([]) == 1
+
+
+def test_branch_justified_by_recorded_trailer_passes_a_tests_only_commit(
+    path_recorded: Path,
+) -> None:
+    """SHOULD PASS: the finding was justified on this branch, so a test-only commit is clean."""
+    _stage(path_recorded, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+
+    assert gate.main([]) == 0
+
+
+def test_branch_justified_by_recorded_trailer_passes_with_nothing_new_staged(
+    path_recorded: Path,
+) -> None:
+    """SHOULD PASS: the merge-with-main shape — nothing of this branch's own changes."""
+    assert gate.main([]) == 0
+
+
+def test_branch_justified_by_recorded_trailer_refuses_a_new_weakening(
+    path_recorded: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a NEW weakening on a justified branch still needs a fresh override."""
+    _stage(path_recorded, str_name="ruff.toml", str_text=_STR_RUFF_WEAKEST)
+
+    int_code = gate.main([])
+
+    assert (int_code, "E402" in capsys.readouterr().out) == (1, True)
+
+
+def test_branch_justified_forged_trailer_on_a_clean_commit_justifies_nothing(
+    path_branch: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: an agent-typed trailer on a commit with no findings of its own is void."""
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+
+    int_code = gate.main([])
+
+    assert (int_code, "E501" in capsys.readouterr().out) == (1, True)
+
+
+def test_branch_justified_after_main_adds_a_gate_does_not_record_it(
+    path_recorded: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a gate main added after the trailer commit is not justified by it."""
+    _git_in(path_recorded, "checkout", "-q", "main")
+    _stage(path_recorded, str_name="ruff.toml", str_text=_STR_RUFF_STRICTER)
+    _commit_staged(path_recorded, str_message="chore: main adds rule W")
+    _git_in(path_recorded, "checkout", "-q", "feature")
+    _git_in(path_recorded, "merge", "-q", "-s", "ours", "main", "-m", "merge main")
+
+    int_code = gate.main([])
+
+    assert (int_code, "ruff.toml" in capsys.readouterr().out) == (1, True)
+
+
+@pytest.mark.parametrize(
+    "str_text",
+    [
+        "jobs:\n  a:\n    steps: [1]\n    steps: [2]\n",
+        "jobs:\n  a:\n    steps: [1]\n  a:\n    steps: [1]\n",
+        "a: 1\x0b\njobs:\n",
+    ],
+    ids=["duplicate-steps", "duplicate-job", "control-character"],
+)
+def test_read_workflow_invalid_yaml_is_unparsed_not_a_crash(str_text: str) -> None:
+    """A repeated key or a control character is a workflow that does not parse."""
+    assert gate.read_workflow(str_text) is None
+
+
+def test_branch_justified_trailer_on_a_merge_commit_justifies_nothing(
+    path_branch: Path,
+    *,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """SHOULD FAIL: a merge skips pre-commit, so a trailer on it is not a recorded approval."""
+    _git_in(path_branch, "checkout", "-q", "-b", "side", "main")
+    _stage(path_branch, str_name="ruff.toml", str_text=_STR_RUFF_WEAKER)
+    _commit_staged(path_branch, str_message="feat: side")
+    _git_in(path_branch, "checkout", "-q", "feature")
+    _git_in(path_branch, "merge", "-q", "--no-ff", "side", "-m", _STR_TRAILER)
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+    int_code = gate.main([])
+
+    assert (int_code, "ruff.toml" in capsys.readouterr().out) == (1, True)
+
+
+def test_local_run_ignores_a_bare_trailer_in_history(
+    path_branch: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local run reads no trailer as a blanket reason; only CI keeps that source."""
+    monkeypatch.setattr(gate, "pr_body_text", lambda: "")
+    _stage(path_branch, str_name="tests/unit/test_a.py", str_text="X = 1\n")
+    _commit_staged(path_branch, str_message=_STR_TRAILER)
+
+    assert gate.justification_reason(_git_in(path_branch, "rev-parse", "main")) == ""
+
+
+def test_workflow_job_number_and_string_matrix_values_differ() -> None:
+    """``[16]`` and ``["16"]`` are a number and a string to ``toJSON``, so the jobs differ."""
+    str_head = "jobs:\n  a:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        n: "
+    dict_number = gate.workflow_jobs_of(gate.read_workflow(f"{str_head}[16]\n")[0])["a"]
+    dict_string = gate.workflow_jobs_of(gate.read_workflow(f'{str_head}["16"]\n')[0])["a"]
+
+    assert dict_number != dict_string
+
+
+def test_workflow_typed_copy_is_not_text_a_job_id_is_searched_in() -> None:
+    """A job id ``typed`` is not referenced just because each job carries a typed copy."""
+    dict_document = gate.read_workflow("jobs:\n  other:\n    runs-on: ubuntu-latest\n")[0]
+
+    assert gate.id_is_referenced("typed", dict_document=dict_document) is False
 
 
 def _raise_recursion(*_tuple_args: object, **_dict_kwargs: object) -> None:
