@@ -2461,3 +2461,27 @@ def test_values_equal_tells_apart_equal_values_of_different_types(
 ) -> None:
     """Python equates ``1``, ``1.0`` and ``True``; a typed read must not."""
     assert not gate.values_equal([cls_left], cls_right=[cls_right])
+
+
+def test_workflow_blob_that_is_not_utf8_is_a_finding_not_a_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``show`` returns ``None`` for an undecodable blob, which must not read as absent."""
+    monkeypatch.setattr(gate, "show", lambda _str_ref, *, str_path: None)
+    monkeypatch.setattr(gate, "blob_exists", lambda _str_ref, *, str_path: True)
+
+    assert gate.collect_problems([("M", _STR_SOURCE)], str_base="base") == [
+        f"{_STR_SOURCE}: workflow is not valid UTF-8, so its jobs cannot be compared"
+    ]
+
+
+def test_workflow_added_without_a_base_blob_is_not_a_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A path with no blob at the base is an addition, which has no jobs to lose."""
+    monkeypatch.setattr(gate, "show", lambda _str_ref, *, str_path: None)
+    monkeypatch.setattr(
+        gate, "blob_exists", lambda str_ref, *, str_path: str_ref == gate.STR_INDEX_REF
+    )
+
+    assert gate.collect_problems([("A", _STR_SOURCE)], str_base="base") == []

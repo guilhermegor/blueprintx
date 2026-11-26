@@ -264,6 +264,57 @@ def show(str_ref: str, *, str_path: str) -> str | None:
         return None
 
 
+def blob_exists(str_ref: str, *, str_path: str) -> bool:
+    """Return whether a path exists at a git ref, whatever its encoding.
+
+    Parameters
+    ----------
+    str_ref : str
+        A commit-ish, or ``""`` for the index (``STR_INDEX_REF``).
+    str_path : str
+        Repository-relative path.
+
+    Returns
+    -------
+    bool
+        ``True`` when the blob exists, so a ``show`` that returned ``None`` for it meant
+        "not valid UTF-8" and not "absent".
+    """
+    return (
+        subprocess.run(  # noqa: S603
+            ["git", "cat-file", "-e", f"{str_ref}:{str_path}"],  # noqa: S607
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+def undecodable_problems(str_path: str, *, str_base: str) -> list:
+    """Return a finding for a modified workflow whose blob at either ref is not UTF-8.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative path whose ``show`` returned ``None`` at a ref.
+    str_base : str
+        The merge-base commit.
+
+    Returns
+    -------
+    list of str
+        One message when the path is a workflow present at both refs: its jobs cannot be
+        compared, so a deletion would pass unseen. ``[]`` for an added or removed file and for
+        any other path.
+    """
+    bool_modified = blob_exists(STR_INDEX_REF, str_path=str_path) and blob_exists(
+        str_base, str_path=str_path
+    )
+    if RE_WORKFLOW_PATH.search(str_path) and bool_modified:
+        return [f"{str_path}: workflow is not valid UTF-8, so its jobs cannot be compared"]
+    return []
+
+
 def changed_paths(str_base: str) -> list:
     """Return the branch's cumulative changed paths with their status, INDEX included.
 
@@ -1978,7 +2029,7 @@ def file_problems(
     str_new = show(STR_INDEX_REF, str_path=str_path)
     str_old = show(str_base, str_path=str_path)
     if str_new is None or str_old is None:
-        return []
+        return undecodable_problems(str_path, str_base=str_base)
 
     fn_analyzer = _DICT_DISPATCH.get(pathlib.Path(str_path).name)
     if fn_analyzer is None and RE_WORKFLOW_PATH.search(str_path):
