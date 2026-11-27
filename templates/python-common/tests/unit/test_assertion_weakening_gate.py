@@ -2059,3 +2059,25 @@ def test_a_nested_def_that_wraps_pytest_skip_does_not_hide_the_skip() -> None:
     str_old = "import pytest\n\ndef test_a():\n" + _BODY
     str_head = "import pytest\n\ndef test_a():\n    def skip():\n        pytest.skip()\n"
     assert "newly marked" in _sole_finding(str_old, str_new=str_head + "    skip()\n" + _BODY)
+
+
+@pytest.mark.parametrize(
+    ("str_import", "str_call"),
+    [("import pytest as pt", "pt.skip()"), ("from pytest import skip as s", "s()")],
+)
+def test_a_nested_def_wrapping_an_aliased_skip_does_not_hide_the_skip(
+    *, str_import: str, str_call: str
+) -> None:
+    """Review of #1340: main reports ``skip()``; a wrapper over an aliased skip still skips."""
+    str_old = f"{str_import}\n\ndef test_a():\n" + _BODY
+    str_head = f"{str_import}\n\ndef test_a():\n    def skip():\n        {str_call}\n"
+    assert "newly marked" in _sole_finding(str_old, str_new=str_head + "    skip()\n" + _BODY)
+
+
+def test_a_foreign_nested_import_after_a_pytest_star_import_keeps_skip_pytests() -> None:
+    """Review of #1340: after ``from pytest import *``, a nested foreign ``skip`` stays pytest."""
+    str_head = "from pytest import *\n"
+    str_mid = "try:\n    from helpers import skip\nexcept ImportError:\n    pass\n\n"
+    str_old = str_head + str_mid + "def test_a():\n" + _BODY
+    str_new = str_head + str_mid + "def test_a():\n    skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)

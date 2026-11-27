@@ -591,7 +591,7 @@ def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dic
         dict_added: dict[str, str] = {}
         _bind_names(cls_stmt, dict_names=dict_added)
         dict_local.update({k: v for k, v in dict_added.items() if k not in dict_local})
-    for str_name in _sole_local_names(node_fn):
+    for str_name in _sole_local_names(node_fn, dict_names=dict_local):
         dict_local.pop(str_name, None)
     return dict_local
 
@@ -676,13 +676,16 @@ def _required_params(cls_args: ast.arguments) -> set[str]:
     return {cls_a.arg for cls_a in list_required}
 
 
-def _wraps_skip(cls_stmt: ast.stmt) -> bool:
+def _wraps_skip(cls_stmt: ast.stmt, *, dict_names: dict[str, str]) -> bool:
     """Return whether a statement holds a call that turns a test off at run time.
 
     Parameters
     ----------
     cls_stmt : ast.stmt
         A ``def``, ``class`` or import of a test body.
+    dict_names : dict of str to str
+        The name table the test body is read with, so ``pt.skip()`` and an aliased ``s()``
+        count.
 
     Returns
     -------
@@ -690,16 +693,18 @@ def _wraps_skip(cls_stmt: ast.stmt) -> bool:
         ``True`` for ``def skip(): pytest.skip()``. Nested bodies are not read for skips, so
         treating such a def as a shadowing helper would hide the call it wraps.
     """
-    return any(_skip_call_name(cls_node) for cls_node in ast.walk(cls_stmt))
+    return any(_skip_call_name(cls_node, dict_names=dict_names) for cls_node in ast.walk(cls_stmt))
 
 
-def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
+def _sole_local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> set[str]:
     """Return the names a test function binds exactly once, in a way that makes them local.
 
     Parameters
     ----------
     node_fn : ast.FunctionDef
         The test function.
+    dict_names : dict of str to str
+        The name table of the function, passed to ``_wraps_skip``.
 
     Returns
     -------
@@ -716,7 +721,9 @@ def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
             dict_count[str_name] = dict_count.get(str_name, 0) + 1
     set_candidates = _required_params(node_fn.args)
     for cls_stmt in node_fn.body:
-        if isinstance(cls_stmt, _LOCAL_BINDERS) and not _wraps_skip(cls_stmt):
+        if isinstance(cls_stmt, _LOCAL_BINDERS) and not _wraps_skip(
+            cls_stmt, dict_names=dict_names
+        ):
             dict_pytest: dict[str, str] = {}
             _bind_names(cls_stmt, dict_names=dict_pytest)
             set_candidates |= {n for n in _binding_names(cls_stmt) if n not in dict_pytest}
@@ -1332,7 +1339,7 @@ def _scoped_names(list_body: list, *, dict_start: dict[str, str]) -> dict[str, s
     dict_names = dict(dict_start)
     dict_nested: dict[str, str] = {}
     set_top = {id(cls_stmt) for cls_stmt in list_body}
-    set_explicit: set[str] = set()
+    set_explicit: set[str] = _star_imported(list_body)
     for cls_stmt, _ in _flat_stmts(list_body):
         dict_arm: dict[str, str] = {}
         _bind_names(cls_stmt, dict_names=dict_arm)
@@ -1344,6 +1351,30 @@ def _scoped_names(list_body: list, *, dict_start: dict[str, str]) -> dict[str, s
             dict_nested.update(dict_arm)
         set_explicit |= set(dict_arm)
     return {**dict_names, **dict_nested}
+
+
+def _star_imported(list_body: list) -> set[str]:
+    """Return the pytest names a ``from pytest import *`` at any depth of a body binds.
+
+    Parameters
+    ----------
+    list_body : list of ast.stmt
+        The module's statements.
+
+    Returns
+    -------
+    set of str
+        ``_BOUND_FROM_PYTEST`` when the module star-imports pytest, else empty: a later import
+        of the same name from elsewhere cannot be told apart from the star's own binding, so
+        the name stays pytest's and the gate errs toward reporting.
+    """
+    is_star = any(
+        isinstance(cls_stmt, ast.ImportFrom)
+        and cls_stmt.module == "pytest"
+        and any(cls_a.name == "*" for cls_a in cls_stmt.names)
+        for cls_stmt, _ in _flat_stmts(list_body)
+    )
+    return set(_BOUND_FROM_PYTEST) if is_star else set()
 
 
 def _drop_foreign_import(
