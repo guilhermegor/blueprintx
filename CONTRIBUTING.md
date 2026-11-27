@@ -739,17 +739,26 @@ Configuration files in this repository carry no comments, so the reasoning lives
   at `commit-msg`, then the shared gates. Gates that run over this repo with `--root .`
   follow the one-implementation rule; diff-scoped gates (`gate-integrity`, the PR file-count
   ceiling) compare against `merge-base(HEAD, main)` because they check a delta. `gate-integrity`
-  treats a workflow job as moved when the same id is newly added to another top-level workflow
-  file of the same tree with an identical job block bar a one-line hosted `runs-on`
+  reads each workflow with PyYAML (`yaml.safe_load`, #1315) and compares parsed values, not text:
+  a job is moved when the same id is newly added to another top-level workflow file of the same
+  tree with an equal job mapping bar a hosted `runs-on` string
   (`ubuntu-latest`, or `ubuntu-22.04`/`ubuntu-24.04` each optionally `-arm`, the same architecture
   on both sides), outside an `on: workflow_call` file, under
   the same top-level settings (`on:`, `env:`, `defaults:`, `permissions:`, `run-name:`, with
-  `name:` free), a `concurrency:` group that equals no non-empty source group, before or after this change (`github.workflow` read as the `name:`, an unparsed group never excused), and no read of
+  `name:` free), a `concurrency:` group that equals no non-empty source group, before or after this change (`github.workflow` read as the `name:`, a group that cannot be evaluated blocks the move whenever the source has a non-empty group, before or after this change), and no read of
   `github.workflow`/`GITHUB_WORKFLOW`; a changed name, steps, `if:`,
   `env:` or trigger, a job gone from the tree, a move across trees (template to root) or
   into a subdirectory is still a removal (#1311), and so is a flow-style job or any job with
-  `needs:` or a YAML anchor, alias or merge key, whose meaning lives outside the compared
-  block, or one whose id the source file still names as a word. A moved job's new file must also be in every `bin/scaffold/python_*.sh` copy list, or that tier silently loses the job (not detected). `gate-integrity` reads a
+  `needs:` or a YAML anchor or merge key, whose meaning lives outside the compared
+  mapping, or one whose id the source file still holds as a word. A modified file that does not
+  parse now is itself a finding, and so is one that repeats a mapping key or holds a control
+  character, or is not valid UTF-8 at either ref (the blob exists at both, so its jobs cannot be read and a deletion would pass unseen, even when the change repairs a non-UTF-8 base); a newly added file that does not parse reports nothing of its own but can never
+  excuse a move (a base that is not YAML at all reports nothing; a base that is valid YAML the
+  gate refuses to read, such as a merge key under `jobs:`, a repeated anchor or a second document, is a finding even when the change
+  repairs it; an undefined alias is not, since GitHub rejects it too). PyYAML must be importable: BlueprintX's hook installs it, CI pins it, and a
+  generated project gets it from its venv (a direct dependency of the service tiers, via
+  `yamllint` in `lib-minimal`); the gate fails on a missing import and never falls back to a line
+  parser. A moved job's new file must also be in every `bin/scaffold/python_*.sh` copy list, or that tier silently loses the job (not detected). `gate-integrity` reads a
   renamed file as a deletion plus an addition, so a `git mv` of a gate script, a watched
   config or a workflow needs `gate-change-ok:` like a deletion does, and a test file renamed
   while its code under test changes reports as a deleted test. The

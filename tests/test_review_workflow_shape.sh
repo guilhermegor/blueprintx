@@ -59,7 +59,7 @@ gate_run_blocks_clean() {
 		END { exit bad }
 	' BAD='\\$\\{\\{[^}]*(comment\\.body|issue\\.(title|body)|pull_request\\.(title|body)|review\\.body|head_ref|head\\.ref|label\\.name)' "$1"
 }
-gate_secrets_token_only() { ! grep -E 'secrets\.' "$1" | grep -qvE 'secrets\.GITHUB_TOKEN( |$)'; }
+gate_secrets_token_only() { ! awk '/^  publish-app-check:/{f=1} !f' "$1" | grep -E 'secrets\.' | grep -qvE 'secrets\.GITHUB_TOKEN( |$)'; }
 gate_run_blocks_reject_injection() {
 	local str_dir rc=0
 	str_dir=$(mktemp -d)
@@ -125,7 +125,7 @@ checker_records_head() {
 	local str_dir rc=0
 	str_dir=$(mktemp -d)
 	CHECKED_HEAD_FILE="$str_dir/h" python3 -c "
-import sys; sys.path.insert(0, 'templates/common/bin')
+import sys; sys.path.insert(0, '$REPO_ROOT/templates/common/bin')
 import check_review_threads as m
 m._record_evaluated_head({'headRefOid': 'abc123'})" || rc=1
 	[ "$(cat "$str_dir/h" 2>/dev/null)" = abc123 ] || rc=1
@@ -137,7 +137,7 @@ checker_records_head_on_opt_out() {
 	local str_dir rc=0
 	str_dir=$(mktemp -d)
 	CHECKED_HEAD_FILE="$str_dir/h" EVALUATED_HEAD=def456 python3 -c "
-import sys; sys.path.insert(0, 'templates/common/bin')
+import sys; sys.path.insert(0, '$REPO_ROOT/templates/common/bin')
 import check_review_threads as m
 m.roster_opted_out = lambda p: True
 m.base_opted_out = lambda r, str_number: True

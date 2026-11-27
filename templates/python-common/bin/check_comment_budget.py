@@ -22,7 +22,11 @@ Three independent checks, never conflated:
 Comments come from ``tokenize`` for Python (a ``#`` inside a string is never one, and
 docstrings are not comments) and from a string-aware scan for ``#`` and ``//`` file
 types, which counts trailing comments and ``/* */`` / JSDoc blocks line by line. The
-run-length and banner checks still look only at full-line runs. Markdown is not
+run-length check still looks only at full-line runs in Python. A trailing Python comment
+stands alone, so a wall of them never trips the essay-block check; that is deliberate, because
+each is attached to code and not an essay, and the ratchet (check 1) still counts every one
+of them. The banner check does inspect a non-allowlisted trailing comment such as ``# ---``,
+and CSS trailing comments are grouped into runs like any other. Markdown is not
 scanned at all, so the ``<!-- -->`` template instructions are out of scope by
 construction. Allowlist entries match the START of a comment; ``~text`` entries
 (generated-file banners) match anywhere but only in a file's first lines.

@@ -1190,3 +1190,373 @@ def test_xfail_call_after_an_unconditional_skip_is_not_flagged() -> None:
     str_old = "@pytest.mark.skip\ndef test_a():\n    assert 1\n"
     str_new = "@pytest.mark.skip\ndef test_a():\n    pytest.xfail()\n    assert 1\n"
     assert _findings(str_old, str_new=str_new) == []
+
+
+_SKIPIF_COND = "@pytest.mark.skipif(cond)\ndef test_a():\n    assert 1\n"
+_BODY = "    assert 1\n"
+
+
+@pytest.mark.parametrize(
+    ("str_old", "str_new"),
+    [
+        (
+            "@pytest.mark.skipif(c)\ndef test_a():\n" + _BODY,
+            "def test_a():\n    if not not c:\n        pytest.skip()\n" + _BODY,
+        ),
+        (
+            "@pytest.mark.skipif(a and b)\ndef test_a():\n" + _BODY,
+            "def test_a():\n    if b and a:\n        pytest.skip()\n" + _BODY,
+        ),
+        (
+            "@pytest.mark.skipif(\"sys.platform == 'win32'\")\ndef test_a():\n" + _BODY,
+            "def test_a():\n    if sys.platform == 'win32':\n        pytest.skip()\n" + _BODY,
+        ),
+        (
+            _SKIPIF_COND,
+            "def test_a():\n    cond and pytest.skip()\n" + _BODY,
+        ),
+        (
+            "@pytest.mark.skipif(not cond)\ndef test_a():\n" + _BODY,
+            "def test_a():\n    cond or pytest.skip()\n" + _BODY,
+        ),
+    ],
+    ids=["double-not", "and-order", "string-condition", "and-short-circuit", "or-short-circuit"],
+)
+def test_a_moved_guard_spelled_differently_is_the_same_guard(
+    *, str_old: str, str_new: str
+) -> None:
+    """Items of #1316: ``not not c``, operand order, a string condition and ``c and skip()``."""
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_skip_call_in_an_if_test_is_unconditional() -> None:
+    """Item of #1316: the test of an ``if`` always runs, so a skip there is unconditional."""
+    str_new = "def test_a():\n    if pytest.skip():\n        pass\n" + _BODY
+    assert "newly marked skip()" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new)
+
+
+def test_a_short_circuit_skip_keeps_its_guard() -> None:
+    """Item of #1316: ``cond and pytest.skip()`` is conditional, not an outright skip."""
+    str_new = "def test_a():\n    cond and pytest.skip()\n" + _BODY
+    assert "skip(if):cond" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    ("str_skip", "str_label"),
+    [
+        ("    pt.skip()\n", "newly marked skip()"),
+        ("    raise pt.skip.Exception('x')\n", "newly marked skip()"),
+        ("    request.applymarker(pytest.mark.skip)\n", "newly marked applymarker-skip()"),
+        (
+            "    request.node.add_marker(pytest.mark.xfail)\n",
+            "newly marked applymarker-xfail:;lax()",
+        ),
+    ],
+    ids=["alias", "raise-exception", "applymarker", "add-marker"],
+)
+def test_an_unlisted_spelling_of_skip_is_detected(*, str_skip: str, str_label: str) -> None:
+    """Item of #1316: ``import pytest as pt``, ``raise``, ``applymarker`` and ``add_marker``."""
+    str_head = "import pytest\nimport pytest as pt\n\n\ndef test_a(request):\n"
+    assert str_label in _sole_finding(str_head + _BODY, str_new=str_head + str_skip + _BODY)
+
+
+def test_a_local_helper_named_skip_is_not_pytests() -> None:
+    """Item of #1316: a ``def skip`` the module defines is not ``pytest.skip``."""
+    str_old = "def skip():\n    pass\n\n\ndef test_a():\n" + _BODY
+    str_new = "def skip():\n    pass\n\n\ndef test_a():\n    skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_module_pytestmark_is_a_new_marker() -> None:
+    """Item of #1316: ``pytestmark = pytest.mark.skip`` newly skips every test below it."""
+    str_new = "pytestmark = pytest.mark.skip\n\n\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    "str_assign",
+    ["pytestmark: list = [pytest.mark.skip]", "pytestmark += [pytest.mark.skip]"],
+    ids=["annotated", "augmented"],
+)
+def test_an_annotated_or_augmented_pytestmark_is_a_new_marker(str_assign: str) -> None:
+    """Review of #1328: ``pytestmark`` set by ``AnnAssign`` or ``AugAssign`` is read too."""
+    str_head = "import pytest\npytestmark = []\n\n\ndef test_a():\n"
+    str_new = "import pytest\npytestmark = []\n" + str_assign + "\n\n\ndef test_a():\n"
+    assert "newly marked skip" in _sole_finding(str_head + _BODY, str_new=str_new + _BODY)
+
+
+def test_dropping_a_redundant_run_true_is_not_flagged() -> None:
+    """Review of #1328: ``run=True`` is the default, so removing it changes nothing."""
+    str_old = "@pytest.mark.xfail(strict=True, run=True)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(strict=True)\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_negated_guard_compares_equal_whatever_the_operand_order() -> None:
+    """Review of #1328: ``not (a and b)`` equals ``not (b and a)``."""
+    str_old = "def test_a():\n    if not (a and b):\n        pytest.skip()\n" + _BODY
+    str_new = "def test_a():\n    if not (b and a):\n        pytest.skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_string_if_test_is_not_read_as_the_expression_it_spells() -> None:
+    """Review of #1328: ``if "x"`` is always true, so it is not the guard ``if x``."""
+    str_old = "def test_a():\n    if x:\n        pytest.skip()\n" + _BODY
+    str_new = "def test_a():\n    if 'x':\n        pytest.skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_pytestmark_under_an_if_is_a_new_marker() -> None:
+    """Review of #1328: ``if sys.platform == ...: pytestmark = ...`` still skips the module."""
+    str_new = "if sys.platform == 'win32':\n    pytestmark = pytest.mark.skip\n\n\ndef test_a():\n"
+    assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new + _BODY)
+
+
+def test_an_outright_skip_is_flagged_beside_a_conditional_module_skip() -> None:
+    """Review of #1328: a platform-only ``pytestmark`` does not excuse a new outright skip."""
+    str_head = "if sys.platform == 'win32':\n    pytestmark = pytest.mark.skip\n\n\n"
+    str_old = str_head + "def test_a():\n" + _BODY
+    str_new = str_head + "@pytest.mark.skip\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_xfail_that_starts_running_is_a_tightening() -> None:
+    """Review of #1328: dropping ``run=False`` makes the test run again."""
+    str_old = "@pytest.mark.xfail(strict=True, run=False)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(strict=True)\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_pytestmark_in_an_except_handler_is_a_new_marker() -> None:
+    """Review of #1328: ``except ImportError: pytestmark = ...`` skips the module too."""
+    str_new = "try:\n    import foo\nexcept ImportError:\n    pytestmark = pytest.mark.skip\n"
+    str_new += "\n\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new)
+
+
+def test_making_a_run_false_xfail_strict_is_a_tightening() -> None:
+    """Review of #1328: ``strict=True`` on ``xfail(run=False)`` only tightens it."""
+    str_old = "@pytest.mark.xfail(run=False)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(strict=True, run=False)\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_adding_raises_to_a_run_false_xfail_is_a_tightening() -> None:
+    """Review of #1328: ``raises=`` on ``xfail(run=False)`` only tightens it."""
+    str_old = "@pytest.mark.xfail(run=False)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(raises=ValueError, run=False)\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_mark",
+    ["pytest.mark.xfail", "pytest.mark.skipif(c)"],
+    ids=["xfail", "skipif"],
+)
+def test_a_guarded_pytestmark_keeps_its_guard(str_mark: str) -> None:
+    """Review of #1328: an outright ``xfail`` is flagged beside a guarded ``pytestmark``."""
+    str_head = f"if sys.platform == 'win32':\n    pytestmark = {str_mark}\n\n\n"
+    str_old = str_head + "def test_a():\n" + _BODY
+    str_new = str_head + "@pytest.mark.xfail\ndef test_a():\n" + _BODY
+    assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_nested_pytestmark_guards_are_composed() -> None:
+    """Review of #1328: ``if a: if b:`` guards the marker by ``a and b``."""
+    str_head = "if a:\n    if b:\n        pytestmark = pytest.mark.skip\n\n\n"
+    str_moved = "if b:\n    if a:\n        pytestmark = pytest.mark.skip\n\n\n"
+    str_old = str_head + "def test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_moved + "def test_a():\n" + _BODY) == []
+
+
+def test_a_second_import_guarded_skip_is_not_excused_by_the_first() -> None:
+    """Review of #1328: two ``try`` blocks are two guards, not one literal ``try``."""
+    str_one = "try:\n    import foo\nexcept ImportError:\n    pytestmark = pytest.mark.skip\n"
+    str_two = "try:\n    import bar\nexcept ImportError:\n    pytestmark = pytest.mark.skip\n"
+    str_old = str_one + "\n\ndef test_a():\n" + _BODY
+    str_new = str_one + str_two + "\n\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_walrus_guard_keeps_its_operand_order() -> None:
+    """Review of #1328: ``a and (a := True)`` is not ``(a := True) and a``."""
+    str_old = "def test_a():\n    if a and (a := True):\n        pytest.skip()\n" + _BODY
+    str_new = "def test_a():\n    if (a := True) and a:\n        pytest.skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_plain_import_unbinds_a_pytest_alias() -> None:
+    """Review of #1328: ``import unittest as pt`` after ``import pytest as pt`` rebinds it."""
+    str_head = "import pytest as pt\nimport unittest as pt\n\n\n"
+    str_old = str_head + "def test_a():\n    pt.skip()\n" + _BODY
+    str_new = str_head + "@pytest.mark.skip\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_pytestmark_in_a_finally_block_is_a_new_marker() -> None:
+    """Review of #1328: ``finally: pytestmark = ...`` runs on import."""
+    str_new = "try:\n    pass\nfinally:\n    pytestmark = pytest.mark.skip\n\n\ndef test_a():\n"
+    assert "newly marked skip" in _sole_finding("def test_a():\n" + _BODY, str_new=str_new + _BODY)
+
+
+def test_a_runtime_skip_does_not_excuse_a_new_xfail() -> None:
+    """Review of #1328: an assertion that failed before ``pytest.skip()`` now xfails."""
+    str_old = "def test_a():\n    pytest.skip()\n" + _BODY
+    str_new = "@pytest.mark.xfail\ndef test_a():\n    pytest.skip()\n" + _BODY
+    assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_late_skip_marker_does_not_excuse_a_new_skip_decorator() -> None:
+    """Review of #1328: a mark added during the test is not evaluated, so the body still runs."""
+    str_old = "def test_a(request):\n    request.applymarker(pytest.mark.skip)\n" + _BODY
+    str_new = "@pytest.mark.skip\n" + str_old
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_guarded_late_marker_does_not_excuse_a_skipif_decorator() -> None:
+    """Review of #1328: ``if c: request.node.add_marker(...)`` never stops the body running."""
+    str_old = (
+        "def test_a(request):\n    if c:\n        request.node.add_marker(pytest.mark.skip)\n"
+    )
+    str_new = "@pytest.mark.skipif(c, reason='r')\n" + str_old
+    assert "newly marked skipif:c" in _sole_finding(str_old + _BODY, str_new=str_new + _BODY)
+
+
+def test_a_keyword_condition_replaces_the_positional_ones() -> None:
+    """Review of #1328: pytest reads ``condition=`` and ignores the positional conditions."""
+    str_old = "@pytest.mark.xfail(True, condition=False, strict=True)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(False, condition=True, strict=True)\ndef test_a():\n" + _BODY
+    assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_assignment_unbinds_an_imported_skip() -> None:
+    """Review of #1328: ``skip = lambda ...`` after ``from pytest import skip`` is not pytest's."""
+    str_head = "from pytest import skip\nskip = lambda reason: None\n\n\n"
+    str_old = str_head + "def test_a():\n    skip('r')\n" + _BODY
+    str_new = str_head + "@pytest.mark.skip\ndef test_a():\n    skip('r')\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_late_xfail_keeps_its_settings() -> None:
+    """Review of #1328: dropping ``raises=`` from a late xfail widens what it excuses."""
+    str_head = "def test_a(request):\n    request.applymarker(pytest.mark.xfail("
+    str_old = str_head + "raises=ValueError, strict=True))\n" + _BODY
+    str_new = str_head + "strict=True))\n" + _BODY
+    assert "newly marked applymarker-xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_handler_is_guarded_by_the_handlers_before_it() -> None:
+    """Review of #1328: removing the first handler lets the second one run and skip."""
+    str_try = "try:\n    import foo\n"
+    str_first = "except ValueError:\n    pass\n"
+    str_second = "except Exception:\n    pytestmark = pytest.mark.skip\n"
+    str_tail = "\n\ndef test_a():\n" + _BODY
+    str_old = str_try + str_first + str_second + str_tail
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_try + str_second + str_tail)
+
+
+@pytest.mark.parametrize(
+    "str_stmt",
+    [
+        "request.applymarker(pytest.mark.xfail({}))",
+        "if c:\n        request.node.add_marker(pytest.mark.xfail({}))",
+    ],
+    ids=["plain", "guarded"],
+)
+class TestLateXfailTightening:
+    """Review of #1328: a late xfail is compared with late xfails under the same guard."""
+
+    _HEAD = "def test_a(request):\n    "
+
+    def _findings(self, str_stmt: str, *, str_old_args: str, str_new_args: str) -> list:
+        return _findings(
+            self._HEAD + str_stmt.format(str_old_args) + "\n" + _BODY,
+            str_new=self._HEAD + str_stmt.format(str_new_args) + "\n" + _BODY,
+        )
+
+    def test_strict_is_a_tightening(self, str_stmt: str) -> None:
+        """Adding ``strict=True`` is a tightening."""
+        assert self._findings(str_stmt, str_old_args="", str_new_args="strict=True") == []
+
+    def test_adding_raises_is_a_tightening(self, str_stmt: str) -> None:
+        """Adding ``raises=`` is a tightening."""
+        str_new = "strict=True, raises=ValueError"
+        assert self._findings(str_stmt, str_old_args="strict=True", str_new_args=str_new) == []
+
+    def test_dropping_strict_is_flagged(self, str_stmt: str) -> None:
+        """Dropping ``strict=True`` is flagged."""
+        str_found = self._findings(str_stmt, str_old_args="strict=True", str_new_args="")
+        assert "newly marked applymarker-xfail" in str_found[0]
+
+    def test_dropping_raises_is_flagged(self, str_stmt: str) -> None:
+        """Dropping ``raises=`` is flagged."""
+        str_old = "strict=True, raises=ValueError"
+        str_found = self._findings(str_stmt, str_old_args=str_old, str_new_args="strict=True")
+        assert "newly marked applymarker-xfail" in str_found[0]
+
+
+def test_a_class_marker_is_a_new_marker() -> None:
+    """Item of #1316: a skip decorator on the class newly skips its methods."""
+    str_old = "class TestA:\n    def test_a(self):\n    " + _BODY
+    str_new = "@pytest.mark.skip\nclass TestA:\n    def test_a(self):\n    " + _BODY
+    assert "TestA.test_a() newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_moved_from_the_function_to_its_class_is_not_flagged() -> None:
+    """The same outright skip, one level up, adds nothing."""
+    str_old = "class TestA:\n    @pytest.mark.skip\n    def test_a(self):\n    " + _BODY
+    str_new = "@pytest.mark.skip\nclass TestA:\n    def test_a(self):\n    " + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    ("str_old_mark", "str_new_mark"),
+    [
+        ("xfail(strict=True, raises=ValueError)", "xfail(strict=True)"),
+        ("xfail(strict=True)", "xfail(strict=True, run=False)"),
+    ],
+    ids=["raises-dropped", "run-false"],
+)
+def test_an_xfail_that_loses_raises_or_stops_running_is_flagged(
+    *, str_old_mark: str, str_new_mark: str
+) -> None:
+    """Item of #1316: ``raises=`` and ``run=`` are part of the ``xfail`` marker."""
+    str_old = f"@pytest.mark.{str_old_mark}\ndef test_a():\n{_BODY}"
+    str_new = f"@pytest.mark.{str_new_mark}\ndef test_a():\n{_BODY}"
+    assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_xfail_that_gains_raises_is_a_tightening() -> None:
+    """Narrowing an ``xfail`` to one exception type is not a new marker."""
+    str_old = "@pytest.mark.xfail(strict=True)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(strict=True, raises=ValueError)\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_an_xfail_decorator_after_an_unconditional_skip_is_not_flagged() -> None:
+    """Item of #1316: the decorator is exempt exactly as the ``pytest.xfail()`` call is."""
+    str_old = "@pytest.mark.skip\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    ("str_old_head", "str_new_head"),
+    [
+        ("match v:\n        case 1:\n", "match w:\n        case 1:\n"),
+        ("match v:\n        case 1 if g1:\n", "match v:\n        case 1 if g2:\n"),
+        (
+            "try:\n        a()\n    except E:\n",
+            "try:\n        b()\n    except E:\n",
+        ),
+    ],
+    ids=["match-subject", "match-case-guard", "except-try-body"],
+)
+def test_a_guard_that_names_something_else_is_a_new_skip(
+    *, str_old_head: str, str_new_head: str
+) -> None:
+    """Item of #1316: ``match`` labels carry subject and guard, ``except`` its ``try`` body."""
+    str_tail = "            pytest.skip()\n" + _BODY
+    str_old = "def test_a(v):\n    " + str_old_head + str_tail
+    str_new = "def test_a(v):\n    " + str_new_head + str_tail
+    assert "newly marked skip(if)" in _sole_finding(str_old, str_new=str_new)

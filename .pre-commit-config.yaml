@@ -212,8 +212,9 @@ repos:
 
       - id: gate-integrity
         name: gate integrity (a PR must not weaken a check without saying why)
-        entry: python3 templates/python-common/bin/check_gate_integrity.py --root .
-        language: system
+        entry: python templates/python-common/bin/check_gate_integrity.py --root .
+        language: python
+        additional_dependencies: [pyyaml==6.0.3]
         pass_filenames: false
         always_run: true
 
@@ -399,6 +400,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(templates/python-common/bin/enable_repo_rules\.sh|tests/test_enable_repo_rules\.sh)$
+
+      - id: review-app-token-tests
+        name: review-gate App token is optional and the ruleset pin is opt-in (blueprintx#1318)
+        entry: bash tests/test_review_app_token.sh
+        language: system
+        pass_filenames: false
+        files: ^(\.github/workflows/review_threads\.yml|templates/python-common/(\.github/workflows/review-threads\.yml|bin/enable_repo_rules\.sh)|tests/test_review_app_token\.sh)$
 
       - id: ts-lib-pack-smoke-shape-tests
         name: ts-lib verdaccio rehearsal publishes a prerelease and pins the install (blueprintx#934)
