@@ -2052,3 +2052,10 @@ def test_a_connect_timeout_edited_to_zero_under_an_unchanged_except_skip_is_repo
     str_old = "def test_a():\n    try:\n        connect(timeout=5)\n" + str_tail
     str_new = "def test_a():\n    try:\n        connect(timeout=0)\n" + str_tail
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_nested_def_that_wraps_pytest_skip_does_not_hide_the_skip() -> None:
+    """Review of #1340: main reports ``skip()``; a wrapper around ``pytest.skip`` still skips."""
+    str_old = "import pytest\n\ndef test_a():\n" + _BODY
+    str_head = "import pytest\n\ndef test_a():\n    def skip():\n        pytest.skip()\n"
+    assert "newly marked" in _sole_finding(str_old, str_new=str_head + "    skip()\n" + _BODY)

@@ -676,6 +676,23 @@ def _required_params(cls_args: ast.arguments) -> set[str]:
     return {cls_a.arg for cls_a in list_required}
 
 
+def _wraps_skip(cls_stmt: ast.stmt) -> bool:
+    """Return whether a statement holds a call that turns a test off at run time.
+
+    Parameters
+    ----------
+    cls_stmt : ast.stmt
+        A ``def``, ``class`` or import of a test body.
+
+    Returns
+    -------
+    bool
+        ``True`` for ``def skip(): pytest.skip()``. Nested bodies are not read for skips, so
+        treating such a def as a shadowing helper would hide the call it wraps.
+    """
+    return any(_skip_call_name(cls_node) for cls_node in ast.walk(cls_stmt))
+
+
 def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
     """Return the names a test function binds exactly once, in a way that makes them local.
 
@@ -699,7 +716,7 @@ def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
             dict_count[str_name] = dict_count.get(str_name, 0) + 1
     set_candidates = _required_params(node_fn.args)
     for cls_stmt in node_fn.body:
-        if isinstance(cls_stmt, _LOCAL_BINDERS):
+        if isinstance(cls_stmt, _LOCAL_BINDERS) and not _wraps_skip(cls_stmt):
             dict_pytest: dict[str, str] = {}
             _bind_names(cls_stmt, dict_names=dict_pytest)
             set_candidates |= {n for n in _binding_names(cls_stmt) if n not in dict_pytest}
