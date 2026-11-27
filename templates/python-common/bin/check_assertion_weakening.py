@@ -1240,7 +1240,7 @@ def _marker_condition(str_marker: str) -> str | None:
     """
     cls_late = _RE_LATE_SKIPIF.match(str_marker)
     if cls_late:
-        return cls_late.group(1)
+        return None if _is_guarded(cls_late.group(1)) else cls_late.group(1)
     str_head, str_sep, str_tail = str_marker.partition(":")
     is_late = str_head.startswith("applymarker-")
     is_conditional = not is_late and (str_head == "skipif" or str_head.endswith("(if)"))
@@ -1250,7 +1250,49 @@ def _marker_condition(str_marker: str) -> str | None:
 _RE_XFAIL_RAISES = re.compile(r";raises=([^;]*)")
 
 
-_RE_LATE_SKIPIF = re.compile(r"^applymarker-skipif:((?:(?!\(if\):).)*)\(\)$")
+def _is_parsable(str_text: str) -> bool:
+    """Return whether a text is one Python expression.
+
+    Parameters
+    ----------
+    str_text : str
+        A candidate condition or guard.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``ast.parse(mode="eval")`` accepts it.
+    """
+    try:
+        ast.parse(str_text, mode="eval")
+    except SyntaxError:
+        return False
+    return True
+
+
+def _is_guarded(str_text: str) -> bool:
+    """Return whether the text of a late ``skipif`` label ends in a ``(if):<guard>`` suffix.
+
+    Parameters
+    ----------
+    str_text : str
+        The label between ``applymarker-skipif:`` and the closing ``()``.
+
+    Returns
+    -------
+    bool
+        ``True`` when some ``(if):`` splits it into a condition and a guard that both parse as
+        expressions. A ``(if):`` inside a quoted condition leaves a broken half on one side,
+        so ``tag == '(if):'`` is a plain condition.
+    """
+    list_parts = str_text.split("(if):")
+    return any(
+        _is_parsable("(if):".join(list_parts[:i])) and _is_parsable("(if):".join(list_parts[i:]))
+        for i in range(1, len(list_parts))
+    )
+
+
+_RE_LATE_SKIPIF = re.compile(r"^applymarker-skipif:(.*)\(\)$")
 
 
 _RE_LATE_XFAIL = re.compile(r"^applymarker-(xfail:.*?)(\(\)|\(if\):.*)$")

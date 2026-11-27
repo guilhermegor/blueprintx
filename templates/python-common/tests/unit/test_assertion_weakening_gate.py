@@ -2145,7 +2145,7 @@ def test_numbering_follows_source_order_not_nesting_depth() -> None:
     str_try = "try:\n    f()\nexcept E:\n    pass\n"
     str_src = "if x:\n    " + str_try.replace("\n", "\n    ").rstrip(" ") + str_try
     gate._number_tries(cls_tree := ast.parse(str_src), str_scope="module")
-    assert [cls_t.occurrence for cls_t in gate._scope_tries(cls_tree)] == [0, 1]
+    assert [cls_tree.body[0].body[0].occurrence, cls_tree.body[1].occurrence] == [0, 1]
 
 
 def test_a_skip_in_a_test_try_is_not_hidden_by_an_identical_module_try() -> None:
@@ -2156,3 +2156,9 @@ def test_a_skip_in_a_test_try_is_not_hidden_by_an_identical_module_try() -> None
     str_old = str_mod + str_def + "        pass\n" + _BODY
     str_new = str_mod + str_def + "        pytest.skip()\n" + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_late_skipif_condition_quoting_the_guard_delimiter_is_unguarded() -> None:
+    """Review of #1346: ``(if):`` inside a quoted condition is expression text."""
+    str_label = "applymarker-skipif:tag == '(if):'()"
+    assert gate._marker_condition(str_label) == "tag == '(if):'"
