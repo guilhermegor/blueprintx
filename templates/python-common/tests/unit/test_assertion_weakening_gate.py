@@ -2005,9 +2005,33 @@ def test_xfail_raises_single_tuple_equals_the_bare_type() -> None:
     assert _findings(str_old, str_new=str_new) == []
 
 
-def test_an_async_test_parameter_shadows_pytest() -> None:
-    """Review of #1340: an ``async def`` defined in a test body counts as a local name."""
+def test_an_async_def_in_a_test_body_shadows_pytest() -> None:
+    """Review of #1340: an ``async def pytest`` in a test body makes ``pytest`` a local name."""
     str_old = "import pytest\n\ndef test_a():\n" + _BODY
     str_head = "import pytest\n\ndef test_a():\n    async def pytest():\n        pass\n"
     str_new = str_head + "    pytest.skip()\n" + _BODY
     assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_head",
+    [
+        "def test_a(skip=pytest.skip):\n    skip()\n",
+        "def test_a(*, skip=pytest.skip):\n    skip()\n",
+        "def test_a(pytest=pytest):\n    pytest.skip()\n",
+    ],
+)
+def test_a_parameter_with_a_default_does_not_hide_a_skip(str_head: str) -> None:
+    """Review of #1340: a defaulted parameter is not a fixture, so its call still skips."""
+    str_def, str_call = str_head.split("\n", 1)
+    str_old = "import pytest\n\n" + str_def + "\n    pass\n" + _BODY
+    str_new = "import pytest\n\n" + str_head + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize("str_module", ["_pytest.outcomes", "_pytest.mark"])
+def test_a_local_import_from_pytest_internals_is_still_pytests_skip(str_module: str) -> None:
+    """Review of #1340: ``from _pytest.outcomes import skip`` is pytest's own, not a helper."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = f"def test_a():\n    from {str_module} import skip\n    skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)

@@ -653,6 +653,28 @@ _LOCAL_BINDERS = (
 )
 
 
+def _required_params(cls_args: ast.arguments) -> set[str]:
+    """Return the parameters a caller must supply, which are the only ones that shadow a name.
+
+    Parameters
+    ----------
+    cls_args : ast.arguments
+        The arguments of a test function.
+
+    Returns
+    -------
+    set of str
+        Parameters with no default, ``*args`` and ``**kwargs``. A parameter with a default is
+        not a fixture, so ``def test_a(skip=pytest.skip): skip()`` still calls pytest's
+        ``skip``, and such a name is not local.
+    """
+    list_pos = [*cls_args.posonlyargs, *cls_args.args]
+    list_required = list_pos[: len(list_pos) - len(cls_args.defaults)]
+    list_required += [a for a, d in zip(cls_args.kwonlyargs, cls_args.kw_defaults) if d is None]
+    list_required += [a for a in (cls_args.vararg, cls_args.kwarg) if a]
+    return {cls_a.arg for cls_a in list_required}
+
+
 def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
     """Return the names a test function binds exactly once, in a way that makes them local.
 
@@ -674,18 +696,7 @@ def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
     for cls_sub in ast.walk(node_fn):
         for str_name in _binding_names(cls_sub):
             dict_count[str_name] = dict_count.get(str_name, 0) + 1
-    cls_args = node_fn.args
-    set_candidates = {
-        cls_a.arg
-        for cls_a in (
-            *cls_args.posonlyargs,
-            *cls_args.args,
-            *cls_args.kwonlyargs,
-            cls_args.vararg,
-            cls_args.kwarg,
-        )
-        if cls_a
-    }
+    set_candidates = _required_params(node_fn.args)
     for cls_stmt in node_fn.body:
         if isinstance(cls_stmt, _LOCAL_BINDERS):
             dict_pytest: dict[str, str] = {}
@@ -1400,7 +1411,8 @@ def _bind_names(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
     elif isinstance(cls_stmt, ast.ImportFrom):
         for cls_alias in cls_stmt.names:
             str_local = cls_alias.asname or cls_alias.name
-            is_pytest = cls_stmt.module == "pytest" and cls_alias.name in _BOUND_FROM_PYTEST
+            str_root = (cls_stmt.module or "").split(".")[0] if not cls_stmt.level else ""
+            is_pytest = str_root in ("pytest", "_pytest") and cls_alias.name in _BOUND_FROM_PYTEST
             dict_names.pop(str_local, None)
             if is_pytest:
                 dict_names[str_local] = cls_alias.name
