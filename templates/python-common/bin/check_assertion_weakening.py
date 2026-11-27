@@ -669,7 +669,9 @@ def _required_params(cls_args: ast.arguments) -> set[str]:
     """
     list_pos = [*cls_args.posonlyargs, *cls_args.args]
     list_required = list_pos[: len(list_pos) - len(cls_args.defaults)]
-    list_required += [a for a, d in zip(cls_args.kwonlyargs, cls_args.kw_defaults) if d is None]
+    list_required += [
+        a for a, d in zip(cls_args.kwonlyargs, cls_args.kw_defaults, strict=True) if d is None
+    ]
     list_required += [a for a in (cls_args.vararg, cls_args.kwarg) if a]
     return {cls_a.arg for cls_a in list_required}
 
@@ -1369,7 +1371,7 @@ def _bind_names(cls_stmt: ast.AST, *, dict_names: dict[str, str]) -> None:
         for cls_alias in cls_stmt.names:
             str_local = cls_alias.asname or cls_alias.name
             str_root = (cls_stmt.module or "").split(".")[0] if not cls_stmt.level else ""
-            is_pytest = str_root in ("pytest", "_pytest") and cls_alias.name in _BOUND_FROM_PYTEST
+            is_pytest = str_root in {"pytest", "_pytest"} and cls_alias.name in _BOUND_FROM_PYTEST
             dict_names.pop(str_local, None)
             if is_pytest:
                 dict_names[str_local] = cls_alias.name

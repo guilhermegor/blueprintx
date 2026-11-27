@@ -1976,7 +1976,7 @@ def test_a_lambda_parameter_in_a_default_does_not_hide_pytest_from_the_body() ->
     ],
 )
 def test_an_edited_non_numeric_try_argument_under_an_unchanged_except_skip_is_reported(
-    str_before: str, str_after: str
+    *, str_before: str, str_after: str
 ) -> None:
     """Review of #1340: a new argument can make the handler fire every run, so it is a finding."""
     str_tail = "    except E:\n        pytest.skip()\n" + _BODY
