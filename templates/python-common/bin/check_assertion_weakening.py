@@ -63,7 +63,6 @@ CI must check out with `fetch-depth: 0` — a shallow clone has no common ancest
 """
 
 import ast
-import copy
 import hashlib
 import json
 import os
@@ -982,28 +981,6 @@ def _except_guard(
     return f"{str_type} after {str_after}"
 
 
-def _blanked_text(cls_node: ast.AST) -> str:
-    """Return a node's source with every int and float literal read as ``0``.
-
-    Parameters
-    ----------
-    cls_node : ast.AST
-        A statement of a ``try`` body.
-
-    Returns
-    -------
-    str
-        The source. A number is blanked so that ``f(1)`` to ``f(2)`` stays one key, while a
-        changed string, name, keyword, bool or subscript (``connect(url)`` to
-        ``connect("invalid://")``, ``cfg["k"]`` to ``cfg["missing"]``) changes it.
-    """
-    cls_copy = copy.deepcopy(cls_node)
-    for cls_sub in ast.walk(cls_copy):
-        if isinstance(cls_sub, ast.Constant) and type(cls_sub.value) in (int, float):
-            cls_sub.value = 0
-    return ast.unparse(cls_copy)
-
-
 def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     """Return the key of a ``try`` body, the key of its ``except`` guards.
 
@@ -1015,16 +992,14 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     Returns
     -------
     str
-        ``body #<digest>`` of the body's source with numbers blanked. Editing a number leaves
-        the key alone, so an unchanged ``except E: pytest.skip()`` is not reported again for a
-        adjusted literal; editing anything else (an argument, a subscript, a statement) changes
-        it, because that can change what the handler guards, and a weakening gate prefers that
-        report to a miss (``test-change-ok:`` answers it). Known limits: a numeric edit that
-        changes behaviour (a timeout, a port) is not seen, and a second ``try`` with the same
+        ``body #<digest>`` of the body's source. Any literal edit, numbers included, changes
+        the key, so an unchanged ``except E: pytest.skip()`` is reported again: a different
+        argument can change what the handler guards, and a weakening gate prefers that report
+        to a miss (``test-change-ok:`` answers it). Known limit: a second ``try`` with the same
         body and caught type shares the first one's label, so a skip added there is not
         reported while the first one stays.
     """
-    str_body = "\n".join(_blanked_text(cls_stmt) for cls_stmt in cls_try.body)
+    str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
     return "body #" + hashlib.sha256(str_body.encode()).hexdigest()[:8]
 
 

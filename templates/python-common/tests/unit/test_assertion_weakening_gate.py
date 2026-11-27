@@ -1578,12 +1578,12 @@ def test_applymarker_of_something_that_is_not_pytest_mark_is_not_a_skip() -> Non
     assert _findings(str_old, str_new=str_new) == []
 
 
-def test_an_edited_try_argument_does_not_reflag_an_unchanged_except_skip() -> None:
-    """Review of #1328 (#1334): the ``except`` guard keys on the calls, not the body text."""
+def test_an_edited_numeric_try_argument_under_an_unchanged_except_skip_is_reported() -> None:
+    """Owner decision on #1340: a number is a literal too, so editing it is a finding."""
     str_tail = "    except E:\n        pytest.skip()\n" + _BODY
     str_old = "def test_a():\n    try:\n        f(1)\n" + str_tail
     str_new = "def test_a():\n    try:\n        f(2)\n" + str_tail
-    assert _findings(str_old, str_new=str_new) == []
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
 
 
 def test_an_xfail_raises_tuple_reordered_is_not_a_new_marker() -> None:
@@ -2043,4 +2043,12 @@ def test_an_edited_subscript_under_an_unchanged_except_skip_is_reported() -> Non
     str_head = "def test_a():\n    try:\n        cfg = load()\n        v = cfg['"
     str_old = str_head + "k']\n" + str_tail
     str_new = str_head + "missing']\n" + str_tail
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_connect_timeout_edited_to_zero_under_an_unchanged_except_skip_is_reported() -> None:
+    """Owner decision on #1340: ``timeout=5`` to ``timeout=0`` can make the handler always fire."""
+    str_tail = "    except E:\n        pytest.skip()\n" + _BODY
+    str_old = "def test_a():\n    try:\n        connect(timeout=5)\n" + str_tail
+    str_new = "def test_a():\n    try:\n        connect(timeout=0)\n" + str_tail
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
