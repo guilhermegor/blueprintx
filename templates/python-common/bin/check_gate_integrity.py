@@ -292,8 +292,8 @@ def blob_exists(str_ref: str, *, str_path: str) -> bool:
     )
 
 
-def is_analysed_path(str_path: str) -> bool:
-    """Return whether the gate reads a path: gate script, watched config, workflow or test.
+def is_gate_script(str_path: str) -> bool:
+    """Return whether a path is a quality-check script (``bin/ci/*``, ``bin/check_*``, ``lint_*``).
 
     Parameters
     ----------
@@ -303,15 +303,48 @@ def is_analysed_path(str_path: str) -> bool:
     Returns
     -------
     bool
-        ``True`` for a path ``file_problems`` would compare against its base, ``False`` for any
-        other file (an image, a README), whose encoding is nothing the gate asserts about.
+        ``True`` for a CI script or a ``check_``/``lint_`` gate script.
     """
-    return bool(
-        RE_CI_SCRIPT.search(str_path)
-        or RE_GATE_SCRIPT.search(str_path)
-        or RE_TEST_PATH.search(str_path)
-        or RE_WORKFLOW_PATH.search(str_path)
-        or pathlib.Path(str_path).name in _DICT_DISPATCH
+    return bool(RE_CI_SCRIPT.search(str_path) or RE_GATE_SCRIPT.search(str_path))
+
+
+def is_watched_config(str_path: str) -> bool:
+    """Return whether a path is a watched config (any ``_DICT_DISPATCH`` basename) or a workflow.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative path.
+
+    Returns
+    -------
+    bool
+        ``True`` for a basename ``_DICT_DISPATCH`` routes, matched at any depth exactly as
+        ``file_problems`` does, or a ``.github/workflows/*.yml`` file.
+    """
+    return pathlib.Path(str_path).name in _DICT_DISPATCH or bool(RE_WORKFLOW_PATH.search(str_path))
+
+
+def is_analysed_path(str_path: str) -> bool:
+    """Return whether the gate reads a path: gate script, watched config, workflow or test.
+
+    ``deletion_problems`` classifies through the same two predicates and ``RE_TEST_PATH``, and
+    ``is_watched_config`` derives from ``_DICT_DISPATCH``, so a config added to the dispatch
+    table is covered here without a second edit.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative path.
+
+    Returns
+    -------
+    bool
+        ``True`` for a path the gate compares against its base, ``False`` for any other file
+        (an image, a README), whose encoding is nothing the gate asserts about.
+    """
+    return is_gate_script(str_path) or is_watched_config(str_path) or bool(
+        RE_TEST_PATH.search(str_path)
     )
 
 
@@ -333,10 +366,12 @@ def undecodable_problems(str_path: str, *, str_base: str) -> list:
         file is reported too, which the owner accepted (blueprintx#1341). ``[]`` for an added
         or removed file and for a path the gate does not read.
     """
+    if not is_analysed_path(str_path):
+        return []
     bool_modified = blob_exists(STR_INDEX_REF, str_path=str_path) and blob_exists(
         str_base, str_path=str_path
     )
-    if not (bool_modified and is_analysed_path(str_path)):
+    if not bool_modified:
         return []
     if RE_WORKFLOW_PATH.search(str_path):
         return [f"{str_path}: workflow is not valid UTF-8, so its jobs cannot be compared"]
@@ -2099,9 +2134,9 @@ def deletion_problems(list_changed: list, *, set_touched_stems: frozenset = froz
     for str_status, str_path in list_changed:
         if str_status != "D":
             continue
-        if RE_CI_SCRIPT.search(str_path) or RE_GATE_SCRIPT.search(str_path):
+        if is_gate_script(str_path):
             list_problems.append(f"{str_path}: quality-check script deleted")
-        elif pathlib.Path(str_path).name in _DICT_DISPATCH or RE_WORKFLOW_PATH.search(str_path):
+        elif is_watched_config(str_path):
             list_problems.append(f"{str_path}: watched gate configuration deleted")
         elif RE_TEST_PATH.search(str_path) and test_module_stem(str_path) in set_touched_stems:
             list_problems.append(

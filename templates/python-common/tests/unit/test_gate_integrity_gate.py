@@ -2713,6 +2713,83 @@ def test_modified_unanalysed_file_that_is_not_utf8_is_not_a_finding(
     assert gate.collect_problems([("M", "docs/logo.png")], str_base="base") == []
 
 
+_LIST_ANALYSED_PATHS = [
+    "bin/check_thing.py",
+    "templates/python-common/bin/lint_thing.sh",
+    "bin/ci/check_thing.sh",
+    ".pre-commit-config.yaml",
+    "ruff.toml",
+    "templates/foo/ruff.toml",
+    ".github/workflows/ci.yml",
+    "tests/unit/test_thing.py",
+    "tests/integration/test_thing.py",
+    *gate._DICT_DISPATCH,
+]
+_LIST_UNANALYSED_PATHS = [
+    "docs/logo.png",
+    "README.md",
+    "src/thing.py",
+    "tests/fixtures/test_thing.py",
+    "bin/helper.py",
+]
+
+
+@pytest.mark.parametrize("str_path", _LIST_ANALYSED_PATHS)
+def test_is_analysed_path_accepts_a_path_the_gate_reads(str_path: str) -> None:
+    """Every gate script, watched config (at any depth), workflow and test counts as analysed."""
+    assert gate.is_analysed_path(str_path)
+
+
+@pytest.mark.parametrize("str_path", _LIST_UNANALYSED_PATHS)
+def test_is_analysed_path_rejects_a_path_the_gate_never_reads(str_path: str) -> None:
+    """An image, a README, source and a stray script are out of scope."""
+    assert not gate.is_analysed_path(str_path)
+
+
+@pytest.mark.parametrize("str_path", [*_LIST_ANALYSED_PATHS, *_LIST_UNANALYSED_PATHS])
+def test_is_analysed_path_agrees_with_what_deletion_problems_classifies(str_path: str) -> None:
+    """The two routers cannot drift: a path is analysed exactly when its deletion is reported."""
+    set_stems = frozenset({gate.test_module_stem(str_path)})
+
+    assert bool(gate.deletion_problems([("D", str_path)], set_touched_stems=set_stems)) == (
+        gate.is_analysed_path(str_path)
+    )
+
+
+def test_deleted_analysed_file_gets_only_the_deletion_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deleted path is read by ``deletion_problems`` alone; no encoding finding is added."""
+    monkeypatch.setattr(gate, "show", lambda _str_ref, *, str_path: None)
+    monkeypatch.setattr(gate, "blob_exists", lambda _str_ref, *, str_path: True)
+
+    assert gate.collect_problems([("D", "bin/check_thing.py")], str_base="base") == [
+        "bin/check_thing.py: quality-check script deleted"
+    ]
+
+
+def test_gate_script_renamed_and_reencoded_is_reported_as_deleted(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Renames read as delete plus add, so a rename plus re-encode cannot dodge the gate."""
+    _git_in(tmp_path, "init", "-q", "--initial-branch=main")
+    _git_in(tmp_path, "config", "user.email", "t@example.com")
+    _git_in(tmp_path, "config", "user.name", "t")
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin/check_x.py").write_bytes(b"assert True\n")
+    _git_in(tmp_path, "add", "bin/check_x.py")
+    _git_in(tmp_path, "commit", "-q", "-m", "seed")
+    str_base = _git_in(tmp_path, "rev-parse", "main")
+    _git_in(tmp_path, "mv", "bin/check_x.py", "bin/check_y.py")
+    (tmp_path / "bin/check_y.py").write_bytes(b"pass  # \xe9\n")
+    _git_in(tmp_path, "add", "bin/check_y.py")
+    monkeypatch.chdir(tmp_path)
+
+    assert gate.collect_problems(gate.changed_paths(str_base), str_base=str_base) == [
+        "bin/check_x.py: quality-check script deleted"
+    ]
+
+
 def test_workflow_added_without_a_base_blob_is_not_a_finding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
