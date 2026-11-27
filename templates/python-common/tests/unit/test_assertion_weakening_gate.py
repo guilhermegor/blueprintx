@@ -1949,3 +1949,19 @@ def test_a_match_capture_bound_to_pytest_mark_keeps_the_receiver_check() -> None
     str_head = "import pytest\n\nmatch pytest.mark:\n    case m:\n        pass\n\n"
     str_new = str_head + "def test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_star_import_from_pytest_keeps_the_receiver_check_open() -> None:
+    """Review of #1340: ``from pytest import *`` binds ``mark``, so ``mark.skip`` is a skip."""
+    str_head = "from pytest import *\n\ndef test_a(request):\n"
+    str_old = str_head + "    assert 1 == 1\n"
+    str_new = str_head + "    request.applymarker(mark.skip)\n    assert 1 == 1\n"
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_lambda_parameter_in_a_default_does_not_hide_pytest_from_the_body() -> None:
+    """Review of #1340: ``lambda pytest: 0`` in a default is not a parameter of the test."""
+    str_head = "import pytest\n\ndef test_a(f=lambda pytest: 0):\n"
+    str_old = str_head + "    assert 1 == 1\n"
+    str_new = str_head + "    pytest.skip()\n    assert 1 == 1\n"
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)

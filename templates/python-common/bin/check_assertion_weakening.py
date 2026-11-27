@@ -664,7 +664,18 @@ def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
     for cls_sub in ast.walk(node_fn):
         for str_name in _binding_names(cls_sub):
             dict_count[str_name] = dict_count.get(str_name, 0) + 1
-    set_candidates = {cls_a.arg for cls_a in ast.walk(node_fn.args) if isinstance(cls_a, ast.arg)}
+    cls_args = node_fn.args
+    set_candidates = {
+        cls_a.arg
+        for cls_a in (
+            *cls_args.posonlyargs,
+            *cls_args.args,
+            *cls_args.kwonlyargs,
+            cls_args.vararg,
+            cls_args.kwarg,
+        )
+        if cls_a
+    }
     for cls_stmt in node_fn.body:
         if isinstance(cls_stmt, ast.Import | ast.ImportFrom | ast.FunctionDef | ast.ClassDef):
             dict_pytest: dict[str, str] = {}
@@ -1429,7 +1440,8 @@ def _is_pytest_mark(cls_expr: ast.expr, *, dict_names: dict[str, str]) -> bool:
         cls_root = cls_root.value
     if not isinstance(cls_root, ast.Name) or cls_root.id in dict_names:
         return True
-    return cls_root.id in dict_names.get(_KEY_ASSIGNED, "").split(",")
+    list_assigned = dict_names.get(_KEY_ASSIGNED, "").split(",")
+    return cls_root.id in list_assigned or "*" in list_assigned
 
 
 def _applied_marker(cls_call: ast.Call, *, dict_names: dict[str, str]) -> str | None:
