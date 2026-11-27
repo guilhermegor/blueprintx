@@ -1919,6 +1919,7 @@ def _marker_table(str_source: str) -> tuple[dict[str, str], dict[str, set]]:
         cls_tree = ast.parse(str_source)
     except SyntaxError:
         return dict(_DEFAULT_NAMES), dict_inherited
+    _number_tries(cls_tree)
     _index_inherited(
         cls_tree,
         str_prefix="",

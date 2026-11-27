@@ -2118,3 +2118,12 @@ def test_a_name_table_without_the_assigned_entry_stays_without_it_in_a_test_body
     """#1343: ``_local_names`` adds ``<assigned>`` only when the table it extends has it."""
     cls_fn = ast.parse("def test_a():\n    pass\n").body[0]
     assert gate._KEY_ASSIGNED not in gate._local_names(cls_fn, dict_names=gate._DEFAULT_NAMES)
+
+
+def test_a_skip_added_to_a_second_identical_module_try_is_reported() -> None:
+    """Review of #1346: two module ``try`` blocks with one body keep distinct labels."""
+    str_try = "try:\n    next(items)\nexcept StopIteration:\n    "
+    str_head = "import pytest\n\n" + str_try + "pytestmark = pytest.mark.skip\n" + str_try
+    str_old = str_head + "pass\n\ndef test_a():\n" + _BODY
+    str_new = str_head + "pytestmark = pytest.mark.skip\n\ndef test_a():\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
