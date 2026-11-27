@@ -63,6 +63,7 @@ CI must check out with `fetch-depth: 0` — a shallow clone has no common ancest
 """
 
 import ast
+import copy
 import hashlib
 import json
 import os
@@ -643,6 +644,15 @@ def _binding_names(cls_sub: ast.AST) -> list[str]:
     return []
 
 
+_LOCAL_BINDERS = (
+    ast.Import,
+    ast.ImportFrom,
+    ast.FunctionDef,
+    ast.AsyncFunctionDef,
+    ast.ClassDef,
+)
+
+
 def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
     """Return the names a test function binds exactly once, in a way that makes them local.
 
@@ -677,7 +687,7 @@ def _sole_local_names(node_fn: ast.FunctionDef) -> set[str]:
         if cls_a
     }
     for cls_stmt in node_fn.body:
-        if isinstance(cls_stmt, ast.Import | ast.ImportFrom | ast.FunctionDef | ast.ClassDef):
+        if isinstance(cls_stmt, _LOCAL_BINDERS):
             dict_pytest: dict[str, str] = {}
             _bind_names(cls_stmt, dict_names=dict_pytest)
             set_candidates |= {n for n in _binding_names(cls_stmt) if n not in dict_pytest}
@@ -961,6 +971,28 @@ def _except_guard(
     return f"{str_type} after {str_after}"
 
 
+def _call_text(cls_call: ast.Call) -> str:
+    """Return a call as written, with every int and float literal read as ``0``.
+
+    Parameters
+    ----------
+    cls_call : ast.Call
+        A call in a ``try`` body.
+
+    Returns
+    -------
+    str
+        The call's source. A number is blanked so that ``f(1)`` to ``f(2)`` stays one key,
+        while a changed string, name, keyword or bool (``connect(url)`` to
+        ``connect("invalid://")``, ``strict=True`` to ``False``) changes it.
+    """
+    cls_copy = copy.deepcopy(cls_call)
+    for cls_sub in ast.walk(cls_copy):
+        if isinstance(cls_sub, ast.Constant) and type(cls_sub.value) in (int, float):
+            cls_sub.value = 0
+    return ast.unparse(cls_copy)
+
+
 def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     """Return the sorted callee names a ``try`` body calls, the key of its ``except`` guards.
 
@@ -972,19 +1004,21 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     Returns
     -------
     str
-        ``f(), g()`` for the distinct callees, ``raise``/``assert`` when the body has one, and
-        the module, level and names of each import; a digest of the body when it has no call or
-        import, as before the callee key. Editing an argument leaves the key alone, so an
-        unchanged ``except E: pytest.skip()`` is not reported again; adding or removing a callee
-        or import changes it. Known limit, accepted for that trade: a second ``try`` that calls
-        the same callees and catches the same type shares the first one's label, so a skip added
-        there is not reported while the first one stays.
+        ``f(x), g()`` for the distinct calls as written (numbers blanked), ``raise``/``assert``
+        when the body has one, and the module, level and names of each import; a digest of the
+        body when it has no call or import. Editing a non-numeric argument changes the key
+        (editing a number does not), so an unchanged ``except E: pytest.skip()`` is reported
+        again: a different argument can change what the handler guards (``connect(url)`` to
+        ``connect("invalid://")``), and a weakening gate prefers that report to a miss
+        (``test-change-ok:`` answers it). Known limit: a second ``try`` with the same calls and
+        caught type shares the first one's label, so a skip added there is not reported while
+        the first one stays.
     """
     set_names: set[str] = set()
     for cls_stmt in cls_try.body:
         for cls_node in ast.walk(cls_stmt):
             if isinstance(cls_node, ast.Call):
-                set_names.add(f"{ast.unparse(cls_node.func)}()")
+                set_names.add(_call_text(cls_node))
             elif isinstance(cls_node, ast.Raise | ast.Assert):
                 set_names.add(type(cls_node).__name__.lower())
             elif isinstance(cls_node, ast.Import):
@@ -1110,7 +1144,9 @@ def _xfail_scope(dec: ast.Call) -> str:
     """
     dict_kw = {cls_kw.arg: ast.unparse(cls_kw.value) for cls_kw in dec.keywords}
     cls_raises = next((cls_kw.value for cls_kw in dec.keywords if cls_kw.arg == "raises"), None)
-    if isinstance(cls_raises, ast.Tuple):
+    if isinstance(cls_raises, ast.Tuple) and len(cls_raises.elts) == 1:
+        dict_kw["raises"] = ast.unparse(cls_raises.elts[0])
+    elif isinstance(cls_raises, ast.Tuple):
         dict_kw["raises"] = (
             "(" + ", ".join(sorted(ast.unparse(cls_t) for cls_t in cls_raises.elts)) + ")"
         )
@@ -1302,6 +1338,9 @@ def _scoped_names(list_body: list, *, dict_start: dict[str, str]) -> dict[str, s
         removes a name only through an import of it from elsewhere, and only if the module did
         not import that name from pytest itself: that is the one nested shape the gate is
         meant to read as a helper. Every other nested statement keeps the earlier verdict.
+        A nested pytest binding is merged back after the walk, so a later top-level rebind of
+        the same name from elsewhere does not remove it: arms are alternatives, and the gate
+        errs toward reporting.
     """
     dict_names = dict(dict_start)
     dict_nested: dict[str, str] = {}
@@ -1439,6 +1478,8 @@ def _is_pytest_mark(cls_expr: ast.expr, *, dict_names: dict[str, str]) -> bool:
     while isinstance(cls_root, ast.Attribute):
         cls_root = cls_root.value
     if not isinstance(cls_root, ast.Name) or cls_root.id in dict_names:
+        return True
+    if _KEY_ASSIGNED not in dict_names:
         return True
     list_assigned = dict_names.get(_KEY_ASSIGNED, "").split(",")
     return cls_root.id in list_assigned or "*" in list_assigned

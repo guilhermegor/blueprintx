@@ -1965,3 +1965,49 @@ def test_a_lambda_parameter_in_a_default_does_not_hide_pytest_from_the_body() ->
     str_old = str_head + "    assert 1 == 1\n"
     str_new = str_head + "    pytest.skip()\n    assert 1 == 1\n"
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    ("str_before", "str_after"),
+    [
+        ("f(url)", 'f("invalid://")'),
+        ('import_module("a")', 'import_module("b")'),
+        ("f(strict=True)", "f(strict=False)"),
+    ],
+)
+def test_an_edited_non_numeric_try_argument_under_an_unchanged_except_skip_is_reported(
+    str_before: str, str_after: str
+) -> None:
+    """Review of #1340: a new argument can make the handler fire every run, so it is a finding."""
+    str_tail = "    except E:\n        pytest.skip()\n" + _BODY
+    str_old = f"def test_a():\n    try:\n        {str_before}\n" + str_tail
+    str_new = f"def test_a():\n    try:\n        {str_after}\n" + str_tail
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_alias_receiver_is_reported_when_the_name_table_has_no_assigned_entry() -> None:
+    """Review of #1340: a table without ``<assigned>`` must read a receiver as possibly a mark."""
+    cls_call = ast.parse("request.applymarker(m.skip)").body[0].value
+    assert gate._skip_call_name(cls_call) == "applymarker-skip"
+
+
+def test_a_called_mark_import_is_not_a_skip() -> None:
+    """Review of #1340: ``mark`` is bound from pytest but is not a run-time outcome function."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "from pytest import mark\n\ndef test_a():\n    mark('x')\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_xfail_raises_single_tuple_equals_the_bare_type() -> None:
+    """Review of #1340: ``raises=A`` and ``raises=(A,)`` name the same type."""
+    str_old = "@pytest.mark.xfail(raises=A)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(raises=(A,))\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_an_async_test_parameter_shadows_pytest() -> None:
+    """Review of #1340: an ``async def`` defined in a test body counts as a local name."""
+    str_old = "import pytest\n\ndef test_a():\n" + _BODY
+    str_head = "import pytest\n\ndef test_a():\n    async def pytest():\n        pass\n"
+    str_new = str_head + "    pytest.skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
