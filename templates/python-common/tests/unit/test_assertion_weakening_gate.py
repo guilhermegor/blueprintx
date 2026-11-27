@@ -2127,3 +2127,22 @@ def test_a_skip_added_to_a_second_identical_module_try_is_reported() -> None:
     str_old = str_head + "pass\n\ndef test_a():\n" + _BODY
     str_new = str_head + "pytestmark = pytest.mark.skip\n\ndef test_a():\n" + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_try_added_inside_a_test_does_not_renumber_a_module_try() -> None:
+    """Review of #1346: a ``try`` in a function body is numbered with that function."""
+    str_try = "try:\n    next(items)\nexcept StopIteration:\n    pytestmark = pytest.mark.skip\n"
+    str_head = "import pytest\n\n" + str_try
+    str_def = "\ndef test_a():\n"
+    str_inner = "    try:\n        next(items)\n    except StopIteration:\n        pass\n"
+    str_old = str_head + str_def + _BODY
+    str_new = str_head + str_def + str_inner + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_numbering_follows_source_order_not_nesting_depth() -> None:
+    """Review of #1346: a deeper identical ``try`` listed first still gets number 0."""
+    str_try = "try:\n    f()\nexcept E:\n    pass\n"
+    str_src = "if x:\n    " + str_try.replace("\n", "\n    ").rstrip(" ") + str_try
+    gate._number_tries(cls_tree := ast.parse(str_src))
+    assert [cls_t.occurrence for cls_t in gate._scope_tries(cls_tree)] == [0, 1]

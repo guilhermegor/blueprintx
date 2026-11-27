@@ -1027,21 +1027,45 @@ def _body_digest(cls_try: ast.Try | ast.TryStar) -> str:
     return "body #" + hashlib.sha256(str_body.encode()).hexdigest()[:8]
 
 
-def _number_tries(cls_node: ast.AST) -> None:
-    """Set the occurrence number of each ``try`` under a node that shares a body with another.
+def _scope_tries(cls_node: ast.AST) -> list:
+    """Return the ``try`` statements in a node's own scope, in source order.
 
     Parameters
     ----------
     cls_node : ast.AST
-        A test function; each ``ast.Try``/``ast.TryStar`` below it gets an ``occurrence``
-        attribute, ``0`` for the first of its body, ``1`` for the next, and so on.
+        A module, class or test function.
+
+    Returns
+    -------
+    list of ast.Try or ast.TryStar
+        Every ``try`` below the node, nested ones included, without entering a nested ``def``
+        or ``lambda``: the body of one is a scope of its own.
+    """
+    list_out: list = []
+    for cls_child in ast.iter_child_nodes(cls_node):
+        if isinstance(cls_child, ast.Try | ast.TryStar):
+            list_out.append(cls_child)
+        if not isinstance(cls_child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            list_out.extend(_scope_tries(cls_child))
+    return list_out
+
+
+def _number_tries(cls_node: ast.AST) -> None:
+    """Set the occurrence number of each ``try`` of a scope that shares a body with another.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        A module or a test function. Each ``try`` of its own scope (see ``_scope_tries``) gets
+        an ``occurrence`` attribute: ``0`` for the first of its body in source order, ``1``
+        for the next, and so on. A ``try`` inside a nested ``def`` is numbered with that
+        ``def``, so adding one there never renumbers the module's.
     """
     dict_seen: dict[str, int] = {}
-    for cls_sub in ast.walk(cls_node):
-        if isinstance(cls_sub, ast.Try | ast.TryStar):
-            str_digest = _body_digest(cls_sub)
-            cls_sub.occurrence = dict_seen.get(str_digest, 0)
-            dict_seen[str_digest] = cls_sub.occurrence + 1
+    for cls_try in _scope_tries(cls_node):
+        str_digest = _body_digest(cls_try)
+        cls_try.occurrence = dict_seen.get(str_digest, 0)
+        dict_seen[str_digest] = cls_try.occurrence + 1
 
 
 def _try_key(cls_try: ast.Try | ast.TryStar) -> str:
@@ -1056,7 +1080,8 @@ def _try_key(cls_try: ast.Try | ast.TryStar) -> str:
     -------
     str
         ``body #<digest>`` of the body's source, followed by ``#<n>`` for the n-th later
-        ``try`` of a test with the same body (see ``_number_tries``). Any literal edit,
+        ``try`` of its scope with the same body (see ``_number_tries``, which both entry points
+        that build labels run first; a tree nobody numbered reads as ``0``). Any literal edit,
         numbers included, changes the key, so an unchanged ``except E: pytest.skip()`` is
         reported again: a different argument can change what the handler guards, and a
         weakening gate prefers that report to a miss (``test-change-ok:`` answers it). Without
