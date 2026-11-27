@@ -559,6 +559,7 @@ def _skip_or_xfail_markers(
     dict_known = _local_names(
         node_fn, dict_names=_DEFAULT_NAMES if dict_names is None else dict_names
     )
+    _number_tries(node_fn)
     set_out = _marker_labels(node_fn.decorator_list)
     set_out.update(_body_skip_labels(node_fn.body, tuple_guards=(), dict_names=dict_known))
     return set_out
@@ -585,12 +586,15 @@ def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dic
         module table's verdict.
     """
     dict_local = dict(dict_names)
-    set_assigned = {*dict_names.get(_KEY_ASSIGNED, "").split(","), *_assigned_names(node_fn)}
-    dict_local[_KEY_ASSIGNED] = ",".join(sorted(set_assigned))
+    if _KEY_ASSIGNED in dict_names:
+        set_assigned = {*dict_names[_KEY_ASSIGNED].split(","), *_assigned_names(node_fn)}
+        dict_local[_KEY_ASSIGNED] = ",".join(sorted(set_assigned))
     for cls_stmt, _ in _flat_stmts(node_fn.body):
         dict_added: dict[str, str] = {}
         _bind_names(cls_stmt, dict_names=dict_added)
-        dict_local.update({k: v for k, v in dict_added.items() if k not in dict_local})
+        dict_local.update(
+            {k: v for k, v in dict_added.items() if k not in dict_local or v in _RUNTIME_OFF}
+        )
     for str_name in _sole_local_names(node_fn, dict_names=dict_local):
         dict_local.pop(str_name, None)
     return dict_local
@@ -944,7 +948,7 @@ def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
                     cls_handler.body,
                     (
                         *tuple_guards,
-                        _except_guard(node, cls_handler=cls_handler, str_after=_try_calls(node)),
+                        _except_guard(node, cls_handler=cls_handler, str_after=_try_key(node)),
                     ),
                 )
                 for cls_handler in node.handlers
@@ -987,9 +991,8 @@ def _except_guard(
     cls_handler : ast.ExceptHandler
         One of its handlers.
     str_after : str
-        The key of the ``try`` body: its callees (``_try_calls``) for a test body, where an edited
-        argument must not re-report an unchanged handler, a digest of the whole statement for a
-        module-level ``pytestmark``, where two ``try`` blocks with no call must stay distinct.
+        The key of the ``try`` body, from ``_try_key``: a digest of its source, so any edit to
+        the body re-reports an unchanged handler, plus the occurrence number of a repeated body.
 
     Returns
     -------
@@ -1007,7 +1010,41 @@ def _except_guard(
     return f"{str_type} after {str_after}"
 
 
-def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
+def _body_digest(cls_try: ast.Try | ast.TryStar) -> str:
+    """Return ``body #<digest>`` of the source of a ``try`` body.
+
+    Parameters
+    ----------
+    cls_try : ast.Try or ast.TryStar
+        The statement that owns the handlers.
+
+    Returns
+    -------
+    str
+        The digest label; any literal edit, numbers included, changes it.
+    """
+    str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
+    return "body #" + hashlib.sha256(str_body.encode()).hexdigest()[:8]
+
+
+def _number_tries(cls_node: ast.AST) -> None:
+    """Set the occurrence number of each ``try`` under a node that shares a body with another.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        A test function; each ``ast.Try``/``ast.TryStar`` below it gets an ``occurrence``
+        attribute, ``0`` for the first of its body, ``1`` for the next, and so on.
+    """
+    dict_seen: dict[str, int] = {}
+    for cls_sub in ast.walk(cls_node):
+        if isinstance(cls_sub, ast.Try | ast.TryStar):
+            str_digest = _body_digest(cls_sub)
+            cls_sub.occurrence = dict_seen.get(str_digest, 0)
+            dict_seen[str_digest] = cls_sub.occurrence + 1
+
+
+def _try_key(cls_try: ast.Try | ast.TryStar) -> str:
     """Return the key of a ``try`` body, the key of its ``except`` guards.
 
     Parameters
@@ -1018,15 +1055,17 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     Returns
     -------
     str
-        ``body #<digest>`` of the body's source. Any literal edit, numbers included, changes
-        the key, so an unchanged ``except E: pytest.skip()`` is reported again: a different
-        argument can change what the handler guards, and a weakening gate prefers that report
-        to a miss (``test-change-ok:`` answers it). Known limit: a second ``try`` with the same
-        body and caught type shares the first one's label, so a skip added there is not
-        reported while the first one stays.
+        ``body #<digest>`` of the body's source, followed by ``#<n>`` for the n-th later
+        ``try`` of a test with the same body (see ``_number_tries``). Any literal edit,
+        numbers included, changes the key, so an unchanged ``except E: pytest.skip()`` is
+        reported again: a different argument can change what the handler guards, and a
+        weakening gate prefers that report to a miss (``test-change-ok:`` answers it). Without
+        the number, a skip added to a second ``try`` with the same body and caught type would
+        share the first one's label and go unreported; inserting an identical ``try`` earlier
+        re-reports the later ones, the accepted cost.
     """
-    str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
-    return "body #" + hashlib.sha256(str_body.encode()).hexdigest()[:8]
+    int_occurrence = getattr(cls_try, "occurrence", 0)
+    return _body_digest(cls_try) + (f" #{int_occurrence}" if int_occurrence else "")
 
 
 def _case_guard(cls_match: ast.Match, *, cls_case: ast.match_case) -> str:
@@ -1176,7 +1215,7 @@ def _marker_condition(str_marker: str) -> str | None:
 _RE_XFAIL_RAISES = re.compile(r";raises=([^;]*)")
 
 
-_RE_LATE_SKIPIF = re.compile(r"^applymarker-skipif:(.*)\(\)$")
+_RE_LATE_SKIPIF = re.compile(r"^applymarker-skipif:((?:(?!\(if\):).)*)\(\)$")
 
 
 _RE_LATE_XFAIL = re.compile(r"^applymarker-(xfail:.*?)(\(\)|\(if\):.*)$")
@@ -1931,12 +1970,12 @@ def _stmt_arms(cls_stmt: ast.stmt) -> list:
         str_else = _canon(ast.UnaryOp(op=ast.Not(), operand=cls_stmt.test))
         return [(cls_stmt.body, _canon(cls_stmt.test)), (cls_stmt.orelse, str_else)]
     if isinstance(cls_stmt, ast.Try | ast.TryStar):
-        str_digest = hashlib.sha256(ast.unparse(cls_stmt).encode()).hexdigest()[:8]
-        list_arms = [([*cls_stmt.body, *cls_stmt.orelse], f"try #{str_digest}")]
+        str_key = _try_key(cls_stmt)
+        list_arms = [([*cls_stmt.body, *cls_stmt.orelse], f"try {str_key}")]
         list_arms += [
             (
                 cls_handler.body,
-                _except_guard(cls_stmt, cls_handler=cls_handler, str_after=str_digest),
+                _except_guard(cls_stmt, cls_handler=cls_handler, str_after=str_key),
             )
             for cls_handler in cls_stmt.handlers
         ]
