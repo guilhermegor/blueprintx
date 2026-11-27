@@ -1058,8 +1058,9 @@ def _number_tries(cls_node: ast.AST, *, str_scope: str) -> None:
     cls_node : ast.AST
         A module or a test function. Each ``try`` of its own scope (see ``_scope_tries``) gets
         an ``occurrence`` attribute: ``0`` for the first of its body in source order, ``1``
-        for the next, and so on. A ``try`` inside a nested ``def`` is numbered with that
-        ``def``, so adding one there never renumbers the module's.
+        for the next, and so on. A ``try`` inside a nested ``def`` or ``lambda`` is neither
+        numbered nor read: ``_body_skip_labels`` skips those bodies, and a test function is
+        numbered on its own, so adding such a ``try`` never renumbers the module's.
     str_scope : str
         ``module`` or ``test``, stored as the ``scope`` attribute: a label inherited from a
         module ``try`` and one from a test ``try`` with the same body must stay distinct.
@@ -1281,15 +1282,13 @@ def _is_guarded(str_text: str) -> bool:
     Returns
     -------
     bool
-        ``True`` when some ``(if):`` splits it into a condition and a guard that both parse as
-        expressions. A ``(if):`` inside a quoted condition leaves a broken half on one side,
-        so ``tag == '(if):'`` is a plain condition.
+        ``True`` when some ``(if):`` follows a prefix that parses as an expression. The guard
+        itself may be any label text (``for f()``, ``except E after ...``), so only the
+        condition side is checked; a ``(if):`` inside a quoted condition leaves a broken
+        prefix, so ``tag == '(if):'`` is a plain condition.
     """
     list_parts = str_text.split("(if):")
-    return any(
-        _is_parsable("(if):".join(list_parts[:i])) and _is_parsable("(if):".join(list_parts[i:]))
-        for i in range(1, len(list_parts))
-    )
+    return any(_is_parsable("(if):".join(list_parts[:i])) for i in range(1, len(list_parts)))
 
 
 _RE_LATE_SKIPIF = re.compile(r"^applymarker-skipif:(.*)\(\)$")

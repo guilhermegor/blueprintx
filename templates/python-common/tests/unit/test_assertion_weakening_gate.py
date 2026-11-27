@@ -2162,3 +2162,18 @@ def test_a_late_skipif_condition_quoting_the_guard_delimiter_is_unguarded() -> N
     """Review of #1346: ``(if):`` inside a quoted condition is expression text."""
     str_label = "applymarker-skipif:tag == '(if):'()"
     assert gate._marker_condition(str_label) == "tag == '(if):'"
+
+
+@pytest.mark.parametrize(
+    "str_label",
+    [
+        "applymarker-skipif:c(if):for f()",
+        "applymarker-skipif:c(if):except E after body #ab()",
+        "applymarker-skipif:c(if):f(a)()",
+    ],
+)
+def test_a_late_skipif_guard_that_is_not_an_expression_has_no_unguarded_condition(
+    *, str_label: str
+) -> None:
+    """Review of #1346: a guard label ending in ``()`` is still a guard, parsable or not."""
+    assert gate._marker_condition(str_label) is None
