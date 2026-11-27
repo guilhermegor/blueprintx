@@ -982,22 +982,22 @@ def _except_guard(
     return f"{str_type} after {str_after}"
 
 
-def _call_text(cls_call: ast.Call) -> str:
-    """Return a call as written, with every int and float literal read as ``0``.
+def _blanked_text(cls_node: ast.AST) -> str:
+    """Return a node's source with every int and float literal read as ``0``.
 
     Parameters
     ----------
-    cls_call : ast.Call
-        A call in a ``try`` body.
+    cls_node : ast.AST
+        A statement of a ``try`` body.
 
     Returns
     -------
     str
-        The call's source. A number is blanked so that ``f(1)`` to ``f(2)`` stays one key,
-        while a changed string, name, keyword or bool (``connect(url)`` to
-        ``connect("invalid://")``, ``strict=True`` to ``False``) changes it.
+        The source. A number is blanked so that ``f(1)`` to ``f(2)`` stays one key, while a
+        changed string, name, keyword, bool or subscript (``connect(url)`` to
+        ``connect("invalid://")``, ``cfg["k"]`` to ``cfg["missing"]``) changes it.
     """
-    cls_copy = copy.deepcopy(cls_call)
+    cls_copy = copy.deepcopy(cls_node)
     for cls_sub in ast.walk(cls_copy):
         if isinstance(cls_sub, ast.Constant) and type(cls_sub.value) in (int, float):
             cls_sub.value = 0
@@ -1005,7 +1005,7 @@ def _call_text(cls_call: ast.Call) -> str:
 
 
 def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
-    """Return the sorted callee names a ``try`` body calls, the key of its ``except`` guards.
+    """Return the key of a ``try`` body, the key of its ``except`` guards.
 
     Parameters
     ----------
@@ -1015,34 +1015,16 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     Returns
     -------
     str
-        ``f(x), g()`` for the distinct calls as written (numbers blanked), ``raise``/``assert``
-        when the body has one, and the module, level and names of each import; a digest of the
-        body when it has no call or import. Editing a non-numeric argument changes the key
-        (editing a number does not), so an unchanged ``except E: pytest.skip()`` is reported
-        again: a different argument can change what the handler guards (``connect(url)`` to
-        ``connect("invalid://")``), and a weakening gate prefers that report to a miss
-        (``test-change-ok:`` answers it). Known limit: a second ``try`` with the same calls and
-        caught type shares the first one's label, so a skip added there is not reported while
-        the first one stays.
+        ``body #<digest>`` of the body's source with numbers blanked. Editing a number leaves
+        the key alone, so an unchanged ``except E: pytest.skip()`` is not reported again for a
+        adjusted literal; editing anything else (an argument, a subscript, a statement) changes
+        it, because that can change what the handler guards, and a weakening gate prefers that
+        report to a miss (``test-change-ok:`` answers it). Known limits: a numeric edit that
+        changes behaviour (a timeout, a port) is not seen, and a second ``try`` with the same
+        body and caught type shares the first one's label, so a skip added there is not
+        reported while the first one stays.
     """
-    set_names: set[str] = set()
-    for cls_stmt in cls_try.body:
-        for cls_node in ast.walk(cls_stmt):
-            if isinstance(cls_node, ast.Call):
-                set_names.add(_call_text(cls_node))
-            elif isinstance(cls_node, ast.Raise | ast.Assert):
-                set_names.add(type(cls_node).__name__.lower())
-            elif isinstance(cls_node, ast.Import):
-                set_names.add("import " + ",".join(cls_a.name for cls_a in cls_node.names))
-            elif isinstance(cls_node, ast.ImportFrom):
-                str_from = "." * cls_node.level + (cls_node.module or "")
-                set_names.add(
-                    f"from {str_from} import " + ",".join(cls_a.name for cls_a in cls_node.names)
-                )
-    has_source = any(not cls_n.startswith(("raise", "assert")) for cls_n in set_names)
-    if has_source:
-        return ", ".join(sorted(set_names))
-    str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
+    str_body = "\n".join(_blanked_text(cls_stmt) for cls_stmt in cls_try.body)
     return "body #" + hashlib.sha256(str_body.encode()).hexdigest()[:8]
 
 

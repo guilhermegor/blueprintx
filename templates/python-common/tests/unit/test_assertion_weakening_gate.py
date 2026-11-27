@@ -2035,3 +2035,12 @@ def test_a_local_import_from_pytest_internals_is_still_pytests_skip(str_module: 
     str_old = "def test_a():\n" + _BODY
     str_new = f"def test_a():\n    from {str_module} import skip\n    skip()\n" + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_edited_subscript_under_an_unchanged_except_skip_is_reported() -> None:
+    """Review of #1340: a non-call statement in the ``try`` body is guarded too."""
+    str_tail = "    except KeyError:\n        pytest.skip()\n" + _BODY
+    str_head = "def test_a():\n    try:\n        cfg = load()\n        v = cfg['"
+    str_old = str_head + "k']\n" + str_tail
+    str_new = str_head + "missing']\n" + str_tail
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
