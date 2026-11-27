@@ -320,7 +320,7 @@ def is_watched_config(str_path: str) -> bool:
     -------
     bool
         ``True`` for a basename ``_DICT_DISPATCH`` routes, matched at any depth exactly as
-        ``file_problems`` does, or a ``.github/workflows/*.yml`` file.
+        ``file_problems`` does, or a ``.github/workflows`` YAML file (``.yml`` or ``.yaml``).
     """
     return pathlib.Path(str_path).name in _DICT_DISPATCH or bool(RE_WORKFLOW_PATH.search(str_path))
 
@@ -328,9 +328,11 @@ def is_watched_config(str_path: str) -> bool:
 def is_analysed_path(str_path: str) -> bool:
     """Return whether the gate reads a path: gate script, watched config, workflow or test.
 
-    ``deletion_problems`` classifies through the same two predicates and ``RE_TEST_PATH``, and
-    ``is_watched_config`` derives from ``_DICT_DISPATCH``, so a config added to the dispatch
-    table is covered here without a second edit.
+    ``deletion_problems`` shares the gate-script and watched-config predicates, so a config
+    added to ``_DICT_DISPATCH`` is covered here without a second edit. The two differ on test
+    files: ``deletion_problems`` reports a deleted test only when its module stem is in
+    ``set_touched_stems``, while this accepts every ``RE_TEST_PATH`` match, because an
+    undecodable test cannot be correlated with its code under test.
 
     Parameters
     ----------
@@ -363,10 +365,12 @@ def undecodable_problems(str_path: str, *, str_base: str) -> list:
     Returns
     -------
     list of str
-        One message when the path is analysed (``is_analysed_path``) and present at both refs:
-        it cannot be compared, so a weakening would pass unseen. A legitimately re-encoded
-        file is reported too, which the owner accepted (blueprintx#1341). ``[]`` for an added
-        or removed file and for a path the gate does not read.
+        One message when the path is analysed (``is_analysed_path``), present at both refs and
+        not decodable at one of them: it cannot be compared, so a weakening would pass unseen.
+        The decodability is re-checked here, so a caller that passes a readable file gets
+        ``[]`` rather than a false finding. A legitimately re-encoded file is reported too,
+        which the owner accepted (blueprintx#1341). ``[]`` for an added or removed file and
+        for a path the gate does not read.
     """
     if not is_analysed_path(str_path):
         return []
@@ -374,6 +378,10 @@ def undecodable_problems(str_path: str, *, str_base: str) -> list:
         str_base, str_path=str_path
     )
     if not bool_modified:
+        return []
+    if show(STR_INDEX_REF, str_path=str_path) is not None and (
+        show(str_base, str_path=str_path) is not None
+    ):
         return []
     if RE_WORKFLOW_PATH.search(str_path):
         return [f"{str_path}: workflow is not valid UTF-8, so its jobs cannot be compared"]

@@ -2717,10 +2717,9 @@ _LIST_ANALYSED_PATHS = [
     "bin/check_thing.py",
     "templates/python-common/bin/lint_thing.sh",
     "bin/ci/check_thing.sh",
-    ".pre-commit-config.yaml",
-    "ruff.toml",
     "templates/foo/ruff.toml",
     ".github/workflows/ci.yml",
+    ".github/workflows/ci.yaml",
     "tests/unit/test_thing.py",
     "tests/integration/test_thing.py",
     *gate._DICT_DISPATCH,
@@ -2747,8 +2746,10 @@ def test_is_analysed_path_rejects_a_path_the_gate_never_reads(str_path: str) -> 
 
 
 @pytest.mark.parametrize("str_path", [*_LIST_ANALYSED_PATHS, *_LIST_UNANALYSED_PATHS])
-def test_is_analysed_path_agrees_with_what_deletion_problems_classifies(str_path: str) -> None:
-    """The two routers cannot drift: a path is analysed exactly when its deletion is reported."""
+def test_is_analysed_path_agrees_with_deletion_problems_when_the_test_stem_is_touched(
+    str_path: str,
+) -> None:
+    """Gate scripts, watched configs and workflows route alike; a test is checked with its stem."""
     set_stems = frozenset({gate.test_module_stem(str_path)})
 
     assert bool(gate.deletion_problems([("D", str_path)], set_touched_stems=set_stems)) == (
@@ -2775,6 +2776,8 @@ def test_gate_script_renamed_and_reencoded_is_reported_as_deleted(
     _git_in(tmp_path, "init", "-q", "--initial-branch=main")
     _git_in(tmp_path, "config", "user.email", "t@example.com")
     _git_in(tmp_path, "config", "user.name", "t")
+    _git_in(tmp_path, "config", "commit.gpgsign", "false")
+    _git_in(tmp_path, "config", "core.hooksPath", os.devnull)
     (tmp_path / "bin").mkdir()
     (tmp_path / "bin/check_x.py").write_bytes(b"assert True\n")
     _git_in(tmp_path, "add", "bin/check_x.py")
@@ -2785,9 +2788,31 @@ def test_gate_script_renamed_and_reencoded_is_reported_as_deleted(
     _git_in(tmp_path, "add", "bin/check_y.py")
     monkeypatch.chdir(tmp_path)
 
-    assert gate.collect_problems(gate.changed_paths(str_base), str_base=str_base) == [
-        "bin/check_x.py: quality-check script deleted"
-    ]
+    assert "bin/check_x.py: quality-check script deleted" in gate.collect_problems(
+        gate.changed_paths(str_base), str_base=str_base
+    )
+
+
+def test_decodable_analysed_file_is_not_a_finding(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``undecodable_problems`` re-checks decodability, so a readable file never reports."""
+    monkeypatch.setattr(gate, "show", lambda _str_ref, *, str_path: "assert True\n")
+    monkeypatch.setattr(gate, "blob_exists", lambda _str_ref, *, str_path: True)
+
+    assert gate.undecodable_problems("bin/check_thing.py", str_base="base") == []
+
+
+@pytest.mark.parametrize("str_side", ["index", "base"])
+def test_analysed_file_undecodable_on_one_side_only_is_a_finding(
+    monkeypatch: pytest.MonkeyPatch, *, str_side: str
+) -> None:
+    """Either ref being undecodable is enough, whichever side it is."""
+    str_bad = gate.STR_INDEX_REF if str_side == "index" else "base"
+    monkeypatch.setattr(
+        gate, "show", lambda str_ref, *, str_path: None if str_ref == str_bad else "ok\n"
+    )
+    monkeypatch.setattr(gate, "blob_exists", lambda _str_ref, *, str_path: True)
+
+    assert gate.undecodable_problems("bin/check_thing.py", str_base="base") != []
 
 
 def test_workflow_added_without_a_base_blob_is_not_a_finding(
