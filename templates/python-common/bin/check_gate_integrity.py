@@ -292,8 +292,68 @@ def blob_exists(str_ref: str, *, str_path: str) -> bool:
     )
 
 
+def is_gate_script(str_path: str) -> bool:
+    """Return whether a path is a quality-check script (``bin/ci/*``, ``bin/check_*``, ``lint_*``).
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative path.
+
+    Returns
+    -------
+    bool
+        ``True`` for a CI script or a ``check_``/``lint_`` gate script.
+    """
+    return bool(RE_CI_SCRIPT.search(str_path) or RE_GATE_SCRIPT.search(str_path))
+
+
+def is_watched_config(str_path: str) -> bool:
+    """Return whether a path is a watched config (any ``_DICT_DISPATCH`` basename) or a workflow.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative path.
+
+    Returns
+    -------
+    bool
+        ``True`` for a basename ``_DICT_DISPATCH`` routes, matched at any depth exactly as
+        ``file_problems`` does, or a ``.github/workflows`` YAML file (``.yml`` or ``.yaml``).
+    """
+    return pathlib.Path(str_path).name in _DICT_DISPATCH or bool(RE_WORKFLOW_PATH.search(str_path))
+
+
+def is_analysed_path(str_path: str) -> bool:
+    """Return whether the gate reads a path: gate script, watched config, workflow or test.
+
+    ``deletion_problems`` shares the gate-script and watched-config predicates, so a config
+    added to ``_DICT_DISPATCH`` is covered here without a second edit. The two differ on test
+    files: ``deletion_problems`` reports a deleted test only when its module stem is in
+    ``set_touched_stems``, while this accepts every ``RE_TEST_PATH`` match, because an
+    undecodable test cannot be correlated with its code under test.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative path.
+
+    Returns
+    -------
+    bool
+        ``True`` for a path the gate compares against its base, ``False`` for any other file
+        (an image, a README), whose encoding is nothing the gate asserts about.
+    """
+    return (
+        is_gate_script(str_path)
+        or is_watched_config(str_path)
+        or bool(RE_TEST_PATH.search(str_path))
+    )
+
+
 def undecodable_problems(str_path: str, *, str_base: str) -> list:
-    """Return a finding for a modified workflow whose blob at either ref is not UTF-8.
+    """Return a finding for a modified analysed file whose blob at either ref is not UTF-8.
 
     Parameters
     ----------
@@ -305,16 +365,27 @@ def undecodable_problems(str_path: str, *, str_base: str) -> list:
     Returns
     -------
     list of str
-        One message when the path is a workflow present at both refs: its jobs cannot be
-        compared, so a deletion would pass unseen. ``[]`` for an added or removed file and for
-        any other path.
+        One message when the path is analysed (``is_analysed_path``), present at both refs and
+        not decodable at one of them: it cannot be compared, so a weakening would pass unseen.
+        The decodability is re-checked here, so a caller that passes a readable file gets
+        ``[]`` rather than a false finding. A legitimately re-encoded file is reported too,
+        which the owner accepted (blueprintx#1341). ``[]`` for an added or removed file and
+        for a path the gate does not read.
     """
+    if not is_analysed_path(str_path):
+        return []
     bool_modified = blob_exists(STR_INDEX_REF, str_path=str_path) and blob_exists(
         str_base, str_path=str_path
     )
-    if RE_WORKFLOW_PATH.search(str_path) and bool_modified:
+    if not bool_modified:
+        return []
+    if show(STR_INDEX_REF, str_path=str_path) is not None and (
+        show(str_base, str_path=str_path) is not None
+    ):
+        return []
+    if RE_WORKFLOW_PATH.search(str_path):
         return [f"{str_path}: workflow is not valid UTF-8, so its jobs cannot be compared"]
-    return []
+    return [f"{str_path}: file could not be read as UTF-8, so it cannot be compared with its base"]
 
 
 def changed_paths(str_base: str) -> list:
@@ -2073,9 +2144,9 @@ def deletion_problems(list_changed: list, *, set_touched_stems: frozenset = froz
     for str_status, str_path in list_changed:
         if str_status != "D":
             continue
-        if RE_CI_SCRIPT.search(str_path) or RE_GATE_SCRIPT.search(str_path):
+        if is_gate_script(str_path):
             list_problems.append(f"{str_path}: quality-check script deleted")
-        elif pathlib.Path(str_path).name in _DICT_DISPATCH or RE_WORKFLOW_PATH.search(str_path):
+        elif is_watched_config(str_path):
             list_problems.append(f"{str_path}: watched gate configuration deleted")
         elif RE_TEST_PATH.search(str_path) and test_module_stem(str_path) in set_touched_stems:
             list_problems.append(
