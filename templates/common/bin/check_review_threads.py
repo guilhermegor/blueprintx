@@ -2949,10 +2949,18 @@ def main(list_argv: list[str] | None = None) -> int:
 
 
 def _write_checked_head(str_head: str) -> None:
-    """Write ``str_head`` to ``$CHECKED_HEAD_FILE``, when that variable is set."""
+    """Write ``str_head`` to ``$CHECKED_HEAD_FILE``, when that variable is set.
+
+    An unwritable path is reported on stderr instead of raised: the file then stays absent, and
+    the reporting step turns a missing file into a failure verdict, so the gate fails closed.
+    """
     str_path = os.environ.get("CHECKED_HEAD_FILE", "")
-    if str_path:
+    if not str_path:
+        return
+    try:
         pathlib.Path(str_path).write_text(str_head, encoding="utf-8")
+    except OSError as err:
+        print(f"could not record the evaluated head: {err}", file=sys.stderr)
 
 
 def _record_evaluated_head(dict_pr: dict) -> None:

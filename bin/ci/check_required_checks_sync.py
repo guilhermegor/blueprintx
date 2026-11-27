@@ -216,6 +216,10 @@ def emitting_files(path_dir: pathlib.Path) -> tuple:
                     dict_files.setdefault(str_name, set()).add(path_file.name)
         except UnsupportedError as exc:
             list_problems.append(f"{path_file.name}: {exc}")
+        str_text = path_file.read_text(encoding="utf-8")
+        for str_name in CHECK_RUN_CONTEXTS:
+            if f'name="{str_name}"' in str_text:
+                dict_files.setdefault(str_name, set()).add(path_file.name)
     return dict_files, list_problems
 
 

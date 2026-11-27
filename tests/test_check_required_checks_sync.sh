@@ -132,6 +132,13 @@ int_rc=0
 str_out="$(FAKE_STATE=disabled_manually PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
 check "live disabled workflow emitting a required context fails" "$int_rc" 1 "emitted by a.yml, state disabled_manually" "$str_out"
 
+fixture
+expected '"Review threads answered"' ''
+printf '  poster:\n    runs-on: ubuntu-latest\n    steps:\n      - run: post name="Review threads answered"\n' >>"$str_tmp/wf/a.yml"
+int_rc=0
+str_out="$(FAKE_STATE=disabled_manually PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
+check "live disabled workflow posting a required check-run fails" "$int_rc" 1 "'Review threads answered' is emitted by a.yml, state disabled_manually" "$str_out"
+
 mkdir -p "$str_tmp/repo_bin"
 printf '%s\n' '#!/bin/sh' 'case "$2" in repos/o/r/*) ;; *) exit 1 ;; esac' \
 	"exec \"$str_tmp/bin/gh\" \"\$@\"" >"$str_tmp/repo_bin/gh"

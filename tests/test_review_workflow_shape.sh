@@ -40,7 +40,7 @@ GATES=(
 gate_has() { grep -qE "$2" "$1"; }
 gate_lacks() { ! grep -qE "$2" "$1"; }
 gate_job_name_differs() { ! grep -qE '^    name: Review threads answered$' "$1"; }
-gate_posts_unless_cancelled() { grep -qE '^        if: \$\{\{ !cancelled\(\) \}\}$' "$1" && grep -q 'check-runs' "$1" && grep -q 'conclusion="\$str_conclusion"' "$1"; }
+gate_posts_unless_cancelled() { grep -qE "^        if: \"!cancelled\(\) && steps\.head\.outputs\.sha != ''\"$" "$1" && grep -q 'check-runs' "$1" && grep -q 'conclusion="\$str_conclusion"' "$1"; }
 gate_serialized_per_pr() { grep -qE '^  cancel-in-progress: true$' "$1" && grep -qE '^  group: review-gate-' "$1"; }
 gate_checkout_is_base() {
 	awk '
@@ -147,6 +147,13 @@ sys.exit(0 if int_exit == 0 else 1)" >/dev/null || rc=1
 	rm -rf "$str_dir"
 	return $rc
 }
+checker_survives_unwritable_head_file() {
+	CHECKED_HEAD_FILE=/nonexistent-dir/h python3 -c "
+import sys; sys.path.insert(0, '$REPO_ROOT/templates/common/bin')
+import check_review_threads as m
+m._record_evaluated_head({'headRefOid': 'abc123'})" 2>/dev/null
+}
+check "an unwritable CHECKED_HEAD_FILE is reported, not raised" checker_survives_unwritable_head_file
 check "gate step EVALUATED_HEAD check rejects a head given only to the reporting step" gate_step_evaluated_head_rejects_misplacement
 check "a base-backed opt-out still writes the head read at start to CHECKED_HEAD_FILE" checker_records_head_on_opt_out
 for gate in "${GATES[@]}"; do

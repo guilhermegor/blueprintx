@@ -53,6 +53,10 @@ seeds `REQUIRED_CHECKS` with its name) inline; the changelog half moves here.
 > posting a stale success last within one group; a cancelled run already inside its `gh api` POST can still land, but the
 > check-run is keyed by head SHA, which limits the damage. A read-only `pull_request_review*` run from a fork gets its own
 > group (its `run_id`), so it cannot cancel a run that can write.
+>
+> The gate workflows no longer call `rerun_stale_gate_runs.sh`: a re-run joins the same
+> per-PR group and would cancel the run that started it. The required context is the posted
+> check-run, so the newest post supersedes an older failure and nothing needs re-running.
 
 ## `review-threads.yml` — the resolve half must also catch outdated threads (#196)
 
