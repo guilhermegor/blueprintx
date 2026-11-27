@@ -70,6 +70,21 @@ gate_rename = _load("gate_rename")
 weakening = _load("check_assertion_weakening")
 
 
+@pytest.fixture(autouse=True)
+def _no_ci_event_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the running PR's own event payload out of the gate under test.
+
+    ``pr_body_text`` reads ``GITHUB_EVENT_PATH``, which CI sets, so a PR body carrying a
+    ``gate-change-ok`` line would otherwise justify weakenings these tests expect to be refused.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Removes the variable for the duration of each test.
+    """
+    monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
+
+
 def _local_shell(monkeypatch: pytest.MonkeyPatch) -> None:
     """Simulate a local pre-commit run so the GATE_CHANGE_OK hatch is live (it is local-only).
 
