@@ -559,7 +559,7 @@ def _skip_or_xfail_markers(
     dict_known = _local_names(
         node_fn, dict_names=_DEFAULT_NAMES if dict_names is None else dict_names
     )
-    _number_tries(node_fn)
+    _number_tries(node_fn, str_scope="test")
     set_out = _marker_labels(node_fn.decorator_list)
     set_out.update(_body_skip_labels(node_fn.body, tuple_guards=(), dict_names=dict_known))
     return set_out
@@ -1050,7 +1050,7 @@ def _scope_tries(cls_node: ast.AST) -> list:
     return list_out
 
 
-def _number_tries(cls_node: ast.AST) -> None:
+def _number_tries(cls_node: ast.AST, *, str_scope: str) -> None:
     """Set the occurrence number of each ``try`` of a scope that shares a body with another.
 
     Parameters
@@ -1060,10 +1060,14 @@ def _number_tries(cls_node: ast.AST) -> None:
         an ``occurrence`` attribute: ``0`` for the first of its body in source order, ``1``
         for the next, and so on. A ``try`` inside a nested ``def`` is numbered with that
         ``def``, so adding one there never renumbers the module's.
+    str_scope : str
+        ``module`` or ``test``, stored as the ``scope`` attribute: a label inherited from a
+        module ``try`` and one from a test ``try`` with the same body must stay distinct.
     """
     dict_seen: dict[str, int] = {}
     for cls_try in _scope_tries(cls_node):
         str_digest = _body_digest(cls_try)
+        cls_try.scope = str_scope
         cls_try.occurrence = dict_seen.get(str_digest, 0)
         dict_seen[str_digest] = cls_try.occurrence + 1
 
@@ -1079,7 +1083,8 @@ def _try_key(cls_try: ast.Try | ast.TryStar) -> str:
     Returns
     -------
     str
-        ``body #<digest>`` of the body's source, followed by ``#<n>`` for the n-th later
+        ``body #<digest>`` of the body's source, preceded by its scope (``module`` or ``test``)
+        and followed by ``#<n>`` for the n-th later
         ``try`` of its scope with the same body (see ``_number_tries``, which both entry points
         that build labels run first; a tree nobody numbered reads as ``0``). Any literal edit,
         numbers included, changes the key, so an unchanged ``except E: pytest.skip()`` is
@@ -1090,7 +1095,12 @@ def _try_key(cls_try: ast.Try | ast.TryStar) -> str:
         re-reports the later ones, the accepted cost.
     """
     int_occurrence = getattr(cls_try, "occurrence", 0)
-    return _body_digest(cls_try) + (f" #{int_occurrence}" if int_occurrence else "")
+    str_scope = getattr(cls_try, "scope", "")
+    return (
+        f"{str_scope} " * bool(str_scope)
+        + _body_digest(cls_try)
+        + (f" #{int_occurrence}" if int_occurrence else "")
+    )
 
 
 def _case_guard(cls_match: ast.Match, *, cls_case: ast.match_case) -> str:
@@ -1944,7 +1954,7 @@ def _marker_table(str_source: str) -> tuple[dict[str, str], dict[str, set]]:
         cls_tree = ast.parse(str_source)
     except SyntaxError:
         return dict(_DEFAULT_NAMES), dict_inherited
-    _number_tries(cls_tree)
+    _number_tries(cls_tree, str_scope="module")
     _index_inherited(
         cls_tree,
         str_prefix="",

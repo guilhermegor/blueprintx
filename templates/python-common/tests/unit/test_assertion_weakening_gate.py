@@ -2144,5 +2144,15 @@ def test_numbering_follows_source_order_not_nesting_depth() -> None:
     """Review of #1346: a deeper identical ``try`` listed first still gets number 0."""
     str_try = "try:\n    f()\nexcept E:\n    pass\n"
     str_src = "if x:\n    " + str_try.replace("\n", "\n    ").rstrip(" ") + str_try
-    gate._number_tries(cls_tree := ast.parse(str_src))
+    gate._number_tries(cls_tree := ast.parse(str_src), str_scope="module")
     assert [cls_t.occurrence for cls_t in gate._scope_tries(cls_tree)] == [0, 1]
+
+
+def test_a_skip_in_a_test_try_is_not_hidden_by_an_identical_module_try() -> None:
+    """Review of #1346: a module ``try`` and a test ``try`` with one body keep distinct labels."""
+    str_mod = "import pytest\n\ntry:\n    next(items)\nexcept StopIteration:\n"
+    str_mod += "    pytestmark = pytest.mark.skip\n\n"
+    str_def = "def test_a():\n    try:\n        next(items)\n    except StopIteration:\n"
+    str_old = str_mod + str_def + "        pass\n" + _BODY
+    str_new = str_mod + str_def + "        pytest.skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
