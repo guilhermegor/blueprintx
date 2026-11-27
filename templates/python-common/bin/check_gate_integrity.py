@@ -385,7 +385,7 @@ def undecodable_problems(str_path: str, *, str_base: str) -> list:
         return []
     if RE_WORKFLOW_PATH.search(str_path):
         return [f"{str_path}: workflow is not valid UTF-8, so its jobs cannot be compared"]
-    return [f"{str_path}: file is not valid UTF-8, so the gate cannot compare it with its base"]
+    return [f"{str_path}: file could not be read as UTF-8, so it cannot be compared with its base"]
 
 
 def changed_paths(str_base: str) -> list:

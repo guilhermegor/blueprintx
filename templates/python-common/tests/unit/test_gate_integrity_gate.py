@@ -2701,7 +2701,7 @@ def test_modified_analysed_file_that_is_not_utf8_is_a_finding(
     monkeypatch.setattr(gate, "blob_exists", lambda _str_ref, *, str_path: True)
 
     assert gate.collect_problems([("M", str_path)], str_base="base") == [
-        f"{str_path}: file is not valid UTF-8, so the gate cannot compare it with its base"
+        f"{str_path}: file could not be read as UTF-8, so it cannot be compared with its base"
     ]
 
 
@@ -2784,6 +2784,9 @@ def test_deleted_analysed_file_gets_only_the_deletion_finding(
     ]
 
 
+_BYTES_GATE_BODY = b"".join(b"line_%d = %d\n" % (int_i, int_i) for int_i in range(20))
+
+
 def test_gate_script_renamed_and_reencoded_is_reported_as_deleted(
     tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2794,12 +2797,12 @@ def test_gate_script_renamed_and_reencoded_is_reported_as_deleted(
     _git_in(tmp_path, "config", "commit.gpgsign", "false")
     _git_in(tmp_path, "config", "core.hooksPath", os.devnull)
     (tmp_path / "bin").mkdir()
-    (tmp_path / "bin/check_x.py").write_bytes(b"assert True\n")
+    (tmp_path / "bin/check_x.py").write_bytes(_BYTES_GATE_BODY + b"assert True\n")
     _git_in(tmp_path, "add", "bin/check_x.py")
     _git_in(tmp_path, "commit", "-q", "-m", "seed")
     str_base = _git_in(tmp_path, "rev-parse", "main")
     _git_in(tmp_path, "mv", "bin/check_x.py", "bin/check_y.py")
-    (tmp_path / "bin/check_y.py").write_bytes(b"pass  # \xe9\n")
+    (tmp_path / "bin/check_y.py").write_bytes(_BYTES_GATE_BODY + b"pass  # \xe9\n")
     _git_in(tmp_path, "add", "bin/check_y.py")
     monkeypatch.chdir(tmp_path)
 
