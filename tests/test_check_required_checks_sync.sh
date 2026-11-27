@@ -296,7 +296,33 @@ jobs:
       - run: post name="Review threads answered"
 EOF
 list_mode "Review threads answered"
-check "list mode: a workflow that posts the check-run satisfies it" "$int_rc" 0 "findings=0" "$str_out"
+check "list mode: a workflow that never runs on a PR does not satisfy it" "$int_rc" 1 "is posted by no workflow" "$str_out"
+cat >"$str_tmp/wf/poster.yml" <<'EOF'
+name: Poster
+on:
+  pull_request_target:
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      # post name="Review threads answered"
+      - run: "true"
+EOF
+list_mode "Review threads answered"
+check "list mode: a commented-out post does not satisfy it" "$int_rc" 1 "is posted by no workflow" "$str_out"
+cat >"$str_tmp/wf/poster.yml" <<'EOF'
+name: Poster
+on:
+  pull_request_target:
+  issue_comment:
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - run: post name="Review threads answered"
+EOF
+list_mode "Review threads answered"
+check "list mode: a PR-triggered workflow that posts the check-run satisfies it" "$int_rc" 0 "findings=0" "$str_out"
 
 for str_tier in python-common ts-common bash-cli; do
 	int_rc=0

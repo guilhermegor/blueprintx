@@ -24,11 +24,6 @@ jobs:
     name: Review gate runner
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: read
-      pull-requests: read
-      actions: write
-      checks: write
     outputs:
       head_sha: ${{ steps.head.outputs.sha }}
       gate_outcome: ${{ steps.gate.outcome }}

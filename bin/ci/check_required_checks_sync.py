@@ -203,6 +203,29 @@ def pr_jobs(path_dir: pathlib.Path) -> tuple:
     return dict_jobs, list_problems
 
 
+def posts_check_run(path_file: pathlib.Path, *, str_name: str) -> bool:
+    """True when a PR-triggered workflow file posts check-run `str_name` outside a comment."""
+    dict_wf = load_workflow(path_file)
+    set_events = trigger_events(dict_wf.get("on", dict_wf.get(True)))
+    if not set_events & {"pull_request", "pull_request_target"}:
+        return False
+    list_lines = path_file.read_text(encoding="utf-8").splitlines()
+    return any(
+        f'name="{str_name}"' in str_line
+        for str_line in list_lines
+        if not str_line.lstrip().startswith("#")
+    )
+
+
+def trigger_events(obj_on: object) -> set:
+    """The event names a workflow's `on:` value listens to."""
+    if isinstance(obj_on, str):
+        return {obj_on}
+    if isinstance(obj_on, (list, dict)):
+        return {str(e) for e in obj_on}
+    return set()
+
+
 def emitting_files(path_dir: pathlib.Path) -> tuple:
     """Return ({emitted name: {file}}, [per-workflow problems]) over every workflow."""
     dict_files, list_problems = {}, []
@@ -216,9 +239,8 @@ def emitting_files(path_dir: pathlib.Path) -> tuple:
                     dict_files.setdefault(str_name, set()).add(path_file.name)
         except UnsupportedError as exc:
             list_problems.append(f"{path_file.name}: {exc}")
-        str_text = path_file.read_text(encoding="utf-8")
         for str_name in CHECK_RUN_CONTEXTS:
-            if f'name="{str_name}"' in str_text:
+            if posts_check_run(path_file, str_name=str_name):
                 dict_files.setdefault(str_name, set()).add(path_file.name)
     return dict_files, list_problems
 
@@ -369,14 +391,11 @@ def read_or_skip(args: argparse.Namespace) -> tuple:
 
 def check_run_producers(set_req: set, *, path_workflows: pathlib.Path) -> list:
     """Fail each required check-run context that no workflow posts (it would block forever)."""
-    list_texts = [
-        f.read_text(encoding="utf-8")
-        for f in [*path_workflows.glob("*.yml"), *path_workflows.glob("*.yaml")]
-    ]
+    list_files = [*path_workflows.glob("*.yml"), *path_workflows.glob("*.yaml")]
     return [
         f"required check-run '{n}' is posted by no workflow in {path_workflows}"
         for n in CHECK_RUN_CONTEXTS
-        if n in set_req and not any(f'name="{n}"' in t for t in list_texts)
+        if n in set_req and not any(posts_check_run(f, str_name=n) for f in list_files)
     ]
 
 
