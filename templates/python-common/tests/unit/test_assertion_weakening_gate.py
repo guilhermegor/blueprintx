@@ -9,6 +9,8 @@ issue body, plus the literal-ish narrowing that measurement against real history
 unchanged RHS constant must not be read as an edited expected value).
 """
 
+import ast
+from functools import partial
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -1560,3 +1562,522 @@ def test_a_guard_that_names_something_else_is_a_new_skip(
     str_old = "def test_a(v):\n    " + str_old_head + str_tail
     str_new = "def test_a(v):\n    " + str_new_head + str_tail
     assert "newly marked skip(if)" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skipif_moved_into_applymarker_keeps_its_condition() -> None:
+    """Review of #1328 (#1334): ``@skipif(c)`` moved into ``applymarker`` adds nothing."""
+    str_old = "@pytest.mark.skipif(c)\ndef test_a(request):\n" + _BODY
+    str_new = "def test_a(request):\n    request.applymarker(pytest.mark.skipif(c))\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_applymarker_of_something_that_is_not_pytest_mark_is_not_a_skip() -> None:
+    """Review of #1328 (#1334): the receiver must be ``pytest.mark``, not any ``.skip``."""
+    str_old = "def test_a(request):\n" + _BODY
+    str_new = "def test_a(request):\n    request.applymarker(other.skip)\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_an_edited_numeric_try_argument_under_an_unchanged_except_skip_is_reported() -> None:
+    """Owner decision on #1340: a number is a literal too, so editing it is a finding."""
+    str_tail = "    except E:\n        pytest.skip()\n" + _BODY
+    str_old = "def test_a():\n    try:\n        f(1)\n" + str_tail
+    str_new = "def test_a():\n    try:\n        f(2)\n" + str_tail
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_xfail_raises_tuple_reordered_is_not_a_new_marker() -> None:
+    """Review of #1328 (#1334): ``raises=(A, B)`` and ``raises=(B, A)`` name the same types."""
+    str_old = "@pytest.mark.xfail(raises=(A, B))\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(raises=(B, A))\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_head",
+    [
+        "try:\n    from helpers import skip\nexcept ImportError:\n    pass\n",
+        "if TYPE_CHECKING:\n    from helpers import skip\n",
+    ],
+    ids=["try", "if"],
+)
+def test_a_skip_imported_from_elsewhere_inside_try_or_if_is_a_helper(str_head: str) -> None:
+    """Review of #1328 (#1334): a module-level ``skip`` bound under ``try``/``if`` is no pytest."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = str_head + "\n\ndef test_a():\n    skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_parameter_named_skip_is_not_pytest_skip() -> None:
+    """Review of #1328 (#1334): a fixture or parameter named ``skip`` shadows the bare name."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a(skip):\n    skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_function_local_import_of_skip_is_not_pytest_skip() -> None:
+    """Review of #1328 (#1334): ``from helpers import skip`` inside the test shadows pytest's."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a():\n    from helpers import skip\n\n    skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_head",
+    [
+        "for x in y:\n    pytestmark = pytest.mark.skip\n",
+        "with ctx:\n    pytestmark = pytest.mark.skip\n",
+        "match v:\n    case _:\n        pytestmark = pytest.mark.skip\n",
+        "try:\n    pass\nexcept* E:\n    pytestmark = pytest.mark.skip\n",
+    ],
+    ids=["for", "with", "match", "trystar"],
+)
+def test_a_pytestmark_under_for_with_match_or_trystar_is_a_new_marker(str_head: str) -> None:
+    """Review of #1328 (#1334): ``pytestmark`` set inside these blocks still marks the module."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = str_head + "\n\ndef test_a():\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_in_a_match_case_guard_is_a_new_skip() -> None:
+    """Review of #1328 (#1334): the ``case ... if <guard>`` expression is read like an ``if``."""
+    str_old = "def test_a(v):\n" + _BODY
+    str_new = (
+        "def test_a(v):\n    match v:\n        case 1 if pytest.skip():\n            pass\n"
+        + _BODY
+    )
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_adding_a_callee_to_the_try_body_reports_the_except_skip_again() -> None:
+    """Review of #1340: a new call in the ``try`` body is a different guard."""
+    str_tail = "    except E:\n        pytest.skip()\n" + _BODY
+    str_old = "def test_a():\n    try:\n        f(1)\n" + str_tail
+    str_new = "def test_a():\n    try:\n        f(1)\n        g()\n" + str_tail
+    assert "newly marked skip(if)" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_call_free_try_importing_something_else_is_a_new_except_skip() -> None:
+    """Review of #1340: two call-free ``try`` bodies keep distinct keys through their imports."""
+    str_tail = "    except ImportError:\n        pytest.skip()\n" + _BODY
+    str_old = "def test_a():\n    try:\n        import foo\n" + str_tail
+    str_new = "def test_a():\n    try:\n        import bar\n" + str_tail
+    assert "newly marked skip(if)" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize("str_call", ["mark.skip", "mark.skip()"])
+def test_applymarker_through_from_pytest_import_mark_is_a_new_skip(str_call: str) -> None:
+    """Review of #1340: ``from pytest import mark`` is still ``pytest.mark``."""
+    str_head = "from pytest import mark\n\n\n"
+    str_old = str_head + "def test_a(request):\n" + _BODY
+    str_new = str_head + f"def test_a(request):\n    request.applymarker({str_call})\n" + _BODY
+    assert "newly marked applymarker-skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_guarded_applymarker_skipif_is_not_the_unguarded_decorator() -> None:
+    """Review of #1340: ``if flag: applymarker(skipif(c))`` skips on ``c and flag``, a new skip."""
+    str_old = "@pytest.mark.skipif(c)\ndef test_a(request):\n" + _BODY
+    str_new = (
+        "def test_a(request, flag):\n    if flag:\n"
+        "        request.applymarker(pytest.mark.skipif(c))\n" + _BODY
+    )
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    "tuple_case",
+    [
+        ("def test_a(*skip):", "skip()"),
+        ("def test_a(**skip):", "skip()"),
+        ("def test_a(pytest):", "pytest.skip()"),
+    ],
+    ids=["vararg", "kwarg", "pytest-param"],
+)
+def test_a_star_or_pytest_named_parameter_shadows_the_name(tuple_case: tuple[str, str]) -> None:
+    """Review of #1340: ``*skip``, ``**skip`` and a parameter named ``pytest`` shadow the table."""
+    str_signature, str_call = tuple_case
+    str_old = "def test_a():\n" + _BODY
+    str_new = str_signature + f"\n    {str_call}\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_a_nested_def_named_skip_shadows_pytest_skip() -> None:
+    """Review of #1340: a ``def skip()`` inside the test is a helper."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a():\n    def skip():\n        pass\n\n    skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_head",
+    [
+        "try:\n    from pytest import skip\nexcept ImportError:\n    from helpers import skip\n",
+        "try:\n    from helpers import skip\nexcept ImportError:\n    from pytest import skip\n",
+    ],
+    ids=["pytest-first", "pytest-last"],
+)
+def test_a_skip_bound_to_pytest_in_any_arm_stays_pytests(str_head: str) -> None:
+    """Review of #1340: arms are alternatives; a pytest binding in one is not erased by another."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = str_head + "\n\ndef test_a():\n    skip()\n" + _BODY
+    assert "newly marked skip" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_xfail_raises_tuple_that_gains_a_type_is_not_a_reorder() -> None:
+    """Review of #1340: sorting the tuple must not hide a changed set of types."""
+    str_old = "@pytest.mark.xfail(raises=(A,))\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(raises=(A, B))\ndef test_a():\n" + _BODY
+    assert "newly marked xfail" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_try_import_of_pytest_skip_inside_a_test_stays_pytest() -> None:
+    """Review of #1340: an arm that imports pytest's ``skip`` outlives the later arm."""
+    str_old = "def test_a():\n" + _BODY
+    str_head = (
+        "    try:\n        from pytest import skip\n"
+        "    except ImportError:\n        from helpers import skip\n"
+    )
+    str_new = "def test_a():\n" + str_head + "    skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_try_that_imports_a_different_name_re_reports_the_except_skip() -> None:
+    """Review of #1340: ``from foo import a`` becoming ``from foo import b`` changes the guard."""
+    str_tail = "except ImportError:\n        pytest.skip()\n"
+    str_old = "def test_a():\n    try:\n        from foo import a\n    " + str_tail + _BODY
+    str_new = "def test_a():\n    try:\n        from foo import b\n    " + str_tail + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_raise_added_to_a_try_body_re_reports_the_except_skip() -> None:
+    """Review of #1340: ``try: f(1)`` gaining ``raise E`` makes the handler fire every run."""
+    str_tail = "    except E:\n        pytest.skip()\n"
+    str_old = "def test_a():\n    try:\n        f(1)\n" + str_tail + _BODY
+    str_new = "def test_a():\n    try:\n        f(1)\n        raise E\n" + str_tail + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_called_before_a_local_rebind_is_still_reported() -> None:
+    """Review of #1340: ``skip(); skip = helper`` skips for real, as main reported."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a():\n    from pytest import skip\n    skip()\n    skip = helper\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_pytest_mark_bound_to_a_name_keeps_the_receiver_agnostic_check() -> None:
+    """Review of #1340: ``m = pytest.mark`` then ``applymarker(m.skip)`` is reported."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "m = pytest.mark\n\ndef test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_rebound_inside_a_loop_is_still_reported() -> None:
+    """Review of #1340: a rebind that only some passes of a loop run leaves the call pytest's."""
+    str_old = "def test_a():\n" + _BODY
+    str_loop = "    for _ in range(2):\n        if c:\n            skip = helper\n        skip()\n"
+    str_new = "def test_a():\n    from pytest import skip\n" + str_loop + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    "str_code",
+    [
+        "from pytest import skip\n    skip(); skip = helper\n",
+        "from pytest import skip as s\n    s()\n    s = helper\n",
+        "from pytest import skip\n    if c:\n        skip = helper\n    skip()\n",
+    ],
+    ids=["same-line", "local-alias", "conditional"],
+)
+def test_a_skip_that_a_local_rebind_may_not_reach_is_still_reported(str_code: str) -> None:
+    """Review of #1340: main reported each of these, so the scoping must not hide them."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "def test_a():\n    " + str_code + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_from_pytest_mark_alias_keeps_the_receiver_agnostic_check() -> None:
+    """Review of #1340: ``m = mark`` after ``from pytest import mark`` is an alias of the mark."""
+    str_old = "def test_a():\n" + _BODY
+    str_head = "from pytest import mark\nm = mark\n\n"
+    str_new = str_head + "def test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_try_body_without_calls_keeps_the_digest_key() -> None:
+    """Review of #1340: ``try: x = d[a]`` becoming ``d[b]`` re-reports its ``except``."""
+    str_tail = "    except KeyError:\n        pytest.skip()\n"
+    str_old = "def test_a():\n    try:\n        x = d[a]\n" + str_tail + _BODY
+    str_new = "def test_a():\n    try:\n        x = d[b]\n" + str_tail + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+_MODULE_CASES = {
+    "default": ("", False),
+    "import-pytest-alias": ("import pytest as pt\n", False),
+    "from-pytest-skip": ("from pytest import skip as s\n", False),
+    "from-pytest-mark": ("from pytest import mark\n", False),
+    "top-level-helper": ("from helpers import skip\n", False),
+    "top-level-def": ("def skip():\n    pass\n", False),
+    "top-level-assign": ("skip = helper\n", False),
+    "explicit-then-nested-helper": (
+        "from pytest import skip\nif X:\n    from helpers import skip\n",
+        False,
+    ),
+    "explicit-then-nested-def": (
+        "from pytest import skip\nif X:\n    def skip():\n        pass\n",
+        False,
+    ),
+    "nested-assign": ("if X:\n    skip = helper\n", False),
+    "with-def": ("with ctx():\n    def skip():\n        pass\n", False),
+    "try-helper": ("try:\n    from helpers import skip\nexcept ImportError:\n    pass\n", True),
+    "if-helper": ("if X:\n    from helpers import skip\n", True),
+}
+
+_FUNCTION_CASES = {
+    "plain": ("def test_a():\n    skip()\n", False),
+    "param": ("def test_a(skip):\n    skip()\n", True),
+    "vararg": ("def test_a(*skip):\n    skip()\n", True),
+    "sole-nested-def": ("def test_a():\n    def skip():\n        pass\n    skip()\n", True),
+    "sole-local-import": ("def test_a():\n    from helpers import skip\n    skip()\n", True),
+    "call-then-rebind": ("def test_a():\n    skip()\n    skip = helper\n", False),
+    "same-line-rebind": ("def test_a():\n    skip(); skip = helper\n", False),
+    "conditional-rebind": ("def test_a():\n    if c:\n        skip = helper\n    skip()\n", False),
+    "loop-rebind": ("def test_a():\n    for _ in r:\n        skip = helper\n    skip()\n", False),
+    "import-then-def": (
+        "def test_a():\n    from helpers import skip\n    def skip():\n        pass\n",
+        False,
+    ),
+    "try-local-import": (
+        "def test_a():\n    try:\n        from helpers import skip\n"
+        "    except ImportError:\n        pass\n    skip()\n",
+        False,
+    ),
+    "local-pytest-import": ("def test_a():\n    from pytest import skip as s\n    s()\n", False),
+}
+
+_RECEIVER_CASES = {
+    "pytest-mark": ("import pytest\nx = pytest.mark\n", "pytest.mark", False),
+    "assigned-alias": ("import pytest\nm = pytest.mark\n", "m", False),
+    "from-pytest-mark": ("from pytest import mark\nm = mark\n", "m", False),
+    "imported-mark": ("from pytest import mark\n", "mark", False),
+    "parameter": ("def f(m):\n    pass\n", "m", False),
+    "call-result": ("", "get()", False),
+    "foreign-name": ("", "other", True),
+}
+
+
+def _main_names(cls_tree: ast.Module) -> dict[str, str]:
+    """Return the name table the checker read on main: direct module statements only.
+
+    Parameters
+    ----------
+    cls_tree : ast.Module
+        The parsed file.
+
+    Returns
+    -------
+    dict[str, str]
+        Every statement nested in ``try``/``if``/``with`` was ignored, and so was every name
+        a function bound.
+    """
+    dict_names = dict(gate._DEFAULT_NAMES)
+    list(map(partial(gate._bind_names, dict_names=dict_names), ast.iter_child_nodes(cls_tree)))
+    return dict_names
+
+
+def _kept(dict_main: dict[str, str], *, dict_branch: dict[str, str]) -> bool:
+    """Return whether the branch table keeps every binding the main table has.
+
+    Parameters
+    ----------
+    dict_main : dict[str, str]
+        What main recognised.
+    dict_branch : dict[str, str]
+        What this branch recognises.
+
+    Returns
+    -------
+    bool
+        ``True`` when each pytest name main reports is still reported with the same function.
+    """
+    return all(dict_branch.get(str_k) == str_v for str_k, str_v in dict_main.items())
+
+
+@pytest.mark.parametrize("str_case", sorted(_MODULE_CASES))
+def test_the_module_name_table_never_loses_a_binding_main_had_except_the_listed_shapes(
+    str_case: str,
+) -> None:
+    """Differential, #1340: the branch may drop a pytest name main kept only for a listed shape."""
+    str_source, is_listed = _MODULE_CASES[str_case]
+    cls_tree = ast.parse(str_source)
+    is_kept = _kept(_main_names(cls_tree), dict_branch=gate._pytest_names(cls_tree))
+    assert is_kept is not is_listed
+
+
+@pytest.mark.parametrize("str_case", sorted(_FUNCTION_CASES))
+def test_the_local_name_table_never_loses_a_binding_the_module_had_except_the_listed_shapes(
+    str_case: str,
+) -> None:
+    """Differential, #1340: inside a test, only a parameter or a sole definition may shadow."""
+    str_source, is_listed = _FUNCTION_CASES[str_case]
+    cls_tree = ast.parse(str_source)
+    dict_module = gate._pytest_names(ast.parse(""))
+    dict_local = gate._local_names(cls_tree.body[0], dict_names=dict_module)
+    assert _kept(_main_names(ast.parse("")), dict_branch=dict_local) is not is_listed
+
+
+@pytest.mark.parametrize("str_case", sorted(_RECEIVER_CASES))
+def test_a_marker_receiver_is_accepted_as_on_main_except_the_listed_shape(str_case: str) -> None:
+    """Differential, #1340: only a receiver rooted at a name nothing assigns is not a mark."""
+    str_source, str_receiver, is_listed = _RECEIVER_CASES[str_case]
+    dict_names = gate._pytest_names(ast.parse(str_source))
+    cls_expr = ast.parse(str_receiver, mode="eval").body
+    assert gate._is_pytest_mark(cls_expr, dict_names=dict_names) is not is_listed
+
+
+def test_a_later_local_import_of_another_name_does_not_erase_an_earlier_skip() -> None:
+    """Review of #1340: a later ``import mark as skip`` leaves the earlier ``skip()`` pytest's."""
+    str_old = "def test_a():\n" + _BODY
+    str_head = "def test_a():\n    from pytest import skip\n    skip()\n"
+    str_new = str_head + "    from pytest import mark as skip\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_match_capture_bound_to_pytest_mark_keeps_the_receiver_check() -> None:
+    """Review of #1340: ``case m:`` on ``pytest.mark`` binds ``m``, so ``m.skip`` is a mark."""
+    str_old = "def test_a():\n" + _BODY
+    str_head = "import pytest\n\nmatch pytest.mark:\n    case m:\n        pass\n\n"
+    str_new = str_head + "def test_a(request):\n    request.applymarker(m.skip)\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_star_import_from_pytest_keeps_the_receiver_check_open() -> None:
+    """Review of #1340: ``from pytest import *`` binds ``mark``, so ``mark.skip`` is a skip."""
+    str_head = "from pytest import *\n\ndef test_a(request):\n"
+    str_old = str_head + "    assert 1 == 1\n"
+    str_new = str_head + "    request.applymarker(mark.skip)\n    assert 1 == 1\n"
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_lambda_parameter_in_a_default_does_not_hide_pytest_from_the_body() -> None:
+    """Review of #1340: ``lambda pytest: 0`` in a default is not a parameter of the test."""
+    str_head = "import pytest\n\ndef test_a(f=lambda pytest: 0):\n"
+    str_old = str_head + "    assert 1 == 1\n"
+    str_new = str_head + "    pytest.skip()\n    assert 1 == 1\n"
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize(
+    ("str_before", "str_after"),
+    [
+        ("f(url)", 'f("invalid://")'),
+        ('import_module("a")', 'import_module("b")'),
+        ("f(strict=True)", "f(strict=False)"),
+    ],
+)
+def test_an_edited_non_numeric_try_argument_under_an_unchanged_except_skip_is_reported(
+    *, str_before: str, str_after: str
+) -> None:
+    """Review of #1340: a new argument can make the handler fire every run, so it is a finding."""
+    str_tail = "    except E:\n        pytest.skip()\n" + _BODY
+    str_old = f"def test_a():\n    try:\n        {str_before}\n" + str_tail
+    str_new = f"def test_a():\n    try:\n        {str_after}\n" + str_tail
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_alias_receiver_is_reported_when_the_name_table_has_no_assigned_entry() -> None:
+    """Review of #1340: a table without ``<assigned>`` must read a receiver as possibly a mark."""
+    cls_call = ast.parse("request.applymarker(m.skip)").body[0].value
+    assert gate._skip_call_name(cls_call) == "applymarker-skip"
+
+
+def test_a_called_mark_import_is_not_a_skip() -> None:
+    """Review of #1340: ``mark`` is bound from pytest but is not a run-time outcome function."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = "from pytest import mark\n\ndef test_a():\n    mark('x')\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_xfail_raises_single_tuple_equals_the_bare_type() -> None:
+    """Review of #1340: ``raises=A`` and ``raises=(A,)`` name the same type."""
+    str_old = "@pytest.mark.xfail(raises=A)\ndef test_a():\n" + _BODY
+    str_new = "@pytest.mark.xfail(raises=(A,))\ndef test_a():\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_an_async_def_in_a_test_body_shadows_pytest() -> None:
+    """Review of #1340: an ``async def pytest`` in a test body makes ``pytest`` a local name."""
+    str_old = "import pytest\n\ndef test_a():\n" + _BODY
+    str_head = "import pytest\n\ndef test_a():\n    async def pytest():\n        pass\n"
+    str_new = str_head + "    pytest.skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+@pytest.mark.parametrize(
+    "str_head",
+    [
+        "def test_a(skip=pytest.skip):\n    skip()\n",
+        "def test_a(*, skip=pytest.skip):\n    skip()\n",
+        "def test_a(pytest=pytest):\n    pytest.skip()\n",
+    ],
+)
+def test_a_parameter_with_a_default_does_not_hide_a_skip(str_head: str) -> None:
+    """Review of #1340: a defaulted parameter is not a fixture, so its call still skips."""
+    str_def, str_call = str_head.split("\n", 1)
+    str_old = "import pytest\n\n" + str_def + "\n    pass\n" + _BODY
+    str_new = "import pytest\n\n" + str_head + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+@pytest.mark.parametrize("str_module", ["_pytest.outcomes", "_pytest.mark"])
+def test_a_local_import_from_pytest_internals_is_still_pytests_skip(str_module: str) -> None:
+    """Review of #1340: ``from _pytest.outcomes import skip`` is pytest's own, not a helper."""
+    str_old = "def test_a():\n" + _BODY
+    str_new = f"def test_a():\n    from {str_module} import skip\n    skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_an_edited_subscript_under_an_unchanged_except_skip_is_reported() -> None:
+    """Review of #1340: a non-call statement in the ``try`` body is guarded too."""
+    str_tail = "    except KeyError:\n        pytest.skip()\n" + _BODY
+    str_head = "def test_a():\n    try:\n        cfg = load()\n        v = cfg['"
+    str_old = str_head + "k']\n" + str_tail
+    str_new = str_head + "missing']\n" + str_tail
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_connect_timeout_edited_to_zero_under_an_unchanged_except_skip_is_reported() -> None:
+    """Owner decision on #1340: ``timeout=5`` to ``timeout=0`` can make the handler always fire."""
+    str_tail = "    except E:\n        pytest.skip()\n" + _BODY
+    str_old = "def test_a():\n    try:\n        connect(timeout=5)\n" + str_tail
+    str_new = "def test_a():\n    try:\n        connect(timeout=0)\n" + str_tail
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_nested_def_that_wraps_pytest_skip_does_not_hide_the_skip() -> None:
+    """Review of #1340: main reports ``skip()``; a wrapper around ``pytest.skip`` still skips."""
+    str_old = "import pytest\n\ndef test_a():\n" + _BODY
+    str_head = "import pytest\n\ndef test_a():\n    def skip():\n        pytest.skip()\n"
+    assert "newly marked" in _sole_finding(str_old, str_new=str_head + "    skip()\n" + _BODY)
+
+
+@pytest.mark.parametrize(
+    ("str_import", "str_call"),
+    [("import pytest as pt", "pt.skip()"), ("from pytest import skip as s", "s()")],
+)
+def test_a_nested_def_wrapping_an_aliased_skip_does_not_hide_the_skip(
+    *, str_import: str, str_call: str
+) -> None:
+    """Review of #1340: main reports ``skip()``; a wrapper over an aliased skip still skips."""
+    str_old = f"{str_import}\n\ndef test_a():\n" + _BODY
+    str_head = f"{str_import}\n\ndef test_a():\n    def skip():\n        {str_call}\n"
+    assert "newly marked" in _sole_finding(str_old, str_new=str_head + "    skip()\n" + _BODY)
+
+
+def test_a_foreign_nested_import_after_a_pytest_star_import_keeps_skip_pytests() -> None:
+    """Review of #1340: after ``from pytest import *``, a nested foreign ``skip`` stays pytest."""
+    str_head = "from pytest import *\n"
+    str_mid = "try:\n    from helpers import skip\nexcept ImportError:\n    pass\n\n"
+    str_old = str_head + str_mid + "def test_a():\n" + _BODY
+    str_new = str_head + str_mid + "def test_a():\n    skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
