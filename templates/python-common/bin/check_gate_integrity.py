@@ -292,8 +292,31 @@ def blob_exists(str_ref: str, *, str_path: str) -> bool:
     )
 
 
+def is_analysed_path(str_path: str) -> bool:
+    """Return whether the gate reads a path: gate script, watched config, workflow or test.
+
+    Parameters
+    ----------
+    str_path : str
+        Repository-relative path.
+
+    Returns
+    -------
+    bool
+        ``True`` for a path ``file_problems`` would compare against its base, ``False`` for any
+        other file (an image, a README), whose encoding is nothing the gate asserts about.
+    """
+    return bool(
+        RE_CI_SCRIPT.search(str_path)
+        or RE_GATE_SCRIPT.search(str_path)
+        or RE_TEST_PATH.search(str_path)
+        or RE_WORKFLOW_PATH.search(str_path)
+        or pathlib.Path(str_path).name in _DICT_DISPATCH
+    )
+
+
 def undecodable_problems(str_path: str, *, str_base: str) -> list:
-    """Return a finding for a modified workflow whose blob at either ref is not UTF-8.
+    """Return a finding for a modified analysed file whose blob at either ref is not UTF-8.
 
     Parameters
     ----------
@@ -305,16 +328,19 @@ def undecodable_problems(str_path: str, *, str_base: str) -> list:
     Returns
     -------
     list of str
-        One message when the path is a workflow present at both refs: its jobs cannot be
-        compared, so a deletion would pass unseen. ``[]`` for an added or removed file and for
-        any other path.
+        One message when the path is analysed (``is_analysed_path``) and present at both refs:
+        it cannot be compared, so a weakening would pass unseen. A legitimately re-encoded
+        file is reported too, which the owner accepted (blueprintx#1341). ``[]`` for an added
+        or removed file and for a path the gate does not read.
     """
     bool_modified = blob_exists(STR_INDEX_REF, str_path=str_path) and blob_exists(
         str_base, str_path=str_path
     )
-    if RE_WORKFLOW_PATH.search(str_path) and bool_modified:
+    if not (bool_modified and is_analysed_path(str_path)):
+        return []
+    if RE_WORKFLOW_PATH.search(str_path):
         return [f"{str_path}: workflow is not valid UTF-8, so its jobs cannot be compared"]
-    return []
+    return [f"{str_path}: file is not valid UTF-8, so the gate cannot compare it with its base"]
 
 
 def changed_paths(str_base: str) -> list:

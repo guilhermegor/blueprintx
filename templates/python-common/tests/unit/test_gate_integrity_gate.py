@@ -2667,6 +2667,52 @@ def test_workflow_blob_that_is_not_utf8_is_a_finding_not_a_skip(
     ]
 
 
+@pytest.mark.parametrize(
+    "str_path",
+    [
+        "bin/check_thing.py",
+        "bin/ci/check_thing.sh",
+        ".pre-commit-config.yaml",
+        "ruff.toml",
+        "enable_repo_rules.sh",
+        "tests/unit/test_thing.py",
+    ],
+)
+def test_modified_analysed_file_that_is_not_utf8_is_a_finding(
+    monkeypatch: pytest.MonkeyPatch, *, str_path: str
+) -> None:
+    """A gate script, config or test that cannot be decoded is reported, never skipped."""
+    monkeypatch.setattr(gate, "show", lambda _str_ref, *, str_path: None)
+    monkeypatch.setattr(gate, "blob_exists", lambda _str_ref, *, str_path: True)
+
+    assert gate.collect_problems([("M", str_path)], str_base="base") == [
+        f"{str_path}: file is not valid UTF-8, so the gate cannot compare it with its base"
+    ]
+
+
+@pytest.mark.parametrize("str_path", ["bin/check_thing.py", ".pre-commit-config.yaml"])
+def test_added_analysed_file_that_is_not_utf8_is_not_a_finding(
+    monkeypatch: pytest.MonkeyPatch, *, str_path: str
+) -> None:
+    """An added file has no base to weaken, so its encoding is nothing to report."""
+    monkeypatch.setattr(gate, "show", lambda _str_ref, *, str_path: None)
+    monkeypatch.setattr(
+        gate, "blob_exists", lambda str_ref, *, str_path: str_ref == gate.STR_INDEX_REF
+    )
+
+    assert gate.collect_problems([("A", str_path)], str_base="base") == []
+
+
+def test_modified_unanalysed_file_that_is_not_utf8_is_not_a_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A binary the gate never reads (an image) stays out of scope."""
+    monkeypatch.setattr(gate, "show", lambda _str_ref, *, str_path: None)
+    monkeypatch.setattr(gate, "blob_exists", lambda _str_ref, *, str_path: True)
+
+    assert gate.collect_problems([("M", "docs/logo.png")], str_base="base") == []
+
+
 def test_workflow_added_without_a_base_blob_is_not_a_finding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
