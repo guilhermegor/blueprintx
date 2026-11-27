@@ -343,8 +343,10 @@ def is_analysed_path(str_path: str) -> bool:
         ``True`` for a path the gate compares against its base, ``False`` for any other file
         (an image, a README), whose encoding is nothing the gate asserts about.
     """
-    return is_gate_script(str_path) or is_watched_config(str_path) or bool(
-        RE_TEST_PATH.search(str_path)
+    return (
+        is_gate_script(str_path)
+        or is_watched_config(str_path)
+        or bool(RE_TEST_PATH.search(str_path))
     )
 
 
