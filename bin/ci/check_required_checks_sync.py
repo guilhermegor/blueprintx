@@ -223,7 +223,7 @@ def step_posts_check_run(dict_step: dict, *, str_name: str) -> bool:
         s for s in str(dict_step.get("run", "")).splitlines() if not s.lstrip().startswith("#")
     )
     return any(
-        "check-runs" in str_cmd and f'name="{str_name}"' in str_cmd
+        "check-runs" in str_cmd and re.search(rf'(?<!\w)name="{re.escape(str_name)}"', str_cmd)
         for str_cmd in re.sub(r"\\\n", " ", str_run).splitlines()
     )
 
