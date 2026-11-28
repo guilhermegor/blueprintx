@@ -1866,7 +1866,7 @@ def test_no_bin_script_names_the_deleted_stale_run_rerunner() -> None:
     assert not (path_bin / f"{str_name}.sh").exists()
     list_hits = [
         path.name
-        for path in path_bin.iterdir()
+        for path in path_bin.rglob("*")
         if path.is_file() and str_name in path.read_text(encoding="utf-8", errors="ignore")
     ]
     assert list_hits == []

@@ -2815,8 +2815,8 @@ branch is checked since #1339, so its approval takes the same path.
 
 > **Decision.** `bin/rerun_stale_gate_runs.sh` is deleted with its tests and doc mentions.
 > `retry_rate_limited_review.py` only mentioned it in its docstring (it never called it), and
-> keeps its single action: ask the reviewer again. It re-triggers no workflow and re-requests no
-> review event.
+> keeps its single action: ask the reviewer again. It dispatches no workflow run and posts nothing but the
+> review request.
 >
 > **Why.** Since #1280 the gate runs from the base branch on `pull_request_target` and posts its
 > verdict as a check-run attached to the head SHA; the required context is that check-run, so
