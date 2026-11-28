@@ -2875,11 +2875,21 @@ seeds <code>REQUIRED_CHECKS</code> with its name) inline; the changelog half mov
 NOT be a required check". That conclusion was WRONG, and it was load-bearing: while it stood,
 <code>REQUIRED_CHECKS</code> in bin/enable_repo_rules.sh shipped EMPTY, so a generated project ran its CI
 and blocked nothing. Measured upstream: a PR merged with 32 of 47 checks passed.</p>
+<p>UPDATE 2026-11-23 (#1249, #1280). The three review-thread workflows now post the required
+context as an explicit check-run from a step, so the newest run always publishes the verdict and
+a cancelled or queued older run no longer strands an <code>Expected</code> context. They therefore carry a
+per-PR <code>concurrency:</code> group with <code>cancel-in-progress: true</code>, which stops a slower run from
+posting a stale success last within one group; a cancelled run already inside its <code>gh api</code> POST can still land, but the
+check-run is keyed by head SHA, which limits the damage. A read-only <code>pull_request_review*</code> run from a fork gets its own
+group (its <code>run_id</code>), so it cannot cancel a run that can write.</p>
+<p>The gate workflows no longer call <code>rerun_stale_gate_runs.sh</code>: a re-run joins the same
+per-PR group and would cancel the run that started it. The required context is the posted
+check-run, so the newest post supersedes an older failure and nothing needs re-running.</p>
+<p>The workflow-level <code>cancel-in-progress</code> group covers every job of a superseded run, so its
+<code>publish-app-check</code> is cancelled with it; the newer run publishes for its own head. The
+publisher's own group only serializes same-head publishes, it does not shield it from a
+workflow-level cancel.</p>
 </blockquote>
-<p><strong>Not yet applied</strong> to <code>.github/workflows/review_threads.yml</code> (root) — that file
-carries the same block (dated text: "SUPERSEDED 2026-08-17 (#173, PR #185)") plus
-two more below, and is held by PRs #491/#492 as of this writing. Follow-up once
-those land.</p>
 <h2 id="review-threadsyml-the-resolve-half-must-also-catch-outdated-threads-196"><code>review-threads.yml</code> — the resolve half must also catch outdated threads (#196)<a class="headerlink" href="#review-threadsyml-the-resolve-half-must-also-catch-outdated-threads-196" title="Permanent link">&para;</a></h2>
 <p>Applies to <code>templates/python-common/.github/workflows/review-threads.yml</code>. The
 "split as it stood" bullet list a few lines below the live comment already states
