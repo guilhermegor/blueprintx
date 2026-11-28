@@ -26,7 +26,7 @@ each_workflow() {
 	done
 }
 
-mint_is_gated() { grep -A2 'id: app$' "$1" | grep -qF "env.REVIEW_APP_CONFIGURED == 'true' && needs.review-threads.outputs.head_sha != ''"; }
+mint_is_gated() { grep -A2 'id: app$' "$1" | grep -qF "env.REVIEW_APP_CONFIGURED == 'true' && needs.review-gate-runner.outputs.head_sha != ''"; }
 mint_is_sha_pinned() { grep -qE 'uses: actions/create-github-app-token@[0-9a-f]{40} # v' "$1"; }
 mint_scopes_are_minimal() {
 	grep -q 'permission-checks: write' "$1" && [ "$(grep -c 'permission-' "$1")" -eq 1 ]
@@ -42,16 +42,16 @@ publish_needs_mint() {
 	grep -A1 'name: Publish the check run' "$1" | grep -qF "steps.app.outcome == 'success'"
 }
 publish_uses_resolved_head() {
-	awk '/name: Publish the check run/{f=1} f' "$1" | grep -qF 'STR_HEAD: ${{ needs.review-threads.outputs.head_sha }}' &&
-		awk '/name: Clear stale/{f=1} /publish-app-check:/{f=0} f' "$1" | grep -qF 'STR_HEAD: ${{ steps.head.outputs.sha }}'
+	awk '/name: Publish the check run/{f=1} f' "$1" | grep -qF 'STR_HEAD: ${{ needs.review-gate-runner.outputs.head_sha }}' &&
+		awk '/name: Post the required/{f=1} /name: Fail this job/{f=0} f' "$1" | grep -qF 'EVALUATED_HEAD: ${{ steps.head.outputs.sha }}'
 }
-stale_step_defines_pr_number() {
-	awk '/name: Clear stale/{f=1} /publish-app-check:/{f=0} f' "$1" | grep -qF 'PR_NUMBER: ${{ github.event.pull_request.number'
+gate_never_reruns_its_own_group() { ! grep -q 'rerun_stale_gate_runs' "$1"; }
+post_needs_a_head() {
+	awk '/name: Post the required/{f=1} f' "$1" | grep -m1 'if:' | grep -qF "steps.head.outputs.sha != ''"
 }
 runs_are_serialized_per_pr() {
-	! grep -q '^concurrency:' "$1" &&
-		awk '/^  publish-app-check:/{f=1} f' "$1" | grep -A2 '^    concurrency:' |
-		grep -qF 'group: review-app-check-${{ github.event.pull_request.number || github.event.issue.number }}-${{ needs.review-threads.outputs.head_sha }}' &&
+	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -A2 '^    concurrency:' |
+		grep -qF 'group: review-app-check-${{ github.event.pull_request.number || github.event.issue.number }}-${{ needs.review-gate-runner.outputs.head_sha }}' &&
 		awk '/^  publish-app-check:/{f=1} f' "$1" | grep -A3 '^    concurrency:' | grep -qF 'cancel-in-progress: false'
 }
 gate_job_holds_no_app_token() { ! awk '/^  publish-app-check:/{f=1} !f' "$1" | grep -qE 'create-github-app-token|REVIEW_APP_'; }
@@ -65,11 +65,11 @@ head_resolved_before_the_guard() {
 }
 publish_checks_the_head_did_not_move() {
 	grep -qF 'head_stable: ${{ steps.stable.outputs.stable }}' "$1" &&
-		awk '/id: stable$/{f=1} /name: Clear stale/{f=0} f' "$1" | grep -qF "[ \"\$str_now\" = \"\$STR_HEAD\" ]"
+		awk '/id: stable$/{f=1} /name: Post the required/{f=0} f' "$1" | grep -qF "[ \"\$str_now\" = \"\$STR_HEAD\" ]"
 }
 publish_job_runs_no_pr_code() {
 	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -qE 'actions/checkout|setup-python|python3? |bin/' && return 1
-	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -qF 'needs: review-threads'
+	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -qF 'needs: review-gate-runner'
 }
 publish_uses_app_token() { grep -qF 'GH_TOKEN: ${{ steps.app.outputs.token }}' "$1"; }
 
@@ -81,18 +81,19 @@ check "one ::notice:: says the App path was skipped" each_workflow skip_notice_l
 check "the gate step still runs on GITHUB_TOKEN" each_workflow gate_keeps_github_token
 check "check publishing runs only when the App is configured" each_workflow publish_is_gated
 check "check publishing is skipped when minting failed" each_workflow publish_needs_mint
-check "stale-run clearing and publishing share the head resolved before the gate" \
+check "posting and publishing share the head resolved before the gate" \
 	each_workflow publish_uses_resolved_head
-check "the stale-run step defines the PR number its error message prints" \
-	each_workflow stale_step_defines_pr_number
-check "only the publisher is serialized, per PR and head SHA; the required gate job is never cancelled" each_workflow runs_are_serialized_per_pr
+check "no step re-runs this workflow, which would cancel the run in its own concurrency group" \
+	each_workflow gate_never_reruns_its_own_group
+check "the check-run POST is skipped when no head was resolved" each_workflow post_needs_a_head
+check "the publisher has its own per-PR, per-head group with cancel-in-progress: false" each_workflow runs_are_serialized_per_pr
 check "the job that runs PR code holds no App token" each_workflow gate_job_holds_no_app_token
 check "the head SHA is resolved before the protected-file guard" each_workflow head_resolved_before_the_guard
 check "success needs the head to be unchanged since the gate started" each_workflow publish_checks_the_head_did_not_move
 check "only a passing gate publishes success" each_workflow only_a_passing_gate_publishes_success
 publish_job_fails_on_empty_head() {
 	awk '/^  publish-app-check:/{f=1} f' "$1" | grep -A1 'name: Fail when the gate job produced no head SHA' |
-		grep -qF "needs.review-threads.outputs.head_sha == ''"
+		grep -qF "needs.review-gate-runner.outputs.head_sha == ''"
 }
 check "the publish job fails loud when no head SHA came from the gate job" each_workflow publish_job_fails_on_empty_head
 check "the publish job checks out and runs no PR code" each_workflow publish_job_runs_no_pr_code
@@ -143,6 +144,9 @@ leading_zero_refused() {
 }
 check "a leading-zero integration id is refused" leading_zero_refused
 check "a non-numeric integration id is refused" rejects_non_numeric
+
+gate_holds_no_actions_write() { ! grep -qE '^ +actions: write$' "$1"; }
+check "no job holds actions: write now that nothing re-runs a workflow" each_workflow gate_holds_no_actions_write
 
 [ "$int_failures" -eq 0 ] && echo "all passed" || {
 	echo "$int_failures failure(s)"
