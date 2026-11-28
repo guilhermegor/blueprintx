@@ -10,9 +10,10 @@ in the end** — so a rate limit is a DELAY, not an unavailability.
 That single number decides the design. An unavailability would need an escape hatch in the
 gate; a delay needs the *asking* automated. So this script leaves the gate's verdict exactly
 as strict as it was and removes the only part a human was doing by hand: waiting for the
-window to pass, then re-typing the request. The PR then goes green on its own — the stale red
-runs are cleared by ``bin/rerun_stale_gate_runs.sh`` (blueprintx#263), which already runs
-from the passing gate.
+window to pass, then re-typing the request. The PR then goes green on its own: the reviewer's
+answer fires a ``pull_request_review`` event, the gate re-runs from the base branch and posts
+a fresh head-attached check-run that supersedes the earlier failure (blueprintx#1280), so
+nothing here has to re-run a stale run.
 
 ⚠️ WHY A RATE-LIMIT DETECTOR IS SOUND HERE WHEN THE "ALREADY REVIEWED" ONE WAS NOT.
 blueprintx#259 established that a reviewer notice's TEXT cannot decide a verdict: the
