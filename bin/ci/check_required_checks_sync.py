@@ -222,9 +222,11 @@ def step_posts_check_run(dict_step: dict, *, str_name: str) -> bool:
     str_run = "\n".join(
         s for s in str(dict_step.get("run", "")).splitlines() if not s.lstrip().startswith("#")
     )
+    str_esc = re.escape(str_name)
+    re_name = re.compile(rf"""(?<!\w)name=(["']){str_esc}\1|"name={str_esc}\"""")
     return any(
-        "check-runs" in str_cmd and re.search(rf'(?<!\w)name="{re.escape(str_name)}"', str_cmd)
-        for str_cmd in re.sub(r"\\\n", " ", str_run).splitlines()
+        "check-runs" in str_cmd and re_name.search(str_cmd)
+        for str_cmd in re.sub(r"\\[ \t]*\n", " ", str_run).splitlines()
     )
 
 
