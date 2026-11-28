@@ -556,10 +556,10 @@ def _skip_or_xfail_markers(
         Decorator labels (``skip``, ``xfail``, ``skipif:<condition>``), plus ``skip()`` for a
         ``pytest.skip(...)`` call outside any ``if`` and ``skip(if):<test>`` for a guarded one.
     """
+    _number_tries(node_fn, str_scope="test")
     dict_known = _local_names(
         node_fn, dict_names=_DEFAULT_NAMES if dict_names is None else dict_names
     )
-    _number_tries(node_fn, str_scope="test")
     set_out = _marker_labels(node_fn.decorator_list)
     set_out.update(_body_skip_labels(node_fn.body, tuple_guards=(), dict_names=dict_known))
     return set_out
@@ -991,8 +991,9 @@ def _except_guard(
     cls_handler : ast.ExceptHandler
         One of its handlers.
     str_after : str
-        The key of the ``try`` body, from ``_try_key``: a digest of its source, so any edit to
-        the body re-reports an unchanged handler, plus the occurrence number of a repeated body.
+        The key of the ``try`` body, from ``_try_key``: its scope (``module`` or ``test``) and a
+        digest of its source, so any edit to the body re-reports an unchanged handler, plus the
+        occurrence number of a repeated body.
 
     Returns
     -------

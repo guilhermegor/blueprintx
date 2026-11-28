@@ -2177,3 +2177,20 @@ def test_a_late_skipif_guard_that_is_not_an_expression_has_no_unguarded_conditio
 ) -> None:
     """Review of #1346: a guard label ending in ``()`` is still a guard, parsable or not."""
     assert gate._marker_condition(str_label) is None
+
+
+def test_a_guarded_late_skipif_that_narrows_a_decorator_condition_is_still_reported() -> None:
+    """Review of #1346: a guarded label has no condition, so it never suppresses a finding."""
+    str_old = "import pytest\n\n@pytest.mark.skipif(c, reason='r')\ndef test_a(request):\n" + _BODY
+    str_new = "import pytest\n\ndef test_a(request):\n    if g:\n"
+    str_new += "        request.applymarker(pytest.mark.skipif(c))\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_added_to_a_module_try_else_arm_is_reported() -> None:
+    """Review of #1346: the ``else`` arm is read under the ``try`` label, so a new skip shows."""
+    str_try = "try:\n    import x\nexcept ImportError:\n    pass\n"
+    str_old = "import pytest\n" + str_try + "\ndef test_a():\n" + _BODY
+    str_else = "else:\n    pytestmark = pytest.mark.skip\n"
+    str_new = "import pytest\n" + str_try + str_else + "\ndef test_a():\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
