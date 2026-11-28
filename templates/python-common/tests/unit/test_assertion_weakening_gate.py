@@ -1657,7 +1657,7 @@ def test_adding_a_callee_to_the_try_body_reports_the_except_skip_again() -> None
     assert "newly marked skip(if)" in _sole_finding(str_old, str_new=str_new)
 
 
-def test_a_call_free_try_importing_something_else_is_a_new_except_skip() -> None:
+def test_a_try_body_importing_something_else_is_a_new_except_skip() -> None:
     """Review of #1340: two call-free ``try`` bodies keep distinct keys through their imports."""
     str_tail = "    except ImportError:\n        pytest.skip()\n" + _BODY
     str_old = "def test_a():\n    try:\n        import foo\n" + str_tail
@@ -2023,7 +2023,7 @@ def test_an_async_def_in_a_test_body_shadows_pytest() -> None:
 )
 def test_a_parameter_with_a_default_does_not_hide_a_skip(str_head: str) -> None:
     """Review of #1340: a defaulted parameter is not a fixture, so its call still skips."""
-    str_def, str_call = str_head.split("\n", 1)
+    str_def = str_head.split("\n", 1)[0]
     str_old = "import pytest\n\n" + str_def + "\n    pass\n" + _BODY
     str_new = "import pytest\n\n" + str_head + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
@@ -2081,3 +2081,125 @@ def test_a_foreign_nested_import_after_a_pytest_star_import_keeps_skip_pytests()
     str_old = str_head + str_mid + "def test_a():\n" + _BODY
     str_new = str_head + str_mid + "def test_a():\n    skip()\n" + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_added_to_a_second_try_with_the_same_body_is_reported() -> None:
+    """#1343: two ``try`` blocks with one body and one caught type must keep distinct labels."""
+    str_head = "def test_a():\n    try:\n        f()\n    except E:\n        pytest.skip()\n"
+    str_second = "    try:\n        f()\n    except E:\n        "
+    str_old = str_head + str_second + "pass\n" + _BODY
+    str_new = str_head + str_second + "pytest.skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_module_try_key_ignores_an_edit_in_a_handler_of_the_same_statement() -> None:
+    """#1343: module and test-body ``try`` keys cover the body only, so a handler edit is quiet."""
+    str_head = "import pytest\n\ntry:\n    import x\nexcept ImportError:\n    y = 1\n"
+    str_tail = "except KeyError:\n    pytestmark = pytest.mark.skip\n\ndef test_a():\n" + _BODY
+    assert (
+        _findings(str_head + str_tail, str_new=str_head.replace("y = 1", "y = 2") + str_tail) == []
+    )
+
+
+def test_a_late_skipif_with_a_guard_ending_in_a_call_has_no_unguarded_condition() -> None:
+    """#1343: a guard ending in a call makes the label guarded, so it has no condition."""
+    assert gate._marker_condition("applymarker-skipif:c(if):is_ci()") is None
+
+
+def test_a_local_skip_import_wins_over_a_module_binding_of_the_same_name() -> None:
+    """#1343: ``from pytest import skip as s`` in a test beats a module ``mark as s``."""
+    str_head = "from pytest import mark as s\n\ndef test_a():\n"
+    str_old = str_head + _BODY
+    str_new = str_head + "    from pytest import skip as s\n    s()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_name_table_without_the_assigned_entry_stays_without_it_in_a_test_body() -> None:
+    """#1343: ``_local_names`` adds ``<assigned>`` only when the table it extends has it."""
+    cls_fn = ast.parse("def test_a():\n    pass\n").body[0]
+    assert gate._KEY_ASSIGNED not in gate._local_names(cls_fn, dict_names=gate._DEFAULT_NAMES)
+
+
+def test_a_skip_added_to_a_second_identical_module_try_is_reported() -> None:
+    """Review of #1346: two module ``try`` blocks with one body keep distinct labels."""
+    str_try = "try:\n    next(items)\nexcept StopIteration:\n    "
+    str_head = "import pytest\n\n" + str_try + "pytestmark = pytest.mark.skip\n" + str_try
+    str_old = str_head + "pass\n\ndef test_a():\n" + _BODY
+    str_new = str_head + "pytestmark = pytest.mark.skip\n\ndef test_a():\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_try_added_inside_a_test_does_not_renumber_a_module_try() -> None:
+    """Review of #1346: a ``try`` in a function body is numbered with that function."""
+    str_try = "try:\n    next(items)\nexcept StopIteration:\n    pytestmark = pytest.mark.skip\n"
+    str_head = "import pytest\n\n" + str_try
+    str_def = "\ndef test_a():\n"
+    str_inner = "    try:\n        next(items)\n    except StopIteration:\n        pass\n"
+    str_old = str_head + str_def + _BODY
+    str_new = str_head + str_def + str_inner + _BODY
+    assert _findings(str_old, str_new=str_new) == []
+
+
+def test_numbering_follows_source_order_not_nesting_depth() -> None:
+    """Review of #1346: a deeper identical ``try`` listed first still gets number 0."""
+    str_try = "try:\n    f()\nexcept E:\n    pass\n"
+    str_src = "if x:\n    " + str_try.replace("\n", "\n    ").rstrip(" ") + str_try
+    gate._number_tries(cls_tree := ast.parse(str_src), str_scope="module")
+    assert [cls_tree.body[0].body[0].occurrence, cls_tree.body[1].occurrence] == [0, 1]
+
+
+def test_a_skip_in_a_test_try_is_not_hidden_by_an_identical_module_try() -> None:
+    """Review of #1346: a module ``try`` and a test ``try`` with one body keep distinct labels."""
+    str_mod = "import pytest\n\ntry:\n    next(items)\nexcept StopIteration:\n"
+    str_mod += "    pytestmark = pytest.mark.skip\n\n"
+    str_def = "def test_a():\n    try:\n        next(items)\n    except StopIteration:\n"
+    str_old = str_mod + str_def + "        pass\n" + _BODY
+    str_new = str_mod + str_def + "        pytest.skip()\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_late_skipif_condition_quoting_the_guard_delimiter_is_unguarded() -> None:
+    """Review of #1346: ``(if):`` inside a quoted condition is expression text."""
+    str_label = "applymarker-skipif:tag == '(if):'()"
+    assert gate._marker_condition(str_label) == "tag == '(if):'"
+
+
+@pytest.mark.parametrize(
+    "str_label",
+    [
+        "applymarker-skipif:c(if):for f()",
+        "applymarker-skipif:c(if):except E after body #ab()",
+        "applymarker-skipif:c(if):f(a)()",
+    ],
+)
+def test_a_late_skipif_guard_that_is_not_an_expression_has_no_unguarded_condition(
+    *, str_label: str
+) -> None:
+    """Review of #1346: a guard label ending in ``()`` is still a guard, parsable or not."""
+    assert gate._marker_condition(str_label) is None
+
+
+def test_a_guarded_late_skipif_that_narrows_a_decorator_condition_is_still_reported() -> None:
+    """Review of #1346: a guarded label has no condition, so it never suppresses a finding."""
+    str_old = "import pytest\n\n@pytest.mark.skipif(c, reason='r')\ndef test_a(request):\n" + _BODY
+    str_new = "import pytest\n\ndef test_a(request):\n    if g:\n"
+    str_new += "        request.applymarker(pytest.mark.skipif(c))\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_added_to_a_module_try_else_arm_is_reported() -> None:
+    """Review of #1346: the ``else`` arm is read under the ``try`` label, so a new skip shows."""
+    str_try = "try:\n    import x\nexcept ImportError:\n    pass\n"
+    str_old = "import pytest\n" + str_try + "\ndef test_a():\n" + _BODY
+    str_else = "else:\n    pytestmark = pytest.mark.skip\n"
+    str_new = "import pytest\n" + str_try + str_else + "\ndef test_a():\n" + _BODY
+    assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_in_a_try_of_a_nested_helper_def_is_not_read_as_a_test_level_label() -> None:
+    """Review of #1346: identical ``try`` blocks in a nested ``def`` are not read or numbered."""
+    str_try = "        try:\n            f()\n        except E:\n            "
+    str_head = "def test_a():\n    def helper():\n" + str_try + "pytest.skip()\n" + str_try
+    str_old = str_head + "pass\n" + _BODY
+    str_new = str_head + "pytest.skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []

@@ -556,6 +556,7 @@ def _skip_or_xfail_markers(
         Decorator labels (``skip``, ``xfail``, ``skipif:<condition>``), plus ``skip()`` for a
         ``pytest.skip(...)`` call outside any ``if`` and ``skip(if):<test>`` for a guarded one.
     """
+    _number_tries(node_fn, str_scope="test")
     dict_known = _local_names(
         node_fn, dict_names=_DEFAULT_NAMES if dict_names is None else dict_names
     )
@@ -585,12 +586,15 @@ def _local_names(node_fn: ast.FunctionDef, *, dict_names: dict[str, str]) -> dic
         module table's verdict.
     """
     dict_local = dict(dict_names)
-    set_assigned = {*dict_names.get(_KEY_ASSIGNED, "").split(","), *_assigned_names(node_fn)}
-    dict_local[_KEY_ASSIGNED] = ",".join(sorted(set_assigned))
+    if _KEY_ASSIGNED in dict_names:
+        set_assigned = {*dict_names[_KEY_ASSIGNED].split(","), *_assigned_names(node_fn)}
+        dict_local[_KEY_ASSIGNED] = ",".join(sorted(set_assigned))
     for cls_stmt, _ in _flat_stmts(node_fn.body):
         dict_added: dict[str, str] = {}
         _bind_names(cls_stmt, dict_names=dict_added)
-        dict_local.update({k: v for k, v in dict_added.items() if k not in dict_local})
+        dict_local.update(
+            {k: v for k, v in dict_added.items() if k not in dict_local or v in _RUNTIME_OFF}
+        )
     for str_name in _sole_local_names(node_fn, dict_names=dict_local):
         dict_local.pop(str_name, None)
     return dict_local
@@ -944,7 +948,7 @@ def _guarded_children(node: ast.AST, *, tuple_guards: tuple[str, ...]) -> list:
                     cls_handler.body,
                     (
                         *tuple_guards,
-                        _except_guard(node, cls_handler=cls_handler, str_after=_try_calls(node)),
+                        _except_guard(node, cls_handler=cls_handler, str_after=_try_key(node)),
                     ),
                 )
                 for cls_handler in node.handlers
@@ -987,9 +991,9 @@ def _except_guard(
     cls_handler : ast.ExceptHandler
         One of its handlers.
     str_after : str
-        The key of the ``try`` body: its callees (``_try_calls``) for a test body, where an edited
-        argument must not re-report an unchanged handler, a digest of the whole statement for a
-        module-level ``pytestmark``, where two ``try`` blocks with no call must stay distinct.
+        The key of the ``try`` body, from ``_try_key``: its scope (``module`` or ``test``) and a
+        digest of its source, so any edit to the body re-reports an unchanged handler, plus the
+        occurrence number of a repeated body.
 
     Returns
     -------
@@ -1007,7 +1011,70 @@ def _except_guard(
     return f"{str_type} after {str_after}"
 
 
-def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
+def _body_digest(cls_try: ast.Try | ast.TryStar) -> str:
+    """Return ``body #<digest>`` of the source of a ``try`` body.
+
+    Parameters
+    ----------
+    cls_try : ast.Try or ast.TryStar
+        The statement that owns the handlers.
+
+    Returns
+    -------
+    str
+        The digest label; any literal edit, numbers included, changes it.
+    """
+    str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
+    return "body #" + hashlib.sha256(str_body.encode()).hexdigest()[:8]
+
+
+def _scope_tries(cls_node: ast.AST) -> list:
+    """Return the ``try`` statements in a node's own scope, in source order.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        A module, class or test function.
+
+    Returns
+    -------
+    list of ast.Try or ast.TryStar
+        Every ``try`` below the node, nested ones included, without entering a nested ``def``
+        or ``lambda``: the body of one is a scope of its own.
+    """
+    list_out: list = []
+    for cls_child in ast.iter_child_nodes(cls_node):
+        if isinstance(cls_child, ast.Try | ast.TryStar):
+            list_out.append(cls_child)
+        if not isinstance(cls_child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            list_out.extend(_scope_tries(cls_child))
+    return list_out
+
+
+def _number_tries(cls_node: ast.AST, *, str_scope: str) -> None:
+    """Set the occurrence number of each ``try`` of a scope that shares a body with another.
+
+    Parameters
+    ----------
+    cls_node : ast.AST
+        A module or a test function. Each ``try`` of its own scope (see ``_scope_tries``) gets
+        an ``occurrence`` attribute: ``0`` for the first of its body in source order, ``1``
+        for the next, and so on. A ``try`` inside a nested ``def`` or ``lambda`` is neither
+        numbered nor read: ``_body_skip_labels`` skips those bodies, and a test function is
+        numbered on its own, so adding such a ``try`` never renumbers the module's.
+    str_scope : str
+        ``module`` or ``test``, stored as the ``scope`` attribute: a label inherited from a
+        module ``try`` and one from a test ``try`` with the same body must stay distinct.
+    """
+    dict_seen: dict[str, int] = {}
+    for cls_try in _scope_tries(cls_node):
+        str_digest = _body_digest(cls_try)
+        cls_try.scope = str_scope  # type: ignore[attr-defined]
+        cls_try.occurrence = dict_seen.get(str_digest, 0)  # type: ignore[attr-defined]
+        dict_seen[str_digest] = cls_try.occurrence + 1
+
+
+def _try_key(cls_try: ast.Try | ast.TryStar) -> str:
     """Return the key of a ``try`` body, the key of its ``except`` guards.
 
     Parameters
@@ -1018,15 +1085,24 @@ def _try_calls(cls_try: ast.Try | ast.TryStar) -> str:
     Returns
     -------
     str
-        ``body #<digest>`` of the body's source. Any literal edit, numbers included, changes
-        the key, so an unchanged ``except E: pytest.skip()`` is reported again: a different
-        argument can change what the handler guards, and a weakening gate prefers that report
-        to a miss (``test-change-ok:`` answers it). Known limit: a second ``try`` with the same
-        body and caught type shares the first one's label, so a skip added there is not
-        reported while the first one stays.
+        ``body #<digest>`` of the body's source, preceded by its scope (``module`` or ``test``)
+        and followed by ``#<n>`` for the n-th later
+        ``try`` of its scope with the same body (see ``_number_tries``, which both entry points
+        that build labels run first; a tree nobody numbered reads as ``0``). Any literal edit,
+        numbers included, changes the key, so an unchanged ``except E: pytest.skip()`` is
+        reported again: a different argument can change what the handler guards, and a
+        weakening gate prefers that report to a miss (``test-change-ok:`` answers it). Without
+        the number, a skip added to a second ``try`` with the same body and caught type would
+        share the first one's label and go unreported; inserting an identical ``try`` earlier
+        re-reports the later ones, the accepted cost.
     """
-    str_body = "\n".join(ast.unparse(cls_stmt) for cls_stmt in cls_try.body)
-    return "body #" + hashlib.sha256(str_body.encode()).hexdigest()[:8]
+    int_occurrence = getattr(cls_try, "occurrence", 0)
+    str_scope = getattr(cls_try, "scope", "")
+    return (
+        f"{str_scope} " * bool(str_scope)
+        + _body_digest(cls_try)
+        + (f" #{int_occurrence}" if int_occurrence else "")
+    )
 
 
 def _case_guard(cls_match: ast.Match, *, cls_case: ast.match_case) -> str:
@@ -1166,7 +1242,7 @@ def _marker_condition(str_marker: str) -> str | None:
     """
     cls_late = _RE_LATE_SKIPIF.match(str_marker)
     if cls_late:
-        return cls_late.group(1)
+        return None if _is_guarded(cls_late.group(1)) else cls_late.group(1)
     str_head, str_sep, str_tail = str_marker.partition(":")
     is_late = str_head.startswith("applymarker-")
     is_conditional = not is_late and (str_head == "skipif" or str_head.endswith("(if)"))
@@ -1174,6 +1250,48 @@ def _marker_condition(str_marker: str) -> str | None:
 
 
 _RE_XFAIL_RAISES = re.compile(r";raises=([^;]*)")
+
+
+def _is_parsable(str_text: str) -> bool:
+    """Return whether a text is one Python expression.
+
+    Parameters
+    ----------
+    str_text : str
+        A candidate condition or guard.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``ast.parse(mode="eval")`` accepts it.
+    """
+    try:
+        ast.parse(str_text, mode="eval")
+    except SyntaxError:
+        return False
+    return True
+
+
+def _is_guarded(str_text: str) -> bool:
+    """Return whether the text of a late ``skipif`` label ends in a ``(if):<guard>`` suffix.
+
+    Parameters
+    ----------
+    str_text : str
+        The label between ``applymarker-skipif:`` and the closing ``()``.
+
+    Returns
+    -------
+    bool
+        ``True`` when some ``(if):`` follows a prefix that parses as an expression. The guard
+        itself may be any label text (``for f()``, ``except E after ...``), so only the
+        condition side is checked; a ``(if):`` inside a quoted condition leaves a broken
+        prefix, so ``tag == '(if):'`` is a plain condition.
+    """
+    list_parts = str_text.split("(if):")
+    return any(
+        _is_parsable("(if):".join(list_parts[:int_i])) for int_i in range(1, len(list_parts))
+    )
 
 
 _RE_LATE_SKIPIF = re.compile(r"^applymarker-skipif:(.*)\(\)$")
@@ -1880,6 +1998,7 @@ def _marker_table(str_source: str) -> tuple[dict[str, str], dict[str, set]]:
         cls_tree = ast.parse(str_source)
     except SyntaxError:
         return dict(_DEFAULT_NAMES), dict_inherited
+    _number_tries(cls_tree, str_scope="module")
     _index_inherited(
         cls_tree,
         str_prefix="",
@@ -1931,12 +2050,12 @@ def _stmt_arms(cls_stmt: ast.stmt) -> list:
         str_else = _canon(ast.UnaryOp(op=ast.Not(), operand=cls_stmt.test))
         return [(cls_stmt.body, _canon(cls_stmt.test)), (cls_stmt.orelse, str_else)]
     if isinstance(cls_stmt, ast.Try | ast.TryStar):
-        str_digest = hashlib.sha256(ast.unparse(cls_stmt).encode()).hexdigest()[:8]
-        list_arms = [([*cls_stmt.body, *cls_stmt.orelse], f"try #{str_digest}")]
+        str_key = _try_key(cls_stmt)
+        list_arms = [([*cls_stmt.body, *cls_stmt.orelse], f"try {str_key}")]
         list_arms += [
             (
                 cls_handler.body,
-                _except_guard(cls_stmt, cls_handler=cls_handler, str_after=str_digest),
+                _except_guard(cls_stmt, cls_handler=cls_handler, str_after=str_key),
             )
             for cls_handler in cls_stmt.handlers
         ]
