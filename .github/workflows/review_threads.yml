@@ -7,9 +7,6 @@ on:
   pull_request_review_comment:
   issue_comment:
     types: [created, edited, deleted]
-  workflow_run:
-    workflows: ["Review Threads"]
-    types: [completed]
 
 permissions:
   contents: read
@@ -23,17 +20,6 @@ concurrency:
 
 jobs:
 
-  record-fork-review:
-    name: Record fork review
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions: {}
-    if: >-
-      startsWith(github.event_name, 'pull_request_review') &&
-      github.event.pull_request.head.repo.full_name != github.repository
-    steps:
-      - run: echo "Review recorded; the workflow_run relay re-runs the gate in the base repo."
-
   review-gate-runner:
     name: Review gate runner
     runs-on: ubuntu-latest
@@ -42,56 +28,21 @@ jobs:
       head_sha: ${{ steps.head.outputs.sha }}
       gate_outcome: ${{ steps.gate.outcome }}
       head_stable: ${{ steps.stable.outputs.stable }}
-      pr_number: ${{ steps.pr.outputs.number }}
     if: >-
-      (github.event_name == 'workflow_run' &&
-      startsWith(github.event.workflow_run.event, 'pull_request_review') &&
-      github.event.workflow_run.head_repository.full_name != github.repository) ||
-      (github.event_name != 'workflow_run' &&
-      !(startsWith(github.event_name, 'pull_request_review') &&
-      github.event.pull_request.head.repo.full_name != github.repository) &&
-      (github.event_name != 'issue_comment' || github.event.issue.pull_request != null))
+      github.event_name != 'issue_comment' ||
+      github.event.issue.pull_request != null
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - name: Resolve the PR number
-        id: pr
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          EVENT_PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-          RELAY_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
-          RELAY_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-        run: |
-          set -euo pipefail
-          if [ -n "$EVENT_PR_NUMBER" ]; then
-            echo "number=$EVENT_PR_NUMBER" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ -z "$RELAY_HEAD_REPO" ] || [ -z "$RELAY_HEAD_BRANCH" ]; then
-            echo "::notice::no PR number and no workflow_run head (fork deleted?); nothing to relay"
-            exit 0
-          fi
-          str_number=$(gh api -X GET "repos/${GITHUB_REPOSITORY}/pulls" -f state=open \
-            -f head="${RELAY_HEAD_REPO%%/*}:${RELAY_HEAD_BRANCH}" \
-            --jq '[.[] | select(.head.repo.full_name == env.RELAY_HEAD_REPO) | .number][0] // empty')
-          if [ -z "$str_number" ]; then
-            echo "::notice::no open PR for ${RELAY_HEAD_REPO}; nothing to relay"
-            exit 0
-          fi
-          [[ "$str_number" =~ ^[0-9]+$ ]] || { echo "::error::unexpected PR number"; exit 1; }
-          echo "number=$str_number" >>"$GITHUB_OUTPUT"
-
       - name: Resolve the head SHA once, before the gate runs
         id: head
-        if: steps.pr.outputs.number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
         run: |
           set -euo pipefail
           str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
@@ -99,11 +50,10 @@ jobs:
           echo "sha=$str_head" >> "$GITHUB_OUTPUT"
 
       - name: Gate files unchanged, or the owner approved the change
-        if: steps.pr.outputs.number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
         run: |
           set -euo pipefail
           str_files=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
@@ -134,13 +84,12 @@ jobs:
 
       - name: Every review thread is answered and resolved
         id: gate
-        if: steps.pr.outputs.number != ''
         continue-on-error: true
         timeout-minutes: 15
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           REVIEW_THREADS_REQUIRE_RESOLVED: "1"
           EVALUATED_HEAD: ${{ steps.head.outputs.sha }}
           CHECKED_HEAD_FILE: ${{ runner.temp }}/checked_head
@@ -153,7 +102,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           STR_HEAD: ${{ steps.head.outputs.sha }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
         run: |
           str_now=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null) || str_now=""
           if [ "$str_now" = "$STR_HEAD" ]; then echo "stable=true" >> "$GITHUB_OUTPUT"; else echo "stable=false" >> "$GITHUB_OUTPUT"; fi
@@ -163,7 +112,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           GATE_OUTCOME: ${{ steps.gate.outcome }}
           EVALUATED_HEAD: ${{ steps.head.outputs.sha }}
           CHECKED_HEAD_FILE: ${{ runner.temp }}/checked_head
@@ -190,13 +139,13 @@ jobs:
             -f "output[summary]=Gate outcome: ${GATE_OUTCOME:-did not run}. Run: $RUN_URL"
 
       - name: Fail this job when the gate did not pass
-        if: steps.pr.outputs.number != '' && steps.gate.outcome != 'success'
+        if: steps.gate.outcome != 'success'
         run: exit 1
 
   publish-app-check:
     name: Publish the review-gate App check
     needs: review-gate-runner
-    if: "!cancelled() && needs.review-gate-runner.result != 'skipped' && needs.review-gate-runner.outputs.pr_number != ''"
+    if: "!cancelled() && needs.review-gate-runner.result != 'skipped'"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
