@@ -243,6 +243,14 @@ relay_event_number_wins() {
 	rm -rf "$str_dir"
 	return $rc
 }
+relay_event_number_from_payload() {
+	grep -qF 'EVENT_PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}' "$1" &&
+		! grep -qE 'EVENT_PR_NUMBER: .*steps\.' "$1"
+}
+relay_deleted_fork_is_noop() {
+	FAKE_PULLS='[]' relay_resolve "$1" "" ""
+	[ "$RELAY_RC" -eq 0 ] && [ -z "$RELAY_OUT" ]
+}
 relay_posts_red_when_gate_fails() {
 	local str_dir rc=0
 	str_dir=$(mktemp -d)
@@ -277,6 +285,8 @@ for gate in "${RELAY_GATES[@]}"; do
 	check "$label relay with no open PR does nothing" relay_no_pr_is_noop "$gate"
 	check "$label relay treats the fork branch name as data, never as shell" relay_branch_is_data "$gate"
 	check "$label a same-repo event keeps its own PR number" relay_event_number_wins "$gate"
+	check "$label EVENT_PR_NUMBER comes from the event payload, not from its own step" relay_event_number_from_payload "$gate"
+	check "$label relay whose fork was deleted does nothing instead of failing" relay_deleted_fork_is_noop "$gate"
 	check "$label gate and post steps use the resolved PR number only" relay_runner_wired_to_resolved_pr "$gate"
 	check "$label runner takes a fork review only through the relay" relay_runner_runs_only_for_fork_relay "$gate"
 	check "$label fork review run is read-only and uses no secret" relay_fork_review_is_read_only "$gate"

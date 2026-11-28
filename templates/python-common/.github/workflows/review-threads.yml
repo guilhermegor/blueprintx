@@ -62,7 +62,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          EVENT_PR_NUMBER: ${{ steps.pr.outputs.number }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           RELAY_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           RELAY_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
@@ -71,7 +71,10 @@ jobs:
             echo "number=$EVENT_PR_NUMBER" >>"$GITHUB_OUTPUT"
             exit 0
           fi
-          [ -n "$RELAY_HEAD_REPO" ] && [ -n "$RELAY_HEAD_BRANCH" ] || { echo "::error::no PR number and no workflow_run head"; exit 1; }
+          if [ -z "$RELAY_HEAD_REPO" ] || [ -z "$RELAY_HEAD_BRANCH" ]; then
+            echo "::notice::no PR number and no workflow_run head (fork deleted?); nothing to relay"
+            exit 0
+          fi
           str_number=$(gh api -X GET "repos/${GITHUB_REPOSITORY}/pulls" -f state=open \
             -f head="${RELAY_HEAD_REPO%%/*}:${RELAY_HEAD_BRANCH}" \
             --jq '[.[] | select(.head.repo.full_name == env.RELAY_HEAD_REPO) | .number][0] // empty')
