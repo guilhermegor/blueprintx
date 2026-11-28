@@ -134,7 +134,7 @@ check "live disabled workflow emitting a required context fails" "$int_rc" 1 "em
 
 fixture
 expected '"Review threads answered"' ''
-printf '  poster:\n    runs-on: ubuntu-latest\n    steps:\n      - run: post name="Review threads answered"\n' >>"$str_tmp/wf/a.yml"
+printf '  poster:\n    runs-on: ubuntu-latest\n    steps:\n      - run: gh api repos/o/r/check-runs -f name="Review threads answered"\n' >>"$str_tmp/wf/a.yml"
 int_rc=0
 str_out="$(FAKE_STATE=disabled_manually PATH="$str_tmp/bin:$PATH" REQUIRED_CHECKS_SYNC_REQUIRED=1 run_gate --live)" || int_rc=$?
 check "live disabled workflow posting a required check-run fails" "$int_rc" 1 "'Review threads answered' is emitted by a.yml, state disabled_manually" "$str_out"
@@ -293,7 +293,7 @@ jobs:
   post:
     runs-on: ubuntu-latest
     steps:
-      - run: post name="Review threads answered"
+      - run: gh api repos/o/r/check-runs -f name="Review threads answered"
 EOF
 list_mode "Review threads answered"
 check "list mode: a workflow that never runs on a PR does not satisfy it" "$int_rc" 1 "is posted by no workflow" "$str_out"
@@ -319,10 +319,39 @@ jobs:
   post:
     runs-on: ubuntu-latest
     steps:
-      - run: post name="Review threads answered"
+      - run: gh api repos/o/r/check-runs -f name="Review threads answered"
 EOF
 list_mode "Review threads answered"
 check "list mode: a PR-triggered workflow that posts the check-run satisfies it" "$int_rc" 0 "findings=0" "$str_out"
+cat >"$str_tmp/wf/poster.yml" <<'EOF'
+name: Poster
+on:
+  pull_request_target:
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo name="Review threads answered"
+EOF
+list_mode "Review threads answered"
+check "list mode: the name in an echo without check-runs does not satisfy it" "$int_rc" 1 "is posted by no workflow" "$str_out"
+fixture
+expected '"App check","Review threads answered"' ''
+printf 'external|Review threads answered|posted by a workflow\noptional|Lint gate|x\n' >>"$str_tmp/policy.txt"
+
+cat >"$str_tmp/wf/poster.yml" <<'EOF'
+name: Poster
+on:
+  pull_request_target:
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo name="Review threads answered"
+EOF
+int_rc=0
+str_out="$(run_gate)" || int_rc=$?
+check "default mode: a required check-run with no real poster is refused" "$int_rc" 1 "is posted by no workflow" "$str_out"
 
 for str_tier in python-common ts-common bash-cli; do
 	int_rc=0
