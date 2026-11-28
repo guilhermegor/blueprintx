@@ -1867,7 +1867,9 @@ def test_no_bin_script_names_the_deleted_stale_run_rerunner() -> None:
     list_hits = [
         path.name
         for path in path_bin.rglob("*")
-        if path.is_file() and str_name in path.read_text(encoding="utf-8", errors="ignore")
+        if path.is_file()
+        and "__pycache__" not in path.parts
+        and str_name in path.read_text(encoding="utf-8", errors="ignore")
     ]
     assert list_hits == []
 
