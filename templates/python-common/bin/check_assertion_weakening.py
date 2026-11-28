@@ -1069,8 +1069,8 @@ def _number_tries(cls_node: ast.AST, *, str_scope: str) -> None:
     dict_seen: dict[str, int] = {}
     for cls_try in _scope_tries(cls_node):
         str_digest = _body_digest(cls_try)
-        cls_try.scope = str_scope
-        cls_try.occurrence = dict_seen.get(str_digest, 0)
+        cls_try.scope = str_scope  # type: ignore[attr-defined]
+        cls_try.occurrence = dict_seen.get(str_digest, 0)  # type: ignore[attr-defined]
         dict_seen[str_digest] = cls_try.occurrence + 1
 
 
@@ -1289,7 +1289,9 @@ def _is_guarded(str_text: str) -> bool:
         prefix, so ``tag == '(if):'`` is a plain condition.
     """
     list_parts = str_text.split("(if):")
-    return any(_is_parsable("(if):".join(list_parts[:i])) for i in range(1, len(list_parts)))
+    return any(
+        _is_parsable("(if):".join(list_parts[:int_i])) for int_i in range(1, len(list_parts))
+    )
 
 
 _RE_LATE_SKIPIF = re.compile(r"^applymarker-skipif:(.*)\(\)$")

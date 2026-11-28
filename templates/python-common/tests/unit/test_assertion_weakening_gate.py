@@ -2194,3 +2194,12 @@ def test_a_skip_added_to_a_module_try_else_arm_is_reported() -> None:
     str_else = "else:\n    pytestmark = pytest.mark.skip\n"
     str_new = "import pytest\n" + str_try + str_else + "\ndef test_a():\n" + _BODY
     assert "newly marked" in _sole_finding(str_old, str_new=str_new)
+
+
+def test_a_skip_in_a_try_of_a_nested_helper_def_is_not_read_as_a_test_level_label() -> None:
+    """Review of #1346: identical ``try`` blocks in a nested ``def`` are not read or numbered."""
+    str_try = "        try:\n            f()\n        except E:\n            "
+    str_head = "def test_a():\n    def helper():\n" + str_try + "pytest.skip()\n" + str_try
+    str_old = str_head + "pass\n" + _BODY
+    str_new = str_head + "pytest.skip()\n" + _BODY
+    assert _findings(str_old, str_new=str_new) == []
