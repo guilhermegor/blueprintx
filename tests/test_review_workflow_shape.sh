@@ -57,7 +57,7 @@ gate_run_blocks_clean() {
 		/^ +(- )?run: / { if ($0 ~ BAD) bad = 1; inrun = 0; next }
 		inrun { match($0, /^ */); if (RLENGTH < ind && $0 !~ /^ *$/) inrun = 0; else if ($0 ~ BAD) bad = 1 }
 		END { exit bad }
-	' BAD='\\$\\{\\{[^}]*(comment\\.body|issue\\.(title|body)|pull_request\\.(title|body)|review\\.body|head_ref|head\\.ref|label\\.name)' "$1"
+	' BAD='\\$\\{\\{[^}]*(comment\\.body|issue\\.(title|body)|pull_request\\.(title|body)|review\\.body|head_ref|head\\.ref|head_branch|head_sha|label\\.name)' "$1"
 }
 gate_secrets_token_only() { ! awk '/^  publish-app-check:/{f=1} !f' "$1" | grep -E 'secrets\.' | grep -qvE 'secrets\.GITHUB_TOKEN( |$)'; }
 gate_run_blocks_reject_injection() {
@@ -190,6 +190,116 @@ for gate in "${GATES[@]}"; do
 	check "$label posts success only when the checker's head equals the head read at start" gate_has "$gate" '"\$\(cat "\$CHECKED_HEAD_FILE"[^)]*\)" != "\$EVALUATED_HEAD"'
 	check "$label hands the head read at start to the gate step" gate_step_gets_evaluated_head "$gate"
 	check "$label publishes against the head read before the gate ran" gate_has "$gate" 'head_sha="\$EVALUATED_HEAD"'
+done
+RELAY_GATES=(
+	"$REPO_ROOT/.github/workflows/review_threads.yml"
+	"$REPO_ROOT/templates/python-common/.github/workflows/review-threads.yml"
+)
+step_script() {
+	awk -v n="$2" 'index($0, "- name: " n) {f=1; next} f&&/^        run: \|/ {r=1; next} r&&/^      - / {exit} r' "$1" | sed 's/^          //'
+}
+relay_resolve() {
+	local str_gate="$1" str_repo="$2" str_branch="$3" str_dir
+	str_dir=$(mktemp -d)
+	step_script "$str_gate" "Resolve the PR number" >"$str_dir/step.sh"
+	cat >"$str_dir/gh" <<'FAKE'
+#!/bin/bash
+printf "%s\n" "$*" >>args
+while [ $# -gt 0 ]; do [ "$1" = --jq ] && { str_jq="$2"; break; }; shift; done
+jq -r "$str_jq" <<<"$FAKE_PULLS"
+FAKE
+	chmod +x "$str_dir/gh"
+	: >"$str_dir/out"
+	(cd "$str_dir" && PATH="$str_dir:$PATH" GITHUB_OUTPUT="$str_dir/out" GITHUB_REPOSITORY=o/r EVENT_PR_NUMBER="" \
+		RELAY_HEAD_REPO="$str_repo" RELAY_HEAD_BRANCH="$str_branch" FAKE_PULLS="$FAKE_PULLS" bash "$str_dir/step.sh" >/dev/null 2>&1)
+	RELAY_RC=$?
+	RELAY_OUT=$(cat "$str_dir/out")
+	RELAY_ARGS=$(cat "$str_dir/args" 2>/dev/null || true)
+	RELAY_PWNED=no
+	[ -e "$str_dir/pwned" ] && RELAY_PWNED=yes
+	rm -rf "$str_dir"
+}
+relay_matches_fork_pr() {
+	FAKE_PULLS='[{"number":7,"head":{"repo":{"full_name":"fork/r"}}}]' relay_resolve "$1" fork/r feat
+	[ "$RELAY_RC" -eq 0 ] && [ "$RELAY_OUT" = "number=7" ]
+}
+relay_queries_owner_and_branch() {
+	FAKE_PULLS='[]' relay_resolve "$1" fork/r feat
+	grep -q 'head=fork:feat' <<<"$RELAY_ARGS" && grep -q 'state=open' <<<"$RELAY_ARGS" && grep -q -- '-X GET' <<<"$RELAY_ARGS"
+}
+relay_rejects_foreign_head() {
+	FAKE_PULLS='[{"number":7,"head":{"repo":{"full_name":"attacker/r"}}}]' relay_resolve "$1" fork/r feat
+	[ "$RELAY_RC" -eq 0 ] && [ -z "$RELAY_OUT" ]
+}
+relay_no_pr_is_noop() {
+	FAKE_PULLS='[]' relay_resolve "$1" fork/r feat
+	[ "$RELAY_RC" -eq 0 ] && [ -z "$RELAY_OUT" ]
+}
+relay_branch_is_data() {
+	FAKE_PULLS='[]' relay_resolve "$1" fork/r 'x"; touch pwned; "$(touch pwned)`touch pwned`'
+	[ "$RELAY_PWNED" = no ]
+}
+relay_event_number_wins() {
+	local str_dir rc=0
+	str_dir=$(mktemp -d)
+	step_script "$1" "Resolve the PR number" >"$str_dir/step.sh"
+	: >"$str_dir/out"
+	printf '#!/bin/bash\nexit 99\n' >"$str_dir/gh"
+	chmod +x "$str_dir/gh"
+	PATH="$str_dir:$PATH" GITHUB_OUTPUT="$str_dir/out" EVENT_PR_NUMBER=42 bash "$str_dir/step.sh" >/dev/null 2>&1
+	[ "$(cat "$str_dir/out")" = "number=42" ] || rc=1
+	rm -rf "$str_dir"
+	return $rc
+}
+relay_event_number_from_payload() {
+	grep -qF 'EVENT_PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}' "$1" &&
+		! grep -qE 'EVENT_PR_NUMBER: .*steps\.' "$1"
+}
+relay_deleted_fork_is_noop() {
+	FAKE_PULLS='[]' relay_resolve "$1" "" ""
+	[ "$RELAY_RC" -eq 0 ] && [ -z "$RELAY_OUT" ]
+}
+relay_posts_red_when_gate_fails() {
+	local str_dir rc=0
+	str_dir=$(mktemp -d)
+	step_script "$1" "Post the required result as a check-run on the PR head" >"$str_dir/step.sh"
+	printf '#!/bin/bash\nprintf "%%s\\n" "$*" >>"%s/calls"\n' "$str_dir" >"$str_dir/gh"
+	chmod +x "$str_dir/gh"
+	PATH="$str_dir:$PATH" GITHUB_REPOSITORY=o/r GATE_OUTCOME=failure EVALUATED_HEAD=abc \
+		CHECKED_HEAD_FILE="$str_dir/none" RUN_URL=u bash "$str_dir/step.sh" >/dev/null 2>&1 || rc=1
+	{ grep -q 'conclusion=failure' "$str_dir/calls" && ! grep -q 'conclusion=success' "$str_dir/calls"; } || rc=1
+	rm -rf "$str_dir"
+	return $rc
+}
+relay_runner_wired_to_resolved_pr() {
+	[ "$(grep -c 'PR_NUMBER: \${{ steps.pr.outputs.number }}' "$1")" -ge 2 ] &&
+		! grep -qE '^ +PR_NUMBER: \$\{\{ github.event' "$1"
+}
+relay_runner_runs_only_for_fork_relay() {
+	awk '/^  review-gate-runner:/{f=1} f&&/if: >-/{g=1;next} g&&/^    steps:/{exit} g' "$1" |
+		grep -q "workflow_run.head_repository.full_name != github.repository"
+}
+relay_fork_review_is_read_only() {
+	local str_job
+	str_job=$(awk '/^  record-fork-review:/{f=1} f&&/^  review-gate-runner:/{exit} f' "$1")
+	grep -q 'permissions: {}' <<<"$str_job" && ! grep -q 'secrets\.' <<<"$str_job"
+}
+for gate in "${RELAY_GATES[@]}"; do
+	label="${gate#"$REPO_ROOT"/}"
+	check "$label keeps its workflow name, the one the relay trigger names" gate_has "$gate" '^name: Review Threads$'
+	check "$label relays a finished fork review via workflow_run" gate_has "$gate" '^    workflows: \["Review Threads"\]$'
+	check "$label relay resolves a fork PR from the run's head repo and branch" relay_matches_fork_pr "$gate"
+	check "$label relay asks GitHub for open PRs of the run's owner:branch" relay_queries_owner_and_branch "$gate"
+	check "$label relay refuses a PR whose head repo differs from the run's" relay_rejects_foreign_head "$gate"
+	check "$label relay with no open PR does nothing" relay_no_pr_is_noop "$gate"
+	check "$label relay treats the fork branch name as data, never as shell" relay_branch_is_data "$gate"
+	check "$label a same-repo event keeps its own PR number" relay_event_number_wins "$gate"
+	check "$label EVENT_PR_NUMBER comes from the event payload, not from its own step" relay_event_number_from_payload "$gate"
+	check "$label relay whose fork was deleted does nothing instead of failing" relay_deleted_fork_is_noop "$gate"
+	check "$label gate and post steps use the resolved PR number only" relay_runner_wired_to_resolved_pr "$gate"
+	check "$label runner takes a fork review only through the relay" relay_runner_runs_only_for_fork_relay "$gate"
+	check "$label fork review run is read-only and uses no secret" relay_fork_review_is_read_only "$gate"
+	check "$label relay posts a red check when the gate failed" relay_posts_red_when_gate_fails "$gate"
 done
 retrigger_job() { sed -n '/^  retrigger:/,/^  backfill:/p' "$WORKFLOWS/pr-gate.yml"; }
 retrigger_reruns_failed_gate() { retrigger_job | grep -qE 'gh run rerun'; }
