@@ -353,6 +353,39 @@ int_rc=0
 str_out="$(run_gate)" || int_rc=$?
 check "default mode: a required check-run with no real poster is refused" "$int_rc" 1 "is posted by no workflow" "$str_out"
 
+cat >"$str_tmp/wf/poster.yml" <<'EOF2'
+name: Poster
+on:
+  pull_request_target:
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          gh api repos/o/r/check-runs -X POST \
+            -f name="Review threads answered"
+EOF2
+int_rc=0
+str_out="$(run_gate)" || int_rc=$?
+check "default mode: a real poster satisfies it" "$int_rc" 0 "findings=0" "$str_out"
+check "default mode: the app-posted context is never reported" "$(grep -c 'App check' <<<"$str_out" || true)" 0 "findings=0" "$str_out"
+
+cat >"$str_tmp/wf/poster.yml" <<'EOF2'
+name: Poster
+on:
+  pull_request_target:
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo name="Review threads answered"
+          gh api repos/o/r/check-runs/1/annotations
+EOF2
+int_rc=0
+str_out="$(run_gate)" || int_rc=$?
+check "default mode: the name and check-runs on separate commands is refused" "$int_rc" 1 "is posted by no workflow" "$str_out"
+
 for str_tier in python-common ts-common bash-cli; do
 	int_rc=0
 	str_out="$(python3 "$GATE" --workflows "$REPO_ROOT/templates/$str_tier/.github/workflows" \

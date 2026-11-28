@@ -222,7 +222,10 @@ def step_posts_check_run(dict_step: dict, *, str_name: str) -> bool:
     str_run = "\n".join(
         s for s in str(dict_step.get("run", "")).splitlines() if not s.lstrip().startswith("#")
     )
-    return "check-runs" in str_run and f'name="{str_name}"' in str_run
+    return any(
+        "check-runs" in str_cmd and f'name="{str_name}"' in str_cmd
+        for str_cmd in re.sub(r"\\\n", " ", str_run).splitlines()
+    )
 
 
 def trigger_events(obj_on: object) -> set:
