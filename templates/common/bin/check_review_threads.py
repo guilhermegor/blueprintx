@@ -2824,35 +2824,45 @@ def _missing_review(
     )
 
 
+def _roster_error_verdict(bool_json: bool, *, err: Exception) -> int:
+    """Print the missing or malformed roster verdict for ``err`` and return its exit code."""
+    str_code = "missing_roster"
+    if isinstance(err, (yaml.YAMLError, ValueError)):
+        str_code = "malformed_roster"
+    return _print_missing_roster(bool_json, str_detail=str(err), str_code=str_code)
+
+
 def _roster_or_verdict(
     bool_json: bool, *, str_repo_full: str, str_number: str
 ) -> tuple[dict[str, str], int | None]:
     """Return the roster, or the exit code of the skip/failure that ends the run early."""
     path_cwd = pathlib.Path.cwd()
-    bool_pr_opt_out = False
     try:
         bool_pr_opt_out = roster_opted_out(path_cwd)
-        if bool_pr_opt_out and base_opted_out(str_repo_full, str_number=str_number):
-            return {}, _print_skip(
-                bool_json,
-                str_reason=f"{_ROSTER_FILE} declares `adopted: false` "
-                "— review-thread gate opted out",
-            )
-        if bool_pr_opt_out:
-            return {}, _print_missing_roster(
-                bool_json,
-                str_detail=f"{_ROSTER_FILE} opts out with `adopted: false`, but the base "
-                "branch's roster does not (or could not be read), so the opt-out is "
-                "refused. Land the opt-out on the base branch first.",
-                str_code="opt_out_refused",
-            )
+        bool_base_opt_out = bool_pr_opt_out and base_opted_out(
+            str_repo_full, str_number=str_number
+        )
+    except (RuntimeError, ValueError, OSError, yaml.YAMLError) as err:
+        return {}, _roster_error_verdict(bool_json, err=err)
+    if bool_base_opt_out:
+        _write_checked_head(os.environ.get("EVALUATED_HEAD", ""))
+        return {}, _print_skip(
+            bool_json,
+            str_reason=f"{_ROSTER_FILE} declares `adopted: false` — review-thread gate opted out",
+        )
+    if bool_pr_opt_out:
+        return {}, _print_missing_roster(
+            bool_json,
+            str_detail=f"{_ROSTER_FILE} opts out with `adopted: false`, but the base "
+            "branch's roster does not (or could not be read), so the opt-out is "
+            "refused. Land the opt-out on the base branch first.",
+            str_code="opt_out_refused",
+        )
+    try:
         dict_roster = load_roster(path_cwd)
         reviewer_logins(dict_roster)
     except (RuntimeError, ValueError, OSError, yaml.YAMLError) as err:
-        str_code = "missing_roster"
-        if isinstance(err, (yaml.YAMLError, ValueError)):
-            str_code = "malformed_roster"
-        return {}, _print_missing_roster(bool_json, str_detail=str(err), str_code=str_code)
+        return {}, _roster_error_verdict(bool_json, err=err)
     if not dict_roster:
         return {}, _print_missing_roster(bool_json)
     return dict_roster, None
@@ -2938,6 +2948,32 @@ def main(list_argv: list[str] | None = None) -> int:
         return _print_rate_limited(bool_json, str_detail=str(err))
 
 
+def _write_checked_head(str_head: str) -> None:
+    """Write ``str_head`` to ``$CHECKED_HEAD_FILE``, when that variable is set.
+
+    An unwritable path is reported on stderr instead of raised: the file then stays absent, and
+    the reporting step turns a missing file into a failure verdict, so the gate fails closed.
+    """
+    str_path = os.environ.get("CHECKED_HEAD_FILE", "")
+    if not str_path:
+        return
+    try:
+        pathlib.Path(str_path).write_text(str_head, encoding="utf-8")
+    except OSError as err:
+        print(f"could not record the evaluated head: {err}", file=sys.stderr)
+
+
+def _record_evaluated_head(dict_pr: dict) -> None:
+    """Write the ``headRefOid`` this run evaluated to ``$CHECKED_HEAD_FILE``, when set.
+
+    Parameters
+    ----------
+    dict_pr : dict
+        The pull-request payload the verdict is computed from.
+    """
+    _write_checked_head(str(dict_pr.get("headRefOid") or ""))
+
+
 def _check_pull_request(bool_json: bool) -> int:
     """Run the gate for the current PR.
 
@@ -2972,6 +3008,7 @@ def _check_pull_request(bool_json: bool) -> int:
     set_reviewers = reviewer_logins(dict_roster)
 
     dict_pr = _fetch_current_pr(str_repo_full, str_number=str_number, dict_roster=dict_roster)
+    _record_evaluated_head(dict_pr)
     list_threads = dict_pr["reviewThreads"]["nodes"]
     list_notices = dict_pr.get("comments", {}).get("nodes", [])
 

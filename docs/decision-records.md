@@ -46,10 +46,22 @@ seeds `REQUIRED_CHECKS` with its name) inline; the changelog half moves here.
 > `REQUIRED_CHECKS` in bin/enable_repo_rules.sh shipped EMPTY, so a generated project ran its CI
 > and blocked nothing. Measured upstream: a PR merged with 32 of 47 checks passed.
 
-**Not yet applied** to `.github/workflows/review_threads.yml` (root) — that file
-carries the same block (dated text: "SUPERSEDED 2026-08-17 (#173, PR #185)") plus
-two more below, and is held by PRs #491/#492 as of this writing. Follow-up once
-those land.
+> UPDATE 2026-11-23 (#1249, #1280). The three review-thread workflows now post the required
+> context as an explicit check-run from a step, so the newest run always publishes the verdict and
+> a cancelled or queued older run no longer strands an `Expected` context. They therefore carry a
+> per-PR `concurrency:` group with `cancel-in-progress: true`, which stops a slower run from
+> posting a stale success last within one group; a cancelled run already inside its `gh api` POST can still land, but the
+> check-run is keyed by head SHA, which limits the damage. A read-only `pull_request_review*` run from a fork gets its own
+> group (its `run_id`), so it cannot cancel a run that can write.
+>
+> The gate workflows no longer call `rerun_stale_gate_runs.sh`: a re-run joins the same
+> per-PR group and would cancel the run that started it. The required context is the posted
+> check-run, so the newest post supersedes an older failure and nothing needs re-running.
+>
+> The workflow-level `cancel-in-progress` group covers every job of a superseded run, so its
+> `publish-app-check` is cancelled with it; the newer run publishes for its own head. The
+> publisher's own group only serializes same-head publishes, it does not shield it from a
+> workflow-level cancel.
 
 ## `review-threads.yml` — the resolve half must also catch outdated threads (#196)
 
