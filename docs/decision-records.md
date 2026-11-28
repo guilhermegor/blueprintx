@@ -57,6 +57,11 @@ seeds `REQUIRED_CHECKS` with its name) inline; the changelog half moves here.
 > The gate workflows no longer call `rerun_stale_gate_runs.sh`: a re-run joins the same
 > per-PR group and would cancel the run that started it. The required context is the posted
 > check-run, so the newest post supersedes an older failure and nothing needs re-running.
+>
+> The workflow-level `cancel-in-progress` group covers every job of a superseded run, so its
+> `publish-app-check` is cancelled with it; the newer run publishes for its own head. The
+> publisher's own group only serializes same-head publishes, it does not shield it from a
+> workflow-level cancel.
 
 ## `review-threads.yml` — the resolve half must also catch outdated threads (#196)
 

@@ -154,6 +154,23 @@ import check_review_threads as m
 m._record_evaluated_head({'headRefOid': 'abc123'})" 2>/dev/null
 }
 check "an unwritable CHECKED_HEAD_FILE is reported, not raised" checker_survives_unwritable_head_file
+checker_records_head_on_a_clean_pass() {
+	local str_dir rc=0
+	str_dir=$(mktemp -d)
+	CHECKED_HEAD_FILE="$str_dir/h" GITHUB_REPOSITORY=o/r PR_NUMBER=1 python3 -c "
+import sys; sys.path.insert(0, '$REPO_ROOT/templates/common/bin')
+import check_review_threads as m
+m._roster_or_verdict = lambda *a, **k: ({'bot': {}}, None)
+m.reviewer_logins = lambda r: {'bot'}
+m._fetch_current_pr = lambda *a, **k: {'headRefOid': 'cafe01', 'reviewThreads': {'nodes': []}}
+m._missing_review = lambda *a, **k: ('', '')
+m._unanswered_bodies = lambda *a, **k: []
+sys.exit(m._check_pull_request(False))" >/dev/null || rc=1
+	[ "$(cat "$str_dir/h" 2>/dev/null)" = cafe01 ] || rc=1
+	rm -rf "$str_dir"
+	return $rc
+}
+check "a passing run that finds no threads still records the head it evaluated" checker_records_head_on_a_clean_pass
 check "gate step EVALUATED_HEAD check rejects a head given only to the reporting step" gate_step_evaluated_head_rejects_misplacement
 check "a base-backed opt-out still writes the head read at start to CHECKED_HEAD_FILE" checker_records_head_on_opt_out
 for gate in "${GATES[@]}"; do

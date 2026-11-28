@@ -86,7 +86,7 @@ check "posting and publishing share the head resolved before the gate" \
 check "no step re-runs this workflow, which would cancel the run in its own concurrency group" \
 	each_workflow gate_never_reruns_its_own_group
 check "the check-run POST is skipped when no head was resolved" each_workflow post_needs_a_head
-check "only the publisher is serialized, per PR and head SHA; the publisher is never cancelled by a newer run" each_workflow runs_are_serialized_per_pr
+check "the publisher has its own per-PR, per-head group with cancel-in-progress: false" each_workflow runs_are_serialized_per_pr
 check "the job that runs PR code holds no App token" each_workflow gate_job_holds_no_app_token
 check "the head SHA is resolved before the protected-file guard" each_workflow head_resolved_before_the_guard
 check "success needs the head to be unchanged since the gate started" each_workflow publish_checks_the_head_did_not_move
