@@ -204,7 +204,7 @@ def pr_jobs(path_dir: pathlib.Path) -> tuple:
 
 
 def posts_check_run(path_file: pathlib.Path, *, str_name: str) -> bool:
-    """True when a PR-triggered workflow file posts check-run `str_name` outside a comment."""
+    """Return True when a PR-triggered workflow posts check-run `str_name` outside a comment."""
     dict_wf = load_workflow(path_file)
     set_events = trigger_events(dict_wf.get("on", dict_wf.get(True)))
     if not set_events & {"pull_request", "pull_request_target"}:
@@ -218,7 +218,7 @@ def posts_check_run(path_file: pathlib.Path, *, str_name: str) -> bool:
 
 
 def trigger_events(obj_on: object) -> set:
-    """The event names a workflow's `on:` value listens to."""
+    """Return the event names a workflow's `on:` value listens to."""
     if isinstance(obj_on, str):
         return {obj_on}
     if isinstance(obj_on, (list, dict)):
