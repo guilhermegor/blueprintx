@@ -204,6 +204,7 @@ relay_resolve() {
 	step_script "$str_gate" "Resolve the PR number" >"$str_dir/step.sh"
 	cat >"$str_dir/gh" <<'FAKE'
 #!/bin/bash
+printf "%s\n" "$*" >>args
 while [ $# -gt 0 ]; do [ "$1" = --jq ] && { str_jq="$2"; break; }; shift; done
 jq -r "$str_jq" <<<"$FAKE_PULLS"
 FAKE
@@ -213,6 +214,7 @@ FAKE
 		RELAY_HEAD_REPO="$str_repo" RELAY_HEAD_BRANCH="$str_branch" FAKE_PULLS="$FAKE_PULLS" bash "$str_dir/step.sh" >/dev/null 2>&1)
 	RELAY_RC=$?
 	RELAY_OUT=$(cat "$str_dir/out")
+	RELAY_ARGS=$(cat "$str_dir/args" 2>/dev/null || true)
 	RELAY_PWNED=no
 	[ -e "$str_dir/pwned" ] && RELAY_PWNED=yes
 	rm -rf "$str_dir"
@@ -220,6 +222,10 @@ FAKE
 relay_matches_fork_pr() {
 	FAKE_PULLS='[{"number":7,"head":{"repo":{"full_name":"fork/r"}}}]' relay_resolve "$1" fork/r feat
 	[ "$RELAY_RC" -eq 0 ] && [ "$RELAY_OUT" = "number=7" ]
+}
+relay_queries_owner_and_branch() {
+	FAKE_PULLS='[]' relay_resolve "$1" fork/r feat
+	grep -q 'head=fork:feat' <<<"$RELAY_ARGS" && grep -q 'state=open' <<<"$RELAY_ARGS" && grep -q -- '-X GET' <<<"$RELAY_ARGS"
 }
 relay_rejects_foreign_head() {
 	FAKE_PULLS='[{"number":7,"head":{"repo":{"full_name":"attacker/r"}}}]' relay_resolve "$1" fork/r feat
@@ -238,7 +244,9 @@ relay_event_number_wins() {
 	str_dir=$(mktemp -d)
 	step_script "$1" "Resolve the PR number" >"$str_dir/step.sh"
 	: >"$str_dir/out"
-	GITHUB_OUTPUT="$str_dir/out" EVENT_PR_NUMBER=42 bash "$str_dir/step.sh" >/dev/null 2>&1
+	printf '#!/bin/bash\nexit 99\n' >"$str_dir/gh"
+	chmod +x "$str_dir/gh"
+	PATH="$str_dir:$PATH" GITHUB_OUTPUT="$str_dir/out" EVENT_PR_NUMBER=42 bash "$str_dir/step.sh" >/dev/null 2>&1
 	[ "$(cat "$str_dir/out")" = "number=42" ] || rc=1
 	rm -rf "$str_dir"
 	return $rc
@@ -281,6 +289,7 @@ for gate in "${RELAY_GATES[@]}"; do
 	check "$label keeps its workflow name, the one the relay trigger names" gate_has "$gate" '^name: Review Threads$'
 	check "$label relays a finished fork review via workflow_run" gate_has "$gate" '^    workflows: \["Review Threads"\]$'
 	check "$label relay resolves a fork PR from the run's head repo and branch" relay_matches_fork_pr "$gate"
+	check "$label relay asks GitHub for open PRs of the run's owner:branch" relay_queries_owner_and_branch "$gate"
 	check "$label relay refuses a PR whose head repo differs from the run's" relay_rejects_foreign_head "$gate"
 	check "$label relay with no open PR does nothing" relay_no_pr_is_noop "$gate"
 	check "$label relay treats the fork branch name as data, never as shell" relay_branch_is_data "$gate"
