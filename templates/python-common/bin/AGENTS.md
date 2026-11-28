@@ -151,7 +151,7 @@ A bash script has no conventional unit test, so map the tests-with-every-change 
 
 Most scripts in `bin/` are **gates**: they answer "may this proceed?", so an error must exit
 non-zero. A few are **janitors** — they clean up after a verdict someone else reached
-(`rerun_stale_gate_runs.sh` re-runs the stale failed runs that still block a PR). A janitor
+(`retry_rate_limited_review.py` re-asks for a review that a rate limit swallowed). A janitor
 that fails the step **manufactures the very artifact it came to remove**: a failed CI job is
 one more red run in the rollup the cleanup exists to clear.
 

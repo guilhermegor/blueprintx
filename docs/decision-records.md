@@ -2810,3 +2810,21 @@ PR-body and commit-message lines as before and relies on part 2 plus review. The
 local to the machine and the repository: the same approval made on another machine is not
 found, and the owner repeats the interactive run. Records are not pruned. A first commit on a
 branch is checked since #1339, so its approval takes the same path.
+
+## `rerun_stale_gate_runs.sh` deleted; the rate-limit retry re-triggers nothing (blueprintx#1337)
+
+> **Decision.** `bin/rerun_stale_gate_runs.sh` is deleted with its tests and doc mentions.
+> `retry_rate_limited_review.py` only mentioned it in its docstring (it never called it), and
+> keeps its single action: ask the reviewer again. It dispatches no workflow run and posts nothing but the
+> review request.
+>
+> **Why.** Since #1280 the gate runs from the base branch on `pull_request_target` and posts its
+> verdict as a check-run attached to the head SHA; the required context is that check-run, so
+> the newest post supersedes an older failure and no stale failed run needs clearing. When the
+> reviewer answers the re-ask, its `pull_request_review` event starts a new gate run on its own,
+> so the PR turns green without any extra trigger. A re-run from the retry path would join the
+> per-PR concurrency group and cancel the run it meant to help.
+>
+> **Test.** `test_no_bin_script_names_the_deleted_stale_run_rerunner` fails if the script or a
+> mention of it returns to `bin/`; `tests/test_review_app_token.sh` still fails any workflow
+> that calls it.
