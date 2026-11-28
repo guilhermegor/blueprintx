@@ -46,13 +46,47 @@ seeds `REQUIRED_CHECKS` with its name) inline; the changelog half moves here.
 > `REQUIRED_CHECKS` in bin/enable_repo_rules.sh shipped EMPTY, so a generated project ran its CI
 > and blocked nothing. Measured upstream: a PR merged with 32 of 47 checks passed.
 
-> UPDATE 2026-11-23 (#1249, #1280). The three review-thread workflows now post the required
-> context as an explicit check-run from a step, so the newest run always publishes the verdict and
-> a cancelled or queued older run no longer strands an `Expected` context. They therefore carry a
-> per-PR `concurrency:` group with `cancel-in-progress: true`, which stops a slower run from
-> posting a stale success last within one group; a cancelled run already inside its `gh api` POST can still land, but the
-> check-run is keyed by head SHA, which limits the damage. A read-only `pull_request_review*` run from a fork gets its own
-> group (its `run_id`), so it cannot cancel a run that can write.
+> UPDATE 2026-11-23 (#1249, #1280). The root workflow
+> (`.github/workflows/review_threads.yml`) and the `python-common` and `ts-common` templates now
+> post the required context as an explicit check-run from a step, so the newest run always
+> publishes the verdict and a cancelled or queued older run no longer strands an `Expected`
+> context. They therefore carry a per-PR `concurrency:` group with `cancel-in-progress: true`,
+> which stops a slower run from posting a stale success last within one group; a cancelled run
+> already inside its `gh api` POST can still land, but the check-run is keyed by head SHA, which
+> limits the damage. A read-only `pull_request_review*` run from a fork gets its own group (its
+> `run_id`), so it cannot cancel a run that can write. The group and the job `if:` conditions use
+> one fork predicate, `head.repo.full_name != github.repository`, so a deleted fork (a null head
+> repo) is treated as a fork by both.
+>
+> UPDATE 2026-11-28 (#1336, relay of #1331). Three points the group does not cover.
+>
+> - **The relay is not in the PR group.** A `workflow_run` event carries no PR number the group
+>   expression can read, so a relay run falls back to its own `run_id` and is not serialized
+>   with same-PR runs. The post step therefore re-reads the check-runs on the head before it
+>   writes and leaves the result alone when a run with a higher run id (triggered later) has
+>   already posted. Run ids grow with trigger order, so the newest-triggered verdict wins
+>   whichever run finishes last. A read that fails posts anyway, as before.
+> - **Fork review runs are approval-gated.** GitHub holds the first workflow runs of a fork's
+>   contributor until a maintainer approves them, so a fork `pull_request_review*` run may sit
+>   unstarted, and its relay only fires once that run completes. The required context stays
+>   pending (fail-closed) meanwhile; approving the run, or any later event on the PR that starts
+>   a base-context run, re-evaluates it.
+> - **Code and roster come from the default branch.** Every gate checkout reads the default
+>   branch, never the PR head or `base.ref`, so the checker and `.review-bots.yaml` a PR is
+>   judged by are the ones already merged. A PR that edits them is judged by the old copies,
+>   and the root workflow's gate-files step refuses such a PR until the owner labels it
+>   `gate-change-approved`.
+>
+> **Resolving a thread starts no run.** `pull_request_review_thread` is a webhook event, not a
+> workflow trigger (actionlint 1.7.12 rejects it as an unknown event, and GitHub's list of
+> events that trigger workflows has no such entry), so no workflow can subscribe to it. Resolving
+> the last open thread therefore re-evaluates the gate only when a later `pull_request_review`,
+> `pull_request_review_comment`, `issue_comment` or `pull_request_target` event arrives. Closing
+> that gap needs a webhook receiver or GitHub App, the same cost the #216 record above judged not
+> worth an always-on listener.
+>
+> `ts-common` carries the relay and the App-check publisher as well, so a fork review no longer
+> ends in a 403 on `POST check-runs`.
 >
 > The gate workflows no longer call `rerun_stale_gate_runs.sh`: a re-run joins the same
 > per-PR group and would cancel the run that started it. The required context is the posted
@@ -80,11 +114,9 @@ the current three-layer split in full, so the narrative here is pure changelog.
 > it points at, so the reachable sequence is: reply thinly, rewrite those lines, merge. The half
 > nobody could re-evaluate was also the half nobody was checking.
 
-**Not yet applied** to `.github/workflows/review_threads.yml` (root, held by
-#491/#492), `templates/python-common/bin/enable_repo_rules.sh` (the same #196
-story, told from the ruleset side — held by the #129 dispatch claim), and
-`templates/common/bin/check_review_threads.py` (held by PR #424). Follow-up
-once those land.
+**Applied** to `.github/workflows/review_threads.yml` (root), which sets
+`REVIEW_THREADS_REQUIRE_RESOLVED: "1"`, and to `templates/common/bin/check_review_threads.py`,
+whose default is `"1"` (blueprintx#1336 removed the stale "not yet applied" note).
 
 ## `review-threads.yml` — no `concurrency:` block, ever (#216)
 
@@ -102,8 +134,8 @@ so nothing but the changelog framing is lost by trimming it.
 > Closing this properly inside Actions needs a webhook receiver or GitHub App dispatching a
 > `repository_dispatch` on `resolved`; not worth a always-on listener for this repo.
 
-**Not yet applied** to `.github/workflows/review_threads.yml` (root) — held by
-PRs #491/#492. Follow-up once those land.
+**Superseded everywhere.** The root workflow now carries the per-PR `concurrency:` group too;
+see the 2026-11-23 update under "a required check that reports is safe to require (#173)".
 
 ## `.greptile/` — Greptile reviews only when asked (#737)
 

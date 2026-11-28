@@ -194,6 +194,7 @@ done
 RELAY_GATES=(
 	"$REPO_ROOT/.github/workflows/review_threads.yml"
 	"$REPO_ROOT/templates/python-common/.github/workflows/review-threads.yml"
+	"$REPO_ROOT/templates/ts-common/.github/workflows/review-threads.yml"
 )
 step_script() {
 	awk -v n="$2" 'index($0, "- name: " n) {f=1; next} f&&/^        run: \|/ {r=1; next} r&&/^      - / {exit} r' "$1" | sed 's/^          //'
@@ -266,7 +267,7 @@ relay_posts_red_when_gate_fails() {
 	printf '#!/bin/bash\nprintf "%%s\\n" "$*" >>"%s/calls"\n' "$str_dir" >"$str_dir/gh"
 	chmod +x "$str_dir/gh"
 	PATH="$str_dir:$PATH" GITHUB_REPOSITORY=o/r GATE_OUTCOME=failure EVALUATED_HEAD=abc \
-		CHECKED_HEAD_FILE="$str_dir/none" RUN_URL=u bash "$str_dir/step.sh" >/dev/null 2>&1 || rc=1
+		CHECKED_HEAD_FILE="$str_dir/none" RUN_URL=u GITHUB_RUN_ID=1 bash "$str_dir/step.sh" >/dev/null 2>&1 || rc=1
 	{ grep -q 'conclusion=failure' "$str_dir/calls" && ! grep -q 'conclusion=success' "$str_dir/calls"; } || rc=1
 	rm -rf "$str_dir"
 	return $rc
@@ -301,6 +302,54 @@ for gate in "${RELAY_GATES[@]}"; do
 	check "$label fork review run is read-only and uses no secret" relay_fork_review_is_read_only "$gate"
 	check "$label relay posts a red check when the gate failed" relay_posts_red_when_gate_fails "$gate"
 done
+gate_group_uses_job_predicate() {
+	grep -E '^  group: review-gate-' "$1" | grep -qF 'github.event.pull_request.head.repo.full_name != github.repository' &&
+		! grep -qE '^  group: .*head\.repo\.fork' "$1"
+}
+head_read_failure_is_explicit() {
+	local str_dir str_out int_rc
+	str_dir=$(mktemp -d)
+	step_script "$1" "Resolve the head SHA once, before the gate runs" >"$str_dir/step.sh"
+	printf '#!/bin/bash\nexit 1\n' >"$str_dir/gh"
+	chmod +x "$str_dir/gh"
+	: >"$str_dir/out"
+	str_out=$(PATH="$str_dir:$PATH" GITHUB_OUTPUT="$str_dir/out" GITHUB_REPOSITORY=o/r PR_NUMBER=5 bash "$str_dir/step.sh" 2>&1)
+	int_rc=$?
+	rm -rf "$str_dir"
+	[ "$int_rc" -ne 0 ] && grep -qF '::error::' <<<"$str_out"
+}
+post_calls() {
+	local str_dir
+	str_dir=$(mktemp -d)
+	step_script "$1" "Post the required result as a check-run on the PR head" >"$str_dir/step.sh"
+	cat >"$str_dir/gh" <<'FAKE'
+#!/bin/bash
+case "$*" in
+*commits/*) echo "$FAKE_NEWEST" ;;
+*) printf "%s\n" "$*" >>calls ;;
+esac
+FAKE
+	chmod +x "$str_dir/gh"
+	(cd "$str_dir" && PATH="$str_dir:$PATH" GITHUB_RUN_ID=100 GITHUB_REPOSITORY=o/r GATE_OUTCOME=success \
+		EVALUATED_HEAD=abc CHECKED_HEAD_FILE="$str_dir/none" RUN_URL=u FAKE_NEWEST="$2" bash "$str_dir/step.sh" >/dev/null 2>&1)
+	{ cat "$str_dir/calls" 2>/dev/null || true; } | grep -c 'conclusion=' || true
+	rm -rf "$str_dir"
+}
+post_skips_when_newer_run_posted() { [ "$(post_calls "$1" 101)" = 0 ]; }
+post_runs_when_only_older_run_posted() { [ "$(post_calls "$1" 99)" = 1 ]; }
+post_runs_when_no_run_posted() { [ "$(post_calls "$1" 0)" = 1 ]; }
+for gate in "${GATES[@]}"; do
+	label="${gate#"$REPO_ROOT"/}"
+	check "$label keys the fork concurrency group on the same predicate as its job conditions" gate_group_uses_job_predicate "$gate"
+	check "$label names a failed PR head read with an error annotation" head_read_failure_is_explicit "$gate"
+	check "$label does not overwrite the check-run of a newer run" post_skips_when_newer_run_posted "$gate"
+	check "$label still posts when only an older run has posted" post_runs_when_only_older_run_posted "$gate"
+	check "$label posts when no run has posted yet" post_runs_when_no_run_posted "$gate"
+done
+decision_records_has_no_stale_root_pending_note() {
+	! grep -qE '^\*\*Not yet applied\*\* to `\.github/workflows/review_threads\.yml`' "$REPO_ROOT/docs/decision-records.md"
+}
+check "decision-records no longer calls the root review_threads.yml edits not yet applied" decision_records_has_no_stale_root_pending_note
 retrigger_job() { sed -n '/^  retrigger:/,/^  backfill:/p' "$WORKFLOWS/pr-gate.yml"; }
 retrigger_reruns_failed_gate() { retrigger_job | grep -qE 'gh run rerun'; }
 retrigger_may_write_actions() { retrigger_job | grep -qE '^ +actions: write$'; }

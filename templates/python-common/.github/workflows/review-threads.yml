@@ -18,7 +18,7 @@ permissions:
   checks: write
 
 concurrency:
-  group: review-gate-${{ (github.event.pull_request.head.repo.fork && startsWith(github.event_name, 'pull_request_review') && github.run_id) || github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: review-gate-${{ (github.event.pull_request.head.repo.full_name != github.repository && startsWith(github.event_name, 'pull_request_review') && github.run_id) || github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -94,7 +94,8 @@ jobs:
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           set -euo pipefail
-          str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          str_head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha') ||
+            { echo "::error::could not read the head of PR ${PR_NUMBER}"; exit 1; }
           [ -n "$str_head" ] || { echo "::error::could not resolve head SHA for PR ${PR_NUMBER}"; exit 1; }
           echo "sha=$str_head" >> "$GITHUB_OUTPUT"
 
@@ -142,6 +143,14 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          str_newest=$(gh api -X GET "repos/${GITHUB_REPOSITORY}/commits/${EVALUATED_HEAD}/check-runs" \
+            -f check_name="Review threads answered" -f per_page=100 \
+            --jq '[.check_runs[] | (.details_url // "") | capture("actions/runs/(?<id>[0-9]+)") | .id | tonumber] | max // 0' \
+            2>/dev/null) || str_newest=0
+          if [ "${str_newest:-0}" -gt "$GITHUB_RUN_ID" ]; then
+            echo "::notice::run ${str_newest}, triggered after this one, already posted for ${EVALUATED_HEAD}; leaving its check-run"
+            exit 0
+          fi
           str_conclusion=failure
           str_title="Unanswered or unresolved review threads"
           if [ "$GATE_OUTCOME" = "success" ]; then
