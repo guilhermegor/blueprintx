@@ -209,11 +209,24 @@ def posts_check_run(path_file: pathlib.Path, *, str_name: str) -> bool:
     set_events = trigger_events(dict_wf.get("on", dict_wf.get(True)))
     if not set_events & {"pull_request", "pull_request_target"}:
         return False
-    list_lines = path_file.read_text(encoding="utf-8").splitlines()
     return any(
-        f'name="{str_name}"' in str_line
-        for str_line in list_lines
-        if not str_line.lstrip().startswith("#")
+        step_posts_check_run(dict_step, str_name=str_name)
+        for dict_job in (dict_wf.get("jobs") or {}).values()
+        for dict_step in (dict_job.get("steps") or [] if isinstance(dict_job, dict) else [])
+        if isinstance(dict_step, dict)
+    )
+
+
+def step_posts_check_run(dict_step: dict, *, str_name: str) -> bool:
+    """Return True when one step's `run:` calls the check-runs API naming `str_name`."""
+    str_run = "\n".join(
+        s for s in str(dict_step.get("run", "")).splitlines() if not s.lstrip().startswith("#")
+    )
+    str_esc = re.escape(str_name)
+    re_name = re.compile(rf"""(?<!\w)name=(["']){str_esc}\1|"name={str_esc}\"""")
+    return any(
+        "check-runs" in str_cmd and re_name.search(str_cmd)
+        for str_cmd in re.sub(r"\\[ \t]*\n", " ", str_run).splitlines()
     )
 
 
@@ -452,10 +465,13 @@ def main() -> int:
         )
     else:
         dict_jobs, list_problems = pr_jobs(pathlib.Path(args.workflows))
-        list_err = list_problems + compare(
-            dict_exp["classic"] | dict_exp["ruleset"],
-            dict_jobs=dict_jobs,
-            dict_policy=read_policy(pathlib.Path(args.policy)),
+        set_req = dict_exp["classic"] | dict_exp["ruleset"]
+        list_err = (
+            list_problems
+            + compare(
+                set_req, dict_jobs=dict_jobs, dict_policy=read_policy(pathlib.Path(args.policy))
+            )
+            + check_run_producers(set_req, path_workflows=pathlib.Path(args.workflows))
         )
     for str_msg in list_err:
         print(f"::error::{str_msg}", file=sys.stderr)
